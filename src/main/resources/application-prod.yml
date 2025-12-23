@@ -1,0 +1,24 @@
+spring:
+  config:
+    activate:
+      on-profile: prod
+
+  datasource:
+    url: jdbc:mysql://commerce-mysql:3306/${MYSQL_DATABASE}
+    username: ${MYSQL_USER}
+    password: ${MYSQL_PASSWORD}
+
+  jpa:
+    hibernate:
+      ddl-auto: validate # 운영 서버는 명시적 DB 마이그레이션 하기
+    properties:
+      hibernate:
+        show_sql: false
+        format_sql: true # SQL을 보기 좋게 포맷팅해서 출력
+        use_sql_comments: true # JPQL/HQL 주석을 SQL에 함께 출력
+        #default_batch_fetch_size: 100
+    #open-in-view: false # default true
+
+logging:
+  level:
+    root: INFO
