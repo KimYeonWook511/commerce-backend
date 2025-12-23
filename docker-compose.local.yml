@@ -1,0 +1,13 @@
+#version: "3.8"
+
+services:
+  mysql:
+    image: mysql:8.0
+    container_name: commerce-mysql-local
+    ports:
+      - "13336:3306"
+    environment:
+      MYSQL_ROOT_PASSWORD: root0511
+      MYSQL_DATABASE: commerce_db
+    volumes:
+      - ./mysql-data-local:/var/lib/mysql
