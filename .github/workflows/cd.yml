@@ -35,13 +35,7 @@ jobs:
           # 실행 권한 부여
           chmod +x ./gradlew
           # 테스트 없이 build
-          ./gradlew build -x test
-
-      # Docker 이미지 빌드
-      - name: Build Docker Image
-        run: |
-          # github.sha = 커밋 해시
-          docker build -t $IMAGE_NAME:${{ github.sha }} .
+          ./gradlew clean build -x test
 
       # DockerHub 로그인 (이미지 push를 위한 인증 단계)
       - name: Login to DockerHub
@@ -49,14 +43,21 @@ jobs:
           echo "${{ secrets.DOCKERHUB_PASSWORD }}" | \
           docker login -u ${{ secrets.DOCKERHUB_USERNAME }} --password-stdin
 
-      # Docker 이미지 Push
-      - name: Push Docker Image
+      # Docker Buildx 세팅
+      - name: Set up Docker Buildx
+        uses: docker/setup-buildx-action@v3
+
+      # 멀티 아키텍처 Docker 이미지 빌드 & Push
+      # 아키텍처는 CPU 종류
+      # 대부분 서버, Github Actions Runner는 기본 amd64
+      # 라즈베리파이, Apple Silicon은 기본 arm64
+      - name: Build and Push Docker Image (Multi-Arch)
         run: |
-          docker tag $IMAGE_NAME:${{ github.sha }} $IMAGE_NAME:latest
-          docker push $IMAGE_NAME:${{ github.sha }}
-          docker push $IMAGE_NAME:latest
-        # sha 태그: 정확한 버전 추적
-        # latest 태그: 운영 서버용 포인터
+          docker buildx build \
+            --platform linux/amd64,linux/arm64 \
+            -t $IMAGE_NAME:${{ github.sha }} \
+            -t $IMAGE_NAME:latest \
+            --push .
 
       # SSH 설정
       - name: Setup SSH
