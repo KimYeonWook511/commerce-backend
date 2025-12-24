@@ -102,6 +102,7 @@ jobs:
             docker pull $IMAGE_NAME:latest
 
             # 컨테이너 재기동
+            export IMAGE_NAME=$IMAGE_NAME
             docker compose -f docker-compose.prod.yml down # 기존 컨테이너 중지
             docker compose -f docker-compose.prod.yml up -d
 
