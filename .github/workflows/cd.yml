@@ -81,16 +81,16 @@ jobs:
         run: |
           ssh -i ssh_key.pem -p $SERVER_SSH_PORT \
           ${{ secrets.SERVER_USER }}@${{ secrets.SERVER_HOST }} \
-          '
+          "
             # 중간에 하나라도 실패하면 즉시 스크립트 종료
             set -e
           
             # 디버깅 용
-            echo ">> Deploy start"
-            echo " > env.IMAGE_NAME: ${{ env.IMAGE_NAME }}:latest"
-            echo " > env.DEPLOY_PATH: ${{ env.DEPLOY_PATH }}"
-            echo " > $IMAGE_NAME: $IMAGE_NAME:latest"
-            echo " > $DEPLOY_PATH: $DEPLOY_PATH"
+            echo '>> Deploy start'
+            echo ' > env.IMAGE_NAME: ${{ env.IMAGE_NAME }}:latest'
+            echo ' > env.DEPLOY_PATH: ${{ env.DEPLOY_PATH }}'
+            echo ' > $IMAGE_NAME: $IMAGE_NAME:latest'
+            echo ' > $DEPLOY_PATH: $DEPLOY_PATH'
 
             # 디렉토리 이동
             # cd ${{ env.DEPLOY_PATH }} # 마스킹 안 될 수도 있음
@@ -108,5 +108,5 @@ jobs:
             # 나중에 서버에 image 최신 10개만 유지하도록 하고 docker hub에 이미지를 관리하도록 변경하기!
             docker image prune -f
 
-            echo ">> Deploy finished successfully"
-          '
+            echo '>> Deploy finished successfully'
+          "
