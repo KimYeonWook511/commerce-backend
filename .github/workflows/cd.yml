@@ -1,0 +1,85 @@
+name: CD
+
+on:
+  push:
+    branches: [ main ]
+
+jobs:
+  deploy:
+    name: Deploy to Prod
+    runs-on: ubuntu-latest
+
+    # deploy job 동작 중 사용할 환경변수
+    env:
+      IMAGE_NAME: ${{ secrets.DOCKERHUB_USERNAME }}/commerce-backend
+      DEPLOY_PATH: /home/${{ secrets.SERVER_USER }}/commerce-platform/commerce-backend
+      SERVER_SSH_PORT: ${{ secrets.SERVER_SSH_PORT }}
+      # ${{ env.IMAGE_NAME }} : GitHub Actions YAML 단계에서 미리 문자열 치환
+      # $IMAGE_NAME : 쉘 안에서 환경 변수를 사용함
+
+    steps:
+      - name: Checkout
+        uses: actions/checkout@v4
+
+      - name: Build Docker Image # github.sha = 커밋 해시
+        run: |
+          docker build -t $IMAGE_NAME:${{ github.sha }} .
+
+      - name: Login to DockerHub # 이미지 push를 위한 인증 단계
+        run: |
+          echo "${{ secrets.DOCKERHUB_PASSWORD }}" | \
+          docker login -u ${{ secrets.DOCKERHUB_USERNAME }} --password-stdin
+
+      - name: Push Docker Image
+        run: |
+          docker tag $IMAGE_NAME:${{ github.sha }} $IMAGE_NAME:latest
+          docker push $IMAGE_NAME:${{ github.sha }}
+          docker push $IMAGE_NAME:latest
+        # sha 태그: 정확한 버전 추적
+        # latest 태그: 운영 서버용 포인터
+
+      - name: Setup SSH
+        run: |
+          echo "${{ secrets.SERVER_SSH_KEY }}" > ssh_key.pem
+          chmod 600 ssh_key.pem
+          ssh-keyscan -p $SERVER_SSH_PORT -H ${{ secrets.SERVER_HOST }} >> ~/.ssh/known_hosts
+        # ssh-keyscan은 "ssh -o StrictHostKeyChecking=no" 보다 더 안전
+
+      - name: Upload docker-compose.prod.yml
+        run: |
+          scp -i ssh_key.pem -P $SERVER_SSH_PORT docker-compose.prod.yml \
+          ${{ secrets.SERVER_USER }}@${{ secrets.SERVER_HOST }}:$DEPLOY_PATH
+
+      - name: Deploy via SSH
+        run: |
+          ssh -i ssh_key.pem -p $SERVER_SSH_PORT \
+          ${{ secrets.SERVER_USER }}@${{ secrets.SERVER_HOST }} \
+          '
+            # 중간에 하나라도 실패하면 즉시 스크립트 종료
+            set -e
+            
+            # 디버깅 용
+            echo ">> Deploy start"
+            echo " > env.IMAGE_NAME: ${{ env.IMAGE_NAME }}:latest"
+            echo " > env.DEPLOY_PATH: ${{ env.DEPLOY_PATH }}"
+            echo " > $IMAGE_NAME: $IMAGE_NAME:latest"
+            echo " > $DEPLOY_PATH: $DEPLOY_PATH"
+
+            # 디렉토리 이동
+            # cd ${{ env.DEPLOY_PATH }} # 마스킹 안 될 수도 있음
+            cd $DEPLOY_PATH
+
+            # 최신 이미지 pull
+            # docker pull ${{ env.IMAGE_NAME }}:latest # 마스킹 안 될 수도 있음
+            docker pull $IMAGE_NAME:latest
+
+            # 컨테이너 재기동
+            docker compose -f docker-compose.prod.yml down # 기존 컨테이너 중지
+            docker compose -f docker-compose.prod.yml up -d
+
+            # 사용하지 않는 이미지 정리
+            # 나중에 서버에 image 최신 10개만 유지하도록 하고 docker hub에 이미지를 관리하도록 변경하기!
+            docker image prune -f
+
+            echo ">> Deploy finished successfully"
+          '
