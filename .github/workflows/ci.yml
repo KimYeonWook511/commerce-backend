@@ -24,4 +24,4 @@ jobs: # 이 워크플로에서 실행할 작업들의 집합 # 하나의 workflo
         run: chmod +x gradlew
 
       - name: Execute Gradle Tests # 모든 테스트 실행, 테스트 실패 → CI 실패 (PR merge 차단 기능)
-        run: ./gradlew test
+        run: ./gradlew test --no-daemon
