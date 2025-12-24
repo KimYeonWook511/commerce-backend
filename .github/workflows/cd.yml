@@ -61,10 +61,14 @@ jobs:
       # SSH 설정
       - name: Setup SSH
         run: |
+          # Github Actions Runner는 기본적으로 ~/.ssh 없음
+          mkdir -p ~/.ssh
+          chmod 700 ~/.ssh
           echo "${{ secrets.SERVER_SSH_KEY }}" > ssh_key.pem
           chmod 600 ssh_key.pem
+          # ssh-keyscan은 "ssh -o StrictHostKeyChecking=no" 보다 더 안전
           ssh-keyscan -p $SERVER_SSH_PORT -H ${{ secrets.SERVER_HOST }} >> ~/.ssh/known_hosts
-        # ssh-keyscan은 "ssh -o StrictHostKeyChecking=no" 보다 더 안전
+          chmod 644 ~/.ssh/known_hosts
 
       # docker-compose 파일 업로드
       - name: Upload docker-compose.prod.yml
