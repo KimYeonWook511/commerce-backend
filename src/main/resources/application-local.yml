@@ -4,9 +4,9 @@ spring:
       on-profile: local
 
   datasource:
-    url: jdbc:mysql://localhost:13336/commerce_db
-    username: root
-    password: root0511
+    url: jdbc:mysql://${LOCAL_DB_HOST:localhost}:${LOCAL_DB_PORT:13336}/${LOCAL_DB_NAME:commerce_db}
+    username: ${LOCAL_DB_USER:root}
+    password: ${LOCAL_DB_PASSWORD}
 
   jpa:
     hibernate:

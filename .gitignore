@@ -45,6 +45,8 @@ Thumbs.db
 
 ### 운영 서버 환경변수 ###
 .env.prod
+### 로컬 환경변수 ###
+.env.local
 
 ### 도커 볼륨 ###
 mysql-data-local/
