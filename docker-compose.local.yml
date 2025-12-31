@@ -6,8 +6,10 @@ services:
     container_name: commerce-mysql-local
     ports:
       - "13336:3306"
+    env_file:
+      - .env.local
     environment:
-      MYSQL_ROOT_PASSWORD: root0511
-      MYSQL_DATABASE: commerce_db
+      MYSQL_ROOT_PASSWORD: ${MYSQL_ROOT_PASSWORD}
+      MYSQL_DATABASE: ${MYSQL_DATABASE}
     volumes:
       - ./mysql-data-local:/var/lib/mysql

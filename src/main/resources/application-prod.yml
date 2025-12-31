@@ -4,13 +4,13 @@ spring:
       on-profile: prod
 
   datasource:
-    url: jdbc:mysql://commerce-mysql:3306/${MYSQL_DATABASE}
-    username: ${MYSQL_USER}
-    password: ${MYSQL_PASSWORD}
+    url: jdbc:mysql://${PROD_DB_HOST:commerce-mysql}:${PROD_DB_PORT:3306}/${PROD_DB_NAME}
+    username: ${PROD_DB_USER}
+    password: ${PROD_DB_PASSWORD}
 
   jpa:
     hibernate:
-      ddl-auto: validate # 운영 서버는 명시적 DB 마이그레이션 하기
+      ddl-auto: update # 추후 DB 마이그레이션 학습 후 validate로 변경할 것 (운영 서버는 명시적 DB 마이그레이션 하기)
     properties:
       hibernate:
         show_sql: false
