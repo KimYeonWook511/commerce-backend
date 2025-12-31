@@ -17,3 +17,11 @@ spring:
 logging:
   level:
     root: WARN
+
+jwt:
+  access:
+    secret.key: testAccessSecretKey0123456789abcdef!!
+    expiration: 1800000
+  refresh:
+    secret.key: testRefreshSecretKey0123456789abcdef!!
+    expiration: 604800000
