@@ -1,0 +1,51 @@
+package com.commerce.auth.jwt;
+
+import javax.crypto.SecretKey;
+
+import org.springframework.stereotype.Component;
+
+import io.jsonwebtoken.Claims;
+import io.jsonwebtoken.ExpiredJwtException;
+import io.jsonwebtoken.Jwts;
+import io.jsonwebtoken.MalformedJwtException;
+import io.jsonwebtoken.UnsupportedJwtException;
+import com.commerce.auth.exception.AuthErrorCode;
+import com.commerce.auth.exception.AuthException;
+import lombok.RequiredArgsConstructor;
+import lombok.extern.slf4j.Slf4j;
+
+@Slf4j
+@Component
+@RequiredArgsConstructor
+public class JwtTokenValidator {
+
+	private final JwtProperties jwtProperties;
+
+	public Claims validateAccessToken(String token) {
+		return validate(token, jwtProperties.getAccessSecretKey());
+	}
+
+	public Claims validateRefreshToken(String token) {
+		return validate(token, jwtProperties.getRefreshSecretKey());
+	}
+
+	private Claims validate(String token, SecretKey secretKey) {
+		try {
+			return Jwts.parserBuilder()
+				.setSigningKey(secretKey)
+				.build()
+				.parseClaimsJws(token)
+				.getBody();
+		} catch (ExpiredJwtException e) {
+			log.warn("JWT expired");
+			throw new AuthException(AuthErrorCode.TOKEN_EXPIRED);
+		} catch (UnsupportedJwtException | MalformedJwtException | SecurityException e) {
+			log.warn("Invalid JWT");
+			throw new AuthException(AuthErrorCode.TOKEN_INVALID);
+		} catch (IllegalArgumentException e) {
+			log.warn("Empty or null JWT");
+			throw new AuthException(AuthErrorCode.TOKEN_EMPTY);
+		}
+	}
+
+}
