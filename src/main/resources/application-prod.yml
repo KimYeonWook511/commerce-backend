@@ -22,3 +22,11 @@ spring:
 logging:
   level:
     root: INFO
+
+jwt:
+  access:
+    secret.key: ${PROD_JWT_ACCESS_SECRET} # HMAC-SHA algorithms MUST have a size >= 256 bits
+    expiration: ${PROD_JWT_ACCESS_EXPIRATION:1800000}
+  refresh:
+    secret.key: ${PROD_JWT_REFRESH_SECRET} # HMAC-SHA algorithms MUST have a size >= 256 bits
+    expiration: ${PROD_JWT_REFRESH_EXPIRATION:604800000}
