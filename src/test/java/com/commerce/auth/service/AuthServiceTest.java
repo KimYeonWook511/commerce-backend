@@ -6,8 +6,6 @@ import static org.mockito.ArgumentMatchers.any;
 import static org.mockito.BDDMockito.given;
 import static org.mockito.BDDMockito.then;
 
-import java.util.Optional;
-
 import org.junit.jupiter.api.DisplayName;
 import org.junit.jupiter.api.Test;
 import org.junit.jupiter.api.extension.ExtendWith;
@@ -24,6 +22,7 @@ import com.commerce.auth.service.response.AuthSignUpResponse;
 import com.commerce.auth.util.PasswordHasher;
 import com.commerce.member.domain.Member;
 import com.commerce.member.repository.MemberRepository;
+
 @ExtendWith(MockitoExtension.class)
 class AuthServiceTest {
 
