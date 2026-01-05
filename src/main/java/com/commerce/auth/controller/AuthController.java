@@ -9,9 +9,11 @@ import org.springframework.web.bind.annotation.RestController;
 
 import com.commerce.auth.controller.request.AuthLoginRequest;
 import com.commerce.auth.controller.request.AuthSignUpRequest;
+import com.commerce.auth.controller.request.AuthTokenReissueRequest;
 import com.commerce.auth.service.AuthService;
 import com.commerce.auth.service.response.AuthLoginResponse;
 import com.commerce.auth.service.response.AuthSignUpResponse;
+import com.commerce.auth.service.response.AuthTokenReissueResponse;
 import com.commerce.common.ApiResponse;
 
 import jakarta.validation.Valid;
@@ -38,6 +40,14 @@ public class AuthController {
 	) {
 		AuthLoginResponse loginResponse = authService.login(request.toServiceRequest());
 		return ResponseEntity.status(HttpStatus.OK).body(ApiResponse.of(loginResponse));
+	}
+
+	@PostMapping("/reissue")
+	public ResponseEntity<ApiResponse<AuthTokenReissueResponse>> reissue(
+		@Valid @RequestBody AuthTokenReissueRequest request
+	) {
+		AuthTokenReissueResponse reissueResponse = authService.reissue(request.toServiceRequest());
+		return ResponseEntity.status(HttpStatus.OK).body(ApiResponse.of(reissueResponse));
 	}
 
 }

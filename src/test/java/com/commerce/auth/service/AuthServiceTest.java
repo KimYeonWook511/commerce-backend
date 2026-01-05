@@ -21,15 +21,21 @@ import com.commerce.auth.exception.AuthErrorCode;
 import com.commerce.auth.exception.AuthException;
 import com.commerce.auth.jwt.JwtProperties;
 import com.commerce.auth.jwt.JwtTokenProvider;
+import com.commerce.auth.jwt.JwtTokenType;
+import com.commerce.auth.jwt.JwtTokenValidator;
 import com.commerce.auth.redis.RefreshTokenStore;
 import com.commerce.auth.service.request.AuthLoginServiceRequest;
 import com.commerce.auth.service.request.AuthSignUpServiceRequest;
+import com.commerce.auth.service.request.AuthTokenReissueServiceRequest;
 import com.commerce.auth.service.response.AuthLoginResponse;
 import com.commerce.auth.service.response.AuthSignUpResponse;
+import com.commerce.auth.service.response.AuthTokenReissueResponse;
 import com.commerce.auth.util.PasswordHasher;
 import com.commerce.member.domain.Member;
 import com.commerce.member.repository.MemberRepository;
 
+import io.jsonwebtoken.Claims;
+import io.jsonwebtoken.Jwts;
 @ExtendWith(MockitoExtension.class)
 class AuthServiceTest {
 
@@ -38,6 +44,9 @@ class AuthServiceTest {
 
 	@Mock
 	private JwtTokenProvider jwtTokenProvider;
+
+	@Mock
+	private JwtTokenValidator jwtTokenValidator;
 
 	@Mock
 	private PasswordHasher passwordHasher;
@@ -161,6 +170,65 @@ class AuthServiceTest {
 			.satisfies(exception -> {
 				AuthException authException = (AuthException) exception;
 				assertThat(authException.getErrorCode()).isEqualTo(AuthErrorCode.INVALID_CREDENTIALS);
+			});
+	}
+
+	@DisplayName("리프레시 토큰이 유효하면 토큰을 재발급한다")
+	@Test
+	void reissue_whenRefreshTokenValid_returnTokens() {
+		// given
+		Member member = Member.builder()
+			.email("test@example.com")
+			.password("hashed-password")
+			.username("user1")
+			.build();
+		ReflectionTestUtils.setField(member, "id", 1L);
+
+		Claims claims = Jwts.claims();
+		claims.setSubject("1");
+		claims.put("type", JwtTokenType.REFRESH_TOKEN.name());
+
+		given(jwtTokenValidator.validateRefreshToken("refresh-token")).willReturn(claims);
+		given(refreshTokenStore.get(1L)).willReturn(Optional.of("refresh-token"));
+		given(memberRepository.findById(1L)).willReturn(Optional.of(member));
+		given(jwtTokenProvider.createAccessToken(any())).willReturn("new-access-token");
+		given(jwtTokenProvider.createRefreshToken(any())).willReturn("new-refresh-token");
+		given(jwtProperties.getRefreshExpiration()).willReturn(604800000L);
+
+		AuthTokenReissueServiceRequest request = AuthTokenReissueServiceRequest.builder()
+			.refreshToken("refresh-token")
+			.build();
+
+		// when
+		AuthTokenReissueResponse response = authService.reissue(request);
+
+		// then
+		assertThat(response.getAccessToken()).isEqualTo("new-access-token");
+		assertThat(response.getRefreshToken()).isEqualTo("new-refresh-token");
+		then(refreshTokenStore).should().save(any(Long.class), any(String.class), any());
+	}
+
+	@DisplayName("리프레시 토큰이 일치하지 않으면 예외가 발생한다")
+	@Test
+	void reissue_whenRefreshTokenMismatch_throwException() {
+		// given
+		Claims claims = Jwts.claims();
+		claims.setSubject("1");
+		claims.put("type", JwtTokenType.REFRESH_TOKEN.name());
+
+		given(jwtTokenValidator.validateRefreshToken("refresh-token")).willReturn(claims);
+		given(refreshTokenStore.get(1L)).willReturn(Optional.of("other-token"));
+
+		AuthTokenReissueServiceRequest request = AuthTokenReissueServiceRequest.builder()
+			.refreshToken("refresh-token")
+			.build();
+
+		// when & then
+		assertThatThrownBy(() -> authService.reissue(request))
+			.isInstanceOf(AuthException.class)
+			.satisfies(exception -> {
+				AuthException authException = (AuthException) exception;
+				assertThat(authException.getErrorCode()).isEqualTo(AuthErrorCode.REFRESH_TOKEN_NOT_FOUND);
 			});
 	}
 

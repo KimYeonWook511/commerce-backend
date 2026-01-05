@@ -29,7 +29,8 @@ public class JwtAuthenticationFilter extends OncePerRequestFilter {
 	// 나중에 설정 파일로 분리하기
 	private static final Set<String> WHITELIST = Set.of(
 		"/auth/login",
-		"/auth/signup"
+		"/auth/signup",
+		"/auth/reissue"
 	);
 
 	private final JwtTokenValidator jwtTokenValidator;
