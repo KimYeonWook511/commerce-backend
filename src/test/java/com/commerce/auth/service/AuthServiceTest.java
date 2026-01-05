@@ -13,10 +13,13 @@ import org.mockito.ArgumentCaptor;
 import org.mockito.InjectMocks;
 import org.mockito.Mock;
 import org.mockito.junit.jupiter.MockitoExtension;
+import org.springframework.test.util.ReflectionTestUtils;
 
 import com.commerce.auth.exception.AuthErrorCode;
 import com.commerce.auth.exception.AuthException;
+import com.commerce.auth.jwt.JwtProperties;
 import com.commerce.auth.jwt.JwtTokenProvider;
+import com.commerce.auth.redis.RefreshTokenStore;
 import com.commerce.auth.service.request.AuthSignUpServiceRequest;
 import com.commerce.auth.service.response.AuthSignUpResponse;
 import com.commerce.auth.util.PasswordHasher;
@@ -35,6 +38,12 @@ class AuthServiceTest {
 	@Mock
 	private PasswordHasher passwordHasher;
 
+	@Mock
+	private RefreshTokenStore refreshTokenStore;
+
+	@Mock
+	private JwtProperties jwtProperties;
+
 	@InjectMocks
 	private AuthService authService;
 
@@ -49,9 +58,15 @@ class AuthServiceTest {
 			.build();
 
 		given(memberRepository.existsByEmail("test@example.com")).willReturn(false);
+		given(memberRepository.save(any(Member.class))).willAnswer(invocation -> {
+			Member saved = invocation.getArgument(0);
+			ReflectionTestUtils.setField(saved, "id", 1L);
+			return saved;
+		});
 		given(passwordHasher.hash("password123")).willReturn("hashed-password");
 		given(jwtTokenProvider.createAccessToken(any())).willReturn("access-token");
 		given(jwtTokenProvider.createRefreshToken(any())).willReturn("refresh-token");
+		given(jwtProperties.getRefreshExpiration()).willReturn(604800000L);
 
 		// when
 		AuthSignUpResponse response = authService.signUp(request);
@@ -59,6 +74,7 @@ class AuthServiceTest {
 		// then
 		ArgumentCaptor<Member> memberCaptor = ArgumentCaptor.forClass(Member.class);
 		then(memberRepository).should().save(memberCaptor.capture());
+		then(refreshTokenStore).should().save(any(Long.class), any(String.class), any());
 		assertThat(memberCaptor.getValue().getPassword()).isEqualTo("hashed-password");
 		assertThat(response.getAccessToken()).isEqualTo("access-token");
 		assertThat(response.getRefreshToken()).isEqualTo("refresh-token");
