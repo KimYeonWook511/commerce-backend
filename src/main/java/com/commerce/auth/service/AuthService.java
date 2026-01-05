@@ -12,7 +12,9 @@ import com.commerce.auth.jwt.JwtTokenClaims;
 import com.commerce.auth.jwt.JwtTokenProvider;
 import com.commerce.auth.jwt.JwtTokenType;
 import com.commerce.auth.redis.RefreshTokenStore;
+import com.commerce.auth.service.request.AuthLoginServiceRequest;
 import com.commerce.auth.service.request.AuthSignUpServiceRequest;
+import com.commerce.auth.service.response.AuthLoginResponse;
 import com.commerce.auth.service.response.AuthSignUpResponse;
 import com.commerce.auth.util.PasswordHasher;
 import com.commerce.member.domain.Member;
@@ -55,6 +57,26 @@ public class AuthService {
 		storeRefreshToken(member.getId(), refreshToken);
 
 		return AuthSignUpResponse.from(member, accessToken, refreshToken);
+	}
+
+	public AuthLoginResponse login(AuthLoginServiceRequest request) {
+		Member member = memberRepository.findByEmail(request.getEmail())
+			.orElseThrow(() -> new AuthException(AuthErrorCode.INVALID_CREDENTIALS));
+
+		if (!passwordHasher.matches(request.getPassword(), member.getPassword())) {
+			throw new AuthException(AuthErrorCode.INVALID_CREDENTIALS);
+		}
+
+		// JWT 토큰 발급
+		JwtTokenClaims accessTokenClaims = JwtTokenClaims.from(member, JwtTokenType.ACCESS_TOKEN);
+		JwtTokenClaims refreshTokenClaims = JwtTokenClaims.from(member, JwtTokenType.REFRESH_TOKEN);
+		String accessToken = jwtTokenProvider.createAccessToken(accessTokenClaims);
+		String refreshToken = jwtTokenProvider.createRefreshToken(refreshTokenClaims);
+
+		// 토큰 저장
+		storeRefreshToken(member.getId(), refreshToken);
+
+		return AuthLoginResponse.from(member, accessToken, refreshToken);
 	}
 
 	private void storeRefreshToken(Long memberId, String refreshToken) {
