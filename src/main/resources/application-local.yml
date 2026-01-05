@@ -8,6 +8,11 @@ spring:
     username: ${LOCAL_DB_USER:root}
     password: ${LOCAL_DB_PASSWORD}
 
+  data:
+    redis:
+      host: ${LOCAL_REDIS_HOST:localhost}
+      port: ${LOCAL_REDIS_PORT:16379}
+
   jpa:
     hibernate:
       ddl-auto: update
