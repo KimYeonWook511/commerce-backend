@@ -31,6 +31,7 @@ dependencies {
     developmentOnly 'org.springframework.boot:spring-boot-devtools'
     implementation 'org.springframework.boot:spring-boot-starter-validation'
     implementation 'org.mindrot:jbcrypt:0.4'
+    implementation 'org.springframework.boot:spring-boot-starter-data-redis'
 
     // 쿼리 파라미터 로그 남기기 (외부 라이브러리: https://github.com/gavlyukovskiy/spring-boot-data-source-decorator)
     implementation 'com.github.gavlyukovskiy:p6spy-spring-boot-starter:1.10.0'

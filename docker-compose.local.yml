@@ -13,3 +13,8 @@ services:
       MYSQL_DATABASE: ${MYSQL_DATABASE}
     volumes:
       - ./mysql-data-local:/var/lib/mysql
+  redis:
+    image: redis:7.4
+    container_name: commerce-redis-local
+    ports:
+      - "16379:6379"

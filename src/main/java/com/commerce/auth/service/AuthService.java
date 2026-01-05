@@ -1,13 +1,17 @@
 package com.commerce.auth.service;
 
+import java.time.Duration;
+
 import org.springframework.stereotype.Service;
 import org.springframework.transaction.annotation.Transactional;
 
 import com.commerce.auth.exception.AuthErrorCode;
 import com.commerce.auth.exception.AuthException;
+import com.commerce.auth.jwt.JwtProperties;
 import com.commerce.auth.jwt.JwtTokenClaims;
 import com.commerce.auth.jwt.JwtTokenProvider;
 import com.commerce.auth.jwt.JwtTokenType;
+import com.commerce.auth.redis.RefreshTokenStore;
 import com.commerce.auth.service.request.AuthSignUpServiceRequest;
 import com.commerce.auth.service.response.AuthSignUpResponse;
 import com.commerce.auth.util.PasswordHasher;
@@ -24,6 +28,8 @@ public class AuthService {
 	private final MemberRepository memberRepository;
 	private final JwtTokenProvider jwtTokenProvider;
 	private final PasswordHasher passwordHasher;
+	private final RefreshTokenStore refreshTokenStore;
+	private final JwtProperties jwtProperties;
 
 	@Transactional
 	public AuthSignUpResponse signUp(AuthSignUpServiceRequest request) {
@@ -44,7 +50,16 @@ public class AuthService {
 		JwtTokenClaims refreshTokenClaims = JwtTokenClaims.from(member, JwtTokenType.REFRESH_TOKEN);
 		String accessToken = jwtTokenProvider.createAccessToken(accessTokenClaims);
 		String refreshToken = jwtTokenProvider.createRefreshToken(refreshTokenClaims);
+
+		// 토큰 저장
+		storeRefreshToken(member.getId(), refreshToken);
+
 		return AuthSignUpResponse.from(member, accessToken, refreshToken);
+	}
+
+	private void storeRefreshToken(Long memberId, String refreshToken) {
+		Duration ttl = Duration.ofMillis(jwtProperties.getRefreshExpiration());
+		refreshTokenStore.save(memberId, refreshToken, ttl);
 	}
 
 }

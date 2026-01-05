@@ -8,6 +8,12 @@ spring:
     username: ${PROD_DB_USER}
     password: ${PROD_DB_PASSWORD}
 
+  data:
+    redis:
+      host: ${PROD_REDIS_HOST}
+      port: ${PROD_REDIS_PORT:6379}
+      password: ${PROD_REDIS_PASSWORD:}
+
   jpa:
     hibernate:
       ddl-auto: update # 추후 DB 마이그레이션 학습 후 validate로 변경할 것 (운영 서버는 명시적 DB 마이그레이션 하기)
