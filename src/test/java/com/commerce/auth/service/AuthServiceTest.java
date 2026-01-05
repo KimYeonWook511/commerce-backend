@@ -6,6 +6,8 @@ import static org.mockito.ArgumentMatchers.any;
 import static org.mockito.BDDMockito.given;
 import static org.mockito.BDDMockito.then;
 
+import java.util.Optional;
+
 import org.junit.jupiter.api.DisplayName;
 import org.junit.jupiter.api.Test;
 import org.junit.jupiter.api.extension.ExtendWith;
@@ -20,7 +22,9 @@ import com.commerce.auth.exception.AuthException;
 import com.commerce.auth.jwt.JwtProperties;
 import com.commerce.auth.jwt.JwtTokenProvider;
 import com.commerce.auth.redis.RefreshTokenStore;
+import com.commerce.auth.service.request.AuthLoginServiceRequest;
 import com.commerce.auth.service.request.AuthSignUpServiceRequest;
+import com.commerce.auth.service.response.AuthLoginResponse;
 import com.commerce.auth.service.response.AuthSignUpResponse;
 import com.commerce.auth.util.PasswordHasher;
 import com.commerce.member.domain.Member;
@@ -98,6 +102,65 @@ class AuthServiceTest {
 			.satisfies(exception -> {
 				AuthException authException = (AuthException) exception;
 				assertThat(authException.getErrorCode()).isEqualTo(AuthErrorCode.DUPLICATE_EMAIL);
+			});
+	}
+
+	@DisplayName("로그인 시 비밀번호가 일치하면 토큰을 반환한다")
+	@Test
+	void login_whenPasswordMatches_returnTokens() {
+		// given
+		Member member = Member.builder()
+			.email("test@example.com")
+			.password("hashed-password")
+			.username("user1")
+			.build();
+		ReflectionTestUtils.setField(member, "id", 1L);
+
+		given(memberRepository.findByEmail("test@example.com")).willReturn(Optional.of(member));
+		given(passwordHasher.matches("password123", "hashed-password")).willReturn(true);
+		given(jwtTokenProvider.createAccessToken(any())).willReturn("access-token");
+		given(jwtTokenProvider.createRefreshToken(any())).willReturn("refresh-token");
+		given(jwtProperties.getRefreshExpiration()).willReturn(604800000L);
+
+		AuthLoginServiceRequest request = AuthLoginServiceRequest.builder()
+			.email("test@example.com")
+			.password("password123")
+			.build();
+
+		// when
+		AuthLoginResponse response = authService.login(request);
+
+		// then
+		assertThat(response.getAccessToken()).isEqualTo("access-token");
+		assertThat(response.getRefreshToken()).isEqualTo("refresh-token");
+		then(refreshTokenStore).should().save(any(Long.class), any(String.class), any());
+	}
+
+	@DisplayName("로그인 시 비밀번호가 불일치하면 예외가 발생한다")
+	@Test
+	void login_whenPasswordDoesNotMatch_throwException() {
+		// given
+		Member member = Member.builder()
+			.email("test@example.com")
+			.password("hashed-password")
+			.username("user1")
+			.build();
+		ReflectionTestUtils.setField(member, "id", 1L);
+
+		given(memberRepository.findByEmail("test@example.com")).willReturn(Optional.of(member));
+		given(passwordHasher.matches("password123", "hashed-password")).willReturn(false);
+
+		AuthLoginServiceRequest request = AuthLoginServiceRequest.builder()
+			.email("test@example.com")
+			.password("password123")
+			.build();
+
+		// when & then
+		assertThatThrownBy(() -> authService.login(request))
+			.isInstanceOf(AuthException.class)
+			.satisfies(exception -> {
+				AuthException authException = (AuthException) exception;
+				assertThat(authException.getErrorCode()).isEqualTo(AuthErrorCode.INVALID_CREDENTIALS);
 			});
 	}
 

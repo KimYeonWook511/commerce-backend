@@ -7,8 +7,10 @@ import org.springframework.web.bind.annotation.RequestBody;
 import org.springframework.web.bind.annotation.RequestMapping;
 import org.springframework.web.bind.annotation.RestController;
 
+import com.commerce.auth.controller.request.AuthLoginRequest;
 import com.commerce.auth.controller.request.AuthSignUpRequest;
 import com.commerce.auth.service.AuthService;
+import com.commerce.auth.service.response.AuthLoginResponse;
 import com.commerce.auth.service.response.AuthSignUpResponse;
 import com.commerce.common.ApiResponse;
 
@@ -28,6 +30,14 @@ public class AuthController {
 	) {
 		AuthSignUpResponse memberSignUpResponse = authService.signUp(request.toServiceRequest());
 		return ResponseEntity.status(HttpStatus.CREATED).body(ApiResponse.of(memberSignUpResponse));
+	}
+
+	@PostMapping("/login")
+	public ResponseEntity<ApiResponse<AuthLoginResponse>> login(
+		@Valid @RequestBody AuthLoginRequest request
+	) {
+		AuthLoginResponse loginResponse = authService.login(request.toServiceRequest());
+		return ResponseEntity.status(HttpStatus.OK).body(ApiResponse.of(loginResponse));
 	}
 
 }
