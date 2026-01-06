@@ -1,7 +1,12 @@
 package com.commerce.order.domain;
 
-import com.commerce.member.domain.Member;
+import java.util.ArrayList;
+import java.util.List;
 
+import com.commerce.member.domain.Member;
+import com.commerce.orderproduct.domain.OrderProduct;
+
+import jakarta.persistence.CascadeType;
 import jakarta.persistence.Column;
 import jakarta.persistence.Entity;
 import jakarta.persistence.EnumType;
@@ -12,6 +17,7 @@ import jakarta.persistence.GenerationType;
 import jakarta.persistence.Id;
 import jakarta.persistence.JoinColumn;
 import jakarta.persistence.ManyToOne;
+import jakarta.persistence.OneToMany;
 import jakarta.persistence.Table;
 import lombok.AccessLevel;
 import lombok.Getter;
@@ -37,5 +43,8 @@ public class Order {
 	@Enumerated(EnumType.STRING)
 	@Column(nullable = false)
 	private OrderStatus status;
+
+	@OneToMany(mappedBy = "order", cascade = CascadeType.ALL, orphanRemoval = true)
+	private List<OrderProduct> orderProducts = new ArrayList<>();
 
 }
