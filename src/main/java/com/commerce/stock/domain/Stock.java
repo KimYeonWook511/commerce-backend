@@ -1,6 +1,8 @@
 package com.commerce.stock.domain;
 
 import com.commerce.product.domain.Product;
+import com.commerce.stock.exception.StockErrorCode;
+import com.commerce.stock.exception.StockException;
 
 import jakarta.persistence.Column;
 import jakarta.persistence.Entity;
@@ -29,5 +31,18 @@ public class Stock {
 
 	@Column(nullable = false)
 	private int quantity;
+
+	public void decrease(int quantity) {
+		if (quantity <= 0) {
+			throw new StockException(StockErrorCode.INVALID_QUANTITY);
+		}
+
+		// 재고 수량 확인이 잦아지면 메소드로 분리하기
+		if (this.quantity < quantity) {
+			throw new StockException(StockErrorCode.OUT_OF_STOCK);
+		}
+
+		this.quantity -= quantity;
+	}
 
 }
