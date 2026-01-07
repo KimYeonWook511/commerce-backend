@@ -6,6 +6,7 @@ import jakarta.persistence.GeneratedValue;
 import jakarta.persistence.GenerationType;
 import jakarta.persistence.Id;
 import lombok.AccessLevel;
+import lombok.Builder;
 import lombok.Getter;
 import lombok.NoArgsConstructor;
 
@@ -24,4 +25,9 @@ public class Product {
 	@Column(nullable = false)
 	private int price;
 
+	@Builder
+	private Product(String name, int price) {
+		this.name = name;
+		this.price = price;
+	}
 }
