@@ -13,6 +13,7 @@ import jakarta.persistence.Id;
 import jakarta.persistence.JoinColumn;
 import jakarta.persistence.OneToOne;
 import lombok.AccessLevel;
+import lombok.Builder;
 import lombok.Getter;
 import lombok.NoArgsConstructor;
 
@@ -31,6 +32,12 @@ public class Stock {
 
 	@Column(nullable = false)
 	private int quantity;
+
+	@Builder
+	private Stock(Product product, int quantity) {
+		this.product = product;
+		this.quantity = quantity;
+	}
 
 	public void decrease(int quantity) {
 		if (quantity <= 0) {
