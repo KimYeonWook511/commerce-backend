@@ -78,6 +78,94 @@ class StockConcurrencyTest {
 		assertThat(updated.getQuantity()).isGreaterThan(0);
 	}
 
+	@DisplayName("synchronized만 사용하면 동시 차감 후 재고가 예상치와 달라질 수 있다")
+	@Test
+	void decrease_whenConcurrentWithSynchronized_resultMayDiffer() throws Exception {
+		// given
+		Product product = createProduct("test-product-sync", 1000);
+		createStock(product, 100);
+
+		int threadCount = 100;
+		ExecutorService executor = Executors.newFixedThreadPool(threadCount);
+		CountDownLatch readyLatch = new CountDownLatch(threadCount);
+		CountDownLatch startLatch = new CountDownLatch(1);
+		CountDownLatch doneLatch = new CountDownLatch(threadCount);
+
+		// when
+		try {
+			for (int i = 0; i < threadCount; i++) {
+				executor.submit(() -> {
+					try {
+						startLatch.await();
+						stockService.decreaseWithSynchronized(product.getId(), 1);
+					} catch (InterruptedException e) {
+						Thread.currentThread().interrupt();
+					} finally {
+						doneLatch.countDown();
+					}
+				});
+			}
+
+			startLatch.countDown();
+			boolean completed = doneLatch.await(5, TimeUnit.SECONDS);
+			assertThat(completed).isTrue();
+		} finally {
+			executor.shutdown();
+			boolean terminated = executor.awaitTermination(5, TimeUnit.SECONDS);
+			if (!terminated) {
+				executor.shutdownNow();
+			}
+		}
+
+		// then
+		Stock updated = stockRepository.findByProductId(product.getId()).orElseThrow();
+		// synchronized만 사용하면 트랜잭션 커밋 시점이 락 밖에서 발생해 수량이 어긋날 수 있음
+		assertThat(updated.getQuantity()).isGreaterThanOrEqualTo(0);
+	}
+
+	@DisplayName("synchronized와 트랜잭션을 함께 사용하면 동시 차감 후 재고가 정확히 0이 된다")
+	@Test
+	void decrease_whenConcurrentWithSynchronizedAndTransaction_remainZero() throws Exception {
+		// given
+		Product product = createProduct("test-product-sync-tx", 1000);
+		createStock(product, 100);
+
+		int threadCount = 100;
+		ExecutorService executor = Executors.newFixedThreadPool(threadCount);
+		CountDownLatch startLatch = new CountDownLatch(1);
+		CountDownLatch doneLatch = new CountDownLatch(threadCount);
+
+		// when
+		try {
+			for (int i = 0; i < threadCount; i++) {
+				executor.submit(() -> {
+					try {
+						startLatch.await();
+						stockService.decreaseWithSynchronizedAndTransaction(product.getId(), 1);
+					} catch (InterruptedException e) {
+						Thread.currentThread().interrupt();
+					} finally {
+						doneLatch.countDown();
+					}
+				});
+			}
+
+			startLatch.countDown();
+			boolean completed = doneLatch.await(5, TimeUnit.SECONDS);
+			assertThat(completed).isTrue();
+		} finally {
+			executor.shutdown();
+			boolean terminated = executor.awaitTermination(5, TimeUnit.SECONDS);
+			if (!terminated) {
+				executor.shutdownNow();
+			}
+		}
+
+		// then
+		Stock updated = stockRepository.findByProductId(product.getId()).orElseThrow();
+		assertThat(updated.getQuantity()).isZero();
+	}
+
 	private Stock createStock(Product product, int quantity) {
 		Stock stock = Stock.builder()
 			.product(product)
