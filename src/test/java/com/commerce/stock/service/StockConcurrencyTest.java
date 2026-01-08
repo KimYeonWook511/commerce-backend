@@ -46,32 +46,8 @@ class StockConcurrencyTest {
 		Product product = createProduct("test-product", 1000);
 		Stock stock = createStock(product, 100);
 
-		int threadCount = 100;
-		ExecutorService executor = Executors.newFixedThreadPool(threadCount);
-		CountDownLatch readyLatch = new CountDownLatch(threadCount);
-		CountDownLatch startLatch = new CountDownLatch(1);
-		CountDownLatch doneLatch = new CountDownLatch(threadCount);
-
 		// when
-		for (int i = 0; i < threadCount; i++) {
-			executor.submit(() -> {
-				readyLatch.countDown();
-				try {
-					startLatch.await();
-					stockService.decrease(product.getId(), 1);
-				} catch (InterruptedException e) {
-					Thread.currentThread().interrupt();
-				} finally {
-					doneLatch.countDown();
-				}
-			});
-		}
-
-		readyLatch.await();
-		startLatch.countDown();
-		boolean completed = doneLatch.await(5, TimeUnit.SECONDS);
-		assertThat(completed).isTrue();
-		executor.shutdown();
+		measureConcurrent("no-lock", 100, () -> stockService.decrease(product.getId(), 1));
 
 		// then
 		Stock updated = stockRepository.findByProductId(product.getId()).orElseThrow();
@@ -85,37 +61,8 @@ class StockConcurrencyTest {
 		Product product = createProduct("test-product-sync", 1000);
 		createStock(product, 100);
 
-		int threadCount = 100;
-		ExecutorService executor = Executors.newFixedThreadPool(threadCount);
-		CountDownLatch readyLatch = new CountDownLatch(threadCount);
-		CountDownLatch startLatch = new CountDownLatch(1);
-		CountDownLatch doneLatch = new CountDownLatch(threadCount);
-
 		// when
-		try {
-			for (int i = 0; i < threadCount; i++) {
-				executor.submit(() -> {
-					try {
-						startLatch.await();
-						stockService.decreaseWithSynchronized(product.getId(), 1);
-					} catch (InterruptedException e) {
-						Thread.currentThread().interrupt();
-					} finally {
-						doneLatch.countDown();
-					}
-				});
-			}
-
-			startLatch.countDown();
-			boolean completed = doneLatch.await(5, TimeUnit.SECONDS);
-			assertThat(completed).isTrue();
-		} finally {
-			executor.shutdown();
-			boolean terminated = executor.awaitTermination(5, TimeUnit.SECONDS);
-			if (!terminated) {
-				executor.shutdownNow();
-			}
-		}
+		measureConcurrent("synchronized", 100, () -> stockService.decreaseWithSynchronized(product.getId(), 1));
 
 		// then
 		Stock updated = stockRepository.findByProductId(product.getId()).orElseThrow();
@@ -130,18 +77,49 @@ class StockConcurrencyTest {
 		Product product = createProduct("test-product-sync-tx", 1000);
 		createStock(product, 100);
 
-		int threadCount = 100;
+		// when
+		measureConcurrent(
+			"synchronized-tx",
+			100,
+			() -> stockService.decreaseWithSynchronizedAndTransaction(product.getId(), 1)
+		);
+
+		// then
+		Stock updated = stockRepository.findByProductId(product.getId()).orElseThrow();
+		assertThat(updated.getQuantity()).isZero();
+	}
+
+	@DisplayName("ReentrantLock과 트랜잭션을 함께 사용하면 동시 차감 후 재고가 정확히 0이 된다")
+	@Test
+	void decrease_whenConcurrentWithReentrantLockAndTransaction_remainZero() throws Exception {
+		// given
+		Product product = createProduct("test-product-reentrant-tx", 1000);
+		createStock(product, 100);
+
+		// when
+		measureConcurrent(
+			"reentrant-lock-tx",
+			100,
+			() -> stockService.decreaseWithReentrantLockAndTransaction(product.getId(), 1)
+		);
+
+		// then
+		Stock updated = stockRepository.findByProductId(product.getId()).orElseThrow();
+		assertThat(updated.getQuantity()).isZero();
+	}
+
+	private void measureConcurrent(String label, int threadCount, Runnable task) throws InterruptedException {
 		ExecutorService executor = Executors.newFixedThreadPool(threadCount);
 		CountDownLatch startLatch = new CountDownLatch(1);
 		CountDownLatch doneLatch = new CountDownLatch(threadCount);
 
-		// when
+		long start = System.nanoTime();
 		try {
 			for (int i = 0; i < threadCount; i++) {
 				executor.submit(() -> {
 					try {
 						startLatch.await();
-						stockService.decreaseWithSynchronizedAndTransaction(product.getId(), 1);
+						task.run();
 					} catch (InterruptedException e) {
 						Thread.currentThread().interrupt();
 					} finally {
@@ -161,9 +139,8 @@ class StockConcurrencyTest {
 			}
 		}
 
-		// then
-		Stock updated = stockRepository.findByProductId(product.getId()).orElseThrow();
-		assertThat(updated.getQuantity()).isZero();
+		long durationMs = TimeUnit.NANOSECONDS.toMillis(System.nanoTime() - start);
+		System.out.println("[" + label + "] duration=" + durationMs + "(ms)");
 	}
 
 	private Stock createStock(Product product, int quantity) {
