@@ -12,6 +12,8 @@ import com.commerce.stock.exception.StockErrorCode;
 import com.commerce.stock.exception.StockException;
 import com.commerce.stock.repository.StockRepository;
 
+import java.util.concurrent.locks.ReentrantLock;
+
 import lombok.RequiredArgsConstructor;
 
 @Service
@@ -21,6 +23,7 @@ public class StockService {
 
 	private final StockRepository stockRepository;
 	private final TransactionTemplate transactionTemplate;
+	private final ReentrantLock reentrantLock = new ReentrantLock();
 
 	@Transactional
 	public void decrease(Long productId, int quantity) {
@@ -44,6 +47,20 @@ public class StockService {
 		// boolean currentTransactionReadOnly = TransactionSynchronizationManager.isCurrentTransactionReadOnly();
 		// System.out.println("tx active = " + actualTransactionActive);
 		// System.out.println("tx readOnly = " + currentTransactionReadOnly);
+		decreaseWithNewTransaction(productId, quantity);
+	}
+
+	@Transactional(propagation = Propagation.NOT_SUPPORTED)
+	public void decreaseWithReentrantLockAndTransaction(Long productId, int quantity) {
+		reentrantLock.lock();
+		try {
+			decreaseWithNewTransaction(productId, quantity);
+		} finally {
+			reentrantLock.unlock();
+		}
+	}
+
+	private void decreaseWithNewTransaction(Long productId, int quantity) {
 		transactionTemplate.execute(status -> {
 			Stock stock = stockRepository.findByProductId(productId)
 				.orElseThrow(() -> new StockException(StockErrorCode.STOCK_NOT_FOUND));
