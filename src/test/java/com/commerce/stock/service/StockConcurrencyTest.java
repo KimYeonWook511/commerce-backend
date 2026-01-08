@@ -2,6 +2,7 @@ package com.commerce.stock.service;
 
 import static org.assertj.core.api.Assertions.assertThat;
 
+import java.util.concurrent.ConcurrentLinkedQueue;
 import java.util.concurrent.CountDownLatch;
 import java.util.concurrent.ExecutorService;
 import java.util.concurrent.Executors;
@@ -19,6 +20,7 @@ import com.commerce.product.domain.Product;
 import com.commerce.product.repository.ProductRepository;
 import com.commerce.stock.domain.Stock;
 import com.commerce.stock.repository.StockRepository;
+import com.commerce.stock.service.StockOptimisticLockService;
 
 @SpringBootTest
 @ActiveProfiles("test")
@@ -26,6 +28,9 @@ class StockConcurrencyTest {
 
 	@Autowired
 	private StockService stockService;
+
+	@Autowired
+	private StockOptimisticLockService stockOptimisticLockService;
 
 	@Autowired
 	private StockRepository stockRepository;
@@ -106,6 +111,77 @@ class StockConcurrencyTest {
 		// then
 		Stock updated = stockRepository.findByProductId(product.getId()).orElseThrow();
 		assertThat(updated.getQuantity()).isZero();
+	}
+
+	@DisplayName("Optimistic Lock을 사용하면 동시 차감 후 재고가 정확히 0이 된다")
+	@Test
+	void decrease_whenConcurrentWithOptimisticLock_remainZero() throws Exception {
+		// given
+		Product product = createProduct("test-product-optimistic", 1000);
+		createStock(product, 100);
+
+		// when
+		measureConcurrent(
+			"optimistic-lock",
+			100,
+			() -> stockOptimisticLockService.decreaseWithOptimisticLock(product.getId(), 1)
+		);
+
+		// then
+		Stock updated = stockRepository.findByProductId(product.getId()).orElseThrow();
+		assertThat(updated.getQuantity()).isZero();
+	}
+
+	@DisplayName("synchronized만 사용하면 동시 차감 시 낙관적 락 예외가 발생할 수 있다")
+	@Test
+	void decrease_whenConcurrentWithSynchronized_collectOptimisticLockErrors() throws Exception {
+		// given
+		Product product = createProduct("test-product-sync", 1000);
+		createStock(product, 100);
+
+		int threadCount = 100;
+		ExecutorService executor = Executors.newFixedThreadPool(threadCount);
+		CountDownLatch startLatch = new CountDownLatch(1);
+		CountDownLatch doneLatch = new CountDownLatch(threadCount);
+		ConcurrentLinkedQueue<Throwable> errors = new ConcurrentLinkedQueue<>();
+
+		// when
+		try {
+			for (int i = 0; i < threadCount; i++) {
+				executor.submit(() -> {
+					try {
+						startLatch.await();
+						stockService.decreaseWithSynchronized(product.getId(), 1);
+					} catch (InterruptedException e) {
+						Thread.currentThread().interrupt();
+					} catch (Throwable t) {
+						errors.add(t);
+					} finally {
+						doneLatch.countDown();
+					}
+				});
+			}
+
+			startLatch.countDown();
+			boolean completed = doneLatch.await(5, TimeUnit.SECONDS);
+			assertThat(completed).isTrue();
+		} finally {
+			executor.shutdown();
+			boolean terminated = executor.awaitTermination(5, TimeUnit.SECONDS);
+			if (!terminated) {
+				executor.shutdownNow();
+			}
+		}
+
+		// then
+		Stock updated = stockRepository.findByProductId(product.getId()).orElseThrow();
+		// synchronized만 사용하면 트랜잭션 커밋 시점이 락 밖에서 발생해 수량이 어긋날 수 있음
+		assertThat(updated.getQuantity()).isGreaterThanOrEqualTo(0);
+		assertThat(errors).isNotEmpty();
+		assertThat(updated.getQuantity()).isEqualTo(errors.size());
+		for (Throwable error : errors) {
+			System.out.println(error);
+		}
 	}
 
 	private void measureConcurrent(String label, int threadCount, Runnable task) throws InterruptedException {
