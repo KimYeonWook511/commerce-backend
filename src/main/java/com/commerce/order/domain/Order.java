@@ -5,6 +5,7 @@ import java.util.List;
 
 import com.commerce.member.domain.Member;
 import com.commerce.orderproduct.domain.OrderProduct;
+import com.commerce.product.domain.Product;
 
 import jakarta.persistence.CascadeType;
 import jakarta.persistence.Column;
@@ -20,6 +21,7 @@ import jakarta.persistence.ManyToOne;
 import jakarta.persistence.OneToMany;
 import jakarta.persistence.Table;
 import lombok.AccessLevel;
+import lombok.Builder;
 import lombok.Getter;
 import lombok.NoArgsConstructor;
 
@@ -46,5 +48,25 @@ public class Order {
 
 	@OneToMany(mappedBy = "order", cascade = CascadeType.ALL, orphanRemoval = true)
 	private List<OrderProduct> orderProducts = new ArrayList<>();
+
+	@Builder
+	private Order(Member member, OrderStatus status) {
+		this.member = member;
+		this.status = status;
+		this.totalPrice = 0;
+	}
+
+	public static Order create(Member member) {
+		return Order.builder()
+			.member(member)
+			.status(OrderStatus.INIT)
+			.build();
+	}
+
+	public void addOrderProduct(Product product, int quantity) {
+		OrderProduct orderProduct = OrderProduct.of(this, product, quantity);
+		this.orderProducts.add(orderProduct);
+		this.totalPrice += product.getPrice() * quantity;
+	}
 
 }

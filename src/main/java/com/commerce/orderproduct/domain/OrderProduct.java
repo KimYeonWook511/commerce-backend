@@ -35,6 +35,16 @@ public class OrderProduct {
 	@Column(nullable = false)
 	private int quantity;
 
+	private OrderProduct(Order order, Product product, int quantity) {
+		this.order = order;
+		this.product = product;
+		this.quantity = quantity;
+	}
+
+	public static OrderProduct of(Order order, Product product, int quantity) {
+		return new OrderProduct(order, product, quantity);
+	}
+
 	// 가격도 넣어야 하나? (구매했을때 기준의 가격이 있어야 하지 않나.. 세일,, 등등.. product의 price는 변동하지 않나)
 	// 추후 고려하기
 
