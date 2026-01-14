@@ -23,41 +23,41 @@ class OrderTest {
 		assertThat(order.getMember()).isEqualTo(member);
 		assertThat(order.getStatus()).isEqualTo(OrderStatus.INIT);
 		assertThat(order.getTotalPrice()).isZero();
-		assertThat(order.getOrderProducts()).isEmpty();
+		assertThat(order.getOrderItems()).isEmpty();
 	}
 
 	@DisplayName("주문 상품을 추가하면 주문 상품이 등록되고 총액이 증가한다")
 	@Test
-	void addOrderProduct_whenCalled_appendOrderProductAndIncreaseTotalPrice() {
+	void addOrderItem_whenCalled_appendOrderItemAndIncreaseTotalPrice() {
 		// given
 		Order order = Order.create(createMember());
 		Product product = createProduct("product-1", 1500);
 
 		// when
-		order.addOrderProduct(product, 2);
+		order.addOrderItem(product, 2);
 
 		// then
-		assertThat(order.getOrderProducts()).hasSize(1);
+		assertThat(order.getOrderItems()).hasSize(1);
 		assertThat(order.getTotalPrice()).isEqualTo(3000);
-		assertThat(order.getOrderProducts().get(0).getOrder()).isEqualTo(order);
-		assertThat(order.getOrderProducts().get(0).getProduct()).isEqualTo(product);
-		assertThat(order.getOrderProducts().get(0).getQuantity()).isEqualTo(2);
+		assertThat(order.getOrderItems().get(0).getOrder()).isEqualTo(order);
+		assertThat(order.getOrderItems().get(0).getProduct()).isEqualTo(product);
+		assertThat(order.getOrderItems().get(0).getQuantity()).isEqualTo(2);
 	}
 
 	@DisplayName("여러 상품을 추가하면 총액이 누적된다")
 	@Test
-	void addOrderProduct_whenMultipleItems_accumulateTotalPrice() {
+	void addOrderItem_whenMultipleItems_accumulateTotalPrice() {
 		// given
 		Order order = Order.create(createMember());
 		Product product1 = createProduct("product-1", 1000);
 		Product product2 = createProduct("product-2", 2000);
 
 		// when
-		order.addOrderProduct(product1, 2);
-		order.addOrderProduct(product2, 1);
+		order.addOrderItem(product1, 2);
+		order.addOrderItem(product2, 1);
 
 		// then
-		assertThat(order.getOrderProducts()).hasSize(2);
+		assertThat(order.getOrderItems()).hasSize(2);
 		assertThat(order.getTotalPrice()).isEqualTo(4000);
 	}
 

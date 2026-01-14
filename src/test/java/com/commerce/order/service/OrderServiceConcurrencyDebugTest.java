@@ -26,7 +26,7 @@ import com.commerce.member.repository.MemberRepository;
 import com.commerce.order.repository.OrderRepository;
 import com.commerce.order.service.request.OrderCreateItem;
 import com.commerce.order.service.request.OrderCreateServiceRequest;
-import com.commerce.orderproduct.repository.OrderProductRepository;
+import com.commerce.orderitem.repository.OrderItemRepository;
 import com.commerce.product.domain.Product;
 import com.commerce.product.repository.ProductRepository;
 import com.commerce.stock.domain.Stock;
@@ -60,14 +60,14 @@ class OrderServiceConcurrencyDebugTest {
 	private OrderRepository orderRepository;
 
 	@Autowired
-	private OrderProductRepository orderProductRepository;
+	private OrderItemRepository orderItemRepository;
 
 	@Autowired
 	private DataSource dataSource;
 
 	@AfterEach
 	void tearDown() {
-		orderProductRepository.deleteAllInBatch();
+		orderItemRepository.deleteAllInBatch();
 		orderRepository.deleteAllInBatch();
 		stockRepository.deleteAllInBatch();
 		productRepository.deleteAllInBatch();

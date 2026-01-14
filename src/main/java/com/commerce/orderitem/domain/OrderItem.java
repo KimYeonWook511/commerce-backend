@@ -1,4 +1,4 @@
-package com.commerce.orderproduct.domain;
+package com.commerce.orderitem.domain;
 
 import com.commerce.order.domain.Order;
 import com.commerce.product.domain.Product;
@@ -18,7 +18,7 @@ import lombok.NoArgsConstructor;
 @Entity
 @NoArgsConstructor(access = AccessLevel.PROTECTED)
 @Getter
-public class OrderProduct {
+public class OrderItem {
 
 	@Id
 	@GeneratedValue(strategy = GenerationType.IDENTITY)
@@ -35,14 +35,14 @@ public class OrderProduct {
 	@Column(nullable = false)
 	private int quantity;
 
-	private OrderProduct(Order order, Product product, int quantity) {
+	private OrderItem(Order order, Product product, int quantity) {
 		this.order = order;
 		this.product = product;
 		this.quantity = quantity;
 	}
 
-	public static OrderProduct of(Order order, Product product, int quantity) {
-		return new OrderProduct(order, product, quantity);
+	public static OrderItem of(Order order, Product product, int quantity) {
+		return new OrderItem(order, product, quantity);
 	}
 
 	// 가격도 넣어야 하나? (구매했을때 기준의 가격이 있어야 하지 않나.. 세일,, 등등.. product의 price는 변동하지 않나)

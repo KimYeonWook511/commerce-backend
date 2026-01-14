@@ -4,7 +4,7 @@ import java.util.ArrayList;
 import java.util.List;
 
 import com.commerce.member.domain.Member;
-import com.commerce.orderproduct.domain.OrderProduct;
+import com.commerce.orderitem.domain.OrderItem;
 import com.commerce.product.domain.Product;
 
 import jakarta.persistence.CascadeType;
@@ -47,7 +47,7 @@ public class Order {
 	private OrderStatus status;
 
 	@OneToMany(mappedBy = "order", cascade = CascadeType.ALL, orphanRemoval = true)
-	private List<OrderProduct> orderProducts = new ArrayList<>();
+	private List<OrderItem> orderItems = new ArrayList<>();
 
 	@Builder
 	private Order(Member member, OrderStatus status) {
@@ -63,9 +63,9 @@ public class Order {
 			.build();
 	}
 
-	public void addOrderProduct(Product product, int quantity) {
-		OrderProduct orderProduct = OrderProduct.of(this, product, quantity);
-		this.orderProducts.add(orderProduct);
+	public void addOrderItem(Product product, int quantity) {
+		OrderItem orderItem = OrderItem.of(this, product, quantity);
+		this.orderItems.add(orderItem);
 		this.totalPrice += product.getPrice() * quantity;
 	}
 

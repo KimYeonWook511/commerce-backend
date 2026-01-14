@@ -80,7 +80,7 @@ public class OrderService {
 			// 재고 감소
 			stockDecrease.accept(product.getId(), item.getQuantity());
 
-			order.addOrderProduct(product, item.getQuantity());
+			order.addOrderItem(product, item.getQuantity());
 		}
 
 		orderRepository.save(order);
