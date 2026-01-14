@@ -84,6 +84,14 @@ public class StockService {
 		}
 	}
 
+	@Transactional
+	public void decreaseWithPessimisticLock(Long productId, int quantity) {
+		Stock stock = stockRepository.findByProductIdWithPessimisticLock(productId)
+			.orElseThrow(() -> new StockException(StockErrorCode.STOCK_NOT_FOUND));
+
+		stock.decrease(quantity);
+	}
+
 	private void decreaseWithNewTransaction(Long productId, int quantity) {
 		HikariDataSource hikari;
 		HikariPoolMXBean pool;
