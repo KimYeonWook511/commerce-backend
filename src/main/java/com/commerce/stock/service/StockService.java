@@ -2,24 +2,29 @@ package com.commerce.stock.service;
 
 import org.springframework.dao.OptimisticLockingFailureException;
 import org.springframework.stereotype.Service;
-import org.springframework.transaction.PlatformTransactionManager;
 import org.springframework.transaction.annotation.Propagation;
 import org.springframework.transaction.annotation.Transactional;
-import org.springframework.transaction.support.TransactionSynchronizationManager;
 import org.springframework.transaction.support.TransactionTemplate;
 
 import com.commerce.stock.domain.Stock;
 import com.commerce.stock.exception.StockErrorCode;
 import com.commerce.stock.exception.StockException;
 import com.commerce.stock.repository.StockRepository;
+import com.zaxxer.hikari.HikariDataSource;
+import com.zaxxer.hikari.HikariPoolMXBean;
 
+import java.sql.SQLException;
 import java.util.concurrent.locks.ReentrantLock;
 
+import javax.sql.DataSource;
+
 import lombok.RequiredArgsConstructor;
+import lombok.extern.slf4j.Slf4j;
 
 @Service
 @Transactional(readOnly = true)
 @RequiredArgsConstructor
+@Slf4j
 public class StockService {
 
 	private static final int MAX_RETRY = 5;
@@ -27,6 +32,7 @@ public class StockService {
 	private final StockRepository stockRepository;
 	private final TransactionTemplate transactionTemplate;
 	private final ReentrantLock reentrantLock = new ReentrantLock();
+	private final DataSource dataSource;
 
 	@Transactional
 	public void decrease(Long productId, int quantity) {
@@ -79,6 +85,21 @@ public class StockService {
 	}
 
 	private void decreaseWithNewTransaction(Long productId, int quantity) {
+		HikariDataSource hikari;
+		HikariPoolMXBean pool;
+		try {
+			hikari = dataSource.unwrap(HikariDataSource.class);
+			pool = hikari.getHikariPoolMXBean();
+		} catch (SQLException e) {
+			throw new RuntimeException(e);
+		}
+
+		log.debug(">> BEFORE new tx | thread={} | active={}, idle={}, total={}, waiting={}",
+			Thread.currentThread().getName(),
+			pool.getActiveConnections(),
+			pool.getIdleConnections(),
+			pool.getTotalConnections(),
+			pool.getThreadsAwaitingConnection());
 		transactionTemplate.execute(status -> {
 			Stock stock = stockRepository.findByProductId(productId)
 				.orElseThrow(() -> new StockException(StockErrorCode.STOCK_NOT_FOUND));
@@ -86,6 +107,12 @@ public class StockService {
 			stock.decrease(quantity);
 			return null;
 		});
+		log.debug("<< AFTER new tx | thread={} | active={}, idle={}, total={}, waiting={}",
+			Thread.currentThread().getName(),
+			pool.getActiveConnections(),
+			pool.getIdleConnections(),
+			pool.getTotalConnections(),
+			pool.getThreadsAwaitingConnection());
 	}
 
 }
