@@ -1,5 +1,6 @@
 package com.commerce.orderitem.domain;
 
+import com.commerce.common.jpa.BaseTimeEntity;
 import com.commerce.order.domain.Order;
 import com.commerce.product.domain.Product;
 
@@ -18,7 +19,7 @@ import lombok.NoArgsConstructor;
 @Entity
 @NoArgsConstructor(access = AccessLevel.PROTECTED)
 @Getter
-public class OrderItem {
+public class OrderItem extends BaseTimeEntity {
 
 	@Id
 	@GeneratedValue(strategy = GenerationType.IDENTITY)

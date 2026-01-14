@@ -3,6 +3,7 @@ package com.commerce.order.domain;
 import java.util.ArrayList;
 import java.util.List;
 
+import com.commerce.common.jpa.BaseTimeEntity;
 import com.commerce.member.domain.Member;
 import com.commerce.orderitem.domain.OrderItem;
 import com.commerce.product.domain.Product;
@@ -29,7 +30,7 @@ import lombok.NoArgsConstructor;
 @Table(name = "tbl_order")
 @NoArgsConstructor(access = AccessLevel.PROTECTED)
 @Getter
-public class Order {
+public class Order extends BaseTimeEntity {
 
 	@Id
     @GeneratedValue(strategy = GenerationType.IDENTITY)
