@@ -1,8 +1,8 @@
-package com.commerce.orderproduct.repository;
+package com.commerce.orderitem.repository;
 
 import org.springframework.data.jpa.repository.JpaRepository;
 
-import com.commerce.orderproduct.domain.OrderProduct;
+import com.commerce.orderitem.domain.OrderItem;
 
-public interface OrderProductRepository extends JpaRepository<OrderProduct, Long> {
+public interface OrderItemRepository extends JpaRepository<OrderItem, Long> {
 }
