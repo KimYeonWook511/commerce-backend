@@ -3,6 +3,7 @@ package com.commerce.stock.domain;
 import com.commerce.product.domain.Product;
 import com.commerce.stock.exception.StockErrorCode;
 import com.commerce.stock.exception.StockException;
+import com.commerce.common.jpa.BaseTimeEntity;
 
 import jakarta.persistence.Column;
 import jakarta.persistence.Entity;
@@ -21,7 +22,7 @@ import lombok.NoArgsConstructor;
 @Entity
 @NoArgsConstructor(access = AccessLevel.PROTECTED)
 @Getter
-public class Stock {
+public class Stock extends BaseTimeEntity {
 
 	@Id
 	@GeneratedValue(strategy = GenerationType.IDENTITY)
