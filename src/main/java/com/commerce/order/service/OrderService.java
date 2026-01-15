@@ -34,7 +34,7 @@ public class OrderService {
 
 	@Transactional
 	public OrderCreateResponse createOrder(OrderCreateServiceRequest request) {
-		return createOrderWithOptimisticLock(request);
+		return createOrderWithPessimisticLock(request);
 	}
 
 	@Transactional
@@ -60,6 +60,11 @@ public class OrderService {
 	@Transactional
 	public OrderCreateResponse createOrderWithOptimisticLock(OrderCreateServiceRequest request) {
 		return createOrderWithStockDecrease(request, stockService::decreaseWithOptimisticLock);
+	}
+
+	@Transactional
+	public OrderCreateResponse createOrderWithPessimisticLock(OrderCreateServiceRequest request) {
+		return createOrderWithStockDecrease(request, stockService::decreaseWithPessimisticLock);
 	}
 
 	private OrderCreateResponse createOrderWithStockDecrease(
