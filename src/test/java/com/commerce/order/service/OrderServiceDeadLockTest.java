@@ -3,7 +3,7 @@ package com.commerce.order.service;
 import static org.assertj.core.api.Assertions.assertThat;
 import static org.mockito.ArgumentMatchers.anyInt;
 import static org.mockito.ArgumentMatchers.anyLong;
-import static org.mockito.Mockito.doAnswer;
+import static org.mockito.BDDMockito.*;
 import static org.mockito.Mockito.reset;
 
 import java.util.List;
@@ -104,7 +104,7 @@ class OrderServiceDeadLockTest {
 
 		CountDownLatch firstLockReady = new CountDownLatch(2);
 		ThreadLocal<Integer> callCount = ThreadLocal.withInitial(() -> 1);
-		doAnswer(invocation -> {
+		willAnswer(invocation -> {
 			Object result = invocation.callRealMethod();
 			int count = callCount.get();
 			if (count == 1) {
@@ -114,7 +114,7 @@ class OrderServiceDeadLockTest {
 			}
 			callCount.set(count + 1);
 			return result;
-		}).when(stockService).decreaseWithPessimisticLock(anyLong(), anyInt());
+		}).given(stockService).decreaseWithPessimisticLock(anyLong(), anyInt());
 
 		// when
 		ConcurrentLinkedQueue<Throwable> errors = new ConcurrentLinkedQueue<>();
@@ -130,7 +130,7 @@ class OrderServiceDeadLockTest {
 			}, errors);
 		} finally {
 			// @SpringBootTest는 테스트 컨텍스트를 캐시함
-			// 다른 테스트에 영향이 남지 않게 doAnswer 스텁 제거하기
+			// 다른 테스트에 영향이 남지 않게 스텁 제거하기
 			reset(stockService);
 		}
 
