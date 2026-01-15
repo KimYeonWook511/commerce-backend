@@ -55,9 +55,9 @@ class OrderServiceTest {
 	@InjectMocks
 	private OrderService orderService;
 
-	@DisplayName("기본 주문 생성은 낙관적 락 방식으로 재고를 차감한다")
+	@DisplayName("기본 주문 생성은 비관적 락 방식으로 재고를 차감한다")
 	@Test
-	void createOrder_whenValidRequest_useOptimisticLockDecrease() {
+	void createOrder_whenValidRequest_usePessimisticLockDecrease() {
 		// given
 		Member member = createMember(1L);
 		Product product1 = createProduct(10L, "product-1", 1000);
@@ -69,8 +69,8 @@ class OrderServiceTest {
 		OrderCreateResponse response = orderService.createOrder(request);
 
 		// then
-		then(stockService).should().decreaseWithOptimisticLock(10L, 2);
-		then(stockService).should().decreaseWithOptimisticLock(11L, 1);
+		then(stockService).should().decreaseWithPessimisticLock(10L, 2);
+		then(stockService).should().decreaseWithPessimisticLock(11L, 1);
 
 		ArgumentCaptor<Order> orderCaptor = ArgumentCaptor.forClass(Order.class);
 		then(orderRepository).should().save(orderCaptor.capture());
@@ -173,6 +173,24 @@ class OrderServiceTest {
 		then(stockService).should().decreaseWithOptimisticLock(11L, 1);
 	}
 
+	@DisplayName("비관적 락 차감 방식을 사용해서 주문을 생성한다")
+	@Test
+	void createOrderWithPessimisticLock_whenValidRequest_usePessimisticLockDecrease() {
+		// given
+		Member member = createMember(1L);
+		Product product1 = createProduct(10L, "product-1", 1000);
+		Product product2 = createProduct(11L, "product-2", 2000);
+		OrderCreateServiceRequest request = createDefaultRequest();
+		stubForSuccess(member, product1, product2);
+
+		// when
+		orderService.createOrderWithPessimisticLock(request);
+
+		// then
+		then(stockService).should().decreaseWithPessimisticLock(10L, 2);
+		then(stockService).should().decreaseWithPessimisticLock(11L, 1);
+	}
+
 	@DisplayName("회원이 없으면 주문 생성에 실패한다")
 	@Test
 	void createOrder_whenMemberNotFound_throwException() {
@@ -232,7 +250,7 @@ class OrderServiceTest {
 		given(productRepository.findById(10L)).willReturn(Optional.of(product));
 		willThrow(new StockException(StockErrorCode.STOCK_NOT_FOUND))
 			.given(stockService)
-			.decreaseWithOptimisticLock(10L, 1);
+			.decreaseWithPessimisticLock(10L, 1);
 
 		// when & then
 		assertThatThrownBy(() -> orderService.createOrder(request))
