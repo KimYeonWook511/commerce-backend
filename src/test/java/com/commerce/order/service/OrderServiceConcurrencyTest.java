@@ -32,7 +32,7 @@ import com.commerce.stock.exception.StockErrorCode;
 import com.commerce.stock.exception.StockException;
 import com.commerce.stock.repository.StockRepository;
 
-// @Tag("concurrency")
+@Tag("concurrency")
 @SpringBootTest
 @ActiveProfiles("test")
 @TestPropertySource(properties = {
@@ -158,7 +158,28 @@ class OrderServiceConcurrencyTest {
 		assertThat(errors.size()).isEqualTo(threadCount - orderCount);
 	}
 
-	@DisplayName("주문 생성 시 재고보다 많은 동시 요청은 일부 실패할 수 있다")
+	@DisplayName("동시 요청 상황에서 비관적 락 차감 방식으로 재고가 0이 된다")
+	@Test
+	void createOrderWithPessimisticLock_whenConcurrent_remainZero() throws Exception {
+		// given
+		int threadCount = 50;
+		Member member = createMember();
+		Product product = createProduct("order-product-pessimistic", 1000);
+		createStock(product, threadCount);
+		OrderCreateServiceRequest request = createRequest(member.getId(), product.getId(), 1);
+
+		// when
+		ConcurrentLinkedQueue<Throwable> errors = new ConcurrentLinkedQueue<>();
+		runConcurrent(threadCount, () -> orderService.createOrderWithPessimisticLock(request), errors);
+
+		// then
+		Stock updated = stockRepository.findByProductId(product.getId()).orElseThrow();
+		assertThat(updated.getQuantity()).isZero();
+		assertThat(orderRepository.count()).isEqualTo(threadCount);
+		assertThat(errors).isEmpty();
+	}
+
+	@DisplayName("주문 생성 시 재고보다 많은 동시 요청은 재고 수량만큼만 성공한다")
 	@Test
 	void createOrder_whenConcurrentExceedsStock_allowOnlyAvailableQuantity() throws Exception {
 		// given
@@ -175,30 +196,16 @@ class OrderServiceConcurrencyTest {
 
 		// then
 		long orderCount = orderRepository.count();
-		long outOfStockCount = errors.stream()
-			.filter(StockException.class::isInstance)
-			.map(StockException.class::cast)
-			.filter(exception -> exception.getErrorCode() == StockErrorCode.OUT_OF_STOCK)
-			.count();
-		long optimisticLockFailedCount = errors.stream()
-			.filter(StockException.class::isInstance)
-			.map(StockException.class::cast)
-			.filter(exception -> exception.getErrorCode() == StockErrorCode.OPTIMISTIC_LOCK_FAILED)
-			.count();
 		Stock updated = stockRepository.findByProductId(product.getId()).orElseThrow();
 
-		assertThat(orderCount).isBetween(0L, (long) stockQuantity);
-		assertThat(updated.getQuantity()).isBetween(0, stockQuantity);
-		assertThat(updated.getQuantity() + orderCount).isEqualTo(stockQuantity);
+		assertThat(orderCount).isEqualTo(stockQuantity);
+		assertThat(updated.getQuantity()).isZero();
 		assertThat(errors).hasSize(threadCount - stockQuantity)
 			.allSatisfy(error -> {
 				assertThat(error).isInstanceOf(StockException.class);
 				StockException stockException = (StockException) error;
-				assertThat(stockException.getErrorCode())
-					.isIn(StockErrorCode.OUT_OF_STOCK, StockErrorCode.OPTIMISTIC_LOCK_FAILED);
+				assertThat(stockException.getErrorCode()).isEqualTo(StockErrorCode.OUT_OF_STOCK);
 			});
-		assertThat(outOfStockCount + optimisticLockFailedCount).isEqualTo(errors.size());
-		System.out.println("outOfStockCount=" + outOfStockCount + ", optimisticLockFailedCount=" + optimisticLockFailedCount);
 	}
 
 	private void runConcurrent(int threadCount, Runnable task, ConcurrentLinkedQueue<Throwable> errors)
