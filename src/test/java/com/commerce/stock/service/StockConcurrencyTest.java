@@ -21,7 +21,7 @@ import com.commerce.product.repository.ProductRepository;
 import com.commerce.stock.domain.Stock;
 import com.commerce.stock.repository.StockRepository;
 
-@Tag("concurrency")
+// @Tag("concurrency")
 @SpringBootTest
 @ActiveProfiles("test")
 class StockConcurrencyTest {
@@ -151,6 +151,29 @@ class StockConcurrencyTest {
 		Stock updated = stockRepository.findByProductId(product.getId()).orElseThrow();
 		assertThat(updated.getQuantity()).isBetween(0, 100);
 		assertThat(updated.getQuantity() - errors.size()).isZero();
+	}
+
+	@DisplayName("Pessimistic Lock을 사용하면 동시 차감 후 재고가 정확히 0이 된다")
+	@Test
+	void decrease_whenConcurrentWithPessimisticLock_remainZero() throws Exception {
+		// given
+		Product product = createProduct("test-product-pessimistic", 1000);
+		createStock(product, 100);
+		int threadCount = 100;
+
+		// when
+		ConcurrentLinkedQueue<Throwable> errors = new ConcurrentLinkedQueue<>();
+		measureConcurrent(
+			"pessimistic-lock",
+			threadCount,
+			() -> stockService.decreaseWithPessimisticLock(product.getId(), 1),
+			errors
+		);
+
+		// then
+		Stock updated = stockRepository.findByProductId(product.getId()).orElseThrow();
+		assertThat(updated.getQuantity()).isZero();
+		assertThat(errors).isEmpty();
 	}
 
 	@DisplayName("synchronized만 사용하면 동시 차감 시 낙관적 락 예외가 발생할 수 있다")
