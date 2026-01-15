@@ -191,6 +191,24 @@ class OrderServiceTest {
 		then(stockService).should().decreaseWithPessimisticLock(11L, 1);
 	}
 
+	@DisplayName("비관적 락 차감 방식(정렬)을 사용해서 주문을 생성한다")
+	@Test
+	void createOrderWithPessimisticLockOrdered_whenValidRequest_usePessimisticLockDecrease() {
+		// given
+		Member member = createMember(1L);
+		Product product1 = createProduct(10L, "product-1", 1000);
+		Product product2 = createProduct(11L, "product-2", 2000);
+		OrderCreateServiceRequest request = createDefaultRequest();
+		stubForSuccess(member, product1, product2);
+
+		// when
+		orderService.createOrderWithPessimisticLockOrdered(request);
+
+		// then
+		then(stockService).should().decreaseWithPessimisticLock(10L, 2);
+		then(stockService).should().decreaseWithPessimisticLock(11L, 1);
+	}
+
 	@DisplayName("회원이 없으면 주문 생성에 실패한다")
 	@Test
 	void createOrder_whenMemberNotFound_throwException() {
