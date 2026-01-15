@@ -4,7 +4,6 @@ import static org.assertj.core.api.Assertions.assertThat;
 import static org.mockito.ArgumentMatchers.anyInt;
 import static org.mockito.ArgumentMatchers.anyLong;
 import static org.mockito.BDDMockito.*;
-import static org.mockito.Mockito.reset;
 
 import java.util.List;
 import java.util.concurrent.ConcurrentLinkedQueue;
@@ -45,7 +44,7 @@ import com.commerce.stock.service.StockService;
 	"spring.datasource.hikari.minimum-idle=2",
 	"spring.datasource.hikari.connection-timeout=30000"
 })
-class OrderServiceDeadLockTest {
+class OrderServiceDeadlockTest {
 
 	@Autowired
 	private OrderService orderService;
@@ -138,6 +137,55 @@ class OrderServiceDeadLockTest {
 		long orderCount = orderRepository.count();
 		assertThat(errors).isNotEmpty();
 		assertThat(orderCount).isLessThan(2L);
+	}
+
+	@DisplayName("동시 요청에서 반대 순서로 요청해도 데드락 없이 처리된다")
+	@Test
+	void createOrderWithPessimisticLockOrdered_whenOppositeOrder_avoidDeadlock() throws Exception {
+		// given
+		Member member = createMember();
+		Product product1 = createProduct("order-product-pessimistic-ordered-1", 1000);
+		Product product2 = createProduct("order-product-pessimistic-ordered-2", 1500);
+		Product product3 = createProduct("order-product-pessimistic-ordered-3", 2000);
+		Product product4 = createProduct("order-product-pessimistic-ordered-4", 2500);
+		createStock(product1, 2);
+		createStock(product2, 2);
+		createStock(product3, 2);
+		createStock(product4, 2);
+
+		OrderCreateServiceRequest requestA = OrderCreateServiceRequest.builder()
+			.memberId(member.getId())
+			.items(List.of(
+				OrderCreateItem.builder().productId(product1.getId()).quantity(1).build(),
+				OrderCreateItem.builder().productId(product2.getId()).quantity(1).build(),
+				OrderCreateItem.builder().productId(product3.getId()).quantity(1).build()
+			))
+			.build();
+		OrderCreateServiceRequest requestB = OrderCreateServiceRequest.builder()
+			.memberId(member.getId())
+			.items(List.of(
+				OrderCreateItem.builder().productId(product4.getId()).quantity(1).build(),
+				OrderCreateItem.builder().productId(product2.getId()).quantity(1).build(),
+				OrderCreateItem.builder().productId(product1.getId()).quantity(1).build()
+			))
+			.build();
+
+		// when
+		ConcurrentLinkedQueue<Throwable> errors = new ConcurrentLinkedQueue<>();
+		AtomicInteger sequence = new AtomicInteger();
+		runConcurrent(2, () -> {
+			int index = sequence.getAndIncrement();
+			if (index == 0) {
+				orderService.createOrderWithPessimisticLockOrdered(requestA);
+			} else {
+				orderService.createOrderWithPessimisticLockOrdered(requestB);
+			}
+		}, errors);
+
+		// then
+		long orderCount = orderRepository.count();
+		assertThat(errors).isEmpty();
+		assertThat(orderCount).isEqualTo(2L);
 	}
 
 	private void runConcurrent(int threadCount, Runnable task, ConcurrentLinkedQueue<Throwable> errors)
