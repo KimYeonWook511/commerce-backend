@@ -1,5 +1,7 @@
 package com.commerce.order.service;
 
+import java.util.Comparator;
+import java.util.List;
 import java.util.function.BiConsumer;
 
 import org.springframework.stereotype.Service;
@@ -34,7 +36,7 @@ public class OrderService {
 
 	@Transactional
 	public OrderCreateResponse createOrder(OrderCreateServiceRequest request) {
-		return createOrderWithPessimisticLock(request);
+		return createOrderWithPessimisticLockOrdered(request);
 	}
 
 	@Transactional
@@ -65,6 +67,23 @@ public class OrderService {
 	@Transactional
 	public OrderCreateResponse createOrderWithPessimisticLock(OrderCreateServiceRequest request) {
 		return createOrderWithStockDecrease(request, stockService::decreaseWithPessimisticLock);
+	}
+
+	@Transactional
+	public OrderCreateResponse createOrderWithPessimisticLockOrdered(OrderCreateServiceRequest request) {
+		OrderCreateServiceRequest sortedRequest = sortItemsByProductId(request);
+		return createOrderWithStockDecrease(sortedRequest, stockService::decreaseWithPessimisticLock);
+	}
+
+	private OrderCreateServiceRequest sortItemsByProductId(OrderCreateServiceRequest request) {
+		List<OrderCreateItem> sortedItems = request.getItems().stream()
+			.sorted(Comparator.comparing(OrderCreateItem::getProductId))
+			.toList();
+
+		return OrderCreateServiceRequest.builder()
+			.memberId(request.getMemberId())
+			.items(sortedItems)
+			.build();
 	}
 
 	private OrderCreateResponse createOrderWithStockDecrease(
