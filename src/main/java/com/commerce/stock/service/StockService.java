@@ -10,10 +10,16 @@ import com.commerce.stock.domain.Stock;
 import com.commerce.stock.exception.StockErrorCode;
 import com.commerce.stock.exception.StockException;
 import com.commerce.stock.repository.StockRepository;
+import com.commerce.stock.service.request.StockDecreaseBatchServiceRequest;
+import com.commerce.stock.service.response.StockDecreaseBatchResponse;
 import com.zaxxer.hikari.HikariDataSource;
 import com.zaxxer.hikari.HikariPoolMXBean;
 
 import java.sql.SQLException;
+import java.util.List;
+import java.util.Map;
+import java.util.function.Function;
+import java.util.stream.Collectors;
 import java.util.concurrent.locks.ReentrantLock;
 
 import javax.sql.DataSource;
@@ -90,6 +96,34 @@ public class StockService {
 			.orElseThrow(() -> new StockException(StockErrorCode.STOCK_NOT_FOUND));
 
 		stock.decrease(quantity);
+	}
+
+	@Transactional
+	public StockDecreaseBatchResponse decreaseBatchWithPessimisticLock(StockDecreaseBatchServiceRequest request) {
+		// 재고 조회 (X-Lock)
+		Map<Long, Integer> quantitiesByProductId = request.getQuantitiesByProductId();
+		List<Long> productIds = quantitiesByProductId.keySet().stream()
+			// .sorted()
+			.toList();
+		List<Stock> findStocks = stockRepository.findAllByProductIdInWithPessimisticLock(productIds);
+		if (findStocks.size() != productIds.size()) {
+			throw new StockException(StockErrorCode.STOCK_NOT_FOUND);
+		}
+
+		Map<Long, Stock> stocksByProductId = findStocks.stream()
+			.collect(Collectors.toMap(stock -> stock.getProduct().getId(), Function.identity()));
+
+		// 재고 차감
+		for (Long productId : productIds) {
+			Stock stock = stocksByProductId.get(productId);
+			if (stock == null) {
+				throw new StockException(StockErrorCode.STOCK_NOT_FOUND);
+			}
+			stock.decrease(quantitiesByProductId.get(productId));
+		}
+
+		// void로 끝낼까..
+		return StockDecreaseBatchResponse.from(quantitiesByProductId);
 	}
 
 	private void decreaseWithNewTransaction(Long productId, int quantity) {
