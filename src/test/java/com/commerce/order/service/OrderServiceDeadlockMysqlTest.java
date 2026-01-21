@@ -32,7 +32,7 @@ import com.commerce.product.domain.Product;
 import com.commerce.product.repository.ProductRepository;
 import com.commerce.stock.domain.Stock;
 import com.commerce.stock.repository.StockRepository;
-import com.commerce.support.TestcontainersSupport;
+import com.commerce.test.support.TestcontainersSupport;
 
 @Tag("concurrency")
 @SpringBootTest
