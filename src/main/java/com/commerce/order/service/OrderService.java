@@ -1,6 +1,12 @@
 package com.commerce.order.service;
 
+import java.util.Comparator;
+import java.util.HashMap;
+import java.util.List;
+import java.util.Map;
 import java.util.function.BiConsumer;
+import java.util.function.Function;
+import java.util.stream.Collectors;
 
 import org.springframework.stereotype.Service;
 import org.springframework.transaction.annotation.Transactional;
@@ -19,6 +25,7 @@ import com.commerce.product.exception.ProductErrorCode;
 import com.commerce.product.exception.ProductException;
 import com.commerce.product.repository.ProductRepository;
 import com.commerce.stock.service.StockService;
+import com.commerce.stock.service.request.StockDecreaseBatchServiceRequest;
 
 import lombok.RequiredArgsConstructor;
 
@@ -34,7 +41,7 @@ public class OrderService {
 
 	@Transactional
 	public OrderCreateResponse createOrder(OrderCreateServiceRequest request) {
-		return createOrderWithPessimisticLock(request);
+		return createOrderWithPessimisticLockOrdered(request);
 	}
 
 	@Transactional
@@ -67,6 +74,67 @@ public class OrderService {
 		return createOrderWithStockDecrease(request, stockService::decreaseWithPessimisticLock);
 	}
 
+	@Transactional
+	public OrderCreateResponse createOrderWithPessimisticLockOrdered(OrderCreateServiceRequest request) {
+		OrderCreateServiceRequest sortedRequest = sortItemsByProductId(request);
+		return createOrderWithStockDecrease(sortedRequest, stockService::decreaseWithPessimisticLock);
+	}
+
+	@Transactional
+	public OrderCreateResponse createOrderWithPessimisticLockBatch(OrderCreateServiceRequest request) {
+		Member member = memberRepository.findById(request.getMemberId())
+			.orElseThrow(() -> new MemberException(MemberErrorCode.MEMBER_NOT_FOUND));
+
+		Map<Long, Integer> quantitiesByProductId = mergeQuantities(request);
+		// List<Long> productIds = quantitiesByProductId.keySet().stream()
+		// 	.sorted()
+		// 	.toList();
+		List<Long> productIds = quantitiesByProductId.keySet().stream()
+			.toList();
+
+		Map<Long, Product> findProducts = productRepository.findAllById(productIds).stream()
+			.collect(Collectors.toMap(Product::getId, Function.identity()));
+		if (findProducts.size() != productIds.size()) {
+			throw new ProductException(ProductErrorCode.PRODUCT_NOT_FOUND);
+		}
+
+		stockService.decreaseBatchWithPessimisticLock(
+			StockDecreaseBatchServiceRequest.from(quantitiesByProductId)
+		);
+
+		Order order = Order.create(member);
+		for (OrderCreateItem item : request.getItems()) {
+			Product product = findProducts.get(item.getProductId());
+			if (product == null) {
+				throw new ProductException(ProductErrorCode.PRODUCT_NOT_FOUND);
+			}
+			order.addOrderItem(product, item.getQuantity());
+		}
+
+		orderRepository.save(order);
+
+		return OrderCreateResponse.from(order);
+	}
+
+	private OrderCreateServiceRequest sortItemsByProductId(OrderCreateServiceRequest request) {
+		List<OrderCreateItem> sortedItems = request.getItems().stream()
+			.sorted(Comparator.comparing(OrderCreateItem::getProductId))
+			.toList();
+
+		return OrderCreateServiceRequest.builder()
+			.memberId(request.getMemberId())
+			.items(sortedItems)
+			.build();
+	}
+
+	private Map<Long, Integer> mergeQuantities(OrderCreateServiceRequest request) {
+		Map<Long, Integer> quantities = new HashMap<>();
+		for (OrderCreateItem item : request.getItems()) {
+			quantities.merge(item.getProductId(), item.getQuantity(), Integer::sum);
+		}
+		return quantities;
+	}
+	
 	private OrderCreateResponse createOrderWithStockDecrease(
 		OrderCreateServiceRequest request,
 		BiConsumer<Long, Integer> stockDecrease
