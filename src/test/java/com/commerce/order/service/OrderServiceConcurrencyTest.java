@@ -1,16 +1,23 @@
 package com.commerce.order.service;
 
 import static org.assertj.core.api.Assertions.*;
+import static org.mockito.ArgumentMatchers.any;
+import static org.mockito.ArgumentMatchers.anyLong;
+import static org.mockito.ArgumentMatchers.anyString;
+import static org.mockito.BDDMockito.given;
 
 import java.util.List;
+import java.util.Optional;
 import java.util.concurrent.ConcurrentLinkedDeque;
 import java.util.concurrent.ConcurrentLinkedQueue;
 import java.util.concurrent.CountDownLatch;
 import java.util.concurrent.ExecutorService;
 import java.util.concurrent.Executors;
 import java.util.concurrent.TimeUnit;
+import java.util.concurrent.atomic.AtomicInteger;
 
 import org.junit.jupiter.api.AfterEach;
+import org.junit.jupiter.api.BeforeEach;
 import org.junit.jupiter.api.DisplayName;
 import org.junit.jupiter.api.Tag;
 import org.junit.jupiter.api.Test;
@@ -18,10 +25,12 @@ import org.springframework.beans.factory.annotation.Autowired;
 import org.springframework.boot.test.context.SpringBootTest;
 import org.springframework.test.context.ActiveProfiles;
 import org.springframework.test.context.TestPropertySource;
+import org.springframework.test.context.bean.override.mockito.MockitoBean;
 
 import com.commerce.member.domain.Member;
 import com.commerce.member.repository.MemberRepository;
 import com.commerce.order.repository.OrderRepository;
+import com.commerce.order.redis.OrderIdempotencyStore;
 import com.commerce.order.service.request.OrderCreateItem;
 import com.commerce.order.service.request.OrderCreateServiceRequest;
 import com.commerce.orderitem.repository.OrderItemRepository;
@@ -57,6 +66,9 @@ class OrderServiceConcurrencyTest {
 	@Autowired
 	private OrderRepository orderRepository;
 
+	@MockitoBean
+	private OrderIdempotencyStore orderIdempotencyStore;
+
 	@Autowired
 	private OrderItemRepository orderItemRepository;
 
@@ -67,6 +79,14 @@ class OrderServiceConcurrencyTest {
 		stockRepository.deleteAllInBatch();
 		productRepository.deleteAllInBatch();
 		memberRepository.deleteAllInBatch();
+	}
+
+	@BeforeEach
+	void setUpIdempotencyStore() {
+		given(orderIdempotencyStore.reserve(anyLong(), anyString(), any()))
+			.willReturn(true);
+		given(orderIdempotencyStore.getCompletedOrderId(anyLong(), anyString()))
+			.willReturn(Optional.empty());
 	}
 
 	@DisplayName("동시 요청 상황에서 락 없이 재고를 차감하면 일부 주문이 실패할 수 있다")
@@ -188,11 +208,16 @@ class OrderServiceConcurrencyTest {
 		Member member = createMember();
 		Product product = createProduct("order-product", 1000);
 		createStock(product, stockQuantity);
-		OrderCreateServiceRequest request = createRequest(member.getId(), product.getId(), 1);
 
 		// when
 		ConcurrentLinkedQueue<Throwable> errors = new ConcurrentLinkedQueue<>();
-		runConcurrent(threadCount, () -> orderService.createOrder(request), errors);
+		AtomicInteger sequence = new AtomicInteger(0);
+		runConcurrent(threadCount, () -> {
+			String idempotencyKey = "idempotency-" + sequence.incrementAndGet();
+			OrderCreateServiceRequest request =
+				createRequest(member.getId(), product.getId(), 1, idempotencyKey);
+			orderService.createOrder(request);
+		}, errors);
 
 		// then
 		long orderCount = orderRepository.count();
@@ -284,6 +309,19 @@ class OrderServiceConcurrencyTest {
 	private OrderCreateServiceRequest createRequest(Long memberId, Long productId, int quantity) {
 		return OrderCreateServiceRequest.builder()
 			.memberId(memberId)
+			.items(List.of(OrderCreateItem.builder().productId(productId).quantity(quantity).build()))
+			.build();
+	}
+
+	private OrderCreateServiceRequest createRequest(
+		Long memberId,
+		Long productId,
+		int quantity,
+		String idempotencyKey
+	) {
+		return OrderCreateServiceRequest.builder()
+			.memberId(memberId)
+			.idempotencyKey(idempotencyKey)
 			.items(List.of(OrderCreateItem.builder().productId(productId).quantity(quantity).build()))
 			.build();
 	}
