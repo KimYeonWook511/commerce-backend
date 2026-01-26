@@ -18,7 +18,7 @@ public final class TestcontainersSupport {
 
 	// Lazy Loading (필요할 때만 컨테이너를 시작함)
 	public static void registerMySql(DynamicPropertyRegistry registry) {
-		System.out.println("Registering MySQL container");
+		// System.out.println("Registering MySQL container");
 		if (mysql == null) {
 			synchronized (MYSQL_LOCK) {
 				if (mysql == null) {
@@ -34,22 +34,19 @@ public final class TestcontainersSupport {
 		}
 
 		registry.add("spring.datasource.url", mysql::getJdbcUrl);
-		System.out.println(mysql.getJdbcUrl());
 		registry.add("spring.datasource.username", mysql::getUsername);
-		System.out.println(mysql.getUsername());
 		registry.add("spring.datasource.password", mysql::getPassword);
-		System.out.println(mysql.getPassword());
 		registry.add("spring.datasource.driver-class-name", mysql::getDriverClassName);
-		System.out.println(mysql.getDriverClassName());
 		registry.add("spring.jpa.hibernate.ddl-auto", () -> "create-drop");
 	}
 
 	public static void registerRedis(DynamicPropertyRegistry registry) {
-		System.out.println("Registering Redis container");
+		// System.out.println("Registering Redis container");
 		if (redis == null) {
 			synchronized (REDIS_LOCK) {
 				if (redis == null) {
-					GenericContainer<?> created = new GenericContainer<>("redis:7.2")
+					// 배포랑 버전 맞춰야 함
+					GenericContainer<?> created = new GenericContainer<>("redis:7.4")
 						.withExposedPorts(6379);
 					created.start();
 					redis = created;
