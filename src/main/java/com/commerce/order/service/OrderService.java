@@ -10,6 +10,7 @@ import java.util.function.Function;
 import java.util.stream.Collectors;
 
 import org.springframework.beans.factory.annotation.Value;
+import org.springframework.dao.OptimisticLockingFailureException;
 import org.springframework.stereotype.Service;
 import org.springframework.transaction.annotation.Transactional;
 import org.springframework.util.StringUtils;
@@ -90,23 +91,31 @@ public class OrderService {
 
 	@Transactional
 	public OrderCancelResponse cancelOrder(Long memberId, Long orderId) {
-		// fetch join이 많음! -> 데이터가 커지면 최적화가 필요할 수 있음
-		Order order = orderRepository.findByIdAndMemberIdWithItems(orderId, memberId)
-			.orElseThrow(() -> new OrderException(OrderErrorCode.ORDER_NOT_FOUND));
+		try {
+			// fetch join이 많음! -> 데이터가 커지면 최적화가 필요할 수 있음
+			Order order = orderRepository.findByIdAndMemberIdWithItems(orderId, memberId)
+				.orElseThrow(() -> new OrderException(OrderErrorCode.ORDER_NOT_FOUND));
 
-		order.cancel();
+			order.cancel();
 
-		// 데드락 방지를 위한 정렬
-		List<OrderItem> sortedList = order.getOrderItems().stream()
-			.sorted(Comparator.comparing(item -> item.getProduct().getId()))
-			.toList();
+			// 데드락 방지를 위한 정렬
+			List<OrderItem> sortedList = order.getOrderItems().stream()
+				.sorted(Comparator.comparing(item -> item.getProduct().getId()))
+				.toList();
 
-		// 비관적 락을 이용하여 재고 수량 복구
-		sortedList.forEach(item ->
-			stockService.increaseWithPessimisticLock(item.getProduct().getId(), item.getQuantity())
-		);
+			// 비관적 락을 이용하여 재고 수량 복구
+			sortedList.forEach(item ->
+				stockService.increaseWithPessimisticLock(item.getProduct().getId(), item.getQuantity())
+			);
 
-		return OrderCancelResponse.from(order);
+			// OrderException의 형태로 바꾸기 위한 try-catch and flush()
+			// TransactionTemplate을 사용하는 걸로 바꿀 수도 있음
+			orderRepository.flush();
+
+			return OrderCancelResponse.from(order);
+		} catch (OptimisticLockingFailureException ex) {
+			throw new OrderException(OrderErrorCode.ORDER_CANCEL_NOT_ALLOWED);
+		}
 	}
 
 	@Transactional
