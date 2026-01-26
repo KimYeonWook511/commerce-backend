@@ -46,7 +46,7 @@ public class Stock extends BaseTimeEntity {
 
 	public void decrease(int quantity) {
 		if (quantity <= 0) {
-			throw new StockException(StockErrorCode.INVALID_QUANTITY);
+			throw new StockException(StockErrorCode.INVALID_DECREASE_QUANTITY);
 		}
 
 		// 재고 수량 확인이 잦아지면 메소드로 분리하기
@@ -55,6 +55,14 @@ public class Stock extends BaseTimeEntity {
 		}
 
 		this.quantity -= quantity;
+	}
+
+	public void increase(int quantity) {
+		if (quantity <= 0) {
+			throw new StockException(StockErrorCode.INVALID_INCREASE_QUANTITY);
+		}
+
+		this.quantity += quantity;
 	}
 
 }

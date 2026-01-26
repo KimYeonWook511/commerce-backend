@@ -1,10 +1,9 @@
 package com.commerce.order.controller;
 
-import java.util.List;
-
 import org.springframework.http.HttpStatus;
 import org.springframework.http.ResponseEntity;
 import org.springframework.util.StringUtils;
+import org.springframework.web.bind.annotation.PathVariable;
 import org.springframework.web.bind.annotation.PostMapping;
 import org.springframework.web.bind.annotation.RequestBody;
 import org.springframework.web.bind.annotation.RequestHeader;
@@ -15,11 +14,10 @@ import com.commerce.auth.resolver.AuthenticatedMemberId;
 import com.commerce.common.ApiResponse;
 import com.commerce.common.exception.CommonErrorCode;
 import com.commerce.common.exception.CommonException;
-import com.commerce.order.controller.request.OrderCreateItemRequest;
 import com.commerce.order.controller.request.OrderCreateRequest;
 import com.commerce.order.service.OrderService;
-import com.commerce.order.service.request.OrderCreateItem;
 import com.commerce.order.service.request.OrderCreateServiceRequest;
+import com.commerce.order.service.response.OrderCancelResponse;
 import com.commerce.order.service.response.OrderCreateResponse;
 
 import jakarta.validation.Valid;
@@ -51,5 +49,14 @@ public class OrderController {
 		OrderCreateResponse response = orderService.createOrder(serviceRequest);
 
 		return ResponseEntity.status(HttpStatus.CREATED).body(ApiResponse.of(response));
+	}
+
+	@PostMapping("/{orderId}/cancel")
+	public ResponseEntity<ApiResponse<OrderCancelResponse>> cancelOrder(
+		@AuthenticatedMemberId Long memberId,
+		@PathVariable Long orderId
+	) {
+		OrderCancelResponse response = orderService.cancelOrder(memberId, orderId);
+		return ResponseEntity.status(HttpStatus.OK).body(ApiResponse.of(response));
 	}
 }

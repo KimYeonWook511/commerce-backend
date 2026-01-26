@@ -33,6 +33,7 @@ import com.commerce.order.repository.OrderRepository;
 import com.commerce.order.redis.OrderIdempotencyStore;
 import com.commerce.order.service.request.OrderCreateItem;
 import com.commerce.order.service.request.OrderCreateServiceRequest;
+import com.commerce.order.service.response.OrderCreateResponse;
 import com.commerce.orderitem.repository.OrderItemRepository;
 import com.commerce.product.domain.Product;
 import com.commerce.product.repository.ProductRepository;
@@ -40,6 +41,9 @@ import com.commerce.stock.domain.Stock;
 import com.commerce.stock.exception.StockErrorCode;
 import com.commerce.stock.exception.StockException;
 import com.commerce.stock.repository.StockRepository;
+import com.commerce.order.domain.OrderStatus;
+import com.commerce.order.exception.OrderErrorCode;
+import com.commerce.order.exception.OrderException;
 
 @Tag("concurrency")
 @SpringBootTest
@@ -233,6 +237,36 @@ class OrderServiceConcurrencyTest {
 			});
 	}
 
+	@DisplayName("같은 주문에 취소 요청이 동시에 와도 한 번만 취소된다")
+	@Test
+	void cancelOrder_whenConcurrentRequests_onlyOneCancel() throws Exception {
+		// given
+		int threadCount = 3;
+		Member member = createMember();
+		Product product = createProduct("cancel-product", 1000);
+		createStock(product, 5);
+
+		OrderCreateResponse created = orderService.createOrder(
+			createRequest(member.getId(), product.getId(), 2, "cancel-key")
+		);
+
+		// when
+		ConcurrentLinkedQueue<Throwable> errors = new ConcurrentLinkedQueue<>();
+		runConcurrent(threadCount, () -> orderService.cancelOrder(member.getId(), created.getOrderId()), errors);
+
+		// then
+		Stock updated = stockRepository.findByProductId(product.getId()).orElseThrow();
+		assertThat(updated.getQuantity()).isEqualTo(5);
+		assertThat(orderRepository.findById(created.getOrderId()).orElseThrow().getStatus())
+			.isEqualTo(OrderStatus.CANCELED);
+		assertThat(errors).hasSize(threadCount - 1)
+			.allSatisfy(error -> {
+				assertThat(error).isInstanceOf(OrderException.class);
+				OrderException orderException = (OrderException) error;
+				assertThat(orderException.getErrorCode()).isEqualTo(OrderErrorCode.ORDER_CANCEL_NOT_ALLOWED);
+			});
+	}
+
 	private void runConcurrent(int threadCount, Runnable task, ConcurrentLinkedQueue<Throwable> errors)
 		throws InterruptedException {
 		ExecutorService executor = Executors.newFixedThreadPool(threadCount);
@@ -325,4 +359,5 @@ class OrderServiceConcurrencyTest {
 			.items(List.of(OrderCreateItem.builder().productId(productId).quantity(quantity).build()))
 			.build();
 	}
+
 }

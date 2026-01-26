@@ -28,6 +28,7 @@ import com.commerce.common.config.WebConfig;
 import com.commerce.order.domain.OrderStatus;
 import com.commerce.order.service.OrderService;
 import com.commerce.order.service.request.OrderCreateServiceRequest;
+import com.commerce.order.service.response.OrderCancelResponse;
 import com.commerce.order.service.response.OrderCreateResponse;
 
 import io.jsonwebtoken.Claims;
@@ -119,6 +120,28 @@ class OrderControllerTest {
 			.andExpect(jsonPath("$.data").value(Matchers.nullValue()));
 
 		then(orderService).should(never()).createOrder(any(OrderCreateServiceRequest.class));
+	}
+
+	@DisplayName("주문 취소 요청이 유효하면 상태를 반환한다")
+	@Test
+	void cancelOrder_whenValidRequest_returnOk() throws Exception {
+		// given
+		stubForValidToken();
+		OrderCancelResponse response = OrderCancelResponse.builder()
+			.orderId(10L)
+			.status(OrderStatus.CANCELED)
+			.build();
+
+		given(orderService.cancelOrder(1L, 10L)).willReturn(response);
+
+		// when & then
+		mockMvc.perform(post("/orders/10/cancel")
+				.header("Authorization", "Bearer access-token"))
+			.andExpect(status().isOk())
+			.andExpect(jsonPath("$.code").value("SUCCESS"))
+			.andExpect(jsonPath("$.message").value("OK"))
+			.andExpect(jsonPath("$.data.orderId").value(10L))
+			.andExpect(jsonPath("$.data.status").value("CANCELED"));
 	}
 
 	private void stubForValidToken() {
