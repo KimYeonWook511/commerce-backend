@@ -27,6 +27,7 @@ import com.commerce.member.repository.MemberRepository;
 import com.commerce.order.repository.OrderRepository;
 import com.commerce.order.service.request.OrderCreateItem;
 import com.commerce.order.service.request.OrderCreateServiceRequest;
+import com.commerce.order.service.response.OrderCreateResponse;
 import com.commerce.orderitem.repository.OrderItemRepository;
 import com.commerce.product.domain.Product;
 import com.commerce.product.repository.ProductRepository;
@@ -209,6 +210,46 @@ class OrderServiceDeadlockMysqlTest {
 			Stock updated = stockRepository.findByProductId(product.getId()).orElseThrow();
 			assertThat(updated.getQuantity()).isZero();
 		}
+	}
+
+	@DisplayName("MySQL에서 주문 생성과 주문 취소가 동시에 일어나도 데드락이 발생하지 않는다")
+	@Test
+	void createOrderAndCancelOrder_whenConcurrent_noDeadlock() throws Exception {
+		// given
+		Member member = createMember();
+		Product product1 = createProduct("mysql-order-product-1", 1000);
+		Product product2 = createProduct("mysql-order-product-2", 1200);
+		createStock(product1, 10);
+		createStock(product2, 10);
+
+		OrderCreateServiceRequest cancelRequest = createRequest(
+			member.getId(), List.of(product2.getId(), product1.getId())
+		);
+		OrderCreateResponse created = orderService.createOrderWithPessimisticLockOrdered(cancelRequest);
+
+		OrderCreateServiceRequest createRequest = createRequest(
+			member.getId(), List.of(product1.getId(), product2.getId())
+		);
+
+		// when
+		ConcurrentLinkedQueue<Throwable> errors = new ConcurrentLinkedQueue<>();
+		AtomicInteger sequence = new AtomicInteger();
+		runConcurrent(2, () -> {
+			int index = sequence.getAndIncrement();
+			if (index == 0) {
+				orderService.cancelOrder(member.getId(), created.getOrderId());
+			} else {
+				orderService.createOrderWithPessimisticLockOrdered(createRequest);
+			}
+		}, errors);
+
+		// then
+		assertThat(errors).isEmpty();
+		assertThat(orderRepository.count()).isEqualTo(2L);
+		assertThat(stockRepository.findByProductId(product1.getId()).orElseThrow().getQuantity())
+			.isEqualTo(9);
+		assertThat(stockRepository.findByProductId(product2.getId()).orElseThrow().getQuantity())
+			.isEqualTo(9);
 	}
 
 	private void runConcurrent(int threadCount, Runnable task, ConcurrentLinkedQueue<Throwable> errors)
