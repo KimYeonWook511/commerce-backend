@@ -6,6 +6,7 @@ import static org.mockito.ArgumentMatchers.*;
 import static org.mockito.BDDMockito.given;
 import static org.mockito.BDDMockito.then;
 import static org.mockito.BDDMockito.willThrow;
+import static org.mockito.Mockito.never;
 
 import java.util.List;
 import java.util.Optional;
@@ -26,6 +27,7 @@ import com.commerce.member.repository.MemberRepository;
 import com.commerce.order.domain.Order;
 import com.commerce.order.domain.OrderStatus;
 import com.commerce.order.repository.OrderRepository;
+import com.commerce.order.redis.OrderIdempotencyStore;
 import com.commerce.order.service.request.OrderCreateItem;
 import com.commerce.order.service.request.OrderCreateServiceRequest;
 import com.commerce.order.service.response.OrderCreateResponse;
@@ -53,8 +55,13 @@ class OrderServiceTest {
 	@Mock
 	private OrderRepository orderRepository;
 
+	@Mock
+	private OrderIdempotencyStore orderIdempotencyStore;
+
 	@InjectMocks
 	private OrderService orderService;
+
+	private final String idempotencyKey = "idempotency-key";
 
 	@DisplayName("기본 주문 생성은 비관적 락 방식으로 재고를 차감한다")
 	@Test
@@ -65,6 +72,7 @@ class OrderServiceTest {
 		Product product2 = createProduct(11L, "product-2", 2000);
 		OrderCreateServiceRequest request = createDefaultRequest();
 		stubForSuccess(member, product1, product2);
+		stubForIdempotencyReserved();
 
 		// when
 		OrderCreateResponse response = orderService.createOrder(request);
@@ -238,9 +246,11 @@ class OrderServiceTest {
 		// given
 		OrderCreateServiceRequest request = OrderCreateServiceRequest.builder()
 			.memberId(1L)
+			.idempotencyKey(idempotencyKey)
 			.items(List.of(OrderCreateItem.builder().productId(10L).quantity(1).build()))
 			.build();
 
+		stubForIdempotencyReserved();
 		given(memberRepository.findById(1L)).willReturn(Optional.empty());
 
 		// when & then
@@ -260,9 +270,11 @@ class OrderServiceTest {
 
 		OrderCreateServiceRequest request = OrderCreateServiceRequest.builder()
 			.memberId(1L)
+			.idempotencyKey(idempotencyKey)
 			.items(List.of(OrderCreateItem.builder().productId(10L).quantity(1).build()))
 			.build();
 
+		stubForIdempotencyReserved();
 		given(memberRepository.findById(1L)).willReturn(Optional.of(member));
 		given(productRepository.findById(10L)).willReturn(Optional.empty());
 
@@ -284,9 +296,11 @@ class OrderServiceTest {
 
 		OrderCreateServiceRequest request = OrderCreateServiceRequest.builder()
 			.memberId(1L)
+			.idempotencyKey(idempotencyKey)
 			.items(List.of(OrderCreateItem.builder().productId(10L).quantity(1).build()))
 			.build();
 
+		stubForIdempotencyReserved();
 		given(memberRepository.findById(1L)).willReturn(Optional.of(member));
 		given(productRepository.findById(10L)).willReturn(Optional.of(product));
 		willThrow(new StockException(StockErrorCode.STOCK_NOT_FOUND))
@@ -324,6 +338,7 @@ class OrderServiceTest {
 	private OrderCreateServiceRequest createDefaultRequest() {
 		return OrderCreateServiceRequest.builder()
 			.memberId(1L)
+			.idempotencyKey(idempotencyKey)
 			.items(List.of(
 				OrderCreateItem.builder().productId(10L).quantity(2).build(),
 				OrderCreateItem.builder().productId(11L).quantity(1).build()
@@ -340,6 +355,11 @@ class OrderServiceTest {
 			ReflectionTestUtils.setField(saved, "id", 100L);
 			return saved;
 		});
+	}
+
+	private void stubForIdempotencyReserved() {
+		given(orderIdempotencyStore.reserve(anyLong(), anyString(), any()))
+			.willReturn(true);
 	}
 
 	private void stubForSuccessBatch(Member member, Product product1, Product product2) {

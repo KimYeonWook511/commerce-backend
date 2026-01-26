@@ -9,11 +9,13 @@ import lombok.Getter;
 public class OrderCreateServiceRequest {
 
 	private Long memberId;
+	private String idempotencyKey;
 	private List<OrderCreateItem> items;
 
 	@Builder
-	private OrderCreateServiceRequest(Long memberId, List<OrderCreateItem> items) {
+	private OrderCreateServiceRequest(Long memberId, String idempotencyKey, List<OrderCreateItem> items) {
 		this.memberId = memberId;
+		this.idempotencyKey = idempotencyKey;
 		this.items = items;
 	}
 }

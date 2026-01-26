@@ -1,5 +1,6 @@
 package com.commerce.order.service;
 
+import java.time.Duration;
 import java.util.Comparator;
 import java.util.HashMap;
 import java.util.List;
@@ -8,14 +9,21 @@ import java.util.function.BiConsumer;
 import java.util.function.Function;
 import java.util.stream.Collectors;
 
+import org.springframework.beans.factory.annotation.Value;
 import org.springframework.stereotype.Service;
 import org.springframework.transaction.annotation.Transactional;
+import org.springframework.util.StringUtils;
 
+import com.commerce.common.exception.CommonErrorCode;
+import com.commerce.common.exception.CommonException;
 import com.commerce.member.domain.Member;
 import com.commerce.member.exception.MemberErrorCode;
 import com.commerce.member.exception.MemberException;
 import com.commerce.member.repository.MemberRepository;
 import com.commerce.order.domain.Order;
+import com.commerce.order.exception.OrderErrorCode;
+import com.commerce.order.exception.OrderException;
+import com.commerce.order.redis.OrderIdempotencyStore;
 import com.commerce.order.repository.OrderRepository;
 import com.commerce.order.service.request.OrderCreateItem;
 import com.commerce.order.service.request.OrderCreateServiceRequest;
@@ -37,11 +45,45 @@ public class OrderService {
 	private final MemberRepository memberRepository;
 	private final ProductRepository productRepository;
 	private final OrderRepository orderRepository;
+	private final OrderIdempotencyStore orderIdempotencyStore;
 	private final StockService stockService;
+
+	@Value("${order.idempotency.ttl-seconds:600}")
+	private long idempotencyTtlSeconds;
 
 	@Transactional
 	public OrderCreateResponse createOrder(OrderCreateServiceRequest request) {
-		return createOrderWithPessimisticLockOrdered(request);
+		// 멱등키 검증
+		if (!StringUtils.hasText(request.getIdempotencyKey())) {
+			throw new CommonException(CommonErrorCode.INVALID_REQUEST);
+		}
+
+		// 멱등키 상태 등록 (lock 처럼 선점)
+		Long memberId = request.getMemberId();
+		String idempotencyKey = request.getIdempotencyKey();
+		Duration ttl = Duration.ofSeconds(idempotencyTtlSeconds);
+		boolean reserved = orderIdempotencyStore.reserve(memberId, idempotencyKey, ttl);
+
+		// 이미 선점된 멱등키 처리
+		if (!reserved) {
+			Long orderId = orderIdempotencyStore.getCompletedOrderId(memberId, idempotencyKey)
+				.orElseThrow(() -> new OrderException(OrderErrorCode.ORDER_IDEMPOTENCY_IN_PROGRESS));
+
+			Order order = orderRepository.findById(orderId)
+				.orElseThrow(() -> new OrderException(OrderErrorCode.ORDER_NOT_FOUND));
+
+			return OrderCreateResponse.from(order);
+		}
+
+		try {
+			OrderCreateResponse response = createOrderWithPessimisticLockOrdered(request);
+			orderIdempotencyStore.complete(memberId, idempotencyKey, response.getOrderId(), ttl);
+			return response;
+		} catch (RuntimeException ex) {
+			// 선점한 멱등키 삭제 (PROCESSING 상태 삭제. -> FAILED로 바꾸는 것과 비교한다면??)
+			orderIdempotencyStore.clear(memberId, idempotencyKey);
+			throw ex;
+		}
 	}
 
 	@Transactional
@@ -134,7 +176,7 @@ public class OrderService {
 		}
 		return quantities;
 	}
-	
+
 	private OrderCreateResponse createOrderWithStockDecrease(
 		OrderCreateServiceRequest request,
 		BiConsumer<Long, Integer> stockDecrease
