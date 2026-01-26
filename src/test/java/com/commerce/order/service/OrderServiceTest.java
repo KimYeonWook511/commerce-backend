@@ -16,6 +16,7 @@ import org.junit.jupiter.api.Test;
 import org.junit.jupiter.api.extension.ExtendWith;
 import org.mockito.ArgumentCaptor;
 import org.mockito.InjectMocks;
+import org.mockito.InOrder;
 import org.mockito.Mock;
 import org.mockito.junit.jupiter.MockitoExtension;
 import org.springframework.test.util.ReflectionTestUtils;
@@ -26,10 +27,13 @@ import com.commerce.member.exception.MemberException;
 import com.commerce.member.repository.MemberRepository;
 import com.commerce.order.domain.Order;
 import com.commerce.order.domain.OrderStatus;
+import com.commerce.order.exception.OrderErrorCode;
+import com.commerce.order.exception.OrderException;
 import com.commerce.order.repository.OrderRepository;
 import com.commerce.order.redis.OrderIdempotencyStore;
 import com.commerce.order.service.request.OrderCreateItem;
 import com.commerce.order.service.request.OrderCreateServiceRequest;
+import com.commerce.order.service.response.OrderCancelResponse;
 import com.commerce.order.service.response.OrderCreateResponse;
 import com.commerce.product.domain.Product;
 import com.commerce.product.exception.ProductErrorCode;
@@ -108,6 +112,93 @@ class OrderServiceTest {
 		// then
 		then(stockService).should().decrease(10L, 2);
 		then(stockService).should().decrease(11L, 1);
+	}
+
+	@DisplayName("주문 취소를 요청하면 재고가 복구된다")
+	@Test
+	void cancelOrder_whenInitStatus_restoreStock() {
+		// given
+		Member member = createMember(1L);
+		Product product = createProduct(10L, "product-1", 1000);
+		Order order = Order.create(member);
+		order.addOrderItem(product, 2);
+		ReflectionTestUtils.setField(order, "id", 100L);
+
+		given(orderRepository.findByIdAndMemberIdWithItems(100L, 1L)).willReturn(Optional.of(order));
+
+		// when
+		OrderCancelResponse response = orderService.cancelOrder(1L, 100L);
+
+		// then
+		then(stockService).should().increaseWithPessimisticLock(10L, 2);
+		assertThat(response.getOrderId()).isEqualTo(100L);
+		assertThat(response.getStatus()).isEqualTo(OrderStatus.CANCELED);
+	}
+
+	@DisplayName("주문 취소 시 재고 복구는 상품 ID 순서로 호출된다")
+	@Test
+	void cancelOrder_whenMultipleItems_sortByProductId() {
+		// given
+		Member member = createMember(1L);
+		Product product1 = createProduct(5L, "product-5", 1000);
+		Product product2 = createProduct(2L, "product-2", 1000);
+		Order order = Order.create(member);
+		order.addOrderItem(product1, 1);
+		order.addOrderItem(product2, 1);
+		ReflectionTestUtils.setField(order, "id", 100L);
+
+		given(orderRepository.findByIdAndMemberIdWithItems(100L, 1L)).willReturn(Optional.of(order));
+
+		// when
+		orderService.cancelOrder(1L, 100L);
+
+		// then
+		InOrder inOrder = org.mockito.Mockito.inOrder(stockService);
+		inOrder.verify(stockService).increaseWithPessimisticLock(2L, 1);
+		inOrder.verify(stockService).increaseWithPessimisticLock(5L, 1);
+	}
+
+	@DisplayName("주문 상태가 초기 상태가 아니면 취소에 실패한다")
+	@Test
+	void cancelOrder_whenStatusNotInit_throwException() {
+		// given
+		Member member = createMember(1L);
+		Product product = createProduct(10L, "product-1", 1000);
+		Order order = Order.create(member);
+		order.addOrderItem(product, 1);
+		ReflectionTestUtils.setField(order, "id", 100L);
+		ReflectionTestUtils.setField(order, "status", OrderStatus.RECEIVED);
+
+		given(orderRepository.findByIdAndMemberIdWithItems(100L, 1L)).willReturn(Optional.of(order));
+
+		// when & then
+		assertThatThrownBy(() -> orderService.cancelOrder(1L, 100L))
+			.isInstanceOf(OrderException.class)
+			.satisfies(exception -> {
+				OrderException orderException = (OrderException) exception;
+				assertThat(orderException.getErrorCode()).isEqualTo(OrderErrorCode.ORDER_CANCEL_NOT_ALLOWED);
+			});
+	}
+
+	@DisplayName("다른 회원의 주문은 취소할 수 없다")
+	@Test
+	void cancelOrder_whenMemberMismatch_throwException() {
+		// given
+		Member member = createMember(2L);
+		Product product = createProduct(10L, "product-1", 1000);
+		Order order = Order.create(member);
+		order.addOrderItem(product, 1);
+		ReflectionTestUtils.setField(order, "id", 100L);
+
+		given(orderRepository.findByIdAndMemberIdWithItems(100L, 1L)).willReturn(Optional.empty());
+
+		// when & then
+		assertThatThrownBy(() -> orderService.cancelOrder(1L, 100L))
+			.isInstanceOf(OrderException.class)
+			.satisfies(exception -> {
+				OrderException orderException = (OrderException) exception;
+				assertThat(orderException.getErrorCode()).isEqualTo(OrderErrorCode.ORDER_NOT_FOUND);
+			});
 	}
 
 	@DisplayName("동기화 차감 방식을 사용해서 주문을 생성한다")

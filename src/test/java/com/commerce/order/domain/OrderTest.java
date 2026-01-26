@@ -1,11 +1,14 @@
 package com.commerce.order.domain;
 
 import static org.assertj.core.api.Assertions.assertThat;
+import static org.assertj.core.api.Assertions.assertThatThrownBy;
 
 import org.junit.jupiter.api.DisplayName;
 import org.junit.jupiter.api.Test;
 
 import com.commerce.member.domain.Member;
+import com.commerce.order.exception.OrderErrorCode;
+import com.commerce.order.exception.OrderException;
 import com.commerce.product.domain.Product;
 
 class OrderTest {
@@ -61,6 +64,36 @@ class OrderTest {
 		assertThat(order.getTotalPrice()).isEqualTo(4000);
 	}
 
+	@DisplayName("주문이 초기 상태면 취소된다")
+	@Test
+	void cancel_whenInitStatus_changeToCanceled() {
+		// given
+		Order order = Order.create(createMember());
+
+		// when
+		order.cancel();
+
+		// then
+		assertThat(order.getStatus()).isEqualTo(OrderStatus.CANCELED);
+	}
+
+	@DisplayName("주문이 초기 상태가 아니면 취소에 실패한다")
+	@Test
+	void cancel_whenStatusNotInit_throwException() {
+		// given
+		Order order = Order.create(createMember());
+		order.addOrderItem(createProduct("product-1", 1000), 1);
+		setStatus(order, OrderStatus.RECEIVED);
+
+		// when & then
+		assertThatThrownBy(order::cancel)
+			.isInstanceOf(OrderException.class)
+			.satisfies(exception -> {
+				OrderException orderException = (OrderException) exception;
+				assertThat(orderException.getErrorCode()).isEqualTo(OrderErrorCode.ORDER_CANCEL_NOT_ALLOWED);
+			});
+	}
+
 	private Member createMember() {
 		return Member.builder()
 			.email("test@example.com")
@@ -74,5 +107,9 @@ class OrderTest {
 			.name(name)
 			.price(price)
 			.build();
+	}
+
+	private void setStatus(Order order, OrderStatus status) {
+		org.springframework.test.util.ReflectionTestUtils.setField(order, "status", status);
 	}
 }
