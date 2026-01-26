@@ -49,7 +49,35 @@ class StockTest {
 			.isInstanceOf(StockException.class)
 			.satisfies(exception -> {
 				StockException stockException = (StockException) exception;
-				assertThat(stockException.getErrorCode()).isEqualTo(StockErrorCode.INVALID_QUANTITY);
+				assertThat(stockException.getErrorCode()).isEqualTo(StockErrorCode.INVALID_DECREASE_QUANTITY);
+			});
+	}
+
+	@DisplayName("재고 증가 요청이 유효하면 수량이 늘어난다")
+	@Test
+	void increase_whenQuantityValid_increaseStock() {
+		// given
+		Stock stock = createStock(5);
+
+		// when
+		stock.increase(3);
+
+		// then
+		assertThat(stock.getQuantity()).isEqualTo(8);
+	}
+
+	@DisplayName("증가 수량이 0 이하이면 예외가 발생한다")
+	@Test
+	void increase_whenInvalidQuantity_throwException() {
+		// given
+		Stock stock = createStock(5);
+
+		// when & then
+		assertThatThrownBy(() -> stock.increase(0))
+			.isInstanceOf(StockException.class)
+			.satisfies(exception -> {
+				StockException stockException = (StockException) exception;
+				assertThat(stockException.getErrorCode()).isEqualTo(StockErrorCode.INVALID_INCREASE_QUANTITY);
 			});
 	}
 

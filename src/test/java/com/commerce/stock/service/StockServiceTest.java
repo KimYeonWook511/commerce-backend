@@ -61,6 +61,20 @@ class StockServiceTest {
 		assertThat(stock.getQuantity()).isEqualTo(6);
 	}
 
+	@DisplayName("비관적 락으로 조회한 재고는 증가한다")
+	@Test
+	void increaseWithPessimisticLock_whenStockExists_increaseQuantity() {
+		// given
+		Stock stock = createStock(5);
+		given(stockRepository.findByProductIdWithPessimisticLock(1L)).willReturn(Optional.of(stock));
+
+		// when
+		stockService.increaseWithPessimisticLock(1L, 3);
+
+		// then
+		assertThat(stock.getQuantity()).isEqualTo(8);
+	}
+
 	@DisplayName("비관적 락으로 여러 재고를 조회하면 모두 차감된다")
 	@Test
 	void decreaseBatchWithPessimisticLock_whenStocksExist_decreaseQuantities() {
