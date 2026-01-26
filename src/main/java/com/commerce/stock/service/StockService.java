@@ -99,6 +99,14 @@ public class StockService {
 	}
 
 	@Transactional
+	public void increaseWithPessimisticLock(Long productId, int quantity) {
+		Stock stock = stockRepository.findByProductIdWithPessimisticLock(productId)
+			.orElseThrow(() -> new StockException(StockErrorCode.STOCK_NOT_FOUND));
+
+		stock.increase(quantity);
+	}
+
+	@Transactional
 	public StockDecreaseBatchResponse decreaseBatchWithPessimisticLock(StockDecreaseBatchServiceRequest request) {
 		// 재고 조회 (X-Lock)
 		Map<Long, Integer> quantitiesByProductId = request.getQuantitiesByProductId();
