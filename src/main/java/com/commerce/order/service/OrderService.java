@@ -27,7 +27,9 @@ import com.commerce.order.redis.OrderIdempotencyStore;
 import com.commerce.order.repository.OrderRepository;
 import com.commerce.order.service.request.OrderCreateItem;
 import com.commerce.order.service.request.OrderCreateServiceRequest;
+import com.commerce.order.service.response.OrderCancelResponse;
 import com.commerce.order.service.response.OrderCreateResponse;
+import com.commerce.orderitem.domain.OrderItem;
 import com.commerce.product.domain.Product;
 import com.commerce.product.exception.ProductErrorCode;
 import com.commerce.product.exception.ProductException;
@@ -84,6 +86,27 @@ public class OrderService {
 			orderIdempotencyStore.clear(memberId, idempotencyKey);
 			throw ex;
 		}
+	}
+
+	@Transactional
+	public OrderCancelResponse cancelOrder(Long memberId, Long orderId) {
+		// fetch join이 많음! -> 데이터가 커지면 최적화가 필요할 수 있음
+		Order order = orderRepository.findByIdAndMemberIdWithItems(orderId, memberId)
+			.orElseThrow(() -> new OrderException(OrderErrorCode.ORDER_NOT_FOUND));
+
+		order.cancel();
+
+		// 데드락 방지를 위한 정렬
+		List<OrderItem> sortedList = order.getOrderItems().stream()
+			.sorted(Comparator.comparing(item -> item.getProduct().getId()))
+			.toList();
+
+		// 비관적 락을 이용하여 재고 수량 복구
+		sortedList.forEach(item ->
+			stockService.increaseWithPessimisticLock(item.getProduct().getId(), item.getQuantity())
+		);
+
+		return OrderCancelResponse.from(order);
 	}
 
 	@Transactional

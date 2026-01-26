@@ -7,6 +7,8 @@ import com.commerce.common.jpa.BaseTimeEntity;
 import com.commerce.member.domain.Member;
 import com.commerce.orderitem.domain.OrderItem;
 import com.commerce.product.domain.Product;
+import com.commerce.order.exception.OrderErrorCode;
+import com.commerce.order.exception.OrderException;
 
 import jakarta.persistence.CascadeType;
 import jakarta.persistence.Column;
@@ -68,6 +70,14 @@ public class Order extends BaseTimeEntity {
 		OrderItem orderItem = OrderItem.of(this, product, quantity);
 		this.orderItems.add(orderItem);
 		this.totalPrice += product.getPrice() * quantity;
+	}
+
+	public void cancel() {
+		if (this.status != OrderStatus.INIT) {
+			throw new OrderException(OrderErrorCode.ORDER_CANCEL_NOT_ALLOWED);
+		}
+
+		this.status = OrderStatus.CANCELED;
 	}
 
 }
