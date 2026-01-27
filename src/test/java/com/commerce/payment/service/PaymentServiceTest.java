@@ -2,8 +2,8 @@ package com.commerce.payment.service;
 
 import static org.assertj.core.api.Assertions.assertThat;
 import static org.assertj.core.api.Assertions.assertThatThrownBy;
+import static org.mockito.ArgumentMatchers.*;
 import static org.mockito.BDDMockito.given;
-import static org.mockito.BDDMockito.then;
 
 import java.time.LocalDateTime;
 import java.util.Optional;
@@ -11,10 +11,10 @@ import java.util.Optional;
 import org.junit.jupiter.api.DisplayName;
 import org.junit.jupiter.api.Test;
 import org.junit.jupiter.api.extension.ExtendWith;
-import org.mockito.ArgumentCaptor;
 import org.mockito.InjectMocks;
 import org.mockito.Mock;
 import org.mockito.junit.jupiter.MockitoExtension;
+import org.springframework.test.util.ReflectionTestUtils;
 
 import com.commerce.member.domain.Member;
 import com.commerce.order.domain.Order;
@@ -26,7 +26,11 @@ import com.commerce.payment.domain.PaymentProvider;
 import com.commerce.payment.domain.PaymentStatus;
 import com.commerce.payment.exception.PaymentErrorCode;
 import com.commerce.payment.exception.PaymentException;
+import com.commerce.payment.provider.PaymentProviderProperties;
+import com.commerce.payment.provider.PaymentProviderPropertiesResolver;
 import com.commerce.payment.repository.PaymentRepository;
+import com.commerce.payment.service.request.PaymentReadyServiceRequest;
+import com.commerce.payment.service.response.PaymentReadyResponse;
 import com.commerce.product.domain.Product;
 
 @ExtendWith(MockitoExtension.class)
@@ -38,44 +42,101 @@ class PaymentServiceTest {
 	@Mock
 	private OrderRepository orderRepository;
 
+	@Mock
+	private PaymentProviderPropertiesResolver propertiesResolver;
+
+	@Mock
+	private PaymentProviderProperties providerProperties;
+
 	@InjectMocks
 	private PaymentService paymentService;
 
-	@DisplayName("주문이 존재하면 결제를 생성하고 저장한다")
+	@DisplayName("결제 준비 요청을 하면 결제 준비 응답을 반환한다")
 	@Test
-	void createPayment_whenOrderExists_savePayment() {
+	void readyPayment_whenOrderExists_returnReadyResponse() {
 		// given
-		Order order = createOrder(2000);
-		given(orderRepository.findById(1L)).willReturn(Optional.of(order));
-		given(paymentRepository.save(org.mockito.ArgumentMatchers.any(Payment.class)))
-			.willAnswer(invocation -> invocation.getArgument(0));
+		Order order = createOrder(1500);
+		setOrderId(order, 1L);
+		given(orderRepository.findByIdAndMemberIdWithItems(1L, 1L)).willReturn(Optional.of(order));
+		given(paymentRepository.findByOrderId(1L)).willReturn(Optional.empty());
+		given(paymentRepository.save(any(Payment.class)))
+			.willAnswer(invocation -> {
+				Payment saved = invocation.getArgument(0);
+				ReflectionTestUtils.setField(saved, "id", 10L);
+				return saved;
+			});
+		stubPaymentProperties();
+
+		PaymentReadyServiceRequest request = PaymentReadyServiceRequest.builder()
+			.memberId(1L)
+			.orderId(1L)
+			.provider(PaymentProvider.NAVERPAY)
+			.build();
 
 		// when
-		Payment payment = paymentService.createPayment(1L, PaymentProvider.NAVERPAY);
+		PaymentReadyResponse response = paymentService.readyPayment(request);
 
 		// then
-		ArgumentCaptor<Payment> captor = ArgumentCaptor.forClass(Payment.class);
-		then(paymentRepository).should().save(captor.capture());
-		Payment saved = captor.getValue();
-
-		assertThat(saved.getOrder()).isEqualTo(order);
-		assertThat(saved.getAmount()).isEqualTo(2000);
-		assertThat(saved.getStatus()).isEqualTo(PaymentStatus.PENDING);
-		assertThat(payment.getStatus()).isEqualTo(PaymentStatus.PENDING);
+		assertThat(response.getClientId()).isEqualTo("client-id");
+		assertThat(response.getChainId()).isEqualTo("chain-id");
+		assertThat(response.getMerchantPayKey()).isEqualTo("PAY-10");
+		assertThat(response.getProductName()).isEqualTo("product");
+		assertThat(response.getProductCount()).isEqualTo(1);
+		assertThat(response.getTotalPayAmount()).isEqualTo(1500);
+		assertThat(response.getTaxScopeAmount()).isEqualTo(1500);
+		assertThat(response.getTaxExScopeAmount()).isZero();
+		assertThat(response.getReturnUrl()).isEqualTo("https://return-url");
 	}
 
-	@DisplayName("주문이 없으면 결제 생성에 실패한다")
+	@DisplayName("주문이 없으면 결제 준비에 실패한다")
 	@Test
-	void createPayment_whenOrderNotFound_throwException() {
+	void readyPayment_whenOrderNotFound_throwException() {
 		// given
-		given(orderRepository.findById(1L)).willReturn(Optional.empty());
+		given(orderRepository.findByIdAndMemberIdWithItems(1L, 1L)).willReturn(Optional.empty());
+
+		PaymentReadyServiceRequest request = PaymentReadyServiceRequest.builder()
+			.memberId(1L)
+			.orderId(1L)
+			.provider(PaymentProvider.NAVERPAY)
+			.build();
 
 		// when & then
-		assertThatThrownBy(() -> paymentService.createPayment(1L, PaymentProvider.NAVERPAY))
+		assertThatThrownBy(() -> paymentService.readyPayment(request))
+			.isInstanceOf(OrderException.class)
+			.satisfies(exception -> {
+				OrderException orderException = (OrderException)exception;
+				assertThat(orderException.getErrorCode()).isEqualTo(OrderErrorCode.ORDER_NOT_FOUND);
+			});
+	}
+
+	@DisplayName("주문 상품이 없으면 결제 준비에 실패한다")
+	@Test
+	void readyPayment_whenOrderItemsEmpty_throwException() {
+		// given
+		Order order = Order.create(createMember());
+		setOrderId(order, 1L);
+		given(orderRepository.findByIdAndMemberIdWithItems(1L, 1L)).willReturn(Optional.of(order));
+		given(paymentRepository.findByOrderId(1L)).willReturn(Optional.empty());
+		given(paymentRepository.save(any(Payment.class)))
+			.willAnswer(invocation -> {
+				Payment saved = invocation.getArgument(0);
+				ReflectionTestUtils.setField(saved, "id", 10L);
+				return saved;
+			});
+		stubPaymentResolver();
+
+		PaymentReadyServiceRequest request = PaymentReadyServiceRequest.builder()
+			.memberId(1L)
+			.orderId(1L)
+			.provider(PaymentProvider.NAVERPAY)
+			.build();
+
+		// when & then
+		assertThatThrownBy(() -> paymentService.readyPayment(request))
 			.isInstanceOf(OrderException.class)
 			.satisfies(exception -> {
 				OrderException orderException = (OrderException) exception;
-				assertThat(orderException.getErrorCode()).isEqualTo(OrderErrorCode.ORDER_NOT_FOUND);
+				assertThat(orderException.getErrorCode()).isEqualTo(OrderErrorCode.ORDER_ITEMS_EMPTY);
 			});
 	}
 
@@ -156,5 +217,20 @@ class PaymentServiceTest {
 			.password("password123")
 			.username("payer")
 			.build();
+	}
+
+	private void setOrderId(Order order, Long orderId) {
+		ReflectionTestUtils.setField(order, "id", orderId);
+	}
+
+	private void stubPaymentProperties() {
+		stubPaymentResolver();
+		given(providerProperties.getClientId()).willReturn("client-id");
+		given(providerProperties.getChainId()).willReturn("chain-id");
+		given(providerProperties.getReturnUrl()).willReturn("https://return-url");
+	}
+
+	private void stubPaymentResolver() {
+		given(propertiesResolver.resolve(PaymentProvider.NAVERPAY)).willReturn(providerProperties);
 	}
 }
