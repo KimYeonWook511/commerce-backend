@@ -1,6 +1,5 @@
 package com.commerce.payment.service;
 
-import java.time.LocalDateTime;
 import java.util.List;
 
 import org.springframework.stereotype.Service;
@@ -64,13 +63,6 @@ public class PaymentService {
 	public Payment getPayment(Long orderId) {
 		return paymentRepository.findByOrderId(orderId)
 			.orElseThrow(() -> new PaymentException(PaymentErrorCode.PAYMENT_NOT_FOUND));
-	}
-
-	@Transactional
-	public Payment completePayment(Long orderId, LocalDateTime approvedAt) {
-		Payment payment = getPayment(orderId);
-		payment.complete(approvedAt);
-		return payment;
 	}
 
 	@Transactional
