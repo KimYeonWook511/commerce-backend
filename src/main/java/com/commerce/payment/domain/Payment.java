@@ -3,6 +3,7 @@ package com.commerce.payment.domain;
 import java.time.LocalDateTime;
 
 import com.commerce.common.jpa.BaseTimeEntity;
+import com.commerce.common.util.UlidGenerator;
 import com.commerce.order.domain.Order;
 import com.commerce.payment.exception.PaymentErrorCode;
 import com.commerce.payment.exception.PaymentException;
@@ -48,24 +49,29 @@ public class Payment extends BaseTimeEntity {
 	@Column(nullable = false)
 	private PaymentProvider provider;
 
+	@Column(unique = true)
+	private String merchantPayKey;
+
 	private String failureReason;
 
 	private LocalDateTime approvedAt;
 
 	@Builder(access = AccessLevel.PRIVATE)
-	private Payment(Order order, int amount, PaymentProvider provider, PaymentStatus status) {
+	private Payment(Order order, int amount, PaymentStatus status, PaymentProvider provider, String merchantPayKey) {
 		this.order = order;
 		this.amount = amount;
-		this.provider = provider;
 		this.status = status;
+		this.provider = provider;
+		this.merchantPayKey = merchantPayKey;
 	}
 
 	public static Payment create(Order order, int amount, PaymentProvider provider) {
 		return Payment.builder()
 			.order(order)
 			.amount(amount)
-			.provider(provider)
 			.status(PaymentStatus.PENDING)
+			.provider(provider)
+			.merchantPayKey("PAY-" + UlidGenerator.generate())
 			.build();
 	}
 
