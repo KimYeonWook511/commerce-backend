@@ -67,6 +67,11 @@ class PaymentProviderPropertiesResolverTest {
 		}
 
 		@Override
+		public String getClientSecret() {
+			return "client-secret";
+		}
+
+		@Override
 		public String getChainId() {
 			return "chain-id";
 		}
@@ -74,6 +79,10 @@ class PaymentProviderPropertiesResolverTest {
 		@Override
 		public String getReturnUrl() {
 			return "https://return-url";
+		}
+
+		public String getApprovalUrl() {
+			return "https://approval-url";
 		}
 	}
 }
