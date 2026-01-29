@@ -7,6 +7,8 @@ import com.commerce.common.exception.ErrorCode;
 public enum PaymentErrorCode implements ErrorCode {
 	PAYMENT_NOT_FOUND(HttpStatus.NOT_FOUND, "PAYMENT-404-1", "결제를 찾을 수 없습니다"),
 	PAYMENT_PROVIDER_NOT_SUPPORTED(HttpStatus.BAD_REQUEST, "PAYMENT-400-1", "지원하지 않는 결제 수단입니다"),
+	PAYMENT_APPROVAL_FAILED(HttpStatus.BAD_REQUEST, "PAYMENT-400-2", "결제 승인에 실패했습니다"),
+	PAYMENT_MERCHANT_KEY_MISMATCH(HttpStatus.BAD_REQUEST, "PAYMENT-400-3", "결제 식별 공개 키가 일치하지 않습니다"),
 	PAYMENT_STATUS_NOT_ALLOWED(HttpStatus.CONFLICT, "PAYMENT-409-1", "결제 상태 변경이 허용되지 않습니다");
 
 	private final HttpStatus status;
