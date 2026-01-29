@@ -78,8 +78,9 @@ public class Payment extends BaseTimeEntity {
 			.build();
 	}
 
-	public void complete(LocalDateTime approvedAt) {
+	public void completeWithPgPaymentId(String pgPaymentId, LocalDateTime approvedAt) {
 		validatePending();
+		this.pgPaymentId = pgPaymentId;
 		this.status = PaymentStatus.COMPLETED;
 		this.approvedAt = approvedAt;
 		this.failureReason = null;
@@ -97,13 +98,6 @@ public class Payment extends BaseTimeEntity {
 		this.status = PaymentStatus.CANCELED;
 		this.failureReason = reason;
 		this.approvedAt = null;
-	}
-
-	public void assignPgPaymentId(String pgPaymentId) {
-		if (this.pgPaymentId != null) {
-			return;
-		}
-		this.pgPaymentId = pgPaymentId;
 	}
 
 	private void validatePending() {

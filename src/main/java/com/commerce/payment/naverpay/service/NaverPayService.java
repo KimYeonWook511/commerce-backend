@@ -54,8 +54,8 @@ public class NaverPayService {
 			throw new PaymentException(PaymentErrorCode.PAYMENT_APPROVAL_FAILED);
 		}
 
-		payment.assignPgPaymentId(detail.getPaymentId());
-		payment.complete(LocalDateTime.now());
+		// 결제 완료 처리
+		payment.completeWithPgPaymentId(detail.getPaymentId(), LocalDateTime.now());
 
 		return NaverPayApproveResult.builder()
 			.orderId(payment.getOrder().getId())
