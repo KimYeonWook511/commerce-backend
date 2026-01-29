@@ -52,6 +52,9 @@ public class Payment extends BaseTimeEntity {
 	@Column(unique = true)
 	private String merchantPayKey;
 
+	@Column(unique = true)
+	private String pgPaymentId;
+
 	private String failureReason;
 
 	private LocalDateTime approvedAt;
@@ -94,6 +97,13 @@ public class Payment extends BaseTimeEntity {
 		this.status = PaymentStatus.CANCELED;
 		this.failureReason = reason;
 		this.approvedAt = null;
+	}
+
+	public void assignPgPaymentId(String pgPaymentId) {
+		if (this.pgPaymentId != null) {
+			return;
+		}
+		this.pgPaymentId = pgPaymentId;
 	}
 
 	private void validatePending() {
