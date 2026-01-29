@@ -12,7 +12,6 @@ import com.commerce.order.exception.OrderException;
 import com.commerce.order.repository.OrderRepository;
 import com.commerce.orderitem.domain.OrderItem;
 import com.commerce.payment.domain.Payment;
-import com.commerce.payment.domain.PaymentProvider;
 import com.commerce.payment.exception.PaymentErrorCode;
 import com.commerce.payment.exception.PaymentException;
 import com.commerce.payment.provider.PaymentProviderProperties;
@@ -52,7 +51,7 @@ public class PaymentService {
 		return PaymentReadyResponse.builder()
 			.clientId(properties.getClientId())
 			.chainId(properties.getChainId())
-			.merchantPayKey(buildMerchantPayKey(payment.getId()))
+			.merchantPayKey(payment.getMerchantPayKey())
 			.productName(buildProductName(items))
 			.productCount(productCount)
 			.totalPayAmount(totalPayAmount)
@@ -86,10 +85,6 @@ public class PaymentService {
 		Payment payment = getPayment(orderId);
 		payment.cancel(reason);
 		return payment;
-	}
-
-	private String buildMerchantPayKey(Long orderId) {
-		return "PAY-" + orderId;
 	}
 
 	private String buildProductName(List<OrderItem> items) {
