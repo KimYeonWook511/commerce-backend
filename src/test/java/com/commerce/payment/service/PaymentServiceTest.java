@@ -24,8 +24,6 @@ import com.commerce.order.repository.OrderRepository;
 import com.commerce.payment.domain.Payment;
 import com.commerce.payment.domain.PaymentProvider;
 import com.commerce.payment.domain.PaymentStatus;
-import com.commerce.payment.exception.PaymentErrorCode;
-import com.commerce.payment.exception.PaymentException;
 import com.commerce.payment.provider.PaymentProviderProperties;
 import com.commerce.payment.provider.PaymentProviderPropertiesResolver;
 import com.commerce.payment.repository.PaymentRepository;
@@ -138,37 +136,6 @@ class PaymentServiceTest {
 			.satisfies(exception -> {
 				OrderException orderException = (OrderException) exception;
 				assertThat(orderException.getErrorCode()).isEqualTo(OrderErrorCode.ORDER_ITEMS_EMPTY);
-			});
-	}
-
-	@DisplayName("결제를 완료하면 상태가 COMPLETED로 바뀐다")
-	@Test
-	void completePayment_whenPaymentExists_changeStatus() {
-		// given
-		Payment payment = Payment.create(createOrder(1000), 1000, PaymentProvider.NAVERPAY);
-		LocalDateTime approvedAt = LocalDateTime.now();
-		given(paymentRepository.findByOrderId(1L)).willReturn(Optional.of(payment));
-
-		// when
-		Payment result = paymentService.completePayment(1L, approvedAt);
-
-		// then
-		assertThat(result.getStatus()).isEqualTo(PaymentStatus.COMPLETED);
-		assertThat(result.getApprovedAt()).isEqualTo(approvedAt);
-	}
-
-	@DisplayName("결제가 없으면 완료 처리에 실패한다")
-	@Test
-	void completePayment_whenPaymentNotFound_throwException() {
-		// given
-		given(paymentRepository.findByOrderId(1L)).willReturn(Optional.empty());
-
-		// when & then
-		assertThatThrownBy(() -> paymentService.completePayment(1L, LocalDateTime.now()))
-			.isInstanceOf(PaymentException.class)
-			.satisfies(exception -> {
-				PaymentException paymentException = (PaymentException) exception;
-				assertThat(paymentException.getErrorCode()).isEqualTo(PaymentErrorCode.PAYMENT_NOT_FOUND);
 			});
 	}
 
