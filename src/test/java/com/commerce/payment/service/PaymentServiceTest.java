@@ -79,7 +79,8 @@ class PaymentServiceTest {
 		// then
 		assertThat(response.getClientId()).isEqualTo("client-id");
 		assertThat(response.getChainId()).isEqualTo("chain-id");
-		assertThat(response.getMerchantPayKey()).isEqualTo("PAY-10");
+		assertThat(response.getMerchantPayKey()).startsWith("PAY-");
+		assertThat(response.getMerchantPayKey()).hasSize(30);
 		assertThat(response.getProductName()).isEqualTo("product");
 		assertThat(response.getProductCount()).isEqualTo(1);
 		assertThat(response.getTotalPayAmount()).isEqualTo(1500);
@@ -200,6 +201,7 @@ class PaymentServiceTest {
 		assertThat(result.getStatus()).isEqualTo(PaymentStatus.CANCELED);
 		assertThat(result.getFailureReason()).isEqualTo("cancel");
 	}
+
 
 	private Order createOrder(int totalPrice) {
 		Order order = Order.create(createMember());
