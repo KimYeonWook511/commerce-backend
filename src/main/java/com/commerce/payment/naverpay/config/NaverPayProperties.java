@@ -12,11 +12,17 @@ public class NaverPayProperties implements PaymentProviderProperties {
 	@Value("${naverpay.client-id}")
 	private String clientId;
 
+	@Value("${naverpay.client-secret}")
+	private String clientSecret;
+
 	@Value("${naverpay.chain-id}")
 	private String chainId;
 
 	@Value("${naverpay.return-url}")
 	private String returnUrl;
+
+	@Value("${naverpay.approval-url}")
+	private String approvalUrl;
 
 	@Override
 	public PaymentProvider getProvider() {
@@ -29,6 +35,11 @@ public class NaverPayProperties implements PaymentProviderProperties {
 	}
 
 	@Override
+	public String getClientSecret() {
+		return clientSecret;
+	}
+
+	@Override
 	public String getChainId() {
 		return chainId;
 	}
@@ -37,4 +48,9 @@ public class NaverPayProperties implements PaymentProviderProperties {
 	public String getReturnUrl() {
 		return returnUrl;
 	}
+
+	public String getApprovalUrl() {
+		return approvalUrl;
+	}
+
 }

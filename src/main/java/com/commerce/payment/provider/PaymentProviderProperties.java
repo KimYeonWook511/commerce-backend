@@ -8,6 +8,8 @@ public interface PaymentProviderProperties {
 
 	String getClientId();
 
+	String getClientSecret();
+
 	String getChainId();
 
 	String getReturnUrl();
