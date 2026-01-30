@@ -2,7 +2,10 @@ package com.commerce.payment.controller;
 
 import static org.mockito.ArgumentMatchers.any;
 import static org.mockito.BDDMockito.given;
+import static org.mockito.BDDMockito.willThrow;
+import static org.springframework.test.web.servlet.request.MockMvcRequestBuilders.get;
 import static org.springframework.test.web.servlet.request.MockMvcRequestBuilders.post;
+import static org.springframework.test.web.servlet.result.MockMvcResultMatchers.header;
 import static org.springframework.test.web.servlet.result.MockMvcResultMatchers.jsonPath;
 import static org.springframework.test.web.servlet.result.MockMvcResultMatchers.status;
 
@@ -22,6 +25,11 @@ import com.commerce.auth.interceptor.AuthorizationInterceptor;
 import com.commerce.auth.jwt.JwtTokenValidator;
 import com.commerce.auth.resolver.AuthenticatedMemberIdArgumentResolver;
 import com.commerce.common.config.WebConfig;
+import com.commerce.payment.exception.PaymentErrorCode;
+import com.commerce.payment.exception.PaymentException;
+import com.commerce.payment.naverpay.service.NaverPayService;
+import com.commerce.payment.naverpay.service.result.NaverPayApproveResult;
+import com.commerce.payment.domain.PaymentStatus;
 import com.commerce.payment.service.PaymentService;
 import com.commerce.payment.service.request.PaymentReadyServiceRequest;
 import com.commerce.payment.service.response.PaymentReadyResponse;
@@ -45,6 +53,9 @@ class PaymentControllerTest {
 
 	@MockitoBean
 	private PaymentService paymentService;
+
+	@MockitoBean
+	private NaverPayService naverPayService;
 
 	@MockitoBean
 	private JwtTokenValidator jwtTokenValidator;
@@ -116,6 +127,51 @@ class PaymentControllerTest {
 			.andExpect(jsonPath("$.code").value("PAYMENT-400-1"))
 			.andExpect(jsonPath("$.message").value("지원하지 않는 결제 수단입니다"))
 			.andExpect(jsonPath("$.data").doesNotExist());
+	}
+
+	@DisplayName("결제 승인 성공이면 성공 페이지로 리다이렉트한다")
+	@Test
+	void approveNaverPay_whenSuccess_redirectToSuccess() throws Exception {
+		// given
+		NaverPayApproveResult result = NaverPayApproveResult.builder()
+			.orderId(1L)
+			.pgPaymentId("pg-payment-id")
+			.status(PaymentStatus.COMPLETED)
+			.build();
+		given(naverPayService.approve("pg-payment-id")).willReturn(result);
+
+		// when & then
+		mockMvc.perform(get("/payments/naverpay/return")
+				.param("resultCode", "Success")
+				.param("paymentId", "pg-payment-id"))
+			.andExpect(status().isFound())
+			.andExpect(header().string("Location", "/orders/1/payment/success"));
+	}
+
+	@DisplayName("결제 승인 실패 코드면 실패 페이지로 리다이렉트한다")
+	@Test
+	void approveNaverPay_whenResultCodeFail_redirectToFail() throws Exception {
+		// when & then
+		mockMvc.perform(get("/payments/naverpay/return")
+				.param("resultCode", "Fail")
+				.param("paymentId", "pg-payment-id"))
+			.andExpect(status().isFound())
+			.andExpect(header().string("Location", "/orders/payment/fail"));
+	}
+
+	@DisplayName("결제 승인 처리 중 예외가 발생하면 실패 페이지로 리다이렉트한다")
+	@Test
+	void approveNaverPay_whenApproveFails_redirectToFail() throws Exception {
+		// given
+		willThrow(new PaymentException(PaymentErrorCode.PAYMENT_APPROVAL_FAILED))
+			.given(naverPayService).approve("pg-payment-id");
+
+		// when & then
+		mockMvc.perform(get("/payments/naverpay/return")
+				.param("resultCode", "Success")
+				.param("paymentId", "pg-payment-id"))
+			.andExpect(status().isFound())
+			.andExpect(header().string("Location", "/orders/payment/fail"));
 	}
 
 	private void stubForValidToken() {
