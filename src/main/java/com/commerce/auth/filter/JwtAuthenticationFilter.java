@@ -30,7 +30,8 @@ public class JwtAuthenticationFilter extends OncePerRequestFilter {
 	private static final Set<String> WHITELIST = Set.of(
 		"/auth/login",
 		"/auth/signup",
-		"/auth/reissue"
+		"/auth/reissue",
+		"/payments/naverpay/return"
 	);
 
 	private final JwtTokenValidator jwtTokenValidator;
