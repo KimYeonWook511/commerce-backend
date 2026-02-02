@@ -79,29 +79,38 @@ public class Payment extends BaseTimeEntity {
 	}
 
 	public void completeWithPgPaymentId(String pgPaymentId, LocalDateTime approvedAt) {
-		validatePending();
+		validateProcessing();
 		this.pgPaymentId = pgPaymentId;
 		this.status = PaymentStatus.COMPLETED;
 		this.approvedAt = approvedAt;
 		this.failureReason = null;
 	}
 
-	public void fail(String reason) {
-		validatePending();
+	public void failWithPgPaymentId(String pgPaymentId, String reason) {
+		validateProcessing();
+		this.pgPaymentId = pgPaymentId;
 		this.status = PaymentStatus.FAILED;
 		this.failureReason = reason;
 		this.approvedAt = null;
 	}
 
 	public void cancel(String reason) {
-		validatePending();
+		validateCancelable();
 		this.status = PaymentStatus.CANCELED;
 		this.failureReason = reason;
 		this.approvedAt = null;
 	}
 
-	private void validatePending() {
-		if (this.status != PaymentStatus.PENDING) {
+	private void validateProcessing() {
+		if (this.status != PaymentStatus.PROCESSING) {
+			throw new PaymentException(PaymentErrorCode.PAYMENT_STATUS_NOT_ALLOWED);
+		}
+	}
+
+	private void validateCancelable() {
+		if (this.status != PaymentStatus.PENDING
+			&& this.status != PaymentStatus.PROCESSING
+			&& this.status != PaymentStatus.COMPLETED) {
 			throw new PaymentException(PaymentErrorCode.PAYMENT_STATUS_NOT_ALLOWED);
 		}
 	}

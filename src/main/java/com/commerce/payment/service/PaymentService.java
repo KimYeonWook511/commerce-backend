@@ -1,8 +1,10 @@
 package com.commerce.payment.service;
 
+import java.time.LocalDateTime;
 import java.util.List;
 
 import org.springframework.stereotype.Service;
+import org.springframework.transaction.annotation.Propagation;
 import org.springframework.transaction.annotation.Transactional;
 
 import com.commerce.order.domain.Order;
@@ -11,6 +13,7 @@ import com.commerce.order.exception.OrderException;
 import com.commerce.order.repository.OrderRepository;
 import com.commerce.orderitem.domain.OrderItem;
 import com.commerce.payment.domain.Payment;
+import com.commerce.payment.domain.PaymentStatus;
 import com.commerce.payment.exception.PaymentErrorCode;
 import com.commerce.payment.exception.PaymentException;
 import com.commerce.payment.provider.PaymentProviderProperties;
@@ -56,26 +59,48 @@ public class PaymentService {
 			.totalPayAmount(totalPayAmount)
 			.taxScopeAmount(totalPayAmount)
 			.taxExScopeAmount(0)
-			.returnUrl(properties.getReturnUrl())
+			.returnUrl(buildReturnUrl(properties.getReturnUrl(), payment.getMerchantPayKey()))
 			.build();
 	}
 
-	public Payment getPayment(Long orderId) {
-		return paymentRepository.findByOrderId(orderId)
+	public Payment getPaymentByMerchantPayKey(String merchantPayKey) {
+		return paymentRepository.findByMerchantPayKey(merchantPayKey)
 			.orElseThrow(() -> new PaymentException(PaymentErrorCode.PAYMENT_NOT_FOUND));
 	}
 
 	@Transactional
 	public Payment failPayment(Long orderId, String reason) {
-		Payment payment = getPayment(orderId);
-		payment.fail(reason);
+		Payment payment = paymentRepository.findByOrderId(orderId)
+			.orElseThrow(() -> new PaymentException(PaymentErrorCode.PAYMENT_NOT_FOUND));
+		payment.failWithPgPaymentId(null, reason);
 		return payment;
 	}
 
 	@Transactional
 	public Payment cancelPayment(Long orderId, String reason) {
-		Payment payment = getPayment(orderId);
+		Payment payment = paymentRepository.findByOrderId(orderId)
+			.orElseThrow(() -> new PaymentException(PaymentErrorCode.PAYMENT_NOT_FOUND));
 		payment.cancel(reason);
+		return payment;
+	}
+
+	@Transactional(propagation = Propagation.REQUIRES_NEW)
+	public int markProcessing(String merchantPayKey) {
+		return paymentRepository.updateStatusIfMatches(
+			merchantPayKey, PaymentStatus.PENDING, PaymentStatus.PROCESSING);
+	}
+
+	@Transactional(propagation = Propagation.REQUIRES_NEW)
+	public Payment completePayment(String merchantPayKey, String pgPaymentId, LocalDateTime approvedAt) {
+		Payment payment = getPaymentByMerchantPayKey(merchantPayKey);
+		payment.completeWithPgPaymentId(pgPaymentId, approvedAt);
+		return payment;
+	}
+
+	@Transactional(propagation = Propagation.REQUIRES_NEW)
+	public Payment failPayment(String merchantPayKey, String pgPaymentId, String reason) {
+		Payment payment = getPaymentByMerchantPayKey(merchantPayKey);
+		payment.failWithPgPaymentId(pgPaymentId, reason);
 		return payment;
 	}
 
@@ -90,5 +115,9 @@ public class PaymentService {
 		}
 
 		return firstName + " 외 " + (items.size() - 1) + "건";
+	}
+
+	private String buildReturnUrl(String baseUrl, String merchantPayKey) {
+		return baseUrl + "/" + merchantPayKey;
 	}
 }
