@@ -30,8 +30,7 @@ public class JwtAuthenticationFilter extends OncePerRequestFilter {
 	private static final Set<String> WHITELIST = Set.of(
 		"/auth/login",
 		"/auth/signup",
-		"/auth/reissue",
-		"/payments/naverpay/return"
+		"/auth/reissue"
 	);
 
 	private final JwtTokenValidator jwtTokenValidator;
@@ -45,7 +44,8 @@ public class JwtAuthenticationFilter extends OncePerRequestFilter {
 	) throws ServletException, IOException {
 
 		// 인증이 필요 없는 경로 요청
-		if (WHITELIST.contains(request.getRequestURI())) {
+		String requestUri = request.getRequestURI();
+		if (WHITELIST.contains(requestUri) || requestUri.startsWith("/payments/naverpay/return/")) {
 			filterChain.doFilter(request, response);
 			return;
 		}
