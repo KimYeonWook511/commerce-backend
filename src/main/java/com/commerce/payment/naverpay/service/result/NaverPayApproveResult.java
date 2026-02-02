@@ -1,7 +1,5 @@
 package com.commerce.payment.naverpay.service.result;
 
-import com.commerce.payment.domain.PaymentStatus;
-
 import lombok.Builder;
 import lombok.Getter;
 
@@ -10,10 +8,10 @@ public class NaverPayApproveResult {
 
 	private Long orderId;
 	private String pgPaymentId;
-	private PaymentStatus status;
+	private NaverPayApproveStatus status;
 
 	@Builder
-	private NaverPayApproveResult(Long orderId, String pgPaymentId, PaymentStatus status) {
+	private NaverPayApproveResult(Long orderId, String pgPaymentId, NaverPayApproveStatus status) {
 		this.orderId = orderId;
 		this.pgPaymentId = pgPaymentId;
 		this.status = status;
