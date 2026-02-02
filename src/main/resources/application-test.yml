@@ -29,3 +29,10 @@ jwt:
   refresh:
     secret.key: testRefreshSecretKey0123456789abcdef!!
     expiration: 604800000
+
+naverpay:
+  client-id: test
+  client-secret: test
+  chain-id: test
+  return-url: https://test
+  approval-url: https://test
