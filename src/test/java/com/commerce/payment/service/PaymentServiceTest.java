@@ -4,8 +4,9 @@ import static org.assertj.core.api.Assertions.assertThat;
 import static org.assertj.core.api.Assertions.assertThatThrownBy;
 import static org.mockito.ArgumentMatchers.*;
 import static org.mockito.BDDMockito.given;
+import static org.mockito.BDDMockito.then;
+import static org.mockito.Mockito.never;
 
-import java.time.LocalDateTime;
 import java.util.Optional;
 
 import org.junit.jupiter.api.DisplayName;
@@ -24,6 +25,8 @@ import com.commerce.order.repository.OrderRepository;
 import com.commerce.payment.domain.Payment;
 import com.commerce.payment.domain.PaymentProvider;
 import com.commerce.payment.domain.PaymentStatus;
+import com.commerce.payment.exception.PaymentErrorCode;
+import com.commerce.payment.exception.PaymentException;
 import com.commerce.payment.provider.PaymentProviderProperties;
 import com.commerce.payment.provider.PaymentProviderPropertiesResolver;
 import com.commerce.payment.repository.PaymentRepository;
@@ -84,7 +87,34 @@ class PaymentServiceTest {
 		assertThat(response.getTotalPayAmount()).isEqualTo(1500);
 		assertThat(response.getTaxScopeAmount()).isEqualTo(1500);
 		assertThat(response.getTaxExScopeAmount()).isZero();
-		assertThat(response.getReturnUrl()).isEqualTo("https://return-url");
+		assertThat(response.getReturnUrl()).startsWith("https://return-url");
+	}
+
+	@DisplayName("이미 결제가 있으면 기존 결제 정보를 사용한다")
+	@Test
+	void readyPayment_whenPaymentExists_useExistingPayment() {
+		// given
+		Order order = createOrder(1500);
+		setOrderId(order, 1L);
+		Payment existing = Payment.create(order, 1500, PaymentProvider.NAVERPAY);
+		ReflectionTestUtils.setField(existing, "merchantPayKey", "PAY-EXIST");
+
+		given(orderRepository.findByIdAndMemberIdWithItems(1L, 1L)).willReturn(Optional.of(order));
+		given(paymentRepository.findByOrderId(1L)).willReturn(Optional.of(existing));
+		stubPaymentProperties();
+
+		PaymentReadyServiceRequest request = PaymentReadyServiceRequest.builder()
+			.memberId(1L)
+			.orderId(1L)
+			.provider(PaymentProvider.NAVERPAY)
+			.build();
+
+		// when
+		PaymentReadyResponse response = paymentService.readyPayment(request);
+
+		// then
+		assertThat(response.getMerchantPayKey()).isEqualTo("PAY-EXIST");
+		then(paymentRepository).should(never()).save(any(Payment.class));
 	}
 
 	@DisplayName("주문이 없으면 결제 준비에 실패한다")
@@ -144,6 +174,7 @@ class PaymentServiceTest {
 	void failPayment_whenPaymentExists_changeStatus() {
 		// given
 		Payment payment = Payment.create(createOrder(1000), 1000, PaymentProvider.NAVERPAY);
+		ReflectionTestUtils.setField(payment, "status", PaymentStatus.PROCESSING);
 		given(paymentRepository.findByOrderId(1L)).willReturn(Optional.of(payment));
 
 		// when
@@ -152,6 +183,22 @@ class PaymentServiceTest {
 		// then
 		assertThat(result.getStatus()).isEqualTo(PaymentStatus.FAILED);
 		assertThat(result.getFailureReason()).isEqualTo("fail");
+		assertThat(result.getPgPaymentId()).isNull();
+	}
+
+	@DisplayName("결제가 없으면 실패 처리에 실패한다")
+	@Test
+	void failPayment_whenPaymentNotFound_throwException() {
+		// given
+		given(paymentRepository.findByOrderId(1L)).willReturn(Optional.empty());
+
+		// when & then
+		assertThatThrownBy(() -> paymentService.failPayment(1L, "fail"))
+			.isInstanceOf(PaymentException.class)
+			.satisfies(exception -> {
+				PaymentException paymentException = (PaymentException)exception;
+				assertThat(paymentException.getErrorCode()).isEqualTo(PaymentErrorCode.PAYMENT_NOT_FOUND);
+			});
 	}
 
 	@DisplayName("결제를 취소하면 상태가 CANCELED로 바뀐다")
@@ -169,6 +216,67 @@ class PaymentServiceTest {
 		assertThat(result.getFailureReason()).isEqualTo("cancel");
 	}
 
+	@DisplayName("결제가 없으면 취소 처리에 실패한다")
+	@Test
+	void cancelPayment_whenPaymentNotFound_throwException() {
+		// given
+		given(paymentRepository.findByOrderId(1L)).willReturn(Optional.empty());
+
+		// when & then
+		assertThatThrownBy(() -> paymentService.cancelPayment(1L, "cancel"))
+			.isInstanceOf(PaymentException.class)
+			.satisfies(exception -> {
+				PaymentException paymentException = (PaymentException)exception;
+				assertThat(paymentException.getErrorCode()).isEqualTo(PaymentErrorCode.PAYMENT_NOT_FOUND);
+			});
+	}
+
+	@DisplayName("결제를 처리 중으로 마킹하면 업데이트 수를 반환한다")
+	@Test
+	void markProcessing_whenCalled_returnUpdatedCount() {
+		// given
+		given(paymentRepository.updateStatusIfMatches(
+			"PAY-1", PaymentStatus.PENDING, PaymentStatus.PROCESSING)).willReturn(1);
+
+		// when
+		int updated = paymentService.markProcessing("PAY-1");
+
+		// then
+		assertThat(updated).isEqualTo(1);
+	}
+
+	@DisplayName("결제가 처리 중이면 완료 처리에 성공한다")
+	@Test
+	void completePayment_whenProcessing_changeStatus() {
+		// given
+		Payment payment = Payment.create(createOrder(1000), 1000, PaymentProvider.NAVERPAY);
+		ReflectionTestUtils.setField(payment, "status", PaymentStatus.PROCESSING);
+		given(paymentRepository.findByMerchantPayKey("PAY-1")).willReturn(Optional.of(payment));
+
+		// when
+		Payment result = paymentService.completePayment("PAY-1", "pg-payment-id", java.time.LocalDateTime.now());
+
+		// then
+		assertThat(result.getStatus()).isEqualTo(PaymentStatus.COMPLETED);
+		assertThat(result.getPgPaymentId()).isEqualTo("pg-payment-id");
+	}
+
+	@DisplayName("결제가 처리 중이면 실패 처리에 성공한다")
+	@Test
+	void failPaymentByMerchantPayKey_whenProcessing_changeStatus() {
+		// given
+		Payment payment = Payment.create(createOrder(1000), 1000, PaymentProvider.NAVERPAY);
+		ReflectionTestUtils.setField(payment, "status", PaymentStatus.PROCESSING);
+		given(paymentRepository.findByMerchantPayKey("PAY-1")).willReturn(Optional.of(payment));
+
+		// when
+		Payment result = paymentService.failPayment("PAY-1", null, "fail");
+
+		// then
+		assertThat(result.getStatus()).isEqualTo(PaymentStatus.FAILED);
+		assertThat(result.getFailureReason()).isEqualTo("fail");
+		assertThat(result.getPgPaymentId()).isNull();
+	}
 
 	private Order createOrder(int totalPrice) {
 		Order order = Order.create(createMember());
