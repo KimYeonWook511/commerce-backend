@@ -68,20 +68,9 @@ public class PaymentService {
 			.orElseThrow(() -> new PaymentException(PaymentErrorCode.PAYMENT_NOT_FOUND));
 	}
 
-	@Transactional
-	public Payment failPayment(Long orderId, String reason) {
-		Payment payment = paymentRepository.findByOrderId(orderId)
+	public Payment getPaymentByMerchantPayKeyAndMemberId(String merchantPayKey, Long memberId) {
+		return paymentRepository.findByMerchantPayKeyAndMemberId(merchantPayKey, memberId)
 			.orElseThrow(() -> new PaymentException(PaymentErrorCode.PAYMENT_NOT_FOUND));
-		payment.failWithPgPaymentId(null, reason);
-		return payment;
-	}
-
-	@Transactional
-	public Payment cancelPayment(Long orderId, String reason) {
-		Payment payment = paymentRepository.findByOrderId(orderId)
-			.orElseThrow(() -> new PaymentException(PaymentErrorCode.PAYMENT_NOT_FOUND));
-		payment.cancel(reason);
-		return payment;
 	}
 
 	@Transactional(propagation = Propagation.REQUIRES_NEW)
@@ -118,6 +107,6 @@ public class PaymentService {
 	}
 
 	private String buildReturnUrl(String baseUrl, String merchantPayKey) {
-		return baseUrl + "/" + merchantPayKey;
+		return baseUrl + "?merchantPayKey=" + merchantPayKey;
 	}
 }

@@ -16,6 +16,19 @@ public interface PaymentRepository extends JpaRepository<Payment, Long> {
 
 	Optional<Payment> findByMerchantPayKey(String merchantPayKey);
 
+	@Query("""
+		select p
+		from Payment p
+		join p.order o
+		join o.member m
+		where p.merchantPayKey = :merchantPayKey
+		and m.id = :memberId
+		""")
+	Optional<Payment> findByMerchantPayKeyAndMemberId(
+		@Param("merchantPayKey") String merchantPayKey,
+		@Param("memberId") Long memberId
+	);
+
 	@Modifying(flushAutomatically = true, clearAutomatically = true)
 	@Query("""
 		update Payment p
