@@ -1,4 +1,4 @@
-package com.commerce.payment.naverpay.client.response;
+package com.commerce.payment.naverpay.client.response.body;
 
 import com.fasterxml.jackson.annotation.JsonIgnoreProperties;
 
@@ -6,18 +6,10 @@ import lombok.Getter;
 
 @Getter
 @JsonIgnoreProperties(ignoreUnknown = true)
-public class NaverPayApproveResponse {
+public class NaverPayApproveBody {
 
-	private String code;
-	private String message;
-	private Body body;
-
-	@Getter
-	@JsonIgnoreProperties(ignoreUnknown = true)
-	public static class Body {
-		private String paymentId;
-		private Detail detail;
-	}
+	private String paymentId;
+	private Detail detail;
 
 	@Getter
 	@JsonIgnoreProperties(ignoreUnknown = true)
