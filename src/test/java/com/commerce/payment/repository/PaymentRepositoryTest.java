@@ -2,6 +2,8 @@ package com.commerce.payment.repository;
 
 import static org.assertj.core.api.Assertions.assertThat;
 
+import java.util.Optional;
+
 import org.junit.jupiter.api.DisplayName;
 import org.junit.jupiter.api.Test;
 import org.springframework.beans.factory.annotation.Autowired;
@@ -67,11 +69,55 @@ class PaymentRepositoryTest {
 		assertThat(updated).isEqualTo(0);
 	}
 
+	@DisplayName("결제 키와 회원 ID가 일치하면 결제를 조회한다")
+	@Test
+	void findByMerchantPayKeyAndMemberId_whenMatch_returnPayment() {
+		// given
+		Member member = createMember();
+		Order order = createOrder(member);
+		Payment payment = Payment.create(order, 1000, PaymentProvider.NAVERPAY);
+		paymentRepository.save(payment);
+
+		// when
+		Optional<Payment> result =
+			paymentRepository.findByMerchantPayKeyAndMemberId(payment.getMerchantPayKey(), member.getId());
+
+		// then
+		assertThat(result).isPresent();
+	}
+
+	@DisplayName("결제 키와 회원 ID가 다르면 결제를 조회하지 못한다")
+	@Test
+	void findByMerchantPayKeyAndMemberId_whenMemberMismatch_returnEmpty() {
+		// given
+		Member member = createMember();
+		Member other = createOtherMember();
+		Order order = createOrder(member);
+		Payment payment = Payment.create(order, 1000, PaymentProvider.NAVERPAY);
+		paymentRepository.save(payment);
+
+		// when
+		Optional<Payment> result =
+			paymentRepository.findByMerchantPayKeyAndMemberId(payment.getMerchantPayKey(), other.getId());
+
+		// then
+		assertThat(result).isEmpty();
+	}
+
 	private Member createMember() {
 		Member member = Member.builder()
 			.email("payment-repo@example.com")
 			.password("password123")
 			.username("payer")
+			.build();
+		return memberRepository.save(member);
+	}
+
+	private Member createOtherMember() {
+		Member member = Member.builder()
+			.email("payment-repo2@example.com")
+			.password("password123")
+			.username("payer2")
 			.build();
 		return memberRepository.save(member);
 	}

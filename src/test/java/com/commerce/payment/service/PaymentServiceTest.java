@@ -2,7 +2,7 @@ package com.commerce.payment.service;
 
 import static org.assertj.core.api.Assertions.assertThat;
 import static org.assertj.core.api.Assertions.assertThatThrownBy;
-import static org.mockito.ArgumentMatchers.*;
+import static org.mockito.ArgumentMatchers.any;
 import static org.mockito.BDDMockito.given;
 import static org.mockito.BDDMockito.then;
 import static org.mockito.Mockito.never;
@@ -169,68 +169,6 @@ class PaymentServiceTest {
 			});
 	}
 
-	@DisplayName("결제를 실패 처리하면 상태가 FAILED로 바뀐다")
-	@Test
-	void failPayment_whenPaymentExists_changeStatus() {
-		// given
-		Payment payment = Payment.create(createOrder(1000), 1000, PaymentProvider.NAVERPAY);
-		ReflectionTestUtils.setField(payment, "status", PaymentStatus.PROCESSING);
-		given(paymentRepository.findByOrderId(1L)).willReturn(Optional.of(payment));
-
-		// when
-		Payment result = paymentService.failPayment(1L, "fail");
-
-		// then
-		assertThat(result.getStatus()).isEqualTo(PaymentStatus.FAILED);
-		assertThat(result.getFailureReason()).isEqualTo("fail");
-		assertThat(result.getPgPaymentId()).isNull();
-	}
-
-	@DisplayName("결제가 없으면 실패 처리에 실패한다")
-	@Test
-	void failPayment_whenPaymentNotFound_throwException() {
-		// given
-		given(paymentRepository.findByOrderId(1L)).willReturn(Optional.empty());
-
-		// when & then
-		assertThatThrownBy(() -> paymentService.failPayment(1L, "fail"))
-			.isInstanceOf(PaymentException.class)
-			.satisfies(exception -> {
-				PaymentException paymentException = (PaymentException)exception;
-				assertThat(paymentException.getErrorCode()).isEqualTo(PaymentErrorCode.PAYMENT_NOT_FOUND);
-			});
-	}
-
-	@DisplayName("결제를 취소하면 상태가 CANCELED로 바뀐다")
-	@Test
-	void cancelPayment_whenPaymentExists_changeStatus() {
-		// given
-		Payment payment = Payment.create(createOrder(1000), 1000, PaymentProvider.NAVERPAY);
-		given(paymentRepository.findByOrderId(1L)).willReturn(Optional.of(payment));
-
-		// when
-		Payment result = paymentService.cancelPayment(1L, "cancel");
-
-		// then
-		assertThat(result.getStatus()).isEqualTo(PaymentStatus.CANCELED);
-		assertThat(result.getFailureReason()).isEqualTo("cancel");
-	}
-
-	@DisplayName("결제가 없으면 취소 처리에 실패한다")
-	@Test
-	void cancelPayment_whenPaymentNotFound_throwException() {
-		// given
-		given(paymentRepository.findByOrderId(1L)).willReturn(Optional.empty());
-
-		// when & then
-		assertThatThrownBy(() -> paymentService.cancelPayment(1L, "cancel"))
-			.isInstanceOf(PaymentException.class)
-			.satisfies(exception -> {
-				PaymentException paymentException = (PaymentException)exception;
-				assertThat(paymentException.getErrorCode()).isEqualTo(PaymentErrorCode.PAYMENT_NOT_FOUND);
-			});
-	}
-
 	@DisplayName("결제를 처리 중으로 마킹하면 업데이트 수를 반환한다")
 	@Test
 	void markProcessing_whenCalled_returnUpdatedCount() {
@@ -261,6 +199,21 @@ class PaymentServiceTest {
 		assertThat(result.getPgPaymentId()).isEqualTo("pg-payment-id");
 	}
 
+	@DisplayName("결제가 없으면 완료 처리에 실패한다")
+	@Test
+	void completePayment_whenPaymentNotFound_throwException() {
+		// given
+		given(paymentRepository.findByMerchantPayKey("PAY-1")).willReturn(Optional.empty());
+
+		// when & then
+		assertThatThrownBy(() -> paymentService.completePayment("PAY-1", "pg-payment-id", java.time.LocalDateTime.now()))
+			.isInstanceOf(PaymentException.class)
+			.satisfies(exception -> {
+				PaymentException paymentException = (PaymentException) exception;
+				assertThat(paymentException.getErrorCode()).isEqualTo(PaymentErrorCode.PAYMENT_NOT_FOUND);
+			});
+	}
+
 	@DisplayName("결제가 처리 중이면 실패 처리에 성공한다")
 	@Test
 	void failPaymentByMerchantPayKey_whenProcessing_changeStatus() {
@@ -276,6 +229,52 @@ class PaymentServiceTest {
 		assertThat(result.getStatus()).isEqualTo(PaymentStatus.FAILED);
 		assertThat(result.getFailureReason()).isEqualTo("fail");
 		assertThat(result.getPgPaymentId()).isNull();
+	}
+
+	@DisplayName("결제가 없으면 실패 처리에 실패한다")
+	@Test
+	void failPaymentByMerchantPayKey_whenPaymentNotFound_throwException() {
+		// given
+		given(paymentRepository.findByMerchantPayKey("PAY-1")).willReturn(Optional.empty());
+
+		// when & then
+		assertThatThrownBy(() -> paymentService.failPayment("PAY-1", null, "fail"))
+			.isInstanceOf(PaymentException.class)
+			.satisfies(exception -> {
+				PaymentException paymentException = (PaymentException) exception;
+				assertThat(paymentException.getErrorCode()).isEqualTo(PaymentErrorCode.PAYMENT_NOT_FOUND);
+			});
+	}
+
+	@DisplayName("결제 키와 회원 ID가 일치하면 결제를 조회한다")
+	@Test
+	void getPaymentByMerchantPayKeyAndMemberId_whenExists_returnPayment() {
+		// given
+		Payment payment = Payment.create(createOrder(1000), 1000, PaymentProvider.NAVERPAY);
+		given(paymentRepository.findByMerchantPayKeyAndMemberId("PAY-1", 1L))
+			.willReturn(Optional.of(payment));
+
+		// when
+		Payment result = paymentService.getPaymentByMerchantPayKeyAndMemberId("PAY-1", 1L);
+
+		// then
+		assertThat(result).isEqualTo(payment);
+	}
+
+	@DisplayName("결제 키와 회원 ID에 해당하는 결제가 없으면 예외가 발생한다")
+	@Test
+	void getPaymentByMerchantPayKeyAndMemberId_whenNotFound_throwException() {
+		// given
+		given(paymentRepository.findByMerchantPayKeyAndMemberId("PAY-1", 1L))
+			.willReturn(Optional.empty());
+
+		// when & then
+		assertThatThrownBy(() -> paymentService.getPaymentByMerchantPayKeyAndMemberId("PAY-1", 1L))
+			.isInstanceOf(PaymentException.class)
+			.satisfies(exception -> {
+				PaymentException paymentException = (PaymentException) exception;
+				assertThat(paymentException.getErrorCode()).isEqualTo(PaymentErrorCode.PAYMENT_NOT_FOUND);
+			});
 	}
 
 	private Order createOrder(int totalPrice) {
