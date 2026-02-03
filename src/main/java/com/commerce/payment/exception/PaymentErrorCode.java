@@ -9,6 +9,11 @@ public enum PaymentErrorCode implements ErrorCode {
 	PAYMENT_PROVIDER_NOT_SUPPORTED(HttpStatus.BAD_REQUEST, "PAYMENT-400-1", "지원하지 않는 결제 수단입니다"),
 	PAYMENT_APPROVAL_FAILED(HttpStatus.BAD_REQUEST, "PAYMENT-400-2", "결제 승인에 실패했습니다"),
 	PAYMENT_MERCHANT_KEY_MISMATCH(HttpStatus.BAD_REQUEST, "PAYMENT-400-3", "결제 식별 공개 키가 일치하지 않습니다"),
+	PAYMENT_APPROVAL_RETRYABLE_FAILED(HttpStatus.BAD_REQUEST, "PAYMENT-400-4", "결제 승인에 일시적인 오류가 발생했습니다"),
+	PAYMENT_USER_CANCELED(HttpStatus.BAD_REQUEST, "PAYMENT-400-5", "사용자가 결제를 취소했습니다"),
+	PAYMENT_TIME_EXPIRED(HttpStatus.BAD_REQUEST, "PAYMENT-400-6", "결제 시간이 초과되었습니다"),
+	PAYMENT_UNDERAGE_LIMIT(HttpStatus.BAD_REQUEST, "PAYMENT-400-7", "미성년자 결제 한도 초과로 결제가 실패했습니다"),
+	PAYMENT_AMOUNT_MISMATCH(HttpStatus.BAD_REQUEST, "PAYMENT-400-8", "결제 금액이 일치하지 않습니다"),
 	PAYMENT_STATUS_NOT_ALLOWED(HttpStatus.CONFLICT, "PAYMENT-409-1", "결제 상태 변경이 허용되지 않습니다");
 
 	private final HttpStatus status;
