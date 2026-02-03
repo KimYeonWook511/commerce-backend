@@ -5,6 +5,8 @@ import static org.assertj.core.api.Assertions.assertThatThrownBy;
 import static org.mockito.ArgumentMatchers.any;
 import static org.mockito.ArgumentMatchers.eq;
 import static org.mockito.BDDMockito.given;
+import static org.mockito.BDDMockito.then;
+import static org.mockito.Mockito.never;
 
 import org.junit.jupiter.api.DisplayName;
 import org.junit.jupiter.api.Test;
@@ -22,7 +24,10 @@ import com.commerce.payment.domain.PaymentStatus;
 import com.commerce.payment.exception.PaymentErrorCode;
 import com.commerce.payment.exception.PaymentException;
 import com.commerce.payment.naverpay.client.NaverPayClient;
-import com.commerce.payment.naverpay.client.response.NaverPayApproveResponse;
+import com.commerce.payment.naverpay.client.response.body.NaverPayApproveBody;
+import com.commerce.payment.naverpay.client.response.NaverPayResponse;
+import com.commerce.payment.naverpay.exception.NaverPayErrorCode;
+import com.commerce.payment.naverpay.exception.NaverPayException;
 import com.commerce.payment.naverpay.service.result.NaverPayApproveResult;
 import com.commerce.payment.naverpay.service.result.NaverPayApproveStatus;
 import com.commerce.payment.service.PaymentService;
@@ -44,189 +49,369 @@ class NaverPayServiceTest {
 	@Test
 	void approve_whenSuccess_returnResult() {
 		// given
+		long memberId = 1L;
 		Order order = createOrder(1000);
-		setOrderId(order, 1L);
 		Payment pending = Payment.create(order, 1000, PaymentProvider.NAVERPAY);
 		String merchantPayKey = pending.getMerchantPayKey();
 
-		NaverPayApproveResponse response = buildApprovalResponse(merchantPayKey, 1000, "Success", "SUCCESS");
+		NaverPayResponse<NaverPayApproveBody> response = buildApprovalResponse(merchantPayKey, 1000, "Success", "SUCCESS");
 		given(naverPayClient.approve("pg-payment-id")).willReturn(response);
+		given(paymentService.getPaymentByMerchantPayKeyAndMemberId(merchantPayKey, memberId)).willReturn(pending);
 		given(paymentService.getPaymentByMerchantPayKey(merchantPayKey)).willReturn(pending);
 		given(paymentService.markProcessing(merchantPayKey)).willReturn(1);
 		given(paymentService.completePayment(eq(merchantPayKey), eq("pg-payment-id"), any()))
 			.willReturn(completedFrom(pending, "pg-payment-id"));
 
 		// when
-		NaverPayApproveResult result = naverPayService.approve(merchantPayKey, "pg-payment-id");
+		NaverPayApproveResult result = naverPayService.approve(memberId, merchantPayKey, "pg-payment-id");
 
 		// then
-		assertThat(result.getOrderId()).isEqualTo(1L);
 		assertThat(result.getPgPaymentId()).isEqualTo("pg-payment-id");
 		assertThat(result.getStatus()).isEqualTo(NaverPayApproveStatus.SUCCESS);
 	}
 
-	@DisplayName("응답이 비어있으면 결제 승인에 실패한다")
+	@DisplayName("네이버페이 서버 오류면 재시도 가능한 실패로 처리한다")
 	@Test
-	void approve_whenResponseNull_returnFail() {
+	void approve_whenRetryableException_returnRetryableFail() {
 		// given
+		long memberId = 1L;
 		Payment pending = Payment.create(createOrder(1000), 1000, PaymentProvider.NAVERPAY);
 		String merchantPayKey = pending.getMerchantPayKey();
-		given(naverPayClient.approve("pg-payment-id")).willReturn(null);
-		given(paymentService.getPaymentByMerchantPayKey(merchantPayKey)).willReturn(pending);
+		given(paymentService.getPaymentByMerchantPayKeyAndMemberId(merchantPayKey, memberId)).willReturn(pending);
 		given(paymentService.markProcessing(merchantPayKey)).willReturn(1);
-		given(paymentService.failPayment(merchantPayKey, null, PaymentErrorCode.PAYMENT_APPROVAL_FAILED.getMessage()))
+		given(naverPayClient.approve("pg-payment-id"))
+			.willThrow(new NaverPayException(NaverPayErrorCode.SERVER_ERROR, "server error"));
+		given(paymentService.failPayment(
+			merchantPayKey, null, PaymentErrorCode.PAYMENT_APPROVAL_RETRYABLE_FAILED.getMessage()))
 			.willReturn(failedFrom(pending));
 
 		// when
-		NaverPayApproveResult result = naverPayService.approve(merchantPayKey, "pg-payment-id");
+		NaverPayApproveResult result = naverPayService.approve(memberId, merchantPayKey, "pg-payment-id");
 
 		// then
 		assertThat(result.getStatus()).isEqualTo(NaverPayApproveStatus.FAIL);
+		then(paymentService).should().failPayment(
+			merchantPayKey, null, PaymentErrorCode.PAYMENT_APPROVAL_RETRYABLE_FAILED.getMessage());
 	}
 
-	@DisplayName("승인 코드가 Success가 아니면 결제 승인에 실패한다")
+	@DisplayName("네이버페이 네트워크 오류면 재시도 가능한 실패로 처리한다")
 	@Test
-	void approve_whenCodeNotSuccess_returnFail() {
+	void approve_whenNetworkException_returnRetryableFail() {
 		// given
+		long memberId = 1L;
 		Payment pending = Payment.create(createOrder(1000), 1000, PaymentProvider.NAVERPAY);
 		String merchantPayKey = pending.getMerchantPayKey();
-		NaverPayApproveResponse response = buildApprovalResponse(merchantPayKey, 1000, "Fail", "SUCCESS");
-		given(naverPayClient.approve("pg-payment-id")).willReturn(response);
-		given(paymentService.getPaymentByMerchantPayKey(merchantPayKey)).willReturn(pending);
+		given(paymentService.getPaymentByMerchantPayKeyAndMemberId(merchantPayKey, memberId)).willReturn(pending);
 		given(paymentService.markProcessing(merchantPayKey)).willReturn(1);
-		given(paymentService.failPayment(merchantPayKey, null, PaymentErrorCode.PAYMENT_APPROVAL_FAILED.getMessage()))
+		given(naverPayClient.approve("pg-payment-id"))
+			.willThrow(new NaverPayException(NaverPayErrorCode.NETWORK, "network error"));
+		given(paymentService.failPayment(
+			merchantPayKey, null, PaymentErrorCode.PAYMENT_APPROVAL_RETRYABLE_FAILED.getMessage()))
 			.willReturn(failedFrom(pending));
 
 		// when
-		NaverPayApproveResult result = naverPayService.approve(merchantPayKey, "pg-payment-id");
+		NaverPayApproveResult result = naverPayService.approve(memberId, merchantPayKey, "pg-payment-id");
 
 		// then
 		assertThat(result.getStatus()).isEqualTo(NaverPayApproveStatus.FAIL);
+		then(paymentService).should().failPayment(
+			merchantPayKey, null, PaymentErrorCode.PAYMENT_APPROVAL_RETRYABLE_FAILED.getMessage());
 	}
 
-	@DisplayName("승인 상태가 SUCCESS가 아니면 결제 승인에 실패한다")
+	@DisplayName("네이버페이 응답 오류면 실패로 처리한다")
 	@Test
-	void approve_whenAdmissionStateNotSuccess_returnFail() {
+	void approve_whenNonRetryableException_returnFail() {
 		// given
+		long memberId = 1L;
 		Payment pending = Payment.create(createOrder(1000), 1000, PaymentProvider.NAVERPAY);
 		String merchantPayKey = pending.getMerchantPayKey();
-		NaverPayApproveResponse response = buildApprovalResponse(merchantPayKey, 1000, "Success", "FAIL");
-		given(naverPayClient.approve("pg-payment-id")).willReturn(response);
-		given(paymentService.getPaymentByMerchantPayKey(merchantPayKey)).willReturn(pending);
+		given(paymentService.getPaymentByMerchantPayKeyAndMemberId(merchantPayKey, memberId)).willReturn(pending);
 		given(paymentService.markProcessing(merchantPayKey)).willReturn(1);
-		given(paymentService.failPayment(merchantPayKey, null, PaymentErrorCode.PAYMENT_APPROVAL_FAILED.getMessage()))
+		given(naverPayClient.approve("pg-payment-id"))
+			.willThrow(new NaverPayException(NaverPayErrorCode.INVALID_RESPONSE, "invalid response"));
+		given(paymentService.failPayment(
+			merchantPayKey, null, PaymentErrorCode.PAYMENT_APPROVAL_FAILED.getMessage()))
 			.willReturn(failedFrom(pending));
 
 		// when
-		NaverPayApproveResult result = naverPayService.approve(merchantPayKey, "pg-payment-id");
+		NaverPayApproveResult result = naverPayService.approve(memberId, merchantPayKey, "pg-payment-id");
 
 		// then
 		assertThat(result.getStatus()).isEqualTo(NaverPayApproveStatus.FAIL);
+		then(paymentService).should().failPayment(
+			merchantPayKey, null, PaymentErrorCode.PAYMENT_APPROVAL_FAILED.getMessage());
 	}
 
-	@DisplayName("결제 정보가 없으면 결제 승인에 실패한다")
+	@DisplayName("네이버페이 인증 오류면 실패로 처리한다")
 	@Test
-	void approve_whenPaymentNotFound_throwException() {
+	void approve_whenAuthenticationException_returnFail() {
 		// given
-		given(paymentService.getPaymentByMerchantPayKey("PAY-1"))
-			.willThrow(new PaymentException(PaymentErrorCode.PAYMENT_NOT_FOUND));
+		long memberId = 1L;
+		Payment pending = Payment.create(createOrder(1000), 1000, PaymentProvider.NAVERPAY);
+		String merchantPayKey = pending.getMerchantPayKey();
+		given(paymentService.getPaymentByMerchantPayKeyAndMemberId(merchantPayKey, memberId)).willReturn(pending);
+		given(paymentService.markProcessing(merchantPayKey)).willReturn(1);
+		given(naverPayClient.approve("pg-payment-id"))
+			.willThrow(new NaverPayException(NaverPayErrorCode.AUTHENTICATION, "auth error"));
+		given(paymentService.failPayment(
+			merchantPayKey, null, PaymentErrorCode.PAYMENT_APPROVAL_FAILED.getMessage()))
+			.willReturn(failedFrom(pending));
 
-		// when & then
-		assertThatThrownBy(() -> naverPayService.approve("PAY-1", "pg-payment-id"))
-			.isInstanceOf(PaymentException.class)
-			.satisfies(exception -> {
-				PaymentException paymentException = (PaymentException) exception;
-				assertThat(paymentException.getErrorCode()).isEqualTo(PaymentErrorCode.PAYMENT_NOT_FOUND);
-			});
+		// when
+		NaverPayApproveResult result = naverPayService.approve(memberId, merchantPayKey, "pg-payment-id");
+
+		// then
+		assertThat(result.getStatus()).isEqualTo(NaverPayApproveStatus.FAIL);
+		then(paymentService).should().failPayment(
+			merchantPayKey, null, PaymentErrorCode.PAYMENT_APPROVAL_FAILED.getMessage());
+	}
+
+	@DisplayName("네이버페이 클라이언트 오류면 실패로 처리한다")
+	@Test
+	void approve_whenClientErrorException_returnFail() {
+		// given
+		long memberId = 1L;
+		Payment pending = Payment.create(createOrder(1000), 1000, PaymentProvider.NAVERPAY);
+		String merchantPayKey = pending.getMerchantPayKey();
+		given(paymentService.getPaymentByMerchantPayKeyAndMemberId(merchantPayKey, memberId)).willReturn(pending);
+		given(paymentService.markProcessing(merchantPayKey)).willReturn(1);
+		given(naverPayClient.approve("pg-payment-id"))
+			.willThrow(new NaverPayException(NaverPayErrorCode.CLIENT_ERROR, "client error"));
+		given(paymentService.failPayment(
+			merchantPayKey, null, PaymentErrorCode.PAYMENT_APPROVAL_FAILED.getMessage()))
+			.willReturn(failedFrom(pending));
+
+		// when
+		NaverPayApproveResult result = naverPayService.approve(memberId, merchantPayKey, "pg-payment-id");
+
+		// then
+		assertThat(result.getStatus()).isEqualTo(NaverPayApproveStatus.FAIL);
+		then(paymentService).should().failPayment(
+			merchantPayKey, null, PaymentErrorCode.PAYMENT_APPROVAL_FAILED.getMessage());
 	}
 
 	@DisplayName("처리 중인 결제면 외부 호출 없이 결과를 반환한다")
 	@Test
 	void approve_whenProcessing_returnResult() {
 		// given
+		long memberId = 1L;
 		Order order = createOrder(1000);
-		setOrderId(order, 1L);
 		Payment payment = Payment.create(order, 1000, PaymentProvider.NAVERPAY);
 		ReflectionTestUtils.setField(payment, "status", PaymentStatus.PROCESSING);
 		ReflectionTestUtils.setField(payment, "pgPaymentId", "pg-payment-id");
 		String merchantPayKey = payment.getMerchantPayKey();
 
-		given(paymentService.getPaymentByMerchantPayKey(merchantPayKey)).willReturn(payment);
+		given(paymentService.getPaymentByMerchantPayKeyAndMemberId(merchantPayKey, memberId)).willReturn(payment);
 
 		// when
-		NaverPayApproveResult result = naverPayService.approve(merchantPayKey, "pg-payment-id");
+		NaverPayApproveResult result = naverPayService.approve(memberId, merchantPayKey, "pg-payment-id");
 
 		// then
 		assertThat(result.getStatus()).isEqualTo(NaverPayApproveStatus.PROCESSING);
-		assertThat(result.getOrderId()).isEqualTo(1L);
 	}
 
 	@DisplayName("이미 처리 중이면 최신 결제 상태를 반환한다")
 	@Test
 	void approve_whenMarkProcessingReturnsZero_returnResult() {
 		// given
+		long memberId = 1L;
 		Order order = createOrder(1000);
-		setOrderId(order, 1L);
 		Payment pending = Payment.create(order, 1000, PaymentProvider.NAVERPAY);
 		Payment processing = processingFrom(pending);
 		String merchantPayKey = pending.getMerchantPayKey();
 
-		given(paymentService.getPaymentByMerchantPayKey(merchantPayKey))
+		given(paymentService.getPaymentByMerchantPayKeyAndMemberId(merchantPayKey, memberId))
 			.willReturn(pending, processing);
 		given(paymentService.markProcessing(merchantPayKey)).willReturn(0);
 
 		// when
-		NaverPayApproveResult result = naverPayService.approve(merchantPayKey, "pg-payment-id");
+		NaverPayApproveResult result = naverPayService.approve(memberId, merchantPayKey, "pg-payment-id");
 
 		// then
 		assertThat(result.getStatus()).isEqualTo(NaverPayApproveStatus.PROCESSING);
-		assertThat(result.getOrderId()).isEqualTo(1L);
 	}
 
 	@DisplayName("결제 금액이 다르면 결제 승인에 실패한다")
 	@Test
 	void approve_whenAmountMismatch_returnFail() {
 		// given
+		long memberId = 1L;
 		Order order = createOrder(1000);
-		setOrderId(order, 1L);
 		Payment pending = Payment.create(order, 1000, PaymentProvider.NAVERPAY);
 		String merchantPayKey = pending.getMerchantPayKey();
 
-		NaverPayApproveResponse response = buildApprovalResponse(merchantPayKey, 2000, "Success", "SUCCESS");
+		NaverPayResponse<NaverPayApproveBody> response = buildApprovalResponse(merchantPayKey, 2000, "Success", "SUCCESS");
 		given(naverPayClient.approve("pg-payment-id")).willReturn(response);
+		given(paymentService.getPaymentByMerchantPayKeyAndMemberId(merchantPayKey, memberId)).willReturn(pending);
 		given(paymentService.getPaymentByMerchantPayKey(merchantPayKey)).willReturn(pending);
 		given(paymentService.markProcessing(merchantPayKey)).willReturn(1);
-		given(paymentService.failPayment(merchantPayKey, null, PaymentErrorCode.PAYMENT_APPROVAL_FAILED.getMessage()))
+		given(paymentService.failPayment(merchantPayKey, null, PaymentErrorCode.PAYMENT_AMOUNT_MISMATCH.getMessage()))
 			.willReturn(failedFrom(pending));
 
 		// when
-		NaverPayApproveResult result = naverPayService.approve(merchantPayKey, "pg-payment-id");
+		NaverPayApproveResult result = naverPayService.approve(memberId, merchantPayKey, "pg-payment-id");
 
 		// then
 		assertThat(result.getStatus()).isEqualTo(NaverPayApproveStatus.FAIL);
+		then(paymentService).should().failPayment(
+			merchantPayKey, null, PaymentErrorCode.PAYMENT_AMOUNT_MISMATCH.getMessage());
 	}
 
 	@DisplayName("결제 키가 다르면 결제 승인에 실패한다")
 	@Test
 	void approve_whenMerchantPayKeyMismatch_returnFail() {
 		// given
+		long memberId = 1L;
 		Order order = createOrder(1000);
-		setOrderId(order, 1L);
 		Payment pending = Payment.create(order, 1000, PaymentProvider.NAVERPAY);
 		String merchantPayKey = pending.getMerchantPayKey();
 
-		NaverPayApproveResponse response = buildApprovalResponse("OTHER-PAY", 1000, "Success", "SUCCESS");
+		NaverPayResponse<NaverPayApproveBody> response = buildApprovalResponse("OTHER-PAY", 1000, "Success", "SUCCESS");
 		given(naverPayClient.approve("pg-payment-id")).willReturn(response);
-		given(paymentService.getPaymentByMerchantPayKey(merchantPayKey)).willReturn(pending);
+		given(paymentService.getPaymentByMerchantPayKeyAndMemberId(merchantPayKey, memberId)).willReturn(pending);
+		given(paymentService.getPaymentByMerchantPayKey("OTHER-PAY")).willReturn(pending);
 		given(paymentService.markProcessing(merchantPayKey)).willReturn(1);
-		given(paymentService.failPayment(merchantPayKey, null, PaymentErrorCode.PAYMENT_MERCHANT_KEY_MISMATCH.getMessage()))
+		// when
+		assertThatThrownBy(() -> naverPayService.approve(memberId, merchantPayKey, "pg-payment-id"))
+			.isInstanceOf(PaymentException.class);
+
+		// then
+		then(paymentService).should(never()).failPayment(any(), any(), any());
+	}
+
+	@DisplayName("이미 진행 중이면 결제 처리 상태를 반환한다")
+	@Test
+	void approve_whenAlreadyOnGoing_returnProcessing() {
+		// given
+		long memberId = 1L;
+		Payment pending = Payment.create(createOrder(1000), 1000, PaymentProvider.NAVERPAY);
+		String merchantPayKey = pending.getMerchantPayKey();
+		NaverPayResponse<NaverPayApproveBody> response =
+			buildApprovalResponse(merchantPayKey, 1000, "AlreadyOnGoing", "SUCCESS");
+		given(naverPayClient.approve("pg-payment-id")).willReturn(response);
+		given(paymentService.getPaymentByMerchantPayKeyAndMemberId(merchantPayKey, memberId))
+			.willReturn(pending, processingFrom(pending));
+		given(paymentService.markProcessing(merchantPayKey)).willReturn(1);
+
+		// when
+		NaverPayApproveResult result = naverPayService.approve(memberId, merchantPayKey, "pg-payment-id");
+
+		// then
+		assertThat(result.getStatus()).isEqualTo(NaverPayApproveStatus.PROCESSING);
+	}
+
+	@DisplayName("이미 완료된 결제라면 완료 상태를 반환한다")
+	@Test
+	void approve_whenAlreadyComplete_returnSuccess() {
+		// given
+		long memberId = 1L;
+		Payment pending = Payment.create(createOrder(1000), 1000, PaymentProvider.NAVERPAY);
+		String merchantPayKey = pending.getMerchantPayKey();
+		NaverPayResponse<NaverPayApproveBody> response =
+			buildApprovalResponse(merchantPayKey, 1000, "AlreadyComplete", "SUCCESS");
+		Payment completed = completedFrom(pending, "pg-payment-id");
+
+		given(naverPayClient.approve("pg-payment-id")).willReturn(response);
+		given(paymentService.getPaymentByMerchantPayKeyAndMemberId(merchantPayKey, memberId))
+			.willReturn(pending, completed);
+		given(paymentService.markProcessing(merchantPayKey)).willReturn(1);
+
+		// when
+		NaverPayApproveResult result = naverPayService.approve(memberId, merchantPayKey, "pg-payment-id");
+
+		// then
+		assertThat(result.getStatus()).isEqualTo(NaverPayApproveStatus.SUCCESS);
+		then(paymentService).should(never()).completePayment(any(), any(), any());
+	}
+
+	@DisplayName("승인 코드가 시간 초과면 실패 처리한다")
+	@Test
+	void approve_whenTimeExpired_returnFail() {
+		// given
+		long memberId = 1L;
+		Payment pending = Payment.create(createOrder(1000), 1000, PaymentProvider.NAVERPAY);
+		String merchantPayKey = pending.getMerchantPayKey();
+		NaverPayResponse<NaverPayApproveBody> response =
+			buildApprovalResponse(merchantPayKey, 1000, "TimeExpired", "SUCCESS");
+		given(naverPayClient.approve("pg-payment-id")).willReturn(response);
+		given(paymentService.getPaymentByMerchantPayKeyAndMemberId(merchantPayKey, memberId)).willReturn(pending);
+		given(paymentService.markProcessing(merchantPayKey)).willReturn(1);
+		given(paymentService.failPayment(
+			merchantPayKey, null, PaymentErrorCode.PAYMENT_TIME_EXPIRED.getMessage()))
 			.willReturn(failedFrom(pending));
 
 		// when
-		NaverPayApproveResult result = naverPayService.approve(merchantPayKey, "pg-payment-id");
+		NaverPayApproveResult result = naverPayService.approve(memberId, merchantPayKey, "pg-payment-id");
 
 		// then
 		assertThat(result.getStatus()).isEqualTo(NaverPayApproveStatus.FAIL);
+		then(paymentService).should().failPayment(
+			merchantPayKey, null, PaymentErrorCode.PAYMENT_TIME_EXPIRED.getMessage());
+	}
+
+	@DisplayName("결제 요청 실패 코드면 결제를 실패 처리한다")
+	@Test
+	void failByResultCode_whenPending_returnFail() {
+		// given
+		Payment pending = Payment.create(createOrder(1000), 1000, PaymentProvider.NAVERPAY);
+		String merchantPayKey = pending.getMerchantPayKey();
+		given(paymentService.getPaymentByMerchantPayKey(merchantPayKey)).willReturn(pending);
+		given(paymentService.markProcessing(merchantPayKey)).willReturn(1);
+		given(paymentService.failPayment(
+			merchantPayKey, null, PaymentErrorCode.PAYMENT_APPROVAL_FAILED.getMessage()))
+			.willReturn(failedFrom(pending));
+
+		// when
+		NaverPayApproveResult result = naverPayService.failByResultCode(merchantPayKey, "Fail", "fail-message");
+
+		// then
+		assertThat(result.getStatus()).isEqualTo(NaverPayApproveStatus.FAIL);
+		then(paymentService).should().failPayment(
+			merchantPayKey, null, PaymentErrorCode.PAYMENT_APPROVAL_FAILED.getMessage());
+	}
+
+	@DisplayName("사용자 취소 코드면 사용자 취소로 실패 처리한다")
+	@Test
+	void failByResultCode_whenUserCancel_returnUserCanceled() {
+		// given
+		Payment pending = Payment.create(createOrder(1000), 1000, PaymentProvider.NAVERPAY);
+		String merchantPayKey = pending.getMerchantPayKey();
+		given(paymentService.getPaymentByMerchantPayKey(merchantPayKey)).willReturn(pending);
+		given(paymentService.markProcessing(merchantPayKey)).willReturn(1);
+		given(paymentService.failPayment(
+			merchantPayKey, null, PaymentErrorCode.PAYMENT_USER_CANCELED.getMessage()))
+			.willReturn(failedFrom(pending));
+
+		// when
+		NaverPayApproveResult result =
+			naverPayService.failByResultCode(merchantPayKey, "UserCancel", "user canceled");
+
+		// then
+		assertThat(result.getStatus()).isEqualTo(NaverPayApproveStatus.FAIL);
+		then(paymentService).should().failPayment(
+			merchantPayKey, null, PaymentErrorCode.PAYMENT_USER_CANCELED.getMessage());
+	}
+
+	@DisplayName("시간 초과 코드면 시간 초과로 실패 처리한다")
+	@Test
+	void failByResultCode_whenTimeExpired_returnTimeExpired() {
+		// given
+		Payment pending = Payment.create(createOrder(1000), 1000, PaymentProvider.NAVERPAY);
+		String merchantPayKey = pending.getMerchantPayKey();
+		given(paymentService.getPaymentByMerchantPayKey(merchantPayKey)).willReturn(pending);
+		given(paymentService.markProcessing(merchantPayKey)).willReturn(1);
+		given(paymentService.failPayment(
+			merchantPayKey, null, PaymentErrorCode.PAYMENT_TIME_EXPIRED.getMessage()))
+			.willReturn(failedFrom(pending));
+
+		// when
+		NaverPayApproveResult result =
+			naverPayService.failByResultCode(merchantPayKey, "TimeExpired", "expired");
+
+		// then
+		assertThat(result.getStatus()).isEqualTo(NaverPayApproveStatus.FAIL);
+		then(paymentService).should().failPayment(
+			merchantPayKey, null, PaymentErrorCode.PAYMENT_TIME_EXPIRED.getMessage());
 	}
 
 	private Order createOrder(int totalPrice) {
@@ -247,14 +432,12 @@ class NaverPayServiceTest {
 			.build();
 	}
 
-	private void setOrderId(Order order, Long orderId) {
-		ReflectionTestUtils.setField(order, "id", orderId);
-	}
-
-	private NaverPayApproveResponse buildApprovalResponse(String merchantPayKey, int amount, String code, String state) {
-		NaverPayApproveResponse response = new NaverPayApproveResponse();
-		NaverPayApproveResponse.Body body = new NaverPayApproveResponse.Body();
-		NaverPayApproveResponse.Detail detail = new NaverPayApproveResponse.Detail();
+	private NaverPayResponse<NaverPayApproveBody> buildApprovalResponse(
+		String merchantPayKey, int amount, String code, String state
+	) {
+		NaverPayResponse<NaverPayApproveBody> response = new NaverPayResponse<>();
+		NaverPayApproveBody body = new NaverPayApproveBody();
+		NaverPayApproveBody.Detail detail = new NaverPayApproveBody.Detail();
 
 		ReflectionTestUtils.setField(response, "code", code);
 		ReflectionTestUtils.setField(detail, "paymentId", "pg-payment-id");
