@@ -42,3 +42,4 @@ naverpay:
   chain-id: ${LOCAL_NAVERPAY_CHAIN_ID}
   return-url: ${LOCAL_NAVERPAY_RETURN_URL}
   approval-url: ${LOCAL_NAVERPAY_APPROVAL_URL}
+  cancel-url: ${LOCAL_NAVERPAY_CANCEL_URL}

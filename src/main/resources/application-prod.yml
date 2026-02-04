@@ -39,5 +39,8 @@ jwt:
 
 naverpay:
   client-id: ${PROD_NAVERPAY_CLIENT_ID}
+  client-secret: ${PROD_NAVERPAY_CLIENT_SECRET}
   chain-id: ${PROD_NAVERPAY_CHAIN_ID}
   return-url: ${PROD_NAVERPAY_RETURN_URL}
+  approval-url: ${PROD_NAVERPAY_APPROVAL_URL}
+  cancel-url: ${PROD_NAVERPAY_CANCEL_URL}
