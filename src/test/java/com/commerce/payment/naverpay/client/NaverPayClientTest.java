@@ -21,15 +21,18 @@ import org.springframework.test.web.client.MockRestServiceServer;
 import org.springframework.web.client.ResourceAccessException;
 import org.springframework.web.client.RestTemplate;
 
+import com.commerce.payment.naverpay.client.request.NaverPayCancelRequest;
 import com.commerce.payment.naverpay.client.response.NaverPayResponse;
 import com.commerce.payment.naverpay.client.response.body.NaverPayApproveBody;
+import com.commerce.payment.naverpay.client.response.body.NaverPayCancelBody;
 import com.commerce.payment.naverpay.config.NaverPayProperties;
 import com.commerce.payment.naverpay.exception.NaverPayErrorCode;
 import com.commerce.payment.naverpay.exception.NaverPayException;
 
 class NaverPayClientTest {
 
-	private static final String APPROVAL_URL = "https://test.naverpay/approve";
+	private static final String APPROVAL_URL = "https://test.naverpay/naverpay-partner/naverpay/payments/v2.2/apply/payment";
+	private static final String CANCEL_URL = "https://test.naverpay/naverpay-partner/naverpay/payments/v1/cancel";
 
 	private NaverPayClient client;
 	private RestTemplate restTemplate;
@@ -42,6 +45,7 @@ class NaverPayClientTest {
 		ReflectionTestUtils.setField(properties, "clientSecret", "client-secret");
 		ReflectionTestUtils.setField(properties, "chainId", "chain-id");
 		ReflectionTestUtils.setField(properties, "approvalUrl", APPROVAL_URL);
+		ReflectionTestUtils.setField(properties, "cancelUrl", CANCEL_URL);
 
 		client = new NaverPayClient(properties);
 		restTemplate = new RestTemplate();
@@ -133,6 +137,90 @@ class NaverPayClientTest {
 			});
 	}
 
+	@DisplayName("취소 요청이 성공하면 응답이 매핑된다")
+	@Test
+	void cancel_whenSuccess_mapResponse() {
+		server.expect(requestTo(CANCEL_URL))
+			.andExpect(method(HttpMethod.POST))
+			.andRespond(withSuccess(cancelSuccessResponse(), MediaType.APPLICATION_JSON));
+
+		NaverPayResponse<NaverPayCancelBody> response = client.cancel(createCancelRequest());
+
+		assertThat(response.getCode()).isEqualTo("Success");
+		assertThat(response.getBody()).isNotNull();
+		assertThat(response.getBody().getPaymentId()).isEqualTo("pg-payment-id");
+	}
+
+	@DisplayName("취소 요청에서 인증 실패면 AUTHENTICATION 예외가 발생한다")
+	@Test
+	void cancel_whenUnauthorized_throwException() {
+		server.expect(requestTo(CANCEL_URL))
+			.andExpect(method(HttpMethod.POST))
+			.andRespond(withStatus(HttpStatus.UNAUTHORIZED));
+
+		assertThatThrownBy(() -> client.cancel(createCancelRequest()))
+			.isInstanceOfSatisfying(NaverPayException.class, ex -> {
+				assertThat(ex.getErrorCode()).isEqualTo(NaverPayErrorCode.AUTHENTICATION);
+			});
+	}
+
+	@DisplayName("취소 요청에서 서버 오류면 SERVER_ERROR 예외가 발생한다")
+	@Test
+	void cancel_whenServerError_throwException() {
+		server.expect(requestTo(CANCEL_URL))
+			.andExpect(method(HttpMethod.POST))
+			.andRespond(withStatus(HttpStatus.INTERNAL_SERVER_ERROR));
+
+		assertThatThrownBy(() -> client.cancel(createCancelRequest()))
+			.isInstanceOfSatisfying(NaverPayException.class, ex -> {
+				assertThat(ex.getErrorCode()).isEqualTo(NaverPayErrorCode.SERVER_ERROR);
+			});
+	}
+
+	@DisplayName("취소 요청에서 클라이언트 오류면 CLIENT_ERROR 예외가 발생한다")
+	@Test
+	void cancel_whenClientError_throwException() {
+		server.expect(requestTo(CANCEL_URL))
+			.andExpect(method(HttpMethod.POST))
+			.andRespond(withStatus(HttpStatus.BAD_REQUEST));
+
+		assertThatThrownBy(() -> client.cancel(createCancelRequest()))
+			.isInstanceOfSatisfying(NaverPayException.class, ex -> {
+				assertThat(ex.getErrorCode()).isEqualTo(NaverPayErrorCode.CLIENT_ERROR);
+			});
+	}
+
+	@DisplayName("취소 요청에서 응답 파싱이 실패하면 INVALID_RESPONSE 예외가 발생한다")
+	@Test
+	void cancel_whenInvalidResponse_throwException() {
+		server.expect(requestTo(CANCEL_URL))
+			.andExpect(method(HttpMethod.POST))
+			.andRespond(withSuccess("not-json", MediaType.APPLICATION_JSON));
+
+		assertThatThrownBy(() -> client.cancel(createCancelRequest()))
+			.isInstanceOfSatisfying(NaverPayException.class, ex -> {
+				assertThat(ex.getErrorCode()).isEqualTo(NaverPayErrorCode.INVALID_RESPONSE);
+			});
+	}
+
+	@DisplayName("취소 요청에서 네트워크 오류면 NETWORK 예외가 발생한다")
+	@Test
+	void cancel_whenNetworkError_throwException() {
+		RestTemplate failingRestTemplate = mock(RestTemplate.class);
+		when(failingRestTemplate.postForObject(
+			eq(CANCEL_URL),
+			any(),
+			eq(String.class)))
+			.thenThrow(new ResourceAccessException("timeout"));
+
+		ReflectionTestUtils.setField(client, "restTemplate", failingRestTemplate);
+
+		assertThatThrownBy(() -> client.cancel(createCancelRequest()))
+			.isInstanceOfSatisfying(NaverPayException.class, ex -> {
+				assertThat(ex.getErrorCode()).isEqualTo(NaverPayErrorCode.NETWORK);
+			});
+	}
+
 	private static String successResponse() {
 		return """
 			{
@@ -147,5 +235,31 @@ class NaverPayClientTest {
 			  }
 			}
 			""";
+	}
+
+	private static String cancelSuccessResponse() {
+		return """
+			{
+			  "code": "Success",
+			  "message": "성공",
+			  "body": {
+			    "paymentId": "pg-payment-id",
+			    "payHistId": "cancel-hist-id",
+			    "cancelYmdt": "20260204123000",
+			    "totalRestAmount": 0
+			  }
+			}
+			""";
+	}
+
+	private NaverPayCancelRequest createCancelRequest() {
+		return NaverPayCancelRequest.builder()
+			.paymentId("pg-payment-id")
+			.cancelAmount(1000)
+			.cancelReason("test-cancel")
+			.cancelRequester("2")
+			.taxScopeAmount(1000)
+			.taxExScopeAmount(0)
+			.build();
 	}
 }
