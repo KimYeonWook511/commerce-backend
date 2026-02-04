@@ -24,6 +24,9 @@ public class NaverPayProperties implements PaymentProviderProperties {
 	@Value("${naverpay.approval-url}")
 	private String approvalUrl;
 
+	@Value("${naverpay.cancel-url}")
+	private String cancelUrl;
+
 	@Override
 	public PaymentProvider getProvider() {
 		return PaymentProvider.NAVERPAY;
@@ -51,6 +54,10 @@ public class NaverPayProperties implements PaymentProviderProperties {
 
 	public String getApprovalUrl() {
 		return approvalUrl;
+	}
+
+	public String getCancelUrl() {
+		return cancelUrl;
 	}
 
 }
