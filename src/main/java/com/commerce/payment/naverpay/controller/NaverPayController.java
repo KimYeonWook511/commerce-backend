@@ -11,6 +11,7 @@ import org.springframework.web.bind.annotation.RestController;
 import com.commerce.auth.resolver.AuthenticatedMemberId;
 import com.commerce.common.ApiResponse;
 import com.commerce.payment.naverpay.controller.request.NaverPayApproveRequest;
+import com.commerce.payment.naverpay.controller.request.NaverPayPreApproveFailRequest;
 import com.commerce.payment.naverpay.service.NaverPayService;
 import com.commerce.payment.naverpay.service.result.NaverPayApproveResult;
 
@@ -44,4 +45,15 @@ public class NaverPayController {
 			memberId, request.getMerchantPayKey(), request.getPaymentId());
 		return ResponseEntity.status(HttpStatus.OK).body(ApiResponse.of(result));
 	}
+
+	@PostMapping("/pre-approve-fail")
+	public ResponseEntity<ApiResponse<NaverPayApproveResult>> preApproveFailNaverPay(
+		@AuthenticatedMemberId Long memberId,
+		@Valid @RequestBody NaverPayPreApproveFailRequest request
+	) {
+		NaverPayApproveResult result = naverPayService.preApproveFail(
+			memberId, request.getMerchantPayKey(), request.getResultCode(), request.getResultMessage());
+		return ResponseEntity.status(HttpStatus.OK).body(ApiResponse.of(result));
+	}
+
 }
