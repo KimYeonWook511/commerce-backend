@@ -8,6 +8,7 @@ import org.springframework.data.jpa.repository.Query;
 import org.springframework.data.repository.query.Param;
 
 import com.commerce.payment.domain.Payment;
+import com.commerce.payment.domain.PaymentReasonCode;
 import com.commerce.payment.domain.PaymentStatus;
 
 public interface PaymentRepository extends JpaRepository<Payment, Long> {
@@ -15,6 +16,8 @@ public interface PaymentRepository extends JpaRepository<Payment, Long> {
 	Optional<Payment> findByOrderId(Long orderId);
 
 	Optional<Payment> findByMerchantPayKey(String merchantPayKey);
+
+	Optional<Payment> findByPgPaymentId(String pgPaymentId);
 
 	@Query("""
 		select p
@@ -40,5 +43,24 @@ public interface PaymentRepository extends JpaRepository<Payment, Long> {
 		@Param("merchantPayKey") String merchantPayKey,
 		@Param("expected") PaymentStatus expected,
 		@Param("next") PaymentStatus next
+	);
+
+	@Modifying(flushAutomatically = true, clearAutomatically = true)
+	@Query("""
+		update Payment p
+		set p.status = :next,
+			p.pgPaymentId = :pgPaymentId,
+			p.reasonCode = :reasonCode,
+			p.reasonDetail = :reasonDetail
+		where p.merchantPayKey = :merchantPayKey
+		and p.status = :expected
+		""")
+	int updateToCancelPending(
+		@Param("merchantPayKey") String merchantPayKey,
+		@Param("expected") PaymentStatus expected,
+		@Param("next") PaymentStatus next,
+		@Param("pgPaymentId") String pgPaymentId,
+		@Param("reasonCode") PaymentReasonCode reasonCode,
+		@Param("reasonDetail") String reasonDetail
 	);
 }

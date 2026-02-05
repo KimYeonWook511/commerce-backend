@@ -13,6 +13,7 @@ import com.commerce.order.exception.OrderException;
 import com.commerce.order.repository.OrderRepository;
 import com.commerce.orderitem.domain.OrderItem;
 import com.commerce.payment.domain.Payment;
+import com.commerce.payment.domain.PaymentReasonCode;
 import com.commerce.payment.domain.PaymentStatus;
 import com.commerce.payment.exception.PaymentErrorCode;
 import com.commerce.payment.exception.PaymentException;
@@ -73,6 +74,11 @@ public class PaymentService {
 			.orElseThrow(() -> new PaymentException(PaymentErrorCode.PAYMENT_NOT_FOUND));
 	}
 
+	public Payment getPaymentByPgPaymentId(String pgPaymentId) {
+		return paymentRepository.findByPgPaymentId(pgPaymentId)
+			.orElseThrow(() -> new PaymentException(PaymentErrorCode.PAYMENT_NOT_FOUND));
+	}
+
 	@Transactional(propagation = Propagation.REQUIRES_NEW)
 	public int markProcessing(String merchantPayKey) {
 		return paymentRepository.updateStatusIfMatches(
@@ -87,9 +93,22 @@ public class PaymentService {
 	}
 
 	@Transactional(propagation = Propagation.REQUIRES_NEW)
-	public Payment failPayment(String merchantPayKey, String pgPaymentId, String reason) {
+	public Payment failPayment(String merchantPayKey, PaymentReasonCode reasonCode, String reasonDetail) {
 		Payment payment = getPaymentByMerchantPayKey(merchantPayKey);
-		payment.failWithPgPaymentId(pgPaymentId, reason);
+		payment.fail(reasonCode, reasonDetail);
+		return payment;
+	}
+
+	@Transactional(propagation = Propagation.REQUIRES_NEW)
+	public int markCancelPending(String merchantPayKey, String pgPaymentId, PaymentReasonCode reasonCode, String reasonDetail) {
+		return paymentRepository.updateToCancelPending(
+			merchantPayKey, PaymentStatus.PROCESSING, PaymentStatus.CANCEL_PENDING, pgPaymentId, reasonCode, reasonDetail);
+	}
+
+	@Transactional(propagation = Propagation.REQUIRES_NEW)
+	public Payment completeCancelPayment(String pgPaymentId) {
+		Payment payment = getPaymentByPgPaymentId(pgPaymentId);
+		payment.completeCancel();
 		return payment;
 	}
 
