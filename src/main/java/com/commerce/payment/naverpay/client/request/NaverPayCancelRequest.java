@@ -10,7 +10,7 @@ public class NaverPayCancelRequest {
 	private String paymentId;
 	private int cancelAmount;
 	private String cancelReason;
-	private String cancelRequester;
+	private NaverPayCancelRequester cancelRequester;
 	private int taxScopeAmount;
 	private int taxExScopeAmount;
 }

@@ -55,7 +55,7 @@ public class NaverPayClient {
 		body.add("paymentId", cancelRequest.getPaymentId());
 		body.add("cancelAmount", String.valueOf(cancelRequest.getCancelAmount()));
 		body.add("cancelReason", cancelRequest.getCancelReason());
-		body.add("cancelRequester", cancelRequest.getCancelRequester());
+		body.add("cancelRequester", cancelRequest.getCancelRequester().getCode());
 		body.add("taxScopeAmount", String.valueOf(cancelRequest.getTaxScopeAmount()));
 		body.add("taxExScopeAmount", String.valueOf(cancelRequest.getTaxExScopeAmount()));
 
