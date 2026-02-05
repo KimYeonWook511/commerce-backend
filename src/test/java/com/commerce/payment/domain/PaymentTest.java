@@ -67,79 +67,47 @@ class PaymentTest {
 
 	@DisplayName("결제가 처리 중이면 실패 처리에 성공한다")
 	@Test
-	void failWithPgPaymentId_whenProcessing_updateStatusAndReason() {
+	void fail_whenProcessing_updateStatusAndReason() {
 		// given
 		Payment payment = Payment.create(createOrder(1000), 1000, PaymentProvider.NAVERPAY);
-		ReflectionTestUtils.setField(payment, "status", PaymentStatus.PROCESSING);
 
 		// when
-		payment.failWithPgPaymentId(null, "fail");
+		payment.fail(PaymentReasonCode.APPROVAL_FAILED, "fail");
 
 		// then
 		assertThat(payment.getStatus()).isEqualTo(PaymentStatus.FAILED);
-		assertThat(payment.getPgPaymentId()).isNull();
-		assertThat(payment.getFailureReason()).isEqualTo("fail");
-		assertThat(payment.getApprovedAt()).isNull();
+		assertThat(payment.getReasonCode()).isEqualTo(PaymentReasonCode.APPROVAL_FAILED);
+		assertThat(payment.getReasonDetail()).isEqualTo("fail");
 	}
 
-	@DisplayName("결제가 대기 상태면 취소할 수 있다")
+	@DisplayName("결제가 취소 대기 상태로 전환된다")
 	@Test
-	void cancel_whenPending_updateStatus() {
+	void cancelPending_updateStatusAndReason() {
 		// given
 		Payment payment = Payment.create(createOrder(1000), 1000, PaymentProvider.NAVERPAY);
 
 		// when
-		payment.cancel("cancel");
+		payment.cancelPending("pg-payment-id", PaymentReasonCode.AMOUNT_MISMATCH, "mismatch");
 
 		// then
-		assertThat(payment.getStatus()).isEqualTo(PaymentStatus.CANCELED);
-		assertThat(payment.getFailureReason()).isEqualTo("cancel");
+		assertThat(payment.getStatus()).isEqualTo(PaymentStatus.CANCEL_PENDING);
+		assertThat(payment.getPgPaymentId()).isEqualTo("pg-payment-id");
+		assertThat(payment.getReasonCode()).isEqualTo(PaymentReasonCode.AMOUNT_MISMATCH);
+		assertThat(payment.getReasonDetail()).isEqualTo("mismatch");
 	}
 
-	@DisplayName("결제가 완료 상태면 취소할 수 있다")
+	@DisplayName("결제가 취소 완료 상태로 전환된다")
 	@Test
-	void cancel_whenCompleted_updateStatus() {
+	void completeCancel_updateStatus() {
 		// given
 		Payment payment = Payment.create(createOrder(1000), 1000, PaymentProvider.NAVERPAY);
-		ReflectionTestUtils.setField(payment, "status", PaymentStatus.COMPLETED);
+		ReflectionTestUtils.setField(payment, "status", PaymentStatus.CANCEL_PENDING);
 
 		// when
-		payment.cancel("cancel");
+		payment.completeCancel();
 
 		// then
 		assertThat(payment.getStatus()).isEqualTo(PaymentStatus.CANCELED);
-		assertThat(payment.getFailureReason()).isEqualTo("cancel");
-	}
-
-	@DisplayName("결제가 처리 중이면 취소할 수 있다")
-	@Test
-	void cancel_whenProcessing_updateStatus() {
-		// given
-		Payment payment = Payment.create(createOrder(1000), 1000, PaymentProvider.NAVERPAY);
-		ReflectionTestUtils.setField(payment, "status", PaymentStatus.PROCESSING);
-
-		// when
-		payment.cancel("cancel");
-
-		// then
-		assertThat(payment.getStatus()).isEqualTo(PaymentStatus.CANCELED);
-		assertThat(payment.getFailureReason()).isEqualTo("cancel");
-	}
-
-	@DisplayName("결제가 실패 상태면 취소할 수 없다")
-	@Test
-	void cancel_whenFailed_throwException() {
-		// given
-		Payment payment = Payment.create(createOrder(1000), 1000, PaymentProvider.NAVERPAY);
-		ReflectionTestUtils.setField(payment, "status", PaymentStatus.FAILED);
-
-		// when & then
-		assertThatThrownBy(() -> payment.cancel("cancel"))
-			.isInstanceOf(PaymentException.class)
-			.satisfies(exception -> {
-				PaymentException paymentException = (PaymentException) exception;
-				assertThat(paymentException.getErrorCode()).isEqualTo(PaymentErrorCode.PAYMENT_STATUS_NOT_ALLOWED);
-			});
 	}
 
 	private Order createOrder(int totalPrice) {
