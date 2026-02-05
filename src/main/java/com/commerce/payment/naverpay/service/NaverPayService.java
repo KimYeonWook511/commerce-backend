@@ -3,13 +3,18 @@ package com.commerce.payment.naverpay.service;
 import java.time.LocalDateTime;
 
 import org.springframework.stereotype.Service;
+
 import com.commerce.payment.domain.Payment;
+import com.commerce.payment.domain.PaymentReasonCode;
 import com.commerce.payment.domain.PaymentStatus;
 import com.commerce.payment.exception.PaymentErrorCode;
 import com.commerce.payment.exception.PaymentException;
 import com.commerce.payment.naverpay.client.NaverPayClient;
+import com.commerce.payment.naverpay.client.request.NaverPayCancelRequest;
+import com.commerce.payment.naverpay.client.request.NaverPayCancelRequester;
 import com.commerce.payment.naverpay.client.response.body.NaverPayApproveBody;
 import com.commerce.payment.naverpay.client.response.NaverPayResponse;
+import com.commerce.payment.naverpay.client.response.body.NaverPayCancelBody;
 import com.commerce.payment.naverpay.exception.NaverPayErrorCode;
 import com.commerce.payment.naverpay.exception.NaverPayException;
 import com.commerce.payment.naverpay.service.result.NaverPayApproveResult;
@@ -63,7 +68,7 @@ public class NaverPayService {
 			// 결제 실패
 			if (!responseCode.isSuccess()) {
 				// 다른 사용자 paymentId로 실패했다면?? -> 사실 추적 불가능한 것 같음
-				return toFailResult(payment, toPaymentErrorCode(responseCode));
+				return toFailResult(merchantPayKey, toPaymentReasonCode(responseCode));
 			}
 
 			NaverPayApproveBody.Detail detail = getDetail(response);
@@ -71,8 +76,53 @@ public class NaverPayService {
 			// 악의적인 공격 - 결제 금액을 다르게 함 (결제 승인 취소 하기!)
 			Payment detailPayment = paymentService.getPaymentByMerchantPayKey(detail.getMerchantPayKey());
 			if (detailPayment.getAmount() != detail.getTotalPayAmount()) {
-				// Todo: 결제 승인 취소해야함
-				return toFailResult(payment, PaymentErrorCode.PAYMENT_AMOUNT_MISMATCH);
+				if (detailPayment.getStatus() != PaymentStatus.PROCESSING) {
+					throw new PaymentException(PaymentErrorCode.PAYMENT_AMOUNT_MISMATCH);
+				}
+
+				// 결제 취소 요청 전 상태 변경
+				int count = paymentService.markCancelPending(
+					detail.getMerchantPayKey(),
+					detail.getPaymentId(),
+					PaymentReasonCode.AMOUNT_MISMATCH,
+					PaymentReasonCode.AMOUNT_MISMATCH.getDescription());
+				if (count == 0) {
+					throw new PaymentException(PaymentErrorCode.PAYMENT_AMOUNT_MISMATCH);
+				}
+
+				// 결제 취소 요청
+				NaverPayResponse<NaverPayCancelBody> cancelResponse = naverPayClient.cancel(
+					NaverPayCancelRequest.builder()
+						.paymentId(detail.getPaymentId())
+						.cancelAmount(detail.getTotalPayAmount())
+						.cancelReason(PaymentReasonCode.AMOUNT_MISMATCH.getDescription())
+						.cancelRequester(NaverPayCancelRequester.CANCEL_BY_ADMIN)
+						.taxScopeAmount(detail.getTotalPayAmount())
+						.taxExScopeAmount(0)
+						.build());
+				NaverPayCancelCode cancelResponseCode = NaverPayCancelCode.from(cancelResponse.getCode());
+
+				// AlreadyCanceled, AlreadyOnGoing
+				if (cancelResponseCode.isIdempotent()) {
+					throw new PaymentException(PaymentErrorCode.PAYMENT_AMOUNT_MISMATCH);
+				}
+
+				if (cancelResponseCode.isSuccess()) {
+					// 취소 성공
+					NaverPayCancelBody cancelBody = getBody(cancelResponse);
+					paymentService.completeCancelPayment(cancelBody.getPaymentId());
+				} else {
+					// 취소 실패 -> 우선 로그로 남기기
+					// 추후 배치로 취소 요청 하도록 하기 (CANCEL_PENDING + updateAt(+60s))
+					log.warn(
+						"NaverPay cancel failed: merchantPayKey={}, paymentId={}, code={}, message={}",
+						detail.getMerchantPayKey(),
+						detail.getPaymentId(),
+						cancelResponse.getCode(),
+						cancelResponse.getMessage()
+					);
+				}
+				throw new PaymentException(PaymentErrorCode.PAYMENT_AMOUNT_MISMATCH);
 			}
 
 			// 결제 성공 처리
@@ -89,19 +139,20 @@ public class NaverPayService {
 
 			return toResult(completed);
 		} catch (NaverPayException ex) {
-			PaymentErrorCode errorCode = ex.isRetryable()
-				? PaymentErrorCode.PAYMENT_APPROVAL_RETRYABLE_FAILED
-				: PaymentErrorCode.PAYMENT_APPROVAL_FAILED;
-			return toFailResult(payment, errorCode);
+			if (ex.isRetryable()) {
+				throw new PaymentException(PaymentErrorCode.PAYMENT_APPROVAL_RETRYABLE_FAILED);
+			}
+			return toFailResult(merchantPayKey, toPaymentReasonCode(ex));
 		}
 	}
 
-	public NaverPayApproveResult failByResultCode(
+	public NaverPayApproveResult preApproveFail(
+		Long memberId,
 		String merchantPayKey,
 		String resultCode,
 		String resultMessage
 	) {
-		Payment payment = paymentService.getPaymentByMerchantPayKey(merchantPayKey);
+		Payment payment = paymentService.getPaymentByMerchantPayKeyAndMemberId(merchantPayKey, memberId);
 		if (payment.getStatus() != PaymentStatus.PENDING) {
 			return toResult(payment);
 		}
@@ -114,7 +165,8 @@ public class NaverPayService {
 		log.info("NaverPay payment failed before approval: merchantPayKey={}, resultCode={}, resultMessage={}",
 			merchantPayKey, resultCode, resultMessage);
 		NaverPayResultCode enumResultCode = NaverPayResultCode.from(resultCode);
-		return toFailResult(payment, toPaymentErrorCode(enumResultCode));
+		return toFailResult(merchantPayKey, toPaymentReasonCode(enumResultCode),
+			resultMessage != null ? resultMessage : enumResultCode.getDescription());
 	}
 
 	private NaverPayApproveResult toResult(Payment payment) {
@@ -133,6 +185,45 @@ public class NaverPayService {
 		};
 	}
 
+	private NaverPayApproveResult toFailResult(String merchantPayKey, PaymentReasonCode reasonCode) {
+		return toFailResult(merchantPayKey, reasonCode, reasonCode.getDescription());
+	}
+
+	private NaverPayApproveResult toFailResult(String merchantPayKey, PaymentReasonCode reasonCode,
+		String reasonDetail) {
+		Payment failed = paymentService.failPayment(merchantPayKey, reasonCode, reasonDetail);
+		return toResult(failed);
+	}
+
+	private PaymentReasonCode toPaymentReasonCode(NaverPayApproveCode approveCode) {
+		return switch (approveCode) {
+			case TIME_EXPIRED -> PaymentReasonCode.TIME_EXPIRED;
+			case BANK_MAINTENANCE, MAINTENANCE_ONGOING, FAULT_CHECK_ONGOING -> PaymentReasonCode.PG_MAINTENANCE;
+			case INVALID_MERCHANT, OWNER_AUTH_FAIL, NOT_ENOUGH_ACCOUNT_BALANCE, FAIL ->
+				PaymentReasonCode.APPROVAL_FAILED;
+			default -> PaymentReasonCode.UNKNOWN;
+		};
+	}
+
+	private PaymentReasonCode toPaymentReasonCode(NaverPayException ex) {
+		return switch (ex.getErrorCode()) {
+			case NETWORK -> PaymentReasonCode.PG_NETWORK_ERROR;
+			case SERVER_ERROR -> PaymentReasonCode.PG_SERVER_ERROR;
+			case CLIENT_ERROR, AUTHENTICATION, INVALID_RESPONSE -> PaymentReasonCode.APPROVAL_FAILED;
+			default -> PaymentReasonCode.UNKNOWN;
+		};
+	}
+
+	private PaymentReasonCode toPaymentReasonCode(NaverPayResultCode resultCode) {
+		return switch (resultCode) {
+			case USER_CANCEL -> PaymentReasonCode.USER_CANCELED;
+			case TIME_EXPIRED -> PaymentReasonCode.TIME_EXPIRED;
+			case UNDER_AGE_AMOUNT_LIMIT -> PaymentReasonCode.UNDER_AGE_LIMIT;
+			case FAIL -> PaymentReasonCode.PRE_APPROVE_FAILED;
+			default -> PaymentReasonCode.UNKNOWN;
+		};
+	}
+
 	private NaverPayApproveBody.Detail getDetail(NaverPayResponse<NaverPayApproveBody> response) {
 		try {
 			return response.getBody().getDetail();
@@ -141,29 +232,11 @@ public class NaverPayService {
 		}
 	}
 
-	private NaverPayApproveResult toFailResult(Payment payment, PaymentErrorCode errorCode) {
-		Payment failed = paymentService.failPayment(
-			payment.getMerchantPayKey(), null, errorCode.getMessage());
-		return toResult(failed);
-	}
-
-	private PaymentErrorCode toPaymentErrorCode(NaverPayApproveCode approveCode) {
-		return switch (approveCode) {
-			case TIME_EXPIRED -> PaymentErrorCode.PAYMENT_TIME_EXPIRED;
-			case INVALID_MERCHANT, OWNER_AUTH_FAIL, NOT_ENOUGH_ACCOUNT_BALANCE ->
-				PaymentErrorCode.PAYMENT_APPROVAL_FAILED;
-			case BANK_MAINTENANCE, MAINTENANCE_ONGOING, FAULT_CHECK_ONGOING ->
-				PaymentErrorCode.PAYMENT_APPROVAL_RETRYABLE_FAILED;
-			default -> PaymentErrorCode.PAYMENT_APPROVAL_FAILED;
-		};
-	}
-
-	private PaymentErrorCode toPaymentErrorCode(NaverPayResultCode resultCode) {
-		return switch (resultCode) {
-			case USER_CANCEL -> PaymentErrorCode.PAYMENT_USER_CANCELED;
-			case TIME_EXPIRED -> PaymentErrorCode.PAYMENT_TIME_EXPIRED;
-			case UNDER_AGE_AMOUNT_LIMIT -> PaymentErrorCode.PAYMENT_UNDERAGE_LIMIT;
-			default -> PaymentErrorCode.PAYMENT_APPROVAL_FAILED;
-		};
+	private NaverPayCancelBody getBody(NaverPayResponse<NaverPayCancelBody> response) {
+		try {
+			return response.getBody();
+		} catch (NullPointerException ex) {
+			throw new NaverPayException(NaverPayErrorCode.INVALID_RESPONSE, "네이버페이 응답 처리에 실패했습니다", ex);
+		}
 	}
 }
