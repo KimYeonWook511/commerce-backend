@@ -55,9 +55,12 @@ public class Payment extends BaseTimeEntity {
 	@Column(unique = true)
 	private String pgPaymentId;
 
-	private String failureReason;
-
 	private LocalDateTime approvedAt;
+
+	@Enumerated(EnumType.STRING)
+	private PaymentReasonCode reasonCode;
+
+	private String reasonDetail;
 
 	@Builder(access = AccessLevel.PRIVATE)
 	private Payment(Order order, int amount, PaymentStatus status, PaymentProvider provider, String merchantPayKey) {
@@ -83,22 +86,23 @@ public class Payment extends BaseTimeEntity {
 		this.pgPaymentId = pgPaymentId;
 		this.status = PaymentStatus.COMPLETED;
 		this.approvedAt = approvedAt;
-		this.failureReason = null;
 	}
 
-	public void failWithPgPaymentId(String pgPaymentId, String reason) {
-		validateProcessing();
-		this.pgPaymentId = pgPaymentId;
+	public void fail(PaymentReasonCode reasonCode, String reasonDetail) {
 		this.status = PaymentStatus.FAILED;
-		this.failureReason = reason;
-		this.approvedAt = null;
+		this.reasonCode = reasonCode;
+		this.reasonDetail = reasonDetail;
 	}
 
-	public void cancel(String reason) {
-		validateCancelable();
+	public void cancelPending(String pgPaymentId, PaymentReasonCode reasonCode, String reasonDetail) {
+		this.status = PaymentStatus.CANCEL_PENDING;
+		this.pgPaymentId = pgPaymentId;
+		this.reasonCode = reasonCode;
+		this.reasonDetail = reasonDetail;
+	}
+
+	public void completeCancel() {
 		this.status = PaymentStatus.CANCELED;
-		this.failureReason = reason;
-		this.approvedAt = null;
 	}
 
 	private void validateProcessing() {
