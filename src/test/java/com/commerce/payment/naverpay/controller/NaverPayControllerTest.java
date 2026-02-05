@@ -94,6 +94,38 @@ class NaverPayControllerTest {
 		then(naverPayService).should().approve(1L, "PAY-1", "pg-payment-id");
 	}
 
+	@DisplayName("승인 전 결제 실패 요청이 성공하면 결과를 반환한다")
+	@Test
+	void preApproveFailNaverPay_whenSuccess_returnOk() throws Exception {
+		// given
+		stubForValidToken();
+		NaverPayApproveResult result = NaverPayApproveResult.builder()
+			.pgPaymentId(null)
+			.status(NaverPayApproveStatus.FAIL)
+			.build();
+		given(naverPayService.preApproveFail(1L, "PAY-1", "Fail", "fail-message")).willReturn(result);
+
+		String requestBody = """
+			{
+			  "merchantPayKey": "PAY-1",
+			  "resultCode": "Fail",
+			  "resultMessage": "fail-message"
+			}
+			""";
+
+		// when & then
+		mockMvc.perform(post("/payments/naverpay/pre-approve-fail")
+				.header("Authorization", "Bearer access-token")
+				.contentType(MediaType.APPLICATION_JSON)
+				.content(requestBody))
+			.andExpect(status().isOk())
+			.andExpect(jsonPath("$.code").value("SUCCESS"))
+			.andExpect(jsonPath("$.message").value("OK"))
+			.andExpect(jsonPath("$.data.status").value("FAIL"));
+
+		then(naverPayService).should().preApproveFail(1L, "PAY-1", "Fail", "fail-message");
+	}
+
 	private void stubForValidToken() {
 		Claims claims = Jwts.claims().setSubject("1");
 		claims.put("role", "ROLE_USER");
