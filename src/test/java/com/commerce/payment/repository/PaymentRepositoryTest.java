@@ -17,6 +17,7 @@ import com.commerce.order.domain.Order;
 import com.commerce.order.repository.OrderRepository;
 import com.commerce.payment.domain.Payment;
 import com.commerce.payment.domain.PaymentProvider;
+import com.commerce.payment.domain.PaymentReasonCode;
 import com.commerce.payment.domain.PaymentStatus;
 
 @DataJpaTest
@@ -67,6 +68,36 @@ class PaymentRepositoryTest {
 
 		// then
 		assertThat(updated).isEqualTo(0);
+	}
+
+	@DisplayName("결제가 처리 중이면 취소 대기 상태로 변경된다")
+	@Test
+	void updateToCancelPending_whenProcessing_updateStatusAndReason() {
+		// given
+		Member member = createMember();
+		Order order = createOrder(member);
+		Payment payment = Payment.create(order, 1000, PaymentProvider.NAVERPAY);
+		ReflectionTestUtils.setField(payment, "status", PaymentStatus.PROCESSING);
+		paymentRepository.save(payment);
+		String merchantPayKey = payment.getMerchantPayKey();
+
+		// when
+		int updated = paymentRepository.updateToCancelPending(
+			merchantPayKey,
+			PaymentStatus.PROCESSING,
+			PaymentStatus.CANCEL_PENDING,
+			"pg-payment-id",
+			PaymentReasonCode.AMOUNT_MISMATCH,
+			"mismatch"
+		);
+
+		// then
+		assertThat(updated).isEqualTo(1);
+		Payment updatedPayment = paymentRepository.findByMerchantPayKey(merchantPayKey).orElseThrow();
+		assertThat(updatedPayment.getStatus()).isEqualTo(PaymentStatus.CANCEL_PENDING);
+		assertThat(updatedPayment.getPgPaymentId()).isEqualTo("pg-payment-id");
+		assertThat(updatedPayment.getReasonCode()).isEqualTo(PaymentReasonCode.AMOUNT_MISMATCH);
+		assertThat(updatedPayment.getReasonDetail()).isEqualTo("mismatch");
 	}
 
 	@DisplayName("결제 키와 회원 ID가 일치하면 결제를 조회한다")
