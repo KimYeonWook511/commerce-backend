@@ -3,6 +3,7 @@ package com.commerce.payment.domain;
 import java.time.LocalDateTime;
 
 import com.commerce.common.jpa.BaseTimeEntity;
+import com.commerce.common.util.UlidGenerator;
 import com.commerce.order.domain.Order;
 import com.commerce.payment.exception.PaymentErrorCode;
 import com.commerce.payment.exception.PaymentException;
@@ -48,50 +49,72 @@ public class Payment extends BaseTimeEntity {
 	@Column(nullable = false)
 	private PaymentProvider provider;
 
-	private String failureReason;
+	@Column(unique = true)
+	private String merchantPayKey;
+
+	@Column(unique = true)
+	private String pgPaymentId;
 
 	private LocalDateTime approvedAt;
 
+	@Enumerated(EnumType.STRING)
+	private PaymentReasonCode reasonCode;
+
+	private String reasonDetail;
+
 	@Builder(access = AccessLevel.PRIVATE)
-	private Payment(Order order, int amount, PaymentProvider provider, PaymentStatus status) {
+	private Payment(Order order, int amount, PaymentStatus status, PaymentProvider provider, String merchantPayKey) {
 		this.order = order;
 		this.amount = amount;
-		this.provider = provider;
 		this.status = status;
+		this.provider = provider;
+		this.merchantPayKey = merchantPayKey;
 	}
 
 	public static Payment create(Order order, int amount, PaymentProvider provider) {
 		return Payment.builder()
 			.order(order)
 			.amount(amount)
-			.provider(provider)
 			.status(PaymentStatus.PENDING)
+			.provider(provider)
+			.merchantPayKey("PAY-" + UlidGenerator.generate())
 			.build();
 	}
 
-	public void complete(LocalDateTime approvedAt) {
-		validatePending();
+	public void completeWithPgPaymentId(String pgPaymentId, LocalDateTime approvedAt) {
+		validateProcessing();
+		this.pgPaymentId = pgPaymentId;
 		this.status = PaymentStatus.COMPLETED;
 		this.approvedAt = approvedAt;
-		this.failureReason = null;
 	}
 
-	public void fail(String reason) {
-		validatePending();
+	public void fail(PaymentReasonCode reasonCode, String reasonDetail) {
 		this.status = PaymentStatus.FAILED;
-		this.failureReason = reason;
-		this.approvedAt = null;
+		this.reasonCode = reasonCode;
+		this.reasonDetail = reasonDetail;
 	}
 
-	public void cancel(String reason) {
-		validatePending();
+	public void cancelPending(String pgPaymentId, PaymentReasonCode reasonCode, String reasonDetail) {
+		this.status = PaymentStatus.CANCEL_PENDING;
+		this.pgPaymentId = pgPaymentId;
+		this.reasonCode = reasonCode;
+		this.reasonDetail = reasonDetail;
+	}
+
+	public void completeCancel() {
 		this.status = PaymentStatus.CANCELED;
-		this.failureReason = reason;
-		this.approvedAt = null;
 	}
 
-	private void validatePending() {
-		if (this.status != PaymentStatus.PENDING) {
+	private void validateProcessing() {
+		if (this.status != PaymentStatus.PROCESSING) {
+			throw new PaymentException(PaymentErrorCode.PAYMENT_STATUS_NOT_ALLOWED);
+		}
+	}
+
+	private void validateCancelable() {
+		if (this.status != PaymentStatus.PENDING
+			&& this.status != PaymentStatus.PROCESSING
+			&& this.status != PaymentStatus.COMPLETED) {
 			throw new PaymentException(PaymentErrorCode.PAYMENT_STATUS_NOT_ALLOWED);
 		}
 	}

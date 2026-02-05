@@ -9,6 +9,7 @@ import org.junit.jupiter.api.Test;
 import org.springframework.beans.factory.annotation.Autowired;
 import org.springframework.boot.test.autoconfigure.orm.jpa.DataJpaTest;
 import org.springframework.test.context.ActiveProfiles;
+import org.springframework.test.util.ReflectionTestUtils;
 
 import com.commerce.member.domain.Member;
 import com.commerce.member.repository.MemberRepository;
@@ -16,6 +17,8 @@ import com.commerce.order.domain.Order;
 import com.commerce.order.repository.OrderRepository;
 import com.commerce.payment.domain.Payment;
 import com.commerce.payment.domain.PaymentProvider;
+import com.commerce.payment.domain.PaymentReasonCode;
+import com.commerce.payment.domain.PaymentStatus;
 
 @DataJpaTest
 @ActiveProfiles("test")
@@ -25,32 +28,133 @@ class PaymentRepositoryTest {
 	private PaymentRepository paymentRepository;
 
 	@Autowired
-	private OrderRepository orderRepository;
-
-	@Autowired
 	private MemberRepository memberRepository;
 
-	@DisplayName("주문 ID로 결제를 조회하면 해당 결제를 반환한다")
+	@Autowired
+	private OrderRepository orderRepository;
+
+	@DisplayName("결제가 대기 상태면 처리 중으로 변경된다")
 	@Test
-	void findByOrderId_whenPaymentExists_returnPayment() {
+	void updateStatusIfMatches_whenPending_updateStatus() {
 		// given
-		Member member = memberRepository.save(createMember());
-		Order order = orderRepository.save(Order.create(member));
-		Payment payment = paymentRepository.save(Payment.create(order, 1000, PaymentProvider.NAVERPAY));
+		Member member = createMember();
+		Order order = createOrder(member);
+		Payment payment = Payment.create(order, 1000, PaymentProvider.NAVERPAY);
+		paymentRepository.save(payment);
+		String merchantPayKey = payment.getMerchantPayKey();
 
 		// when
-		Optional<Payment> result = paymentRepository.findByOrderId(order.getId());
+		int updated = paymentRepository.updateStatusIfMatches(
+			merchantPayKey, PaymentStatus.PENDING, PaymentStatus.PROCESSING);
+
+		// then
+		assertThat(updated).isEqualTo(1);
+	}
+
+	@DisplayName("결제가 완료 상태면 처리 중으로 변경되지 않는다")
+	@Test
+	void updateStatusIfMatches_whenCompleted_returnZero() {
+		// given
+		Member member = createMember();
+		Order order = createOrder(member);
+		Payment payment = Payment.create(order, 1000, PaymentProvider.NAVERPAY);
+		ReflectionTestUtils.setField(payment, "status", PaymentStatus.COMPLETED);
+		paymentRepository.save(payment);
+		String merchantPayKey = payment.getMerchantPayKey();
+
+		// when
+		int updated = paymentRepository.updateStatusIfMatches(
+			merchantPayKey, PaymentStatus.PENDING, PaymentStatus.PROCESSING);
+
+		// then
+		assertThat(updated).isEqualTo(0);
+	}
+
+	@DisplayName("결제가 처리 중이면 취소 대기 상태로 변경된다")
+	@Test
+	void updateToCancelPending_whenProcessing_updateStatusAndReason() {
+		// given
+		Member member = createMember();
+		Order order = createOrder(member);
+		Payment payment = Payment.create(order, 1000, PaymentProvider.NAVERPAY);
+		ReflectionTestUtils.setField(payment, "status", PaymentStatus.PROCESSING);
+		paymentRepository.save(payment);
+		String merchantPayKey = payment.getMerchantPayKey();
+
+		// when
+		int updated = paymentRepository.updateToCancelPending(
+			merchantPayKey,
+			PaymentStatus.PROCESSING,
+			PaymentStatus.CANCEL_PENDING,
+			"pg-payment-id",
+			PaymentReasonCode.AMOUNT_MISMATCH,
+			"mismatch"
+		);
+
+		// then
+		assertThat(updated).isEqualTo(1);
+		Payment updatedPayment = paymentRepository.findByMerchantPayKey(merchantPayKey).orElseThrow();
+		assertThat(updatedPayment.getStatus()).isEqualTo(PaymentStatus.CANCEL_PENDING);
+		assertThat(updatedPayment.getPgPaymentId()).isEqualTo("pg-payment-id");
+		assertThat(updatedPayment.getReasonCode()).isEqualTo(PaymentReasonCode.AMOUNT_MISMATCH);
+		assertThat(updatedPayment.getReasonDetail()).isEqualTo("mismatch");
+	}
+
+	@DisplayName("결제 키와 회원 ID가 일치하면 결제를 조회한다")
+	@Test
+	void findByMerchantPayKeyAndMemberId_whenMatch_returnPayment() {
+		// given
+		Member member = createMember();
+		Order order = createOrder(member);
+		Payment payment = Payment.create(order, 1000, PaymentProvider.NAVERPAY);
+		paymentRepository.save(payment);
+
+		// when
+		Optional<Payment> result =
+			paymentRepository.findByMerchantPayKeyAndMemberId(payment.getMerchantPayKey(), member.getId());
 
 		// then
 		assertThat(result).isPresent();
-		assertThat(result.orElseThrow().getId()).isEqualTo(payment.getId());
+	}
+
+	@DisplayName("결제 키와 회원 ID가 다르면 결제를 조회하지 못한다")
+	@Test
+	void findByMerchantPayKeyAndMemberId_whenMemberMismatch_returnEmpty() {
+		// given
+		Member member = createMember();
+		Member other = createOtherMember();
+		Order order = createOrder(member);
+		Payment payment = Payment.create(order, 1000, PaymentProvider.NAVERPAY);
+		paymentRepository.save(payment);
+
+		// when
+		Optional<Payment> result =
+			paymentRepository.findByMerchantPayKeyAndMemberId(payment.getMerchantPayKey(), other.getId());
+
+		// then
+		assertThat(result).isEmpty();
 	}
 
 	private Member createMember() {
-		return Member.builder()
-			.email("payment@example.com")
+		Member member = Member.builder()
+			.email("payment-repo@example.com")
 			.password("password123")
 			.username("payer")
 			.build();
+		return memberRepository.save(member);
+	}
+
+	private Member createOtherMember() {
+		Member member = Member.builder()
+			.email("payment-repo2@example.com")
+			.password("password123")
+			.username("payer2")
+			.build();
+		return memberRepository.save(member);
+	}
+
+	private Order createOrder(Member member) {
+		Order order = Order.create(member);
+		return orderRepository.save(order);
 	}
 }

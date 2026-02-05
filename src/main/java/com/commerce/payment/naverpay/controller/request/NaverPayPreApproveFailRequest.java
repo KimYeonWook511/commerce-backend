@@ -1,0 +1,18 @@
+package com.commerce.payment.naverpay.controller.request;
+
+import jakarta.validation.constraints.NotBlank;
+import lombok.Getter;
+import lombok.NoArgsConstructor;
+
+@Getter
+@NoArgsConstructor
+public class NaverPayPreApproveFailRequest {
+
+	@NotBlank
+	private String merchantPayKey;
+
+	@NotBlank
+	private String resultCode;
+
+	private String resultMessage;
+}
