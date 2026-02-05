@@ -22,6 +22,7 @@ import org.springframework.web.client.ResourceAccessException;
 import org.springframework.web.client.RestTemplate;
 
 import com.commerce.payment.naverpay.client.request.NaverPayCancelRequest;
+import com.commerce.payment.naverpay.client.request.NaverPayCancelRequester;
 import com.commerce.payment.naverpay.client.response.NaverPayResponse;
 import com.commerce.payment.naverpay.client.response.body.NaverPayApproveBody;
 import com.commerce.payment.naverpay.client.response.body.NaverPayCancelBody;
@@ -257,7 +258,7 @@ class NaverPayClientTest {
 			.paymentId("pg-payment-id")
 			.cancelAmount(1000)
 			.cancelReason("test-cancel")
-			.cancelRequester("2")
+			.cancelRequester(NaverPayCancelRequester.CANCEL_BY_ADMIN)
 			.taxScopeAmount(1000)
 			.taxExScopeAmount(0)
 			.build();
