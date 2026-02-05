@@ -24,6 +24,7 @@ import com.commerce.order.exception.OrderException;
 import com.commerce.order.repository.OrderRepository;
 import com.commerce.payment.domain.Payment;
 import com.commerce.payment.domain.PaymentProvider;
+import com.commerce.payment.domain.PaymentReasonCode;
 import com.commerce.payment.domain.PaymentStatus;
 import com.commerce.payment.exception.PaymentErrorCode;
 import com.commerce.payment.exception.PaymentException;
@@ -219,16 +220,15 @@ class PaymentServiceTest {
 	void failPaymentByMerchantPayKey_whenProcessing_changeStatus() {
 		// given
 		Payment payment = Payment.create(createOrder(1000), 1000, PaymentProvider.NAVERPAY);
-		ReflectionTestUtils.setField(payment, "status", PaymentStatus.PROCESSING);
 		given(paymentRepository.findByMerchantPayKey("PAY-1")).willReturn(Optional.of(payment));
 
 		// when
-		Payment result = paymentService.failPayment("PAY-1", null, "fail");
+		Payment result = paymentService.failPayment("PAY-1", PaymentReasonCode.APPROVAL_FAILED, "fail");
 
 		// then
 		assertThat(result.getStatus()).isEqualTo(PaymentStatus.FAILED);
-		assertThat(result.getFailureReason()).isEqualTo("fail");
-		assertThat(result.getPgPaymentId()).isNull();
+		assertThat(result.getReasonCode()).isEqualTo(PaymentReasonCode.APPROVAL_FAILED);
+		assertThat(result.getReasonDetail()).isEqualTo("fail");
 	}
 
 	@DisplayName("결제가 없으면 실패 처리에 실패한다")
@@ -238,12 +238,52 @@ class PaymentServiceTest {
 		given(paymentRepository.findByMerchantPayKey("PAY-1")).willReturn(Optional.empty());
 
 		// when & then
-		assertThatThrownBy(() -> paymentService.failPayment("PAY-1", null, "fail"))
+		assertThatThrownBy(() -> paymentService.failPayment("PAY-1", PaymentReasonCode.APPROVAL_FAILED, "fail"))
 			.isInstanceOf(PaymentException.class)
 			.satisfies(exception -> {
 				PaymentException paymentException = (PaymentException) exception;
 				assertThat(paymentException.getErrorCode()).isEqualTo(PaymentErrorCode.PAYMENT_NOT_FOUND);
 			});
+	}
+
+	@DisplayName("결제 취소 대기 상태로 전환하면 업데이트 수를 반환한다")
+	@Test
+	void markCancelPending_whenCalled_returnUpdatedCount() {
+		// given
+		given(paymentRepository.updateToCancelPending(
+			"PAY-1",
+			PaymentStatus.PROCESSING,
+			PaymentStatus.CANCEL_PENDING,
+			"pg-payment-id",
+			PaymentReasonCode.AMOUNT_MISMATCH,
+			"mismatch"
+		)).willReturn(1);
+
+		// when
+		int updated = paymentService.markCancelPending(
+			"PAY-1",
+			"pg-payment-id",
+			PaymentReasonCode.AMOUNT_MISMATCH,
+			"mismatch"
+		);
+
+		// then
+		assertThat(updated).isEqualTo(1);
+	}
+
+	@DisplayName("결제 취소 완료 처리에 성공한다")
+	@Test
+	void completeCancelPayment_whenCalled_updateStatus() {
+		// given
+		Payment payment = Payment.create(createOrder(1000), 1000, PaymentProvider.NAVERPAY);
+		ReflectionTestUtils.setField(payment, "status", PaymentStatus.CANCEL_PENDING);
+		given(paymentRepository.findByPgPaymentId("pg-payment-id")).willReturn(Optional.of(payment));
+
+		// when
+		Payment result = paymentService.completeCancelPayment("pg-payment-id");
+
+		// then
+		assertThat(result.getStatus()).isEqualTo(PaymentStatus.CANCELED);
 	}
 
 	@DisplayName("결제 키와 회원 ID가 일치하면 결제를 조회한다")
