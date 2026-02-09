@@ -92,4 +92,10 @@ public class Order extends BaseTimeEntity {
 		this.status = OrderStatus.PAID;
 	}
 
+	public void cancelIfPaid() {
+		if (this.status == OrderStatus.PAID) {
+			this.status = OrderStatus.CANCELED;
+		}
+	}
+
 }
