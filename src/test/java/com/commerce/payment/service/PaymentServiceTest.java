@@ -293,19 +293,38 @@ class PaymentServiceTest {
 		assertThat(updated).isEqualTo(1);
 	}
 
-	@DisplayName("결제 취소 완료 처리에 성공한다")
+	@DisplayName("결제 취소 완료 시 주문도 취소 처리된다")
 	@Test
 	void completeCancelPayment_whenCalled_updateStatus() {
 		// given
 		Payment payment = Payment.create(createOrder(1000), 1000, PaymentProvider.NAVERPAY);
 		ReflectionTestUtils.setField(payment, "status", PaymentStatus.CANCEL_PENDING);
-		given(paymentRepository.findByPgPaymentId("pg-payment-id")).willReturn(Optional.of(payment));
+		ReflectionTestUtils.setField(payment.getOrder(), "status", OrderStatus.PAID);
+		given(paymentRepository.findByPgPaymentIdWithOrder("pg-payment-id")).willReturn(Optional.of(payment));
 
 		// when
 		Payment result = paymentService.completeCancelPayment("pg-payment-id");
 
 		// then
 		assertThat(result.getStatus()).isEqualTo(PaymentStatus.CANCELED);
+		assertThat(result.getOrder().getStatus()).isEqualTo(OrderStatus.CANCELED);
+	}
+
+	@DisplayName("결제 취소 완료 시 주문이 PAID가 아니면 주문 상태는 그대로 두고 결제만 취소 완료 처리한다")
+	@Test
+	void completeCancelPayment_whenOrderNotPaid_keepOrderStatus() {
+		// given
+		Payment payment = Payment.create(createOrder(1000), 1000, PaymentProvider.NAVERPAY);
+		ReflectionTestUtils.setField(payment, "status", PaymentStatus.CANCEL_PENDING);
+		ReflectionTestUtils.setField(payment.getOrder(), "status", OrderStatus.INIT);
+		given(paymentRepository.findByPgPaymentIdWithOrder("pg-payment-id")).willReturn(Optional.of(payment));
+
+		// when
+		Payment result = paymentService.completeCancelPayment("pg-payment-id");
+
+		// then
+		assertThat(result.getStatus()).isEqualTo(PaymentStatus.CANCELED);
+		assertThat(result.getOrder().getStatus()).isEqualTo(OrderStatus.INIT);
 	}
 
 	@DisplayName("결제 키와 회원 ID가 일치하면 결제를 조회한다")
