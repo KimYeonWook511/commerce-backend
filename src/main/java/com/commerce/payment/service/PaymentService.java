@@ -8,6 +8,7 @@ import org.springframework.transaction.annotation.Propagation;
 import org.springframework.transaction.annotation.Transactional;
 
 import com.commerce.order.domain.Order;
+import com.commerce.order.domain.OrderStatus;
 import com.commerce.order.exception.OrderErrorCode;
 import com.commerce.order.exception.OrderException;
 import com.commerce.order.repository.OrderRepository;
@@ -74,11 +75,6 @@ public class PaymentService {
 			.orElseThrow(() -> new PaymentException(PaymentErrorCode.PAYMENT_NOT_FOUND));
 	}
 
-	public Payment getPaymentByPgPaymentId(String pgPaymentId) {
-		return paymentRepository.findByPgPaymentId(pgPaymentId)
-			.orElseThrow(() -> new PaymentException(PaymentErrorCode.PAYMENT_NOT_FOUND));
-	}
-
 	@Transactional(propagation = Propagation.REQUIRES_NEW)
 	public int markProcessing(String merchantPayKey) {
 		return paymentRepository.updateStatusIfMatches(
@@ -109,7 +105,9 @@ public class PaymentService {
 
 	@Transactional(propagation = Propagation.REQUIRES_NEW)
 	public Payment completeCancelPayment(String pgPaymentId) {
-		Payment payment = getPaymentByPgPaymentId(pgPaymentId);
+		Payment payment = paymentRepository.findByPgPaymentIdWithOrder(pgPaymentId)
+			.orElseThrow(() -> new PaymentException(PaymentErrorCode.PAYMENT_NOT_FOUND));
+		payment.getOrder().cancelIfPaid();
 		payment.completeCancel();
 		return payment;
 	}
