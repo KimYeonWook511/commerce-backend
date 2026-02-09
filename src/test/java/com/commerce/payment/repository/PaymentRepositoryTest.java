@@ -175,6 +175,26 @@ class PaymentRepositoryTest {
 		assertThat(result.getOrder().getId()).isEqualTo(order.getId());
 	}
 
+	@DisplayName("PG 결제 키로 조회하면 주문이 함께 로딩된다")
+	@Test
+	void findByPgPaymentIdWithOrder_whenExists_loadOrder() {
+		// given
+		Member member = createMember();
+		Order order = createOrder(member);
+		Payment payment = Payment.create(order, 1000, PaymentProvider.NAVERPAY);
+		ReflectionTestUtils.setField(payment, "pgPaymentId", "pg-payment-id");
+		paymentRepository.save(payment);
+
+		em.flush();
+		em.clear();
+
+		// when
+		Payment result = paymentRepository.findByPgPaymentIdWithOrder("pg-payment-id").orElseThrow();
+
+		// then
+		assertThat(result.getOrder().getId()).isEqualTo(order.getId());
+	}
+
 	private Member createMember() {
 		Member member = Member.builder()
 			.email("payment-repo@example.com")
