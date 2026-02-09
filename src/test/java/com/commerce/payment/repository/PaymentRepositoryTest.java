@@ -20,6 +20,8 @@ import com.commerce.payment.domain.PaymentProvider;
 import com.commerce.payment.domain.PaymentReasonCode;
 import com.commerce.payment.domain.PaymentStatus;
 
+import jakarta.persistence.EntityManager;
+
 @DataJpaTest
 @ActiveProfiles("test")
 class PaymentRepositoryTest {
@@ -33,6 +35,9 @@ class PaymentRepositoryTest {
 	@Autowired
 	private OrderRepository orderRepository;
 
+	@Autowired
+	private EntityManager em;
+
 	@DisplayName("결제가 대기 상태면 처리 중으로 변경된다")
 	@Test
 	void updateStatusIfMatches_whenPending_updateStatus() {
@@ -42,6 +47,9 @@ class PaymentRepositoryTest {
 		Payment payment = Payment.create(order, 1000, PaymentProvider.NAVERPAY);
 		paymentRepository.save(payment);
 		String merchantPayKey = payment.getMerchantPayKey();
+
+		em.flush();
+		em.clear();
 
 		// when
 		int updated = paymentRepository.updateStatusIfMatches(
@@ -62,6 +70,9 @@ class PaymentRepositoryTest {
 		paymentRepository.save(payment);
 		String merchantPayKey = payment.getMerchantPayKey();
 
+		em.flush();
+		em.clear();
+
 		// when
 		int updated = paymentRepository.updateStatusIfMatches(
 			merchantPayKey, PaymentStatus.PENDING, PaymentStatus.PROCESSING);
@@ -80,6 +91,9 @@ class PaymentRepositoryTest {
 		ReflectionTestUtils.setField(payment, "status", PaymentStatus.PROCESSING);
 		paymentRepository.save(payment);
 		String merchantPayKey = payment.getMerchantPayKey();
+
+		em.flush();
+		em.clear();
 
 		// when
 		int updated = paymentRepository.updateToCancelPending(
@@ -109,6 +123,9 @@ class PaymentRepositoryTest {
 		Payment payment = Payment.create(order, 1000, PaymentProvider.NAVERPAY);
 		paymentRepository.save(payment);
 
+		em.flush();
+		em.clear();
+
 		// when
 		Optional<Payment> result =
 			paymentRepository.findByMerchantPayKeyAndMemberId(payment.getMerchantPayKey(), member.getId());
@@ -127,12 +144,35 @@ class PaymentRepositoryTest {
 		Payment payment = Payment.create(order, 1000, PaymentProvider.NAVERPAY);
 		paymentRepository.save(payment);
 
+		em.flush();
+		em.clear();
+
 		// when
 		Optional<Payment> result =
 			paymentRepository.findByMerchantPayKeyAndMemberId(payment.getMerchantPayKey(), other.getId());
 
 		// then
 		assertThat(result).isEmpty();
+	}
+
+	@DisplayName("결제 키로 조회하면 주문이 함께 로딩된다")
+	@Test
+	void findByMerchantPayKeyWithOrder_whenExists_loadOrder() {
+		// given
+		Member member = createMember();
+		Order order = createOrder(member);
+		Payment payment = Payment.create(order, 1000, PaymentProvider.NAVERPAY);
+		paymentRepository.save(payment);
+		String merchantPayKey = payment.getMerchantPayKey();
+
+		em.flush();
+		em.clear();
+
+		// when
+		Payment result = paymentRepository.findByMerchantPayKeyWithOrder(merchantPayKey).orElseThrow();
+
+		// then
+		assertThat(result.getOrder().getId()).isEqualTo(order.getId());
 	}
 
 	private Member createMember() {
