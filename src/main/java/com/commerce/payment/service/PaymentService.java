@@ -87,7 +87,9 @@ public class PaymentService {
 
 	@Transactional(propagation = Propagation.REQUIRES_NEW)
 	public Payment completePayment(String merchantPayKey, String pgPaymentId, LocalDateTime approvedAt) {
-		Payment payment = getPaymentByMerchantPayKey(merchantPayKey);
+		Payment payment = paymentRepository.findByMerchantPayKeyWithOrder(merchantPayKey)
+			.orElseThrow(() -> new PaymentException(PaymentErrorCode.PAYMENT_NOT_FOUND));
+		payment.getOrder().completePayment();
 		payment.completeWithPgPaymentId(pgPaymentId, approvedAt);
 		return payment;
 	}
