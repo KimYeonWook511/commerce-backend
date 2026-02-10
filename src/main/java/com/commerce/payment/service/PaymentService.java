@@ -40,9 +40,10 @@ public class PaymentService {
 		Order order = orderRepository.findByIdAndMemberIdWithItems(command.getOrderId(), command.getMemberId())
 			.orElseThrow(() -> new OrderException(OrderErrorCode.ORDER_NOT_FOUND));
 
-		// 기존 결제 정보 가져오기 or 결제 생성하기
-		Payment payment = paymentRepository.findByOrderId(order.getId())
-			.orElseGet(() -> paymentRepository.save(Payment.create(order, order.getTotalPrice(), command.getProvider())));
+		// 결제 생성하기
+		Payment payment = paymentRepository.save(
+			Payment.create(order, order.getTotalPrice(), command.getProvider())
+		);
 
 		// 결제 수단에 맞는 프로퍼티 가져오기
 		PaymentProviderProperties properties = propertiesResolver.resolve(command.getProvider());

@@ -195,6 +195,26 @@ class PaymentRepositoryTest {
 		assertThat(result.getOrder().getId()).isEqualTo(order.getId());
 	}
 
+	@DisplayName("하나의 주문에 여러 결제를 저장할 수 있다")
+	@Test
+	void save_whenSameOrder_multiplePaymentsAllowed() {
+		// given
+		Member member = createMember();
+		Order order = createOrder(member);
+		Payment first = Payment.create(order, 1000, PaymentProvider.NAVERPAY);
+		Payment second = Payment.create(order, 1000, PaymentProvider.NAVERPAY);
+
+		// when
+		paymentRepository.save(first);
+		paymentRepository.save(second);
+
+		em.flush();
+		em.clear();
+
+		// then
+		assertThat(paymentRepository.count()).isEqualTo(2);
+	}
+
 	private Member createMember() {
 		Member member = Member.builder()
 			.email("payment-repo@example.com")
