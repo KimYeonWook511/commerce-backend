@@ -94,6 +94,63 @@ class OrderTest {
 			});
 	}
 
+	@DisplayName("주문이 초기 상태면 결제 완료로 변경된다")
+	@Test
+	void completePayment_whenInitStatus_changeToPaid() {
+		// given
+		Order order = Order.create(createMember());
+
+		// when
+		order.completePayment();
+
+		// then
+		assertThat(order.getStatus()).isEqualTo(OrderStatus.PAID);
+	}
+
+	@DisplayName("주문이 초기 상태가 아니면 결제 완료 처리에 실패한다")
+	@Test
+	void completePayment_whenStatusNotInit_throwException() {
+		// given
+		Order order = Order.create(createMember());
+		setStatus(order, OrderStatus.RECEIVED);
+
+		// when & then
+		assertThatThrownBy(order::completePayment)
+			.isInstanceOf(OrderException.class)
+			.satisfies(exception -> {
+				OrderException orderException = (OrderException) exception;
+				assertThat(orderException.getErrorCode()).isEqualTo(OrderErrorCode.ORDER_PAID_NOT_ALLOWED);
+			});
+	}
+
+	@DisplayName("주문이 결제 완료 상태면 결제 취소로 변경된다")
+	@Test
+	void cancelIfPaid_whenPaid_changeToCanceled() {
+		// given
+		Order order = Order.create(createMember());
+		order.completePayment();
+
+		// when
+		order.cancelIfPaid();
+
+		// then
+		assertThat(order.getStatus()).isEqualTo(OrderStatus.CANCELED);
+	}
+
+	@DisplayName("주문이 결제 완료 상태가 아니면 결제 취소를 하지 않는다")
+	@Test
+	void cancelIfPaid_whenStatusNotPaid_keepStatus() {
+		// given
+		Order order = Order.create(createMember());
+		setStatus(order, OrderStatus.INIT);
+
+		// when
+		order.cancelIfPaid();
+
+		// then
+		assertThat(order.getStatus()).isEqualTo(OrderStatus.INIT);
+	}
+
 	private Member createMember() {
 		return Member.builder()
 			.email("test@example.com")
