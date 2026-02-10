@@ -26,8 +26,8 @@ import org.springframework.test.context.bean.override.mockito.MockitoSpyBean;
 import com.commerce.member.domain.Member;
 import com.commerce.member.repository.MemberRepository;
 import com.commerce.order.repository.OrderRepository;
-import com.commerce.order.service.request.OrderCreateItem;
-import com.commerce.order.service.request.OrderCreateServiceRequest;
+import com.commerce.order.service.command.OrderCreateItem;
+import com.commerce.order.service.command.OrderCreateCommand;
 import com.commerce.orderitem.repository.OrderItemRepository;
 import com.commerce.product.domain.Product;
 import com.commerce.product.repository.ProductRepository;
@@ -86,14 +86,14 @@ class OrderServiceDeadlockTest {
 		createStock(product1, 2);
 		createStock(product2, 2);
 
-		OrderCreateServiceRequest requestA = OrderCreateServiceRequest.builder()
+		OrderCreateCommand requestA = OrderCreateCommand.builder()
 			.memberId(member.getId())
 			.items(List.of(
 				OrderCreateItem.builder().productId(product1.getId()).quantity(1).build(),
 				OrderCreateItem.builder().productId(product2.getId()).quantity(1).build()
 			))
 			.build();
-		OrderCreateServiceRequest requestB = OrderCreateServiceRequest.builder()
+		OrderCreateCommand requestB = OrderCreateCommand.builder()
 			.memberId(member.getId())
 			.items(List.of(
 				OrderCreateItem.builder().productId(product2.getId()).quantity(1).build(),
@@ -153,7 +153,7 @@ class OrderServiceDeadlockTest {
 		createStock(product3, 2);
 		createStock(product4, 2);
 
-		OrderCreateServiceRequest requestA = OrderCreateServiceRequest.builder()
+		OrderCreateCommand requestA = OrderCreateCommand.builder()
 			.memberId(member.getId())
 			.items(List.of(
 				OrderCreateItem.builder().productId(product1.getId()).quantity(1).build(),
@@ -161,7 +161,7 @@ class OrderServiceDeadlockTest {
 				OrderCreateItem.builder().productId(product3.getId()).quantity(1).build()
 			))
 			.build();
-		OrderCreateServiceRequest requestB = OrderCreateServiceRequest.builder()
+		OrderCreateCommand requestB = OrderCreateCommand.builder()
 			.memberId(member.getId())
 			.items(List.of(
 				OrderCreateItem.builder().productId(product4.getId()).quantity(1).build(),

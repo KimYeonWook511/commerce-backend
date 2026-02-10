@@ -1,7 +1,5 @@
 package com.commerce.auth.controller.request;
 
-import com.commerce.auth.service.request.AuthSignUpServiceRequest;
-
 import jakarta.validation.constraints.Email;
 import jakarta.validation.constraints.NotBlank;
 import jakarta.validation.constraints.Size;
@@ -24,13 +22,5 @@ public class AuthSignUpRequest {
 	@NotBlank
 	@Size(max = 12)
 	private String username;
-
-	public AuthSignUpServiceRequest toServiceRequest() {
-		return AuthSignUpServiceRequest.builder()
-			.email(this.email)
-			.password(this.password)
-			.username(this.username)
-			.build();
-	}
 
 }

@@ -24,8 +24,8 @@ import org.springframework.test.context.TestPropertySource;
 import com.commerce.member.domain.Member;
 import com.commerce.member.repository.MemberRepository;
 import com.commerce.order.repository.OrderRepository;
-import com.commerce.order.service.request.OrderCreateItem;
-import com.commerce.order.service.request.OrderCreateServiceRequest;
+import com.commerce.order.service.command.OrderCreateItem;
+import com.commerce.order.service.command.OrderCreateCommand;
 import com.commerce.orderitem.repository.OrderItemRepository;
 import com.commerce.product.domain.Product;
 import com.commerce.product.repository.ProductRepository;
@@ -82,11 +82,11 @@ class OrderServiceConcurrencyDebugTest {
 		Member member = createMember();
 		Product product = createProduct("order-product-sync", 1000);
 		createStock(product, threadCount);
-		OrderCreateServiceRequest request = createRequest(member.getId(), product.getId(), 1);
+		OrderCreateCommand command = createRequest(member.getId(), product.getId(), 1);
 
 		// when
 		ConcurrentLinkedQueue<Throwable> errors = new ConcurrentLinkedQueue<>();
-		runConcurrent(threadCount, () -> orderService.createOrderWithSynchronizedAndTransaction(request), errors);
+		runConcurrent(threadCount, () -> orderService.createOrderWithSynchronizedAndTransaction(command), errors);
 
 		// then
 		Stock updated = stockRepository.findByProductId(product.getId()).orElseThrow();
@@ -200,8 +200,8 @@ class OrderServiceConcurrencyDebugTest {
 		);
 	}
 
-	private OrderCreateServiceRequest createRequest(Long memberId, Long productId, int quantity) {
-		return OrderCreateServiceRequest.builder()
+	private OrderCreateCommand createRequest(Long memberId, Long productId, int quantity) {
+		return OrderCreateCommand.builder()
 			.memberId(memberId)
 			.items(List.of(OrderCreateItem.builder().productId(productId).quantity(quantity).build()))
 			.build();

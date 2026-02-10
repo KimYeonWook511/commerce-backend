@@ -24,12 +24,12 @@ import com.commerce.auth.jwt.JwtTokenProvider;
 import com.commerce.auth.jwt.JwtTokenType;
 import com.commerce.auth.jwt.JwtTokenValidator;
 import com.commerce.auth.redis.RefreshTokenStore;
-import com.commerce.auth.service.request.AuthLoginServiceRequest;
-import com.commerce.auth.service.request.AuthSignUpServiceRequest;
-import com.commerce.auth.service.request.AuthTokenReissueServiceRequest;
-import com.commerce.auth.service.response.AuthLoginResponse;
-import com.commerce.auth.service.response.AuthSignUpResponse;
-import com.commerce.auth.service.response.AuthTokenReissueResponse;
+import com.commerce.auth.service.command.AuthLoginCommand;
+import com.commerce.auth.service.command.AuthSignUpCommand;
+import com.commerce.auth.service.command.AuthTokenReissueCommand;
+import com.commerce.auth.service.result.AuthLoginResult;
+import com.commerce.auth.service.result.AuthSignUpResult;
+import com.commerce.auth.service.result.AuthTokenReissueResult;
 import com.commerce.auth.util.PasswordHasher;
 import com.commerce.member.domain.Member;
 import com.commerce.member.repository.MemberRepository;
@@ -64,7 +64,7 @@ class AuthServiceTest {
 	@Test
 	void signUp_whenValidRequest_hashPasswordAndReturnTokens() {
 		// given
-		AuthSignUpServiceRequest request = AuthSignUpServiceRequest.builder()
+		AuthSignUpCommand command = AuthSignUpCommand.builder()
 			.email("test@example.com")
 			.password("password123")
 			.username("user1")
@@ -82,22 +82,22 @@ class AuthServiceTest {
 		given(jwtProperties.getRefreshExpiration()).willReturn(604800000L);
 
 		// when
-		AuthSignUpResponse response = authService.signUp(request);
+		AuthSignUpResult result = authService.signUp(command);
 
 		// then
 		ArgumentCaptor<Member> memberCaptor = ArgumentCaptor.forClass(Member.class);
 		then(memberRepository).should().save(memberCaptor.capture());
 		then(refreshTokenStore).should().save(any(Long.class), any(String.class), any());
 		assertThat(memberCaptor.getValue().getPassword()).isEqualTo("hashed-password");
-		assertThat(response.getAccessToken()).isEqualTo("access-token");
-		assertThat(response.getRefreshToken()).isEqualTo("refresh-token");
+		assertThat(result.getAccessToken()).isEqualTo("access-token");
+		assertThat(result.getRefreshToken()).isEqualTo("refresh-token");
 	}
 
 	@DisplayName("회원 가입 시 이메일이 중복되면 예외가 발생한다")
 	@Test
 	void signUp_whenEmailDuplicated_throwException() {
 		// given
-		AuthSignUpServiceRequest request = AuthSignUpServiceRequest.builder()
+		AuthSignUpCommand command = AuthSignUpCommand.builder()
 			.email("test@example.com")
 			.password("password123")
 			.username("user1")
@@ -106,7 +106,7 @@ class AuthServiceTest {
 		given(memberRepository.existsByEmail("test@example.com")).willReturn(true);
 
 		// when & then
-		assertThatThrownBy(() -> authService.signUp(request))
+		assertThatThrownBy(() -> authService.signUp(command))
 			.isInstanceOf(AuthException.class)
 			.satisfies(exception -> {
 				AuthException authException = (AuthException) exception;
@@ -131,17 +131,17 @@ class AuthServiceTest {
 		given(jwtTokenProvider.createRefreshToken(any())).willReturn("refresh-token");
 		given(jwtProperties.getRefreshExpiration()).willReturn(604800000L);
 
-		AuthLoginServiceRequest request = AuthLoginServiceRequest.builder()
+		AuthLoginCommand command = AuthLoginCommand.builder()
 			.email("test@example.com")
 			.password("password123")
 			.build();
 
 		// when
-		AuthLoginResponse response = authService.login(request);
+		AuthLoginResult result = authService.login(command);
 
 		// then
-		assertThat(response.getAccessToken()).isEqualTo("access-token");
-		assertThat(response.getRefreshToken()).isEqualTo("refresh-token");
+		assertThat(result.getAccessToken()).isEqualTo("access-token");
+		assertThat(result.getRefreshToken()).isEqualTo("refresh-token");
 		then(refreshTokenStore).should().save(any(Long.class), any(String.class), any());
 	}
 
@@ -159,13 +159,13 @@ class AuthServiceTest {
 		given(memberRepository.findByEmail("test@example.com")).willReturn(Optional.of(member));
 		given(passwordHasher.matches("password123", "hashed-password")).willReturn(false);
 
-		AuthLoginServiceRequest request = AuthLoginServiceRequest.builder()
+		AuthLoginCommand command = AuthLoginCommand.builder()
 			.email("test@example.com")
 			.password("password123")
 			.build();
 
 		// when & then
-		assertThatThrownBy(() -> authService.login(request))
+		assertThatThrownBy(() -> authService.login(command))
 			.isInstanceOf(AuthException.class)
 			.satisfies(exception -> {
 				AuthException authException = (AuthException) exception;
@@ -195,16 +195,16 @@ class AuthServiceTest {
 		given(jwtTokenProvider.createRefreshToken(any())).willReturn("new-refresh-token");
 		given(jwtProperties.getRefreshExpiration()).willReturn(604800000L);
 
-		AuthTokenReissueServiceRequest request = AuthTokenReissueServiceRequest.builder()
+		AuthTokenReissueCommand command = AuthTokenReissueCommand.builder()
 			.refreshToken("refresh-token")
 			.build();
 
 		// when
-		AuthTokenReissueResponse response = authService.reissue(request);
+		AuthTokenReissueResult result = authService.reissue(command);
 
 		// then
-		assertThat(response.getAccessToken()).isEqualTo("new-access-token");
-		assertThat(response.getRefreshToken()).isEqualTo("new-refresh-token");
+		assertThat(result.getAccessToken()).isEqualTo("new-access-token");
+		assertThat(result.getRefreshToken()).isEqualTo("new-refresh-token");
 		then(refreshTokenStore).should().save(any(Long.class), any(String.class), any());
 	}
 
@@ -219,12 +219,12 @@ class AuthServiceTest {
 		given(jwtTokenValidator.validateRefreshToken("refresh-token")).willReturn(claims);
 		given(refreshTokenStore.get(1L)).willReturn(Optional.of("other-token"));
 
-		AuthTokenReissueServiceRequest request = AuthTokenReissueServiceRequest.builder()
+		AuthTokenReissueCommand command = AuthTokenReissueCommand.builder()
 			.refreshToken("refresh-token")
 			.build();
 
 		// when & then
-		assertThatThrownBy(() -> authService.reissue(request))
+		assertThatThrownBy(() -> authService.reissue(command))
 			.isInstanceOf(AuthException.class)
 			.satisfies(exception -> {
 				AuthException authException = (AuthException) exception;

@@ -16,9 +16,10 @@ import com.commerce.common.exception.CommonErrorCode;
 import com.commerce.common.exception.CommonException;
 import com.commerce.order.controller.request.OrderCreateRequest;
 import com.commerce.order.service.OrderService;
-import com.commerce.order.service.request.OrderCreateServiceRequest;
-import com.commerce.order.service.response.OrderCancelResponse;
-import com.commerce.order.service.response.OrderCreateResponse;
+import com.commerce.order.service.command.OrderCreateCommand;
+import com.commerce.order.service.command.OrderCreateItem;
+import com.commerce.order.service.result.OrderCancelResult;
+import com.commerce.order.service.result.OrderCreateResult;
 
 import jakarta.validation.Valid;
 import lombok.RequiredArgsConstructor;
@@ -31,7 +32,7 @@ public class OrderController {
 	private final OrderService orderService;
 
 	@PostMapping
-	public ResponseEntity<ApiResponse<OrderCreateResponse>> createOrder(
+	public ResponseEntity<ApiResponse<OrderCreateResult>> createOrder(
 		@AuthenticatedMemberId Long memberId,
 		@RequestHeader(value = "Idempotency-Key", required = false) String idempotencyKey,
 		@Valid @RequestBody OrderCreateRequest request
@@ -41,22 +42,27 @@ public class OrderController {
 			throw new CommonException(CommonErrorCode.INVALID_REQUEST);
 		}
 
-		OrderCreateServiceRequest serviceRequest = OrderCreateServiceRequest.builder()
+		OrderCreateCommand command = OrderCreateCommand.builder()
 			.memberId(memberId)
 			.idempotencyKey(idempotencyKey)
-			.items(request.toServiceRequestItems())
+			.items(request.getItems().stream()
+				.map(item -> OrderCreateItem.builder()
+					.productId(item.getProductId())
+					.quantity(item.getQuantity())
+					.build())
+				.toList())
 			.build();
-		OrderCreateResponse response = orderService.createOrder(serviceRequest);
+		OrderCreateResult result = orderService.createOrder(command);
 
-		return ResponseEntity.status(HttpStatus.CREATED).body(ApiResponse.of(response));
+		return ResponseEntity.status(HttpStatus.CREATED).body(ApiResponse.of(result));
 	}
 
 	@PostMapping("/{orderId}/cancel")
-	public ResponseEntity<ApiResponse<OrderCancelResponse>> cancelOrder(
+	public ResponseEntity<ApiResponse<OrderCancelResult>> cancelOrder(
 		@AuthenticatedMemberId Long memberId,
 		@PathVariable Long orderId
 	) {
-		OrderCancelResponse response = orderService.cancelOrder(memberId, orderId);
-		return ResponseEntity.status(HttpStatus.OK).body(ApiResponse.of(response));
+		OrderCancelResult result = orderService.cancelOrder(memberId, orderId);
+		return ResponseEntity.status(HttpStatus.OK).body(ApiResponse.of(result));
 	}
 }

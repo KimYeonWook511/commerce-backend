@@ -26,17 +26,17 @@ import com.commerce.order.exception.OrderErrorCode;
 import com.commerce.order.exception.OrderException;
 import com.commerce.order.redis.OrderIdempotencyStore;
 import com.commerce.order.repository.OrderRepository;
-import com.commerce.order.service.request.OrderCreateItem;
-import com.commerce.order.service.request.OrderCreateServiceRequest;
-import com.commerce.order.service.response.OrderCancelResponse;
-import com.commerce.order.service.response.OrderCreateResponse;
+import com.commerce.order.service.command.OrderCreateItem;
+import com.commerce.order.service.command.OrderCreateCommand;
+import com.commerce.order.service.result.OrderCancelResult;
+import com.commerce.order.service.result.OrderCreateResult;
 import com.commerce.orderitem.domain.OrderItem;
 import com.commerce.product.domain.Product;
 import com.commerce.product.exception.ProductErrorCode;
 import com.commerce.product.exception.ProductException;
 import com.commerce.product.repository.ProductRepository;
 import com.commerce.stock.service.StockService;
-import com.commerce.stock.service.request.StockDecreaseBatchServiceRequest;
+import com.commerce.stock.service.command.StockDecreaseBatchCommand;
 
 import lombok.RequiredArgsConstructor;
 
@@ -55,15 +55,15 @@ public class OrderService {
 	private long idempotencyTtlSeconds;
 
 	@Transactional
-	public OrderCreateResponse createOrder(OrderCreateServiceRequest request) {
+	public OrderCreateResult createOrder(OrderCreateCommand command) {
 		// 멱등키 검증
-		if (!StringUtils.hasText(request.getIdempotencyKey())) {
+		if (!StringUtils.hasText(command.getIdempotencyKey())) {
 			throw new CommonException(CommonErrorCode.INVALID_REQUEST);
 		}
 
 		// 멱등키 상태 등록 (lock 처럼 선점)
-		Long memberId = request.getMemberId();
-		String idempotencyKey = request.getIdempotencyKey();
+		Long memberId = command.getMemberId();
+		String idempotencyKey = command.getIdempotencyKey();
 		Duration ttl = Duration.ofSeconds(idempotencyTtlSeconds);
 		boolean reserved = orderIdempotencyStore.reserve(memberId, idempotencyKey, ttl);
 
@@ -75,13 +75,13 @@ public class OrderService {
 			Order order = orderRepository.findById(orderId)
 				.orElseThrow(() -> new OrderException(OrderErrorCode.ORDER_NOT_FOUND));
 
-			return OrderCreateResponse.from(order);
+			return OrderCreateResult.from(order);
 		}
 
 		try {
-			OrderCreateResponse response = createOrderWithPessimisticLockOrdered(request);
-			orderIdempotencyStore.complete(memberId, idempotencyKey, response.getOrderId(), ttl);
-			return response;
+			OrderCreateResult result = createOrderWithPessimisticLockOrdered(command);
+			orderIdempotencyStore.complete(memberId, idempotencyKey, result.getOrderId(), ttl);
+			return result;
 		} catch (RuntimeException ex) {
 			// 선점한 멱등키 삭제 (PROCESSING 상태 삭제. -> FAILED로 바꾸는 것과 비교한다면??)
 			orderIdempotencyStore.clear(memberId, idempotencyKey);
@@ -90,7 +90,7 @@ public class OrderService {
 	}
 
 	@Transactional
-	public OrderCancelResponse cancelOrder(Long memberId, Long orderId) {
+	public OrderCancelResult cancelOrder(Long memberId, Long orderId) {
 		try {
 			// fetch join이 많음! -> 데이터가 커지면 최적화가 필요할 수 있음
 			Order order = orderRepository.findByIdAndMemberIdWithItems(orderId, memberId)
@@ -112,54 +112,54 @@ public class OrderService {
 			// TransactionTemplate을 사용하는 걸로 바꿀 수도 있음
 			orderRepository.flush();
 
-			return OrderCancelResponse.from(order);
+			return OrderCancelResult.from(order);
 		} catch (OptimisticLockingFailureException ex) {
 			throw new OrderException(OrderErrorCode.ORDER_CANCEL_NOT_ALLOWED);
 		}
 	}
 
 	@Transactional
-	public OrderCreateResponse createOrderWithoutLock(OrderCreateServiceRequest request) {
-		return createOrderWithStockDecrease(request, stockService::decrease);
+	public OrderCreateResult createOrderWithoutLock(OrderCreateCommand command) {
+		return createOrderWithStockDecrease(command, stockService::decrease);
 	}
 
 	@Transactional
-	public OrderCreateResponse createOrderWithSynchronized(OrderCreateServiceRequest request) {
-		return createOrderWithStockDecrease(request, stockService::decreaseWithSynchronized);
+	public OrderCreateResult createOrderWithSynchronized(OrderCreateCommand command) {
+		return createOrderWithStockDecrease(command, stockService::decreaseWithSynchronized);
 	}
 
 	@Transactional
-	public OrderCreateResponse createOrderWithSynchronizedAndTransaction(OrderCreateServiceRequest request) {
-		return createOrderWithStockDecrease(request, stockService::decreaseWithSynchronizedAndTransaction);
+	public OrderCreateResult createOrderWithSynchronizedAndTransaction(OrderCreateCommand command) {
+		return createOrderWithStockDecrease(command, stockService::decreaseWithSynchronizedAndTransaction);
 	}
 
 	@Transactional
-	public OrderCreateResponse createOrderWithReentrantLockAndTransaction(OrderCreateServiceRequest request) {
-		return createOrderWithStockDecrease(request, stockService::decreaseWithReentrantLockAndTransaction);
+	public OrderCreateResult createOrderWithReentrantLockAndTransaction(OrderCreateCommand command) {
+		return createOrderWithStockDecrease(command, stockService::decreaseWithReentrantLockAndTransaction);
 	}
 
 	@Transactional
-	public OrderCreateResponse createOrderWithOptimisticLock(OrderCreateServiceRequest request) {
-		return createOrderWithStockDecrease(request, stockService::decreaseWithOptimisticLock);
+	public OrderCreateResult createOrderWithOptimisticLock(OrderCreateCommand command) {
+		return createOrderWithStockDecrease(command, stockService::decreaseWithOptimisticLock);
 	}
 
 	@Transactional
-	public OrderCreateResponse createOrderWithPessimisticLock(OrderCreateServiceRequest request) {
-		return createOrderWithStockDecrease(request, stockService::decreaseWithPessimisticLock);
+	public OrderCreateResult createOrderWithPessimisticLock(OrderCreateCommand command) {
+		return createOrderWithStockDecrease(command, stockService::decreaseWithPessimisticLock);
 	}
 
 	@Transactional
-	public OrderCreateResponse createOrderWithPessimisticLockOrdered(OrderCreateServiceRequest request) {
-		OrderCreateServiceRequest sortedRequest = sortItemsByProductId(request);
+	public OrderCreateResult createOrderWithPessimisticLockOrdered(OrderCreateCommand command) {
+		OrderCreateCommand sortedRequest = sortItemsByProductId(command);
 		return createOrderWithStockDecrease(sortedRequest, stockService::decreaseWithPessimisticLock);
 	}
 
 	@Transactional
-	public OrderCreateResponse createOrderWithPessimisticLockBatch(OrderCreateServiceRequest request) {
-		Member member = memberRepository.findById(request.getMemberId())
+	public OrderCreateResult createOrderWithPessimisticLockBatch(OrderCreateCommand command) {
+		Member member = memberRepository.findById(command.getMemberId())
 			.orElseThrow(() -> new MemberException(MemberErrorCode.MEMBER_NOT_FOUND));
 
-		Map<Long, Integer> quantitiesByProductId = mergeQuantities(request);
+		Map<Long, Integer> quantitiesByProductId = mergeQuantities(command);
 		// List<Long> productIds = quantitiesByProductId.keySet().stream()
 		// 	.sorted()
 		// 	.toList();
@@ -173,11 +173,11 @@ public class OrderService {
 		}
 
 		stockService.decreaseBatchWithPessimisticLock(
-			StockDecreaseBatchServiceRequest.from(quantitiesByProductId)
+			StockDecreaseBatchCommand.from(quantitiesByProductId)
 		);
 
 		Order order = Order.create(member);
-		for (OrderCreateItem item : request.getItems()) {
+		for (OrderCreateItem item : command.getItems()) {
 			Product product = findProducts.get(item.getProductId());
 			if (product == null) {
 				throw new ProductException(ProductErrorCode.PRODUCT_NOT_FOUND);
@@ -187,39 +187,39 @@ public class OrderService {
 
 		orderRepository.save(order);
 
-		return OrderCreateResponse.from(order);
+		return OrderCreateResult.from(order);
 	}
 
-	private OrderCreateServiceRequest sortItemsByProductId(OrderCreateServiceRequest request) {
-		List<OrderCreateItem> sortedItems = request.getItems().stream()
+	private OrderCreateCommand sortItemsByProductId(OrderCreateCommand command) {
+		List<OrderCreateItem> sortedItems = command.getItems().stream()
 			.sorted(Comparator.comparing(OrderCreateItem::getProductId))
 			.toList();
 
-		return OrderCreateServiceRequest.builder()
-			.memberId(request.getMemberId())
+		return OrderCreateCommand.builder()
+			.memberId(command.getMemberId())
 			.items(sortedItems)
 			.build();
 	}
 
-	private Map<Long, Integer> mergeQuantities(OrderCreateServiceRequest request) {
+	private Map<Long, Integer> mergeQuantities(OrderCreateCommand command) {
 		Map<Long, Integer> quantities = new HashMap<>();
-		for (OrderCreateItem item : request.getItems()) {
+		for (OrderCreateItem item : command.getItems()) {
 			quantities.merge(item.getProductId(), item.getQuantity(), Integer::sum);
 		}
 		return quantities;
 	}
 
-	private OrderCreateResponse createOrderWithStockDecrease(
-		OrderCreateServiceRequest request,
+	private OrderCreateResult createOrderWithStockDecrease(
+		OrderCreateCommand command,
 		BiConsumer<Long, Integer> stockDecrease
 	) {
 		// 회원 조회
-		Member member = memberRepository.findById(request.getMemberId())
+		Member member = memberRepository.findById(command.getMemberId())
 			.orElseThrow(() -> new MemberException(MemberErrorCode.MEMBER_NOT_FOUND));
 
 		Order order = Order.create(member);
 
-		for (OrderCreateItem item : request.getItems()) {
+		for (OrderCreateItem item : command.getItems()) {
 			// 상품 조회
 			Product product = productRepository.findById(item.getProductId())
 				.orElseThrow(() -> new ProductException(ProductErrorCode.PRODUCT_NOT_FOUND));
@@ -232,6 +232,6 @@ public class OrderService {
 
 		orderRepository.save(order);
 
-		return OrderCreateResponse.from(order);
+		return OrderCreateResult.from(order);
 	}
 }

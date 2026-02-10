@@ -1,10 +1,10 @@
-package com.commerce.payment.service.response;
+package com.commerce.payment.service.result;
 
 import lombok.Builder;
 import lombok.Getter;
 
 @Getter
-public class PaymentReadyResponse {
+public class PaymentReadyResult {
 
 	private String clientId;
 	private String chainId;
@@ -17,7 +17,7 @@ public class PaymentReadyResponse {
 	private String returnUrl;
 
 	@Builder
-	private PaymentReadyResponse(String clientId, String chainId, String merchantPayKey, String productName,
+	private PaymentReadyResult(String clientId, String chainId, String merchantPayKey, String productName,
 		int productCount, int totalPayAmount, int taxScopeAmount, int taxExScopeAmount, String returnUrl) {
 		this.clientId = clientId;
 		this.chainId = chainId;

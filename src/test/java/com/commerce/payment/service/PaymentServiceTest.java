@@ -33,8 +33,8 @@ import com.commerce.payment.exception.PaymentException;
 import com.commerce.payment.provider.PaymentProviderProperties;
 import com.commerce.payment.provider.PaymentProviderPropertiesResolver;
 import com.commerce.payment.repository.PaymentRepository;
-import com.commerce.payment.service.request.PaymentReadyServiceRequest;
-import com.commerce.payment.service.response.PaymentReadyResponse;
+import com.commerce.payment.service.command.PaymentReadyCommand;
+import com.commerce.payment.service.result.PaymentReadyResult;
 import com.commerce.product.domain.Product;
 
 @ExtendWith(MockitoExtension.class)
@@ -71,26 +71,26 @@ class PaymentServiceTest {
 			});
 		stubPaymentProperties();
 
-		PaymentReadyServiceRequest request = PaymentReadyServiceRequest.builder()
+		PaymentReadyCommand command = PaymentReadyCommand.builder()
 			.memberId(1L)
 			.orderId(1L)
 			.provider(PaymentProvider.NAVERPAY)
 			.build();
 
 		// when
-		PaymentReadyResponse response = paymentService.readyPayment(request);
+		PaymentReadyResult result = paymentService.readyPayment(command);
 
 		// then
-		assertThat(response.getClientId()).isEqualTo("client-id");
-		assertThat(response.getChainId()).isEqualTo("chain-id");
-		assertThat(response.getMerchantPayKey()).startsWith("PAY-");
-		assertThat(response.getMerchantPayKey()).hasSize(30);
-		assertThat(response.getProductName()).isEqualTo("product");
-		assertThat(response.getProductCount()).isEqualTo(1);
-		assertThat(response.getTotalPayAmount()).isEqualTo(1500);
-		assertThat(response.getTaxScopeAmount()).isEqualTo(1500);
-		assertThat(response.getTaxExScopeAmount()).isZero();
-		assertThat(response.getReturnUrl()).startsWith("https://return-url");
+		assertThat(result.getClientId()).isEqualTo("client-id");
+		assertThat(result.getChainId()).isEqualTo("chain-id");
+		assertThat(result.getMerchantPayKey()).startsWith("PAY-");
+		assertThat(result.getMerchantPayKey()).hasSize(30);
+		assertThat(result.getProductName()).isEqualTo("product");
+		assertThat(result.getProductCount()).isEqualTo(1);
+		assertThat(result.getTotalPayAmount()).isEqualTo(1500);
+		assertThat(result.getTaxScopeAmount()).isEqualTo(1500);
+		assertThat(result.getTaxExScopeAmount()).isZero();
+		assertThat(result.getReturnUrl()).startsWith("https://return-url");
 	}
 
 	@DisplayName("이미 결제가 있으면 기존 결제 정보를 사용한다")
@@ -106,17 +106,17 @@ class PaymentServiceTest {
 		given(paymentRepository.findByOrderId(1L)).willReturn(Optional.of(existing));
 		stubPaymentProperties();
 
-		PaymentReadyServiceRequest request = PaymentReadyServiceRequest.builder()
+		PaymentReadyCommand command = PaymentReadyCommand.builder()
 			.memberId(1L)
 			.orderId(1L)
 			.provider(PaymentProvider.NAVERPAY)
 			.build();
 
 		// when
-		PaymentReadyResponse response = paymentService.readyPayment(request);
+		PaymentReadyResult result = paymentService.readyPayment(command);
 
 		// then
-		assertThat(response.getMerchantPayKey()).isEqualTo("PAY-EXIST");
+		assertThat(result.getMerchantPayKey()).isEqualTo("PAY-EXIST");
 		then(paymentRepository).should(never()).save(any(Payment.class));
 	}
 
@@ -126,14 +126,14 @@ class PaymentServiceTest {
 		// given
 		given(orderRepository.findByIdAndMemberIdWithItems(1L, 1L)).willReturn(Optional.empty());
 
-		PaymentReadyServiceRequest request = PaymentReadyServiceRequest.builder()
+		PaymentReadyCommand command = PaymentReadyCommand.builder()
 			.memberId(1L)
 			.orderId(1L)
 			.provider(PaymentProvider.NAVERPAY)
 			.build();
 
 		// when & then
-		assertThatThrownBy(() -> paymentService.readyPayment(request))
+		assertThatThrownBy(() -> paymentService.readyPayment(command))
 			.isInstanceOf(OrderException.class)
 			.satisfies(exception -> {
 				OrderException orderException = (OrderException)exception;
@@ -157,14 +157,14 @@ class PaymentServiceTest {
 			});
 		stubPaymentResolver();
 
-		PaymentReadyServiceRequest request = PaymentReadyServiceRequest.builder()
+		PaymentReadyCommand command = PaymentReadyCommand.builder()
 			.memberId(1L)
 			.orderId(1L)
 			.provider(PaymentProvider.NAVERPAY)
 			.build();
 
 		// when & then
-		assertThatThrownBy(() -> paymentService.readyPayment(request))
+		assertThatThrownBy(() -> paymentService.readyPayment(command))
 			.isInstanceOf(OrderException.class)
 			.satisfies(exception -> {
 				OrderException orderException = (OrderException) exception;

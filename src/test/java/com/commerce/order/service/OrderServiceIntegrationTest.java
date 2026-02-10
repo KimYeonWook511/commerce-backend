@@ -17,9 +17,9 @@ import org.springframework.test.context.DynamicPropertySource;
 import com.commerce.member.domain.Member;
 import com.commerce.member.repository.MemberRepository;
 import com.commerce.order.repository.OrderRepository;
-import com.commerce.order.service.request.OrderCreateItem;
-import com.commerce.order.service.request.OrderCreateServiceRequest;
-import com.commerce.order.service.response.OrderCreateResponse;
+import com.commerce.order.service.command.OrderCreateItem;
+import com.commerce.order.service.command.OrderCreateCommand;
+import com.commerce.order.service.result.OrderCreateResult;
 import com.commerce.orderitem.repository.OrderItemRepository;
 import com.commerce.product.domain.Product;
 import com.commerce.product.repository.ProductRepository;
@@ -90,19 +90,19 @@ class OrderServiceIntegrationTest {
 				.build()
 		);
 
-		OrderCreateServiceRequest firstRequest = OrderCreateServiceRequest.builder()
+		OrderCreateCommand firstRequest = OrderCreateCommand.builder()
 			.memberId(member.getId())
 			.idempotencyKey("first-key")
 			.items(List.of(OrderCreateItem.builder().productId(product.getId()).quantity(1).build()))
 			.build();
-		OrderCreateServiceRequest secondRequest = OrderCreateServiceRequest.builder()
+		OrderCreateCommand secondRequest = OrderCreateCommand.builder()
 			.memberId(member.getId())
 			.idempotencyKey("second-key")
 			.items(List.of(OrderCreateItem.builder().productId(product.getId()).quantity(1).build()))
 			.build();
 
 		// when
-		OrderCreateResponse created = orderService.createOrder(firstRequest);
+		OrderCreateResult created = orderService.createOrder(firstRequest);
 
 		// then
 		assertThatThrownBy(() -> orderService.createOrder(secondRequest))
@@ -114,7 +114,7 @@ class OrderServiceIntegrationTest {
 
 		orderService.cancelOrder(member.getId(), created.getOrderId());
 
-		OrderCreateResponse recreated = orderService.createOrder(secondRequest);
+		OrderCreateResult recreated = orderService.createOrder(secondRequest);
 		assertThat(recreated.getOrderId()).isNotNull();
 		assertThat(stockRepository.findByProductId(product.getId()).orElseThrow().getQuantity()).isZero();
 	}

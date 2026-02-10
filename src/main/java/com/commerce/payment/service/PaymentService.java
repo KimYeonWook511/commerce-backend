@@ -21,8 +21,8 @@ import com.commerce.payment.exception.PaymentException;
 import com.commerce.payment.provider.PaymentProviderProperties;
 import com.commerce.payment.provider.PaymentProviderPropertiesResolver;
 import com.commerce.payment.repository.PaymentRepository;
-import com.commerce.payment.service.request.PaymentReadyServiceRequest;
-import com.commerce.payment.service.response.PaymentReadyResponse;
+import com.commerce.payment.service.command.PaymentReadyCommand;
+import com.commerce.payment.service.result.PaymentReadyResult;
 
 import lombok.RequiredArgsConstructor;
 
@@ -36,23 +36,23 @@ public class PaymentService {
 	private final PaymentProviderPropertiesResolver propertiesResolver;
 
 	@Transactional
-	public PaymentReadyResponse readyPayment(PaymentReadyServiceRequest request) {
-		Order order = orderRepository.findByIdAndMemberIdWithItems(request.getOrderId(), request.getMemberId())
+	public PaymentReadyResult readyPayment(PaymentReadyCommand command) {
+		Order order = orderRepository.findByIdAndMemberIdWithItems(command.getOrderId(), command.getMemberId())
 			.orElseThrow(() -> new OrderException(OrderErrorCode.ORDER_NOT_FOUND));
 
 		// 기존 결제 정보 가져오기 or 결제 생성하기
 		Payment payment = paymentRepository.findByOrderId(order.getId())
-			.orElseGet(() -> paymentRepository.save(Payment.create(order, order.getTotalPrice(), request.getProvider())));
+			.orElseGet(() -> paymentRepository.save(Payment.create(order, order.getTotalPrice(), command.getProvider())));
 
 		// 결제 수단에 맞는 프로퍼티 가져오기
-		PaymentProviderProperties properties = propertiesResolver.resolve(request.getProvider());
+		PaymentProviderProperties properties = propertiesResolver.resolve(command.getProvider());
 
 		List<OrderItem> items = order.getOrderItems();
 		int productCount = items.stream().mapToInt(OrderItem::getQuantity).sum();
 		int totalPayAmount = order.getTotalPrice();
 
 		// Response 변환을 from으로 하면 결합도가 올라가는 것 같기도?
-		return PaymentReadyResponse.builder()
+		return PaymentReadyResult.builder()
 			.clientId(properties.getClientId())
 			.chainId(properties.getChainId())
 			.merchantPayKey(payment.getMerchantPayKey())

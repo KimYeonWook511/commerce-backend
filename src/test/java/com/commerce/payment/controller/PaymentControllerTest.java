@@ -23,8 +23,8 @@ import com.commerce.auth.jwt.JwtTokenValidator;
 import com.commerce.auth.resolver.AuthenticatedMemberIdArgumentResolver;
 import com.commerce.common.config.WebConfig;
 import com.commerce.payment.service.PaymentService;
-import com.commerce.payment.service.request.PaymentReadyServiceRequest;
-import com.commerce.payment.service.response.PaymentReadyResponse;
+import com.commerce.payment.service.command.PaymentReadyCommand;
+import com.commerce.payment.service.result.PaymentReadyResult;
 
 import io.jsonwebtoken.Claims;
 import io.jsonwebtoken.Jwts;
@@ -55,7 +55,7 @@ class PaymentControllerTest {
 		// given
 		stubForValidToken();
 
-		PaymentReadyResponse response = PaymentReadyResponse.builder()
+		PaymentReadyResult result = PaymentReadyResult.builder()
 			.clientId("clientId")
 			.chainId("chainId")
 			.merchantPayKey("PAY-1")
@@ -66,8 +66,8 @@ class PaymentControllerTest {
 			.taxExScopeAmount(0)
 			.returnUrl("https://return-url")
 			.build();
-		given(paymentService.readyPayment(any(PaymentReadyServiceRequest.class)))
-			.willReturn(response);
+		given(paymentService.readyPayment(any(PaymentReadyCommand.class)))
+			.willReturn(result);
 
 		String requestBody = """
 			{

@@ -1,4 +1,4 @@
-package com.commerce.auth.service.response;
+package com.commerce.auth.service.result;
 
 import com.commerce.member.domain.Member;
 
@@ -7,21 +7,21 @@ import lombok.Builder;
 import lombok.Getter;
 
 @Getter
-public class MemberDetailResponse {
+public class MemberDetailResult {
 
 	private Long memberId;
 	private String email;
 	private String username;
 
 	@Builder(access = AccessLevel.PRIVATE)
-	private MemberDetailResponse(Long memberId, String email, String username) {
+	private MemberDetailResult(Long memberId, String email, String username) {
 		this.memberId = memberId;
 		this.email = email;
 		this.username = username;
 	}
 
-	public static MemberDetailResponse from(Member member) {
-		return MemberDetailResponse.builder()
+	public static MemberDetailResult from(Member member) {
+		return MemberDetailResult.builder()
 			.memberId(member.getId())
 			.email(member.getEmail())
 			.username(member.getUsername())

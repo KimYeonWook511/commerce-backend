@@ -27,9 +27,9 @@ import com.commerce.auth.resolver.AuthenticatedMemberIdArgumentResolver;
 import com.commerce.common.config.WebConfig;
 import com.commerce.order.domain.OrderStatus;
 import com.commerce.order.service.OrderService;
-import com.commerce.order.service.request.OrderCreateServiceRequest;
-import com.commerce.order.service.response.OrderCancelResponse;
-import com.commerce.order.service.response.OrderCreateResponse;
+import com.commerce.order.service.command.OrderCreateCommand;
+import com.commerce.order.service.result.OrderCancelResult;
+import com.commerce.order.service.result.OrderCreateResult;
 
 import io.jsonwebtoken.Claims;
 import io.jsonwebtoken.Jwts;
@@ -59,14 +59,14 @@ class OrderControllerTest {
 	void createOrder_whenIdempotencyKeyPresent_returnCreated() throws Exception {
 		// given
 		stubForValidToken();
-		OrderCreateResponse response = OrderCreateResponse.builder()
+		OrderCreateResult result = OrderCreateResult.builder()
 			.orderId(10L)
 			.totalPrice(2000)
 			.status(OrderStatus.INIT)
 			.build();
 
-		given(orderService.createOrder(any(OrderCreateServiceRequest.class)))
-			.willReturn(response);
+		given(orderService.createOrder(any(OrderCreateCommand.class)))
+			.willReturn(result);
 
 		String requestBody = """
 			{
@@ -119,7 +119,7 @@ class OrderControllerTest {
 			.andExpect(jsonPath("$.message").value("요청 값이 올바르지 않습니다"))
 			.andExpect(jsonPath("$.data").value(Matchers.nullValue()));
 
-		then(orderService).should(never()).createOrder(any(OrderCreateServiceRequest.class));
+		then(orderService).should(never()).createOrder(any(OrderCreateCommand.class));
 	}
 
 	@DisplayName("주문 취소 요청이 유효하면 상태를 반환한다")
@@ -127,12 +127,12 @@ class OrderControllerTest {
 	void cancelOrder_whenValidRequest_returnOk() throws Exception {
 		// given
 		stubForValidToken();
-		OrderCancelResponse response = OrderCancelResponse.builder()
+		OrderCancelResult result = OrderCancelResult.builder()
 			.orderId(10L)
 			.status(OrderStatus.CANCELED)
 			.build();
 
-		given(orderService.cancelOrder(1L, 10L)).willReturn(response);
+		given(orderService.cancelOrder(1L, 10L)).willReturn(result);
 
 		// when & then
 		mockMvc.perform(post("/orders/10/cancel")

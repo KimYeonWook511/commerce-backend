@@ -31,9 +31,9 @@ import com.commerce.member.domain.Member;
 import com.commerce.member.repository.MemberRepository;
 import com.commerce.order.repository.OrderRepository;
 import com.commerce.order.redis.OrderIdempotencyStore;
-import com.commerce.order.service.request.OrderCreateItem;
-import com.commerce.order.service.request.OrderCreateServiceRequest;
-import com.commerce.order.service.response.OrderCreateResponse;
+import com.commerce.order.service.command.OrderCreateItem;
+import com.commerce.order.service.command.OrderCreateCommand;
+import com.commerce.order.service.result.OrderCreateResult;
 import com.commerce.orderitem.repository.OrderItemRepository;
 import com.commerce.product.domain.Product;
 import com.commerce.product.repository.ProductRepository;
@@ -101,11 +101,11 @@ class OrderServiceConcurrencyTest {
 		Member member = createMember();
 		Product product = createProduct("order-product-no-lock", 1000);
 		createStock(product, threadCount);
-		OrderCreateServiceRequest request = createRequest(member.getId(), product.getId(), 1);
+		OrderCreateCommand command = createRequest(member.getId(), product.getId(), 1);
 
 		// when
 		ConcurrentLinkedQueue<Throwable> errors = new ConcurrentLinkedQueue<>();
-		runConcurrent(threadCount, () -> orderService.createOrderWithoutLock(request), errors);
+		runConcurrent(threadCount, () -> orderService.createOrderWithoutLock(command), errors);
 
 		// then
 		Stock updated = stockRepository.findByProductId(product.getId()).orElseThrow();
@@ -124,11 +124,11 @@ class OrderServiceConcurrencyTest {
 		Member member = createMember();
 		Product product = createProduct("order-product-sync", 1000);
 		createStock(product, threadCount);
-		OrderCreateServiceRequest request = createRequest(member.getId(), product.getId(), 1);
+		OrderCreateCommand command = createRequest(member.getId(), product.getId(), 1);
 
 		// when
 		ConcurrentLinkedQueue<Throwable> errors = new ConcurrentLinkedQueue<>();
-		runConcurrent(threadCount, () -> orderService.createOrderWithSynchronizedAndTransaction(request), errors);
+		runConcurrent(threadCount, () -> orderService.createOrderWithSynchronizedAndTransaction(command), errors);
 
 		// then
 		Stock updated = stockRepository.findByProductId(product.getId()).orElseThrow();
@@ -145,11 +145,11 @@ class OrderServiceConcurrencyTest {
 		Member member = createMember();
 		Product product = createProduct("order-product-reentrant", 1000);
 		createStock(product, threadCount);
-		OrderCreateServiceRequest request = createRequest(member.getId(), product.getId(), 1);
+		OrderCreateCommand command = createRequest(member.getId(), product.getId(), 1);
 
 		// when
 		ConcurrentLinkedQueue<Throwable> errors = new ConcurrentLinkedQueue<>();
-		runConcurrent(threadCount, () -> orderService.createOrderWithReentrantLockAndTransaction(request), errors);
+		runConcurrent(threadCount, () -> orderService.createOrderWithReentrantLockAndTransaction(command), errors);
 
 		// then
 		Stock updated = stockRepository.findByProductId(product.getId()).orElseThrow();
@@ -166,11 +166,11 @@ class OrderServiceConcurrencyTest {
 		Member member = createMember();
 		Product product = createProduct("order-product-optimistic", 1000);
 		createStock(product, threadCount);
-		OrderCreateServiceRequest request = createRequest(member.getId(), product.getId(), 1);
+		OrderCreateCommand command = createRequest(member.getId(), product.getId(), 1);
 
 		// when
 		ConcurrentLinkedQueue<Throwable> errors = new ConcurrentLinkedQueue<>();
-		runConcurrent(threadCount, () -> orderService.createOrderWithOptimisticLock(request), errors);
+		runConcurrent(threadCount, () -> orderService.createOrderWithOptimisticLock(command), errors);
 
 		// then
 		Stock updated = stockRepository.findByProductId(product.getId()).orElseThrow();
@@ -190,11 +190,11 @@ class OrderServiceConcurrencyTest {
 		Member member = createMember();
 		Product product = createProduct("order-product-pessimistic", 1000);
 		createStock(product, threadCount);
-		OrderCreateServiceRequest request = createRequest(member.getId(), product.getId(), 1);
+		OrderCreateCommand command = createRequest(member.getId(), product.getId(), 1);
 
 		// when
 		ConcurrentLinkedQueue<Throwable> errors = new ConcurrentLinkedQueue<>();
-		runConcurrent(threadCount, () -> orderService.createOrderWithPessimisticLock(request), errors);
+		runConcurrent(threadCount, () -> orderService.createOrderWithPessimisticLock(command), errors);
 
 		// then
 		Stock updated = stockRepository.findByProductId(product.getId()).orElseThrow();
@@ -218,9 +218,9 @@ class OrderServiceConcurrencyTest {
 		AtomicInteger sequence = new AtomicInteger(0);
 		runConcurrent(threadCount, () -> {
 			String idempotencyKey = "idempotency-" + sequence.incrementAndGet();
-			OrderCreateServiceRequest request =
+			OrderCreateCommand command =
 				createRequest(member.getId(), product.getId(), 1, idempotencyKey);
-			orderService.createOrder(request);
+			orderService.createOrder(command);
 		}, errors);
 
 		// then
@@ -246,7 +246,7 @@ class OrderServiceConcurrencyTest {
 		Product product = createProduct("cancel-product", 1000);
 		createStock(product, 5);
 
-		OrderCreateResponse created = orderService.createOrder(
+		OrderCreateResult created = orderService.createOrder(
 			createRequest(member.getId(), product.getId(), 2, "cancel-key")
 		);
 
@@ -340,20 +340,20 @@ class OrderServiceConcurrencyTest {
 		);
 	}
 
-	private OrderCreateServiceRequest createRequest(Long memberId, Long productId, int quantity) {
-		return OrderCreateServiceRequest.builder()
+	private OrderCreateCommand createRequest(Long memberId, Long productId, int quantity) {
+		return OrderCreateCommand.builder()
 			.memberId(memberId)
 			.items(List.of(OrderCreateItem.builder().productId(productId).quantity(quantity).build()))
 			.build();
 	}
 
-	private OrderCreateServiceRequest createRequest(
+	private OrderCreateCommand createRequest(
 		Long memberId,
 		Long productId,
 		int quantity,
 		String idempotencyKey
 	) {
-		return OrderCreateServiceRequest.builder()
+		return OrderCreateCommand.builder()
 			.memberId(memberId)
 			.idempotencyKey(idempotencyKey)
 			.items(List.of(OrderCreateItem.builder().productId(productId).quantity(quantity).build()))

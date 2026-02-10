@@ -10,8 +10,8 @@ import com.commerce.stock.domain.Stock;
 import com.commerce.stock.exception.StockErrorCode;
 import com.commerce.stock.exception.StockException;
 import com.commerce.stock.repository.StockRepository;
-import com.commerce.stock.service.request.StockDecreaseBatchServiceRequest;
-import com.commerce.stock.service.response.StockDecreaseBatchResponse;
+import com.commerce.stock.service.command.StockDecreaseBatchCommand;
+import com.commerce.stock.service.result.StockDecreaseBatchResult;
 import com.zaxxer.hikari.HikariDataSource;
 import com.zaxxer.hikari.HikariPoolMXBean;
 
@@ -107,9 +107,9 @@ public class StockService {
 	}
 
 	@Transactional
-	public StockDecreaseBatchResponse decreaseBatchWithPessimisticLock(StockDecreaseBatchServiceRequest request) {
+	public StockDecreaseBatchResult decreaseBatchWithPessimisticLock(StockDecreaseBatchCommand command) {
 		// 재고 조회 (X-Lock)
-		Map<Long, Integer> quantitiesByProductId = request.getQuantitiesByProductId();
+		Map<Long, Integer> quantitiesByProductId = command.getQuantitiesByProductId();
 		List<Long> productIds = quantitiesByProductId.keySet().stream()
 			// .sorted()
 			.toList();
@@ -131,7 +131,7 @@ public class StockService {
 		}
 
 		// void로 끝낼까..
-		return StockDecreaseBatchResponse.from(quantitiesByProductId);
+		return StockDecreaseBatchResult.from(quantitiesByProductId);
 	}
 
 	private void decreaseWithNewTransaction(Long productId, int quantity) {

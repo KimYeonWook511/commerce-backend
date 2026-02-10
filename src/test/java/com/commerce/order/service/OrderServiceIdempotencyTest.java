@@ -22,9 +22,9 @@ import com.commerce.order.repository.OrderRepository;
 import com.commerce.order.exception.OrderErrorCode;
 import com.commerce.order.exception.OrderException;
 import com.commerce.order.redis.OrderIdempotencyStatus;
-import com.commerce.order.service.request.OrderCreateItem;
-import com.commerce.order.service.request.OrderCreateServiceRequest;
-import com.commerce.order.service.response.OrderCreateResponse;
+import com.commerce.order.service.command.OrderCreateItem;
+import com.commerce.order.service.command.OrderCreateCommand;
+import com.commerce.order.service.result.OrderCreateResult;
 import com.commerce.orderitem.repository.OrderItemRepository;
 import com.commerce.product.domain.Product;
 import com.commerce.product.repository.ProductRepository;
@@ -95,15 +95,15 @@ class OrderServiceIdempotencyTest {
 				.build()
 		);
 
-		OrderCreateServiceRequest request = OrderCreateServiceRequest.builder()
+		OrderCreateCommand command = OrderCreateCommand.builder()
 			.memberId(member.getId())
 			.idempotencyKey("idem-key")
 			.items(List.of(OrderCreateItem.builder().productId(product.getId()).quantity(2).build()))
 			.build();
 
 		// when
-		OrderCreateResponse first = orderService.createOrder(request);
-		OrderCreateResponse second = orderService.createOrder(request);
+		OrderCreateResult first = orderService.createOrder(command);
+		OrderCreateResult second = orderService.createOrder(command);
 
 		// then
 		assertThat(first.getOrderId()).isEqualTo(second.getOrderId());
@@ -137,7 +137,7 @@ class OrderServiceIdempotencyTest {
 				.build()
 		);
 
-		OrderCreateServiceRequest request = OrderCreateServiceRequest.builder()
+		OrderCreateCommand command = OrderCreateCommand.builder()
 			.memberId(member.getId())
 			.idempotencyKey("processing-key")
 			.items(List.of(OrderCreateItem.builder().productId(product.getId()).quantity(1).build()))
@@ -152,7 +152,7 @@ class OrderServiceIdempotencyTest {
 		);
 
 		// then
-		assertThatThrownBy(() -> orderService.createOrder(request))
+		assertThatThrownBy(() -> orderService.createOrder(command))
 			.isInstanceOf(OrderException.class)
 			.satisfies(exception -> {
 				OrderException orderException = (OrderException) exception;

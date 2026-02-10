@@ -1,17 +1,17 @@
-package com.commerce.auth.service.request;
+package com.commerce.auth.service.command;
 
 import lombok.Builder;
 import lombok.Getter;
 
 @Getter
-public class AuthSignUpServiceRequest {
+public class AuthSignUpCommand {
 
 	private String email;
 	private String password;
 	private String username;
 
 	@Builder
-	private AuthSignUpServiceRequest(String email, String password, String username) {
+	private AuthSignUpCommand(String email, String password, String username) {
 		this.email = email;
 		this.password = password;
 		this.username = username;

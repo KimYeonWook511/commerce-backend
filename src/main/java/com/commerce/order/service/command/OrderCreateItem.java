@@ -1,4 +1,4 @@
-package com.commerce.order.service.request;
+package com.commerce.order.service.command;
 
 import lombok.Builder;
 import lombok.Getter;
