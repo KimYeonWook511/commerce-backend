@@ -4,8 +4,6 @@ import static org.assertj.core.api.Assertions.assertThat;
 import static org.assertj.core.api.Assertions.assertThatThrownBy;
 import static org.mockito.ArgumentMatchers.any;
 import static org.mockito.BDDMockito.given;
-import static org.mockito.BDDMockito.then;
-import static org.mockito.Mockito.never;
 
 import java.time.LocalDateTime;
 import java.util.Optional;
@@ -62,7 +60,6 @@ class PaymentServiceTest {
 		Order order = createOrder(1500);
 		setOrderId(order, 1L);
 		given(orderRepository.findByIdAndMemberIdWithItems(1L, 1L)).willReturn(Optional.of(order));
-		given(paymentRepository.findByOrderId(1L)).willReturn(Optional.empty());
 		given(paymentRepository.save(any(Payment.class)))
 			.willAnswer(invocation -> {
 				Payment saved = invocation.getArgument(0);
@@ -93,33 +90,6 @@ class PaymentServiceTest {
 		assertThat(result.getReturnUrl()).startsWith("https://return-url");
 	}
 
-	@DisplayName("이미 결제가 있으면 기존 결제 정보를 사용한다")
-	@Test
-	void readyPayment_whenPaymentExists_useExistingPayment() {
-		// given
-		Order order = createOrder(1500);
-		setOrderId(order, 1L);
-		Payment existing = Payment.create(order, 1500, PaymentProvider.NAVERPAY);
-		ReflectionTestUtils.setField(existing, "merchantPayKey", "PAY-EXIST");
-
-		given(orderRepository.findByIdAndMemberIdWithItems(1L, 1L)).willReturn(Optional.of(order));
-		given(paymentRepository.findByOrderId(1L)).willReturn(Optional.of(existing));
-		stubPaymentProperties();
-
-		PaymentReadyCommand command = PaymentReadyCommand.builder()
-			.memberId(1L)
-			.orderId(1L)
-			.provider(PaymentProvider.NAVERPAY)
-			.build();
-
-		// when
-		PaymentReadyResult result = paymentService.readyPayment(command);
-
-		// then
-		assertThat(result.getMerchantPayKey()).isEqualTo("PAY-EXIST");
-		then(paymentRepository).should(never()).save(any(Payment.class));
-	}
-
 	@DisplayName("주문이 없으면 결제 준비에 실패한다")
 	@Test
 	void readyPayment_whenOrderNotFound_throwException() {
@@ -148,7 +118,6 @@ class PaymentServiceTest {
 		Order order = Order.create(createMember());
 		setOrderId(order, 1L);
 		given(orderRepository.findByIdAndMemberIdWithItems(1L, 1L)).willReturn(Optional.of(order));
-		given(paymentRepository.findByOrderId(1L)).willReturn(Optional.empty());
 		given(paymentRepository.save(any(Payment.class)))
 			.willAnswer(invocation -> {
 				Payment saved = invocation.getArgument(0);
