@@ -20,7 +20,7 @@ import com.commerce.product.domain.Product;
 import com.commerce.product.repository.ProductRepository;
 import com.commerce.stock.domain.Stock;
 import com.commerce.stock.repository.StockRepository;
-import com.commerce.stock.service.request.StockDecreaseBatchServiceRequest;
+import com.commerce.stock.service.command.StockDecreaseBatchCommand;
 
 @Tag("concurrency")
 @SpringBootTest
@@ -191,7 +191,7 @@ class StockConcurrencyTest {
 			"pessimistic-lock-batch",
 			threadCount,
 			() -> stockService.decreaseBatchWithPessimisticLock(
-				StockDecreaseBatchServiceRequest.from(java.util.Map.of(product.getId(), 1))
+				StockDecreaseBatchCommand.from(java.util.Map.of(product.getId(), 1))
 			),
 			errors
 		);

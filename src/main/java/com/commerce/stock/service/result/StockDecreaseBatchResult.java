@@ -1,4 +1,4 @@
-package com.commerce.stock.service.response;
+package com.commerce.stock.service.result;
 
 import java.util.Map;
 
@@ -6,23 +6,23 @@ import lombok.Builder;
 import lombok.Getter;
 
 @Getter
-public class StockDecreaseBatchResponse {
+public class StockDecreaseBatchResult {
 
 	private int itemCount;
 	private int totalQuantity;
 
 	@Builder
-	private StockDecreaseBatchResponse(int itemCount, int totalQuantity) {
+	private StockDecreaseBatchResult(int itemCount, int totalQuantity) {
 		this.itemCount = itemCount;
 		this.totalQuantity = totalQuantity;
 	}
 
-	public static StockDecreaseBatchResponse from(Map<Long, Integer> quantitiesByProductId) {
+	public static StockDecreaseBatchResult from(Map<Long, Integer> quantitiesByProductId) {
 		int totalQuantity = quantitiesByProductId.values().stream()
 			.mapToInt(Integer::intValue)
 			.sum();
 
-		return StockDecreaseBatchResponse.builder()
+		return StockDecreaseBatchResult.builder()
 			.itemCount(quantitiesByProductId.size())
 			.totalQuantity(totalQuantity)
 			.build();

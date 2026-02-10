@@ -21,8 +21,8 @@ import com.commerce.stock.domain.Stock;
 import com.commerce.stock.exception.StockErrorCode;
 import com.commerce.stock.exception.StockException;
 import com.commerce.stock.repository.StockRepository;
-import com.commerce.stock.service.request.StockDecreaseBatchServiceRequest;
-import com.commerce.stock.service.response.StockDecreaseBatchResponse;
+import com.commerce.stock.service.command.StockDecreaseBatchCommand;
+import com.commerce.stock.service.result.StockDecreaseBatchResult;
 
 @ExtendWith(MockitoExtension.class)
 class StockServiceTest {
@@ -84,7 +84,7 @@ class StockServiceTest {
 		Stock stock1 = createStock(product1, 10);
 		Stock stock2 = createStock(product2, 9);
 
-		StockDecreaseBatchServiceRequest request = StockDecreaseBatchServiceRequest.from(
+		StockDecreaseBatchCommand command = StockDecreaseBatchCommand.from(
 			Map.of(1L, 1, 2L, 1)
 		);
 
@@ -94,7 +94,7 @@ class StockServiceTest {
 			.willReturn(List.of(stock1, stock2));
 
 		// when
-		stockService.decreaseBatchWithPessimisticLock(request);
+		stockService.decreaseBatchWithPessimisticLock(command);
 
 		// then
 		assertThat(stock1.getQuantity()).isEqualTo(9);
@@ -110,7 +110,7 @@ class StockServiceTest {
 		Stock stock1 = createStock(product1, 10);
 		Stock stock2 = createStock(product2, 9);
 
-		StockDecreaseBatchServiceRequest request = StockDecreaseBatchServiceRequest.builder()
+		StockDecreaseBatchCommand command = StockDecreaseBatchCommand.builder()
 			.quantitiesByProductId(Map.of(1L, 2, 2L, 1))
 			.build();
 
@@ -120,13 +120,13 @@ class StockServiceTest {
 			.willReturn(List.of(stock1, stock2));
 
 		// when
-		StockDecreaseBatchResponse response = stockService.decreaseBatchWithPessimisticLock(request);
+		StockDecreaseBatchResult result = stockService.decreaseBatchWithPessimisticLock(command);
 
 		// then
 		assertThat(stock1.getQuantity()).isEqualTo(8);
 		assertThat(stock2.getQuantity()).isEqualTo(8);
-		assertThat(response.getItemCount()).isEqualTo(2);
-		assertThat(response.getTotalQuantity()).isEqualTo(3);
+		assertThat(result.getItemCount()).isEqualTo(2);
+		assertThat(result.getTotalQuantity()).isEqualTo(3);
 	}
 
 	@DisplayName("비관적 락 조회 결과가 부족하면 예외가 발생한다")
@@ -136,7 +136,7 @@ class StockServiceTest {
 		Product product1 = createProduct(1L, "product-1", 1000);
 		Stock stock1 = createStock(product1, 10);
 
-		StockDecreaseBatchServiceRequest request = StockDecreaseBatchServiceRequest.from(
+		StockDecreaseBatchCommand command = StockDecreaseBatchCommand.from(
 			Map.of(1L, 1, 2L, 1)
 		);
 
@@ -146,7 +146,7 @@ class StockServiceTest {
 			.willReturn(List.of(stock1));
 
 		// when & then
-		assertThatThrownBy(() -> stockService.decreaseBatchWithPessimisticLock(request))
+		assertThatThrownBy(() -> stockService.decreaseBatchWithPessimisticLock(command))
 			.isInstanceOf(StockException.class)
 			.satisfies(exception -> {
 				StockException stockException = (StockException) exception;

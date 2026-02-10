@@ -1,4 +1,4 @@
-package com.commerce.order.service.response;
+package com.commerce.order.service.result;
 
 import com.commerce.order.domain.Order;
 import com.commerce.order.domain.OrderStatus;
@@ -7,19 +7,19 @@ import lombok.Builder;
 import lombok.Getter;
 
 @Getter
-public class OrderCancelResponse {
+public class OrderCancelResult {
 
 	private Long orderId;
 	private OrderStatus status;
 
 	@Builder
-	private OrderCancelResponse(Long orderId, OrderStatus status) {
+	private OrderCancelResult(Long orderId, OrderStatus status) {
 		this.orderId = orderId;
 		this.status = status;
 	}
 
-	public static OrderCancelResponse from(Order order) {
-		return OrderCancelResponse.builder()
+	public static OrderCancelResult from(Order order) {
+		return OrderCancelResult.builder()
 			.orderId(order.getId())
 			.status(order.getStatus())
 			.build();

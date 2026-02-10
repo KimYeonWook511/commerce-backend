@@ -18,10 +18,12 @@ import com.commerce.auth.controller.request.AuthSignUpRequest;
 import com.commerce.auth.controller.request.AuthTokenReissueRequest;
 import com.commerce.auth.jwt.JwtProperties;
 import com.commerce.auth.service.AuthService;
-import com.commerce.auth.service.request.AuthTokenReissueServiceRequest;
-import com.commerce.auth.service.response.AuthLoginResponse;
-import com.commerce.auth.service.response.AuthSignUpResponse;
-import com.commerce.auth.service.response.AuthTokenReissueResponse;
+import com.commerce.auth.service.command.AuthLoginCommand;
+import com.commerce.auth.service.command.AuthSignUpCommand;
+import com.commerce.auth.service.command.AuthTokenReissueCommand;
+import com.commerce.auth.service.result.AuthLoginResult;
+import com.commerce.auth.service.result.AuthSignUpResult;
+import com.commerce.auth.service.result.AuthTokenReissueResult;
 import com.commerce.common.ApiResponse;
 import com.commerce.common.exception.CommonErrorCode;
 import com.commerce.common.exception.CustomException;
@@ -38,48 +40,59 @@ public class AuthController {
 	private final JwtProperties jwtProperties;
 
 	@PostMapping("/signup")
-	public ResponseEntity<ApiResponse<AuthSignUpResponse>> signUp(
+	public ResponseEntity<ApiResponse<AuthSignUpResult>> signUp(
 		@Valid @RequestBody AuthSignUpRequest request
 	) {
-		AuthSignUpResponse signUpResponse = authService.signUp(request.toServiceRequest());
+		AuthSignUpResult signUpResult = authService.signUp(
+			AuthSignUpCommand.builder()
+				.email(request.getEmail())
+				.password(request.getPassword())
+				.username(request.getUsername())
+				.build()
+		);
 
-		HttpHeaders headers = buildAuthHeaders(signUpResponse.getAccessToken(), signUpResponse.getRefreshToken());
+		HttpHeaders headers = buildAuthHeaders(signUpResult.getAccessToken(), signUpResult.getRefreshToken());
 
 		return ResponseEntity.status(HttpStatus.CREATED)
 			.headers(headers)
-			.body(ApiResponse.of(signUpResponse));
+			.body(ApiResponse.of(signUpResult));
 	}
 
 	@PostMapping("/login")
-	public ResponseEntity<ApiResponse<AuthLoginResponse>> login(
+	public ResponseEntity<ApiResponse<AuthLoginResult>> login(
 		@Valid @RequestBody AuthLoginRequest request
 	) {
-		AuthLoginResponse loginResponse = authService.login(request.toServiceRequest());
+		AuthLoginResult loginResult = authService.login(
+			AuthLoginCommand.builder()
+				.email(request.getEmail())
+				.password(request.getPassword())
+				.build()
+		);
 
-		HttpHeaders headers = buildAuthHeaders(loginResponse.getAccessToken(), loginResponse.getRefreshToken());
+		HttpHeaders headers = buildAuthHeaders(loginResult.getAccessToken(), loginResult.getRefreshToken());
 
 		return ResponseEntity.status(HttpStatus.OK)
 			.headers(headers)
-			.body(ApiResponse.of(loginResponse));
+			.body(ApiResponse.of(loginResult));
 	}
 
 	@PostMapping("/reissue")
-	public ResponseEntity<ApiResponse<AuthTokenReissueResponse>> reissue(
+	public ResponseEntity<ApiResponse<AuthTokenReissueResult>> reissue(
 		@CookieValue(name = "refreshToken", required = false) String refreshToken,
 		@RequestBody(required = false) AuthTokenReissueRequest request
 	) {
 		String resolvedRefreshToken = resolveRefreshToken(refreshToken, request);
-		AuthTokenReissueResponse reissueResponse = authService.reissue(
-			AuthTokenReissueServiceRequest.builder()
+		AuthTokenReissueResult reissueResult = authService.reissue(
+			AuthTokenReissueCommand.builder()
 				.refreshToken(resolvedRefreshToken)
 				.build()
 		);
 
-		HttpHeaders headers = buildAuthHeaders(reissueResponse.getAccessToken(), reissueResponse.getRefreshToken());
+		HttpHeaders headers = buildAuthHeaders(reissueResult.getAccessToken(), reissueResult.getRefreshToken());
 
 		return ResponseEntity.status(HttpStatus.OK)
 			.headers(headers)
-			.body(ApiResponse.of(reissueResponse));
+			.body(ApiResponse.of(reissueResult));
 	}
 
 	private HttpHeaders buildAuthHeaders(String accessToken, String refreshToken) {

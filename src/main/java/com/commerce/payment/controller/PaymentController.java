@@ -14,8 +14,8 @@ import com.commerce.payment.domain.PaymentProvider;
 import com.commerce.payment.exception.PaymentErrorCode;
 import com.commerce.payment.exception.PaymentException;
 import com.commerce.payment.service.PaymentService;
-import com.commerce.payment.service.request.PaymentReadyServiceRequest;
-import com.commerce.payment.service.response.PaymentReadyResponse;
+import com.commerce.payment.service.command.PaymentReadyCommand;
+import com.commerce.payment.service.result.PaymentReadyResult;
 
 import jakarta.validation.Valid;
 import lombok.RequiredArgsConstructor;
@@ -28,17 +28,17 @@ public class PaymentController {
 	private final PaymentService paymentService;
 
 	@PostMapping("/ready")
-	public ResponseEntity<ApiResponse<PaymentReadyResponse>> readyPayment(
+	public ResponseEntity<ApiResponse<PaymentReadyResult>> readyPayment(
 		@AuthenticatedMemberId Long memberId,
 		@Valid @RequestBody PaymentReadyRequest request
 	) {
-		PaymentReadyServiceRequest serviceRequest = PaymentReadyServiceRequest.builder()
+		PaymentReadyCommand command = PaymentReadyCommand.builder()
 			.memberId(memberId)
 			.orderId(request.getOrderId())
 			.provider(parseProvider(request.getProvider()))
 			.build();
-		PaymentReadyResponse response = paymentService.readyPayment(serviceRequest);
-		return ResponseEntity.status(HttpStatus.OK).body(ApiResponse.of(response));
+		PaymentReadyResult result = paymentService.readyPayment(command);
+		return ResponseEntity.status(HttpStatus.OK).body(ApiResponse.of(result));
 	}
 
 	private PaymentProvider parseProvider(String provider) {
