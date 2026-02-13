@@ -22,6 +22,7 @@ import com.commerce.member.exception.MemberErrorCode;
 import com.commerce.member.exception.MemberException;
 import com.commerce.member.repository.MemberRepository;
 import com.commerce.order.domain.Order;
+import com.commerce.order.domain.OrderStatus;
 import com.commerce.order.exception.OrderErrorCode;
 import com.commerce.order.exception.OrderException;
 import com.commerce.order.redis.OrderIdempotencyStore;
@@ -207,6 +208,33 @@ public class OrderService {
 			quantities.merge(item.getProductId(), item.getQuantity(), Integer::sum);
 		}
 		return quantities;
+	}
+
+	/**
+	 * 	주문 만료 배치에서 사용하는 메서드
+	 * 	트랜잭션은 청크 단위임
+	 */
+	@Transactional
+	public void expireOrder(Long orderId) {
+		Order order = orderRepository.findByIdWithItems(orderId)
+			.orElseThrow(() -> new OrderException(OrderErrorCode.ORDER_NOT_FOUND));
+
+		// 주문 취소 처리
+		order.cancel();
+
+		// 재고 복구
+		// 문제점 -> 락이 길어짐(청크만큼)
+		restoreStock(order.getOrderItems());
+	}
+
+	private void restoreStock(List<OrderItem> orderItems) {
+		List<OrderItem> sortedItems = orderItems.stream()
+			.sorted(Comparator.comparing(item -> item.getProduct().getId()))
+			.toList();
+
+		sortedItems.forEach(item ->
+			stockService.increaseWithPessimisticLock(item.getProduct().getId(), item.getQuantity())
+		);
 	}
 
 	private OrderCreateResult createOrderWithStockDecrease(
