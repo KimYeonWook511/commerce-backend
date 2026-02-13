@@ -15,12 +15,18 @@ spring:
     properties:
       hibernate:
         format_sql: false
+  batch:
+    job:
+      enabled: false
+    jdbc:
+      initialize-schema: always
 
 logging:
   level:
     root: WARN
     org.hibernate.SQL: debug
     p6spy: info
+    com.commerce.order.batch.listener: info
 
 jwt:
   access:
@@ -37,3 +43,10 @@ naverpay:
   return-url: https://test
   approval-url: https://test
   cancel-url: https://test
+
+order:
+  expiration:
+    minutes: 60
+    batch:
+      cron: "0 */5 * * * *"
+      chunk-size: 100
