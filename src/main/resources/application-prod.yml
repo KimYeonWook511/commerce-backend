@@ -24,6 +24,11 @@ spring:
         use_sql_comments: true # JPQL/HQL 주석을 SQL에 함께 출력
         #default_batch_fetch_size: 100
     #open-in-view: false # default true
+  batch:
+    job:
+      enabled: false
+    jdbc:
+      initialize-schema: always
 
 logging:
   level:
@@ -44,3 +49,10 @@ naverpay:
   return-url: ${PROD_NAVERPAY_RETURN_URL}
   approval-url: ${PROD_NAVERPAY_APPROVAL_URL}
   cancel-url: ${PROD_NAVERPAY_CANCEL_URL}
+
+order:
+  expiration:
+    minutes: 60
+    batch:
+      cron: "0 */5 * * * *"
+      chunk-size: 100
