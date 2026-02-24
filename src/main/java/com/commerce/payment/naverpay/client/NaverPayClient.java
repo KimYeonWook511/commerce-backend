@@ -31,9 +31,9 @@ import lombok.RequiredArgsConstructor;
 @RequiredArgsConstructor
 public class NaverPayClient {
 
-	private final RestTemplate restTemplate = new RestTemplate();
 	private final NaverPayProperties properties;
-	private final ObjectMapper objectMapper = new ObjectMapper();
+	private final RestTemplate naverPayRestTemplate;
+	private final ObjectMapper objectMapper;
 
 	public NaverPayResponse<NaverPayApproveBody> approve(String paymentId) {
 		HttpHeaders headers = createHeaders();
@@ -65,7 +65,7 @@ public class NaverPayClient {
 	private <T> T postForm(String url, HttpHeaders headers, MultiValueMap<String, String> body, TypeReference<T> typeReference) {
 		HttpEntity<MultiValueMap<String, String>> request = new HttpEntity<>(body, headers);
 		try {
-			String response = restTemplate.postForObject(url, request, String.class);
+			String response = naverPayRestTemplate.postForObject(url, request, String.class);
 			if (response == null) {
 				throw new NaverPayException(NaverPayErrorCode.INVALID_RESPONSE, "네이버페이 응답이 비어있습니다");
 			}
