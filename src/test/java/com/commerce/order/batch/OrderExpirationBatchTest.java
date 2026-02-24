@@ -1,8 +1,7 @@
 package com.commerce.order.batch;
 
 import static org.assertj.core.api.Assertions.assertThat;
-import static org.mockito.ArgumentMatchers.anyInt;
-import static org.mockito.ArgumentMatchers.anyLong;
+import static org.mockito.ArgumentMatchers.*;
 import static org.mockito.BDDMockito.then;
 import static org.mockito.Mockito.doThrow;
 import static org.mockito.Mockito.never;
@@ -13,6 +12,7 @@ import java.util.ArrayList;
 import java.util.List;
 import java.util.UUID;
 
+import org.junit.jupiter.api.AfterEach;
 import org.junit.jupiter.api.BeforeEach;
 import org.junit.jupiter.api.DisplayName;
 import org.junit.jupiter.api.Tag;
@@ -37,9 +37,11 @@ import com.commerce.member.repository.MemberRepository;
 import com.commerce.order.domain.Order;
 import com.commerce.order.domain.OrderStatus;
 import com.commerce.order.repository.OrderRepository;
+import com.commerce.orderitem.repository.OrderItemRepository;
+import com.commerce.outbox.service.OutboxService;
+import com.commerce.outbox.stock.service.command.StockRestoreOutboxCreateCommand;
 import com.commerce.product.domain.Product;
 import com.commerce.product.repository.ProductRepository;
-import com.commerce.stock.service.StockService;
 
 @Tag("batch")
 @SpringBatchTest
@@ -63,15 +65,26 @@ class OrderExpirationBatchTest {
 	@Autowired
 	private OrderRepository orderRepository;
 
+	@Autowired
+	private OrderItemRepository orderItemRepository;
+
 	@MockitoBean
-	private StockService stockService;
+	private OutboxService outboxService;
 
 	@BeforeEach
 	void setUp() {
 		jobLauncherTestUtils.setJob(orderExpirationJob);
 	}
 
-	@DisplayName("만료된 주문은 배치에서 취소 처리된다")
+	@AfterEach
+	void tearDown() {
+		orderItemRepository.deleteAllInBatch();
+		orderRepository.deleteAllInBatch();
+		productRepository.deleteAllInBatch();
+		memberRepository.deleteAllInBatch();
+	}
+
+	@DisplayName("만료된 주문은 배치에서 취소되고 outbox 이벤트가 생성된다")
 	@Test
 	void orderExpirationJob_whenOrderExpired_cancelOrder() throws Exception {
 		// given
@@ -86,8 +99,8 @@ class OrderExpirationBatchTest {
 		assertThat(execution.getStatus()).isEqualTo(BatchStatus.COMPLETED);
 		Order result = orderRepository.findById(order.getId()).orElseThrow();
 		assertThat(result.getStatus()).isEqualTo(OrderStatus.CANCELED);
-		Long productId = order.getOrderItems().getFirst().getProduct().getId();
-		then(stockService).should().increaseWithPessimisticLock(productId, 2);
+		then(outboxService).should()
+			.createStockRestoreOutboxEvent(argThat(command -> command.getOrderId().equals(result.getId())));
 	}
 
 	@DisplayName("만료 대상이 없으면 아무 것도 처리하지 않는다")
@@ -106,7 +119,8 @@ class OrderExpirationBatchTest {
 		StepExecution stepExecution = execution.getStepExecutions().iterator().next();
 		assertThat(stepExecution.getReadCount()).isEqualTo(0);
 		assertThat(stepExecution.getWriteCount()).isEqualTo(0);
-		then(stockService).should(never()).increaseWithPessimisticLock(anyLong(), anyInt());
+		then(outboxService).should(never())
+			.createStockRestoreOutboxEvent(any(StockRestoreOutboxCreateCommand.class));
 	}
 
 	@DisplayName("만료 기준을 지나지 않은 주문은 배치에서 유지된다")
@@ -124,8 +138,8 @@ class OrderExpirationBatchTest {
 		assertThat(execution.getStatus()).isEqualTo(BatchStatus.COMPLETED);
 		Order result = orderRepository.findById(order.getId()).orElseThrow();
 		assertThat(result.getStatus()).isEqualTo(OrderStatus.INIT);
-		Long productId = order.getOrderItems().getFirst().getProduct().getId();
-		then(stockService).should(never()).increaseWithPessimisticLock(productId, 2);
+		then(outboxService).should(never())
+			.createStockRestoreOutboxEvent(any(StockRestoreOutboxCreateCommand.class));
 	}
 
 	@DisplayName("만료 주문이 청크 사이즈를 넘어도 모두 취소 처리된다")
@@ -151,7 +165,8 @@ class OrderExpirationBatchTest {
 		List<Long> orderIds = orders.stream().map(Order::getId).toList();
 		List<Order> updatedOrders = orderRepository.findAllById(orderIds);
 		assertThat(updatedOrders).allMatch(order -> order.getStatus() == OrderStatus.CANCELED);
-		then(stockService).should(times(totalOrders)).increaseWithPessimisticLock(product.getId(), 2);
+		then(outboxService).should(times(totalOrders))
+			.createStockRestoreOutboxEvent(any(StockRestoreOutboxCreateCommand.class));
 	}
 
 	@DisplayName("같은 조건으로 배치를 다시 실행해도 추가 처리하지 않는다")
@@ -179,7 +194,8 @@ class OrderExpirationBatchTest {
 		StepExecution secondStep = secondExecution.getStepExecutions().iterator().next();
 		assertThat(secondStep.getReadCount()).isEqualTo(0);
 		assertThat(secondStep.getWriteCount()).isEqualTo(0);
-		then(stockService).should(times(1)).increaseWithPessimisticLock(product.getId(), 2);
+		then(outboxService).should(times(1))
+			.createStockRestoreOutboxEvent(any(StockRestoreOutboxCreateCommand.class));
 	}
 
 	@DisplayName("주문 만료 처리 중 CustomException이 발생하면 해당 주문을 skip한다")
@@ -189,7 +205,8 @@ class OrderExpirationBatchTest {
 		LocalDateTime now = LocalDateTime.now();
 		Order order = saveOrder();
 		doThrow(new OrderException(OrderErrorCode.ORDER_CANCEL_NOT_ALLOWED))
-			.when(stockService).increaseWithPessimisticLock(anyLong(), anyInt());
+			.when(outboxService)
+			.createStockRestoreOutboxEvent(any(StockRestoreOutboxCreateCommand.class));
 		JobParameters parameters = jobParameters(now.plusMinutes(10));
 
 		// when

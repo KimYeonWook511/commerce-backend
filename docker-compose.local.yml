@@ -13,8 +13,33 @@ services:
       MYSQL_DATABASE: ${MYSQL_DATABASE}
     volumes:
       - ./mysql-data-local:/var/lib/mysql
+
   redis:
     image: redis:7.4
     container_name: commerce-redis-local
     ports:
       - "16379:6379"
+
+  kafka:
+    image: bitnami/kafka:3.7
+    container_name: commerce-kafka-local
+    ports:
+      - "127.0.0.1:19092:9094"
+    environment:
+      - KAFKA_CFG_NODE_ID=1
+      - KAFKA_CFG_PROCESS_ROLES=controller,broker
+      - KAFKA_CFG_INTER_BROKER_LISTENER_NAME=INTERNAL
+      - KAFKA_CFG_CONTROLLER_LISTENER_NAMES=CONTROLLER
+      - KAFKA_CFG_LISTENERS=INTERNAL://:9092,CONTROLLER://:9093,EXTERNAL://:9094 # Kafka가 컨테이너 내부에서 리슨하는 포트 (bootstrap)
+      # INTERNAL(9092): 도커 네트워크 내부 컨테이너용
+      # CONTROLLER(9093): KRaft 컨트롤러 통신용
+      # EXTERNAL(9094): 컨테이너 내부 외부용 리스너 포트
+      - KAFKA_CFG_ADVERTISED_LISTENERS=INTERNAL://kafka:9092,EXTERNAL://localhost:19092 # 클라이언트에게 안내할 접속 주소
+      # 도커 네트워크 내부는 kafka:9092 (commerce-kafka-local:9092는 도커 네트워크로 묶는다면 이런식으로 명시함(배포환경), 현재는 compose파일에 있는 것만 하기 때문에 패스)
+      - KAFKA_CFG_LISTENER_SECURITY_PROTOCOL_MAP=INTERNAL:PLAINTEXT,CONTROLLER:PLAINTEXT,EXTERNAL:PLAINTEXT
+      - KAFKA_CFG_CONTROLLER_QUORUM_VOTERS=1@kafka:9093
+      - KAFKA_CFG_AUTO_CREATE_TOPICS_ENABLE=true
+      - ALLOW_PLAINTEXT_LISTENER=yes
+      - KAFKA_KRAFT_CLUSTER_ID=abcdefghijklmnopqrstuv
+    volumes:
+      - ./kafka-data-local:/bitnami/kafka

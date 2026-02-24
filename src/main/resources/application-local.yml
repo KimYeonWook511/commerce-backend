@@ -2,17 +2,14 @@ spring:
   config:
     activate:
       on-profile: local
-
   datasource:
     url: jdbc:mysql://${LOCAL_DB_HOST:localhost}:${LOCAL_DB_PORT:3306}/${LOCAL_DB_NAME:commerce_db}
     username: ${LOCAL_DB_USER:root}
     password: ${LOCAL_DB_PASSWORD}
-
   data:
     redis:
       host: ${LOCAL_REDIS_HOST:localhost}
       port: ${LOCAL_REDIS_PORT:6379}
-
   jpa:
     hibernate:
       ddl-auto: update
@@ -28,6 +25,11 @@ spring:
       enabled: false
     jdbc:
       initialize-schema: always
+  kafka:
+    bootstrap-servers: ${LOCAL_KAFKA_HOST:localhost}:${LOCAL_KAFKA_PORT:9092}
+    producer:
+      key-serializer: org.apache.kafka.common.serialization.StringSerializer
+      value-serializer: org.apache.kafka.common.serialization.StringSerializer
 
 logging:
   level:
@@ -55,3 +57,20 @@ order:
     batch:
       cron: "0 */5 * * * *"
       chunk-size: 100
+
+outbox:
+  stock-restore:
+    relay:
+      topic: ${LOCAL_OUTBOX_STOCK_RESTORE_TOPIC:stock-restore-events}
+      send-timeout-millis: 5000
+    publisher:
+      cron: "*/10 * * * * *"
+      batch-size: 100
+    retry-publisher:
+      cron: "*/10 * * * * *"
+    stale-recovery:
+      cron: "*/30 * * * * *"
+    stale-publishing-seconds: 300
+    retry:
+      base-seconds: 30
+      max-seconds: 3600
