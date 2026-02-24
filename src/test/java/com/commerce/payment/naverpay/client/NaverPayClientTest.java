@@ -29,6 +29,7 @@ import com.commerce.payment.naverpay.client.response.body.NaverPayCancelBody;
 import com.commerce.payment.naverpay.config.NaverPayProperties;
 import com.commerce.payment.naverpay.exception.NaverPayErrorCode;
 import com.commerce.payment.naverpay.exception.NaverPayException;
+import com.fasterxml.jackson.databind.ObjectMapper;
 
 class NaverPayClientTest {
 
@@ -36,22 +37,21 @@ class NaverPayClientTest {
 	private static final String CANCEL_URL = "https://test.naverpay/naverpay-partner/naverpay/payments/v1/cancel";
 
 	private NaverPayClient client;
-	private RestTemplate restTemplate;
 	private MockRestServiceServer server;
 
 	@BeforeEach
 	void setUp() {
-		NaverPayProperties properties = new NaverPayProperties();
-		ReflectionTestUtils.setField(properties, "clientId", "client-id");
-		ReflectionTestUtils.setField(properties, "clientSecret", "client-secret");
-		ReflectionTestUtils.setField(properties, "chainId", "chain-id");
-		ReflectionTestUtils.setField(properties, "approvalUrl", APPROVAL_URL);
-		ReflectionTestUtils.setField(properties, "cancelUrl", CANCEL_URL);
+		NaverPayProperties naverPayProperties = new NaverPayProperties();
+		ReflectionTestUtils.setField(naverPayProperties, "clientId", "client-id");
+		ReflectionTestUtils.setField(naverPayProperties, "clientSecret", "client-secret");
+		ReflectionTestUtils.setField(naverPayProperties, "chainId", "chain-id");
+		ReflectionTestUtils.setField(naverPayProperties, "approvalUrl", APPROVAL_URL);
+		ReflectionTestUtils.setField(naverPayProperties, "cancelUrl", CANCEL_URL);
+		RestTemplate restTemplate = new RestTemplate();
+		ObjectMapper objectMapper = new ObjectMapper();
 
-		client = new NaverPayClient(properties);
-		restTemplate = new RestTemplate();
+		client = new NaverPayClient(naverPayProperties, restTemplate, objectMapper);
 		server = MockRestServiceServer.bindTo(restTemplate).build();
-		ReflectionTestUtils.setField(client, "restTemplate", restTemplate);
 	}
 
 	@DisplayName("승인 요청이 성공하면 응답이 매핑된다")
@@ -130,7 +130,7 @@ class NaverPayClientTest {
 			eq(String.class)))
 			.thenThrow(new ResourceAccessException("timeout"));
 
-		ReflectionTestUtils.setField(client, "restTemplate", failingRestTemplate);
+		ReflectionTestUtils.setField(client, "naverPayRestTemplate", failingRestTemplate);
 
 		assertThatThrownBy(() -> client.approve("pg-payment-id"))
 			.isInstanceOfSatisfying(NaverPayException.class, ex -> {
@@ -214,7 +214,7 @@ class NaverPayClientTest {
 			eq(String.class)))
 			.thenThrow(new ResourceAccessException("timeout"));
 
-		ReflectionTestUtils.setField(client, "restTemplate", failingRestTemplate);
+		ReflectionTestUtils.setField(client, "naverPayRestTemplate", failingRestTemplate);
 
 		assertThatThrownBy(() -> client.cancel(createCancelRequest()))
 			.isInstanceOfSatisfying(NaverPayException.class, ex -> {
