@@ -111,7 +111,7 @@ public class StockService {
 		// 재고 조회 (X-Lock)
 		Map<Long, Integer> quantitiesByProductId = command.getQuantitiesByProductId();
 		List<Long> productIds = quantitiesByProductId.keySet().stream()
-			// .sorted()
+			// .sorted() // in절에 쓰이는 list는 정렬해도 락 순서를 보장하지 않음
 			.toList();
 		List<Stock> findStocks = stockRepository.findAllByProductIdInWithPessimisticLock(productIds);
 		if (findStocks.size() != productIds.size()) {
