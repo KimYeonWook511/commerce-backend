@@ -2,13 +2,11 @@ spring:
   config:
     activate:
       on-profile: test
-
   datasource:
     url: jdbc:h2:mem:testdb
     driver-class-name: org.h2.Driver
     username: sa
     password:
-
   jpa:
     hibernate:
       ddl-auto: create-drop
@@ -20,6 +18,11 @@ spring:
       enabled: false
     jdbc:
       initialize-schema: always
+  kafka:
+    bootstrap-servers: localhost:9092
+    producer:
+      key-serializer: org.apache.kafka.common.serialization.StringSerializer
+      value-serializer: org.apache.kafka.common.serialization.StringSerializer
 
 logging:
   level:
@@ -27,6 +30,7 @@ logging:
     org.hibernate.SQL: debug
     p6spy: info
     com.commerce.order.batch.listener: info
+    com.commerce.outbox: info
 
 jwt:
   access:
@@ -43,6 +47,23 @@ naverpay:
   return-url: https://test
   approval-url: https://test
   cancel-url: https://test
+
+outbox:
+  stock-restore:
+    relay:
+      topic: test-stock-restore-events
+      send-timeout-millis: 5000
+    publisher:
+      cron: "*/10 * * * * *"
+      batch-size: 100
+    retry-publisher:
+      cron: "*/10 * * * * *"
+    stale-recovery:
+      cron: "*/30 * * * * *"
+    stale-publishing-seconds: 300
+    retry:
+      base-seconds: 30
+      max-seconds: 3600
 
 order:
   expiration:
