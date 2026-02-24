@@ -2,7 +2,6 @@ package com.commerce.order.service;
 
 import static org.assertj.core.api.Assertions.assertThat;
 import static org.assertj.core.api.Assertions.assertThatThrownBy;
-import static org.mockito.ArgumentMatchers.eq;
 import static org.mockito.BDDMockito.given;
 import static org.mockito.BDDMockito.then;
 import static org.mockito.Mockito.never;
@@ -23,8 +22,9 @@ import com.commerce.order.domain.OrderStatus;
 import com.commerce.order.exception.OrderErrorCode;
 import com.commerce.order.exception.OrderException;
 import com.commerce.order.repository.OrderRepository;
+import com.commerce.outbox.service.OutboxService;
+import com.commerce.outbox.stock.service.command.StockRestoreOutboxCreateCommand;
 import com.commerce.product.domain.Product;
-import com.commerce.stock.service.StockService;
 
 @ExtendWith(MockitoExtension.class)
 class OrderServiceExpirationTest {
@@ -33,14 +33,14 @@ class OrderServiceExpirationTest {
 	private OrderRepository orderRepository;
 
 	@Mock
-	private StockService stockService;
+	private OutboxService stockRestoreOutboxService;
 
 	@InjectMocks
 	private OrderService orderService;
 
-	@DisplayName("만료 주문을 취소하고 재고를 복구한다")
+	@DisplayName("만료 주문을 취소하고 재고 복구 outbox 이벤트를 저장한다")
 	@Test
-	void expireOrder_whenExpired_cancelOrderAndRestoreStock() {
+	void expireOrder_whenExpired_cancelOrderAndSaveOutbox() {
 		// given
 		Order order = createOrderWithItem();
 
@@ -51,8 +51,13 @@ class OrderServiceExpirationTest {
 
 		// then
 		assertThat(order.getStatus()).isEqualTo(OrderStatus.CANCELED);
-		then(stockService).should()
-			.increaseWithPessimisticLock(eq(1L), eq(2));
+		then(stockRestoreOutboxService).should()
+			.createStockRestoreOutboxEvent(org.mockito.ArgumentMatchers.argThat(command ->
+				command.getOrderId().equals(order.getId())
+					&& command.getItems().size() == 1
+					&& command.getItems().getFirst().getProductId().equals(1L)
+					&& command.getItems().getFirst().getQuantity() == 2
+			));
 	}
 
 	@DisplayName("주문이 존재하지 않으면 만료 처리에 실패한다")
@@ -82,7 +87,8 @@ class OrderServiceExpirationTest {
 			.isInstanceOf(OrderException.class)
 			.extracting("errorCode")
 			.isEqualTo(OrderErrorCode.ORDER_CANCEL_NOT_ALLOWED);
-		then(stockService).should(never()).increaseWithPessimisticLock(eq(1L), eq(2));
+		then(stockRestoreOutboxService).should(never())
+			.createStockRestoreOutboxEvent(org.mockito.ArgumentMatchers.any(StockRestoreOutboxCreateCommand.class));
 	}
 
 	private Order createOrderWithItem() {
