@@ -1,6 +1,7 @@
 package com.commerce.order.service;
 
 import java.time.Duration;
+import java.time.LocalDateTime;
 import java.util.Comparator;
 import java.util.HashMap;
 import java.util.List;
@@ -22,7 +23,6 @@ import com.commerce.member.exception.MemberErrorCode;
 import com.commerce.member.exception.MemberException;
 import com.commerce.member.repository.MemberRepository;
 import com.commerce.order.domain.Order;
-import com.commerce.order.domain.OrderStatus;
 import com.commerce.order.exception.OrderErrorCode;
 import com.commerce.order.exception.OrderException;
 import com.commerce.order.redis.OrderIdempotencyStore;
@@ -32,6 +32,8 @@ import com.commerce.order.service.command.OrderCreateCommand;
 import com.commerce.order.service.result.OrderCancelResult;
 import com.commerce.order.service.result.OrderCreateResult;
 import com.commerce.orderitem.domain.OrderItem;
+import com.commerce.outbox.service.OutboxService;
+import com.commerce.outbox.stock.service.command.StockRestoreOutboxCreateCommand;
 import com.commerce.product.domain.Product;
 import com.commerce.product.exception.ProductErrorCode;
 import com.commerce.product.exception.ProductException;
@@ -51,6 +53,7 @@ public class OrderService {
 	private final OrderRepository orderRepository;
 	private final OrderIdempotencyStore orderIdempotencyStore;
 	private final StockService stockService;
+	private final OutboxService outboxService;
 
 	@Value("${order.idempotency.ttl-seconds:600}")
 	private long idempotencyTtlSeconds;
@@ -161,10 +164,8 @@ public class OrderService {
 			.orElseThrow(() -> new MemberException(MemberErrorCode.MEMBER_NOT_FOUND));
 
 		Map<Long, Integer> quantitiesByProductId = mergeQuantities(command);
-		// List<Long> productIds = quantitiesByProductId.keySet().stream()
-		// 	.sorted()
-		// 	.toList();
 		List<Long> productIds = quantitiesByProductId.keySet().stream()
+			// .sorted() // in절에 쓰이는 list는 정렬해도 락 순서를 보장하지 않음
 			.toList();
 
 		Map<Long, Product> findProducts = productRepository.findAllById(productIds).stream()
@@ -222,19 +223,9 @@ public class OrderService {
 		// 주문 취소 처리
 		order.cancel();
 
-		// 재고 복구
-		// 문제점 -> 락이 길어짐(청크만큼)
-		restoreStock(order.getOrderItems());
-	}
-
-	private void restoreStock(List<OrderItem> orderItems) {
-		List<OrderItem> sortedItems = orderItems.stream()
-			.sorted(Comparator.comparing(item -> item.getProduct().getId()))
-			.toList();
-
-		sortedItems.forEach(item ->
-			stockService.increaseWithPessimisticLock(item.getProduct().getId(), item.getQuantity())
-		);
+		// 이벤트 발행
+		LocalDateTime now = LocalDateTime.now();
+		outboxService.createStockRestoreOutboxEvent(toStockRestoreOutboxCreateCommand(order, now));
 	}
 
 	private OrderCreateResult createOrderWithStockDecrease(
@@ -261,5 +252,27 @@ public class OrderService {
 		orderRepository.save(order);
 
 		return OrderCreateResult.from(order);
+	}
+
+	private StockRestoreOutboxCreateCommand toStockRestoreOutboxCreateCommand(Order order, LocalDateTime requestedAt) {
+		Map<Long, Integer> mergedQuantities = new HashMap<>();
+		for (OrderItem orderItem : order.getOrderItems()) {
+			Long productId = orderItem.getProduct().getId();
+			mergedQuantities.merge(productId, orderItem.getQuantity(), Integer::sum);
+		}
+
+		List<StockRestoreOutboxCreateCommand.Item> items = mergedQuantities.entrySet().stream()
+			.map(entry -> StockRestoreOutboxCreateCommand.Item.builder()
+				.productId(entry.getKey())
+				.quantity(entry.getValue())
+				.build())
+			.sorted(Comparator.comparing(StockRestoreOutboxCreateCommand.Item::getProductId))
+			.toList();
+
+		return StockRestoreOutboxCreateCommand.builder()
+			.orderId(order.getId())
+			.items(items)
+			.requestedAt(requestedAt)
+			.build();
 	}
 }
