@@ -116,7 +116,7 @@ public class StockRestoreOutboxService {
 		return toPublishResult(targets.size(), successCount, failedCount, skippedCount);
 	}
 
-	@Transactional
+	@Transactional(propagation = Propagation.NOT_SUPPORTED)
 	public int recoverStalePublishingEvents(LocalDateTime now) {
 		LocalDateTime staleThreshold = now.minusSeconds(stalePublishingSeconds);
 		List<Long> staleTargetIds = outboxEventRepository.findStalePublishingTargetIds(
