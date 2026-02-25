@@ -50,3 +50,4 @@ Thumbs.db
 
 ### 도커 볼륨 ###
 mysql-data-local/
+kafka-data-local/

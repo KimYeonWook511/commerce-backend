@@ -8,6 +8,7 @@ import org.springframework.data.jpa.repository.JpaRepository;
 import org.springframework.data.jpa.repository.Modifying;
 import org.springframework.data.jpa.repository.Query;
 import org.springframework.data.repository.query.Param;
+import org.springframework.transaction.annotation.Transactional;
 
 import com.commerce.outbox.domain.OutboxEvent;
 import com.commerce.outbox.domain.OutboxEventType;
@@ -57,7 +58,8 @@ public interface OutboxEventRepository extends JpaRepository<OutboxEvent, Long> 
 		Pageable pageable
 	);
 
-	@Modifying(clearAutomatically = true, flushAutomatically = true)
+	@Transactional
+	@Modifying(flushAutomatically = true, clearAutomatically = true)
 	@Query("""
 		update OutboxEvent e
 		set e.status = com.commerce.outbox.domain.OutboxEventStatus.PUBLISHING,
@@ -71,7 +73,8 @@ public interface OutboxEventRepository extends JpaRepository<OutboxEvent, Long> 
 		@Param("eventType") OutboxEventType eventType
 	);
 
-	@Modifying(clearAutomatically = true, flushAutomatically = true)
+	@Transactional
+	@Modifying(flushAutomatically = true, clearAutomatically = true)
 	@Query("""
 		update OutboxEvent e
 		set e.status = com.commerce.outbox.domain.OutboxEventStatus.PUBLISHING,
@@ -87,7 +90,8 @@ public interface OutboxEventRepository extends JpaRepository<OutboxEvent, Long> 
 		@Param("now") LocalDateTime now
 	);
 
-	@Modifying(clearAutomatically = true, flushAutomatically = true)
+	@Transactional
+	@Modifying(flushAutomatically = true, clearAutomatically = true)
 	@Query("""
 		update OutboxEvent e
 		set e.status = com.commerce.outbox.domain.OutboxEventStatus.SENT,
@@ -102,7 +106,8 @@ public interface OutboxEventRepository extends JpaRepository<OutboxEvent, Long> 
 		@Param("eventType") OutboxEventType eventType
 	);
 
-	@Modifying(clearAutomatically = true, flushAutomatically = true)
+	@Transactional
+	@Modifying(flushAutomatically = true, clearAutomatically = true)
 	@Query("""
 		update OutboxEvent e
 		set e.status = com.commerce.outbox.domain.OutboxEventStatus.FAILED,
@@ -134,7 +139,8 @@ public interface OutboxEventRepository extends JpaRepository<OutboxEvent, Long> 
 		Pageable pageable
 	);
 
-	@Modifying(clearAutomatically = true, flushAutomatically = true)
+	@Transactional
+	@Modifying(flushAutomatically = true, clearAutomatically = true)
 	@Query("""
 		update OutboxEvent e
 		set e.status = com.commerce.outbox.domain.OutboxEventStatus.FAILED,
