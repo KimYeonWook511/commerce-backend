@@ -34,7 +34,7 @@ import com.commerce.outbox.domain.OutboxEventStatus;
 import com.commerce.outbox.domain.OutboxEventType;
 import com.commerce.outbox.repository.OutboxEventRepository;
 import com.commerce.outbox.repository.projection.OutboxPublishTarget;
-import com.commerce.outbox.stock.mq.StockRestoreKafkaOutboxRelayPublisher;
+import com.commerce.outbox.stock.mq.StockRestoreKafkaEventProducer;
 import com.commerce.outbox.stock.service.command.StockRestoreOutboxCreateCommand;
 import com.commerce.outbox.stock.service.result.OutboxPublishResult;
 import com.fasterxml.jackson.core.JsonProcessingException;
@@ -47,7 +47,7 @@ class StockRestoreOutboxServiceTest {
 	private OutboxEventRepository outboxEventRepository;
 
 	@Mock
-	private StockRestoreKafkaOutboxRelayPublisher outboxRelayPublisher;
+	private StockRestoreKafkaEventProducer kafkaEventProducer;
 
 	@Mock
 	private ObjectMapper objectMapper;
@@ -142,7 +142,7 @@ class StockRestoreOutboxServiceTest {
 
 		doNothing()
 			.doThrow(new IllegalStateException("publish failed"))
-			.when(outboxRelayPublisher)
+			.when(kafkaEventProducer)
 			.publish(any());
 
 		// when
@@ -154,7 +154,7 @@ class StockRestoreOutboxServiceTest {
 		assertThat(result.getFailedCount()).isEqualTo(1);
 		assertThat(result.getSkippedCount()).isEqualTo(1);
 
-		then(outboxRelayPublisher).should(times(2)).publish(any());
+		then(kafkaEventProducer).should(times(2)).publish(any());
 		then(outboxEventRepository).should().markFailed(
 			eq(3L),
 			eq(OutboxEventType.STOCK_RESTORE_REQUESTED),
@@ -181,7 +181,7 @@ class StockRestoreOutboxServiceTest {
 		assertThat(result.getPublishedCount()).isZero();
 		assertThat(result.getFailedCount()).isZero();
 		assertThat(result.getSkippedCount()).isZero();
-		then(outboxRelayPublisher).shouldHaveNoInteractions();
+		then(kafkaEventProducer).shouldHaveNoInteractions();
 	}
 
 	@DisplayName("발행 실패 후 markFailed가 실패해도 예외를 던지지 않고 failed로 집계한다")
@@ -197,7 +197,7 @@ class StockRestoreOutboxServiceTest {
 		)).willReturn(List.of(failedTarget));
 		given(outboxEventRepository.markPublishingFromPending(11L, OutboxEventType.STOCK_RESTORE_REQUESTED)).willReturn(1);
 		doThrow(new IllegalStateException("publish failed"))
-			.when(outboxRelayPublisher)
+			.when(kafkaEventProducer)
 			.publish(any());
 		given(outboxEventRepository.markFailed(
 			eq(11L),
@@ -229,7 +229,7 @@ class StockRestoreOutboxServiceTest {
 		)).willReturn(List.of(failedTarget));
 		given(outboxEventRepository.markPublishingFromPending(12L, OutboxEventType.STOCK_RESTORE_REQUESTED)).willReturn(1);
 		doThrow(new IllegalStateException("x".repeat(1500)))
-			.when(outboxRelayPublisher)
+			.when(kafkaEventProducer)
 			.publish(any());
 
 		ArgumentCaptor<String> errorCaptor = ArgumentCaptor.forClass(String.class);
@@ -291,7 +291,7 @@ class StockRestoreOutboxServiceTest {
 		given(outboxEventRepository.markPublishingFromRetryableFailed(
 			20L, OutboxEventType.STOCK_RESTORE_REQUESTED, now
 		)).willReturn(1);
-		doThrow(new IllegalStateException("retry failed")).when(outboxRelayPublisher).publish(any());
+		doThrow(new IllegalStateException("retry failed")).when(kafkaEventProducer).publish(any());
 		given(outboxEventRepository.markFailed(
 			eq(20L),
 			eq(OutboxEventType.STOCK_RESTORE_REQUESTED),
