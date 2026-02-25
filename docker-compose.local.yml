@@ -52,3 +52,14 @@ services:
       KAFKA_LOG_DIRS: /tmp/kraft-combined-logs
     volumes:
       - ./kafka-data-local:/tmp/kraft-combined-logs
+
+  kafka-ui:
+    image: provectuslabs/kafka-ui:latest
+    container_name: commerce-kafka-ui-local
+    ports:
+      - "127.0.0.1:18080:8080"
+    environment:
+      KAFKA_CLUSTERS_0_NAME: commerce-local
+      KAFKA_CLUSTERS_0_BOOTSTRAPSERVERS: kafka:9092 # 같은 compose 네트워크 내부라 internal 통신
+    depends_on:
+      - kafka
