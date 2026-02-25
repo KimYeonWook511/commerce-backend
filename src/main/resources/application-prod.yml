@@ -57,6 +57,13 @@ outbox:
     relay:
       topic: ${PROD_OUTBOX_STOCK_RESTORE_TOPIC:stock-restore-events}
       send-timeout-millis: 5000
+    consumer:
+      group-id: stock-restore-consumer
+      retry:
+        max-attempts: 3
+        initial-interval-millis: 1000
+        multiplier: 2.0
+        max-interval-millis: 10000
     producer:
       cron: "*/10 * * * * *"
       batch-size: 100
