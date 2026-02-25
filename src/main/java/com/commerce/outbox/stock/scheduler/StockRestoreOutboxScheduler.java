@@ -20,14 +20,14 @@ public class StockRestoreOutboxScheduler {
 
 	private final StockRestoreOutboxService stockRestoreOutboxService;
 
-	@Scheduled(cron = "${outbox.stock-restore.publisher.cron:*/10 * * * * *}")
+	@Scheduled(cron = "${outbox.stock-restore.producer.cron:*/10 * * * * *}")
 	public void publishPendingEvents() {
 		LocalDateTime now = LocalDateTime.now();
 		OutboxPublishResult publishResult = stockRestoreOutboxService.publishPendingEvents(now);
 		logPublishResult("outbox-stock-restore-pending-publish", publishResult);
 	}
 
-	@Scheduled(cron = "${outbox.stock-restore.retry-publisher.cron:*/10 * * * * *}")
+	@Scheduled(cron = "${outbox.stock-restore.retry-producer.cron:*/10 * * * * *}")
 	public void publishRetryableFailedEvents() {
 		LocalDateTime now = LocalDateTime.now();
 		OutboxPublishResult publishResult = stockRestoreOutboxService.publishRetryableFailedEvents(now);

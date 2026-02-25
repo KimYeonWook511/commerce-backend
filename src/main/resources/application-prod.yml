@@ -57,10 +57,10 @@ outbox:
     relay:
       topic: ${PROD_OUTBOX_STOCK_RESTORE_TOPIC:stock-restore-events}
       send-timeout-millis: 5000
-    publisher:
+    producer:
       cron: "*/10 * * * * *"
       batch-size: 100
-    retry-publisher:
+    retry-producer:
       cron: "*/10 * * * * *"
     stale-recovery:
       cron: "*/30 * * * * *"

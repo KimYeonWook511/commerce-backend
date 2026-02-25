@@ -16,7 +16,7 @@ import com.commerce.outbox.domain.OutboxEventType;
 import com.commerce.outbox.mq.OutboxRelayMessage;
 import com.commerce.outbox.repository.OutboxEventRepository;
 import com.commerce.outbox.repository.projection.OutboxPublishTarget;
-import com.commerce.outbox.stock.mq.StockRestoreKafkaOutboxRelayPublisher;
+import com.commerce.outbox.stock.mq.StockRestoreKafkaEventProducer;
 import com.commerce.outbox.stock.service.command.StockRestoreOutboxCreateCommand;
 import com.commerce.outbox.stock.service.payload.StockRestoreRequestedPayload;
 import com.commerce.outbox.stock.service.result.OutboxPublishResult;
@@ -34,10 +34,10 @@ public class StockRestoreOutboxService {
 	private static final int MAX_ERROR_LENGTH = 1000;
 	private static final OutboxEventType STOCK_RESTORE_EVENT_TYPE = OutboxEventType.STOCK_RESTORE_REQUESTED;
 	private final OutboxEventRepository outboxEventRepository;
-	private final StockRestoreKafkaOutboxRelayPublisher outboxRelayPublisher;
+	private final StockRestoreKafkaEventProducer kafkaEventProducer;
 	private final ObjectMapper objectMapper;
 
-	@Value("${outbox.stock-restore.publisher.batch-size:100}")
+	@Value("${outbox.stock-restore.producer.batch-size:100}")
 	private int batchSize;
 
 	@Value("${outbox.stock-restore.retry.base-seconds:30}")
@@ -147,7 +147,7 @@ public class StockRestoreOutboxService {
 
 	private PublishResult publishTarget(OutboxPublishTarget target, LocalDateTime now) {
 		try {
-			outboxRelayPublisher.publish(toRelayMessage(target));
+			kafkaEventProducer.publish(toRelayMessage(target));
 			if (!markSent(target)) {
 				return PublishResult.SKIPPED;
 			}
