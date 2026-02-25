@@ -30,6 +30,8 @@ public class StockRestoreKafkaEventConsumer {
 	)
 	public void consume(String message) {
 		OutboxRelayMessage relayMessage = deserializeRelayMessage(message);
+		log.info("Consume stock restore relay message. eventId={}, eventType={}",
+			relayMessage.getEventId(), relayMessage.getEventType());
 		if (relayMessage.getEventType() != OutboxEventType.STOCK_RESTORE_REQUESTED) {
 			log.warn("Skip unsupported outbox event type. eventId={}, eventType={}",
 				relayMessage.getEventId(), relayMessage.getEventType());
@@ -37,7 +39,10 @@ public class StockRestoreKafkaEventConsumer {
 		}
 
 		StockRestoreRequestedPayload payload = deserializePayload(relayMessage.getPayload());
+		int itemCount = payload.getItems() == null ? 0 : payload.getItems().size();
 		stockRestoreOutboxConsumeService.consume(toStockRestoreConsumeCommand(relayMessage, payload));
+		log.info("Consumed stock restore relay message. eventId={}, eventType={}, itemCount={}",
+			relayMessage.getEventId(), relayMessage.getEventType(), itemCount);
 	}
 
 	private StockRestoreConsumeCommand toStockRestoreConsumeCommand(OutboxRelayMessage relayMessage, StockRestoreRequestedPayload payload) {
@@ -58,6 +63,8 @@ public class StockRestoreKafkaEventConsumer {
 		try {
 			return objectMapper.readValue(message, OutboxRelayMessage.class);
 		} catch (IOException ex) {
+			log.warn("Failed to deserialize relay message. messageLength={}",
+				message == null ? 0 : message.length(), ex);
 			throw new IllegalStateException("Failed to deserialize relay message", ex);
 		}
 	}
@@ -66,6 +73,8 @@ public class StockRestoreKafkaEventConsumer {
 		try {
 			return objectMapper.readValue(payload, StockRestoreRequestedPayload.class);
 		} catch (IOException ex) {
+			log.warn("Failed to deserialize stock restore payload. payloadLength={}",
+				payload == null ? 0 : payload.length(), ex);
 			throw new IllegalStateException("Failed to deserialize stock restore payload", ex);
 		}
 	}

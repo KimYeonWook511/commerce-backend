@@ -34,6 +34,8 @@ public class StockRestoreOutboxConsumeService {
 		}
 
 		restoreStock(command.getItems());
+		log.info("Consumed stock restore event. eventId={}, consumerType={}, itemCount={}",
+			command.getEventId(), CONSUMER_TYPE, command.getItems().size());
 	}
 
 	private boolean markProcessed(String eventId) {
