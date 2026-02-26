@@ -35,4 +35,14 @@ public class OutboxRelayMessage {
 		this.payload = payload;
 		this.occurredAt = occurredAt;
 	}
+
+	public boolean hasRequiredFields() {
+		return !isBlank(eventId)
+			&& eventType != null
+			&& !isBlank(payload);
+	}
+
+	private boolean isBlank(String value) {
+		return value == null || value.isBlank();
+	}
 }

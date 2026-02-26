@@ -18,6 +18,7 @@ import org.mockito.InjectMocks;
 import org.mockito.Mock;
 import org.mockito.junit.jupiter.MockitoExtension;
 
+import com.commerce.common.kafka.exception.KafkaConsumeNonRetryableException;
 import com.commerce.outbox.domain.OutboxAggregateType;
 import com.commerce.outbox.domain.OutboxEventType;
 import com.commerce.outbox.mq.OutboxRelayMessage;
@@ -89,8 +90,7 @@ class StockRestoreKafkaEventConsumerTest {
 
 		// when & then
 		assertThatThrownBy(() -> stockRestoreKafkaEventConsumer.consume(relayJson))
-			.isInstanceOf(IllegalStateException.class)
-			.hasMessage("Failed to deserialize relay message");
+			.isInstanceOf(KafkaConsumeNonRetryableException.class);
 		then(stockRestoreOutboxConsumeService).should(never()).consume(org.mockito.ArgumentMatchers.any());
 	}
 
@@ -115,8 +115,34 @@ class StockRestoreKafkaEventConsumerTest {
 
 		// when & then
 		assertThatThrownBy(() -> stockRestoreKafkaEventConsumer.consume(relayJson))
-			.isInstanceOf(IllegalStateException.class)
-			.hasMessage("Failed to deserialize stock restore payload");
+			.isInstanceOf(KafkaConsumeNonRetryableException.class);
+		then(stockRestoreOutboxConsumeService).should(never()).consume(org.mockito.ArgumentMatchers.any());
+	}
+
+	@DisplayName("payload items가 비어있으면 비재시도 예외를 던지고 소비 서비스를 호출하지 않는다")
+	@Test
+	void consume_whenPayloadItemsIsEmpty_throwNonRetryableException() throws Exception {
+		// given
+		String relayJson = "{\"relay\":true}";
+		String payloadJson = "{\"payload\":true}";
+		OutboxRelayMessage relayMessage = OutboxRelayMessage.builder()
+			.eventId("01ARZ3NDEKTSV4RRFFQ69G5FAV")
+			.eventType(OutboxEventType.STOCK_RESTORE_REQUESTED)
+			.aggregateType(OutboxAggregateType.ORDER)
+			.aggregateId(1L)
+			.payload(payloadJson)
+			.occurredAt(LocalDateTime.of(2000, 1, 1, 0, 0))
+			.build();
+		StockRestoreRequestedPayload payload = StockRestoreRequestedPayload.builder()
+			.orderId(1L)
+			.items(List.of())
+			.build();
+		given(objectMapper.readValue(relayJson, OutboxRelayMessage.class)).willReturn(relayMessage);
+		given(objectMapper.readValue(payloadJson, StockRestoreRequestedPayload.class)).willReturn(payload);
+
+		// when & then
+		assertThatThrownBy(() -> stockRestoreKafkaEventConsumer.consume(relayJson))
+			.isInstanceOf(KafkaConsumeNonRetryableException.class);
 		then(stockRestoreOutboxConsumeService).should(never()).consume(org.mockito.ArgumentMatchers.any());
 	}
 

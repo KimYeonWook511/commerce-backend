@@ -35,6 +35,19 @@ public class StockRestoreRequestedPayload {
 			.build();
 	}
 
+	public boolean hasValidItems() {
+		if (items == null || items.isEmpty()) {
+			return false;
+		}
+
+		for (Item item : items) {
+			if (item == null || item.getProductId() == null || item.getQuantity() <= 0) {
+				return false;
+			}
+		}
+		return true;
+	}
+
 	@Getter
 	public static class Item {
 		private Long productId;
