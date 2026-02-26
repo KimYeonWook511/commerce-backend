@@ -11,6 +11,8 @@ import org.mockito.junit.jupiter.MockitoExtension;
 import org.springframework.boot.autoconfigure.kafka.ConcurrentKafkaListenerContainerFactoryConfigurer;
 import org.springframework.kafka.config.ConcurrentKafkaListenerContainerFactory;
 import org.springframework.kafka.core.ConsumerFactory;
+import org.springframework.kafka.core.KafkaOperations;
+import org.springframework.kafka.listener.DeadLetterPublishingRecoverer;
 import org.springframework.kafka.listener.ContainerProperties;
 import org.springframework.kafka.listener.DefaultErrorHandler;
 import org.springframework.test.util.ReflectionTestUtils;
@@ -24,6 +26,9 @@ class StockRestoreKafkaConsumerConfigTest {
 	@Mock
 	private ConsumerFactory<Object, Object> consumerFactory;
 
+	@Mock
+	private KafkaOperations<Object, Object> kafkaOperations;
+
 	@DisplayName("재고 복구 Kafka 리스너 팩토리는 에러 핸들러와 RECORD AckMode를 설정한다")
 	@Test
 	void stockRestoreKafkaListenerContainerFactory_whenCreateFactory_setErrorHandlerAndAckMode() {
@@ -33,7 +38,10 @@ class StockRestoreKafkaConsumerConfigTest {
 		ReflectionTestUtils.setField(config, "multiplier", 2.0d);
 		ReflectionTestUtils.setField(config, "maxIntervalMillis", 10000L);
 		ReflectionTestUtils.setField(config, "maxAttempts", 3);
-		DefaultErrorHandler errorHandler = config.stockRestoreKafkaErrorHandler();
+		ReflectionTestUtils.setField(config, "dltEnabled", true);
+		ReflectionTestUtils.setField(config, "dltSuffix", ".DLT");
+		DeadLetterPublishingRecoverer recoverer = config.stockRestoreDeadLetterPublishingRecoverer(kafkaOperations);
+		DefaultErrorHandler errorHandler = config.stockRestoreKafkaErrorHandler(recoverer);
 
 		// when
 		ConcurrentKafkaListenerContainerFactory<Object, Object> factory =
@@ -53,11 +61,28 @@ class StockRestoreKafkaConsumerConfigTest {
 		ReflectionTestUtils.setField(config, "multiplier", 2.0d);
 		ReflectionTestUtils.setField(config, "maxIntervalMillis", 10000L);
 		ReflectionTestUtils.setField(config, "maxAttempts", 3);
+		ReflectionTestUtils.setField(config, "dltEnabled", true);
+		ReflectionTestUtils.setField(config, "dltSuffix", ".DLT");
 
 		// when
-		DefaultErrorHandler errorHandler = config.stockRestoreKafkaErrorHandler();
+		DeadLetterPublishingRecoverer recoverer = config.stockRestoreDeadLetterPublishingRecoverer(kafkaOperations);
+		DefaultErrorHandler errorHandler = config.stockRestoreKafkaErrorHandler(recoverer);
 
 		// then
 		assertThat(errorHandler).isNotNull();
+	}
+
+	@DisplayName("재고 복구 Kafka DLT recoverer를 생성한다")
+	@Test
+	void stockRestoreDeadLetterPublishingRecoverer_whenCreate_returnRecoverer() {
+		// given
+		StockRestoreKafkaConsumerConfig config = new StockRestoreKafkaConsumerConfig();
+		ReflectionTestUtils.setField(config, "dltSuffix", ".DLT");
+
+		// when
+		DeadLetterPublishingRecoverer recoverer = config.stockRestoreDeadLetterPublishingRecoverer(kafkaOperations);
+
+		// then
+		assertThat(recoverer).isNotNull();
 	}
 }

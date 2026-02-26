@@ -55,6 +55,9 @@ outbox:
       send-timeout-millis: 5000
     consumer:
       group-id: stock-restore-consumer
+      dlt:
+        enabled: true
+        suffix: .DLT
       retry:
         max-attempts: 3
         initial-interval-millis: 1000

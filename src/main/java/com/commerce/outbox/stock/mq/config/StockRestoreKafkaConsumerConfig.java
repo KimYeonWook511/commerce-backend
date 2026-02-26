@@ -1,18 +1,25 @@
 package com.commerce.outbox.stock.mq.config;
 
+import org.apache.kafka.clients.consumer.ConsumerRecord;
+import org.apache.kafka.common.TopicPartition;
 import org.springframework.beans.factory.annotation.Value;
 import org.springframework.boot.autoconfigure.kafka.ConcurrentKafkaListenerContainerFactoryConfigurer;
 import org.springframework.context.annotation.Bean;
 import org.springframework.context.annotation.Configuration;
 import org.springframework.kafka.config.ConcurrentKafkaListenerContainerFactory;
 import org.springframework.kafka.core.ConsumerFactory;
+import org.springframework.kafka.core.KafkaOperations;
+import org.springframework.kafka.listener.DeadLetterPublishingRecoverer;
 import org.springframework.kafka.listener.ContainerProperties;
 import org.springframework.kafka.listener.DefaultErrorHandler;
 import org.springframework.kafka.support.ExponentialBackOffWithMaxRetries;
 
 import com.commerce.common.exception.KafkaConsumeNonRetryableException;
 
+import lombok.extern.slf4j.Slf4j;
+
 @Configuration
+@Slf4j
 public class StockRestoreKafkaConsumerConfig {
 
 	@Value("${outbox.stock-restore.consumer.retry.initial-interval-millis:1000}")
@@ -27,10 +34,41 @@ public class StockRestoreKafkaConsumerConfig {
 	@Value("${outbox.stock-restore.consumer.retry.max-attempts:3}")
 	private int maxAttempts;
 
+	@Value("${outbox.stock-restore.consumer.dlt.enabled:true}")
+	private boolean dltEnabled;
+
+	@Value("${outbox.stock-restore.consumer.dlt.suffix:.DLT}")
+	private String dltSuffix;
+
 	@Bean
-	public DefaultErrorHandler stockRestoreKafkaErrorHandler() {
+	public DeadLetterPublishingRecoverer stockRestoreDeadLetterPublishingRecoverer(
+		KafkaOperations<Object, Object> kafkaOperations
+	) {
+		return new DeadLetterPublishingRecoverer(
+			kafkaOperations,
+			(ConsumerRecord<?, ?> record, Exception ex) -> {
+				TopicPartition topicPartition = new TopicPartition(record.topic() + dltSuffix, record.partition());
+				log.warn(
+					"Route failed kafka record to DLT. sourceTopic={}, dltTopic={}, partition={}, offset={}, exception={}",
+					record.topic(),
+					topicPartition.topic(),
+					record.partition(),
+					record.offset(),
+					ex.getClass().getSimpleName()
+				);
+				return topicPartition;
+			}
+		);
+	}
+
+	@Bean
+	public DefaultErrorHandler stockRestoreKafkaErrorHandler(
+		DeadLetterPublishingRecoverer stockRestoreDeadLetterPublishingRecoverer
+	) {
 		// 비재시도 예외는 즉시 중단하고, 그 외 예외는 백오프 정책으로 재시도한다.
-		DefaultErrorHandler errorHandler = new DefaultErrorHandler(stockRestoreConsumerBackOff());
+		DefaultErrorHandler errorHandler = dltEnabled
+			? new DefaultErrorHandler(stockRestoreDeadLetterPublishingRecoverer, stockRestoreConsumerBackOff())
+			: new DefaultErrorHandler(stockRestoreConsumerBackOff());
 		errorHandler.addNotRetryableExceptions(KafkaConsumeNonRetryableException.class);
 		return errorHandler;
 	}
