@@ -18,7 +18,7 @@ import org.mockito.InjectMocks;
 import org.mockito.Mock;
 import org.mockito.junit.jupiter.MockitoExtension;
 
-import com.commerce.common.exception.KafkaConsumeNonRetryableException;
+import com.commerce.common.kafka.exception.KafkaConsumeNonRetryableException;
 import com.commerce.outbox.domain.OutboxAggregateType;
 import com.commerce.outbox.domain.OutboxEventType;
 import com.commerce.outbox.mq.OutboxRelayMessage;

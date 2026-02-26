@@ -14,7 +14,7 @@ import org.springframework.kafka.listener.ContainerProperties;
 import org.springframework.kafka.listener.DefaultErrorHandler;
 import org.springframework.kafka.support.ExponentialBackOffWithMaxRetries;
 
-import com.commerce.common.exception.KafkaConsumeNonRetryableException;
+import com.commerce.common.kafka.exception.KafkaConsumeNonRetryableException;
 
 import lombok.extern.slf4j.Slf4j;
 

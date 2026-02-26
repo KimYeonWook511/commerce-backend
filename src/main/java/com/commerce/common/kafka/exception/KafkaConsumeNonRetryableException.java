@@ -1,4 +1,4 @@
-package com.commerce.common.exception;
+package com.commerce.common.kafka.exception;
 
 public class KafkaConsumeNonRetryableException extends RuntimeException {
 

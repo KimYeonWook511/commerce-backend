@@ -6,7 +6,7 @@ import java.util.List;
 import org.springframework.kafka.annotation.KafkaListener;
 import org.springframework.stereotype.Component;
 
-import com.commerce.common.exception.KafkaConsumeNonRetryableException;
+import com.commerce.common.kafka.exception.KafkaConsumeNonRetryableException;
 import com.commerce.outbox.domain.OutboxEventType;
 import com.commerce.outbox.mq.OutboxRelayMessage;
 import com.commerce.outbox.stock.service.StockRestoreOutboxConsumeService;
