@@ -7,6 +7,7 @@ import org.springframework.stereotype.Service;
 import org.springframework.transaction.annotation.Propagation;
 import org.springframework.transaction.annotation.Transactional;
 
+import com.commerce.common.util.UlidGenerator;
 import com.commerce.order.domain.Order;
 import com.commerce.order.domain.OrderStatus;
 import com.commerce.order.exception.OrderErrorCode;
@@ -40,10 +41,8 @@ public class PaymentService {
 		Order order = orderRepository.findByIdAndMemberIdWithItems(command.getOrderId(), command.getMemberId())
 			.orElseThrow(() -> new OrderException(OrderErrorCode.ORDER_NOT_FOUND));
 
-		// 결제 생성하기
-		Payment payment = paymentRepository.save(
-			Payment.create(order, order.getTotalPrice(), command.getProvider())
-		);
+		// 주문 결제 키 가져오기
+		String merchantPayKey = getOrCreateMerchantPayKey(order);
 
 		// 결제 수단에 맞는 프로퍼티 가져오기
 		PaymentProviderProperties properties = propertiesResolver.resolve(command.getProvider());
@@ -56,13 +55,13 @@ public class PaymentService {
 		return PaymentReadyResult.builder()
 			.clientId(properties.getClientId())
 			.chainId(properties.getChainId())
-			.merchantPayKey(payment.getMerchantPayKey())
+			.merchantPayKey(merchantPayKey)
 			.productName(buildProductName(items))
 			.productCount(productCount)
 			.totalPayAmount(totalPayAmount)
 			.taxScopeAmount(totalPayAmount)
 			.taxExScopeAmount(0)
-			.returnUrl(buildReturnUrl(properties.getReturnUrl(), payment.getMerchantPayKey()))
+			.returnUrl(buildReturnUrl(properties.getReturnUrl(), merchantPayKey))
 			.build();
 	}
 
@@ -128,5 +127,12 @@ public class PaymentService {
 
 	private String buildReturnUrl(String baseUrl, String merchantPayKey) {
 		return baseUrl + "?merchantPayKey=" + merchantPayKey;
+	}
+
+	private String getOrCreateMerchantPayKey(Order order) {
+		if (order.getMerchantPayKey() == null) {
+			order.assignMerchantPayKey("PAY-" + UlidGenerator.generate());
+		}
+		return order.getMerchantPayKey();
 	}
 }

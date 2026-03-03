@@ -53,6 +53,9 @@ public class Order extends BaseTimeEntity {
 	@Column(nullable = false)
 	private OrderStatus status;
 
+	@Column(unique = true)
+	private String merchantPayKey;
+
 	@OneToMany(mappedBy = "order", cascade = CascadeType.ALL, orphanRemoval = true)
 	private List<OrderItem> orderItems = new ArrayList<>();
 
@@ -95,6 +98,12 @@ public class Order extends BaseTimeEntity {
 	public void cancelIfPaid() {
 		if (this.status == OrderStatus.PAID) {
 			this.status = OrderStatus.CANCELED;
+		}
+	}
+
+	public void assignMerchantPayKey(String merchantPayKey) {
+		if (this.merchantPayKey == null) {
+			this.merchantPayKey = merchantPayKey;
 		}
 	}
 
