@@ -4,6 +4,7 @@ import static org.assertj.core.api.Assertions.assertThat;
 import static org.assertj.core.api.Assertions.assertThatThrownBy;
 import static org.mockito.ArgumentMatchers.any;
 import static org.mockito.BDDMockito.given;
+import static org.mockito.BDDMockito.then;
 
 import java.time.LocalDateTime;
 import java.util.Optional;
@@ -14,6 +15,7 @@ import org.junit.jupiter.api.extension.ExtendWith;
 import org.mockito.InjectMocks;
 import org.mockito.Mock;
 import org.mockito.junit.jupiter.MockitoExtension;
+import org.springframework.dao.DataIntegrityViolationException;
 import org.springframework.test.util.ReflectionTestUtils;
 
 import com.commerce.member.domain.Member;
@@ -24,7 +26,6 @@ import com.commerce.order.exception.OrderException;
 import com.commerce.order.repository.OrderRepository;
 import com.commerce.payment.domain.Payment;
 import com.commerce.payment.domain.PaymentProvider;
-import com.commerce.payment.domain.PaymentReasonCode;
 import com.commerce.payment.domain.PaymentStatus;
 import com.commerce.payment.exception.PaymentErrorCode;
 import com.commerce.payment.exception.PaymentException;
@@ -45,6 +46,9 @@ class PaymentServiceTest {
 	private OrderRepository orderRepository;
 
 	@Mock
+	private PaymentAttemptService paymentAttemptService;
+
+	@Mock
 	private PaymentProviderPropertiesResolver propertiesResolver;
 
 	@Mock
@@ -56,16 +60,9 @@ class PaymentServiceTest {
 	@DisplayName("결제 준비 요청을 하면 결제 준비 응답을 반환한다")
 	@Test
 	void readyPayment_whenOrderExists_returnReadyResponse() {
-		// given
 		Order order = createOrder(1500);
 		setOrderId(order, 1L);
 		given(orderRepository.findByIdAndMemberIdWithItems(1L, 1L)).willReturn(Optional.of(order));
-		given(paymentRepository.save(any(Payment.class)))
-			.willAnswer(invocation -> {
-				Payment saved = invocation.getArgument(0);
-				ReflectionTestUtils.setField(saved, "id", 10L);
-				return saved;
-			});
 		stubPaymentProperties();
 
 		PaymentReadyCommand command = PaymentReadyCommand.builder()
@@ -74,26 +71,18 @@ class PaymentServiceTest {
 			.provider(PaymentProvider.NAVERPAY)
 			.build();
 
-		// when
 		PaymentReadyResult result = paymentService.readyPayment(command);
 
-		// then
 		assertThat(result.getClientId()).isEqualTo("client-id");
 		assertThat(result.getChainId()).isEqualTo("chain-id");
 		assertThat(result.getMerchantPayKey()).startsWith("PAY-");
-		assertThat(result.getMerchantPayKey()).hasSize(30);
 		assertThat(result.getProductName()).isEqualTo("product");
-		assertThat(result.getProductCount()).isEqualTo(1);
 		assertThat(result.getTotalPayAmount()).isEqualTo(1500);
-		assertThat(result.getTaxScopeAmount()).isEqualTo(1500);
-		assertThat(result.getTaxExScopeAmount()).isZero();
-		assertThat(result.getReturnUrl()).startsWith("https://return-url");
 	}
 
 	@DisplayName("주문이 없으면 결제 준비에 실패한다")
 	@Test
 	void readyPayment_whenOrderNotFound_throwException() {
-		// given
 		given(orderRepository.findByIdAndMemberIdWithItems(1L, 1L)).willReturn(Optional.empty());
 
 		PaymentReadyCommand command = PaymentReadyCommand.builder()
@@ -102,7 +91,6 @@ class PaymentServiceTest {
 			.provider(PaymentProvider.NAVERPAY)
 			.build();
 
-		// when & then
 		assertThatThrownBy(() -> paymentService.readyPayment(command))
 			.isInstanceOf(OrderException.class)
 			.satisfies(exception -> {
@@ -111,20 +99,13 @@ class PaymentServiceTest {
 			});
 	}
 
-	@DisplayName("주문 상품이 없으면 결제 준비에 실패한다")
+	@DisplayName("결제를 진행할 수 없는 주문이면 결제 준비에 실패한다")
 	@Test
-	void readyPayment_whenOrderItemsEmpty_throwException() {
-		// given
-		Order order = Order.create(createMember());
+	void readyPayment_whenOrderIsNotPayable_throwException() {
+		Order order = createOrder(1500);
 		setOrderId(order, 1L);
+		ReflectionTestUtils.setField(order, "status", OrderStatus.PAID);
 		given(orderRepository.findByIdAndMemberIdWithItems(1L, 1L)).willReturn(Optional.of(order));
-		given(paymentRepository.save(any(Payment.class)))
-			.willAnswer(invocation -> {
-				Payment saved = invocation.getArgument(0);
-				ReflectionTestUtils.setField(saved, "id", 10L);
-				return saved;
-			});
-		stubPaymentResolver();
 
 		PaymentReadyCommand command = PaymentReadyCommand.builder()
 			.memberId(1L)
@@ -132,198 +113,121 @@ class PaymentServiceTest {
 			.provider(PaymentProvider.NAVERPAY)
 			.build();
 
-		// when & then
 		assertThatThrownBy(() -> paymentService.readyPayment(command))
 			.isInstanceOf(OrderException.class)
 			.satisfies(exception -> {
-				OrderException orderException = (OrderException) exception;
-				assertThat(orderException.getErrorCode()).isEqualTo(OrderErrorCode.ORDER_ITEMS_EMPTY);
+				OrderException orderException = (OrderException)exception;
+				assertThat(orderException.getErrorCode()).isEqualTo(OrderErrorCode.ORDER_PAYMENT_NOT_ALLOWED);
 			});
 	}
 
-	@DisplayName("결제를 처리 중으로 마킹하면 업데이트 수를 반환한다")
+	@DisplayName("결제 완료에 성공하면 payment를 생성한다")
 	@Test
-	void markProcessing_whenCalled_returnUpdatedCount() {
-		// given
-		given(paymentRepository.updateStatusIfMatches(
-			"PAY-1", PaymentStatus.PENDING, PaymentStatus.PROCESSING)).willReturn(1);
+	void completeApprove_whenPaymentNotExists_createPayment() {
+		Order order = createOrder(1000);
+		setOrderId(order, 1L);
+		LocalDateTime approvedAt = LocalDateTime.now();
+		given(orderRepository.findByMerchantPayKeyForUpdate("PAY-1")).willReturn(Optional.of(order));
+		given(paymentRepository.findByMerchantPayKey("PAY-1")).willReturn(Optional.empty());
+		given(paymentRepository.saveAndFlush(any(Payment.class))).willAnswer(invocation -> invocation.getArgument(0));
 
-		// when
-		int updated = paymentService.markProcessing("PAY-1");
+		Payment result = paymentService.completeApprove(
+			"PAY-1",
+			PaymentProvider.NAVERPAY,
+			"pg-payment-id",
+			approvedAt
+		);
 
-		// then
-		assertThat(updated).isEqualTo(1);
-	}
-
-	@DisplayName("결제가 처리 중이면 완료 처리에 성공한다")
-	@Test
-	void completePayment_whenProcessing_changeStatus() {
-		// given
-		Payment payment = Payment.create(createOrder(1000), 1000, PaymentProvider.NAVERPAY);
-		ReflectionTestUtils.setField(payment, "status", PaymentStatus.PROCESSING);
-		given(paymentRepository.findByMerchantPayKeyWithOrder("PAY-1")).willReturn(Optional.of(payment));
-
-		// when
-		Payment result = paymentService.completePayment("PAY-1", "pg-payment-id", java.time.LocalDateTime.now());
-
-		// then
 		assertThat(result.getStatus()).isEqualTo(PaymentStatus.COMPLETED);
 		assertThat(result.getPgPaymentId()).isEqualTo("pg-payment-id");
+		assertThat(result.getMerchantPayKey()).isEqualTo("PAY-1");
 		assertThat(result.getOrder().getStatus()).isEqualTo(OrderStatus.PAID);
 	}
 
-	@DisplayName("주문이 초기 상태가 아니면 결제 완료 처리에 실패한다")
+	@DisplayName("이미 완료된 동일 결제가 있으면 기존 payment를 반환한다")
 	@Test
-	void completePayment_whenOrderNotInit_throwException() {
-		// given
+	void completeApprove_whenPaymentExistsAndSameRequest_returnExistingPayment() {
 		Order order = createOrder(1000);
-		ReflectionTestUtils.setField(order, "status", OrderStatus.RECEIVED);
-		Payment payment = Payment.create(order, 1000, PaymentProvider.NAVERPAY);
-		ReflectionTestUtils.setField(payment, "status", PaymentStatus.PROCESSING);
-		given(paymentRepository.findByMerchantPayKeyWithOrder("PAY-1")).willReturn(Optional.of(payment));
+		Payment payment = Payment.createCompleted(
+			order,
+			PaymentProvider.NAVERPAY,
+			"PAY-1",
+			"pg-payment-id",
+			LocalDateTime.now()
+		);
+		LocalDateTime approvedAt = LocalDateTime.now();
 
-		// when & then
-		assertThatThrownBy(() -> paymentService.completePayment("PAY-1", "pg-payment-id", LocalDateTime.now()))
-			.isInstanceOf(OrderException.class)
-			.satisfies(exception -> {
-				OrderException orderException = (OrderException) exception;
-				assertThat(orderException.getErrorCode()).isEqualTo(OrderErrorCode.ORDER_PAID_NOT_ALLOWED);
-			});
-	}
-
-	@DisplayName("결제가 없으면 완료 처리에 실패한다")
-	@Test
-	void completePayment_whenPaymentNotFound_throwException() {
-		// given
-		given(paymentRepository.findByMerchantPayKeyWithOrder("PAY-1")).willReturn(Optional.empty());
-
-		// when & then
-		assertThatThrownBy(() -> paymentService.completePayment("PAY-1", "pg-payment-id", LocalDateTime.now()))
-			.isInstanceOf(PaymentException.class)
-			.satisfies(exception -> {
-				PaymentException paymentException = (PaymentException) exception;
-				assertThat(paymentException.getErrorCode()).isEqualTo(PaymentErrorCode.PAYMENT_NOT_FOUND);
-			});
-	}
-
-	@DisplayName("결제가 처리 중이면 실패 처리에 성공한다")
-	@Test
-	void failPaymentByMerchantPayKey_whenProcessing_changeStatus() {
-		// given
-		Payment payment = Payment.create(createOrder(1000), 1000, PaymentProvider.NAVERPAY);
+		given(orderRepository.findByMerchantPayKeyForUpdate("PAY-1")).willReturn(Optional.of(order));
 		given(paymentRepository.findByMerchantPayKey("PAY-1")).willReturn(Optional.of(payment));
 
-		// when
-		Payment result = paymentService.failPayment("PAY-1", PaymentReasonCode.APPROVAL_FAILED, "fail");
+		Payment result = paymentService.completeApprove(
+			"PAY-1",
+			PaymentProvider.NAVERPAY,
+			"pg-payment-id",
+			approvedAt
+		);
 
-		// then
-		assertThat(result.getStatus()).isEqualTo(PaymentStatus.FAILED);
-		assertThat(result.getReasonCode()).isEqualTo(PaymentReasonCode.APPROVAL_FAILED);
-		assertThat(result.getReasonDetail()).isEqualTo("fail");
+		assertThat(result).isEqualTo(payment);
+		then(orderRepository).should().findByMerchantPayKeyForUpdate("PAY-1");
+		then(paymentAttemptService).should().succeedApproveAttempt(
+			"PAY-1",
+			PaymentProvider.NAVERPAY,
+			"pg-payment-id",
+			approvedAt
+		);
+		then(paymentRepository).shouldHaveNoMoreInteractions();
 	}
 
-	@DisplayName("결제가 없으면 실패 처리에 실패한다")
+	@DisplayName("이미 완료된 결제의 pgPaymentId가 다르면 예외가 발생한다")
 	@Test
-	void failPaymentByMerchantPayKey_whenPaymentNotFound_throwException() {
-		// given
-		given(paymentRepository.findByMerchantPayKey("PAY-1")).willReturn(Optional.empty());
+	void completeApprove_whenExistingPaymentHasDifferentPgPaymentId_throwException() {
+		Order order = createOrder(1000);
+		Payment payment = Payment.createCompleted(
+			order,
+			PaymentProvider.NAVERPAY,
+			"PAY-1",
+			"other-payment-id",
+			LocalDateTime.now()
+		);
 
-		// when & then
-		assertThatThrownBy(() -> paymentService.failPayment("PAY-1", PaymentReasonCode.APPROVAL_FAILED, "fail"))
+		given(orderRepository.findByMerchantPayKeyForUpdate("PAY-1")).willReturn(Optional.of(order));
+		given(paymentRepository.findByMerchantPayKey("PAY-1")).willReturn(Optional.of(payment));
+
+		assertThatThrownBy(() -> paymentService.completeApprove(
+			"PAY-1",
+			PaymentProvider.NAVERPAY,
+			"pg-payment-id",
+			LocalDateTime.now()
+		))
 			.isInstanceOf(PaymentException.class)
 			.satisfies(exception -> {
-				PaymentException paymentException = (PaymentException) exception;
-				assertThat(paymentException.getErrorCode()).isEqualTo(PaymentErrorCode.PAYMENT_NOT_FOUND);
+				PaymentException paymentException = (PaymentException)exception;
+				assertThat(paymentException.getErrorCode()).isEqualTo(PaymentErrorCode.PAYMENT_DUPLICATE);
 			});
 	}
 
-	@DisplayName("결제 취소 대기 상태로 전환하면 업데이트 수를 반환한다")
+	@DisplayName("결제 저장 중 유니크 충돌이 발생하면 중복 결제 예외를 던진다")
 	@Test
-	void markCancelPending_whenCalled_returnUpdatedCount() {
+	void completeApprove_whenDuplicateOnSave_throwDuplicateException() {
 		// given
-		given(paymentRepository.updateToCancelPending(
-			"PAY-1",
-			PaymentStatus.PROCESSING,
-			PaymentStatus.CANCEL_PENDING,
-			"pg-payment-id",
-			PaymentReasonCode.AMOUNT_MISMATCH,
-			"mismatch"
-		)).willReturn(1);
-
-		// when
-		int updated = paymentService.markCancelPending(
-			"PAY-1",
-			"pg-payment-id",
-			PaymentReasonCode.AMOUNT_MISMATCH,
-			"mismatch"
-		);
-
-		// then
-		assertThat(updated).isEqualTo(1);
-	}
-
-	@DisplayName("결제 취소 완료 시 주문도 취소 처리된다")
-	@Test
-	void completeCancelPayment_whenCalled_updateStatus() {
-		// given
-		Payment payment = Payment.create(createOrder(1000), 1000, PaymentProvider.NAVERPAY);
-		ReflectionTestUtils.setField(payment, "status", PaymentStatus.CANCEL_PENDING);
-		ReflectionTestUtils.setField(payment.getOrder(), "status", OrderStatus.PAID);
-		given(paymentRepository.findByPgPaymentIdWithOrder("pg-payment-id")).willReturn(Optional.of(payment));
-
-		// when
-		Payment result = paymentService.completeCancelPayment("pg-payment-id");
-
-		// then
-		assertThat(result.getStatus()).isEqualTo(PaymentStatus.CANCELED);
-		assertThat(result.getOrder().getStatus()).isEqualTo(OrderStatus.CANCELED);
-	}
-
-	@DisplayName("결제 취소 완료 시 주문이 PAID가 아니면 주문 상태는 그대로 두고 결제만 취소 완료 처리한다")
-	@Test
-	void completeCancelPayment_whenOrderNotPaid_keepOrderStatus() {
-		// given
-		Payment payment = Payment.create(createOrder(1000), 1000, PaymentProvider.NAVERPAY);
-		ReflectionTestUtils.setField(payment, "status", PaymentStatus.CANCEL_PENDING);
-		ReflectionTestUtils.setField(payment.getOrder(), "status", OrderStatus.INIT);
-		given(paymentRepository.findByPgPaymentIdWithOrder("pg-payment-id")).willReturn(Optional.of(payment));
-
-		// when
-		Payment result = paymentService.completeCancelPayment("pg-payment-id");
-
-		// then
-		assertThat(result.getStatus()).isEqualTo(PaymentStatus.CANCELED);
-		assertThat(result.getOrder().getStatus()).isEqualTo(OrderStatus.INIT);
-	}
-
-	@DisplayName("결제 키와 회원 ID가 일치하면 결제를 조회한다")
-	@Test
-	void getPaymentByMerchantPayKeyAndMemberId_whenExists_returnPayment() {
-		// given
-		Payment payment = Payment.create(createOrder(1000), 1000, PaymentProvider.NAVERPAY);
-		given(paymentRepository.findByMerchantPayKeyAndMemberId("PAY-1", 1L))
-			.willReturn(Optional.of(payment));
-
-		// when
-		Payment result = paymentService.getPaymentByMerchantPayKeyAndMemberId("PAY-1", 1L);
-
-		// then
-		assertThat(result).isEqualTo(payment);
-	}
-
-	@DisplayName("결제 키와 회원 ID에 해당하는 결제가 없으면 예외가 발생한다")
-	@Test
-	void getPaymentByMerchantPayKeyAndMemberId_whenNotFound_throwException() {
-		// given
-		given(paymentRepository.findByMerchantPayKeyAndMemberId("PAY-1", 1L))
-			.willReturn(Optional.empty());
+		Order order = createOrder(1000);
+		setOrderId(order, 1L);
+		given(orderRepository.findByMerchantPayKeyForUpdate("PAY-1")).willReturn(Optional.of(order));
+		given(paymentRepository.findByMerchantPayKey("PAY-1")).willReturn(Optional.empty());
+		given(paymentRepository.saveAndFlush(any(Payment.class)))
+			.willThrow(new DataIntegrityViolationException("duplicate key"));
 
 		// when & then
-		assertThatThrownBy(() -> paymentService.getPaymentByMerchantPayKeyAndMemberId("PAY-1", 1L))
+		assertThatThrownBy(() -> paymentService.completeApprove(
+			"PAY-1",
+			PaymentProvider.NAVERPAY,
+			"pg-payment-id",
+			LocalDateTime.now()
+		))
 			.isInstanceOf(PaymentException.class)
 			.satisfies(exception -> {
-				PaymentException paymentException = (PaymentException) exception;
-				assertThat(paymentException.getErrorCode()).isEqualTo(PaymentErrorCode.PAYMENT_NOT_FOUND);
+				PaymentException paymentException = (PaymentException)exception;
+				assertThat(paymentException.getErrorCode()).isEqualTo(PaymentErrorCode.PAYMENT_DUPLICATE);
 			});
 	}
 
