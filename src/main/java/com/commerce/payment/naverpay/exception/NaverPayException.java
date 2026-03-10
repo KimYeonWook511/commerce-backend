@@ -14,10 +14,6 @@ public class NaverPayException extends RuntimeException {
 		this.errorCode = errorCode;
 	}
 
-	public boolean isRetryable() {
-		return errorCode.isRetryable();
-	}
-
 	public NaverPayErrorCode getErrorCode() {
 		return errorCode;
 	}
