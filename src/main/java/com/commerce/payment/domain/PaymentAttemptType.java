@@ -1,0 +1,13 @@
+package com.commerce.payment.domain;
+
+import lombok.Getter;
+import lombok.RequiredArgsConstructor;
+
+@Getter
+@RequiredArgsConstructor
+public enum PaymentAttemptType {
+	APPROVE("승인"),
+	CANCEL("취소");
+
+	private final String description;
+}

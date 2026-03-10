@@ -114,8 +114,51 @@ class PaymentControllerTest {
 				.content(requestBody))
 			.andExpect(status().isBadRequest())
 			.andExpect(jsonPath("$.code").value("PAYMENT-400-1"))
-			.andExpect(jsonPath("$.message").value("지원하지 않는 결제 수단입니다"))
-			.andExpect(jsonPath("$.data").doesNotExist());
+				.andExpect(jsonPath("$.message").value("지원하지 않는 결제 수단입니다"))
+				.andExpect(jsonPath("$.data").doesNotExist());
+	}
+
+	@DisplayName("주문 ID가 없으면 요청 값 검증에 실패한다")
+	@Test
+	void readyPayment_whenOrderIdIsNull_returnBadRequest() throws Exception {
+		// given
+		stubForValidToken();
+		String requestBody = """
+			{
+			  "provider": "NAVERPAY"
+			}
+			""";
+
+		// when & then
+		mockMvc.perform(post("/payments/ready")
+				.header("Authorization", "Bearer access-token")
+				.contentType(MediaType.APPLICATION_JSON)
+				.content(requestBody))
+			.andExpect(status().isBadRequest())
+			.andExpect(jsonPath("$.code").value("COMMON-400"))
+			.andExpect(jsonPath("$.data.orderId").value("주문 ID는 필수입니다"));
+	}
+
+	@DisplayName("결제 수단이 비어있으면 요청 값 검증에 실패한다")
+	@Test
+	void readyPayment_whenProviderIsBlank_returnBadRequest() throws Exception {
+		// given
+		stubForValidToken();
+		String requestBody = """
+			{
+			  "orderId": 1,
+			  "provider": " "
+			}
+			""";
+
+		// when & then
+		mockMvc.perform(post("/payments/ready")
+				.header("Authorization", "Bearer access-token")
+				.contentType(MediaType.APPLICATION_JSON)
+				.content(requestBody))
+			.andExpect(status().isBadRequest())
+			.andExpect(jsonPath("$.code").value("COMMON-400"))
+			.andExpect(jsonPath("$.data.provider").value("결제 수단은 필수입니다"));
 	}
 
 	private void stubForValidToken() {

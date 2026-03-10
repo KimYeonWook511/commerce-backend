@@ -122,6 +122,11 @@ public class OrderService {
 		}
 	}
 
+	public Order getOrderByMerchantPayKeyAndMemberId(String merchantPayKey, Long memberId) {
+		return orderRepository.findByMerchantPayKeyAndMemberId(merchantPayKey, memberId)
+			.orElseThrow(() -> new OrderException(OrderErrorCode.ORDER_NOT_FOUND));
+	}
+
 	@Transactional
 	public OrderCreateResult createOrderWithoutLock(OrderCreateCommand command) {
 		return createOrderWithStockDecrease(command, stockService::decrease);

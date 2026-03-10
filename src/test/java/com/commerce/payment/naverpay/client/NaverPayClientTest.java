@@ -35,6 +35,10 @@ class NaverPayClientTest {
 
 	private static final String APPROVAL_URL = "https://test.naverpay/naverpay-partner/naverpay/payments/v2.2/apply/payment";
 	private static final String CANCEL_URL = "https://test.naverpay/naverpay-partner/naverpay/payments/v1/cancel";
+	private static final String PAYMENT_HISTORY_URL =
+		"https://test.naverpay/naverpay-partner/naverpay/payments/v2.2/list/history/{paymentId}";
+	private static final String RESOLVED_PAYMENT_HISTORY_URL =
+		"https://test.naverpay/naverpay-partner/naverpay/payments/v2.2/list/history/pg-payment-id";
 
 	private NaverPayClient client;
 	private MockRestServiceServer server;
@@ -47,6 +51,7 @@ class NaverPayClientTest {
 		ReflectionTestUtils.setField(naverPayProperties, "chainId", "chain-id");
 		ReflectionTestUtils.setField(naverPayProperties, "approvalUrl", APPROVAL_URL);
 		ReflectionTestUtils.setField(naverPayProperties, "cancelUrl", CANCEL_URL);
+		ReflectionTestUtils.setField(naverPayProperties, "paymentHistoryUrl", PAYMENT_HISTORY_URL);
 		RestTemplate restTemplate = new RestTemplate();
 		ObjectMapper objectMapper = new ObjectMapper();
 
@@ -124,7 +129,7 @@ class NaverPayClientTest {
 	@Test
 	void approve_whenNetworkError_throwException() {
 		RestTemplate failingRestTemplate = mock(RestTemplate.class);
-		when(failingRestTemplate.postForObject(
+		when(failingRestTemplate.postForEntity(
 			eq(APPROVAL_URL),
 			any(),
 			eq(String.class)))
@@ -208,7 +213,7 @@ class NaverPayClientTest {
 	@Test
 	void cancel_whenNetworkError_throwException() {
 		RestTemplate failingRestTemplate = mock(RestTemplate.class);
-		when(failingRestTemplate.postForObject(
+		when(failingRestTemplate.postForEntity(
 			eq(CANCEL_URL),
 			any(),
 			eq(String.class)))
@@ -220,6 +225,57 @@ class NaverPayClientTest {
 			.isInstanceOfSatisfying(NaverPayException.class, ex -> {
 				assertThat(ex.getErrorCode()).isEqualTo(NaverPayErrorCode.NETWORK);
 			});
+	}
+
+	@DisplayName("결제내역 조회 요청이 성공하면 응답이 매핑된다")
+	@Test
+	void getApprovalHistory_whenSuccess_mapResponse() {
+		server.expect(requestTo(RESOLVED_PAYMENT_HISTORY_URL))
+			.andExpect(method(HttpMethod.POST))
+			.andRespond(withSuccess(historySuccessResponse(), MediaType.APPLICATION_JSON));
+
+		var response = client.getApprovalHistory("pg-payment-id");
+
+		assertThat(response.getCode()).isEqualTo("Success");
+		assertThat(response.getBody()).isNotNull();
+		assertThat(response.getBody().getList()).isNotEmpty();
+		assertThat(response.getBody().getList().getFirst().getMerchantPayKey()).isEqualTo("PAY-TEST");
+	}
+
+	@DisplayName("결제내역 조회 응답 코드가 InvalidMerchant면 코드가 그대로 매핑된다")
+	@Test
+	void getApprovalHistory_whenInvalidMerchantCode_mapResponse() {
+		server.expect(requestTo(RESOLVED_PAYMENT_HISTORY_URL))
+			.andExpect(method(HttpMethod.POST))
+			.andRespond(withSuccess("""
+				{
+				  "code": "InvalidMerchant",
+				  "message": "유효하지 않은 가맹점",
+				  "body": null
+				}
+				""", MediaType.APPLICATION_JSON));
+
+		var response = client.getApprovalHistory("pg-payment-id");
+
+		assertThat(response.getCode()).isEqualTo("InvalidMerchant");
+	}
+
+	@DisplayName("결제내역 조회 응답 코드가 MaintenanceOngoing이면 코드가 그대로 매핑된다")
+	@Test
+	void getApprovalHistory_whenMaintenanceCode_mapResponse() {
+		server.expect(requestTo(RESOLVED_PAYMENT_HISTORY_URL))
+			.andExpect(method(HttpMethod.POST))
+			.andRespond(withSuccess("""
+				{
+				  "code": "MaintenanceOngoing",
+				  "message": "서비스 점검중",
+				  "body": null
+				}
+				""", MediaType.APPLICATION_JSON));
+
+		var response = client.getApprovalHistory("pg-payment-id");
+
+		assertThat(response.getCode()).isEqualTo("MaintenanceOngoing");
 	}
 
 	private static String successResponse() {
@@ -248,6 +304,30 @@ class NaverPayClientTest {
 			    "payHistId": "cancel-hist-id",
 			    "cancelYmdt": "20260204123000",
 			    "totalRestAmount": 0
+			  }
+			}
+			""";
+	}
+
+	private static String historySuccessResponse() {
+		return """
+			{
+			  "code": "Success",
+			  "message": "성공",
+			  "body": {
+			    "list": [
+			      {
+			        "paymentId": "pg-payment-id",
+			        "admissionState": "SUCCESS",
+			        "admissionTypeCode": "01",
+			        "totalPayAmount": 1000,
+			        "merchantPayKey": "PAY-TEST"
+			      }
+			    ],
+			    "totalCount": 1,
+			    "responseCount": 1,
+			    "totalPageCount": 1,
+			    "currentPageNumber": 1
 			  }
 			}
 			""";
