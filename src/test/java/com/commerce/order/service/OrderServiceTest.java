@@ -200,6 +200,36 @@ class OrderServiceTest {
 			});
 	}
 
+	@DisplayName("merchantPayKey와 회원 ID가 일치하면 주문을 조회한다")
+	@Test
+	void getOrderByMerchantPayKeyAndMemberId_whenExists_returnOrder() {
+		// given
+		Order order = Order.create(createMember(1L));
+		ReflectionTestUtils.setField(order, "merchantPayKey", "PAY-1");
+		given(orderRepository.findByMerchantPayKeyAndMemberId("PAY-1", 1L)).willReturn(Optional.of(order));
+
+		// when
+		Order result = orderService.getOrderByMerchantPayKeyAndMemberId("PAY-1", 1L);
+
+		// then
+		assertThat(result).isEqualTo(order);
+	}
+
+	@DisplayName("merchantPayKey와 회원 ID에 해당하는 주문이 없으면 예외를 던진다")
+	@Test
+	void getOrderByMerchantPayKeyAndMemberId_whenNotFound_throwException() {
+		// given
+		given(orderRepository.findByMerchantPayKeyAndMemberId("PAY-1", 1L)).willReturn(Optional.empty());
+
+		// when & then
+		assertThatThrownBy(() -> orderService.getOrderByMerchantPayKeyAndMemberId("PAY-1", 1L))
+			.isInstanceOf(OrderException.class)
+			.satisfies(exception -> {
+				OrderException orderException = (OrderException)exception;
+				assertThat(orderException.getErrorCode()).isEqualTo(OrderErrorCode.ORDER_NOT_FOUND);
+			});
+	}
+
 	@DisplayName("동기화 차감 방식을 사용해서 주문을 생성한다")
 	@Test
 	void createOrderWithSynchronized_whenValidRequest_useSynchronizedDecrease() {

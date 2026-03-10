@@ -26,7 +26,35 @@ class OrderTest {
 		assertThat(order.getMember()).isEqualTo(member);
 		assertThat(order.getStatus()).isEqualTo(OrderStatus.INIT);
 		assertThat(order.getTotalPrice()).isZero();
+		assertThat(order.getMerchantPayKey()).isNull();
 		assertThat(order.getOrderItems()).isEmpty();
+	}
+
+	@DisplayName("merchantPayKey가 없으면 주문에 merchantPayKey를 저장한다")
+	@Test
+	void assignMerchantPayKey_whenNull_assignMerchantPayKey() {
+		// given
+		Order order = Order.create(createMember());
+
+		// when
+		order.assignMerchantPayKey("PAY-123");
+
+		// then
+		assertThat(order.getMerchantPayKey()).isEqualTo("PAY-123");
+	}
+
+	@DisplayName("merchantPayKey가 이미 있으면 기존 값을 유지한다")
+	@Test
+	void assignMerchantPayKey_whenAlreadyAssigned_keepExistingValue() {
+		// given
+		Order order = Order.create(createMember());
+		order.assignMerchantPayKey("PAY-123");
+
+		// when
+		order.assignMerchantPayKey("PAY-456");
+
+		// then
+		assertThat(order.getMerchantPayKey()).isEqualTo("PAY-123");
 	}
 
 	@DisplayName("주문 상품을 추가하면 주문 상품이 등록되고 총액이 증가한다")
@@ -123,32 +151,33 @@ class OrderTest {
 			});
 	}
 
-	@DisplayName("주문이 결제 완료 상태면 결제 취소로 변경된다")
+	@DisplayName("주문이 초기 상태면 결제를 진행할 수 있다")
 	@Test
-	void cancelIfPaid_whenPaid_changeToCanceled() {
+	void checkPayable_whenInitStatus_doNothing() {
 		// given
 		Order order = Order.create(createMember());
-		order.completePayment();
 
 		// when
-		order.cancelIfPaid();
-
-		// then
-		assertThat(order.getStatus()).isEqualTo(OrderStatus.CANCELED);
-	}
-
-	@DisplayName("주문이 결제 완료 상태가 아니면 결제 취소를 하지 않는다")
-	@Test
-	void cancelIfPaid_whenStatusNotPaid_keepStatus() {
-		// given
-		Order order = Order.create(createMember());
-		setStatus(order, OrderStatus.INIT);
-
-		// when
-		order.cancelIfPaid();
+		order.checkPayable();
 
 		// then
 		assertThat(order.getStatus()).isEqualTo(OrderStatus.INIT);
+	}
+
+	@DisplayName("주문이 초기 상태가 아니면 결제를 진행할 수 없다")
+	@Test
+	void checkPayable_whenStatusNotInit_throwException() {
+		// given
+		Order order = Order.create(createMember());
+		setStatus(order, OrderStatus.PAID);
+
+		// when & then
+		assertThatThrownBy(order::checkPayable)
+			.isInstanceOf(OrderException.class)
+			.satisfies(exception -> {
+				OrderException orderException = (OrderException) exception;
+				assertThat(orderException.getErrorCode()).isEqualTo(OrderErrorCode.ORDER_PAYMENT_NOT_ALLOWED);
+			});
 	}
 
 	private Member createMember() {

@@ -6,8 +6,11 @@ import java.util.Optional;
 
 import org.springframework.data.domain.Pageable;
 import org.springframework.data.jpa.repository.JpaRepository;
+import org.springframework.data.jpa.repository.Lock;
 import org.springframework.data.jpa.repository.Query;
 import org.springframework.data.repository.query.Param;
+
+import jakarta.persistence.LockModeType;
 
 import com.commerce.order.domain.Order;
 import com.commerce.order.domain.OrderStatus;
@@ -32,6 +35,28 @@ public interface OrderRepository extends JpaRepository<Order, Long> {
 		where o.id = :orderId
 		""")
 	Optional<Order> findByIdWithItems(@Param("orderId") Long orderId);
+
+	@Query("""
+		select o
+		from Order o
+		join o.member m
+		where o.merchantPayKey = :merchantPayKey
+		and m.id = :memberId
+		""")
+	Optional<Order> findByMerchantPayKeyAndMemberId(
+		@Param("merchantPayKey") String merchantPayKey,
+		@Param("memberId") Long memberId
+	);
+
+	Optional<Order> findByMerchantPayKey(String merchantPayKey);
+
+	@Lock(LockModeType.PESSIMISTIC_WRITE)
+	@Query("""
+		select o
+		from Order o
+		where o.merchantPayKey = :merchantPayKey
+		""")
+	Optional<Order> findByMerchantPayKeyForUpdate(@Param("merchantPayKey") String merchantPayKey);
 
 	@Query("""
 		select o
