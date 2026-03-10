@@ -47,6 +47,7 @@ naverpay:
   return-url: https://test
   approval-url: https://test
   cancel-url: https://test
+  payment-history-url: https://test
 
 outbox:
   stock-restore:

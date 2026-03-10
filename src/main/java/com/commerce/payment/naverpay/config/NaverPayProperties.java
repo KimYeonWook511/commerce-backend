@@ -27,6 +27,9 @@ public class NaverPayProperties implements PaymentProviderProperties {
 	@Value("${naverpay.cancel-url}")
 	private String cancelUrl;
 
+	@Value("${naverpay.payment-history-url}")
+	private String paymentHistoryUrl;
+
 	@Override
 	public PaymentProvider getProvider() {
 		return PaymentProvider.NAVERPAY;
@@ -58,6 +61,10 @@ public class NaverPayProperties implements PaymentProviderProperties {
 
 	public String getCancelUrl() {
 		return cancelUrl;
+	}
+
+	public String getPaymentHistoryUrl() {
+		return paymentHistoryUrl;
 	}
 
 }

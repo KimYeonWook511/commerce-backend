@@ -51,6 +51,7 @@ naverpay:
   return-url: ${PROD_NAVERPAY_RETURN_URL}
   approval-url: ${PROD_NAVERPAY_APPROVAL_URL}
   cancel-url: ${PROD_NAVERPAY_CANCEL_URL}
+  payment-history-url: ${PROD_NAVERPAY_PAYMENT_HISTORY_URL}
 
 outbox:
   stock-restore:
