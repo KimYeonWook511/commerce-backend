@@ -23,8 +23,8 @@ import lombok.NoArgsConstructor;
 	name = "tbl_payment_attempt",
 	uniqueConstraints = {
 		@UniqueConstraint(
-			name = "uk_payment_attempt_merchant_pay_key_payment_id",
-			columnNames = {"merchant_pay_key", "payment_id"}
+			name = "uk_payment_attempt_merchant_pay_key_provider_payment_id_type",
+			columnNames = {"merchant_pay_key", "provider", "payment_id", "type"}
 		)
 	}
 )
@@ -51,12 +51,16 @@ public class PaymentAttempt extends BaseTimeEntity {
 
 	@Enumerated(EnumType.STRING)
 	@Column(nullable = false)
+	private PaymentAttemptType type;
+
+	@Enumerated(EnumType.STRING)
+	@Column(nullable = false)
 	private PaymentAttemptStatus status;
 
 	@Enumerated(EnumType.STRING)
-	private PaymentAttemptReasonCode reasonCode;
+	private PaymentAttemptFailCode failCode;
 
-	private String reasonDetail;
+	private String failDetail;
 
 	private LocalDateTime respondedAt;
 
@@ -66,18 +70,20 @@ public class PaymentAttempt extends BaseTimeEntity {
 		String paymentId,
 		int amount,
 		PaymentProvider provider,
+		PaymentAttemptType type,
 		PaymentAttemptStatus status,
-		PaymentAttemptReasonCode reasonCode,
-		String reasonDetail,
+		PaymentAttemptFailCode failCode,
+		String failDetail,
 		LocalDateTime respondedAt
 	) {
 		this.merchantPayKey = merchantPayKey;
 		this.paymentId = paymentId;
 		this.amount = amount;
 		this.provider = provider;
+		this.type = type;
 		this.status = status;
-		this.reasonCode = reasonCode;
-		this.reasonDetail = reasonDetail;
+		this.failCode = failCode;
+		this.failDetail = failDetail;
 		this.respondedAt = respondedAt;
 	}
 
@@ -92,21 +98,22 @@ public class PaymentAttempt extends BaseTimeEntity {
 			.paymentId(paymentId)
 			.amount(amount)
 			.provider(provider)
-			.status(PaymentAttemptStatus.APPROVE_REQUESTED)
+			.type(PaymentAttemptType.APPROVE)
+			.status(PaymentAttemptStatus.REQUESTED)
 			.build();
 	}
 
 	public void approveSucceed(LocalDateTime respondedAt) {
-		this.status = PaymentAttemptStatus.APPROVE_SUCCEEDED;
-		this.reasonCode = null;
-		this.reasonDetail = null;
+		this.status = PaymentAttemptStatus.SUCCEEDED;
+		this.failCode = null;
+		this.failDetail = null;
 		this.respondedAt = respondedAt;
 	}
 
-	public void approveFail(PaymentAttemptReasonCode reasonCode, String reasonDetail, LocalDateTime respondedAt) {
-		this.status = PaymentAttemptStatus.APPROVE_FAILED;
-		this.reasonCode = reasonCode;
-		this.reasonDetail = reasonDetail;
+	public void approveFail(PaymentAttemptFailCode failCode, String failDetail, LocalDateTime respondedAt) {
+		this.status = PaymentAttemptStatus.FAILED;
+		this.failCode = failCode;
+		this.failDetail = failDetail;
 		this.respondedAt = respondedAt;
 	}
 
@@ -121,21 +128,22 @@ public class PaymentAttempt extends BaseTimeEntity {
 			.paymentId(paymentId)
 			.amount(amount)
 			.provider(provider)
-			.status(PaymentAttemptStatus.CANCEL_REQUESTED)
+			.type(PaymentAttemptType.CANCEL)
+			.status(PaymentAttemptStatus.REQUESTED)
 			.build();
 	}
 
 	public void cancelSucceed(LocalDateTime respondedAt) {
-		this.status = PaymentAttemptStatus.CANCEL_SUCCEEDED;
-		this.reasonCode = null;
-		this.reasonDetail = null;
+		this.status = PaymentAttemptStatus.SUCCEEDED;
+		this.failCode = null;
+		this.failDetail = null;
 		this.respondedAt = respondedAt;
 	}
 
-	public void cancelFail(PaymentAttemptReasonCode reasonCode, String reasonDetail, LocalDateTime respondedAt) {
-		this.status = PaymentAttemptStatus.CANCEL_FAILED;
-		this.reasonCode = reasonCode;
-		this.reasonDetail = reasonDetail;
+	public void failCancel(PaymentAttemptFailCode failCode, String failDetail, LocalDateTime respondedAt) {
+		this.status = PaymentAttemptStatus.FAILED;
+		this.failCode = failCode;
+		this.failDetail = failDetail;
 		this.respondedAt = respondedAt;
 	}
 }

@@ -3,10 +3,7 @@ package com.commerce.payment.domain;
 import java.time.LocalDateTime;
 
 import com.commerce.common.jpa.BaseTimeEntity;
-import com.commerce.common.util.UlidGenerator;
 import com.commerce.order.domain.Order;
-import com.commerce.payment.exception.PaymentErrorCode;
-import com.commerce.payment.exception.PaymentException;
 
 import jakarta.persistence.Column;
 import jakarta.persistence.Entity;
@@ -17,7 +14,7 @@ import jakarta.persistence.GeneratedValue;
 import jakarta.persistence.GenerationType;
 import jakarta.persistence.Id;
 import jakarta.persistence.JoinColumn;
-import jakarta.persistence.ManyToOne;
+import jakarta.persistence.OneToOne;
 import jakarta.persistence.Table;
 import lombok.AccessLevel;
 import lombok.Builder;
@@ -34,8 +31,8 @@ public class Payment extends BaseTimeEntity {
 	@GeneratedValue(strategy = GenerationType.IDENTITY)
 	private Long id;
 
-	@ManyToOne(fetch = FetchType.LAZY)
-	@JoinColumn(name = "order_id", nullable = false)
+	@OneToOne(fetch = FetchType.LAZY)
+	@JoinColumn(name = "order_id", nullable = false, unique = true)
 	private Order order;
 
 	@Column(nullable = false)
@@ -57,65 +54,40 @@ public class Payment extends BaseTimeEntity {
 
 	private LocalDateTime approvedAt;
 
-	@Enumerated(EnumType.STRING)
-	private PaymentReasonCode reasonCode;
-
-	private String reasonDetail;
-
 	@Builder(access = AccessLevel.PRIVATE)
-	private Payment(Order order, int amount, PaymentStatus status, PaymentProvider provider, String merchantPayKey) {
+	private Payment(
+		Order order,
+		int amount,
+		PaymentStatus status,
+		PaymentProvider provider,
+		String merchantPayKey,
+		String pgPaymentId,
+		LocalDateTime approvedAt
+	) {
 		this.order = order;
 		this.amount = amount;
 		this.status = status;
 		this.provider = provider;
 		this.merchantPayKey = merchantPayKey;
-	}
-
-	public static Payment create(Order order, int amount, PaymentProvider provider) {
-		return Payment.builder()
-			.order(order)
-			.amount(amount)
-			.status(PaymentStatus.PENDING)
-			.provider(provider)
-			.merchantPayKey("PAY-" + UlidGenerator.generate())
-			.build();
-	}
-
-	public void completeWithPgPaymentId(String pgPaymentId, LocalDateTime approvedAt) {
-		validateProcessing();
 		this.pgPaymentId = pgPaymentId;
-		this.status = PaymentStatus.COMPLETED;
 		this.approvedAt = approvedAt;
 	}
 
-	public void fail(PaymentReasonCode reasonCode, String reasonDetail) {
-		this.status = PaymentStatus.FAILED;
-		this.reasonCode = reasonCode;
-		this.reasonDetail = reasonDetail;
-	}
-
-	public void cancelPending(String pgPaymentId, PaymentReasonCode reasonCode, String reasonDetail) {
-		this.status = PaymentStatus.CANCEL_PENDING;
-		this.pgPaymentId = pgPaymentId;
-		this.reasonCode = reasonCode;
-		this.reasonDetail = reasonDetail;
-	}
-
-	public void completeCancel() {
-		this.status = PaymentStatus.CANCELED;
-	}
-
-	private void validateProcessing() {
-		if (this.status != PaymentStatus.PROCESSING) {
-			throw new PaymentException(PaymentErrorCode.PAYMENT_STATUS_NOT_ALLOWED);
-		}
-	}
-
-	private void validateCancelable() {
-		if (this.status != PaymentStatus.PENDING
-			&& this.status != PaymentStatus.PROCESSING
-			&& this.status != PaymentStatus.COMPLETED) {
-			throw new PaymentException(PaymentErrorCode.PAYMENT_STATUS_NOT_ALLOWED);
-		}
+	public static Payment createCompleted(
+		Order order,
+		PaymentProvider provider,
+		String merchantPayKey,
+		String pgPaymentId,
+		LocalDateTime approvedAt
+	) {
+		return Payment.builder()
+			.order(order)
+			.amount(order.getTotalPrice())
+			.status(PaymentStatus.COMPLETED)
+			.provider(provider)
+			.merchantPayKey(merchantPayKey)
+			.pgPaymentId(pgPaymentId)
+			.approvedAt(approvedAt)
+			.build();
 	}
 }
