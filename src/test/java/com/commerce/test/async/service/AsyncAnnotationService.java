@@ -14,7 +14,6 @@ import com.commerce.test.async.AsyncTest.ExternalScenario;
 import lombok.RequiredArgsConstructor;
 import lombok.extern.slf4j.Slf4j;
 
-@Service
 @Slf4j
 @RequiredArgsConstructor
 public class AsyncAnnotationService {

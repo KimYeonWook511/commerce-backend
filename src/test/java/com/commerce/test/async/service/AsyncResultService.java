@@ -12,7 +12,6 @@ import com.commerce.test.async.repository.AsyncTestEntityRepository;
 import lombok.RequiredArgsConstructor;
 import lombok.extern.slf4j.Slf4j;
 
-@Service
 @Slf4j
 @RequiredArgsConstructor
 public class AsyncResultService {

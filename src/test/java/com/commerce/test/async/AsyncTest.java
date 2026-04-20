@@ -9,7 +9,10 @@ import org.junit.jupiter.api.DisplayName;
 import org.junit.jupiter.api.Tag;
 import org.junit.jupiter.api.Test;
 import org.springframework.beans.factory.annotation.Autowired;
+import org.springframework.boot.SpringBootConfiguration;
+import org.springframework.boot.autoconfigure.EnableAutoConfiguration;
 import org.springframework.boot.test.context.SpringBootTest;
+import org.springframework.context.annotation.Import;
 import org.springframework.test.context.ActiveProfiles;
 import org.springframework.test.context.TestPropertySource;
 
@@ -20,7 +23,7 @@ import com.commerce.test.async.repository.AsyncTestEntityRepository;
 import com.commerce.test.async.service.AsyncService;
 
 @Tag("test")
-@SpringBootTest(classes = AsyncTestConfig.class)
+@SpringBootTest(classes = AsyncTest.AsyncTestApplication.class)
 @ActiveProfiles("test")
 @TestPropertySource(properties = {
 	"logging.level.root=WARN",
@@ -31,6 +34,12 @@ import com.commerce.test.async.service.AsyncService;
 	"logging.level.org.springframework.orm.jpa.JpaTransactionManager=OFF"
 })
 public class AsyncTest {
+
+	@SpringBootConfiguration
+	@EnableAutoConfiguration
+	@Import(AsyncTestConfig.class)
+	static class AsyncTestApplication {
+	}
 
 	public enum ExternalScenario {
 		SUCCESS,

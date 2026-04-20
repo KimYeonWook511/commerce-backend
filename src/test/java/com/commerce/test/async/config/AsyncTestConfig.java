@@ -5,11 +5,9 @@ import java.net.SocketTimeoutException;
 import java.net.URI;
 import java.time.Duration;
 
-import org.springframework.boot.autoconfigure.EnableAutoConfiguration;
-import org.springframework.boot.autoconfigure.batch.BatchAutoConfiguration;
 import org.springframework.boot.autoconfigure.domain.EntityScan;
+import org.springframework.boot.test.context.TestConfiguration;
 import org.springframework.context.annotation.Bean;
-import org.springframework.context.annotation.Configuration;
 import org.springframework.context.annotation.Import;
 import org.springframework.data.jpa.repository.config.EnableJpaRepositories;
 import org.springframework.http.HttpMethod;
@@ -38,8 +36,7 @@ import com.commerce.test.async.service.WebClientService;
 
 import reactor.core.publisher.Mono;
 
-@Configuration
-@EnableAutoConfiguration(exclude = BatchAutoConfiguration.class)
+@TestConfiguration
 @EnableAsync
 @EntityScan(basePackageClasses = AsyncTestEntity.class)
 @EnableJpaRepositories(basePackageClasses = AsyncTestEntityRepository.class)
