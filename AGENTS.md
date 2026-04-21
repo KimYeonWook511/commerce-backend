@@ -1,169 +1,35 @@
 # AGENTS.md
 
-## 1. Role & Project Context
+## 프로젝트 컨텍스트
 
-You are an AI coding agent working in this repository.
+- Java, Spring Boot, Gradle, MySQL, JPA(Hibernate)를 사용하는 백엔드 프로젝트입니다.
 
-This is a Backend-focused project.
-Primary language is Java.
-Framework is Spring Boot.
-Build tool is Gradle.
-Database is MySQL with JPA (Hibernate).
+## 언어 규칙
 
-You must behave like a senior backend engineer who prioritizes:
-- clean and maintainable code
-- clear domain modeling
-- testability
-- long-term readability over short-term convenience
+- 모든 설명과 답변은 반드시 한국어로 작성합니다.
+- 클래스, 메서드, 변수, 패키지, 테스트 메서드명 같은 코드 식별자는 반드시 영어로 작성합니다.
+- 코드 식별자에는 한국어를 섞지 않습니다.
 
----
+## 구현 규칙
 
-## 2. Language Rules
+- 도메인 중심 네이밍을 우선하고, 기존 프로젝트 패턴을 따릅니다.
+- 비즈니스 로직은 Domain 또는 Service 계층에 둡니다.
+- Controller는 요청 수신, 입력 검증, 서비스 위임, 응답 반환만 담당합니다.
+- 불필요한 추상화와 과한 설계를 피합니다.
 
-- ALL explanations and answers MUST be written in Korean
-- ALL code (class names, methods, variables, packages) MUST be written in English
-- Do NOT mix Korean into code identifiers
+## 안전 규칙
 
-If you generate any explanation, reasoning, or documentation, it MUST be in Korean.
+- 근거 없이 기존 컨벤션을 무시하거나 사용하지 않는 코드를 추가하지 않습니다.
+- 불명확한 점은 임의로 판단하지 않고 구현 전에 사용자에게 먼저 확인합니다.
 
----
+## 참고 문서
 
-## 3. Architecture & Design Principles
-
-Follow these principles strictly:
-
-- Prefer domain-driven naming
-- Avoid anemic domain models when possible
-- Business logic MUST reside in the Domain or Service layer
-- Controllers MUST:
-    - accept requests
-    - validate input
-    - delegate to services
-    - return responses
-- Controllers MUST NOT contain business logic
-
-Do NOT introduce unnecessary abstractions.
-Do NOT over-engineer solutions.
-
----
-
-## 4. Coding Rules
-
-- Favor clarity over cleverness
-- Keep methods small and focused
-- One responsibility per class
-- Prefer immutability where possible
-- Avoid static state unless explicitly justified
-
-If an existing style or pattern exists in the codebase, FOLLOW it.
-
----
-
-## 5. Testing Rules (Mandatory)
-
-### 5.1 General Rules
-
-- ALL new features MUST include test code
-- If existing logic is modified, tests MUST be updated accordingly
-- Skipping tests is NOT allowed unless explicitly instructed
-
-### 5.2 Testing Style
-
-- Testing framework: JUnit 5
-- Prefer unit tests over integration tests
-- Use:
-    - @WebMvcTest for controller tests
-    - @DataJpaTest for repository tests
-    - Plain unit tests for domain and service logic
-- Use @SpringBootTest ONLY when necessary
-
-### 5.3 Test Naming Convention
-
-Use the following format:
-
-    methodName_condition_expectedResult
-
-Example:
-
-    createMember_whenEmailIsDuplicated_throwException
-
-### 5.4 Test Display Name Rule
-
-- ALL test methods MUST include a @DisplayName annotation
-- @DisplayName MUST be written in Korean
-- @DisplayName SHOULD clearly describe the test scenario and expected result
-- Method names MUST still follow the English naming convention defined above
-
-Example:
-
-    @DisplayName("이메일이 중복되면 회원 가입에 실패한다")
-    @Test
-    void createMember_whenEmailIsDuplicated_throwException() {
-        // given
-        // when
-        // then
-    }
-
----
-
-## 6. Commit Convention (Mandatory)
-
-You MUST follow the commit message convention below.
-
-### 6.1 Format
-
-    <type>: <subject>
-
-### 6.2 Allowed Types
-
-- feat: new feature
-- fix: bug fix
-- refactor: refactoring without behavior change
-- test: add or modify tests
-- docs: documentation only
-- chore: build, config, infra, or misc tasks
-
-### 6.3 Rules
-
-- Subject MUST be written in present tense
-- Do NOT end the subject with a period (.)
-- One commit MUST represent one logical change
-- Vague commit messages are NOT allowed
-
-Examples:
-
-    feat: implement JWT login
-    fix: handle duplicated email case
-    test: add order service unit tests
-    refactor: extract BaseTimeEntity
-
----
-
-## 7. Formatting Rules
-
-- This project uses .editorconfig
-- Generated code MUST comply with the repository formatting rules
-- Do NOT introduce formatting-only changes unless explicitly required
-
----
-
-## 8. Pull Request Policy
-
-- Pull Request rules are intentionally omitted at this stage
-- This project is currently maintained by a single developer
-- PR rules may be introduced later when collaboration begins
-
----
-
-## 9. Forbidden Actions
-
-The following actions are strictly forbidden:
-
-- Implementing features without tests
-- Skipping existing patterns or conventions without justification
-- Writing vague commit messages (e.g. "update", "fix", "temp")
-- Adding unused classes, methods, or dead code
-
-If anything is unclear, ASK before implementing.
-
----
+- 작업 추적: `docs/TODO.md`
+- 기능 범위: `docs/PRD.md`
+- 설계 결정: `docs/ADR.md`
+- 백엔드 구조와 의존성: `docs/architecture.md`
+- API 스펙: `docs/api-spec.md`
+- DB 스키마: `docs/db-schema.md`
+- 테스트 컨벤션: `docs/testing-conventions.md`
+- 커밋 컨벤션: `docs/commit-conventions.md`
+- Codex 에이전트 목록: `docs/agents/README.md`
