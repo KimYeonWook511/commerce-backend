@@ -1,12 +1,10 @@
-# Agent Guide
+# 에이전트 가이드
 
-이 문서는 현재 저장소에서 사용할 수 있는 에이전트를 설명하는 안내 문서입니다.
-
-어떤 에이전트가 있는지, 어떤 상황에서 사용하는지, 어떤 역할에 적합한지를 빠르게 확인할 수 있도록 정리합니다.
+이 문서는 현재 저장소에서 사용할 수 있는 Codex 에이전트를 설명하는 안내 문서입니다.
 
 에이전트의 실제 정의 파일은 `.codex/agents/*.toml`에 있으며, 각 파일에는 에이전트 이름, 설명, 모델, 권한, 세부 동작 지침이 들어 있습니다.
 
-## My Available Agents
+## 사용 가능한 에이전트
 
 ### `spring-boot-engineer`
 
@@ -68,7 +66,7 @@
   - 외부 입력 경로의 검증과 주입 가능성을 확인할 때
   - 비밀 정보나 설정 노출 위험을 점검할 때
 
-## References
+## 참고 자료
 
 - Codex Subagents Docs: https://developers.openai.com/codex/subagents
 - GitHub Reference: https://github.com/VoltAgent/awesome-codex-subagents
