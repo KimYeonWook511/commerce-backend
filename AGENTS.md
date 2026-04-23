@@ -30,6 +30,8 @@
 - 백엔드 구조와 의존성: `docs/architecture.md`
 - API 스펙: `docs/api-spec.md`
 - DB 스키마: `docs/db-schema.md`
+- 기능별 문서 운영 가이드: `docs/features/README.md`
+- 브랜치 컨벤션: `docs/branch-conventions.md`
 - 테스트 컨벤션: `docs/testing-conventions.md`
 - 커밋 컨벤션: `docs/commit-conventions.md`
 - Codex 에이전트 목록: `docs/agents/README.md`
