@@ -1,32 +1,16 @@
-# Codex Hooks 운영 가이드
+# PreToolUse Bash 정책
 
 ## 목적
 
-이 문서는 이 저장소에서 사용하는 Codex hook 설정과 운영 방식을 설명한다.
+이 문서는 현재 Repo 전용 `PreToolUse` Bash hook의 운영 규칙을 설명한다.
 
-현재는 현재 Repo 전용 `PreToolUse` hook만 사용하며, Codex가 Bash 명령을 실행하기 전에 대표적인 위험 명령 패턴을 한 번 더 차단하는 최소 방어선 역할을 한다.
+현재 정책은 Codex가 Bash 명령을 실행하기 전에 대표적인 위험 명령 패턴을 한 번 더 차단하는 최소 방어선 역할을 한다.
 
 ## 적용 범위
 
-- 이 설정은 현재 저장소에서만 적용된다.
+- 이 정책은 현재 Repo에서만 적용된다.
 - hook 설정 파일은 `.codex/hooks.json`이다.
 - 정책 스크립트는 `.codex/hooks/pre_tool_use_policy.py`이다.
-- 현재 이벤트 범위는 `PreToolUse` 하나뿐이다.
-
-여기서 `현재 Repo 전용`은 전역 사용자 설정이 아니라, 현재 프로젝트 디렉토리 아래 `.codex/*` 설정에만 적용된다는 뜻이다.
-
-## 활성화 방식
-
-이 저장소는 전역 `~/.codex/config.toml`이 아니라, 저장소 내부 `.codex/config.toml`에서 hook 기능을 활성화한다.
-
-현재 설정:
-
-```toml
-[features]
-codex_hooks = true
-```
-
-Codex를 이 저장소 루트에서 실행하면 저장소 내부 `.codex/config.toml`과 `.codex/hooks.json`을 함께 읽어 hook을 적용한다.
 
 ## 현재 차단 규칙
 
@@ -55,7 +39,7 @@ Codex를 이 저장소 루트에서 실행하면 저장소 내부 `.codex/config
 
 - `ls -la`
 - `rg hooks .codex`
-- `sed -n '1,80p' docs/codex-hooks.md`
+- `sed -n '1,80p' docs/hooks/pre-tool-use-policy.md`
 - `./gradlew test`
 
 ## 동작 방식
@@ -74,4 +58,4 @@ Codex가 Bash 실행을 시도하면 `PreToolUse` hook이 `tool_input.command`�
 python3 .codex/hooks/tests/test_pre_tool_use_policy.py
 ```
 
-실제 Codex 동작 검증은 이 저장소 루트에서 Codex를 실행한 뒤 허용 명령과 차단 명령을 각각 한 번씩 실행해 확인한다.
+실제 Codex 동작 검증은 현재 Repo 루트에서 Codex를 실행한 뒤 허용 명령과 차단 명령을 각각 한 번씩 실행해 확인한다.

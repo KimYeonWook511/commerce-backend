@@ -15,8 +15,6 @@ description: 개발 시작 전 문서 탐색, 논의, step 설계, phases 초안
 수동 리뷰 절차와 수동 commit/push 운영 절차는 이 skill의 범위가 아니다.
 다만 skill 내부 실행기 `execute.py`는 브랜치 생성, 자동 커밋, 선택적 push를 수행할 수 있다.
 
-skill 검증 기준은 `references/skill-test.md`를 따른다.
-
 ## 먼저 읽을 것
 
 항상 먼저 아래를 읽는다.
@@ -38,7 +36,7 @@ feature 문서와 `phases` 문서로 부족한 공통 맥락이 있을 때만 `A
 
 ### 1. Explore
 
-- `AGENTS.md`를 읽고 현재 저장소 규칙을 파악한다.
+- `AGENTS.md`를 읽고 현재 Repo 규칙을 파악한다.
 - 현재 작업 대상 feature 폴더의 문서와 `phases` 문서를 우선 읽고 현재 구조와 변경 범위를 파악한다.
 - 공통 아키텍처, 다른 도메인 ERD, 전역 ADR 같은 정보가 더 필요할 때만 루트 `docs/` 기준 문서를 추가로 읽는다.
 - 작업 범위에 직접 연결된 코드와 테스트를 함께 읽는다.
@@ -92,24 +90,16 @@ python3 .codex/skills/dev-start/scripts/execute.py docs/features/<feature-name>/
 python3 .codex/skills/dev-start/scripts/execute.py docs/features/<feature-name>/phases/<phase-name> --push
 ```
 
-실행 순서는 아래와 같다.
+실행기는 아래 규칙으로 동작한다.
 
-1. `docs/features/<feature-name>/phases/index.json`과 `docs/features/<feature-name>/phases/<phase-name>/index.json`을 읽고 실행 가능한 상태인지 확인한다.
-2. 이전 step 중 `error` 또는 `blocked` 상태가 있으면 즉시 중단한다.
-3. 현재 feature용 브랜치 `feature/<feature-name>`을 checkout하거나 없으면 새로 만든다.
-4. phase에 `created_at`이 없으면 최초 실행 시각을 기록한다.
-5. 가장 앞의 `pending` step을 찾고, `started_at`이 없으면 기록한다.
-6. 현재 step 문서와 관련 문서를 `step_context`로 모으고, 이전 완료 step의 `summary`를 developer 컨텍스트로 합친다.
-7. `developer_guardrails`와 `developer_worker`로 현재 step 구현을 실행한다.
-8. step 실행 후 `step_verifier`로 상태와 output을 먼저 검증한다.
-9. step이 `completed`면 실행기가 Acceptance Criteria를 직접 재실행하고 `stepN-ac-output.json`으로 기록한다.
-10. 후검증을 통과하면 `reviewer_guardrails`와 `reviewer_worker`로 writer 결과를 read-only로 다시 검토한다. reviewer는 전달된 diff와 output만 근거로 판단한다.
-11. verifier, AC 재검증, reviewer 중 하나라도 실패를 반환하면 사유를 다음 시도 컨텍스트에 넣어 최대 3회까지 재시도한다.
-12. `completed` + verifier 통과 + AC 재검증 통과 + reviewer 통과면 `completed_at`을 기록하고, 코드 변경과 metadata 변경을 나눠 feat/chore 2단계 커밋을 수행한다.
-13. `blocked`이면 `blocked_at`, `blocked_reason`을 기록하고 기능 내부 `phases/index.json`의 status도 `blocked`로 갱신한 뒤 즉시 중단한다.
-14. 3회 모두 실패하면 `failed_at`, `error_message`를 기록하고 기능 내부 `phases/index.json`의 status도 `error`로 갱신한 뒤 중단한다.
-15. 더 이상 `pending` step이 없으면 phase에 `completed_at`을 기록하고 기능 내부 `phases/index.json`의 status를 `completed`로 갱신한다.
-16. `--push` 옵션이 있으면 마지막에 현재 feature 브랜치를 원격으로 push한다.
+- phase/step 상태를 확인하고, 실행 가능한 경우에만 가장 앞의 `pending` step을 수행한다.
+- 현재 step 문서와 관련 문서를 모아 developer 컨텍스트를 만들고 `developer_worker`를 실행한다.
+- 실행 후 `step_verifier`로 상태와 output을 먼저 검증한다.
+- step이 `completed`면 실행기가 Acceptance Criteria를 직접 재실행한다.
+- 후검증을 통과하면 `reviewer_worker`가 diff와 output 기준으로 read-only 검토한다.
+- verifier, AC 재검증, reviewer 중 하나라도 실패하면 사유를 다음 시도 컨텍스트에 넣어 최대 3회까지 재시도한다.
+- `completed` + verifier 통과 + AC 재검증 통과 + reviewer 통과면 자동 커밋을 수행한다.
+- `blocked` 또는 최종 `error`면 phase 상태를 함께 갱신하고 즉시 중단한다.
 
 `--push`는 모든 step이 완료된 뒤 현재 feature 브랜치를 원격 저장소로 push하는 옵션이다.
 

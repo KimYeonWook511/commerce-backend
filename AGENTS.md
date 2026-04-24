@@ -24,7 +24,6 @@
 
 ## 참고 문서
 
-- 작업 추적: `docs/TODO.md`
 - 기능 범위: `docs/PRD.md`
 - 설계 결정: `docs/ADR.md`
 - 백엔드 구조와 의존성: `docs/architecture.md`
@@ -34,4 +33,6 @@
 - 브랜치 컨벤션: `docs/branch-conventions.md`
 - 테스트 컨벤션: `docs/testing-conventions.md`
 - 커밋 컨벤션: `docs/commit-conventions.md`
+- Codex 하네스 원칙: `docs/codex-harness.md`
+- Codex hook 구조: `docs/hooks/README.md`
 - Codex 에이전트 목록: `docs/agents/README.md`
