@@ -99,15 +99,17 @@ python3 .codex/skills/dev-start/scripts/execute.py docs/features/<feature-name>/
 3. 현재 feature용 브랜치 `feature/<feature-name>`을 checkout하거나 없으면 새로 만든다.
 4. phase에 `created_at`이 없으면 최초 실행 시각을 기록한다.
 5. 가장 앞의 `pending` step을 찾고, `started_at`이 없으면 기록한다.
-6. 현재 step 문서와 `AGENTS.md`, feature 문서 우선 guardrails, 이전 완료 step의 `summary`, 이전 실패 메시지를 합쳐 preamble을 만든다.
-7. Codex CLI로 현재 step을 실행하고, 진행 표시기와 경과 시간을 함께 보여준다.
-8. step 실행 후 `docs/features/<feature-name>/phases/<phase-name>/index.json`을 다시 읽어 `completed`, `error`, `blocked` 상태를 확인한다.
-9. `completed`이면 `completed_at`을 기록하고, 코드 변경과 metadata 변경을 나눠 feat/chore 2단계 커밋을 수행한다.
-10. `blocked`이면 `blocked_at`, `blocked_reason`을 기록하고 기능 내부 `phases/index.json`의 status도 `blocked`로 갱신한 뒤 즉시 중단한다.
-11. 실패면 `error_message`를 다음 시도 preamble에 넣어 최대 3회까지 재시도한다.
-12. 3회 모두 실패하면 `failed_at`, `error_message`를 기록하고 기능 내부 `phases/index.json`의 status도 `error`로 갱신한 뒤 중단한다.
-13. 더 이상 `pending` step이 없으면 phase에 `completed_at`을 기록하고 기능 내부 `phases/index.json`의 status를 `completed`로 갱신한다.
-14. `--push` 옵션이 있으면 마지막에 현재 feature 브랜치를 원격으로 push한다.
+6. 현재 step 문서와 관련 문서를 `step_context`로 모으고, 이전 완료 step의 `summary`를 developer 컨텍스트로 합친다.
+7. `developer_guardrails`와 `developer_worker`로 현재 step 구현을 실행한다.
+8. step 실행 후 `step_verifier`로 상태와 output을 먼저 검증한다.
+9. step이 `completed`면 실행기가 Acceptance Criteria를 직접 재실행하고 `stepN-ac-output.json`으로 기록한다.
+10. 후검증을 통과하면 `reviewer_guardrails`와 `reviewer_worker`로 writer 결과를 read-only로 다시 검토한다. reviewer는 전달된 diff와 output만 근거로 판단한다.
+11. verifier, AC 재검증, reviewer 중 하나라도 실패를 반환하면 사유를 다음 시도 컨텍스트에 넣어 최대 3회까지 재시도한다.
+12. `completed` + verifier 통과 + AC 재검증 통과 + reviewer 통과면 `completed_at`을 기록하고, 코드 변경과 metadata 변경을 나눠 feat/chore 2단계 커밋을 수행한다.
+13. `blocked`이면 `blocked_at`, `blocked_reason`을 기록하고 기능 내부 `phases/index.json`의 status도 `blocked`로 갱신한 뒤 즉시 중단한다.
+14. 3회 모두 실패하면 `failed_at`, `error_message`를 기록하고 기능 내부 `phases/index.json`의 status도 `error`로 갱신한 뒤 중단한다.
+15. 더 이상 `pending` step이 없으면 phase에 `completed_at`을 기록하고 기능 내부 `phases/index.json`의 status를 `completed`로 갱신한다.
+16. `--push` 옵션이 있으면 마지막에 현재 feature 브랜치를 원격으로 push한다.
 
 `--push`는 모든 step이 완료된 뒤 현재 feature 브랜치를 원격 저장소로 push하는 옵션이다.
 

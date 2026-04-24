@@ -1,6 +1,8 @@
 from __future__ import annotations
 
 import subprocess
+
+
 def run_git(executor, *args) -> subprocess.CompletedProcess:
     """git 명령을 실행하고 stdout/stderr를 캡처한다."""
     return subprocess.run(
@@ -65,6 +67,44 @@ def list_worktree_paths(executor) -> list[str]:
     return sorted(tracked | staged | untracked)
 
 
+def build_review_diff(executor, pathspecs: list[str], limit: int = 12000) -> str:
+    """주어진 pathspec 범위의 diff를 reviewer 입력용으로 만든다."""
+    normalized = [normalize_pathspec(path) for path in pathspecs if normalize_pathspec(path)]
+    if not normalized:
+        return ""
+
+    pieces: list[str] = []
+
+    tracked = executor.run_git("diff", "--", *normalized)
+    if tracked.stdout.strip():
+        pieces.append(tracked.stdout.strip())
+
+    staged = executor.run_git("diff", "--cached", "--", *normalized)
+    if staged.stdout.strip():
+        pieces.append(staged.stdout.strip())
+
+    untracked = [
+        path
+        for path in list_worktree_paths(executor)
+        if any(matches_pathspec(path, pathspec) for pathspec in normalized)
+        and path in set(filter(None, executor.run_git("ls-files", "--others", "--exclude-standard").stdout.splitlines()))
+    ]
+    for path in untracked:
+        file_path = executor.root_path / path
+        if not file_path.is_file():
+            continue
+        try:
+            content = file_path.read_text(encoding="utf-8")
+        except OSError:
+            continue
+        pieces.append(f"diff --git a/{path} b/{path}\nnew file mode 100644\n--- /dev/null\n+++ b/{path}\n{content}")
+
+    diff_text = "\n\n".join(piece for piece in pieces if piece).strip()
+    if len(diff_text) <= limit:
+        return diff_text
+    return diff_text[:limit] + "\n...[truncated]"
+
+
 def validate_worktree_scope(executor, editable_paths: list[str], metadata_paths: list[str], context: str):
     """허용 경로와 메타데이터 경로 밖의 변경이 있으면 즉시 중단한다."""
     allowed = [normalize_pathspec(path) for path in editable_paths]
@@ -104,9 +144,11 @@ def stage_paths(executor, pathspecs: list[str]):
 def commit_step(executor, step_num: int, step_name: str, editable_paths: list[str]):
     """코드 변경과 메타데이터 변경을 분리해 2단계 커밋한다."""
     output_rel = f"{executor.phase_relpath}/step{step_num}-output.json"
+    ac_output_rel = f"{executor.phase_relpath}/step{step_num}-ac-output.json"
+    review_output_rel = f"{executor.phase_relpath}/step{step_num}-review-output.json"
     phase_index_rel = f"{executor.phase_relpath}/index.json"
     feature_index_rel = f"{executor.feature_phases_relpath}/index.json"
-    metadata_paths = [output_rel, phase_index_rel, feature_index_rel]
+    metadata_paths = [output_rel, ac_output_rel, review_output_rel, phase_index_rel, feature_index_rel]
 
     validate_worktree_scope(executor, editable_paths, metadata_paths, context=f"step {step_num} commit")
     stage_paths(executor, editable_paths)

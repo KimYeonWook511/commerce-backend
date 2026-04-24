@@ -5,8 +5,13 @@ import tempfile
 from pathlib import Path
 
 
-def invoke_codex(root: str, phase_dir: Path, write_json, step: dict, preamble: str) -> dict:
-    """현재 step 문서와 preamble을 합쳐 Codex CLI를 비대화형으로 호출한다."""
+def build_prompt(context_text: str, guardrails_text: str, step_text: str) -> str:
+    sections = [section for section in (context_text, guardrails_text, step_text) if section]
+    return "\n\n---\n\n".join(sections)
+
+
+def run(root: str, phase_dir: Path, write_json, step: dict, context_text: str, guardrails_text: str) -> dict:
+    """developer worker를 실행하고 step output 파일을 기록한다."""
     step_num = step["step"]
     step_name = step["name"]
     step_file = phase_dir / f"step{step_num}.md"
@@ -15,7 +20,7 @@ def invoke_codex(root: str, phase_dir: Path, write_json, step: dict, preamble: s
         print(f"  ERROR: {step_file} not found")
         raise SystemExit(1)
 
-    prompt = preamble + step_file.read_text(encoding="utf-8")
+    prompt = build_prompt(context_text, guardrails_text, step_file.read_text(encoding="utf-8"))
     with tempfile.NamedTemporaryFile(delete=False) as message_file:
         message_path = Path(message_file.name)
 

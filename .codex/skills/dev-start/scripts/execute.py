@@ -15,7 +15,6 @@ import argparse
 import contextlib
 import json
 import re
-import subprocess
 import sys
 import threading
 import time
@@ -28,9 +27,14 @@ SCRIPT_DIR = Path(__file__).resolve().parent
 if str(SCRIPT_DIR) not in sys.path:
     sys.path.insert(0, str(SCRIPT_DIR))
 
-import codex_client
+import developer_guardrails
+import developer_worker
+import acceptance_runner
 import git_ops
-import guardrails
+import reviewer_guardrails
+import reviewer_worker
+import step_context
+import step_verifier
 
 # .codex/skills/dev-start/scripts/execute.py -> repository root
 ROOT = Path(__file__).resolve().parents[4]
@@ -142,6 +146,14 @@ class StepExecutor:
         """현재 phase의 step 문서 경로를 반환한다."""
         return self.phase_dir / f"step{step_num}.md"
 
+    def step_output_path(self, step_num: int) -> Path:
+        """현재 phase의 step output JSON 경로를 반환한다."""
+        return self.phase_dir / f"step{step_num}-output.json"
+
+    def step_acceptance_output_path(self, step_num: int) -> Path:
+        """현재 phase의 step Acceptance Criteria output JSON 경로를 반환한다."""
+        return self.phase_dir / f"step{step_num}-ac-output.json"
+
     def ensure_step_file_exists(self, step_num: int) -> Path:
         """현재 step 문서가 없으면 실행기 레벨에서 즉시 중단한다."""
         step_file = self.step_file_path(step_num)
@@ -229,43 +241,114 @@ class StepExecutor:
 
         self.write_json(self.feature_index_file, feature)
 
-    # --- guardrails & context ---
+    # --- context & role guardrails ---
 
     def resolve_doc(self, *candidates: str) -> Optional[Path]:
         """후보 경로 중 실제로 존재하는 첫 문서를 반환한다."""
-        return guardrails.resolve_doc(self.root_path, *candidates)
+        return step_context.resolve_doc(self.root_path, *candidates)
 
     def list_agents_reference_docs(self) -> list[Path]:
         """AGENTS.md의 `참고 문서` 섹션에 나열된 markdown 경로를 반환한다."""
-        return guardrails.list_agents_reference_docs(self.root_path)
+        return step_context.list_agents_reference_docs(self.root_path)
 
-    def load_guardrails(self, step_text: str) -> str:
-        """현재 step과 직접 관련된 최소 문서만 preamble에 주입한다."""
-        return guardrails.load_guardrails(self.root_path, self.feature_dir, step_text)
+    def load_step_context(self, step_text: str) -> str:
+        """현재 step에 필요한 최소 문서만 developer 컨텍스트로 주입한다."""
+        return step_context.load_step_documents(self.root_path, self.feature_dir, step_text)
 
     @staticmethod
-    def build_step_context(index: dict) -> str:
+    def build_previous_step_context(index: dict) -> str:
         """이전 완료 step의 summary를 다음 step용 컨텍스트로 구성한다."""
-        return guardrails.build_step_context(index)
+        return step_context.build_previous_step_context(index)
 
-    def build_preamble(self, guardrails_text: str, step_context: str, prev_error: Optional[str] = None) -> str:
-        """실행기 공통 작업 지시문을 만든다."""
-        return guardrails.build_preamble(
+    def build_developer_guardrails(self, prev_error: Optional[str] = None) -> str:
+        """developer worker용 규칙 문자열을 만든다."""
+        return developer_guardrails.build(
             project=self.project,
             phase_name=self.phase_name,
             phase_index_relpath=f"{self.phase_relpath}/index.json",
             max_retries=self.MAX_RETRIES,
             feat_msg_template=self.FEAT_MSG,
-            guardrails=guardrails_text,
-            step_context=step_context,
             prev_error=prev_error,
         )
 
-    # --- Codex 호출 ---
+    def build_reviewer_guardrails(self) -> str:
+        """reviewer worker용 규칙 문자열을 만든다."""
+        return reviewer_guardrails.build(self.project)
 
-    def invoke_codex(self, step: dict, preamble: str) -> dict:
-        """현재 step 문서와 preamble을 합쳐 Codex CLI를 비대화형으로 호출한다."""
-        return codex_client.invoke_codex(self.root, self.phase_dir, self.write_json, step, preamble)
+    def verify_step_result(self, current: dict, step_text: str, *, require_acceptance: bool = False) -> step_verifier.VerificationResult:
+        """Codex 실행 직후 step 상태와 output 파일을 후검증한다."""
+        ac_output_path = self.step_acceptance_output_path(current["step"]) if require_acceptance else None
+        return step_verifier.verify_step_result(
+            current,
+            step_text,
+            self.step_output_path(current["step"]),
+            ac_output_path,
+        )
+
+    def review_step_result(self, current: dict, step_text: str, changed_paths: list[str], diff_text: str) -> reviewer_worker.ReviewResult:
+        """writer 결과를 read-only review worker로 다시 확인한다."""
+        output = self.read_json(self.step_output_path(current["step"]))
+        return reviewer_worker.run(
+            root=self.root,
+            phase_dir=self.phase_dir,
+            write_json=self.write_json,
+            step=current,
+            step_text=step_text,
+            changed_paths=changed_paths,
+            diff_text=diff_text,
+            output=output,
+            guardrails_text=self.build_reviewer_guardrails(),
+        )
+
+    def run_acceptance_checks(self, current: dict, step_text: str) -> dict | None:
+        """Acceptance Criteria를 실행기가 직접 재실행하고 결과를 기록한다."""
+        return acceptance_runner.run(self.root, self.phase_dir, self.write_json, current, step_text)
+
+    @staticmethod
+    def reset_step_for_retry(current: dict, verification_error: str):
+        """재시도 전 상태를 pending으로 되돌리고 검증 실패 사유를 남긴다."""
+        current["status"] = "pending"
+        current["verification_error"] = verification_error
+        for key in ("summary", "error_message", "blocked_reason", "completed_at", "failed_at", "blocked_at"):
+            current.pop(key, None)
+
+    @staticmethod
+    def mark_step_blocked_from_review(current: dict, reason: str):
+        """review worker 판단으로 step을 blocked 처리한다."""
+        current["status"] = "blocked"
+        current["blocked_reason"] = reason
+        for key in ("summary", "error_message", "verification_error", "completed_at", "failed_at"):
+            current.pop(key, None)
+
+    def mark_step_error(self, current: dict, message: str, timestamp: str):
+        """최종 실패 시 step을 error로 고정한다."""
+        current["status"] = "error"
+        current["error_message"] = f"[{self.MAX_RETRIES}회 시도 후 실패] {message}"
+        current["failed_at"] = timestamp
+        for key in ("summary", "blocked_reason", "verification_error", "completed_at", "blocked_at"):
+            current.pop(key, None)
+
+    def list_review_changed_paths(self, editable_paths: list[str], metadata_paths: list[str]) -> list[str]:
+        """리뷰 대상 변경 파일만 repo-relative 경로로 추린다."""
+        changed_paths = git_ops.list_worktree_paths(self)
+        review_paths: list[str] = []
+        for path in changed_paths:
+            if any(git_ops.matches_pathspec(path, allowed_path) for allowed_path in editable_paths):
+                review_paths.append(path)
+                continue
+            if any(git_ops.matches_pathspec(path, metadata_path) for metadata_path in metadata_paths):
+                review_paths.append(path)
+        return review_paths
+
+    def build_review_diff(self, editable_paths: list[str], metadata_paths: list[str]) -> str:
+        """현재 step 범위의 diff를 reviewer 입력용으로 만든다."""
+        return git_ops.build_review_diff(self, [*editable_paths, *metadata_paths])
+
+    # --- worker 호출 ---
+
+    def run_developer_worker(self, step: dict, context_text: str, guardrails_text: str) -> dict:
+        """developer worker를 실행한다."""
+        return developer_worker.run(self.root, self.phase_dir, self.write_json, step, context_text, guardrails_text)
 
     # --- header & validation ---
 
@@ -322,19 +405,29 @@ class StepExecutor:
         step_file = self.ensure_step_file_exists(step_num)
         step_text = step_file.read_text(encoding="utf-8")
         editable_paths = self.parse_editable_paths(step_text)
+        metadata_paths = [
+            f"{self.phase_relpath}/step{step_num}-output.json",
+            f"{self.phase_relpath}/step{step_num}-ac-output.json",
+            f"{self.phase_relpath}/step{step_num}-review-output.json",
+            f"{self.phase_relpath}/index.json",
+            f"{self.feature_phases_relpath}/index.json",
+        ]
 
         for attempt in range(1, self.MAX_RETRIES + 1):
             index = self.read_json(self.index_file)
-            step_context = self.build_step_context(index)
-            guardrails = self.load_guardrails(step_text)
-            preamble = self.build_preamble(guardrails, step_context, prev_error)
+            context_text = self.load_step_context(step_text)
+            previous_step_context = self.build_previous_step_context(index)
+            developer_rules = self.build_developer_guardrails(prev_error)
+            developer_context = "\n\n---\n\n".join(
+                section for section in (context_text, previous_step_context) if section
+            )
 
             label = f"Step {step_num}/{self.total_steps - 1} ({done} done): {step_name}"
             if attempt > 1:
                 label += f" [retry {attempt}/{self.MAX_RETRIES}]"
 
             with progress_indicator(label) as info:
-                self.invoke_codex(step, preamble)
+                self.run_developer_worker(step, developer_context, developer_rules)
                 elapsed = int(info.elapsed)
 
             index = self.read_json(self.index_file)
@@ -345,8 +438,81 @@ class StepExecutor:
 
             status = current.get("status", "pending")
             timestamp = self.stamp()
+            verification = self.verify_step_result(current, step_text)
+
+            if verification.decision == "retryable_error":
+                error_message = verification.message
+                if attempt < self.MAX_RETRIES:
+                    self.reset_step_for_retry(current, error_message)
+                    self.write_json(self.index_file, index)
+                    prev_error = error_message
+                    print(f"  ↻ Step {step_num}: retry {attempt}/{self.MAX_RETRIES} — {error_message}")
+                    continue
+
+                self.mark_step_error(current, error_message, timestamp)
+                self.write_json(self.index_file, index)
+                self.commit_step(step_num, step_name, editable_paths)
+                print(f"  ✗ Step {step_num}: {step_name} failed after {self.MAX_RETRIES} attempts [{elapsed}s]")
+                print(f"    Error: {error_message}")
+                self.update_feature_index("error")
+                raise SystemExit(1)
+
+            current.pop("verification_error", None)
 
             if status == "completed":
+                self.run_acceptance_checks(current, step_text)
+                verification = self.verify_step_result(current, step_text, require_acceptance=True)
+                if verification.decision == "retryable_error":
+                    error_message = verification.message
+                    if attempt < self.MAX_RETRIES:
+                        self.reset_step_for_retry(current, error_message)
+                        self.write_json(self.index_file, index)
+                        prev_error = error_message
+                        print(f"  ↻ Step {step_num}: retry {attempt}/{self.MAX_RETRIES} — {error_message}")
+                        continue
+
+                    self.mark_step_error(current, error_message, timestamp)
+                    self.write_json(self.index_file, index)
+                    self.commit_step(step_num, step_name, editable_paths)
+                    print(f"  ✗ Step {step_num}: {step_name} failed after {self.MAX_RETRIES} attempts [{elapsed}s]")
+                    print(f"    Error: {error_message}")
+                    self.update_feature_index("error")
+                    raise SystemExit(1)
+
+                git_ops.validate_worktree_scope(
+                    self,
+                    editable_paths=editable_paths,
+                    metadata_paths=metadata_paths,
+                    context=f"step {step_num} review",
+                )
+                review_paths = self.list_review_changed_paths(editable_paths, metadata_paths)
+                diff_text = self.build_review_diff(editable_paths, metadata_paths)
+                review = self.review_step_result(current, step_text, review_paths, diff_text)
+                if review.decision == "blocked":
+                    self.mark_step_blocked_from_review(current, review.message)
+                    current["blocked_at"] = timestamp
+                    self.write_json(self.index_file, index)
+                    print(f"  ⏸ Step {step_num}: {step_name} blocked [{elapsed}s]")
+                    print(f"    Reason: {review.message}")
+                    self.update_feature_index("blocked")
+                    raise SystemExit(2)
+                if review.decision == "retryable_error":
+                    error_message = review.message
+                    if attempt < self.MAX_RETRIES:
+                        self.reset_step_for_retry(current, error_message)
+                        self.write_json(self.index_file, index)
+                        prev_error = error_message
+                        print(f"  ↻ Step {step_num}: retry {attempt}/{self.MAX_RETRIES} — {error_message}")
+                        continue
+
+                    self.mark_step_error(current, error_message, timestamp)
+                    self.write_json(self.index_file, index)
+                    self.commit_step(step_num, step_name, editable_paths)
+                    print(f"  ✗ Step {step_num}: {step_name} failed after {self.MAX_RETRIES} attempts [{elapsed}s]")
+                    print(f"    Error: {error_message}")
+                    self.update_feature_index("error")
+                    raise SystemExit(1)
+
                 current["completed_at"] = timestamp
                 self.write_json(self.index_file, index)
                 self.commit_step(step_num, step_name, editable_paths)
@@ -364,15 +530,12 @@ class StepExecutor:
 
             error_message = current.get("error_message", "Step did not update status")
             if attempt < self.MAX_RETRIES:
-                current["status"] = "pending"
-                current.pop("error_message", None)
+                self.reset_step_for_retry(current, error_message)
                 self.write_json(self.index_file, index)
                 prev_error = error_message
                 print(f"  ↻ Step {step_num}: retry {attempt}/{self.MAX_RETRIES} — {error_message}")
             else:
-                current["status"] = "error"
-                current["error_message"] = f"[{self.MAX_RETRIES}회 시도 후 실패] {error_message}"
-                current["failed_at"] = timestamp
+                self.mark_step_error(current, error_message, timestamp)
                 self.write_json(self.index_file, index)
                 self.commit_step(step_num, step_name, editable_paths)
                 print(f"  ✗ Step {step_num}: {step_name} failed after {self.MAX_RETRIES} attempts [{elapsed}s]")

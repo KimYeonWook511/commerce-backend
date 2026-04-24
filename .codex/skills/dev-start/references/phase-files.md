@@ -135,7 +135,7 @@ task 상세 상태 파일이다.
 - 필요한 파일 경로와 배경은 문서 안에 직접 적는다.
 - `수정 가능 경로` 섹션은 필수이며, 현재 step이 수정해도 되는 경로만 명시한다.
 - 구현 코드는 인터페이스와 제약 중심으로 유도하고, 내부 구현을 전부 박아넣지 않는다.
-- Acceptance Criteria는 추상 문장이 아니라 실제 실행 커맨드여야 한다.
+- Acceptance Criteria는 추상 문장이 아니라 실행기가 다시 돌릴 수 있는 실제 실행 커맨드여야 한다.
 - 기본 예시는 `./gradlew test`를 사용하고, 실제 step 초안에서는 해당 feature에 맞는 더 구체적인 Gradle 커맨드로 좁힐 수 있다.
 
 ## 상태 전이 규칙
@@ -162,6 +162,10 @@ python3 .codex/skills/dev-start/scripts/execute.py docs/features/<feature-name>/
 
 1. 기능 내부 phase index와 현재 phase index를 읽는다.
 2. `pending` step을 순차 실행한다.
-3. step 결과에 따라 `completed`, `error`, `blocked` 상태를 기록한다.
-4. 완료된 step의 `summary`는 다음 step 컨텍스트로 누적된다.
-5. `--push`가 있으면 마지막에 현재 feature 브랜치를 원격으로 push한다.
+3. developer worker가 step을 수행하고 `stepN-output.json`을 기록한다.
+4. verifier가 step 상태와 output을 자동 검증한다.
+5. step이 `completed`면 실행기가 Acceptance Criteria를 다시 실행하고 `stepN-ac-output.json`을 기록한다.
+6. reviewer worker가 현재 step 결과를 diff와 output 기준으로 read-only 재검토한다.
+7. verifier, Acceptance Criteria 재검증, reviewer를 모두 통과한 경우에만 `completed`를 인정한다.
+8. 완료된 step의 `summary`는 다음 step 컨텍스트로 누적된다.
+9. `--push`가 있으면 마지막에 현재 feature 브랜치를 원격으로 push한다.
