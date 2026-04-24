@@ -17,6 +17,13 @@
 - Controller는 요청 수신, 입력 검증, 서비스 위임, 응답 반환만 담당합니다.
 - 불필요한 추상화와 과한 설계를 피합니다.
 
+## 작업 시작 규칙
+
+- 이 프로젝트에서는 기능 구현 전에 반드시 `dev-start` workflow로 기획, 문서화, step 설계를 먼저 수행합니다.
+- 사용자가 명시적으로 `dev-start` 이후 구현 시작을 승인하기 전에는 코드를 수정하지 않습니다.
+- 구현 요청처럼 보이더라도 `dev-start`가 선행되지 않았다면 먼저 문서 탐색, 논의, 계획 수립만 수행합니다.
+- `Implement the plan` 같은 요청도, 해당 계획이 `dev-start` workflow 산출물 기준으로 정리되고 사용자가 구현 시작 의사를 명시한 경우에만 실제 구현으로 해석합니다.
+
 ## 안전 규칙
 
 - 근거 없이 기존 컨벤션을 무시하거나 사용하지 않는 코드를 추가하지 않습니다.
@@ -24,12 +31,15 @@
 
 ## 참고 문서
 
-- 작업 추적: `docs/TODO.md`
 - 기능 범위: `docs/PRD.md`
 - 설계 결정: `docs/ADR.md`
 - 백엔드 구조와 의존성: `docs/architecture.md`
 - API 스펙: `docs/api-spec.md`
 - DB 스키마: `docs/db-schema.md`
+- 기능별 문서 운영 가이드: `docs/features/README.md`
+- 브랜치 컨벤션: `docs/branch-conventions.md`
 - 테스트 컨벤션: `docs/testing-conventions.md`
 - 커밋 컨벤션: `docs/commit-conventions.md`
+- Codex 하네스 원칙: `docs/codex-harness.md`
+- Codex hook 구조: `docs/hooks/README.md`
 - Codex 에이전트 목록: `docs/agents/README.md`
