@@ -1,0 +1,9 @@
+{
+  "phases": [
+    {
+      "dir": "0-query-read-api",
+      "status": "blocked",
+      "blocked_at": "2026-04-26T01:56:41+0900"
+    }
+  ]
+}

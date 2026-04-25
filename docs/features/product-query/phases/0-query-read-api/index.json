@@ -1,0 +1,17 @@
+{
+  "project": "commerce-backend",
+  "phase": "0-query-read-api",
+  "steps": [
+    {
+      "step": 0,
+      "name": "product-query-api",
+      "status": "pending"
+    },
+    {
+      "step": 1,
+      "name": "sync-root-docs",
+      "status": "pending"
+    }
+  ],
+  "created_at": "2026-04-26T01:47:14+0900"
+}
