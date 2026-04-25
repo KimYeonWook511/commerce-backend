@@ -230,13 +230,22 @@ class StepExecutor:
 
         feature = self.read_json(self.feature_index_file)
         timestamp = self.stamp()
-        key = {"completed": "completed_at", "error": "failed_at", "blocked": "blocked_at"}.get(status)
+        key = {
+            "completed": "completed_at",
+            "error": "failed_at",
+            "blocked": "blocked_at",
+        }.get(status)
 
         for phase in feature.get("phases", []):
             if phase.get("dir") == self.phase_dir_name:
                 phase["status"] = status
+                for stale_key in ("completed_at", "failed_at", "blocked_at"):
+                    if stale_key != key:
+                        phase.pop(stale_key, None)
                 if key:
                     phase[key] = timestamp
+                elif status == "in_progress":
+                    phase["started_at"] = phase.get("started_at", timestamp)
                 break
 
         self.write_json(self.feature_index_file, feature)
@@ -395,6 +404,7 @@ class StepExecutor:
             if step.get("step") == step_num and "started_at" not in step:
                 step["started_at"] = self.stamp()
                 self.write_json(self.index_file, index)
+                self.update_feature_index("in_progress")
                 break
 
     # --- execution loop ---
