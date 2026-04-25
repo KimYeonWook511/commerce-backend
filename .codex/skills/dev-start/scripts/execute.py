@@ -342,7 +342,10 @@ class StepExecutor:
 
     def build_review_diff(self, editable_paths: list[str], metadata_paths: list[str]) -> str:
         """현재 step 범위의 diff를 reviewer 입력용으로 만든다."""
-        return git_ops.build_review_diff(self, [*editable_paths, *metadata_paths])
+        # Reviewer 검토는 구현 변경을 우선 보여줘야 한다.
+        # step output/index 같은 메타데이터 diff를 함께 넣으면 prompt 크기 제한 안에서
+        # 실제 코드 diff가 잘려 reviewer가 근거 부족으로 blocked 되는 경우가 있다.
+        return git_ops.build_review_diff(self, editable_paths)
 
     # --- worker 호출 ---
 
