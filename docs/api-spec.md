@@ -161,6 +161,79 @@
 }
 ```
 
+## 상품
+
+### `GET /products`
+
+설명:
+- 비로그인 사용자도 호출 가능한 공개 상품 목록 조회 API입니다.
+- 상품은 `createdAt DESC` 기준 최신 등록순으로 전체 조회합니다.
+- 목록 응답에는 재고 정보를 포함하지 않습니다.
+
+요청:
+- 요청 바디 없음
+- 요청 파라미터 없음
+- 인증 헤더 없음
+
+응답:
+
+```json
+{
+  "code": "SUCCESS",
+  "message": "OK",
+  "data": [
+    {
+      "productId": 2,
+      "name": "latest-product",
+      "price": 3000
+    },
+    {
+      "productId": 1,
+      "name": "old-product",
+      "price": 1000
+    }
+  ]
+}
+```
+
+### `GET /products/{productId}`
+
+설명:
+- 비로그인 사용자도 호출 가능한 공개 상품 상세 조회 API입니다.
+- 상품 기본 정보와 현재 재고 수량을 함께 반환합니다.
+- 재고 레코드가 없으면 `stockQuantity`는 `0`으로 응답합니다.
+
+요청:
+- Path
+  - `productId`: 양수, 필수
+- 요청 바디 없음
+- 인증 헤더 없음
+
+응답:
+
+```json
+{
+  "code": "SUCCESS",
+  "message": "OK",
+  "data": {
+    "productId": 2,
+    "name": "latest-product",
+    "price": 3000,
+    "stockQuantity": 7
+  }
+}
+```
+
+존재하지 않는 상품 상세 조회 응답:
+
+```json
+{
+  "code": "PRODUCT-404",
+  "message": "상품을 찾을 수 없습니다",
+  "data": null
+}
+```
+
 ## 주문
 
 ### `POST /orders`

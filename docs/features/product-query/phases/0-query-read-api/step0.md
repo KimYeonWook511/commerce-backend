@@ -38,6 +38,7 @@
 ## 수정 가능 경로
 
 - `src/main/java/com/commerce/product/**`
+- `src/main/java/com/commerce/auth/filter/JwtAuthenticationFilter.java`
 - `src/test/java/com/commerce/product/**`
 
 ## Acceptance Criteria
