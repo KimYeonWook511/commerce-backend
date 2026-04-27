@@ -70,6 +70,36 @@ docs/features/<feature-name>/phases/<phase-name>/index.json
 docs/features/<feature-name>/phases/<phase-name>/step0.md
 ```
 
+## Step 작성 원칙
+
+- step 문서의 `수정 가능 경로`는 실제 구현에서 변경될 수 있는 모든 경로를 포함해야 한다.
+- 도메인 패키지 경로만 적고 끝내지 말고, 횡단 관심사 파일도 처음부터 검토한다.
+- 특히 아래 유형은 누락되기 쉽다.
+  - 인증 필터, 인터셉터, `WebConfig`
+  - 공통 예외/응답 처리
+  - feature 문서 자체
+  - 루트 `docs/api-spec.md`, `docs/architecture.md`, `docs/db-schema.md`
+- review 단계에서 "허용 범위 밖 변경"이 반복되면 구현보다 먼저 `수정 가능 경로` 설계를 다시 확인한다.
+
+예:
+
+```text
+## 수정 가능 경로
+- `src/main/java/com/commerce/product/**`
+- `src/main/java/com/commerce/auth/filter/JwtAuthenticationFilter.java`
+- `src/test/java/com/commerce/product/**`
+```
+
+## 재실행 주의사항
+
+- step이 중간에 blocked/error로 끝났다면 `phases/<phase-name>/index.json` 상태와 실제 Git 워킹트리를 함께 확인한다.
+- 실행기 output json은 실행 산출물일 뿐 기능 구현 산출물과 다를 수 있다.
+- 이전 step 변경이 커밋되지 않은 상태로 다음 step을 바로 재실행하면 scope validation에 다시 걸릴 수 있다.
+- 따라서 재실행 전에는 아래를 먼저 확인한다.
+  - 현재 워킹트리에 남은 변경이 어떤 step 산출물인지
+  - 해당 변경이 현재 step의 `수정 가능 경로`에 포함되는지
+  - 이전 step 산출물이 아직 미커밋 상태인지
+
 ## 문서 우선순위
 
 기능 작업 시 agent는 아래 순서로 문서를 읽는다.

@@ -31,6 +31,7 @@ public class JwtAuthenticationFilter extends OncePerRequestFilter {
 		"/auth/login",
 		"/auth/signup",
 		"/auth/reissue",
+		"/products",
 		"/payments/naverpay/return"
 	);
 
@@ -46,7 +47,7 @@ public class JwtAuthenticationFilter extends OncePerRequestFilter {
 
 		// 인증이 필요 없는 경로 요청
 		String requestUri = request.getRequestURI();
-		if (WHITELIST.contains(requestUri)) {
+		if (WHITELIST.contains(requestUri) || requestUri.startsWith("/products/")) {
 			filterChain.doFilter(request, response);
 			return;
 		}

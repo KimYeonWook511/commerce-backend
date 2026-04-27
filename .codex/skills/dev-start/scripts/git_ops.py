@@ -160,11 +160,13 @@ def commit_step(executor, step_num: int, step_name: str, editable_paths: list[st
         if feat_commit.returncode == 0:
             print(f"  Commit: {feat_msg}")
         else:
-            print(f"  WARN: 코드 커밋 실패: {feat_commit.stderr.strip()}")
+            print(f"  ERROR: 코드 커밋 실패: {feat_commit.stderr.strip()}")
+            raise SystemExit(1)
 
     stage_paths(executor, metadata_paths)
     if executor.run_git("diff", "--cached", "--quiet").returncode != 0:
         chore_msg = executor.CHORE_MSG.format(phase=executor.phase_name, num=step_num)
         chore_commit = executor.run_git("commit", "-m", chore_msg)
         if chore_commit.returncode != 0:
-            print(f"  WARN: housekeeping 커밋 실패: {chore_commit.stderr.strip()}")
+            print(f"  ERROR: housekeeping 커밋 실패: {chore_commit.stderr.strip()}")
+            raise SystemExit(1)

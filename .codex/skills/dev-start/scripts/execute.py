@@ -230,13 +230,22 @@ class StepExecutor:
 
         feature = self.read_json(self.feature_index_file)
         timestamp = self.stamp()
-        key = {"completed": "completed_at", "error": "failed_at", "blocked": "blocked_at"}.get(status)
+        key = {
+            "completed": "completed_at",
+            "error": "failed_at",
+            "blocked": "blocked_at",
+        }.get(status)
 
         for phase in feature.get("phases", []):
             if phase.get("dir") == self.phase_dir_name:
                 phase["status"] = status
+                for stale_key in ("completed_at", "failed_at", "blocked_at"):
+                    if stale_key != key:
+                        phase.pop(stale_key, None)
                 if key:
                     phase[key] = timestamp
+                elif status == "in_progress":
+                    phase["started_at"] = phase.get("started_at", timestamp)
                 break
 
         self.write_json(self.feature_index_file, feature)
@@ -342,7 +351,10 @@ class StepExecutor:
 
     def build_review_diff(self, editable_paths: list[str], metadata_paths: list[str]) -> str:
         """현재 step 범위의 diff를 reviewer 입력용으로 만든다."""
-        return git_ops.build_review_diff(self, [*editable_paths, *metadata_paths])
+        # Reviewer 검토는 구현 변경을 우선 보여줘야 한다.
+        # step output/index 같은 메타데이터 diff를 함께 넣으면 prompt 크기 제한 안에서
+        # 실제 코드 diff가 잘려 reviewer가 근거 부족으로 blocked 되는 경우가 있다.
+        return git_ops.build_review_diff(self, editable_paths)
 
     # --- worker 호출 ---
 
@@ -392,6 +404,7 @@ class StepExecutor:
             if step.get("step") == step_num and "started_at" not in step:
                 step["started_at"] = self.stamp()
                 self.write_json(self.index_file, index)
+                self.update_feature_index("in_progress")
                 break
 
     # --- execution loop ---

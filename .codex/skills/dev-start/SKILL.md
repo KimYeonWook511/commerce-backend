@@ -15,6 +15,14 @@ description: 개발 시작 전 문서 탐색, 논의, step 설계, phases 초안
 수동 리뷰 절차와 수동 commit/push 운영 절차는 이 skill의 범위가 아니다.
 다만 skill 내부 실행기 `execute.py`는 브랜치 생성, 자동 커밋, 선택적 push를 수행할 수 있다.
 
+## 필수 준수 규칙
+
+아래 규칙은 반드시 지켜야 한다.
+
+- 이 skill을 사용하는 작업에서는 `phases`가 준비된 이후의 기본 구현 경로를 수동 파일 수정이 아니라 `execute.py` 실행으로 본다.
+- 사용자가 명시적으로 `execute.py`를 쓰지 말라고 하지 않은 이상, agent가 직접 구현을 시작하면 안 된다.
+- `Implement the plan`은 자동으로 직접 구현을 뜻하지 않는다. `phases` 준비 여부와 실행 승인 여부를 먼저 확인해야 한다.
+
 ## 먼저 읽을 것
 
 항상 먼저 아래를 읽는다.
@@ -81,6 +89,10 @@ feature 문서와 `phases` 문서로 부족한 공통 맥락이 있을 때만 `A
 
 포맷과 상세 규칙은 `references/phase-files.md`를 따른다.
 
+파일 생성 승인 전 금지:
+- feature 문서 초안, `phases/index.json`, step 문서를 직접 만들지 않는다.
+- 계획이 완성됐더라도 승인 없이 repo 파일을 수정하지 않는다.
+
 ### 5. Execution
 
 `phases` 파일이 준비되면 skill 내부 실행기로 step을 순차 실행할 수 있다.
@@ -89,6 +101,12 @@ feature 문서와 `phases` 문서로 부족한 공통 맥락이 있을 때만 `A
 python3 .codex/skills/dev-start/scripts/execute.py docs/features/<feature-name>/phases/<phase-name>
 python3 .codex/skills/dev-start/scripts/execute.py docs/features/<feature-name>/phases/<phase-name> --push
 ```
+
+실행 규칙:
+- `phases` 문서가 준비되지 않았으면 구현을 시작하지 말고 문서 준비 단계로 되돌아간다.
+- 사용자가 구현을 요청하더라도, 기본 동작은 agent의 직접 수정이 아니라 `execute.py` 실행 제안 또는 실행 승인 대기다.
+- 사용자가 `execute.py` 실행을 승인하지 않았으면 agent는 코드를 직접 수정하지 않는다.
+- 사용자가 명시적으로 수동 구현을 지시한 경우에만 `execute.py`를 우회할 수 있으며, 이때도 해당 예외를 먼저 사용자 업데이트에 분명히 남긴다.
 
 실행기는 아래 규칙으로 동작한다.
 
@@ -102,10 +120,3 @@ python3 .codex/skills/dev-start/scripts/execute.py docs/features/<feature-name>/
 - `blocked` 또는 최종 `error`면 phase 상태를 함께 갱신하고 즉시 중단한다.
 
 `--push`는 모든 step이 완료된 뒤 현재 feature 브랜치를 원격 저장소로 push하는 옵션이다.
-
-## 작성 규칙
-
-- 계획만 요청받았으면 구조와 초안만 제안하고 파일을 만들지 않는다.
-- 파일 생성 승인 전에는 경로, step 수, Acceptance Criteria를 먼저 보여준다.
-- 각 step에는 읽어야 할 파일, 작업, 수정 가능 경로, Acceptance Criteria, 검증 절차, 금지사항이 포함되어야 한다.
-- 핵심 규칙은 명시하지만 구현 세부를 불필요하게 과잉 지정하지 않는다.

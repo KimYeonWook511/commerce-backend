@@ -20,10 +20,16 @@ Controller -> Service -> Domain/Repository
 ## 데이터 흐름
 ```
 회원 요청 → Controller → Service → Domain/Repository
+상품 공개 조회 → ProductController → ProductService → ProductRepository/StockRepository
 주문 생성 → 재고 차감 → 주문 저장 → 결제 준비
 결제 승인 → 외부 결제사 검증 → 주문/결제 상태 반영
 주문 취소/실패 → Outbox 이벤트 저장 → 후속 복구 처리
 ```
+
+## 도메인 책임
+- `product` 도메인은 주문 내부 참조용 상품 정보 관리뿐 아니라 공개 상품 목록 조회와 상품 상세 조회 API를 제공한다.
+- 상품 목록 조회는 `ProductRepository`를 통해 `createdAt DESC` 기준으로 전체 상품을 반환한다.
+- 상품 상세 조회는 `ProductRepository`와 `StockRepository`를 함께 사용해 상품 기본 정보와 현재 재고 수량을 조합한다.
 
 ## 저장소 및 인프라 의존성
 - 영속 데이터는 MySQL에 저장한다.
