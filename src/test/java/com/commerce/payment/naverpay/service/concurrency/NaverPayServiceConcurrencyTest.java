@@ -63,6 +63,7 @@ import com.commerce.product.repository.ProductRepository;
 import com.commerce.test.support.TestcontainersSupport;
 
 @Tag("concurrency")
+@Tag("docker")
 @SpringBootTest
 @ActiveProfiles("test")
 class NaverPayServiceConcurrencyTest {
