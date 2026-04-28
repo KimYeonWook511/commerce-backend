@@ -78,6 +78,9 @@ class NaverPayClientIntegrationTest {
 	@Autowired
 	private NaverPayClient naverPayClient;
 
+	@Autowired
+	private ObjectMapper objectMapper;
+
 	@DisplayName("샌드박스 승인 API 호출이 성공하면 응답이 매핑된다")
 	@Test
 	void approve_whenSandboxConfigured_mapResponse() {
@@ -187,7 +190,6 @@ class NaverPayClientIntegrationTest {
 
 	private void printResponse(Object response) {
 		try {
-			ObjectMapper objectMapper = new ObjectMapper();
 			String json = objectMapper.writerWithDefaultPrettyPrinter().writeValueAsString(response);
 			System.out.println(json);
 		} catch (Exception e) {
