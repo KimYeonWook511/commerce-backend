@@ -74,7 +74,139 @@ dependencies {
 }
 
 tasks.named('test') {
+    systemProperty 'spring.profiles.active', 'test'
+
     useJUnitPlatform {
-        excludeTags "concurrency", "test", "batch"
+        excludeTags "concurrency", "test", "batch", "docker", "sandbox"
+    }
+}
+
+def loadDotEnv = { File envFile ->
+    if (!envFile.exists()) {
+        return [:]
+    }
+
+    envFile.readLines()
+        .collect { it.trim() }
+        .findAll { it && !it.startsWith("#") && it.contains("=") }
+        .collectEntries { line ->
+            def index = line.indexOf("=")
+            def key = line.substring(0, index).trim()
+            def value = line.substring(index + 1).trim()
+
+            if ((value.startsWith("\"") && value.endsWith("\""))
+                || (value.startsWith("'") && value.endsWith("'"))) {
+                value = value.substring(1, value.length() - 1)
+            }
+
+            if (!value) {
+                return [:]
+            }
+
+            [(key): value]
+        }
+}
+
+def resolveDockerCommand = {
+    def output = new ByteArrayOutputStream()
+
+    try {
+        exec {
+            commandLine 'sh', '-c', 'command -v docker'
+            standardOutput = output
+            errorOutput = new ByteArrayOutputStream()
+            ignoreExitValue = true
+        }
+
+        def dockerPath = output.toString().trim()
+        if (dockerPath) {
+            return dockerPath
+        }
+    } catch (Exception ignored) {
+    }
+
+    def candidates = [
+            '/opt/homebrew/bin/docker',
+            '/usr/local/bin/docker',
+            '/usr/bin/docker'
+    ]
+
+    candidates.find { file(it).exists() } ?: 'docker'
+}
+
+tasks.register('ciTest', Test) {
+    group = 'verification'
+    description = 'Runs normal tests and Docker/Testcontainers tests for CI.'
+
+    systemProperty 'spring.profiles.active', 'test'
+
+    useJUnitPlatform {
+        excludeTags "concurrency", "test", "batch", "sandbox"
+    }
+}
+
+tasks.register('dockerTest', Test) {
+    group = 'verification'
+    description = 'Runs tests that require Docker/Testcontainers.'
+    testClassesDirs = sourceSets.test.output.classesDirs
+    classpath = sourceSets.test.runtimeClasspath
+    shouldRunAfter tasks.named('test')
+
+    systemProperty 'spring.profiles.active', 'test'
+
+    doFirst {
+        ByteArrayOutputStream output = new ByteArrayOutputStream()
+        ExecResult result
+
+        def dockerCommand = resolveDockerCommand()
+        try {
+            result = exec {
+                commandLine dockerCommand, 'info'
+                standardOutput = output
+                errorOutput = output
+                ignoreExitValue = true
+            }
+        } catch (Exception ex) {
+            throw new GradleException(
+                "docker 명령어를 실행할 수 없습니다. Docker Desktop 설치 상태와 Gradle 실행 환경의 PATH를 확인하세요.",
+                ex
+            )
+        }
+
+        if (result.exitValue != 0) {
+            List<String> outputLines = output.toString()
+                .readLines()
+                .findAll { !it.isBlank() }
+            String details = outputLines.isEmpty() ? null : outputLines.last()
+
+            String message = "Docker daemon에 연결할 수 없습니다. Docker Desktop을 실행한 뒤 dockerTest를 다시 실행하세요."
+            if (details) {
+                message += "\n세부 원인: ${details}"
+            }
+
+            throw new GradleException(message)
+        }
+    }
+
+    useJUnitPlatform {
+        includeTags "docker"
+    }
+}
+
+tasks.register('naverPaySandboxTest', Test) {
+    group = 'verification'
+    description = 'Runs NaverPay sandbox integration tests with values from .env.sandbox.'
+    testClassesDirs = sourceSets.test.output.classesDirs
+    classpath = sourceSets.test.runtimeClasspath
+    shouldRunAfter tasks.named('test')
+
+    systemProperty 'spring.profiles.active', 'test'
+
+    loadDotEnv(file('.env.sandbox')).each { key, value ->
+        environment key, value
+    }
+
+    useJUnitPlatform {
+        includeTags "sandbox"
     }
 }
