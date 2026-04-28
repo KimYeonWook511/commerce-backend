@@ -1,5 +1,6 @@
 <!--
 PR 제목은 `<type>: <변경 요약>` 형식으로 작성합니다.
+변경 요약은 명사형으로 작성하고, 마침표로 끝내지 않습니다.
 
 예:
 - feat: 상품 조회 API 추가
@@ -39,7 +40,7 @@ feat, fix, refactor, test, docs, chore
 ## 테스트
 
 - [ ] `./gradlew test`
-  - 기본 테스트에서는 `concurrency`, `test`, `batch` 태그가 제외됩니다.
+  - 기본 테스트에서는 `concurrency`, `test`, `batch`, `docker`, `sandbox` 태그가 제외됩니다.
 - [ ] 태그 제외 테스트를 별도로 실행했습니다.
   - 실행 커맨드:
 - [ ] 실행하지 않았습니다.

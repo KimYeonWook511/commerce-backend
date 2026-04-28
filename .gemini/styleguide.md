@@ -21,7 +21,9 @@
 - PR의 주된 변경 목적을 기준으로 타입을 선택합니다.
 - 설정, 도구, 자동화, 하네스, 운영성 변경이 주 목적이면 `chore`를 사용합니다.
 - 테스트 코드가 함께 포함되어도 주된 목적이 설정 검증이면 `chore`를 사용합니다.
+- 변경 요약은 명사형으로 작성합니다.
 - 변경 요약은 `추가`, `수정`, `보강`, `분리`, `정리`, `개선` 같은 짧은 제목형으로 작성합니다.
+- PR 제목에는 커밋 메시지 규칙의 `~~한다` 형태를 사용하지 않습니다.
 - PR 제목은 마침표로 끝내지 않습니다.
 
 예:
@@ -55,13 +57,24 @@
 ## Gemini suggestion 커밋 메시지
 
 - Gemini Code Assist가 리뷰 코멘트에서 suggestion을 제안할 때도 이 저장소의 커밋 메시지 규칙을 따릅니다.
-- suggestion 적용으로 생성되는 커밋 메시지 또는 커밋 제목은 `<type>: <subject>` 형식으로 작성합니다.
+- 리뷰 코멘트에 실제 코드 수정 제안이 있으면 마지막에 추천 커밋 메시지를 함께 작성합니다.
+- 추천 커밋 메시지는 `추천 커밋 메시지: <type>: <subject>` 형식으로 작성합니다.
+- suggestion 적용으로 생성되는 커밋 메시지 또는 커밋 제목은 `<type>: <subject>` 형식을 따르도록 안내합니다.
 - suggestion 커밋의 `subject`도 `~~한다` 형태의 한국어 현재형 문장으로 작성합니다.
 - suggestion 커밋 메시지를 `Apply suggestion`, `Update <file>`, `Fix issue`처럼 일반적인 기본 문구로 작성하지 않습니다.
-- 예: `fix: 인증 예외 응답 상태 코드를 수정한다`
+- 추천 커밋 메시지는 `docs/commit-conventions.md`와 동일한 규칙을 따릅니다.
+- Gemini가 `docs/commit-conventions.md`를 항상 읽는다고 가정하지 말고, 이 문서의 커밋 메시지 핵심 규칙을 우선 적용합니다.
+
+예:
+
+- `추천 커밋 메시지: fix: 인증 예외 응답 상태 코드를 수정한다`
+- `추천 커밋 메시지: test: 네이버페이 샌드박스 테스트에서 ObjectMapper를 주입받도록 변경한다`
+- `추천 커밋 메시지: chore: 테스트 실행 태스크를 분리한다`
 
 ## 테스트
 
 - 기본 테스트 명령은 `./gradlew test`입니다.
-- 현재 `./gradlew test`는 `concurrency`, `test`, `batch` 태그 테스트를 제외합니다.
+- 현재 `./gradlew test`는 `concurrency`, `test`, `batch`, `docker`, `sandbox` 태그 테스트를 제외합니다.
 - 태그 제외 테스트가 변경 범위에 관련되면 별도 실행 필요성을 언급합니다.
+- Docker/Testcontainers 기반 테스트가 변경 범위에 관련되면 `./gradlew dockerTest` 실행 필요성을 언급합니다.
+- 네이버페이 샌드박스 테스트가 변경 범위에 관련되면 `./gradlew naverPaySandboxTest --dry-run` 또는 필요한 환경변수 기반 실행 필요성을 언급합니다.

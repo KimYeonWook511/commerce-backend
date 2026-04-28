@@ -36,6 +36,7 @@ import com.commerce.stock.repository.StockRepository;
 import com.commerce.test.support.TestcontainersSupport;
 
 @Tag("concurrency")
+@Tag("docker")
 @SpringBootTest
 @ActiveProfiles("test")
 class OrderServiceDeadlockMysqlTest {

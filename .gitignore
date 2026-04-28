@@ -51,6 +51,8 @@ __pycache__/
 .env.prod
 ### 로컬 환경변수 ###
 .env.local
+### 샌드박스 테스트 환경변수 ###
+.env.sandbox
 
 ### 도커 볼륨 ###
 mysql-data-local/

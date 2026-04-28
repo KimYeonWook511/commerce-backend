@@ -8,11 +8,13 @@ jobs: # 이 워크플로에서 실행할 작업들의 집합 # 하나의 workflo
   test: # job 식별자, ui에 노출도 안됨, 아무거나 써도 됨
     name: Run Gradle Tests # github ui에 노출됨
     runs-on: ubuntu-latest # GitHub가 제공하는 Ubuntu 러너에서 실행 (로컬이랑 완전 분리된 환경)
-
     steps: # 이 job에서 순서대로 실행할 명령들 # 위 → 아래 순차 실행 # 중간에 실패하면 job 즉시 실패
-      - name: GitHub 저장소 코드를 러너 VM으로 가져옴 # 안 하면 소스 코드 없음 (gradlew, build.gradle 파일 못 찾음)
+      # PR의 소스 코드를 GitHub Actions 러너로 가져온다. 안 하면 소스 코드 없음 (gradlew, build.gradle 파일 못 찾음)
+      - name: GitHub 저장소 코드를 러너 VM으로 가져옴
         uses: actions/checkout@v4
 
+      # CI에서 사용할 JDK 21을 명시적으로 설치한다.
+      # 로컬과 CI의 Java 버전 차이로 인한 문제를 방지한다.
       - name: Java 21 환경 구성
         uses: actions/setup-java@v4
         with:
@@ -20,8 +22,10 @@ jobs: # 이 워크플로에서 실행할 작업들의 집합 # 하나의 workflo
           distribution: 'temurin' # 가장 많이 쓰는 배포판 # Eclipse Temurin (OpenJDK) # 명시하는 이유 (러너 기본 Java 버전은 보장 안 됨, 로컬/서버/CI 버전 불일치 방지)
           cache: gradle  # Gradle 빌드 캐시 활성화
 
+      # gradlew에 실행 권한이 없을 수 있으므로 권한을 부여한다.
       - name: gradlew 실행 권한 부여 # 로컬에서 안 터지는 이유는 Git 설정이나 OS 차이 때문
         run: chmod +x gradlew
 
-      - name: Execute Gradle Tests # 모든 테스트 실행, 테스트 실패 → CI 실패 (PR merge 차단 기능)
-        run: ./gradlew test --no-daemon
+      # 일반 테스트와 Docker/Testcontainers 기반 테스트를 함께 실행 | 테스트 실패 → CI 실패 (PR merge 차단 기능)
+      - name: Execute Gradle Tests
+        run: ./gradlew ciTest --no-daemon

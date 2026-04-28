@@ -57,10 +57,13 @@ import com.commerce.test.support.TestcontainersSupport;
 import com.fasterxml.jackson.core.JsonProcessingException;
 import com.fasterxml.jackson.databind.ObjectMapper;
 
-@Tag("test")
+@Tag("docker")
 @SpringBootTest(
 	classes = StockRestoreKafkaEventConsumerIntegrationTest.TestConfig.class,
-	webEnvironment = WebEnvironment.NONE
+	webEnvironment = WebEnvironment.NONE,
+	properties = {
+		"spring.kafka.listener.auto-startup=true"
+	}
 )
 @TestPropertySource(properties = {
 	"spring.kafka.listener.missing-topics-fatal=false",
