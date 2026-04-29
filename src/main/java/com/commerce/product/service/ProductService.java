@@ -5,6 +5,7 @@ import java.util.List;
 import org.springframework.stereotype.Service;
 
 import com.commerce.product.domain.Product;
+import com.commerce.product.domain.ProductStatus;
 import com.commerce.product.exception.ProductErrorCode;
 import com.commerce.product.exception.ProductException;
 import com.commerce.product.repository.ProductRepository;
@@ -22,13 +23,14 @@ public class ProductService {
 	private final StockRepository stockRepository;
 
 	public List<ProductSummaryResult> getProducts() {
-		return productRepository.findAllByOrderByCreatedAtDesc().stream()
+		return productRepository.findAllByDeletedAtIsNullAndStatusInOrderByCreatedAtDesc(ProductStatus.publicStatuses())
+			.stream()
 			.map(ProductSummaryResult::from)
 			.toList();
 	}
 
 	public ProductDetailResult getProduct(Long productId) {
-		Product product = productRepository.findById(productId)
+		Product product = productRepository.findByIdAndDeletedAtIsNullAndStatusIn(productId, ProductStatus.publicStatuses())
 			.orElseThrow(() -> new ProductException(ProductErrorCode.PRODUCT_NOT_FOUND));
 
 		int stockQuantity = stockRepository.findByProductId(productId)

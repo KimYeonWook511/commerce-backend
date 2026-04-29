@@ -17,6 +17,7 @@ import org.mockito.junit.jupiter.MockitoExtension;
 import org.springframework.test.util.ReflectionTestUtils;
 
 import com.commerce.product.domain.Product;
+import com.commerce.product.domain.ProductStatus;
 import com.commerce.product.exception.ProductErrorCode;
 import com.commerce.product.exception.ProductException;
 import com.commerce.product.repository.ProductRepository;
@@ -41,10 +42,23 @@ class ProductServiceTest {
 	@Test
 	void getProducts_whenProductsExist_returnProductsOrderedByCreatedAtDesc() {
 		// given
-		Product latestProduct = createProduct(2L, "latest-product", 3000, LocalDateTime.of(2026, 4, 26, 12, 0));
-		Product oldProduct = createProduct(1L, "old-product", 1000, LocalDateTime.of(2026, 4, 25, 12, 0));
+		Product latestProduct = createProduct(
+			2L,
+			"latest-product",
+			3000,
+			ProductStatus.ON_SALE,
+			LocalDateTime.of(2026, 4, 26, 12, 0)
+		);
+		Product oldProduct = createProduct(
+			1L,
+			"old-product",
+			1000,
+			ProductStatus.SOLD_OUT,
+			LocalDateTime.of(2026, 4, 25, 12, 0)
+		);
 
-		given(productRepository.findAllByOrderByCreatedAtDesc()).willReturn(List.of(latestProduct, oldProduct));
+		given(productRepository.findAllByDeletedAtIsNullAndStatusInOrderByCreatedAtDesc(ProductStatus.publicStatuses()))
+			.willReturn(List.of(latestProduct, oldProduct));
 
 		// when
 		List<ProductSummaryResult> results = productService.getProducts();
@@ -63,10 +77,17 @@ class ProductServiceTest {
 	@Test
 	void getProduct_whenStockExists_returnProductDetail() {
 		// given
-		Product product = createProduct(1L, "product", 1000, LocalDateTime.of(2026, 4, 26, 12, 0));
+		Product product = createProduct(
+			1L,
+			"product",
+			1000,
+			ProductStatus.ON_SALE,
+			LocalDateTime.of(2026, 4, 26, 12, 0)
+		);
 		Stock stock = createStock(product, 7);
 
-		given(productRepository.findById(1L)).willReturn(Optional.of(product));
+		given(productRepository.findByIdAndDeletedAtIsNullAndStatusIn(1L, ProductStatus.publicStatuses()))
+			.willReturn(Optional.of(product));
 		given(stockRepository.findByProductId(1L)).willReturn(Optional.of(stock));
 
 		// when
@@ -83,9 +104,16 @@ class ProductServiceTest {
 	@Test
 	void getProduct_whenStockMissing_returnZeroStockQuantity() {
 		// given
-		Product product = createProduct(1L, "product", 1000, LocalDateTime.of(2026, 4, 26, 12, 0));
+		Product product = createProduct(
+			1L,
+			"product",
+			1000,
+			ProductStatus.SOLD_OUT,
+			LocalDateTime.of(2026, 4, 26, 12, 0)
+		);
 
-		given(productRepository.findById(1L)).willReturn(Optional.of(product));
+		given(productRepository.findByIdAndDeletedAtIsNullAndStatusIn(1L, ProductStatus.publicStatuses()))
+			.willReturn(Optional.of(product));
 		given(stockRepository.findByProductId(1L)).willReturn(Optional.empty());
 
 		// when
@@ -99,7 +127,8 @@ class ProductServiceTest {
 	@Test
 	void getProduct_whenProductMissing_throwProductNotFound() {
 		// given
-		given(productRepository.findById(1L)).willReturn(Optional.empty());
+		given(productRepository.findByIdAndDeletedAtIsNullAndStatusIn(1L, ProductStatus.publicStatuses()))
+			.willReturn(Optional.empty());
 
 		// when & then
 		assertThatThrownBy(() -> productService.getProduct(1L))
@@ -110,10 +139,27 @@ class ProductServiceTest {
 			});
 	}
 
-	private Product createProduct(Long id, String name, int price, LocalDateTime createdAt) {
+	@DisplayName("판매중지 상품 상세 조회는 상품 없음 예외를 던진다")
+	@Test
+	void getProduct_whenProductStopped_throwProductNotFound() {
+		// given
+		given(productRepository.findByIdAndDeletedAtIsNullAndStatusIn(1L, ProductStatus.publicStatuses()))
+			.willReturn(Optional.empty());
+
+		// when & then
+		assertThatThrownBy(() -> productService.getProduct(1L))
+			.isInstanceOf(ProductException.class)
+			.satisfies(exception -> {
+				ProductException productException = (ProductException)exception;
+				assertThat(productException.getErrorCode()).isEqualTo(ProductErrorCode.PRODUCT_NOT_FOUND);
+			});
+	}
+
+	private Product createProduct(Long id, String name, int price, ProductStatus status, LocalDateTime createdAt) {
 		Product product = Product.builder()
 			.name(name)
 			.price(price)
+			.status(status)
 			.build();
 		ReflectionTestUtils.setField(product, "id", id);
 		ReflectionTestUtils.setField(product, "createdAt", createdAt);
