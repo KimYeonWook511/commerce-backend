@@ -1,0 +1,25 @@
+{
+  "project": "commerce-backend",
+  "phase": "0-admin-product-management-api",
+  "steps": [
+    {
+      "step": 0,
+      "name": "product-domain-fields",
+      "status": "completed",
+      "started_at": "2026-04-29T16:56:18+0900",
+      "completed_at": "2026-04-29T17:03:00+0900",
+      "summary": "Product 생성 시 status를 필수 검증하도록 resolveInitialStatus 기본값 보정 로직을 제거했다. ProductStatus enum, Product 운영 필드, 수정/soft delete 도메인 메서드, 가격 검증, 공개 조회 필터를 유지하고 null status 생성 회귀 테스트를 추가했으며 product 범위 AC 검증을 통과했다."
+    },
+    {
+      "step": 1,
+      "name": "admin-product-command-api",
+      "status": "pending"
+    },
+    {
+      "step": 2,
+      "name": "sync-root-docs",
+      "status": "pending"
+    }
+  ],
+  "created_at": "2026-04-29T16:52:29+0900"
+}
