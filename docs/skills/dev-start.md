@@ -2,7 +2,7 @@
 
 `dev-start`는 개발을 바로 시작하기 전에 요청을 정리하고, 필요한 문서를 좁혀 읽고, step을 설계하고, 준비된 phase는 실행기까지 연결하는 하네스성 skill이다.
 
-지금 이 Repo 기준으로 보면 `router -> context -> developer -> verifier/AC -> reviewer -> commit` 흐름으로 움직인다. 이 문서는 상세 사용법이 아니라, 나중에 다시 봤을 때 "아 지금 이런 구조였지"를 빠르게 떠올리기 위한 요약 문서다.
+지금 이 Repo 기준으로 보면 `router -> context -> authorization -> developer -> verifier/AC -> reviewer -> commit` 흐름으로 움직인다. 이 문서는 상세 사용법이 아니라, 나중에 다시 봤을 때 "아 지금 이런 구조였지"를 빠르게 떠올리기 위한 요약 문서다.
 
 ## 전체 흐름 요약
 
@@ -12,10 +12,11 @@ flowchart TD
     B -->|모호한 요청| C["❓ Discuss<br>되물어보기"]
     B -->|명확한 작업| D["📋 Context Manager<br>필요한 정보만 수집"]
     B -->|일반 대화| E["💬 일반 응답"]
-    D --> F["⚙️ Developer Worker<br>구현 수행"]
+    D --> M["🔐 Execution Authorization<br>권한 방식 확정"]
+    M --> F["⚙️ Developer Worker<br>구현 수행"]
     F --> G["✅ Verifier<br>상태 / output 검증"]
     G -->|completed| H["🧪 AC 재검증<br>실행기가 직접 실행"]
-    H -->|통과| I["🔍 Reviewer Worker<br>diff / output 검토"]
+    H -->|통과| I["🔍 Reviewer Worker<br>repo read-only 검토"]
     H -->|실패| J["🔄 재시도"]
     G -->|실패| J
     I -->|pass| K["🎉 완료 및 커밋"]
@@ -28,7 +29,7 @@ flowchart TD
 
 ### 1. Router
 
-현재는 별도 `router` 코드 파일이 있는 구조는 아니다. 대신 `dev-start`의 `SKILL.md` 안에서 `Explore -> Discuss -> Execution` 규칙으로 요청을 분기한다.
+현재는 별도 `router` 코드 파일이 있는 구조는 아니다. 대신 `dev-start`의 `SKILL.md` 안에서 `Explore -> Discuss -> Step Design -> File Drafting -> Execution Authorization -> Execution` 규칙으로 요청을 분기한다.
 
 - 요구사항이 모호하면 바로 구현하지 않고 discuss로 돌린다.
 - 계획만 필요한지, 실제 step 실행까지 들어갈지 여기서 갈린다.
@@ -70,7 +71,7 @@ developer가 `completed`라고 썼다고 바로 끝나지 않는다. 실행기�
 
 developer가 만든 결과를 read-only 관점에서 한 번 더 본다.
 
-- 전달된 diff와 output만 근거로 본다.
+- 변경 경로, output, AC 결과를 바탕으로 실제 repo 파일을 read-only로 확인한다.
 - correctness, regression, test 누락, 명백한 규칙 위반을 중심으로 판단한다.
 - `pass`, `retryable_error`, `blocked` 중 하나를 반환한다.
 
@@ -88,7 +89,7 @@ developer가 만든 결과를 read-only 관점에서 한 번 더 본다.
 
 ## 현재 Repo의 역할별 구성
 
-- Router: `.codex/skills/dev-start/SKILL.md`의 `Explore / Discuss / Execution`
+- Router: `.codex/skills/dev-start/SKILL.md`의 `Explore / Discuss / Step Design / File Drafting / Execution Authorization / Execution`
 - Context Manager: `.codex/skills/dev-start/scripts/step_context.py`
 - Developer Worker: `.codex/skills/dev-start/scripts/developer_guardrails.py`, `.codex/skills/dev-start/scripts/developer_worker.py`
 - Verifier / AC 재검증: `.codex/skills/dev-start/scripts/step_verifier.py`, `.codex/skills/dev-start/scripts/acceptance_runner.py`

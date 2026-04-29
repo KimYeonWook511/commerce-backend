@@ -34,12 +34,25 @@ class ReviewerWorkerTest(unittest.TestCase):
             {"step": 2, "name": "api", "status": "completed", "summary": "완료"},
             "# Step 2",
             ["src/main/java/com/commerce/skilltest/ApiService.java"],
-            "diff --git a/a b/a",
             {"step": 2, "name": "api", "exitCode": 0, "stdout": "ok", "stderr": "", "lastMessage": "done"},
+            {"step": 2, "commands": ["./gradlew test"], "results": [], "passed": True},
         )
         self.assertIn("ApiService.java", prompt)
         self.assertIn("## 변경 경로", prompt)
-        self.assertIn("## 변경 diff", prompt)
+        self.assertIn("## Acceptance Criteria 재검증 요약", prompt)
+        self.assertIn("passed=True", prompt)
+        self.assertNotIn("## 변경 diff", prompt)
+        self.assertNotIn("diff --git", prompt)
+
+    def test_build_codex_command_uses_ephemeral_read_only(self):
+        command = self.module.build_codex_command("/repo", Path("/tmp/message.txt"))
+        self.assertEqual(["codex", "exec"], command[:2])
+        self.assertIn("--ephemeral", command)
+        self.assertIn("-c", command)
+        self.assertIn('approval_policy="never"', command)
+        self.assertIn("-s", command)
+        self.assertIn("read-only", command)
+        self.assertNotIn("danger-full-access", command)
 
 
 if __name__ == "__main__":

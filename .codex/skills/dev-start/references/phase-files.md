@@ -131,12 +131,31 @@ task 상세 상태 파일이다.
 ## Step 작성 규칙
 
 - step 하나에 여러 모듈을 한 번에 넣지 않는다.
+- step 하나는 하나의 핵심 관심사만 다룬다. domain model, repository/service behavior, controller endpoint, web test, root docs sync는 기본적으로 분리한다.
+- API feature는 아래 단위로 나누는 것을 기본값으로 삼는다.
+  - domain/model contract
+  - repository/service behavior
+  - create endpoint
+  - update/delete endpoint
+  - controller/web test
+  - root docs sync
+- controller, request DTO, service, result DTO, test를 모두 새로 만드는 작업은 한 step에 넣지 않는다.
+- 신규 파일이 많거나 여러 레이어를 동시에 건드려 reviewer가 한 번에 판단하기 어렵다면 step을 더 작게 나눈다.
 - “이전 대화에서 논의한 바와 같이” 같은 외부 참조를 쓰지 않는다.
 - 필요한 파일 경로와 배경은 문서 안에 직접 적는다.
 - `수정 가능 경로` 섹션은 필수이며, 현재 step이 수정해도 되는 경로만 명시한다.
 - 구현 코드는 인터페이스와 제약 중심으로 유도하고, 내부 구현을 전부 박아넣지 않는다.
 - Acceptance Criteria는 추상 문장이 아니라 실행기가 다시 돌릴 수 있는 실제 실행 커맨드여야 한다.
-- 기본 예시는 `./gradlew test`를 사용하고, 실제 step 초안에서는 해당 feature에 맞는 더 구체적인 Gradle 커맨드로 좁힐 수 있다.
+- 기본 예시는 `./gradlew test`를 사용한다.
+- 실제 step 초안에서 더 구체적인 Gradle 커맨드로 좁힐 수 있지만, 좁히는 경우 step 문서에 그 이유를 명시한다.
+- 아래 변경이 포함된 step은 전체 테스트 `./gradlew test`를 Acceptance Criteria에 포함한다.
+  - entity builder/constructor 변경
+  - enum 필수화 또는 상태 정책 변경
+  - repository 조회 조건 변경
+  - 공통 예외/응답 변경
+  - 인증/권한 경계 변경
+- shared domain 계약을 바꾸는 step은 사용처 탐색 커맨드를 `검증 절차`에 포함한다.
+  - 예: `rg "Product.builder" src/main/java src/test/java`
 
 ## 상태 전이 규칙
 
@@ -162,10 +181,36 @@ python3 .codex/skills/dev-start/scripts/execute.py docs/features/<feature-name>/
 
 1. 기능 내부 phase index와 현재 phase index를 읽는다.
 2. `pending` step을 순차 실행한다.
-3. developer worker가 step을 수행하고 `stepN-output.json`을 기록한다.
+3. developer worker가 `codex exec --ephemeral -c approval_policy="never" -s workspace-write`로 step을 수행하고 `stepN-output.json`을 기록한다.
 4. verifier가 step 상태와 output을 자동 검증한다.
 5. step이 `completed`면 실행기가 Acceptance Criteria를 다시 실행하고 `stepN-ac-output.json`을 기록한다.
-6. reviewer worker가 현재 step 결과를 diff와 output 기준으로 read-only 재검토한다.
+6. reviewer worker가 `codex exec --ephemeral -c approval_policy="never" -s read-only`로 변경 경로, output, Acceptance Criteria 결과를 바탕으로 실제 repo 파일을 read-only 재검토한다.
 7. verifier, Acceptance Criteria 재검증, reviewer를 모두 통과한 경우에만 `completed`를 인정한다.
 8. 완료된 step의 `summary`는 다음 step 컨텍스트로 누적된다.
 9. `--push`가 있으면 마지막에 현재 feature 브랜치를 원격으로 push한다.
+
+## Git 권한 운영
+
+- `execute.py`는 branch checkout/create, add, commit을 직접 수행한다.
+- Git preflight는 실행 중인 `execute.py`가 `.git` 메타데이터에 쓸 수 있는지만 조기에 확인한다. preflight는 권한을 부여하지 않는다.
+- developer/reviewer worker의 내부 `codex exec` 권한 설정은 worker 프로세스에만 적용되며, `execute.py`가 직접 수행하는 `git checkout/add/commit` 권한을 대신 부여하지 않는다.
+- 사용자가 로컬 터미널에서 직접 실행하면 일반적으로 sandbox 권한 문제가 발생하지 않는다.
+- Codex가 실행기를 대신 실행하는 경우에는 아래 명령 자체를 권한 상승으로 실행해야 한다.
+- 반복 승인은 Codex permission UI에서 `prefix_rule=["python3", ".codex/skills/dev-start/scripts/execute.py"]`를 저장해 처리한다.
+
+```bash
+python3 .codex/skills/dev-start/scripts/execute.py docs/features/<feature-name>/phases/<phase-name>
+```
+
+- 개별 `git add` 또는 `git commit` prefix만 승인해도 `execute.py` 내부 Git subprocess 권한이 해결되는 것은 아니다.
+- preflight가 실패하면 Git 작업으로 들어가기 전에 중단하고, `execute.py` 명령 자체를 권한 상승으로 다시 실행한다.
+
+## 실행 산출물
+
+각 step은 실행기로 완료되어야 하며, 수동으로 `status = completed`만 기록하면 안 된다.
+
+- `stepN-output.json`: writer worker 실행 결과
+- `stepN-ac-output.json`: Acceptance Criteria 재실행 결과. Acceptance Criteria가 있는 step에서 필수다.
+- `stepN-review-output.json`: reviewer worker 검토 결과
+
+실행 시작 시 이미 `completed`인 step은 위 산출물을 검사한다. 산출물이 누락되면 실행기는 중단하며, 해당 step의 `status`를 `pending`으로 되돌리고 `completed_at`, `summary`를 정리한 뒤 다시 실행해야 한다.

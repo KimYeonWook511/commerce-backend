@@ -134,7 +134,9 @@ class StepExecutor:
     def run(self):
         """실행 헤더 출력부터 전체 phase 완료 처리까지 오케스트레이션한다."""
         self.print_header()
+        self.validate_completed_step_artifacts()
         self.check_blockers()
+        git_ops.preflight_git_write(self)
         self.checkout_branch()
         self.ensure_created_at()
         self.execute_all_steps()
@@ -294,9 +296,11 @@ class StepExecutor:
             ac_output_path,
         )
 
-    def review_step_result(self, current: dict, step_text: str, changed_paths: list[str], diff_text: str) -> reviewer_worker.ReviewResult:
+    def review_step_result(self, current: dict, step_text: str, changed_paths: list[str]) -> reviewer_worker.ReviewResult:
         """writer 결과를 read-only review worker로 다시 확인한다."""
         output = self.read_json(self.step_output_path(current["step"]))
+        ac_output_path = self.step_acceptance_output_path(current["step"])
+        ac_output = self.read_json(ac_output_path) if ac_output_path.exists() else None
         return reviewer_worker.run(
             root=self.root,
             phase_dir=self.phase_dir,
@@ -304,8 +308,8 @@ class StepExecutor:
             step=current,
             step_text=step_text,
             changed_paths=changed_paths,
-            diff_text=diff_text,
             output=output,
+            ac_output=ac_output,
             guardrails_text=self.build_reviewer_guardrails(),
         )
 
@@ -349,13 +353,6 @@ class StepExecutor:
                 review_paths.append(path)
         return review_paths
 
-    def build_review_diff(self, editable_paths: list[str], metadata_paths: list[str]) -> str:
-        """현재 step 범위의 diff를 reviewer 입력용으로 만든다."""
-        # Reviewer 검토는 구현 변경을 우선 보여줘야 한다.
-        # step output/index 같은 메타데이터 diff를 함께 넣으면 prompt 크기 제한 안에서
-        # 실제 코드 diff가 잘려 reviewer가 근거 부족으로 blocked 되는 경우가 있다.
-        return git_ops.build_review_diff(self, editable_paths)
-
     # --- worker 호출 ---
 
     def run_developer_worker(self, step: dict, context_text: str, guardrails_text: str) -> dict:
@@ -389,6 +386,39 @@ class StepExecutor:
                 raise SystemExit(2)
             if step.get("status") != "pending":
                 break
+
+    def validate_completed_step_artifacts(self):
+        """completed step이 실행기 산출물을 모두 가지고 있는지 확인한다."""
+        index = self.read_json(self.index_file)
+        missing: list[str] = []
+        for step in index.get("steps", []):
+            if step.get("status") != "completed":
+                continue
+
+            step_num = step.get("step")
+            if not isinstance(step_num, int):
+                continue
+
+            step_file = self.step_file_path(step_num)
+            required = [
+                self.step_output_path(step_num),
+                self.phase_dir / f"step{step_num}-review-output.json",
+            ]
+            if step_file.exists():
+                step_text = step_file.read_text(encoding="utf-8")
+                if acceptance_runner.extract_acceptance_commands(step_text):
+                    required.append(self.step_acceptance_output_path(step_num))
+
+            for path in required:
+                if not path.exists():
+                    missing.append(path.relative_to(ROOT).as_posix())
+
+        if missing:
+            print("\n  ERROR: completed step의 실행 산출물이 누락되었습니다.")
+            for path in missing:
+                print(f"  - {path}")
+            print("  Fix: 해당 step의 status를 'pending'으로 되돌리고 completed_at/summary를 정리한 뒤 execute.py로 재실행하세요.")
+            raise SystemExit(1)
 
     def ensure_created_at(self):
         """phase index 최초 실행 시점을 한 번만 기록한다."""
@@ -499,8 +529,7 @@ class StepExecutor:
                     context=f"step {step_num} review",
                 )
                 review_paths = self.list_review_changed_paths(editable_paths, metadata_paths)
-                diff_text = self.build_review_diff(editable_paths, metadata_paths)
-                review = self.review_step_result(current, step_text, review_paths, diff_text)
+                review = self.review_step_result(current, step_text, review_paths)
                 if review.decision == "blocked":
                     self.mark_step_blocked_from_review(current, review.message)
                     current["blocked_at"] = timestamp

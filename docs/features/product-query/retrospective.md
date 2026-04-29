@@ -19,6 +19,7 @@
 - 실행기는 reviewer에게 보여줄 diff를 만들 때 step output, phase index 같은 메타데이터 경로도 함께 포함할 수 있었다.
 - 이 경우 `ProductController`, `ProductService`, 테스트 같은 핵심 코드 diff가 prompt 안에서 잘리거나 묻혀 reviewer가 근거 부족으로 blocked 판단을 내릴 수 있었다.
 - 이후 `execute.py`에서 reviewer diff는 구현 변경 경로 중심으로만 구성하도록 수정했다.
+- 현재 하네스는 diffText 전달 대신 변경 경로와 실행 산출물을 바탕으로 repo 파일을 read-only 검토한다.
 
 ### 3. step 상태 기록과 실제 Git 상태가 완전히 일치하지 않을 수 있었다
 

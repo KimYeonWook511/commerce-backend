@@ -67,6 +67,8 @@ feature 문서와 `phases` 문서로 부족한 공통 맥락이 있을 때만 `A
 설계 원칙:
 
 - 한 step은 하나의 레이어 또는 하나의 핵심 관심사만 다룬다.
+- API feature는 domain/service/controller/test/docs sync를 한 step에 몰아넣지 않는다.
+- command API가 여러 동작을 포함하면 create, update/delete, controller test, docs sync처럼 나눈다.
 - 각 step 문서는 독립 실행 가능한 자기완결 문서여야 한다.
 - 관련 문서 경로와 이전 step 산출물 경로를 명시한다.
 - 구현 지시는 인터페이스와 핵심 제약 위주로 작성하고, 내부 구현은 과도하게 고정하지 않는다.
@@ -93,7 +95,16 @@ feature 문서와 `phases` 문서로 부족한 공통 맥락이 있을 때만 `A
 - feature 문서 초안, `phases/index.json`, step 문서를 직접 만들지 않는다.
 - 계획이 완성됐더라도 승인 없이 repo 파일을 수정하지 않는다.
 
-### 5. Execution
+### 5. Execution Authorization
+
+`execute.py`를 실행하기 전에 권한 방식을 확정한다.
+
+- `execute.py`는 feature 브랜치 checkout/create, add, commit을 직접 수행한다.
+- Codex가 실행기를 대신 실행할 때는 사용자에게 권한 상승 실행이 필요함을 알린다.
+- 반복 승인은 Codex permission UI에서 `prefix_rule=["python3", ".codex/skills/dev-start/scripts/execute.py"]` 저장으로 처리한다.
+- 사용자가 실행을 승인하지 않으면 구현으로 진행하지 않는다.
+
+### 6. Execution
 
 `phases` 파일이 준비되면 skill 내부 실행기로 step을 순차 실행할 수 있다.
 
@@ -106,17 +117,23 @@ python3 .codex/skills/dev-start/scripts/execute.py docs/features/<feature-name>/
 - `phases` 문서가 준비되지 않았으면 구현을 시작하지 말고 문서 준비 단계로 되돌아간다.
 - 사용자가 구현을 요청하더라도, 기본 동작은 agent의 직접 수정이 아니라 `execute.py` 실행 제안 또는 실행 승인 대기다.
 - 사용자가 `execute.py` 실행을 승인하지 않았으면 agent는 코드를 직접 수정하지 않는다.
+- 사용자가 `execute.py` 실행을 승인하면 agent는 `execute.py` 명령 자체를 권한 상승으로 실행한다.
 - 사용자가 명시적으로 수동 구현을 지시한 경우에만 `execute.py`를 우회할 수 있으며, 이때도 해당 예외를 먼저 사용자 업데이트에 분명히 남긴다.
 
 실행기는 아래 규칙으로 동작한다.
 
 - phase/step 상태를 확인하고, 실행 가능한 경우에만 가장 앞의 `pending` step을 수행한다.
 - 현재 step 문서와 관련 문서를 모아 developer 컨텍스트를 만들고 `developer_worker`를 실행한다.
+- developer worker는 실행기 내부 `codex exec --ephemeral -c approval_policy="never" -s workspace-write` 명령으로 호출해 승인 프롬프트 없이 repo 작업 파일을 수정한다.
+- reviewer worker는 실행기 내부 `codex exec --ephemeral -c approval_policy="never" -s read-only` 명령으로 호출해 승인 프롬프트 없이 실제 repo 파일을 읽기 전용으로 검토한다.
+- `execute.py`는 branch checkout/create, add, commit을 직접 수행한다.
+- Git preflight는 실행 중인 `execute.py`가 Git 메타데이터에 쓸 수 있는지만 확인한다. preflight는 권한을 부여하지 않는다.
 - 실행 후 `step_verifier`로 상태와 output을 먼저 검증한다.
 - step이 `completed`면 실행기가 Acceptance Criteria를 직접 재실행한다.
-- 후검증을 통과하면 `reviewer_worker`가 diff와 output 기준으로 read-only 검토한다.
+- 후검증을 통과하면 `reviewer_worker`가 변경 경로와 output을 기준으로 실제 repo 파일을 read-only 검토한다.
 - verifier, AC 재검증, reviewer 중 하나라도 실패하면 사유를 다음 시도 컨텍스트에 넣어 최대 3회까지 재시도한다.
 - `completed` + verifier 통과 + AC 재검증 통과 + reviewer 통과면 자동 커밋을 수행한다.
+- 실행 시작 시 이미 `completed`인 step은 `stepN-output.json`, `stepN-review-output.json`, Acceptance Criteria가 있으면 `stepN-ac-output.json`이 모두 있어야 한다. 산출물이 없으면 수동 완료로 보고 실행을 중단한다.
 - `blocked` 또는 최종 `error`면 phase 상태를 함께 갱신하고 즉시 중단한다.
 
 `--push`는 모든 step이 완료된 뒤 현재 feature 브랜치를 원격 저장소로 push하는 옵션이다.

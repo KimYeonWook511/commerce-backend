@@ -1,6 +1,8 @@
 from __future__ import annotations
 
+from pathlib import Path
 import subprocess
+import uuid
 
 
 def run_git(executor, *args) -> subprocess.CompletedProcess:
@@ -11,6 +13,31 @@ def run_git(executor, *args) -> subprocess.CompletedProcess:
         capture_output=True,
         text=True,
     )
+
+
+def preflight_git_write(executor):
+    """실행 중인 execute.py 프로세스가 git 메타데이터에 쓸 수 있는지 확인한다."""
+    git_dir_result = executor.run_git("rev-parse", "--git-dir")
+    if git_dir_result.returncode != 0:
+        print("  ERROR: git을 사용할 수 없거나 git repo가 아닙니다.")
+        print(f"  {git_dir_result.stderr.strip()}")
+        raise SystemExit(1)
+
+    git_dir = Path(git_dir_result.stdout.strip())
+    if not git_dir.is_absolute():
+        git_dir = Path(executor.root) / git_dir
+
+    probe_path = git_dir / f".codex-write-test-{uuid.uuid4().hex}"
+    try:
+        probe_path.write_text("ok", encoding="utf-8")
+    except OSError as exc:
+        print("  ERROR: execute.py 프로세스가 git 메타데이터 디렉터리에 쓸 수 없습니다.")
+        print(f"  Path: {git_dir}")
+        print(f"  Reason: {exc}")
+        print("  Fix: execute.py 명령 자체를 권한 상승으로 다시 실행하세요.")
+        raise SystemExit(1)
+    finally:
+        probe_path.unlink(missing_ok=True)
 
 
 def checkout_branch(executor):
@@ -65,44 +92,6 @@ def list_worktree_paths(executor) -> list[str]:
     staged = set(filter(None, executor.run_git("diff", "--cached", "--name-only").stdout.splitlines()))
     untracked = set(filter(None, executor.run_git("ls-files", "--others", "--exclude-standard").stdout.splitlines()))
     return sorted(tracked | staged | untracked)
-
-
-def build_review_diff(executor, pathspecs: list[str], limit: int = 12000) -> str:
-    """주어진 pathspec 범위의 diff를 reviewer 입력용으로 만든다."""
-    normalized = [normalize_pathspec(path) for path in pathspecs if normalize_pathspec(path)]
-    if not normalized:
-        return ""
-
-    pieces: list[str] = []
-
-    tracked = executor.run_git("diff", "--", *normalized)
-    if tracked.stdout.strip():
-        pieces.append(tracked.stdout.strip())
-
-    staged = executor.run_git("diff", "--cached", "--", *normalized)
-    if staged.stdout.strip():
-        pieces.append(staged.stdout.strip())
-
-    untracked = [
-        path
-        for path in list_worktree_paths(executor)
-        if any(matches_pathspec(path, pathspec) for pathspec in normalized)
-        and path in set(filter(None, executor.run_git("ls-files", "--others", "--exclude-standard").stdout.splitlines()))
-    ]
-    for path in untracked:
-        file_path = executor.root_path / path
-        if not file_path.is_file():
-            continue
-        try:
-            content = file_path.read_text(encoding="utf-8")
-        except OSError:
-            continue
-        pieces.append(f"diff --git a/{path} b/{path}\nnew file mode 100644\n--- /dev/null\n+++ b/{path}\n{content}")
-
-    diff_text = "\n\n".join(piece for piece in pieces if piece).strip()
-    if len(diff_text) <= limit:
-        return diff_text
-    return diff_text[:limit] + "\n...[truncated]"
 
 
 def validate_worktree_scope(executor, editable_paths: list[str], metadata_paths: list[str], context: str):
