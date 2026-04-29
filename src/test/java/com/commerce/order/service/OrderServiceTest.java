@@ -35,6 +35,7 @@ import com.commerce.order.service.command.OrderCreateCommand;
 import com.commerce.order.service.result.OrderCancelResult;
 import com.commerce.order.service.result.OrderCreateResult;
 import com.commerce.product.domain.Product;
+import com.commerce.product.domain.ProductStatus;
 import com.commerce.product.exception.ProductErrorCode;
 import com.commerce.product.exception.ProductException;
 import com.commerce.product.repository.ProductRepository;
@@ -450,6 +451,7 @@ class OrderServiceTest {
 		Product product = Product.builder()
 			.name(name)
 			.price(price)
+			.status(ProductStatus.ON_SALE)
 			.build();
 		ReflectionTestUtils.setField(product, "id", productId);
 		return product;

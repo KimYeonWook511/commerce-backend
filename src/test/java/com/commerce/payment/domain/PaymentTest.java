@@ -9,6 +9,7 @@ import org.junit.jupiter.api.Test;
 import com.commerce.member.domain.Member;
 import com.commerce.order.domain.Order;
 import com.commerce.product.domain.Product;
+import com.commerce.product.domain.ProductStatus;
 
 class PaymentTest {
 
@@ -40,6 +41,7 @@ class PaymentTest {
 		Product product = Product.builder()
 			.name("product")
 			.price(totalPrice)
+			.status(ProductStatus.ON_SALE)
 			.build();
 		order.addOrderItem(product, 1);
 		return order;

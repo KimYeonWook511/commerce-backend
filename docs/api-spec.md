@@ -167,7 +167,8 @@
 
 설명:
 - 비로그인 사용자도 호출 가능한 공개 상품 목록 조회 API입니다.
-- 상품은 `createdAt DESC` 기준 최신 등록순으로 전체 조회합니다.
+- 삭제되지 않고 `status`가 `ON_SALE` 또는 `SOLD_OUT`인 상품만 조회합니다.
+- 상품은 `createdAt DESC` 기준 최신 등록순으로 조회합니다.
 - 목록 응답에는 재고 정보를 포함하지 않습니다.
 
 요청:
@@ -200,6 +201,7 @@
 
 설명:
 - 비로그인 사용자도 호출 가능한 공개 상품 상세 조회 API입니다.
+- 삭제되지 않고 `status`가 `ON_SALE` 또는 `SOLD_OUT`인 상품만 조회할 수 있습니다.
 - 상품 기본 정보와 현재 재고 수량을 함께 반환합니다.
 - 재고 레코드가 없으면 `stockQuantity`는 `0`으로 응답합니다.
 
@@ -224,13 +226,129 @@
 }
 ```
 
-존재하지 않는 상품 상세 조회 응답:
+존재하지 않거나 공개 대상이 아닌 상품 상세 조회 응답:
 
 ```json
 {
   "code": "PRODUCT-404",
   "message": "상품을 찾을 수 없습니다",
   "data": null
+}
+```
+
+## 관리자 상품
+
+### `POST /admin/products`
+
+설명:
+- 관리자 상품 등록 API입니다.
+- `ROLE_ADMIN` 권한이 필요합니다.
+- 상품 등록 시 재고 레코드는 생성하지 않습니다.
+
+요청:
+- Body
+
+```json
+{
+  "name": "product",
+  "price": 10000,
+  "description": "description",
+  "imageUrl": "https://example.com/product.png",
+  "status": "ON_SALE"
+}
+```
+
+- `name`: blank 불가, 필수
+- `price`: 0보다 커야 함, 필수
+- `description`: 선택
+- `imageUrl`: 선택
+- `status`: `ON_SALE`, `SOLD_OUT`, `STOPPED` 중 하나, 필수
+
+응답:
+- HTTP Status: `201 Created`
+
+```json
+{
+  "code": "SUCCESS",
+  "message": "OK",
+  "data": {
+    "productId": 1,
+    "name": "product",
+    "price": 10000,
+    "description": "description",
+    "imageUrl": "https://example.com/product.png",
+    "status": "ON_SALE"
+  }
+}
+```
+
+### `PATCH /admin/products/{productId}`
+
+설명:
+- 관리자 상품 수정 API입니다.
+- `ROLE_ADMIN` 권한이 필요합니다.
+- 삭제된 상품은 수정할 수 없습니다.
+
+요청:
+- Path
+  - `productId`: 양수, 필수
+- Body
+
+```json
+{
+  "name": "updated-product",
+  "price": 12000,
+  "description": "updated description",
+  "imageUrl": "https://example.com/updated.png",
+  "status": "SOLD_OUT"
+}
+```
+
+- `name`: blank 불가, 필수
+- `price`: 0보다 커야 함, 필수
+- `description`: 선택
+- `imageUrl`: 선택
+- `status`: `ON_SALE`, `SOLD_OUT`, `STOPPED` 중 하나, 필수
+
+응답:
+
+```json
+{
+  "code": "SUCCESS",
+  "message": "OK",
+  "data": {
+    "productId": 1,
+    "name": "updated-product",
+    "price": 12000,
+    "description": "updated description",
+    "imageUrl": "https://example.com/updated.png",
+    "status": "SOLD_OUT"
+  }
+}
+```
+
+### `DELETE /admin/products/{productId}`
+
+설명:
+- 관리자 상품 soft delete API입니다.
+- `ROLE_ADMIN` 권한이 필요합니다.
+- 삭제된 상품은 공개 조회와 관리자 수정/삭제 대상에서 제외됩니다.
+
+요청:
+- Path
+  - `productId`: 양수, 필수
+- 요청 바디 없음
+
+응답:
+
+```json
+{
+  "code": "SUCCESS",
+  "message": "OK",
+  "data": {
+    "productId": 1,
+    "deleted": true
+  }
 }
 ```
 

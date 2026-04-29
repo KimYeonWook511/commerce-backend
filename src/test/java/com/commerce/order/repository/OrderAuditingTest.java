@@ -17,6 +17,7 @@ import com.commerce.member.domain.Member;
 import com.commerce.member.repository.MemberRepository;
 import com.commerce.order.domain.Order;
 import com.commerce.product.domain.Product;
+import com.commerce.product.domain.ProductStatus;
 import com.commerce.product.repository.ProductRepository;
 
 @DataJpaTest
@@ -80,6 +81,7 @@ class OrderAuditingTest {
 		return Product.builder()
 			.name("auditing-product")
 			.price(1000)
+			.status(ProductStatus.ON_SALE)
 			.build();
 	}
 }
