@@ -48,8 +48,11 @@ class ReviewerWorkerTest(unittest.TestCase):
         command = self.module.build_codex_command("/repo", Path("/tmp/message.txt"))
         self.assertEqual(["codex", "exec"], command[:2])
         self.assertIn("--ephemeral", command)
+        self.assertIn("-c", command)
+        self.assertIn('approval_policy="never"', command)
         self.assertIn("-s", command)
         self.assertIn("read-only", command)
+        self.assertNotIn("danger-full-access", command)
 
 
 if __name__ == "__main__":

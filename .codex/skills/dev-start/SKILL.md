@@ -114,9 +114,10 @@ python3 .codex/skills/dev-start/scripts/execute.py docs/features/<feature-name>/
 
 - phase/step 상태를 확인하고, 실행 가능한 경우에만 가장 앞의 `pending` step을 수행한다.
 - 현재 step 문서와 관련 문서를 모아 developer 컨텍스트를 만들고 `developer_worker`를 실행한다.
-- developer/reviewer worker는 실행기 내부 `codex exec --ephemeral` 명령으로 호출해 세션 파일 쓰기 의존성을 피한다.
+- developer worker는 실행기 내부 `codex exec --ephemeral -c approval_policy="never" -s workspace-write` 명령으로 호출해 승인 프롬프트 없이 repo 작업 파일을 수정한다.
+- reviewer worker는 실행기 내부 `codex exec --ephemeral -c approval_policy="never" -s read-only` 명령으로 호출해 승인 프롬프트 없이 실제 repo 파일을 읽기 전용으로 검토한다.
 - 브랜치 생성, add, commit 전에 Git 메타데이터 디렉터리 쓰기 가능 여부를 preflight로 확인한다. preflight는 권한을 부여하지 않고 권한 부족을 조기에 감지한다.
-- Codex가 실행기를 대신 돌릴 때 Git sandbox 권한 문제가 예상되면 `python3 .codex/skills/dev-start/scripts/execute.py ...` 명령 자체를 권한 상승으로 실행한다.
+- Codex가 실행기를 대신 돌릴 때 `execute.py` 자체의 Git sandbox 권한 문제가 예상되면 `python3 .codex/skills/dev-start/scripts/execute.py ...` 명령 자체를 권한 상승으로 실행한다.
 - 실행 후 `step_verifier`로 상태와 output을 먼저 검증한다.
 - step이 `completed`면 실행기가 Acceptance Criteria를 직접 재실행한다.
 - 후검증을 통과하면 `reviewer_worker`가 변경 경로와 output을 기준으로 실제 repo 파일을 read-only 검토한다.

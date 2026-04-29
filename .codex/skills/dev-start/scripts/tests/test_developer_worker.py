@@ -40,7 +40,12 @@ class DeveloperWorkerTest(unittest.TestCase):
         command = self.module.build_codex_command(str(self.root), self.root / "message.txt")
         self.assertEqual(["codex", "exec"], command[:2])
         self.assertIn("--ephemeral", command)
-        self.assertIn("--full-auto", command)
+        self.assertIn("-c", command)
+        self.assertIn('approval_policy="never"', command)
+        self.assertIn("-s", command)
+        self.assertIn("workspace-write", command)
+        self.assertNotIn("danger-full-access", command)
+        self.assertNotIn("--full-auto", command)
         self.assertIn("--skip-git-repo-check", command)
 
     def test_run_writes_output_file(self):

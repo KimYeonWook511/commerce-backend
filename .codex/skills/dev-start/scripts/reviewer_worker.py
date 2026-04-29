@@ -68,6 +68,8 @@ def build_codex_command(root: str, message_path: Path) -> list[str]:
         "codex",
         "exec",
         "--ephemeral",
+        "-c",
+        'approval_policy="never"',
         "-s",
         "read-only",
         "--skip-git-repo-check",

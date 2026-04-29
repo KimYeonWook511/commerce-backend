@@ -181,10 +181,10 @@ python3 .codex/skills/dev-start/scripts/execute.py docs/features/<feature-name>/
 
 1. 기능 내부 phase index와 현재 phase index를 읽는다.
 2. `pending` step을 순차 실행한다.
-3. developer worker가 step을 수행하고 `stepN-output.json`을 기록한다.
+3. developer worker가 `codex exec --ephemeral -c approval_policy="never" -s workspace-write`로 step을 수행하고 `stepN-output.json`을 기록한다.
 4. verifier가 step 상태와 output을 자동 검증한다.
 5. step이 `completed`면 실행기가 Acceptance Criteria를 다시 실행하고 `stepN-ac-output.json`을 기록한다.
-6. reviewer worker가 변경 경로, output, Acceptance Criteria 결과를 바탕으로 실제 repo 파일을 read-only 재검토한다.
+6. reviewer worker가 `codex exec --ephemeral -c approval_policy="never" -s read-only`로 변경 경로, output, Acceptance Criteria 결과를 바탕으로 실제 repo 파일을 read-only 재검토한다.
 7. verifier, Acceptance Criteria 재검증, reviewer를 모두 통과한 경우에만 `completed`를 인정한다.
 8. 완료된 step의 `summary`는 다음 step 컨텍스트로 누적된다.
 9. `--push`가 있으면 마지막에 현재 feature 브랜치를 원격으로 push한다.
@@ -192,6 +192,7 @@ python3 .codex/skills/dev-start/scripts/execute.py docs/features/<feature-name>/
 ## Git 권한 운영
 
 - 실행기의 Git preflight는 권한을 부여하지 않고, `.git` 메타데이터 디렉터리에 쓸 수 있는지만 조기에 확인한다.
+- developer/reviewer worker의 내부 `codex exec` 권한 설정은 worker 프로세스에만 적용되며, `execute.py`가 직접 수행하는 `git checkout/add/commit` 권한을 대신 부여하지 않는다.
 - 사용자가 로컬 터미널에서 직접 실행하면 일반적으로 sandbox 권한 문제가 발생하지 않는다.
 - Codex가 실행기를 대신 실행하는 경우에는 내부 `git checkout/add/commit`까지 같은 프로세스 권한을 사용하므로, 아래 명령 자체를 권한 상승으로 실행해야 한다.
 
