@@ -53,6 +53,7 @@ import com.commerce.payment.repository.PaymentRepository;
 import com.commerce.payment.service.PaymentAttemptService;
 import com.commerce.payment.service.PaymentService;
 import com.commerce.product.domain.Product;
+import com.commerce.product.domain.ProductStatus;
 import com.commerce.product.repository.ProductRepository;
 
 @SpringBootTest
@@ -842,6 +843,7 @@ class NaverPayServiceIntegrationTest {
 			Product.builder()
 				.name("product-" + merchantPayKey)
 				.price(totalPrice)
+				.status(ProductStatus.ON_SALE)
 				.build()
 		);
 

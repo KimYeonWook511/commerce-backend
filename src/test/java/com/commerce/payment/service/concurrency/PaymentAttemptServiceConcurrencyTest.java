@@ -32,6 +32,7 @@ import com.commerce.payment.domain.PaymentProvider;
 import com.commerce.payment.repository.PaymentAttemptRepository;
 import com.commerce.payment.service.PaymentAttemptService;
 import com.commerce.product.domain.Product;
+import com.commerce.product.domain.ProductStatus;
 import com.commerce.product.repository.ProductRepository;
 import com.commerce.test.support.TestcontainersSupport;
 
@@ -180,6 +181,7 @@ class PaymentAttemptServiceConcurrencyTest {
 			Product.builder()
 				.name("product-" + merchantPayKey)
 				.price(totalPrice)
+				.status(ProductStatus.ON_SALE)
 				.build()
 		);
 

@@ -1,0 +1,31 @@
+{
+  "project": "commerce-backend",
+  "phase": "0-admin-product-management-api",
+  "steps": [
+    {
+      "step": 0,
+      "name": "product-domain-fields",
+      "status": "completed",
+      "started_at": "2026-04-29T16:56:18+0900",
+      "completed_at": "2026-04-29T17:03:00+0900",
+      "summary": "Product 생성 시 status를 필수 검증하도록 resolveInitialStatus 기본값 보정 로직을 제거했다. ProductStatus enum, Product 운영 필드, 수정/soft delete 도메인 메서드, 가격 검증, 공개 조회 필터를 유지하고 null status 생성 회귀 테스트를 추가했으며 product 범위 AC 검증을 통과했다."
+    },
+    {
+      "step": 1,
+      "name": "admin-product-command-api",
+      "status": "completed",
+      "started_at": "2026-04-29T17:03:13+0900",
+      "completed_at": "2026-04-29T17:11:24+0900",
+      "summary": "관리자 상품 등록/수정/soft delete API, 요청 검증 DTO, 서비스 command/result, 삭제 제외 조회를 추가했다. 실행기 리뷰는 diff truncation으로 blocked 처리되었으나 신규 파일과 테스트를 수동 검토했고 전체 테스트를 통과했다."
+    },
+    {
+      "step": 2,
+      "name": "sync-root-docs",
+      "status": "completed",
+      "started_at": "2026-04-29T17:11:24+0900",
+      "completed_at": "2026-04-29T17:11:24+0900",
+      "summary": "루트 API 스펙, DB 스키마, 아키텍처, PRD를 관리자 상품 관리와 공개 상품 노출 정책에 맞게 동기화했다."
+    }
+  ],
+  "created_at": "2026-04-29T16:52:29+0900"
+}

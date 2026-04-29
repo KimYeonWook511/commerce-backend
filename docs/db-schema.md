@@ -32,6 +32,10 @@ COLUMNS:
 - `id (PK)`
 - `name`
 - `price`
+- `description`
+- `image_url`
+- `status`
+- `deleted_at`
 
 INDEX:
 - 없음

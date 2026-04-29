@@ -35,6 +35,7 @@ import com.commerce.payment.repository.PaymentRepository;
 import com.commerce.payment.service.command.PaymentReadyCommand;
 import com.commerce.payment.service.result.PaymentReadyResult;
 import com.commerce.product.domain.Product;
+import com.commerce.product.domain.ProductStatus;
 
 @ExtendWith(MockitoExtension.class)
 class PaymentServiceTest {
@@ -236,6 +237,7 @@ class PaymentServiceTest {
 		Product product = Product.builder()
 			.name("product")
 			.price(totalPrice)
+			.status(ProductStatus.ON_SALE)
 			.build();
 		order.addOrderItem(product, 1);
 		return order;

@@ -23,6 +23,7 @@ import com.commerce.order.service.command.OrderCreateCommand;
 import com.commerce.order.service.result.OrderCreateResult;
 import com.commerce.orderitem.repository.OrderItemRepository;
 import com.commerce.product.domain.Product;
+import com.commerce.product.domain.ProductStatus;
 import com.commerce.product.repository.ProductRepository;
 import com.commerce.stock.domain.Stock;
 import com.commerce.stock.exception.StockErrorCode;
@@ -83,6 +84,7 @@ class OrderServiceIntegrationTest {
 			Product.builder()
 				.name("recovery-product")
 				.price(1000)
+				.status(ProductStatus.ON_SALE)
 				.build()
 		);
 		stockRepository.save(

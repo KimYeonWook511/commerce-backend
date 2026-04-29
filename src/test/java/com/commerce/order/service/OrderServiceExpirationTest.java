@@ -25,6 +25,7 @@ import com.commerce.order.repository.OrderRepository;
 import com.commerce.outbox.service.OutboxService;
 import com.commerce.outbox.stock.service.command.StockRestoreOutboxCreateCommand;
 import com.commerce.product.domain.Product;
+import com.commerce.product.domain.ProductStatus;
 
 @ExtendWith(MockitoExtension.class)
 class OrderServiceExpirationTest {
@@ -102,6 +103,7 @@ class OrderServiceExpirationTest {
 		Product product = Product.builder()
 			.name("expire-product")
 			.price(1000)
+			.status(ProductStatus.ON_SALE)
 			.build();
 		ReflectionTestUtils.setField(product, "id", 1L);
 
