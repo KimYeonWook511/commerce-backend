@@ -191,11 +191,12 @@ python3 .codex/skills/dev-start/scripts/execute.py docs/features/<feature-name>/
 
 ## Git 권한 운영
 
-- 실행기의 Git preflight는 부모 `execute.py` 프로세스가 `.git` 메타데이터 디렉터리에 쓸 수 있는지만 조기에 확인한다. preflight는 권한을 부여하지 않는다.
+- `execute.py`는 branch checkout/create, add, commit을 직접 수행한다.
+- Git preflight는 실행 중인 `execute.py`가 `.git` 메타데이터에 쓸 수 있는지만 조기에 확인한다. preflight는 권한을 부여하지 않는다.
 - developer/reviewer worker의 내부 `codex exec` 권한 설정은 worker 프로세스에만 적용되며, `execute.py`가 직접 수행하는 `git checkout/add/commit` 권한을 대신 부여하지 않는다.
 - 사용자가 로컬 터미널에서 직접 실행하면 일반적으로 sandbox 권한 문제가 발생하지 않는다.
-- Codex가 실행기를 대신 실행하는 경우에는 내부 `git checkout/add/commit`까지 같은 프로세스 권한을 사용하므로, 아래 명령 자체를 권한 상승으로 실행해야 한다.
-- 반복 승인은 Codex permission UI에서 `prefix_rule=["python3", ".codex/skills/dev-start/scripts/execute.py"]`를 저장해 처리한다. 이 rule은 실행기 호출만 자동 승인하고, 일반 `git commit`이나 다른 `python3` 명령까지 허용하지 않는다.
+- Codex가 실행기를 대신 실행하는 경우에는 아래 명령 자체를 권한 상승으로 실행해야 한다.
+- 반복 승인은 Codex permission UI에서 `prefix_rule=["python3", ".codex/skills/dev-start/scripts/execute.py"]`를 저장해 처리한다.
 
 ```bash
 python3 .codex/skills/dev-start/scripts/execute.py docs/features/<feature-name>/phases/<phase-name>

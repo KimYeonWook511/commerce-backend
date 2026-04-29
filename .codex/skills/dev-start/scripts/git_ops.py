@@ -16,7 +16,7 @@ def run_git(executor, *args) -> subprocess.CompletedProcess:
 
 
 def preflight_git_write(executor):
-    """부모 execute.py 프로세스가 git 메타데이터에 쓸 수 있는지 확인한다."""
+    """실행 중인 execute.py 프로세스가 git 메타데이터에 쓸 수 있는지 확인한다."""
     git_dir_result = executor.run_git("rev-parse", "--git-dir")
     if git_dir_result.returncode != 0:
         print("  ERROR: git을 사용할 수 없거나 git repo가 아닙니다.")

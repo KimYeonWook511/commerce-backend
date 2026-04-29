@@ -126,7 +126,8 @@ python3 .codex/skills/dev-start/scripts/execute.py docs/features/skill-test/phas
 ```
 
 3. `--push`가 마지막에 원격 브랜치를 푸시하는 옵션이라는 점을 분리해서 설명한다.
-4. 실행 흐름이 `pending` step 순차 실행, 상태 전이, `summary` 누적 방식이라는 점을 요약한다.
+4. 실행 전 권한 상승과 반복 승인 저장 옵션을 안내한다.
+5. 실행 흐름이 `pending` step 순차 실행, 상태 전이, `summary` 누적 방식이라는 점을 요약한다.
 
 ### 4. 실패 기준
 
@@ -134,6 +135,7 @@ python3 .codex/skills/dev-start/scripts/execute.py docs/features/skill-test/phas
 
 - 실행기 경로를 잘못 안내한다.
 - `--push` 의미를 잘못 설명한다.
+- 권한 상승 실행 안내를 빠뜨린다.
 - review나 decision log 흐름과 섞어서 설명한다.
 
 ## 테스트 5. 범위 밖 요청 분리

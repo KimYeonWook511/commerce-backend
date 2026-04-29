@@ -94,6 +94,8 @@ docs/features/<feature-name>/phases/<phase-name>/step0.md
 
 - step이 중간에 blocked/error로 끝났다면 `phases/<phase-name>/index.json` 상태와 실제 Git 워킹트리를 함께 확인한다.
 - 실행기 output json은 실행 산출물일 뿐 기능 구현 산출물과 다를 수 있다.
+- `completed` step은 `stepN-output.json`, `stepN-review-output.json`, AC가 있으면 `stepN-ac-output.json`이 필요하다.
+- completed 산출물이 누락되면 해당 step을 `pending`으로 되돌리고 실행기로 재실행한다.
 - 이전 step 변경이 커밋되지 않은 상태로 다음 step을 바로 재실행하면 scope validation에 다시 걸릴 수 있다.
 - 따라서 재실행 전에는 아래를 먼저 확인한다.
   - 현재 워킹트리에 남은 변경이 어떤 step 산출물인지
