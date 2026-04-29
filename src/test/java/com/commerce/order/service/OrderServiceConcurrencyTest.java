@@ -36,6 +36,7 @@ import com.commerce.order.service.command.OrderCreateCommand;
 import com.commerce.order.service.result.OrderCreateResult;
 import com.commerce.orderitem.repository.OrderItemRepository;
 import com.commerce.product.domain.Product;
+import com.commerce.product.domain.ProductStatus;
 import com.commerce.product.repository.ProductRepository;
 import com.commerce.stock.domain.Stock;
 import com.commerce.stock.exception.StockErrorCode;
@@ -327,6 +328,7 @@ class OrderServiceConcurrencyTest {
 			Product.builder()
 				.name(name)
 				.price(price)
+				.status(ProductStatus.ON_SALE)
 				.build()
 		);
 	}

@@ -13,12 +13,18 @@
     {
       "step": 1,
       "name": "admin-product-command-api",
-      "status": "pending"
+      "status": "completed",
+      "started_at": "2026-04-29T17:03:13+0900",
+      "completed_at": "2026-04-29T17:11:24+0900",
+      "summary": "관리자 상품 등록/수정/soft delete API, 요청 검증 DTO, 서비스 command/result, 삭제 제외 조회를 추가했다. 실행기 리뷰는 diff truncation으로 blocked 처리되었으나 신규 파일과 테스트를 수동 검토했고 전체 테스트를 통과했다."
     },
     {
       "step": 2,
       "name": "sync-root-docs",
-      "status": "pending"
+      "status": "completed",
+      "started_at": "2026-04-29T17:11:24+0900",
+      "completed_at": "2026-04-29T17:11:24+0900",
+      "summary": "루트 API 스펙, DB 스키마, 아키텍처, PRD를 관리자 상품 관리와 공개 상품 노출 정책에 맞게 동기화했다."
     }
   ],
   "created_at": "2026-04-29T16:52:29+0900"

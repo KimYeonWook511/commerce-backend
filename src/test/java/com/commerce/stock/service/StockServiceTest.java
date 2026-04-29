@@ -17,6 +17,7 @@ import org.mockito.junit.jupiter.MockitoExtension;
 import org.springframework.test.util.ReflectionTestUtils;
 
 import com.commerce.product.domain.Product;
+import com.commerce.product.domain.ProductStatus;
 import com.commerce.stock.domain.Stock;
 import com.commerce.stock.exception.StockErrorCode;
 import com.commerce.stock.exception.StockException;
@@ -202,6 +203,7 @@ class StockServiceTest {
 		Product product = Product.builder()
 			.name(name)
 			.price(price)
+			.status(ProductStatus.ON_SALE)
 			.build();
 		ReflectionTestUtils.setField(product, "id", id);
 		return product;

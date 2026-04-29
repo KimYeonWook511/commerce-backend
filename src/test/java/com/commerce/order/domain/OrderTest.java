@@ -10,6 +10,7 @@ import com.commerce.member.domain.Member;
 import com.commerce.order.exception.OrderErrorCode;
 import com.commerce.order.exception.OrderException;
 import com.commerce.product.domain.Product;
+import com.commerce.product.domain.ProductStatus;
 
 class OrderTest {
 
@@ -192,6 +193,7 @@ class OrderTest {
 		return Product.builder()
 			.name(name)
 			.price(price)
+			.status(ProductStatus.ON_SALE)
 			.build();
 	}
 

@@ -17,6 +17,7 @@ import org.springframework.boot.test.context.SpringBootTest;
 import org.springframework.test.context.ActiveProfiles;
 
 import com.commerce.product.domain.Product;
+import com.commerce.product.domain.ProductStatus;
 import com.commerce.product.repository.ProductRepository;
 import com.commerce.stock.domain.Stock;
 import com.commerce.stock.repository.StockRepository;
@@ -278,6 +279,7 @@ class StockConcurrencyTest {
 		Product product = Product.builder()
 			.name(name)
 			.price(price)
+			.status(ProductStatus.ON_SALE)
 			.build();
 		return productRepository.save(product);
 	}

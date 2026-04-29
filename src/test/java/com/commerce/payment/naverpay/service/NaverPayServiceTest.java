@@ -42,6 +42,7 @@ import com.commerce.payment.naverpay.service.result.NaverPayApproveStatus;
 import com.commerce.payment.service.PaymentAttemptService;
 import com.commerce.payment.service.PaymentService;
 import com.commerce.product.domain.Product;
+import com.commerce.product.domain.ProductStatus;
 import com.commerce.order.service.OrderService;
 
 @ExtendWith(MockitoExtension.class)
@@ -1198,6 +1199,7 @@ class NaverPayServiceTest {
 		Product product = Product.builder()
 			.name("product")
 			.price(totalPrice)
+			.status(ProductStatus.ON_SALE)
 			.build();
 		order.addOrderItem(product, 1);
 		ReflectionTestUtils.setField(order, "id", 1L);

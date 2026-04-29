@@ -20,6 +20,7 @@ import com.commerce.member.repository.MemberRepository;
 import com.commerce.order.domain.Order;
 import com.commerce.order.domain.OrderStatus;
 import com.commerce.product.domain.Product;
+import com.commerce.product.domain.ProductStatus;
 import com.commerce.product.repository.ProductRepository;
 
 import jakarta.persistence.EntityManager;
@@ -173,6 +174,7 @@ class OrderRepositoryTest {
 		return Product.builder()
 			.name("order-repo-product-" + suffix)
 			.price(1000)
+			.status(ProductStatus.ON_SALE)
 			.build();
 	}
 }

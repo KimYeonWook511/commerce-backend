@@ -28,6 +28,7 @@ import com.commerce.order.service.command.OrderCreateCommand;
 import com.commerce.order.service.result.OrderCreateResult;
 import com.commerce.orderitem.repository.OrderItemRepository;
 import com.commerce.product.domain.Product;
+import com.commerce.product.domain.ProductStatus;
 import com.commerce.product.repository.ProductRepository;
 import com.commerce.stock.domain.Stock;
 import com.commerce.stock.repository.StockRepository;
@@ -88,6 +89,7 @@ class OrderServiceIdempotencyTest {
 			Product.builder()
 				.name("product-1")
 				.price(1000)
+				.status(ProductStatus.ON_SALE)
 				.build()
 		);
 		stockRepository.save(
@@ -130,6 +132,7 @@ class OrderServiceIdempotencyTest {
 			Product.builder()
 				.name("product-2")
 				.price(2000)
+				.status(ProductStatus.ON_SALE)
 				.build()
 		);
 		stockRepository.save(

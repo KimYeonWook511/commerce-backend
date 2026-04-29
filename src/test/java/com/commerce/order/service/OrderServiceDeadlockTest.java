@@ -30,6 +30,7 @@ import com.commerce.order.service.command.OrderCreateItem;
 import com.commerce.order.service.command.OrderCreateCommand;
 import com.commerce.orderitem.repository.OrderItemRepository;
 import com.commerce.product.domain.Product;
+import com.commerce.product.domain.ProductStatus;
 import com.commerce.product.repository.ProductRepository;
 import com.commerce.stock.domain.Stock;
 import com.commerce.stock.repository.StockRepository;
@@ -240,6 +241,7 @@ class OrderServiceDeadlockTest {
 			Product.builder()
 				.name(name)
 				.price(price)
+				.status(ProductStatus.ON_SALE)
 				.build()
 		);
 	}

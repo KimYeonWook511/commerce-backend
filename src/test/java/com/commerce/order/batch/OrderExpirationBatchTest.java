@@ -41,6 +41,7 @@ import com.commerce.orderitem.repository.OrderItemRepository;
 import com.commerce.outbox.service.OutboxService;
 import com.commerce.outbox.stock.service.command.StockRestoreOutboxCreateCommand;
 import com.commerce.product.domain.Product;
+import com.commerce.product.domain.ProductStatus;
 import com.commerce.product.repository.ProductRepository;
 
 @Tag("batch")
@@ -281,6 +282,7 @@ class OrderExpirationBatchTest {
 		Product product = Product.builder()
 			.name("batch-product-" + uniqueSuffix)
 			.price(1000)
+			.status(ProductStatus.ON_SALE)
 			.build();
 		return productRepository.save(product);
 	}
