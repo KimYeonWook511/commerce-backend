@@ -131,6 +131,16 @@ task 상세 상태 파일이다.
 ## Step 작성 규칙
 
 - step 하나에 여러 모듈을 한 번에 넣지 않는다.
+- step 하나는 하나의 핵심 관심사만 다룬다. domain model, repository/service behavior, controller endpoint, web test, root docs sync는 기본적으로 분리한다.
+- API feature는 아래 단위로 나누는 것을 기본값으로 삼는다.
+  - domain/model contract
+  - repository/service behavior
+  - create endpoint
+  - update/delete endpoint
+  - controller/web test
+  - root docs sync
+- controller, request DTO, service, result DTO, test를 모두 새로 만드는 작업은 한 step에 넣지 않는다.
+- 신규 파일이 많거나 여러 레이어를 동시에 건드려 reviewer가 한 번에 판단하기 어렵다면 step을 더 작게 나눈다.
 - “이전 대화에서 논의한 바와 같이” 같은 외부 참조를 쓰지 않는다.
 - 필요한 파일 경로와 배경은 문서 안에 직접 적는다.
 - `수정 가능 경로` 섹션은 필수이며, 현재 step이 수정해도 되는 경로만 명시한다.
@@ -178,6 +188,19 @@ python3 .codex/skills/dev-start/scripts/execute.py docs/features/<feature-name>/
 7. verifier, Acceptance Criteria 재검증, reviewer를 모두 통과한 경우에만 `completed`를 인정한다.
 8. 완료된 step의 `summary`는 다음 step 컨텍스트로 누적된다.
 9. `--push`가 있으면 마지막에 현재 feature 브랜치를 원격으로 push한다.
+
+## Git 권한 운영
+
+- 실행기의 Git preflight는 권한을 부여하지 않고, `.git` 메타데이터 디렉터리에 쓸 수 있는지만 조기에 확인한다.
+- 사용자가 로컬 터미널에서 직접 실행하면 일반적으로 sandbox 권한 문제가 발생하지 않는다.
+- Codex가 실행기를 대신 실행하는 경우에는 내부 `git checkout/add/commit`까지 같은 프로세스 권한을 사용하므로, 아래 명령 자체를 권한 상승으로 실행해야 한다.
+
+```bash
+python3 .codex/skills/dev-start/scripts/execute.py docs/features/<feature-name>/phases/<phase-name>
+```
+
+- 개별 `git add` 또는 `git commit` prefix만 승인해도 `execute.py` 내부 Git subprocess 권한이 해결되는 것은 아니다.
+- preflight가 실패하면 Git 작업으로 들어가기 전에 중단하고, 권한 있는 실행 방식으로 다시 시작한다.
 
 ## 실행 산출물
 
