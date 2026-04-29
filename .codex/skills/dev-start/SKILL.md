@@ -112,6 +112,8 @@ python3 .codex/skills/dev-start/scripts/execute.py docs/features/<feature-name>/
 
 - phase/step 상태를 확인하고, 실행 가능한 경우에만 가장 앞의 `pending` step을 수행한다.
 - 현재 step 문서와 관련 문서를 모아 developer 컨텍스트를 만들고 `developer_worker`를 실행한다.
+- developer/reviewer worker는 실행기 내부 `codex exec --ephemeral` 명령으로 호출해 세션 파일 쓰기 의존성을 피한다.
+- 브랜치 생성, add, commit 전에 Git 메타데이터 디렉터리 쓰기 가능 여부를 preflight로 확인한다.
 - 실행 후 `step_verifier`로 상태와 output을 먼저 검증한다.
 - step이 `completed`면 실행기가 Acceptance Criteria를 직접 재실행한다.
 - 후검증을 통과하면 `reviewer_worker`가 변경 경로와 output을 기준으로 실제 repo 파일을 read-only 검토한다.

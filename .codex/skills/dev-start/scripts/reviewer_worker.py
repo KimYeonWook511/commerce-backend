@@ -63,6 +63,24 @@ def output_path(phase_dir: Path, step_num: int) -> Path:
     return phase_dir / f"step{step_num}-review-output.json"
 
 
+def build_codex_command(root: str, message_path: Path) -> list[str]:
+    return [
+        "codex",
+        "exec",
+        "--ephemeral",
+        "-s",
+        "read-only",
+        "--skip-git-repo-check",
+        "--color",
+        "never",
+        "-C",
+        root,
+        "-o",
+        str(message_path),
+        "-",
+    ]
+
+
 def run(
     root: str,
     phase_dir: Path,
@@ -81,20 +99,7 @@ def run(
 
     try:
         result = subprocess.run(
-            [
-                "codex",
-                "exec",
-                "-s",
-                "read-only",
-                "--skip-git-repo-check",
-                "--color",
-                "never",
-                "-C",
-                root,
-                "-o",
-                str(message_path),
-                "-",
-            ],
+            build_codex_command(root, message_path),
             input=prompt,
             cwd=root,
             capture_output=True,

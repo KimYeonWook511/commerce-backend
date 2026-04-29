@@ -10,6 +10,23 @@ def build_prompt(context_text: str, guardrails_text: str, step_text: str) -> str
     return "\n\n---\n\n".join(sections)
 
 
+def build_codex_command(root: str, message_path: Path) -> list[str]:
+    return [
+        "codex",
+        "exec",
+        "--ephemeral",
+        "--full-auto",
+        "--skip-git-repo-check",
+        "--color",
+        "never",
+        "-C",
+        root,
+        "-o",
+        str(message_path),
+        "-",
+    ]
+
+
 def run(root: str, phase_dir: Path, write_json, step: dict, context_text: str, guardrails_text: str) -> dict:
     """developer worker를 실행하고 step output 파일을 기록한다."""
     step_num = step["step"]
@@ -26,19 +43,7 @@ def run(root: str, phase_dir: Path, write_json, step: dict, context_text: str, g
 
     try:
         result = subprocess.run(
-            [
-                "codex",
-                "exec",
-                "--full-auto",
-                "--skip-git-repo-check",
-                "--color",
-                "never",
-                "-C",
-                root,
-                "-o",
-                str(message_path),
-                "-",
-            ],
+            build_codex_command(root, message_path),
             input=prompt,
             cwd=root,
             capture_output=True,

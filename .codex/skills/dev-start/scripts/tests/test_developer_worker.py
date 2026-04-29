@@ -36,14 +36,24 @@ class DeveloperWorkerTest(unittest.TestCase):
         self.assertIn("GUARD", prompt)
         self.assertIn("STEP", prompt)
 
+    def test_build_codex_command_uses_ephemeral(self):
+        command = self.module.build_codex_command(str(self.root), self.root / "message.txt")
+        self.assertEqual(["codex", "exec"], command[:2])
+        self.assertIn("--ephemeral", command)
+        self.assertIn("--full-auto", command)
+        self.assertIn("--skip-git-repo-check", command)
+
     def test_run_writes_output_file(self):
         mock_result = MagicMock(returncode=0, stdout="ok", stderr="")
 
         def write_json(path: Path, data: dict):
             path.write_text(json.dumps(data, ensure_ascii=False), encoding="utf-8")
 
-        with patch.object(self.module.subprocess, "run", return_value=mock_result):
+        with patch.object(self.module.subprocess, "run", return_value=mock_result) as run_mock:
             self.module.run(str(self.root), self.phase_dir, write_json, {"step": 2, "name": "api"}, "CTX", "GUARD")
+
+        called_command = run_mock.call_args.args[0]
+        self.assertIn("--ephemeral", called_command)
 
         output = json.loads((self.phase_dir / "step2-output.json").read_text(encoding="utf-8"))
         self.assertEqual(2, output["step"])

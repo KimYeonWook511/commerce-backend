@@ -1,6 +1,8 @@
 from __future__ import annotations
 
+from pathlib import Path
 import subprocess
+import uuid
 
 
 def run_git(executor, *args) -> subprocess.CompletedProcess:
@@ -11,6 +13,31 @@ def run_git(executor, *args) -> subprocess.CompletedProcess:
         capture_output=True,
         text=True,
     )
+
+
+def preflight_git_write(executor):
+    """git 쓰기 작업이 가능한지 실행 초기에 확인한다."""
+    git_dir_result = executor.run_git("rev-parse", "--git-dir")
+    if git_dir_result.returncode != 0:
+        print("  ERROR: git을 사용할 수 없거나 git repo가 아닙니다.")
+        print(f"  {git_dir_result.stderr.strip()}")
+        raise SystemExit(1)
+
+    git_dir = Path(git_dir_result.stdout.strip())
+    if not git_dir.is_absolute():
+        git_dir = Path(executor.root) / git_dir
+
+    probe_path = git_dir / f".codex-write-test-{uuid.uuid4().hex}"
+    try:
+        probe_path.write_text("ok", encoding="utf-8")
+    except OSError as exc:
+        print("  ERROR: git 메타데이터 디렉터리에 쓸 수 없습니다.")
+        print(f"  Path: {git_dir}")
+        print(f"  Reason: {exc}")
+        print("  Fix: git checkout/add/commit이 가능한 권한으로 실행하거나 승인된 권한 상승으로 재실행하세요.")
+        raise SystemExit(1)
+    finally:
+        probe_path.unlink(missing_ok=True)
 
 
 def checkout_branch(executor):

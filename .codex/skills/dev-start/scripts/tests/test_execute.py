@@ -365,6 +365,25 @@ class StepExecutorTest(unittest.TestCase):
             executor.checkout_branch()
         self.assertEqual(1, exc.exception.code)
 
+    def test_preflight_git_write_passes_when_git_dir_writable(self):
+        executor = self.make_executor()
+        git_dir = self.root / ".git"
+        git_dir.mkdir()
+        executor.run_git = MagicMock(return_value=MagicMock(returncode=0, stdout=".git\n", stderr=""))
+
+        self.execute.git_ops.preflight_git_write(executor)
+
+        self.assertFalse(any(git_dir.glob(".codex-write-test-*")))
+
+    def test_preflight_git_write_exits_when_git_dir_missing(self):
+        executor = self.make_executor()
+        executor.run_git = MagicMock(return_value=MagicMock(returncode=0, stdout=".git\n", stderr=""))
+
+        with self.assertRaises(SystemExit) as exc:
+            self.execute.git_ops.preflight_git_write(executor)
+
+        self.assertEqual(1, exc.exception.code)
+
     def test_commit_step_uses_two_phase_commit(self):
         executor = self.make_executor()
         calls = []

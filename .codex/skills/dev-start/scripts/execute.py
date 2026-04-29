@@ -136,6 +136,7 @@ class StepExecutor:
         self.print_header()
         self.validate_completed_step_artifacts()
         self.check_blockers()
+        git_ops.preflight_git_write(self)
         self.checkout_branch()
         self.ensure_created_at()
         self.execute_all_steps()
