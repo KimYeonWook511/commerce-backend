@@ -108,10 +108,7 @@ python3 .codex/skills/dev-start/scripts/execute.py docs/features/<feature-name>/
 - `phases` 문서가 준비되지 않았으면 구현을 시작하지 말고 문서 준비 단계로 되돌아간다.
 - 사용자가 구현을 요청하더라도, 기본 동작은 agent의 직접 수정이 아니라 `execute.py` 실행 제안 또는 실행 승인 대기다.
 - 사용자가 `execute.py` 실행을 승인하지 않았으면 agent는 코드를 직접 수정하지 않는다.
-- 사용자가 `execute.py` 실행을 승인하면 agent는 실행 직전에 반복 승인 저장 여부를 확인한다.
-  - 반복 승인 저장을 원하면 `python3 .codex/skills/dev-start/scripts/execute.py ...` 명령을 권한 상승으로 실행하면서 `prefix_rule=["python3", ".codex/skills/dev-start/scripts/execute.py"]`를 제안한다.
-  - 반복 승인 저장을 원하지 않으면 같은 명령을 1회 권한 상승으로만 실행한다.
-  - 이 질문은 구현 요구사항 논의가 아니라, `execute.py` 부모 프로세스가 `git checkout/add/commit`을 수행하기 위한 도구 권한 확인이다.
+- 사용자가 `execute.py` 실행을 승인하면 agent는 `execute.py` 명령 자체를 권한 상승으로 실행한다. 반복 승인은 Codex permission UI의 `prefix_rule=["python3", ".codex/skills/dev-start/scripts/execute.py"]` 저장으로 처리한다.
 - 사용자가 명시적으로 수동 구현을 지시한 경우에만 `execute.py`를 우회할 수 있으며, 이때도 해당 예외를 먼저 사용자 업데이트에 분명히 남긴다.
 
 실행기는 아래 규칙으로 동작한다.
@@ -120,8 +117,8 @@ python3 .codex/skills/dev-start/scripts/execute.py docs/features/<feature-name>/
 - 현재 step 문서와 관련 문서를 모아 developer 컨텍스트를 만들고 `developer_worker`를 실행한다.
 - developer worker는 실행기 내부 `codex exec --ephemeral -c approval_policy="never" -s workspace-write` 명령으로 호출해 승인 프롬프트 없이 repo 작업 파일을 수정한다.
 - reviewer worker는 실행기 내부 `codex exec --ephemeral -c approval_policy="never" -s read-only` 명령으로 호출해 승인 프롬프트 없이 실제 repo 파일을 읽기 전용으로 검토한다.
-- 브랜치 생성, add, commit 전에 Git 메타데이터 디렉터리 쓰기 가능 여부를 preflight로 확인한다. preflight는 권한을 부여하지 않고 권한 부족을 조기에 감지한다.
-- Codex가 실행기를 대신 돌릴 때 `execute.py` 자체의 Git sandbox 권한 문제가 예상되면 `python3 .codex/skills/dev-start/scripts/execute.py ...` 명령 자체를 권한 상승으로 실행한다. 반복 승인 저장을 원한 경우에는 실행기 prefix rule을 함께 제안한다.
+- 브랜치 생성, add, commit 전에 부모 `execute.py` 프로세스가 Git 메타데이터 디렉터리에 쓸 수 있는지 preflight로 확인한다. preflight는 권한을 부여하지 않는다.
+- Codex가 실행기를 대신 돌릴 때 `execute.py` 자체의 Git sandbox 권한 문제가 예상되면 `python3 .codex/skills/dev-start/scripts/execute.py ...` 명령 자체를 권한 상승으로 실행한다.
 - 실행 후 `step_verifier`로 상태와 output을 먼저 검증한다.
 - step이 `completed`면 실행기가 Acceptance Criteria를 직접 재실행한다.
 - 후검증을 통과하면 `reviewer_worker`가 변경 경로와 output을 기준으로 실제 repo 파일을 read-only 검토한다.

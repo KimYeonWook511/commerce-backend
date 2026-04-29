@@ -16,7 +16,7 @@ def run_git(executor, *args) -> subprocess.CompletedProcess:
 
 
 def preflight_git_write(executor):
-    """git 쓰기 작업이 가능한지 실행 초기에 확인한다."""
+    """부모 execute.py 프로세스가 git 메타데이터에 쓸 수 있는지 확인한다."""
     git_dir_result = executor.run_git("rev-parse", "--git-dir")
     if git_dir_result.returncode != 0:
         print("  ERROR: git을 사용할 수 없거나 git repo가 아닙니다.")
@@ -31,10 +31,10 @@ def preflight_git_write(executor):
     try:
         probe_path.write_text("ok", encoding="utf-8")
     except OSError as exc:
-        print("  ERROR: git 메타데이터 디렉터리에 쓸 수 없습니다.")
+        print("  ERROR: execute.py 프로세스가 git 메타데이터 디렉터리에 쓸 수 없습니다.")
         print(f"  Path: {git_dir}")
         print(f"  Reason: {exc}")
-        print("  Fix: git checkout/add/commit이 가능한 권한으로 실행하거나 승인된 권한 상승으로 재실행하세요.")
+        print("  Fix: execute.py 명령 자체를 권한 상승으로 다시 실행하세요.")
         raise SystemExit(1)
     finally:
         probe_path.unlink(missing_ok=True)
