@@ -67,44 +67,6 @@ def list_worktree_paths(executor) -> list[str]:
     return sorted(tracked | staged | untracked)
 
 
-def build_review_diff(executor, pathspecs: list[str], limit: int = 12000) -> str:
-    """주어진 pathspec 범위의 diff를 reviewer 입력용으로 만든다."""
-    normalized = [normalize_pathspec(path) for path in pathspecs if normalize_pathspec(path)]
-    if not normalized:
-        return ""
-
-    pieces: list[str] = []
-
-    tracked = executor.run_git("diff", "--", *normalized)
-    if tracked.stdout.strip():
-        pieces.append(tracked.stdout.strip())
-
-    staged = executor.run_git("diff", "--cached", "--", *normalized)
-    if staged.stdout.strip():
-        pieces.append(staged.stdout.strip())
-
-    untracked = [
-        path
-        for path in list_worktree_paths(executor)
-        if any(matches_pathspec(path, pathspec) for pathspec in normalized)
-        and path in set(filter(None, executor.run_git("ls-files", "--others", "--exclude-standard").stdout.splitlines()))
-    ]
-    for path in untracked:
-        file_path = executor.root_path / path
-        if not file_path.is_file():
-            continue
-        try:
-            content = file_path.read_text(encoding="utf-8")
-        except OSError:
-            continue
-        pieces.append(f"diff --git a/{path} b/{path}\nnew file mode 100644\n--- /dev/null\n+++ b/{path}\n{content}")
-
-    diff_text = "\n\n".join(piece for piece in pieces if piece).strip()
-    if len(diff_text) <= limit:
-        return diff_text
-    return diff_text[:limit] + "\n...[truncated]"
-
-
 def validate_worktree_scope(executor, editable_paths: list[str], metadata_paths: list[str], context: str):
     """허용 경로와 메타데이터 경로 밖의 변경이 있으면 즉시 중단한다."""
     allowed = [normalize_pathspec(path) for path in editable_paths]

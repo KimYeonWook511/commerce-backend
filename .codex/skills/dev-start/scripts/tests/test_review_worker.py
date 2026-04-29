@@ -34,12 +34,15 @@ class ReviewerWorkerTest(unittest.TestCase):
             {"step": 2, "name": "api", "status": "completed", "summary": "완료"},
             "# Step 2",
             ["src/main/java/com/commerce/skilltest/ApiService.java"],
-            "diff --git a/a b/a",
             {"step": 2, "name": "api", "exitCode": 0, "stdout": "ok", "stderr": "", "lastMessage": "done"},
+            {"step": 2, "commands": ["./gradlew test"], "results": [], "passed": True},
         )
         self.assertIn("ApiService.java", prompt)
         self.assertIn("## 변경 경로", prompt)
-        self.assertIn("## 변경 diff", prompt)
+        self.assertIn("## Acceptance Criteria 재검증 요약", prompt)
+        self.assertIn("passed=True", prompt)
+        self.assertNotIn("## 변경 diff", prompt)
+        self.assertNotIn("diff --git", prompt)
 
 
 if __name__ == "__main__":

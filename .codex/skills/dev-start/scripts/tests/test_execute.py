@@ -115,6 +115,21 @@ class StepExecutorTest(unittest.TestCase):
             },
         )
 
+    def write_review_output(self, step_num: int = 2):
+        self.write_json(
+            self.root / "docs" / "features" / "skill-test" / "phases" / "0-mvp" / f"step{step_num}-review-output.json",
+            {
+                "step": step_num,
+                "name": "api",
+                "exitCode": 0,
+                "stdout": "DECISION: pass\nMESSAGE: OK\n",
+                "stderr": "",
+                "lastMessage": "DECISION: pass\nMESSAGE: OK\n",
+                "changedPaths": [],
+                "reviewMode": "repo-read-only",
+            },
+        )
+
     def make_executor(self, *, auto_push: bool = False):
         return self.execute.StepExecutor("docs/features/skill-test/phases/0-mvp", auto_push=auto_push)
 
@@ -293,6 +308,22 @@ class StepExecutorTest(unittest.TestCase):
             self.make_executor().check_blockers()
         self.assertEqual(2, exc.exception.code)
 
+    def test_validate_completed_step_artifacts_exits_when_output_missing(self):
+        with self.assertRaises(SystemExit) as exc:
+            self.make_executor().validate_completed_step_artifacts()
+        self.assertEqual(1, exc.exception.code)
+
+    def test_validate_completed_step_artifacts_passes_when_completed_outputs_exist(self):
+        for step_num in (0, 1):
+            phase_dir = self.root / "docs" / "features" / "skill-test" / "phases" / "0-mvp"
+            self.write_json(
+                phase_dir / f"step{step_num}-output.json",
+                {"step": step_num, "name": "done", "exitCode": 0, "stdout": "", "stderr": "", "lastMessage": "done"},
+            )
+            self.write_review_output(step_num)
+
+        self.make_executor().validate_completed_step_artifacts()
+
     def test_mark_started_writes_once(self):
         executor = self.make_executor()
         index_before = self.read_json(self.root / "docs" / "features" / "skill-test" / "phases" / "0-mvp" / "index.json")
@@ -417,7 +448,6 @@ class StepExecutorTest(unittest.TestCase):
         executor.review_step_result = MagicMock(return_value=self.execute.reviewer_worker.ReviewResult("pass", "OK"))
         executor.list_review_changed_paths = MagicMock(return_value=["src/main/java/com/commerce/skilltest/ApiService.java"])
         executor.run_acceptance_checks = MagicMock(return_value={"passed": True})
-        executor.build_review_diff = MagicMock(return_value="diff --git a/a b/a")
         with patch.object(self.execute.git_ops, "validate_worktree_scope"):
             self.write_ac_output()
             result = executor.execute_single_step({"step": 2, "name": "api"})
@@ -433,7 +463,6 @@ class StepExecutorTest(unittest.TestCase):
             ],
         )
         executor.review_step_result.assert_called_once()
-        executor.build_review_diff.assert_called_once()
 
     def test_execute_single_step_blocked_updates_top_index(self):
         executor = self.make_executor()
@@ -612,7 +641,6 @@ class StepExecutorTest(unittest.TestCase):
         executor.review_step_result = MagicMock(return_value=self.execute.reviewer_worker.ReviewResult("retryable_error", "회귀 위험이 남아 있습니다."))
         executor.list_review_changed_paths = MagicMock(return_value=["src/main/java/com/commerce/skilltest/ApiService.java"])
         executor.run_acceptance_checks = MagicMock(return_value={"passed": True})
-        executor.build_review_diff = MagicMock(return_value="diff --git a/a b/a")
 
         with patch.object(self.execute.git_ops, "validate_worktree_scope"):
             self.write_ac_output()

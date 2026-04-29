@@ -114,9 +114,10 @@ python3 .codex/skills/dev-start/scripts/execute.py docs/features/<feature-name>/
 - 현재 step 문서와 관련 문서를 모아 developer 컨텍스트를 만들고 `developer_worker`를 실행한다.
 - 실행 후 `step_verifier`로 상태와 output을 먼저 검증한다.
 - step이 `completed`면 실행기가 Acceptance Criteria를 직접 재실행한다.
-- 후검증을 통과하면 `reviewer_worker`가 diff와 output 기준으로 read-only 검토한다.
+- 후검증을 통과하면 `reviewer_worker`가 변경 경로와 output을 기준으로 실제 repo 파일을 read-only 검토한다.
 - verifier, AC 재검증, reviewer 중 하나라도 실패하면 사유를 다음 시도 컨텍스트에 넣어 최대 3회까지 재시도한다.
 - `completed` + verifier 통과 + AC 재검증 통과 + reviewer 통과면 자동 커밋을 수행한다.
+- 실행 시작 시 이미 `completed`인 step은 `stepN-output.json`, `stepN-review-output.json`, Acceptance Criteria가 있으면 `stepN-ac-output.json`이 모두 있어야 한다. 산출물이 없으면 수동 완료로 보고 실행을 중단한다.
 - `blocked` 또는 최종 `error`면 phase 상태를 함께 갱신하고 즉시 중단한다.
 
 `--push`는 모든 step이 완료된 뒤 현재 feature 브랜치를 원격 저장소로 push하는 옵션이다.
