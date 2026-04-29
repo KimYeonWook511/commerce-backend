@@ -195,6 +195,7 @@ python3 .codex/skills/dev-start/scripts/execute.py docs/features/<feature-name>/
 - developer/reviewer worker의 내부 `codex exec` 권한 설정은 worker 프로세스에만 적용되며, `execute.py`가 직접 수행하는 `git checkout/add/commit` 권한을 대신 부여하지 않는다.
 - 사용자가 로컬 터미널에서 직접 실행하면 일반적으로 sandbox 권한 문제가 발생하지 않는다.
 - Codex가 실행기를 대신 실행하는 경우에는 내부 `git checkout/add/commit`까지 같은 프로세스 권한을 사용하므로, 아래 명령 자체를 권한 상승으로 실행해야 한다.
+- 사용자가 반복 승인 저장을 원하면 권한 상승 실행 시 `prefix_rule=["python3", ".codex/skills/dev-start/scripts/execute.py"]`를 제안한다. 이 rule은 실행기 호출만 자동 승인하고, 일반 `git commit`이나 다른 `python3` 명령까지 허용하지 않는다.
 
 ```bash
 python3 .codex/skills/dev-start/scripts/execute.py docs/features/<feature-name>/phases/<phase-name>
