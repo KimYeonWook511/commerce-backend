@@ -2,7 +2,7 @@
 
 `dev-start`는 개발을 바로 시작하기 전에 요청을 정리하고, 필요한 문서를 좁혀 읽고, step을 설계하고, 준비된 phase는 실행기까지 연결하는 하네스성 skill이다.
 
-지금 이 Repo 기준으로 보면 `Explore -> Discuss -> Step Design -> File Drafting -> Execution Authorization -> Execution` 흐름을 `workflow-checklist.json`으로 추적하고, 실행 단계에서는 `execute.py -> developer -> verifier/AC -> reviewer -> commit` 순서로 움직인다. 이 문서는 상세 사용법이 아니라, 나중에 다시 봤을 때 "아 지금 이런 구조였지"를 빠르게 떠올리기 위한 요약 문서다.
+지금 이 Repo 기준으로 보면 `Explore -> Discuss -> Step Design -> File Drafting -> Execution Authorization -> Permission UI -> Execution` 흐름을 `workflow-checklist.json`으로 추적하고, 실행 단계에서는 `execute.py -> developer -> verifier/AC -> reviewer -> commit` 순서로 움직인다. 이 문서는 상세 사용법이 아니라, 나중에 다시 봤을 때 "아 지금 이런 구조였지"를 빠르게 떠올리기 위한 요약 문서다.
 
 ## 전체 흐름 요약
 
@@ -12,8 +12,10 @@ flowchart TD
     B --> C["Discuss<br>요구사항 확정"]
     C --> D["Step Design<br>step 분해"]
     D --> E["File Drafting<br>feature/phases 문서 작성"]
-    E --> M["Execution Authorization<br>문서 검토와 실행 승인"]
-    M --> F["execute.py<br>순차 실행"]
+    E --> M["Execution Authorization<br>사용자 의사 확인"]
+    M --> N["workflow-checklist.json<br>authorization 기록"]
+    N --> O["Codex Permission UI<br>권한 상승 요청"]
+    O --> F["execute.py<br>순차 실행"]
     F --> G["Developer Worker<br>현재 step 구현"]
     G --> H["Verifier / AC<br>상태와 검증 커맨드 확인"]
     H -->|통과| I["Reviewer Worker<br>repo read-only 검토"]
@@ -58,7 +60,7 @@ flowchart TD
 - 권한 상승 실행 허락: `execute.py`를 권한 상승으로 실행해도 되는지.
 - 승인 프롬프트 처리 방식: 매번 승인할지, `prefix_rule=["python3", ".codex/skills/dev-start/scripts/execute.py"]`로 저장할지.
 
-두 입력이 모두 확정되면 checklist의 `Execution Authorization`을 `completed`로 바꾸고 `authorization` 객체에 결과를 기록한다.
+두 입력이 모두 확정되면 agent가 checklist의 `Execution Authorization`을 `completed`로 바꾸고 `authorization` 객체에 결과를 기록한다. 그 다음 Codex permission UI에서 실제 권한 상승 요청을 보낸다.
 
 ### 5. Developer Worker
 
@@ -103,6 +105,7 @@ developer가 만든 결과를 read-only 관점에서 한 번 더 본다.
 - reviewer `blocked` -> 즉시 차단 종료
 - 모두 통과한 경우에만 완료와 커밋으로 간다
 - `blocked` 또는 최종 `error`는 자동 복구하지 않고 사용자에게 실패 step, 실패 사유, output 파일을 보고한다.
+- 실행 중 재시도 reset은 `execute.py` 내부 동작이고, 최종 실패 후 상태 복구는 사용자 승인 후에만 한다.
 
 ## 현재 Repo의 역할별 구성
 

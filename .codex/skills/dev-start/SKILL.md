@@ -136,13 +136,15 @@ File Drafting 완료 후 필수 중단:
 
 - `execute.py`는 feature 브랜치 checkout/create, add, commit을 직접 수행한다.
 - 이 단계에 들어가기 전 checklist의 `Explore`, `Discuss`, `Step Design`, `File Drafting`은 모두 `completed`여야 한다.
-- Codex가 실행기를 대신 실행할 때는 사용자에게 `execute.py` 명령 자체의 권한 상승 실행이 필요함을 알린다.
-- 사용자에게 반드시 두 가지 입력을 받는다.
-  - 권한 상승 실행 허락: `execute.py`를 권한 상승으로 실행해도 되는지.
-  - 승인 프롬프트 처리 방식: 매번 승인 프롬프트를 받을지, `prefix_rule=["python3", ".codex/skills/dev-start/scripts/execute.py"]`로 반복 승인을 저장할지.
+- 아래 순서로만 진행한다.
+  1. 사용자에게 권한 상승 실행 허락을 받는다: `execute.py`를 권한 상승으로 실행해도 되는지 확인한다.
+  2. 사용자에게 승인 프롬프트 처리 방식을 받는다: 매번 승인 프롬프트를 받을지, `prefix_rule=["python3", ".codex/skills/dev-start/scripts/execute.py"]`로 반복 승인을 저장할지 확인한다.
+  3. 두 입력이 모두 확정되면 agent가 `workflow-checklist.json`을 갱신한다.
+  4. checklist 기록이 끝난 뒤에만 Codex permission UI의 권한 상승 요청으로 넘어간다.
 - 사용자가 권한 상승 실행을 허락하지 않으면 구현으로 진행하지 않는다.
-- 두 입력이 모두 확정되면 `workflow-checklist.json`의 `Execution Authorization`을 `completed`로 갱신하고, 선택 결과를 `authorization` 객체에 기록한다.
-- Codex permission UI의 실제 승인 클릭은 실행 직전 별도 절차이며, checklist의 `Execution Authorization`을 대체하지 않는다.
+- checklist 갱신 시 `Execution Authorization`은 `completed`, top-level `status`는 `authorized`로 기록한다.
+- `Execution Authorization.authorization`에는 `escalation_approved`, `approval_prompt_mode`, `prefix_rule`, `approved_by`, `approved_at`을 기록한다.
+- Codex permission UI의 실제 승인 클릭은 실행 직전 별도 절차이며, checklist의 `Execution Authorization` 기록을 대체하지 않는다.
 - `Execution Authorization` 완료 후 checklist는 `Explore`부터 `Execution Authorization`까지 `completed`여야 하고, `Execution`은 `pending`이어야 한다.
 
 ### 6. Execution
@@ -157,7 +159,7 @@ python3 .codex/skills/dev-start/scripts/execute.py docs/features/<feature-name>/
 실행 규칙:
 - 구현 요청을 받으면 먼저 `phases` 문서, `workflow-checklist.json`, `Execution Authorization` 완료 여부와 `authorization` 기록을 확인한다.
 - 준비 또는 승인이 부족하면 구현하지 않고 누락된 단계로 돌아간다.
-- 실행 승인이 완료되면 agent가 직접 수정하지 않고 `execute.py` 명령 자체를 권한 상승으로 실행한다.
+- 실행 승인이 완료되면 Codex permission UI로 `execute.py` 명령 자체의 권한 상승을 요청한 뒤 실행한다.
 - 사용자가 명시적으로 수동 구현을 지시한 경우에만 `execute.py`를 우회할 수 있으며, 이때도 해당 예외를 먼저 사용자 업데이트에 분명히 남긴다.
 
 실행기 운영 규칙:
@@ -165,8 +167,9 @@ python3 .codex/skills/dev-start/scripts/execute.py docs/features/<feature-name>/
 - 성공한 step은 `completed`로 기록하고 다음 `pending` step으로 자동 진행한다.
 - 실행기는 developer worker, Acceptance Criteria 재검증, reviewer worker를 통해 step 완료 여부를 검증한다. 상세 산출물과 파일 포맷은 `references/phase-files.md`를 따른다.
 - 정상 실행 메타데이터 갱신은 자동화 범위다. 현재 step의 `completed` 처리, `summary`, 실행 output, Acceptance Criteria output, review output, workflow checklist 갱신은 허용한다.
+- 실행 중 재시도를 위한 step `pending` reset은 `execute.py` 내부 동작으로만 허용된다.
 - `blocked` 또는 3회 재시도 후 최종 `error`가 발생하면 즉시 중단하고 사용자에게 실패 step, 실패 사유, 관련 output 파일 경로를 보고한다.
-- agent는 사용자 승인 없이 step 상태를 `pending`으로 되돌리지 않는다.
+- 최종 `error` 또는 `blocked` 이후 agent는 사용자 승인 없이 step 상태를 `pending`으로 되돌리지 않는다.
 - agent는 사용자 승인 없이 실패 회피 목적으로 step 요구사항, Acceptance Criteria, feature 문서, root docs, editable path를 수정해 재시도하지 않는다.
 - 실패 원인이 문서 누락, scope 누락, Acceptance Criteria 오류처럼 명확해 보여도 자동 수정하지 않는다. 먼저 원인과 수정 계획을 사용자에게 제시한다.
 - 재실행은 사용자가 문서/상태 수정과 `execute.py` 재실행을 명시적으로 승인한 뒤에만 한다.

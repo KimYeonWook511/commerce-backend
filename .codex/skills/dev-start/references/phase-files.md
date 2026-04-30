@@ -114,7 +114,9 @@ task 상세 상태 파일이다.
 
 - checklist 생성 이후 다음 단계로 넘어가기 전에는 이전 단계가 모두 `completed`여야 한다.
 - 문서 초안 작성 직후에는 1~4번만 `completed`, 5~6번은 `pending`이다.
+- top-level `status`는 문서 초안 작성 직후 `drafting`, `Execution Authorization` 완료 후 `authorized`, 실행 시작 후 `in_progress`, phase 정상 완료 후 `completed`다.
 - `Execution Authorization`은 문서 검토 완료, 권한 상승 실행 허락, 승인 프롬프트 처리 방식이 모두 확정된 뒤에만 `completed`다.
+- `Execution Authorization` 완료 시 agent는 item 5에 `authorization` 객체를 기록하고 top-level `status`를 `authorized`로 갱신한다.
 - `Execution`은 `execute.py`가 시작할 때 `in_progress`, phase 정상 완료 시 `completed`다.
 
 `Execution Authorization` 완료 예시:
@@ -237,6 +239,7 @@ task 상세 상태 파일이다.
 ## 에러 복구
 
 - `error` 또는 `blocked` 발생 시 agent는 즉시 중단하고 사용자에게 실패 step, 실패 사유, 관련 output 파일을 보고한다.
+- 실행 중 재시도를 위해 `execute.py`가 현재 step을 `pending`으로 되돌리는 것은 정상 실행 메타데이터다.
 - 사용자 승인 전에는 해당 step의 상태, 실패 필드, step 요구사항, Acceptance Criteria, 문서, `수정 가능 경로`를 수정하지 않는다.
 - 사용자가 복구를 승인한 뒤에만 상태와 실패 필드를 정리하고 재실행할 수 있다.
 - 복구 시에도 변경한 문서와 상태 파일을 보고하고, `execute.py` 재실행 승인을 별도로 받는다.
@@ -255,7 +258,8 @@ python3 .codex/skills/dev-start/scripts/execute.py docs/features/<feature-name>/
 - 실행기는 checklist 승인 상태를 확인한 뒤 가장 앞의 `pending` step부터 순차 실행한다.
 - 각 step은 developer 실행, Acceptance Criteria 재검증, reviewer 검토를 모두 통과해야 `completed`로 인정된다.
 - 성공한 step의 상태, summary, output/ac/review 산출물, workflow checklist 갱신은 정상 실행 메타데이터로 기록한다.
-- `blocked` 또는 `error` 발생 시 자동 복구하지 않고 사용자 검토와 승인을 기다린다.
+- 실행 중 retryable failure는 실행기가 같은 step을 재시도할 수 있다.
+- 최종 `blocked` 또는 `error` 발생 시 자동 복구하지 않고 사용자 검토와 승인을 기다린다.
 
 ## Git 권한 운영
 
