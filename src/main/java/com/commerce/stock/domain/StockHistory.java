@@ -1,8 +1,6 @@
 package com.commerce.stock.domain;
 
 import com.commerce.common.jpa.BaseTimeEntity;
-import com.commerce.stock.exception.StockErrorCode;
-import com.commerce.stock.exception.StockException;
 
 import jakarta.persistence.Column;
 import jakarta.persistence.Entity;
@@ -46,18 +44,10 @@ public class StockHistory extends BaseTimeEntity {
 
 	@Builder
 	private StockHistory(Stock stock, int quantityChange, StockAdjustmentReason reason, Long adminMemberId) {
-		validateQuantityChange(quantityChange);
-
 		this.stock = stock;
 		this.quantityChange = quantityChange;
 		this.reason = reason;
 		this.adminMemberId = adminMemberId;
-	}
-
-	private void validateQuantityChange(int quantityChange) {
-		if (quantityChange == 0) {
-			throw new StockException(StockErrorCode.INVALID_HISTORY_QUANTITY_CHANGE);
-		}
 	}
 
 }

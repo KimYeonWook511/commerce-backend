@@ -111,9 +111,9 @@ class StockServiceTest {
 			});
 	}
 
-	@DisplayName("관리자 초기 재고 수량이 0이면 재고만 생성하고 이력은 저장하지 않는다")
+	@DisplayName("관리자 초기 재고 수량이 0이면 0 수량 이력을 함께 저장한다")
 	@Test
-	void createInitialStock_whenQuantityIsZero_saveStockWithoutHistory() {
+	void createInitialStock_whenQuantityIsZero_saveStockAndZeroHistory() {
 		// given
 		Product product = createProduct(1L, "product-1", 1000);
 		AdminStockCreateCommand command = AdminStockCreateCommand.builder()
@@ -138,7 +138,14 @@ class StockServiceTest {
 		assertThat(result.getProductId()).isEqualTo(1L);
 		assertThat(result.getStockId()).isEqualTo(100L);
 		assertThat(result.getQuantity()).isZero();
-		then(stockHistoryRepository).should(never()).save(any(StockHistory.class));
+
+		ArgumentCaptor<StockHistory> historyCaptor = ArgumentCaptor.forClass(StockHistory.class);
+		then(stockHistoryRepository).should().save(historyCaptor.capture());
+		StockHistory history = historyCaptor.getValue();
+		assertThat(history.getStock().getId()).isEqualTo(100L);
+		assertThat(history.getQuantityChange()).isZero();
+		assertThat(history.getReason()).isEqualTo(StockAdjustmentReason.INBOUND);
+		assertThat(history.getAdminMemberId()).isEqualTo(10L);
 	}
 
 	@DisplayName("이미 재고가 있으면 초기 재고 생성에 실패한다")

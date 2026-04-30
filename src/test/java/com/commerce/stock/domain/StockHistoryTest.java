@@ -5,9 +5,6 @@ import static org.assertj.core.api.Assertions.*;
 import org.junit.jupiter.api.DisplayName;
 import org.junit.jupiter.api.Test;
 
-import com.commerce.stock.exception.StockErrorCode;
-import com.commerce.stock.exception.StockException;
-
 class StockHistoryTest {
 
 	@DisplayName("양수 변경 수량으로 재고 이력을 생성한다")
@@ -52,24 +49,25 @@ class StockHistoryTest {
 		assertThat(stockHistory.getAdminMemberId()).isEqualTo(1L);
 	}
 
-	@DisplayName("변경 수량이 0이면 예외가 발생한다")
+	@DisplayName("변경 수량이 0인 재고 이력을 생성한다")
 	@Test
-	void create_whenQuantityChangeZero_throwException() {
+	void create_whenQuantityChangeZero_createStockHistory() {
 		// given
 		Stock stock = createStock();
 
-		// when & then
-		assertThatThrownBy(() -> StockHistory.builder()
+		// when
+		StockHistory stockHistory = StockHistory.builder()
 			.stock(stock)
 			.quantityChange(0)
 			.reason(StockAdjustmentReason.ADMIN_ADJUSTMENT)
 			.adminMemberId(1L)
-			.build())
-			.isInstanceOf(StockException.class)
-			.satisfies(exception -> {
-				StockException stockException = (StockException) exception;
-				assertThat(stockException.getErrorCode()).isEqualTo(StockErrorCode.INVALID_HISTORY_QUANTITY_CHANGE);
-			});
+			.build();
+
+		// then
+		assertThat(stockHistory.getStock()).isEqualTo(stock);
+		assertThat(stockHistory.getQuantityChange()).isZero();
+		assertThat(stockHistory.getReason()).isEqualTo(StockAdjustmentReason.ADMIN_ADJUSTMENT);
+		assertThat(stockHistory.getAdminMemberId()).isEqualTo(1L);
 	}
 
 	private Stock createStock() {

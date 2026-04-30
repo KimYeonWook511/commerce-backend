@@ -71,9 +71,7 @@ public class StockService {
 			.quantity(command.getQuantity())
 			.build();
 		Stock savedStock = stockRepository.save(stock);
-		if (command.getQuantity() > 0) {
-			saveHistory(savedStock, command.getQuantity(), command.getReason(), command.getAdminMemberId());
-		}
+		saveHistory(savedStock, command.getQuantity(), command.getReason(), command.getAdminMemberId());
 
 		return AdminStockResult.from(savedStock);
 	}

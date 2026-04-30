@@ -18,7 +18,7 @@ public class AdminStockCreateRequest {
 
 	@NotBlank(message = "재고 변경 사유는 필수입니다")
 	@Pattern(
-		regexp = "INBOUND|DISPOSAL|ADMIN_ADJUSTMENT|ORDER_CANCEL_RESTORE",
+		regexp = StockRequestValidation.ADJUSTMENT_REASON_PATTERN,
 		message = "재고 변경 사유가 올바르지 않습니다"
 	)
 	private String reason;
