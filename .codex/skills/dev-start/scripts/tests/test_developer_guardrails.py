@@ -36,6 +36,7 @@ class DeveloperGuardrailsTest(unittest.TestCase):
         self.assertIn("실패 회피 목적", result)
         self.assertIn("현재 step 외의 step 상태를 수정하지 마라", result)
         self.assertIn("status를 `pending`으로 되돌리지 마라", result)
+        self.assertIn("실행 중 재시도 reset은 execute.py가 처리한다", result)
         self.assertIn("3회 시도 후에도 실패", result)
 
 

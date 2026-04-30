@@ -4,11 +4,13 @@ execute.py 리팩터링 안전망 테스트.
 """
 
 import importlib.util
+import io
 import json
 import tempfile
 import types
 import unittest
 from contextlib import contextmanager
+from contextlib import redirect_stdout
 from datetime import datetime, timedelta
 from pathlib import Path
 from unittest.mock import MagicMock
@@ -474,22 +476,31 @@ class StepExecutorTest(unittest.TestCase):
         index = self.read_json(self.root / "docs" / "features" / "skill-test" / "phases" / "0-mvp" / "index.json")
         index["steps"][2] = {"step": 2, "name": "api", "status": "error", "error_message": "fail"}
         self.write_json(self.root / "docs" / "features" / "skill-test" / "phases" / "0-mvp" / "index.json", index)
+        output = io.StringIO()
         with self.assertRaises(SystemExit) as exc:
-            self.make_executor().check_blockers()
+            with redirect_stdout(output):
+                self.make_executor().check_blockers()
         self.assertEqual(1, exc.exception.code)
+        self.assertIn("사용자 승인 후 status를 'pending'으로 복구", output.getvalue())
 
     def test_check_blockers_blocked_exits(self):
         index = self.read_json(self.root / "docs" / "features" / "skill-test" / "phases" / "0-mvp" / "index.json")
         index["steps"][2] = {"step": 2, "name": "api", "status": "blocked", "blocked_reason": "API key"}
         self.write_json(self.root / "docs" / "features" / "skill-test" / "phases" / "0-mvp" / "index.json", index)
+        output = io.StringIO()
         with self.assertRaises(SystemExit) as exc:
-            self.make_executor().check_blockers()
+            with redirect_stdout(output):
+                self.make_executor().check_blockers()
         self.assertEqual(2, exc.exception.code)
+        self.assertIn("사용자 승인 후 차단 사유를 해결", output.getvalue())
 
     def test_validate_completed_step_artifacts_exits_when_output_missing(self):
+        output = io.StringIO()
         with self.assertRaises(SystemExit) as exc:
-            self.make_executor().validate_completed_step_artifacts()
+            with redirect_stdout(output):
+                self.make_executor().validate_completed_step_artifacts()
         self.assertEqual(1, exc.exception.code)
+        self.assertIn("사용자 승인 후 해당 step의 status를 'pending'으로 복구", output.getvalue())
 
     def test_validate_completed_step_artifacts_passes_when_completed_outputs_exist(self):
         for step_num in (0, 1):

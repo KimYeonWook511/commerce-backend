@@ -36,7 +36,7 @@ def build(
         "8. 실행 결과와 현재 step 상태/summary 갱신은 정상 실행 메타데이터이며 output/index 변경은 별도 housekeeping 커밋으로 처리된다.\n"
         "9. step 요구사항, Acceptance Criteria, feature 문서, root docs, `수정 가능 경로`를 실패 회피 목적으로 임의 수정하지 마라.\n"
         "10. 현재 step 외의 step 상태를 수정하지 마라.\n"
-        "11. 실패 복구를 위해 status를 `pending`으로 되돌리지 마라. 3회 시도 후에도 실패하면 현재 step을 `error` 또는 `blocked`로 남기고 종료하라.\n"
+        "11. 최종 실패 복구를 위해 status를 `pending`으로 되돌리지 마라. 실행 중 재시도 reset은 execute.py가 처리한다. 3회 시도 후에도 실패하면 현재 step을 `error` 또는 `blocked`로 남기고 종료하라.\n"
         "12. 참고용 커밋 예시는 다음과 같다.\n"
         f"   {commit_example}\n"
     )

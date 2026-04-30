@@ -514,12 +514,12 @@ class StepExecutor:
             if step.get("status") == "error":
                 print(f"\n  ✗ Step {step['step']} ({step['name']}) failed.")
                 print(f"  Error: {step.get('error_message', 'unknown')}")
-                print("  Fix and reset status to 'pending' to retry.")
+                print("  Fix: 사용자 승인 후 status를 'pending'으로 복구하고 execute.py를 재실행하세요.")
                 raise SystemExit(1)
             if step.get("status") == "blocked":
                 print(f"\n  ⏸ Step {step['step']} ({step['name']}) blocked.")
                 print(f"  Reason: {step.get('blocked_reason', 'unknown')}")
-                print("  Resolve and reset status to 'pending' to retry.")
+                print("  Fix: 사용자 승인 후 차단 사유를 해결하고 status를 'pending'으로 복구한 뒤 execute.py를 재실행하세요.")
                 raise SystemExit(2)
             if step.get("status") != "pending":
                 break
@@ -554,7 +554,7 @@ class StepExecutor:
             print("\n  ERROR: completed step의 실행 산출물이 누락되었습니다.")
             for path in missing:
                 print(f"  - {path}")
-            print("  Fix: 해당 step의 status를 'pending'으로 되돌리고 completed_at/summary를 정리한 뒤 execute.py로 재실행하세요.")
+            print("  Fix: 사용자 승인 후 해당 step의 status를 'pending'으로 복구하고 completed_at/summary를 정리한 뒤 execute.py를 재실행하세요.")
             raise SystemExit(1)
 
     def ensure_created_at(self):
