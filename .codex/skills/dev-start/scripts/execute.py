@@ -231,7 +231,7 @@ class StepExecutor:
         elif mode == "saved_prefix_rule" and authorization.get("prefix_rule") != self.EXECUTE_PREFIX_RULE:
             errors.append("5. Execution Authorization prefix_rule must match execute.py command")
         elif mode == "per_run" and authorization.get("prefix_rule") not in (None, []):
-            errors.append("5. Execution Authorization prefix_rule must be null for per_run")
+            errors.append("5. Execution Authorization prefix_rule must be null or empty for per_run")
 
         if authorization.get("approved_by") != "user":
             errors.append("5. Execution Authorization approved_by must be user")
