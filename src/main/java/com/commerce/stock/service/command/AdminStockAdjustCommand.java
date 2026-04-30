@@ -1,0 +1,23 @@
+package com.commerce.stock.service.command;
+
+import com.commerce.stock.domain.StockAdjustmentReason;
+
+import lombok.Builder;
+import lombok.Getter;
+
+@Getter
+public class AdminStockAdjustCommand {
+
+	private Long productId;
+	private int quantity;
+	private StockAdjustmentReason reason;
+	private Long adminMemberId;
+
+	@Builder
+	private AdminStockAdjustCommand(Long productId, int quantity, StockAdjustmentReason reason, Long adminMemberId) {
+		this.productId = productId;
+		this.quantity = quantity;
+		this.reason = reason;
+		this.adminMemberId = adminMemberId;
+	}
+}

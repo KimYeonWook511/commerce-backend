@@ -47,6 +47,12 @@ Thumbs.db
 __pycache__/
 *.pyc
 
+### dev-start 실행 산출물 ###
+docs/features/**/phases/**/step*-output.json
+docs/features/**/phases/**/step*-ac-output.json
+docs/features/**/phases/**/step*-review-output.json
+docs/features/**/phases/**/workflow-checklist.json
+
 ### 운영 서버 환경변수 ###
 .env.prod
 ### 로컬 환경변수 ###

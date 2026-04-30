@@ -1,0 +1,10 @@
+{
+  "phases": [
+    {
+      "dir": "0-admin-stock-management-api",
+      "status": "completed",
+      "started_at": "2026-04-30T21:22:31+0900",
+      "completed_at": "2026-04-30T21:51:30+0900"
+    }
+  ]
+}
