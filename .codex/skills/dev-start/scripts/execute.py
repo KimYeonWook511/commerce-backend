@@ -75,6 +75,16 @@ class StepExecutor:
     FEAT_MSG = "feat: {phase} {num}단계 {name} 작업을 반영한다"
     CHORE_MSG = "chore: {phase} {num}단계 실행 결과를 기록한다"
     TZ = timezone(timedelta(hours=9))
+    WORKFLOW_ITEMS = [
+        (1, "Explore"),
+        (2, "Discuss"),
+        (3, "Step Design"),
+        (4, "File Drafting"),
+        (5, "Execution Authorization"),
+        (6, "Execution"),
+    ]
+    EXECUTE_PREFIX_RULE = ["python3", ".codex/skills/dev-start/scripts/execute.py"]
+    APPROVAL_PROMPT_MODES = {"per_run", "saved_prefix_rule"}
 
     def __init__(self, phase_path: str, *, auto_push: bool = False):
         self.root = str(ROOT)
@@ -134,13 +144,136 @@ class StepExecutor:
     def run(self):
         """실행 헤더 출력부터 전체 phase 완료 처리까지 오케스트레이션한다."""
         self.print_header()
+        self.validate_workflow_checklist()
         self.validate_completed_step_artifacts()
         self.check_blockers()
         git_ops.preflight_git_write(self)
         self.checkout_branch()
+        self.mark_workflow_execution_in_progress()
         self.ensure_created_at()
         self.execute_all_steps()
         self.finalize()
+
+    # --- workflow checklist ---
+
+    def workflow_checklist_path(self) -> Path:
+        """현재 phase의 dev-start workflow checklist 경로를 반환한다."""
+        return self.phase_dir / "workflow-checklist.json"
+
+    def validate_workflow_checklist(self):
+        """문서 검토와 실행 승인 완료 여부를 실행 전 강제한다."""
+        checklist_path = self.workflow_checklist_path()
+        if not checklist_path.exists():
+            print(f"\n  ERROR: {checklist_path.relative_to(ROOT).as_posix()} not found")
+            print("  Create workflow-checklist.json and complete Execution Authorization before running execute.py.")
+            raise SystemExit(1)
+
+        checklist = self.read_json(checklist_path)
+        if checklist.get("workflow") != "dev-start":
+            print("\n  ERROR: workflow-checklist.json must have workflow='dev-start'.")
+            raise SystemExit(1)
+
+        items = checklist.get("items")
+        if not isinstance(items, list) or len(items) != len(self.WORKFLOW_ITEMS):
+            print("\n  ERROR: workflow-checklist.json must contain the six dev-start workflow items.")
+            raise SystemExit(1)
+
+        invalid_items: list[str] = []
+        incomplete_items: list[str] = []
+        expected_by_order = dict(self.WORKFLOW_ITEMS)
+
+        for index, (expected_order, expected_title) in enumerate(self.WORKFLOW_ITEMS):
+            item = items[index] if index < len(items) else {}
+            if item.get("order") != expected_order or item.get("title") != expected_title:
+                invalid_items.append(f"{expected_order}. {expected_title}")
+                continue
+
+            status = item.get("status")
+            if expected_order <= 5 and status != "completed":
+                incomplete_items.append(expected_title)
+            if expected_order == 6 and status not in {"pending", "in_progress"}:
+                invalid_items.append(f"{expected_order}. {expected_title} status must be pending or in_progress")
+            if expected_order == 5 and status == "completed":
+                invalid_items.extend(self.validate_execution_authorization_item(item))
+
+        if invalid_items:
+            print("\n  ERROR: workflow-checklist.json has invalid workflow items.")
+            for item in invalid_items:
+                print(f"  - {item}")
+            print("  Keep order/title values identical to the dev-start Workflow section.")
+            raise SystemExit(1)
+
+        observed_orders = {item.get("order") for item in items if isinstance(item, dict)}
+        if set(expected_by_order) != observed_orders:
+            print("\n  ERROR: workflow-checklist.json has missing or duplicate workflow orders.")
+            raise SystemExit(1)
+
+        if incomplete_items:
+            print("\n  ERROR: dev-start workflow is not authorized for execution.")
+            for title in incomplete_items:
+                print(f"  - {title}: not completed")
+            print("  Complete document review and Execution Authorization before running execute.py.")
+            raise SystemExit(1)
+
+    def validate_execution_authorization_item(self, item: dict) -> list[str]:
+        """Execution Authorization 완료 항목의 상세 승인 기록을 검증한다."""
+        errors: list[str] = []
+        authorization = item.get("authorization")
+        if not isinstance(authorization, dict):
+            return ["5. Execution Authorization authorization is required"]
+
+        if authorization.get("escalation_approved") is not True:
+            errors.append("5. Execution Authorization escalation_approved must be true")
+
+        mode = authorization.get("approval_prompt_mode")
+        if mode not in self.APPROVAL_PROMPT_MODES:
+            errors.append("5. Execution Authorization approval_prompt_mode must be per_run or saved_prefix_rule")
+        elif mode == "saved_prefix_rule" and authorization.get("prefix_rule") != self.EXECUTE_PREFIX_RULE:
+            errors.append("5. Execution Authorization prefix_rule must match execute.py command")
+        elif mode == "per_run" and authorization.get("prefix_rule") not in (None, []):
+            errors.append("5. Execution Authorization prefix_rule must be null for per_run")
+
+        if authorization.get("approved_by") != "user":
+            errors.append("5. Execution Authorization approved_by must be user")
+        if not authorization.get("approved_at"):
+            errors.append("5. Execution Authorization approved_at is required")
+
+        return errors
+
+    def update_workflow_item(self, title: str, status: str):
+        """workflow checklist의 단일 항목 상태를 갱신한다."""
+        checklist_path = self.workflow_checklist_path()
+        checklist = self.read_json(checklist_path)
+        timestamp = self.stamp()
+
+        for item in checklist.get("items", []):
+            if item.get("title") == title:
+                item["status"] = status
+                if status == "completed":
+                    item["completed_at"] = timestamp
+                elif status == "in_progress":
+                    item["started_at"] = item.get("started_at", timestamp)
+                    item.pop("completed_at", None)
+                break
+        else:
+            print(f"\n  ERROR: workflow-checklist.json is missing '{title}'.")
+            raise SystemExit(1)
+
+        checklist["status"] = {
+            "pending": "authorized",
+            "in_progress": "in_progress",
+            "completed": "completed",
+        }.get(status, checklist.get("status", "drafting"))
+        checklist["updated_at"] = timestamp
+        self.write_json(checklist_path, checklist)
+
+    def mark_workflow_execution_in_progress(self):
+        """실행 시작 상태를 workflow checklist에 기록한다."""
+        self.update_workflow_item("Execution", "in_progress")
+
+    def mark_workflow_execution_completed(self):
+        """phase 정상 완료 상태를 workflow checklist에 기록한다."""
+        self.update_workflow_item("Execution", "completed")
 
     # --- step files & edit scope ---
 
@@ -190,6 +323,10 @@ class StepExecutor:
             print(f"ERROR: {self.phase_relpath}/step*.md has no editable paths.")
             print("Add at least one allowed edit path under `수정 가능 경로` and retry.")
             raise SystemExit(1)
+
+        feature_docs_path = f"docs/features/{self.feature_name}/**"
+        if not any(git_ops.normalize_pathspec(path) == git_ops.normalize_pathspec(feature_docs_path) for path in editable_paths):
+            editable_paths.insert(0, feature_docs_path)
 
         return editable_paths
 
@@ -453,6 +590,7 @@ class StepExecutor:
             f"{self.phase_relpath}/step{step_num}-ac-output.json",
             f"{self.phase_relpath}/step{step_num}-review-output.json",
             f"{self.phase_relpath}/index.json",
+            f"{self.phase_relpath}/workflow-checklist.json",
             f"{self.feature_phases_relpath}/index.json",
         ]
 
@@ -606,11 +744,13 @@ class StepExecutor:
         index["completed_at"] = self.stamp()
         self.write_json(self.index_file, index)
         self.update_feature_index("completed")
+        self.mark_workflow_execution_completed()
         git_ops.validate_worktree_scope(
             self,
             editable_paths=[],
             metadata_paths=[
                 f"{self.phase_relpath}/index.json",
+                f"{self.phase_relpath}/workflow-checklist.json",
                 f"{self.feature_phases_relpath}/index.json",
             ],
             context="phase finalize",
@@ -619,6 +759,7 @@ class StepExecutor:
             self,
             [
                 f"{self.phase_relpath}/index.json",
+                f"{self.phase_relpath}/workflow-checklist.json",
                 f"{self.feature_phases_relpath}/index.json",
             ],
         )

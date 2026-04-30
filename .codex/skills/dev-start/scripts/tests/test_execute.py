@@ -64,6 +64,7 @@ class StepExecutorTest(unittest.TestCase):
                 ],
             },
         )
+        self.write_workflow_checklist()
         (self.root / "docs" / "features" / "skill-test" / "phases" / "0-mvp" / "step2.md").write_text(
             "# Step 2: api\n\n"
             "`docs/ADR.md`와 `docs/api-spec.md`를 참고해 API를 구현하세요.\n\n"
@@ -90,6 +91,34 @@ class StepExecutorTest(unittest.TestCase):
     @staticmethod
     def read_json(path: Path) -> dict:
         return json.loads(path.read_text(encoding="utf-8"))
+
+    def write_workflow_checklist(self, *, overrides: dict[int, dict] | None = None):
+        items = [
+            {"order": 1, "title": "Explore", "status": "completed"},
+            {"order": 2, "title": "Discuss", "status": "completed"},
+            {"order": 3, "title": "Step Design", "status": "completed"},
+            {"order": 4, "title": "File Drafting", "status": "completed"},
+            {
+                "order": 5,
+                "title": "Execution Authorization",
+                "status": "completed",
+                "authorization": {
+                    "escalation_approved": True,
+                    "approval_prompt_mode": "per_run",
+                    "prefix_rule": None,
+                    "approved_by": "user",
+                    "approved_at": "2026-04-30T15:30:00+0900",
+                },
+            },
+            {"order": 6, "title": "Execution", "status": "pending"},
+        ]
+        for order, override in (overrides or {}).items():
+            items[order - 1].update(override)
+
+        self.write_json(
+            self.root / "docs" / "features" / "skill-test" / "phases" / "0-mvp" / "workflow-checklist.json",
+            {"workflow": "dev-start", "status": "authorized", "items": items},
+        )
 
     def write_step_output(self, *, exit_code: int = 0, stdout: str = "./gradlew test", stderr: str = "", last_message: str = "테스트로 ./gradlew test를 실행했다."):
         self.write_json(
@@ -258,6 +287,19 @@ class StepExecutorTest(unittest.TestCase):
             result,
         )
 
+    def test_parse_editable_paths_adds_feature_docs_scope_by_default(self):
+        executor = self.make_executor()
+        step_text = (
+            "# Step 2: api\n\n"
+            "## 수정 가능 경로\n\n"
+            "- `src/main/java/com/commerce/skilltest/**`\n"
+        )
+
+        result = executor.parse_editable_paths(step_text)
+
+        self.assertEqual("docs/features/skill-test/**", result[0])
+        self.assertIn("src/main/java/com/commerce/skilltest/**", result)
+
     def test_parse_editable_paths_exits_when_section_missing(self):
         executor = self.make_executor()
         with self.assertRaises(SystemExit) as exc:
@@ -291,6 +333,142 @@ class StepExecutorTest(unittest.TestCase):
         with self.assertRaises(SystemExit) as exc:
             self.make_executor()
         self.assertEqual(1, exc.exception.code)
+
+    def test_validate_workflow_checklist_exits_when_missing(self):
+        checklist = self.root / "docs" / "features" / "skill-test" / "phases" / "0-mvp" / "workflow-checklist.json"
+        checklist.unlink()
+
+        with self.assertRaises(SystemExit) as exc:
+            self.make_executor().validate_workflow_checklist()
+
+        self.assertEqual(1, exc.exception.code)
+
+    def test_validate_workflow_checklist_exits_when_required_step_pending(self):
+        self.write_workflow_checklist(overrides={5: {"status": "pending"}})
+
+        with self.assertRaises(SystemExit) as exc:
+            self.make_executor().validate_workflow_checklist()
+
+        self.assertEqual(1, exc.exception.code)
+
+    def test_validate_workflow_checklist_exits_when_title_order_is_wrong(self):
+        self.write_workflow_checklist(overrides={3: {"title": "Wrong Title"}})
+
+        with self.assertRaises(SystemExit) as exc:
+            self.make_executor().validate_workflow_checklist()
+
+        self.assertEqual(1, exc.exception.code)
+
+    def test_validate_workflow_checklist_exits_when_execution_already_completed(self):
+        self.write_workflow_checklist(overrides={6: {"status": "completed"}})
+
+        with self.assertRaises(SystemExit) as exc:
+            self.make_executor().validate_workflow_checklist()
+
+        self.assertEqual(1, exc.exception.code)
+
+    def test_validate_workflow_checklist_exits_when_authorization_missing(self):
+        self.write_workflow_checklist(overrides={5: {"authorization": None}})
+
+        with self.assertRaises(SystemExit) as exc:
+            self.make_executor().validate_workflow_checklist()
+
+        self.assertEqual(1, exc.exception.code)
+
+    def test_validate_workflow_checklist_exits_when_escalation_not_approved(self):
+        self.write_workflow_checklist(
+            overrides={5: {"authorization": {"escalation_approved": False, "approval_prompt_mode": "per_run"}}}
+        )
+
+        with self.assertRaises(SystemExit) as exc:
+            self.make_executor().validate_workflow_checklist()
+
+        self.assertEqual(1, exc.exception.code)
+
+    def test_validate_workflow_checklist_exits_when_approval_prompt_mode_invalid(self):
+        self.write_workflow_checklist(
+            overrides={
+                5: {
+                    "authorization": {
+                        "escalation_approved": True,
+                        "approval_prompt_mode": "always",
+                        "approved_by": "user",
+                        "approved_at": "2026-04-30T15:30:00+0900",
+                    }
+                }
+            }
+        )
+
+        with self.assertRaises(SystemExit) as exc:
+            self.make_executor().validate_workflow_checklist()
+
+        self.assertEqual(1, exc.exception.code)
+
+    def test_validate_workflow_checklist_exits_when_saved_prefix_rule_missing(self):
+        self.write_workflow_checklist(
+            overrides={
+                5: {
+                    "authorization": {
+                        "escalation_approved": True,
+                        "approval_prompt_mode": "saved_prefix_rule",
+                        "prefix_rule": None,
+                        "approved_by": "user",
+                        "approved_at": "2026-04-30T15:30:00+0900",
+                    }
+                }
+            }
+        )
+
+        with self.assertRaises(SystemExit) as exc:
+            self.make_executor().validate_workflow_checklist()
+
+        self.assertEqual(1, exc.exception.code)
+
+    def test_validate_workflow_checklist_passes_when_saved_prefix_rule_matches(self):
+        self.write_workflow_checklist(
+            overrides={
+                5: {
+                    "authorization": {
+                        "escalation_approved": True,
+                        "approval_prompt_mode": "saved_prefix_rule",
+                        "prefix_rule": ["python3", ".codex/skills/dev-start/scripts/execute.py"],
+                        "approved_by": "user",
+                        "approved_at": "2026-04-30T15:30:00+0900",
+                    }
+                }
+            }
+        )
+
+        self.make_executor().validate_workflow_checklist()
+
+    def test_validate_workflow_checklist_passes_when_authorized(self):
+        self.make_executor().validate_workflow_checklist()
+
+    def test_mark_workflow_execution_in_progress(self):
+        executor = self.make_executor()
+
+        executor.mark_workflow_execution_in_progress()
+
+        checklist = self.read_json(
+            self.root / "docs" / "features" / "skill-test" / "phases" / "0-mvp" / "workflow-checklist.json"
+        )
+        execution = checklist["items"][5]
+        self.assertEqual("in_progress", checklist["status"])
+        self.assertEqual("in_progress", execution["status"])
+        self.assertIn("started_at", execution)
+
+    def test_mark_workflow_execution_completed(self):
+        executor = self.make_executor()
+
+        executor.mark_workflow_execution_completed()
+
+        checklist = self.read_json(
+            self.root / "docs" / "features" / "skill-test" / "phases" / "0-mvp" / "workflow-checklist.json"
+        )
+        execution = checklist["items"][5]
+        self.assertEqual("completed", checklist["status"])
+        self.assertEqual("completed", execution["status"])
+        self.assertIn("completed_at", execution)
 
     def test_check_blockers_error_exits(self):
         index = self.read_json(self.root / "docs" / "features" / "skill-test" / "phases" / "0-mvp" / "index.json")
@@ -412,6 +590,7 @@ class StepExecutorTest(unittest.TestCase):
                 "docs/features/skill-test/phases/0-mvp/step2-ac-output.json",
                 "docs/features/skill-test/phases/0-mvp/step2-review-output.json",
                 "docs/features/skill-test/phases/0-mvp/index.json",
+                "docs/features/skill-test/phases/0-mvp/workflow-checklist.json",
                 "docs/features/skill-test/phases/index.json",
             ),
             calls,
@@ -576,6 +755,7 @@ class StepExecutorTest(unittest.TestCase):
                 "--all",
                 "--",
                 "docs/features/skill-test/phases/0-mvp/index.json",
+                "docs/features/skill-test/phases/0-mvp/workflow-checklist.json",
                 "docs/features/skill-test/phases/index.json",
             ),
             calls,
