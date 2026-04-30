@@ -51,6 +51,23 @@ COLUMNS:
 INDEX:
 - `product_id (UNIQUE)`
 
+### `tbl_stock_history`
+
+COLUMNS:
+- `id (PK)`
+- `stock_id (FK -> tbl_stock.id)`
+- `quantity_change`
+- `reason`
+- `admin_member_id`
+- `created_at`
+- `updated_at`
+
+INDEX:
+- 없음
+
+비고:
+- 상품별 재고 이력 최신순 조회가 커지면 `idx_stock_history_stock_id_created_at (stock_id, created_at)` 추가를 검토한다.
+
 ### `tbl_order`
 
 COLUMNS:
@@ -143,5 +160,6 @@ INDEX:
 - `tbl_member` 1:N `tbl_order`
 - `tbl_order` 1:N `tbl_order_item`
 - `tbl_product` 1:1 `tbl_stock`
+- `tbl_stock` 1:N `tbl_stock_history`
 - `tbl_product` 1:N `tbl_order_item`
 - `tbl_order` 1:1 `tbl_payment`

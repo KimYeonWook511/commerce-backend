@@ -352,6 +352,168 @@
 }
 ```
 
+## 관리자 재고
+
+### `POST /admin/products/{productId}/stock`
+
+설명:
+- 관리자 초기 재고 생성 API입니다.
+- `ROLE_ADMIN` 권한이 필요합니다.
+- 초기 재고 생성은 삭제되지 않은 상품에 대해 상품별 한 번만 가능합니다.
+
+요청:
+- Path
+  - `productId`: 양수, 필수
+- Body
+
+```json
+{
+  "quantity": 10,
+  "reason": "INBOUND"
+}
+```
+
+- `quantity`: 0 이상, 필수
+- `reason`: `INBOUND`, `DISPOSAL`, `ADMIN_ADJUSTMENT`, `ORDER_CANCEL_RESTORE` 중 하나, 필수
+
+응답:
+- HTTP Status: `201 Created`
+
+```json
+{
+  "code": "SUCCESS",
+  "message": "OK",
+  "data": {
+    "productId": 1,
+    "stockId": 1,
+    "quantity": 10
+  }
+}
+```
+
+### `POST /admin/products/{productId}/stock/increase`
+
+설명:
+- 관리자 재고 증가 API입니다.
+- `ROLE_ADMIN` 권한이 필요합니다.
+- 비관적 락으로 재고를 조회한 뒤 수량을 증가시키고 양수 변경 이력을 저장합니다.
+
+요청:
+- Path
+  - `productId`: 양수, 필수
+- Body
+
+```json
+{
+  "quantity": 5,
+  "reason": "INBOUND"
+}
+```
+
+- `quantity`: 0보다 커야 함, 필수
+- `reason`: `INBOUND`, `DISPOSAL`, `ADMIN_ADJUSTMENT`, `ORDER_CANCEL_RESTORE` 중 하나, 필수
+
+응답:
+
+```json
+{
+  "code": "SUCCESS",
+  "message": "OK",
+  "data": {
+    "productId": 1,
+    "stockId": 1,
+    "quantity": 15
+  }
+}
+```
+
+### `POST /admin/products/{productId}/stock/decrease`
+
+설명:
+- 관리자 재고 감소 API입니다.
+- `ROLE_ADMIN` 권한이 필요합니다.
+- 비관적 락으로 재고를 조회한 뒤 수량을 감소시키고 음수 변경 이력을 저장합니다.
+- 현재 재고 수량보다 크게 감소할 수 없습니다.
+
+요청:
+- Path
+  - `productId`: 양수, 필수
+- Body
+
+```json
+{
+  "quantity": 3,
+  "reason": "DISPOSAL"
+}
+```
+
+- `quantity`: 0보다 커야 함, 필수
+- `reason`: `INBOUND`, `DISPOSAL`, `ADMIN_ADJUSTMENT`, `ORDER_CANCEL_RESTORE` 중 하나, 필수
+
+응답:
+
+```json
+{
+  "code": "SUCCESS",
+  "message": "OK",
+  "data": {
+    "productId": 1,
+    "stockId": 1,
+    "quantity": 12
+  }
+}
+```
+
+### `GET /admin/products/{productId}/stock/histories`
+
+설명:
+- 관리자 상품별 재고 변경 이력 조회 API입니다.
+- `ROLE_ADMIN` 권한이 필요합니다.
+- 상품별 전체 이력을 `createdAt DESC` 기준 최신순으로 반환합니다.
+
+요청:
+- Path
+  - `productId`: 양수, 필수
+- 요청 바디 없음
+- pagination 파라미터 없음
+
+응답:
+
+```json
+{
+  "code": "SUCCESS",
+  "message": "OK",
+  "data": [
+    {
+      "historyId": 2,
+      "productId": 1,
+      "stockId": 1,
+      "quantityChange": -3,
+      "reason": "DISPOSAL",
+      "adminMemberId": 10,
+      "createdAt": "2026-04-30T12:30:00"
+    },
+    {
+      "historyId": 1,
+      "productId": 1,
+      "stockId": 1,
+      "quantityChange": 10,
+      "reason": "INBOUND",
+      "adminMemberId": 10,
+      "createdAt": "2026-04-30T12:00:00"
+    }
+  ]
+}
+```
+
+관리자 재고 API 실패 응답:
+- 존재하지 않거나 삭제된 상품의 초기 재고 생성: `PRODUCT-404`
+- 존재하지 않는 재고의 증가/감소/이력 조회: `STOCK-404`
+- 재고 부족: `STOCK-409`
+- 이미 재고 존재: `STOCK-409-2`
+- 권한 없음: `AUTH-403`
+- 검증 실패: `COMMON-400`
+
 ## 주문
 
 ### `POST /orders`
