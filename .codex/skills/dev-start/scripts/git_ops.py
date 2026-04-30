@@ -136,8 +136,9 @@ def commit_step(executor, step_num: int, step_name: str, editable_paths: list[st
     ac_output_rel = f"{executor.phase_relpath}/step{step_num}-ac-output.json"
     review_output_rel = f"{executor.phase_relpath}/step{step_num}-review-output.json"
     phase_index_rel = f"{executor.phase_relpath}/index.json"
+    workflow_checklist_rel = f"{executor.phase_relpath}/workflow-checklist.json"
     feature_index_rel = f"{executor.feature_phases_relpath}/index.json"
-    metadata_paths = [output_rel, ac_output_rel, review_output_rel, phase_index_rel, feature_index_rel]
+    metadata_paths = [output_rel, ac_output_rel, review_output_rel, phase_index_rel, workflow_checklist_rel, feature_index_rel]
 
     validate_worktree_scope(executor, editable_paths, metadata_paths, context=f"step {step_num} commit")
     stage_paths(executor, editable_paths)

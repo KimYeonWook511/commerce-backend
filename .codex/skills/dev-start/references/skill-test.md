@@ -32,7 +32,8 @@
 3. 공통 아키텍처나 다른 도메인 정보가 더 필요할 때만 `AGENTS.md`의 참고 문서를 따라 루트 문서를 추가 확인한다.
 4. 바로 구현하지 않고 탐색과 계획 수립으로 시작한다.
 5. 사용자가 다시 요청하지 않아도 `docs/features/skill-test/` 아래 기본 문서 5개와 phase 이름, step 분해 초안을 먼저 제안한다.
-6. `docs/features/skill-test/phases/index.json`, `docs/features/skill-test/phases/0-bootstrap/index.json`, `stepN.md` 구조를 기준으로 초안을 보여준다.
+6. `docs/features/skill-test/phases/index.json`, `docs/features/skill-test/phases/0-bootstrap/index.json`, `workflow-checklist.json`, `stepN.md` 구조를 기준으로 초안을 보여준다.
+7. 상태 표를 함께 보여주고, 파일 초안 작성 단계에서는 `Explore`, `Discuss`, `Step Design`, `File Drafting`까지만 완료로 표시한다.
 
 ### 4. 실패 기준
 
@@ -42,6 +43,8 @@
 - 관련 없는 문서를 전부 읽겠다고 한다.
 - `phase 생성해줘` 같은 후속 지시를 다시 요구한다.
 - 기능 문서 구조 없이 일반 계획 목록만 보여준다.
+- `workflow-checklist.json` 없이 phase 구조를 제안한다.
+- File Drafting 완료 후 바로 실행 승인이나 `execute.py` 실행으로 넘어간다.
 
 ## 테스트 2. 정보 부족 시 최소 질문
 
@@ -92,6 +95,8 @@
 2. 정보가 충분하다고 판단하면 사용자가 다시 요청하지 않아도 기능 문서 초안과 step, phase 초안을 먼저 제안한다.
 3. 각 step은 하나의 핵심 관심사만 다루도록 나눈다.
 4. 각 step에는 읽을 문서, 작업, AC, 검증 절차, 금지사항이 들어가게 제안한다.
+5. 각 step의 `수정 가능 경로`에는 `docs/features/<feature-name>/**`를 포함한다.
+6. phase 초안에는 `workflow-checklist.json`을 포함하고, File Drafting 완료 후 사용자 검토를 기다린다.
 
 ### 4. 실패 기준
 
@@ -100,6 +105,8 @@
 - 질문만 하고 초안을 제안하지 않는다.
 - step이 너무 크거나 모호하다.
 - AC를 실행 가능한 커맨드가 아닌 추상 문장으로 쓴다.
+- `docs/features/<feature-name>/**`를 `수정 가능 경로`에서 누락한다.
+- File Drafting 후 멈추지 않고 실행 단계로 넘어간다.
 
 ## 테스트 4. 실행 연결 확인
 
@@ -126,8 +133,13 @@ python3 .codex/skills/dev-start/scripts/execute.py docs/features/skill-test/phas
 ```
 
 3. `--push`가 마지막에 원격 브랜치를 푸시하는 옵션이라는 점을 분리해서 설명한다.
-4. 실행 전 권한 상승과 반복 승인 저장 옵션을 안내한다.
-5. 실행 흐름이 `pending` step 순차 실행, 상태 전이, `summary` 누적 방식이라는 점을 요약한다.
+4. 실행 전 `workflow-checklist.json`의 `Execution Authorization`이 완료되어야 한다고 안내한다.
+5. 사용자에게 받아야 하는 두 입력을 분리해서 설명한다.
+   - 권한 상승 실행 허락
+   - 승인 프롬프트 처리 방식: 매번 승인 또는 `prefix_rule=["python3", ".codex/skills/dev-start/scripts/execute.py"]` 저장
+6. 사용자 의사 확인 후 agent가 checklist에 `authorization` 객체를 기록해야 한다고 설명한다.
+7. checklist 기록 후 Codex permission UI에서 `execute.py` 명령 자체의 권한 상승 요청을 보낸다고 설명한다.
+8. 실행 흐름이 `pending` step 순차 실행, 상태 전이, `summary` 누적 방식이라는 점을 요약한다.
 
 ### 4. 실패 기준
 
@@ -136,6 +148,9 @@ python3 .codex/skills/dev-start/scripts/execute.py docs/features/skill-test/phas
 - 실행기 경로를 잘못 안내한다.
 - `--push` 의미를 잘못 설명한다.
 - 권한 상승 실행 안내를 빠뜨린다.
+- 권한 상승 실행 허락과 승인 프롬프트 처리 방식을 하나로 뭉뚱그려 묻는다.
+- `authorization` 기록 없이 permission UI 승인이나 `execute.py` 실행으로 바로 넘어간다.
+- checklist 기록과 Codex permission UI 승인을 같은 것으로 설명한다.
 - review나 decision log 흐름과 섞어서 설명한다.
 
 ## 테스트 5. 범위 밖 요청 분리
@@ -173,5 +188,8 @@ python3 .codex/skills/dev-start/scripts/execute.py docs/features/skill-test/phas
 - 사용자가 다시 `step 나눠줘`, `phase 만들어줘`라고 말하지 않아도 된다.
 - 문서 탐색 규칙이 `AGENTS.md` -> feature 문서 우선 -> 필요 시 루트 문서 추가 순서로 일관된다.
 - 기능 문서 5개와 기능 내부 `phases` 산출물 구조가 자기완결적으로 나온다.
+- `workflow-checklist.json`과 상태 표가 1~6번 workflow를 일관되게 보여준다.
+- File Drafting 후에는 멈추고 사용자 검토를 기다린다.
+- 실행 전에는 사용자 의사 확인 -> checklist authorization 기록 -> Codex permission UI 권한 상승 요청 -> `execute.py` 실행 순서를 따른다.
 - 실행기와의 연결 경로가 정확하다.
 - 리뷰, `decision-log`, 훅과의 경계를 혼동하지 않는다.

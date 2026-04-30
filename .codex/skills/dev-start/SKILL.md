@@ -22,6 +22,32 @@ description: 개발 시작 전 문서 탐색, 논의, step 설계, phases 초안
 - 이 skill을 사용하는 작업에서는 `phases`가 준비된 이후의 기본 구현 경로를 수동 파일 수정이 아니라 `execute.py` 실행으로 본다.
 - 사용자가 명시적으로 `execute.py`를 쓰지 말라고 하지 않은 이상, agent가 직접 구현을 시작하면 안 된다.
 - `Implement the plan`은 자동으로 직접 구현을 뜻하지 않는다. `phases` 준비 여부와 실행 승인 여부를 먼저 확인해야 한다.
+- Workflow는 phase별 `workflow-checklist.json`으로 추적하며, 다음 단계로 넘어가기 전 이전 단계가 모두 `completed`여야 한다.
+- `dev-start` 진행 상태를 사용자에게 보고할 때는 1~6번 Workflow 상태 표를 함께 보여준다.
+- `File Drafting` 완료 후에는 반드시 멈추고 작성된 문서 경로를 사용자에게 보고한 뒤 검토 응답을 기다린다. 바로 `execute.py` 실행 요청으로 넘어가지 않는다.
+- `Execution Authorization`은 문서 검토 완료, 권한 상승 실행 허락, 승인 프롬프트 처리 방식이 모두 확정되어야 `completed`가 된다.
+
+## Workflow 상태 표
+
+`dev-start`를 진행하면서 사용자에게 상태를 보고할 때는 아래 표 형식을 사용한다.
+
+| 단계 | Workflow | 상태 |
+| --- | --- | --- |
+| 1 | Explore |  |
+| 2 | Discuss |  |
+| 3 | Step Design |  |
+| 4 | File Drafting |  |
+| 5 | Execution Authorization |  |
+| 6 | Execution |  |
+
+상태 표 규칙:
+
+- 완료된 단계는 `✅`, 아직 완료되지 않은 단계는 빈칸으로 표시한다.
+- `workflow-checklist.json`이 생성된 뒤에는 checklist 값을 기준으로 표시한다.
+- checklist 생성 전에는 현재 대화에서 실제 완료한 단계만 `✅`로 표시한다.
+- `File Drafting` 완료 보고 시 표는 1~4번만 `✅`, 5~6번은 빈칸이어야 한다.
+- `Execution Authorization` 완료 보고 시 표는 1~5번이 `✅`, 6번은 빈칸이어야 한다.
+- `Execution` 시작 후에는 6번을 진행 중으로 설명하되, checklist status는 실행기가 `in_progress`로 기록한다.
 
 ## 먼저 읽을 것
 
@@ -69,6 +95,7 @@ feature 문서와 `phases` 문서로 부족한 공통 맥락이 있을 때만 `A
 - 한 step은 하나의 레이어 또는 하나의 핵심 관심사만 다룬다.
 - API feature는 domain/service/controller/test/docs sync를 한 step에 몰아넣지 않는다.
 - command API가 여러 동작을 포함하면 create, update/delete, controller test, docs sync처럼 나눈다.
+- 모든 step의 `수정 가능 경로`에는 `docs/features/<feature-name>/**`를 포함한다. feature 문서, phase index, workflow checklist, step 산출물이 실행 메타데이터로 함께 갱신되기 때문이다.
 - 각 step 문서는 독립 실행 가능한 자기완결 문서여야 한다.
 - 관련 문서 경로와 이전 step 산출물 경로를 명시한다.
 - 구현 지시는 인터페이스와 핵심 제약 위주로 작성하고, 내부 구현은 과도하게 고정하지 않는다.
@@ -87,6 +114,7 @@ feature 문서와 `phases` 문서로 부족한 공통 맥락이 있을 때만 `A
 - `docs/features/<feature-name>/db-schema.md`
 - `docs/features/<feature-name>/phases/index.json`
 - `docs/features/<feature-name>/phases/<phase-name>/index.json`
+- `docs/features/<feature-name>/phases/<phase-name>/workflow-checklist.json`
 - `docs/features/<feature-name>/phases/<phase-name>/step{N}.md`
 
 포맷과 상세 규칙은 `references/phase-files.md`를 따른다.
@@ -95,14 +123,29 @@ feature 문서와 `phases` 문서로 부족한 공통 맥락이 있을 때만 `A
 - feature 문서 초안, `phases/index.json`, step 문서를 직접 만들지 않는다.
 - 계획이 완성됐더라도 승인 없이 repo 파일을 수정하지 않는다.
 
+File Drafting 완료 후 필수 중단:
+- 작성 또는 수정한 feature 문서, phase index, step 문서, `workflow-checklist.json` 경로를 사용자에게 보고한다.
+- checklist의 `File Drafting`까지만 `completed`로 둔다.
+- `Execution Authorization`은 사용자가 문서 검토 완료와 실행 승인을 명시하기 전까지 `pending`으로 둔다.
+- 이 시점의 checklist는 `Explore`, `Discuss`, `Step Design`, `File Drafting`만 `completed`여야 하고, `Execution Authorization`, `Execution`은 `pending`이어야 한다.
+- 사용자의 단순한 "진행해", "계속해", "Implement the plan"은 문서 검토 완료 또는 실행 승인으로 해석하지 않는다.
+
 ### 5. Execution Authorization
 
 `execute.py`를 실행하기 전에 권한 방식을 확정한다.
 
 - `execute.py`는 feature 브랜치 checkout/create, add, commit을 직접 수행한다.
-- Codex가 실행기를 대신 실행할 때는 사용자에게 권한 상승 실행이 필요함을 알린다.
-- 반복 승인은 Codex permission UI에서 `prefix_rule=["python3", ".codex/skills/dev-start/scripts/execute.py"]` 저장으로 처리한다.
-- 사용자가 실행을 승인하지 않으면 구현으로 진행하지 않는다.
+- 이 단계에 들어가기 전 checklist의 `Explore`, `Discuss`, `Step Design`, `File Drafting`은 모두 `completed`여야 한다.
+- 아래 순서로만 진행한다.
+  1. 사용자에게 권한 상승 실행 허락을 받는다: `execute.py`를 권한 상승으로 실행해도 되는지 확인한다.
+  2. 사용자에게 승인 프롬프트 처리 방식을 받는다: 매번 승인 프롬프트를 받을지, `prefix_rule=["python3", ".codex/skills/dev-start/scripts/execute.py"]`로 반복 승인을 저장할지 확인한다.
+  3. 두 입력이 모두 확정되면 agent가 `workflow-checklist.json`을 갱신한다.
+  4. checklist 기록이 끝난 뒤에만 Codex permission UI의 권한 상승 요청으로 넘어간다.
+- 사용자가 권한 상승 실행을 허락하지 않으면 구현으로 진행하지 않는다.
+- checklist 갱신 시 `Execution Authorization`은 `completed`, top-level `status`는 `authorized`로 기록한다.
+- `Execution Authorization.authorization`에는 `escalation_approved`, `approval_prompt_mode`, `prefix_rule`, `approved_by`, `approved_at`을 기록한다.
+- Codex permission UI의 실제 승인 클릭은 실행 직전 별도 절차이며, checklist의 `Execution Authorization` 기록을 대체하지 않는다.
+- `Execution Authorization` 완료 후 checklist는 `Explore`부터 `Execution Authorization`까지 `completed`여야 하고, `Execution`은 `pending`이어야 한다.
 
 ### 6. Execution
 
@@ -114,26 +157,21 @@ python3 .codex/skills/dev-start/scripts/execute.py docs/features/<feature-name>/
 ```
 
 실행 규칙:
-- `phases` 문서가 준비되지 않았으면 구현을 시작하지 말고 문서 준비 단계로 되돌아간다.
-- 사용자가 구현을 요청하더라도, 기본 동작은 agent의 직접 수정이 아니라 `execute.py` 실행 제안 또는 실행 승인 대기다.
-- 사용자가 `execute.py` 실행을 승인하지 않았으면 agent는 코드를 직접 수정하지 않는다.
-- 사용자가 `execute.py` 실행을 승인하면 agent는 `execute.py` 명령 자체를 권한 상승으로 실행한다.
+- 구현 요청을 받으면 먼저 `phases` 문서, `workflow-checklist.json`, `Execution Authorization` 완료 여부와 `authorization` 기록을 확인한다.
+- 준비 또는 승인이 부족하면 구현하지 않고 누락된 단계로 돌아간다.
+- 실행 승인이 완료되면 Codex permission UI로 `execute.py` 명령 자체의 권한 상승을 요청한 뒤 실행한다.
 - 사용자가 명시적으로 수동 구현을 지시한 경우에만 `execute.py`를 우회할 수 있으며, 이때도 해당 예외를 먼저 사용자 업데이트에 분명히 남긴다.
 
-실행기는 아래 규칙으로 동작한다.
-
-- phase/step 상태를 확인하고, 실행 가능한 경우에만 가장 앞의 `pending` step을 수행한다.
-- 현재 step 문서와 관련 문서를 모아 developer 컨텍스트를 만들고 `developer_worker`를 실행한다.
-- developer worker는 실행기 내부 `codex exec --ephemeral -c approval_policy="never" -s workspace-write` 명령으로 호출해 승인 프롬프트 없이 repo 작업 파일을 수정한다.
-- reviewer worker는 실행기 내부 `codex exec --ephemeral -c approval_policy="never" -s read-only` 명령으로 호출해 승인 프롬프트 없이 실제 repo 파일을 읽기 전용으로 검토한다.
-- `execute.py`는 branch checkout/create, add, commit을 직접 수행한다.
-- Git preflight는 실행 중인 `execute.py`가 Git 메타데이터에 쓸 수 있는지만 확인한다. preflight는 권한을 부여하지 않는다.
-- 실행 후 `step_verifier`로 상태와 output을 먼저 검증한다.
-- step이 `completed`면 실행기가 Acceptance Criteria를 직접 재실행한다.
-- 후검증을 통과하면 `reviewer_worker`가 변경 경로와 output을 기준으로 실제 repo 파일을 read-only 검토한다.
-- verifier, AC 재검증, reviewer 중 하나라도 실패하면 사유를 다음 시도 컨텍스트에 넣어 최대 3회까지 재시도한다.
-- `completed` + verifier 통과 + AC 재검증 통과 + reviewer 통과면 자동 커밋을 수행한다.
-- 실행 시작 시 이미 `completed`인 step은 `stepN-output.json`, `stepN-review-output.json`, Acceptance Criteria가 있으면 `stepN-ac-output.json`이 모두 있어야 한다. 산출물이 없으면 수동 완료로 보고 실행을 중단한다.
-- `blocked` 또는 최종 `error`면 phase 상태를 함께 갱신하고 즉시 중단한다.
+실행기 운영 규칙:
+- 실행기는 `workflow-checklist.json` 승인 상태를 검증한 뒤 가장 앞의 `pending` step부터 순차 실행한다.
+- 성공한 step은 `completed`로 기록하고 다음 `pending` step으로 자동 진행한다.
+- 실행기는 developer worker, Acceptance Criteria 재검증, reviewer worker를 통해 step 완료 여부를 검증한다. 상세 산출물과 파일 포맷은 `references/phase-files.md`를 따른다.
+- 정상 실행 메타데이터 갱신은 자동화 범위다. 현재 step의 `completed` 처리, `summary`, 실행 output, Acceptance Criteria output, review output, workflow checklist 갱신은 허용한다.
+- 실행 중 재시도를 위한 step `pending` reset은 `execute.py` 내부 동작으로만 허용된다.
+- `blocked` 또는 3회 재시도 후 최종 `error`가 발생하면 즉시 중단하고 사용자에게 실패 step, 실패 사유, 관련 output 파일 경로를 보고한다.
+- 최종 `error` 또는 `blocked` 이후 agent는 사용자 승인 없이 step 상태를 `pending`으로 되돌리지 않는다.
+- agent는 사용자 승인 없이 실패 회피 목적으로 step 요구사항, Acceptance Criteria, feature 문서, root docs, editable path를 수정해 재시도하지 않는다.
+- 실패 원인이 문서 누락, scope 누락, Acceptance Criteria 오류처럼 명확해 보여도 자동 수정하지 않는다. 먼저 원인과 수정 계획을 사용자에게 제시한다.
+- 재실행은 사용자가 문서/상태 수정과 `execute.py` 재실행을 명시적으로 승인한 뒤에만 한다.
 
 `--push`는 모든 step이 완료된 뒤 현재 feature 브랜치를 원격 저장소로 push하는 옵션이다.

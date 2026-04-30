@@ -14,6 +14,15 @@
 
 각 문서는 `docs/features/_templates/` 템플릿을 복사해 시작한다.
 
+phase 구조를 만들 때는 아래 파일도 반드시 생성한다.
+
+- `docs/features/<feature-name>/phases/index.json`
+- `docs/features/<feature-name>/phases/<phase-name>/index.json`
+- `docs/features/<feature-name>/phases/<phase-name>/workflow-checklist.json`
+- `docs/features/<feature-name>/phases/<phase-name>/step{N}.md`
+
+`workflow-checklist.json`은 `docs/features/_templates/phases/workflow-checklist.json`을 복사해 시작한다.
+
 ## `docs/features/<feature-name>/phases/index.json`
 
 해당 기능 내부의 phase 목록을 관리하는 인덱스다.
@@ -71,6 +80,69 @@ task 상세 상태 파일이다.
 - `summary`: 완료 산출물의 한 줄 요약
 - `error_message`: 실패 원인
 - `blocked_reason`: 사용자 개입 또는 외부 제약으로 인해 막힌 사유
+
+## `docs/features/<feature-name>/phases/<phase-name>/workflow-checklist.json`
+
+`dev-start` workflow의 단계 진행 상태를 기록하는 checklist다. 항목 제목은 `SKILL.md`의 Workflow 제목과 정확히 일치해야 한다.
+이 파일은 phase를 만들 때 반드시 생성해야 하며, checklist 없이 phase를 실행 가능한 상태로 간주하지 않는다.
+
+```json
+{
+  "workflow": "dev-start",
+  "status": "drafting",
+  "items": [
+    { "order": 1, "title": "Explore", "status": "completed" },
+    { "order": 2, "title": "Discuss", "status": "completed" },
+    { "order": 3, "title": "Step Design", "status": "completed" },
+    { "order": 4, "title": "File Drafting", "status": "completed" },
+    { "order": 5, "title": "Execution Authorization", "status": "pending" },
+    { "order": 6, "title": "Execution", "status": "pending" }
+  ]
+}
+```
+
+필드 규칙:
+
+- `workflow`: 항상 `dev-start`
+- `status`: `drafting` | `authorized` | `in_progress` | `completed`
+- `items[].order`: 1부터 6까지 순서대로 작성
+- `items[].title`: `Explore` | `Discuss` | `Step Design` | `File Drafting` | `Execution Authorization` | `Execution`
+- `items[].status`: `pending` | `completed` | `in_progress`
+- `items[4].authorization`: `Execution Authorization`이 `completed`일 때 필수이며 권한 상승 실행 허락과 승인 프롬프트 처리 방식을 기록한다.
+
+진행 규칙:
+
+- checklist 생성 이후 다음 단계로 넘어가기 전에는 이전 단계가 모두 `completed`여야 한다.
+- 문서 초안 작성 직후에는 1~4번만 `completed`, 5~6번은 `pending`이다.
+- top-level `status`는 문서 초안 작성 직후 `drafting`, `Execution Authorization` 완료 후 `authorized`, 실행 시작 후 `in_progress`, phase 정상 완료 후 `completed`다.
+- `Execution Authorization`은 문서 검토 완료, 권한 상승 실행 허락, 승인 프롬프트 처리 방식이 모두 확정된 뒤에만 `completed`다.
+- `Execution Authorization` 완료 시 agent는 item 5에 `authorization` 객체를 기록하고 top-level `status`를 `authorized`로 갱신한다.
+- `Execution`은 `execute.py`가 시작할 때 `in_progress`, phase 정상 완료 시 `completed`다.
+
+`Execution Authorization` 완료 예시:
+
+```json
+{
+  "order": 5,
+  "title": "Execution Authorization",
+  "status": "completed",
+  "authorization": {
+    "escalation_approved": true,
+    "approval_prompt_mode": "per_run",
+    "prefix_rule": null,
+    "approved_by": "user",
+    "approved_at": "2026-04-30T15:30:00+0900"
+  }
+}
+```
+
+필드 의미:
+
+- `escalation_approved`: 사용자가 `execute.py` 권한 상승 실행을 허락했으면 `true`
+- `approval_prompt_mode`: `per_run` 또는 `saved_prefix_rule`
+- `prefix_rule`: `saved_prefix_rule`일 때 `["python3", ".codex/skills/dev-start/scripts/execute.py"]`, `per_run`일 때 `null`
+- `approved_by`: 사용자 승인임을 나타내는 `user`
+- `approved_at`: KST 기준 승인 시각
 
 ## `docs/features/<feature-name>/phases/<phase-name>/step{N}.md`
 
@@ -144,6 +216,7 @@ task 상세 상태 파일이다.
 - “이전 대화에서 논의한 바와 같이” 같은 외부 참조를 쓰지 않는다.
 - 필요한 파일 경로와 배경은 문서 안에 직접 적는다.
 - `수정 가능 경로` 섹션은 필수이며, 현재 step이 수정해도 되는 경로만 명시한다.
+- 모든 step의 `수정 가능 경로`에는 `docs/features/<feature-name>/**`를 포함한다. feature 문서, phase index, workflow checklist, step 산출물이 실행 중 함께 갱신될 수 있기 때문이다.
 - 구현 코드는 인터페이스와 제약 중심으로 유도하고, 내부 구현을 전부 박아넣지 않는다.
 - Acceptance Criteria는 추상 문장이 아니라 실행기가 다시 돌릴 수 있는 실제 실행 커맨드여야 한다.
 - 기본 예시는 `./gradlew test`를 사용한다.
@@ -165,8 +238,11 @@ task 상세 상태 파일이다.
 
 ## 에러 복구
 
-- `error` 발생 시: `docs/features/<feature-name>/phases/<phase-name>/index.json`에서 해당 step의 `status`를 `pending`으로 바꾸고 `error_message`를 삭제한 뒤 재실행한다.
-- `blocked` 발생 시: `blocked_reason`에 적힌 사유를 해결한 뒤, `status`를 `pending`으로 바꾸고 `blocked_reason`을 삭제한 뒤 재실행한다.
+- `error` 또는 `blocked` 발생 시 agent는 즉시 중단하고 사용자에게 실패 step, 실패 사유, 관련 output 파일을 보고한다.
+- 실행 중 재시도를 위해 `execute.py`가 현재 step을 `pending`으로 되돌리는 것은 정상 실행 메타데이터다.
+- 사용자 승인 전에는 해당 step의 상태, 실패 필드, step 요구사항, Acceptance Criteria, 문서, `수정 가능 경로`를 수정하지 않는다.
+- 사용자가 복구를 승인한 뒤에만 상태와 실패 필드를 정리하고 재실행할 수 있다.
+- 복구 시에도 변경한 문서와 상태 파일을 보고하고, `execute.py` 재실행 승인을 별도로 받는다.
 
 ## 실행
 
@@ -177,17 +253,13 @@ python3 .codex/skills/dev-start/scripts/execute.py docs/features/<feature-name>/
 python3 .codex/skills/dev-start/scripts/execute.py docs/features/<feature-name>/phases/<phase-name> --push
 ```
 
-실행 흐름은 아래와 같다.
+실행 개요:
 
-1. 기능 내부 phase index와 현재 phase index를 읽는다.
-2. `pending` step을 순차 실행한다.
-3. developer worker가 `codex exec --ephemeral -c approval_policy="never" -s workspace-write`로 step을 수행하고 `stepN-output.json`을 기록한다.
-4. verifier가 step 상태와 output을 자동 검증한다.
-5. step이 `completed`면 실행기가 Acceptance Criteria를 다시 실행하고 `stepN-ac-output.json`을 기록한다.
-6. reviewer worker가 `codex exec --ephemeral -c approval_policy="never" -s read-only`로 변경 경로, output, Acceptance Criteria 결과를 바탕으로 실제 repo 파일을 read-only 재검토한다.
-7. verifier, Acceptance Criteria 재검증, reviewer를 모두 통과한 경우에만 `completed`를 인정한다.
-8. 완료된 step의 `summary`는 다음 step 컨텍스트로 누적된다.
-9. `--push`가 있으면 마지막에 현재 feature 브랜치를 원격으로 push한다.
+- 실행기는 checklist 승인 상태를 확인한 뒤 가장 앞의 `pending` step부터 순차 실행한다.
+- 각 step은 developer 실행, Acceptance Criteria 재검증, reviewer 검토를 모두 통과해야 `completed`로 인정된다.
+- 성공한 step의 상태, summary, output/ac/review 산출물, workflow checklist 갱신은 정상 실행 메타데이터로 기록한다.
+- 실행 중 retryable failure는 실행기가 같은 step을 재시도할 수 있다.
+- 최종 `blocked` 또는 `error` 발생 시 자동 복구하지 않고 사용자 검토와 승인을 기다린다.
 
 ## Git 권한 운영
 
@@ -213,4 +285,4 @@ python3 .codex/skills/dev-start/scripts/execute.py docs/features/<feature-name>/
 - `stepN-ac-output.json`: Acceptance Criteria 재실행 결과. Acceptance Criteria가 있는 step에서 필수다.
 - `stepN-review-output.json`: reviewer worker 검토 결과
 
-실행 시작 시 이미 `completed`인 step은 위 산출물을 검사한다. 산출물이 누락되면 실행기는 중단하며, 해당 step의 `status`를 `pending`으로 되돌리고 `completed_at`, `summary`를 정리한 뒤 다시 실행해야 한다.
+실행 시작 시 이미 `completed`인 step은 위 산출물을 검사한다. 산출물이 누락된 수동 완료 step은 실행기가 중단하며, 상태 복구와 재실행은 사용자 승인 후 진행한다.

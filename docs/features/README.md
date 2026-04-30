@@ -20,7 +20,9 @@ docs/
     │   ├── architecture.md
     │   ├── adr.md
     │   ├── api-spec.md
-    │   └── db-schema.md
+    │   ├── db-schema.md
+    │   └── phases/
+    │       └── workflow-checklist.json
     └── <feature-name>/              # 개별 기능 작업 루트
         ├── prd.md                   # 기능 요구사항
         ├── architecture.md          # 기능 구조 설계
@@ -31,6 +33,7 @@ docs/
             ├── index.json           # 기능 내부 phase 목록
             └── <phase-name>/
                 ├── index.json       # 현재 phase의 step 상태
+                ├── workflow-checklist.json # dev-start workflow 상태
                 ├── step0.md         # 첫 번째 실행 step
                 └── step1.md         # 두 번째 실행 step
 ```
@@ -41,6 +44,7 @@ docs/
 - `prd.md`, `architecture.md`, `adr.md`, `api-spec.md`, `db-schema.md`는 기능 기획과 설계 문서다.
 - `phases/index.json`은 해당 기능 내부의 phase 목록을 관리한다.
 - `phases/<phase-name>/index.json`은 해당 phase의 step 상태를 관리한다.
+- `phases/<phase-name>/workflow-checklist.json`은 `dev-start`의 1~6번 workflow 진행 상태를 관리한다.
 - `phases/<phase-name>/step0.md`, `step1.md`는 실제 실행 단위 문서다.
 
 ## 기본 생성 문서
@@ -52,8 +56,13 @@ docs/
 - `adr.md`
 - `api-spec.md`
 - `db-schema.md`
+- `phases/index.json`
+- `phases/<phase-name>/index.json`
+- `phases/<phase-name>/workflow-checklist.json`
+- `phases/<phase-name>/step{N}.md`
 
-각 문서는 `docs/features/_templates/` 아래 템플릿을 복사해 시작한다.
+기능 문서는 `docs/features/_templates/` 아래 템플릿을 복사해 시작한다.
+workflow checklist는 `docs/features/_templates/phases/workflow-checklist.json`을 복사해 시작한다.
 
 ## 기능별 `phases`
 
@@ -67,6 +76,7 @@ docs/
 ```text
 docs/features/<feature-name>/phases/index.json
 docs/features/<feature-name>/phases/<phase-name>/index.json
+docs/features/<feature-name>/phases/<phase-name>/workflow-checklist.json
 docs/features/<feature-name>/phases/<phase-name>/step0.md
 ```
 
@@ -94,8 +104,7 @@ docs/features/<feature-name>/phases/<phase-name>/step0.md
 
 - step이 중간에 blocked/error로 끝났다면 `phases/<phase-name>/index.json` 상태와 실제 Git 워킹트리를 함께 확인한다.
 - 실행기 output json은 실행 산출물일 뿐 기능 구현 산출물과 다를 수 있다.
-- `completed` step은 `stepN-output.json`, `stepN-review-output.json`, AC가 있으면 `stepN-ac-output.json`이 필요하다.
-- completed 산출물이 누락되면 해당 step을 `pending`으로 되돌리고 실행기로 재실행한다.
+- `completed` step의 필수 산출물 규격과 복구 절차는 `.codex/skills/dev-start/references/phase-files.md`를 따른다.
 - 이전 step 변경이 커밋되지 않은 상태로 다음 step을 바로 재실행하면 scope validation에 다시 걸릴 수 있다.
 - 따라서 재실행 전에는 아래를 먼저 확인한다.
   - 현재 워킹트리에 남은 변경이 어떤 step 산출물인지
