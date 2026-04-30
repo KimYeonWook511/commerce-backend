@@ -31,6 +31,12 @@ class DeveloperGuardrailsTest(unittest.TestCase):
         self.assertIn("이전 시도 실패", result)
         self.assertIn("completed` + `summary", result)
         self.assertIn("git add/commit/push/checkout", result)
+        self.assertIn("정상 실행 메타데이터", result)
+        self.assertIn("step 요구사항, Acceptance Criteria", result)
+        self.assertIn("실패 회피 목적", result)
+        self.assertIn("현재 step 외의 step 상태를 수정하지 마라", result)
+        self.assertIn("status를 `pending`으로 되돌리지 마라", result)
+        self.assertIn("3회 시도 후에도 실패", result)
 
 
 if __name__ == "__main__":
