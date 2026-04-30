@@ -184,7 +184,7 @@ class StepExecutor:
 
         for index, (expected_order, expected_title) in enumerate(self.WORKFLOW_ITEMS):
             item = items[index] if index < len(items) else {}
-            if item.get("order") != expected_order or item.get("title") != expected_title:
+            if not isinstance(item, dict) or item.get("order") != expected_order or item.get("title") != expected_title:
                 invalid_items.append(f"{expected_order}. {expected_title}")
                 continue
 
