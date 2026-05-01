@@ -72,8 +72,6 @@ class StepExecutor:
     """Phase 디렉터리 안의 step들을 순차 실행하는 하네스."""
 
     MAX_RETRIES = 3
-    FEAT_MSG = "feat: {phase} {num}단계 {name} 작업을 반영한다"
-    CHORE_MSG = "chore: {phase} {num}단계 실행 결과를 기록한다"
     TZ = timezone(timedelta(hours=9))
     WORKFLOW_ITEMS = [
         (1, "Explore"),
@@ -358,9 +356,9 @@ class StepExecutor:
         """`feature/<feature-name>` 브랜치를 준비한다."""
         git_ops.checkout_branch(self)
 
-    def commit_step(self, step_num: int, step_name: str, editable_paths: list[str]):
-        """코드 변경과 메타데이터 변경을 분리해 2단계 커밋한다."""
-        git_ops.commit_step(self, step_num, step_name, editable_paths)
+    def commit_step(self, step_num: int, message: str, editable_paths: list[str]):
+        """현재 step의 기능 변경만 커밋한다."""
+        git_ops.commit_step(self, step_num, message, editable_paths)
 
     def update_feature_index(self, status: str):
         """기능 내부 phases index와 현재 phase 상태를 동기화한다."""
@@ -415,9 +413,35 @@ class StepExecutor:
             phase_name=self.phase_name,
             phase_index_relpath=f"{self.phase_relpath}/index.json",
             max_retries=self.MAX_RETRIES,
-            feat_msg_template=self.FEAT_MSG,
             prev_error=prev_error,
         )
+
+    def build_commit(self, current: dict, changed_paths: list[str]) -> str:
+        """변경 경로와 step summary를 기반으로 커밋 메시지를 만든다."""
+        summary = str(current.get("summary", "")).strip()
+        if not summary:
+            print("ERROR: completed step에는 summary가 필요합니다.")
+            raise SystemExit(1)
+
+        commit_type = self.infer_commit_type(changed_paths)
+        subject = summary.rstrip(".。").strip()
+        return f"{commit_type}: {subject}"
+
+    def infer_commit_type(self, changed_paths: list[str]) -> str:
+        """변경 경로로 커밋 type을 보수적으로 추론한다."""
+        code_paths = [
+            path
+            for path in changed_paths
+            if not path.startswith(f"{self.phase_relpath}/")
+            and not path.startswith(f"{self.feature_phases_relpath}/")
+        ]
+        if code_paths and all(path.startswith("docs/") for path in code_paths):
+            return "docs"
+        if code_paths and all(path.startswith("src/test/") for path in code_paths):
+            return "test"
+        if code_paths and all(path.startswith((".codex/", ".github/", "gradle", "docs/hooks/", "docs/agents/", "docs/skills/")) for path in code_paths):
+            return "chore"
+        return "feat"
 
     def build_reviewer_guardrails(self) -> str:
         """reviewer worker용 규칙 문자열을 만든다."""
@@ -525,36 +549,31 @@ class StepExecutor:
                 break
 
     def validate_completed_step_artifacts(self):
-        """completed step이 실행기 산출물을 모두 가지고 있는지 확인한다."""
+        """completed step의 실행 상태 기록이 다음 step 진행에 충분한지 확인한다."""
         index = self.read_json(self.index_file)
-        missing: list[str] = []
+        invalid: list[str] = []
         for step in index.get("steps", []):
             if step.get("status") != "completed":
                 continue
 
             step_num = step.get("step")
+            step_name = step.get("name", "unknown")
             if not isinstance(step_num, int):
+                invalid.append(f"step 값이 정수가 아님: {step}")
                 continue
 
-            step_file = self.step_file_path(step_num)
-            required = [
-                self.step_output_path(step_num),
-                self.phase_dir / f"step{step_num}-review-output.json",
-            ]
-            if step_file.exists():
-                step_text = step_file.read_text(encoding="utf-8")
-                if acceptance_runner.extract_acceptance_commands(step_text):
-                    required.append(self.step_acceptance_output_path(step_num))
+            if not self.step_file_path(step_num).exists():
+                invalid.append(f"step{step_num} ({step_name}): step 문서가 없음")
+            if not step.get("summary"):
+                invalid.append(f"step{step_num} ({step_name}): summary가 없음")
+            if not step.get("completed_at"):
+                invalid.append(f"step{step_num} ({step_name}): completed_at이 없음")
 
-            for path in required:
-                if not path.exists():
-                    missing.append(path.relative_to(ROOT).as_posix())
-
-        if missing:
-            print("\n  ERROR: completed step의 실행 산출물이 누락되었습니다.")
-            for path in missing:
-                print(f"  - {path}")
-            print("  Fix: 사용자 승인 후 해당 step의 status를 'pending'으로 복구하고 completed_at/summary를 정리한 뒤 execute.py를 재실행하세요.")
+        if invalid:
+            print("\n  ERROR: completed step의 실행 상태 기록이 불완전합니다.")
+            for item in invalid:
+                print(f"  - {item}")
+            print("  Fix: 사용자 승인 후 상태 기록을 보정하거나 해당 step을 pending으로 복구한 뒤 execute.py를 재실행하세요.")
             raise SystemExit(1)
 
     def ensure_created_at(self):
@@ -632,7 +651,6 @@ class StepExecutor:
 
                 self.mark_step_error(current, error_message, timestamp)
                 self.write_json(self.index_file, index)
-                self.commit_step(step_num, step_name, editable_paths)
                 print(f"  ✗ Step {step_num}: {step_name} failed after {self.MAX_RETRIES} attempts [{elapsed}s]")
                 print(f"    Error: {error_message}")
                 self.update_feature_index("error")
@@ -654,7 +672,6 @@ class StepExecutor:
 
                     self.mark_step_error(current, error_message, timestamp)
                     self.write_json(self.index_file, index)
-                    self.commit_step(step_num, step_name, editable_paths)
                     print(f"  ✗ Step {step_num}: {step_name} failed after {self.MAX_RETRIES} attempts [{elapsed}s]")
                     print(f"    Error: {error_message}")
                     self.update_feature_index("error")
@@ -687,7 +704,6 @@ class StepExecutor:
 
                     self.mark_step_error(current, error_message, timestamp)
                     self.write_json(self.index_file, index)
-                    self.commit_step(step_num, step_name, editable_paths)
                     print(f"  ✗ Step {step_num}: {step_name} failed after {self.MAX_RETRIES} attempts [{elapsed}s]")
                     print(f"    Error: {error_message}")
                     self.update_feature_index("error")
@@ -695,7 +711,9 @@ class StepExecutor:
 
                 current["completed_at"] = timestamp
                 self.write_json(self.index_file, index)
-                self.commit_step(step_num, step_name, editable_paths)
+                commit_paths = self.list_review_changed_paths(editable_paths, metadata_paths)
+                message = self.build_commit(current, commit_paths)
+                self.commit_step(step_num, message, editable_paths)
                 print(f"  ✓ Step {step_num}: {step_name} [{elapsed}s]")
                 return True
 
@@ -717,7 +735,6 @@ class StepExecutor:
             else:
                 self.mark_step_error(current, error_message, timestamp)
                 self.write_json(self.index_file, index)
-                self.commit_step(step_num, step_name, editable_paths)
                 print(f"  ✗ Step {step_num}: {step_name} failed after {self.MAX_RETRIES} attempts [{elapsed}s]")
                 print(f"    Error: {error_message}")
                 self.update_feature_index("error")
@@ -745,29 +762,42 @@ class StepExecutor:
         self.write_json(self.index_file, index)
         self.update_feature_index("completed")
         self.mark_workflow_execution_completed()
+        metadata_paths = [
+            f"{self.phase_relpath}/index.json",
+            f"{self.phase_relpath}/workflow-checklist.json",
+            f"{self.feature_phases_relpath}/index.json",
+        ]
+        for step in index.get("steps", []):
+            step_num = step.get("step")
+            if isinstance(step_num, int):
+                metadata_paths.extend(
+                    [
+                        f"{self.phase_relpath}/step{step_num}-output.json",
+                        f"{self.phase_relpath}/step{step_num}-ac-output.json",
+                        f"{self.phase_relpath}/step{step_num}-review-output.json",
+                    ]
+                )
+
         git_ops.validate_worktree_scope(
             self,
             editable_paths=[],
-            metadata_paths=[
-                f"{self.phase_relpath}/index.json",
-                f"{self.phase_relpath}/workflow-checklist.json",
-                f"{self.feature_phases_relpath}/index.json",
-            ],
+            metadata_paths=metadata_paths,
             context="phase finalize",
         )
         git_ops.stage_paths(
             self,
             [
                 f"{self.phase_relpath}/index.json",
-                f"{self.phase_relpath}/workflow-checklist.json",
                 f"{self.feature_phases_relpath}/index.json",
             ],
         )
         if self.run_git("diff", "--cached", "--quiet").returncode != 0:
-            message = f"chore: {self.phase_name} 완료 상태를 기록한다"
+            message = f"chore: {self.phase_name} 실행 상태를 기록한다"
             result = self.run_git("commit", "-m", message)
-            if result.returncode == 0:
-                print(f"  ✓ {message}")
+            if result.returncode != 0:
+                print(f"\n  ERROR: 실행 상태 커밋 실패: {result.stderr.strip()}")
+                raise SystemExit(1)
+            print(f"  ✓ {message}")
 
         if self.auto_push:
             result = self.run_git("push", "-u", "origin", self.branch_name)

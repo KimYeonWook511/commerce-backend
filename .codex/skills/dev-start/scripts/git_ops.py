@@ -130,8 +130,8 @@ def stage_paths(executor, pathspecs: list[str]):
     executor.run_git("add", "--all", "--", *staged_targets)
 
 
-def commit_step(executor, step_num: int, step_name: str, editable_paths: list[str]):
-    """코드 변경과 메타데이터 변경을 분리해 2단계 커밋한다."""
+def commit_step(executor, step_num: int, message: str, editable_paths: list[str]):
+    """현재 step의 기능 변경만 커밋한다."""
     output_rel = f"{executor.phase_relpath}/step{step_num}-output.json"
     ac_output_rel = f"{executor.phase_relpath}/step{step_num}-ac-output.json"
     review_output_rel = f"{executor.phase_relpath}/step{step_num}-review-output.json"
@@ -145,18 +145,9 @@ def commit_step(executor, step_num: int, step_name: str, editable_paths: list[st
     executor.run_git("reset", "HEAD", "--", *metadata_paths)
 
     if executor.run_git("diff", "--cached", "--quiet").returncode != 0:
-        feat_msg = executor.FEAT_MSG.format(phase=executor.phase_name, num=step_num, name=step_name)
-        feat_commit = executor.run_git("commit", "-m", feat_msg)
-        if feat_commit.returncode == 0:
-            print(f"  Commit: {feat_msg}")
+        step_commit = executor.run_git("commit", "-m", message)
+        if step_commit.returncode == 0:
+            print(f"  Commit: {message}")
         else:
-            print(f"  ERROR: 코드 커밋 실패: {feat_commit.stderr.strip()}")
-            raise SystemExit(1)
-
-    stage_paths(executor, metadata_paths)
-    if executor.run_git("diff", "--cached", "--quiet").returncode != 0:
-        chore_msg = executor.CHORE_MSG.format(phase=executor.phase_name, num=step_num)
-        chore_commit = executor.run_git("commit", "-m", chore_msg)
-        if chore_commit.returncode != 0:
-            print(f"  ERROR: housekeeping 커밋 실패: {chore_commit.stderr.strip()}")
+            print(f"  ERROR: 코드 커밋 실패: {step_commit.stderr.strip()}")
             raise SystemExit(1)
