@@ -45,7 +45,7 @@ phase 구조를 만들 때는 아래 파일도 반드시 생성한다.
 
 ## `docs/features/<feature-name>/phases/<phase-name>/index.json`
 
-task 상세 상태 파일이다.
+step 실행 상태 파일이다.
 
 ```json
 {
@@ -77,14 +77,13 @@ task 상세 상태 파일이다.
 
 상태별 추가 필드 의미:
 
-- `summary`: 완료 산출물의 한 줄 요약
+- `summary`: 완료한 변경의 한 줄 요약
 - `error_message`: 실패 원인
 - `blocked_reason`: 사용자 개입 또는 외부 제약으로 인해 막힌 사유
 
 ## `docs/features/<feature-name>/phases/<phase-name>/workflow-checklist.json`
 
-`dev-start` workflow의 단계 진행 상태를 기록하는 checklist다. 항목 제목은 `SKILL.md`의 Workflow 제목과 정확히 일치해야 한다.
-이 파일은 phase를 만들 때 반드시 생성해야 하며, checklist 없이 phase를 실행 가능한 상태로 간주하지 않는다.
+`dev-start` workflow 진행 상태를 기록하는 checklist다. phase를 만들 때 반드시 생성하며, 항목 제목은 `SKILL.md`의 Workflow 제목과 일치해야 한다.
 
 ```json
 {
@@ -105,21 +104,10 @@ task 상세 상태 파일이다.
 
 - `workflow`: 항상 `dev-start`
 - `status`: `drafting` | `authorized` | `in_progress` | `completed`
-- `items[].order`: 1부터 6까지 순서대로 작성
-- `items[].title`: `Explore` | `Discuss` | `Step Design` | `File Drafting` | `Execution Authorization` | `Execution`
-- `items[].status`: `pending` | `completed` | `in_progress`
-- `items[4].authorization`: `Execution Authorization`이 `completed`일 때 필수이며 권한 상승 실행 허락과 승인 프롬프트 처리 방식을 기록한다.
+- `items`: `SKILL.md`의 1~6번 Workflow 순서와 제목을 그대로 사용한다.
+- `Execution Authorization`이 `completed`이면 `authorization` 객체를 포함한다.
 
-진행 규칙:
-
-- checklist 생성 이후 다음 단계로 넘어가기 전에는 이전 단계가 모두 `completed`여야 한다.
-- 문서 초안 작성 직후에는 1~4번만 `completed`, 5~6번은 `pending`이다.
-- top-level `status`는 문서 초안 작성 직후 `drafting`, `Execution Authorization` 완료 후 `authorized`, 실행 시작 후 `in_progress`, phase 정상 완료 후 `completed`다.
-- `Execution Authorization`은 문서 검토 완료, 권한 상승 실행 허락, 승인 프롬프트 처리 방식이 모두 확정된 뒤에만 `completed`다.
-- `Execution Authorization` 완료 시 agent는 item 5에 `authorization` 객체를 기록하고 top-level `status`를 `authorized`로 갱신한다.
-- `Execution`은 `execute.py`가 시작할 때 `in_progress`, phase 정상 완료 시 `completed`다.
-
-`Execution Authorization` 완료 예시:
+`authorization` 예시:
 
 ```json
 {
@@ -136,13 +124,7 @@ task 상세 상태 파일이다.
 }
 ```
 
-필드 의미:
-
-- `escalation_approved`: 사용자가 `execute.py` 권한 상승 실행을 허락했으면 `true`
-- `approval_prompt_mode`: `per_run` 또는 `saved_prefix_rule`
-- `prefix_rule`: `saved_prefix_rule`일 때 `["python3", ".codex/skills/dev-start/scripts/execute.py"]`, `per_run`일 때 `null`
-- `approved_by`: 사용자 승인임을 나타내는 `user`
-- `approved_at`: KST 기준 승인 시각
+`approval_prompt_mode`는 `per_run` 또는 `saved_prefix_rule`을 사용한다. `saved_prefix_rule`이면 `prefix_rule`은 `["python3", ".codex/skills/dev-start/scripts/execute.py"]`다.
 
 ## `docs/features/<feature-name>/phases/<phase-name>/step{N}.md`
 
@@ -160,6 +142,7 @@ task 상세 상태 파일이다.
 - `/docs/features/<feature-name>/adr.md`
 - `/docs/features/<feature-name>/api-spec.md`
 - `/docs/features/<feature-name>/db-schema.md`
+- `/docs/commit-conventions.md`
 - `{이전 step에서 생성/수정된 파일 경로}`
 
 기능 문서만으로 부족한 공통 맥락이 있으면 아래처럼 루트 문서를 추가로 읽는다.
@@ -202,21 +185,23 @@ task 상세 상태 파일이다.
 
 ## Step 작성 규칙
 
-- step 하나에 여러 모듈을 한 번에 넣지 않는다.
-- step 하나는 하나의 핵심 관심사만 다룬다. domain model, repository/service behavior, controller endpoint, web test, root docs sync는 기본적으로 분리한다.
-- API feature는 아래 단위로 나누는 것을 기본값으로 삼는다.
-  - domain/model contract
-  - repository/service behavior
-  - create endpoint
-  - update/delete endpoint
-  - controller/web test
-  - root docs sync
-- controller, request DTO, service, result DTO, test를 모두 새로 만드는 작업은 한 step에 넣지 않는다.
-- 신규 파일이 많거나 여러 레이어를 동시에 건드려 reviewer가 한 번에 판단하기 어렵다면 step을 더 작게 나눈다.
+- step 하나는 테스트 가능한 사용자 기능 단위를 기본값으로 삼는다.
+- API feature는 요청 하나 또는 강하게 결합된 요청 묶음 단위로 나눈다.
+- 같은 정책과 aggregate를 공유하는 command 동작은 한 step으로 묶을 수 있다.
+- command와 query는 데이터 흐름, 권한, 검증 기준이 다르면 별도 step으로 분리한다.
+- domain, repository, service, controller, request/response DTO, test는 같은 사용자 기능 완성에 필요하면 한 step에 함께 포함한다.
+- 레이어별 step은 공통 도메인 선행 작업, 독립 DB 마이그레이션, 대규모 공유 계약 변경처럼 분리 검증이 명확히 필요한 경우에만 사용한다.
+- root docs sync는 최종 구현과 전체 테스트가 끝난 뒤 마지막 step에서 한 번 수행한다.
+- 신규 파일이 많거나 reviewer가 한 번에 판단하기 어렵다면 레이어가 아니라 사용자 기능/정책 경계를 기준으로 더 작게 나눈다.
 - “이전 대화에서 논의한 바와 같이” 같은 외부 참조를 쓰지 않는다.
 - 필요한 파일 경로와 배경은 문서 안에 직접 적는다.
 - `수정 가능 경로` 섹션은 필수이며, 현재 step이 수정해도 되는 경로만 명시한다.
-- 모든 step의 `수정 가능 경로`에는 `docs/features/<feature-name>/**`를 포함한다. feature 문서, phase index, workflow checklist, step 산출물이 실행 중 함께 갱신될 수 있기 때문이다.
+- 모든 step의 `수정 가능 경로`에는 `docs/features/<feature-name>/**`를 포함한다. feature 문서와 phase index는 실행 중 함께 갱신될 수 있기 때문이다.
+- 구현 단위와 커밋 단위가 같은 기능/정책 목적을 가리키도록 step을 나눈다.
+- 여러 파일을 변경해도 하나의 기능 동작을 완성하기 위한 변경이면 하나의 커밋 단위로 묶는다.
+- 파일 단위로 과도하게 쪼개지 않는다.
+- 목적이 다른 변경은 step을 나누거나 별도 커밋 단위로 분리한다.
+- 커밋 메시지는 `docs/commit-conventions.md`를 따른다.
 - 구현 코드는 인터페이스와 제약 중심으로 유도하고, 내부 구현을 전부 박아넣지 않는다.
 - Acceptance Criteria는 추상 문장이 아니라 실행기가 다시 돌릴 수 있는 실제 실행 커맨드여야 한다.
 - 기본 예시는 `./gradlew test`를 사용한다.
@@ -239,7 +224,7 @@ task 상세 상태 파일이다.
 ## 에러 복구
 
 - `error` 또는 `blocked` 발생 시 agent는 즉시 중단하고 사용자에게 실패 step, 실패 사유, 관련 output 파일을 보고한다.
-- 실행 중 재시도를 위해 `execute.py`가 현재 step을 `pending`으로 되돌리는 것은 정상 실행 메타데이터다.
+- 실행 중 재시도를 위해 `execute.py`가 현재 step을 `pending`으로 되돌리는 것은 정상 실행 상태 갱신이다.
 - 사용자 승인 전에는 해당 step의 상태, 실패 필드, step 요구사항, Acceptance Criteria, 문서, `수정 가능 경로`를 수정하지 않는다.
 - 사용자가 복구를 승인한 뒤에만 상태와 실패 필드를 정리하고 재실행할 수 있다.
 - 복구 시에도 변경한 문서와 상태 파일을 보고하고, `execute.py` 재실행 승인을 별도로 받는다.
@@ -257,32 +242,19 @@ python3 .codex/skills/dev-start/scripts/execute.py docs/features/<feature-name>/
 
 - 실행기는 checklist 승인 상태를 확인한 뒤 가장 앞의 `pending` step부터 순차 실행한다.
 - 각 step은 developer 실행, Acceptance Criteria 재검증, reviewer 검토를 모두 통과해야 `completed`로 인정된다.
-- 성공한 step의 상태, summary, output/ac/review 산출물, workflow checklist 갱신은 정상 실행 메타데이터로 기록한다.
+- 성공한 step은 phase index에 `completed`로 남긴다. 실행 output, AC output, review output, workflow checklist는 로컬 실행 산출물로만 둔다.
+- 완료된 step의 기능 변경은 review 통과 후 실행기가 커밋한다. phase index는 phase 종료 시 별도 `chore` 커밋으로 기록한다.
 - 실행 중 retryable failure는 실행기가 같은 step을 재시도할 수 있다.
 - 최종 `blocked` 또는 `error` 발생 시 자동 복구하지 않고 사용자 검토와 승인을 기다린다.
-
-## Git 권한 운영
-
-- `execute.py`는 branch checkout/create, add, commit을 직접 수행한다.
-- Git preflight는 실행 중인 `execute.py`가 `.git` 메타데이터에 쓸 수 있는지만 조기에 확인한다. preflight는 권한을 부여하지 않는다.
-- developer/reviewer worker의 내부 `codex exec` 권한 설정은 worker 프로세스에만 적용되며, `execute.py`가 직접 수행하는 `git checkout/add/commit` 권한을 대신 부여하지 않는다.
-- 사용자가 로컬 터미널에서 직접 실행하면 일반적으로 sandbox 권한 문제가 발생하지 않는다.
-- Codex가 실행기를 대신 실행하는 경우에는 아래 명령 자체를 권한 상승으로 실행해야 한다.
-- 반복 승인은 Codex permission UI에서 `prefix_rule=["python3", ".codex/skills/dev-start/scripts/execute.py"]`를 저장해 처리한다.
-
-```bash
-python3 .codex/skills/dev-start/scripts/execute.py docs/features/<feature-name>/phases/<phase-name>
-```
-
-- 개별 `git add` 또는 `git commit` prefix만 승인해도 `execute.py` 내부 Git subprocess 권한이 해결되는 것은 아니다.
-- preflight가 실패하면 Git 작업으로 들어가기 전에 중단하고, `execute.py` 명령 자체를 권한 상승으로 다시 실행한다.
 
 ## 실행 산출물
 
 각 step은 실행기로 완료되어야 하며, 수동으로 `status = completed`만 기록하면 안 된다.
 
-- `stepN-output.json`: writer worker 실행 결과
-- `stepN-ac-output.json`: Acceptance Criteria 재실행 결과. Acceptance Criteria가 있는 step에서 필수다.
+- `stepN-output.json`: developer worker 실행 결과
+- `stepN-ac-output.json`: Acceptance Criteria 재실행 결과
 - `stepN-review-output.json`: reviewer worker 검토 결과
 
-실행 시작 시 이미 `completed`인 step은 위 산출물을 검사한다. 산출물이 누락된 수동 완료 step은 실행기가 중단하며, 상태 복구와 재실행은 사용자 승인 후 진행한다.
+위 output 파일과 `workflow-checklist.json`은 로컬 실행 추적용이며 커밋하지 않는다. phase index는 step 진행 기준으로 사용하고 phase 종료 시 커밋한다.
+
+이미 `completed`인 step은 phase index의 `summary`와 `completed_at`으로 확인한다. output 파일 존재 여부는 이전 step 재개 조건으로 사용하지 않는다.
