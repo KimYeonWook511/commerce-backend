@@ -103,13 +103,14 @@ docs/features/<feature-name>/phases/<phase-name>/step0.md
 ## 재실행 주의사항
 
 - step이 중간에 blocked/error로 끝났다면 `phases/<phase-name>/index.json` 상태와 실제 Git 워킹트리를 함께 확인한다.
-- 실행기 output json은 실행 산출물일 뿐 기능 구현 산출물과 다를 수 있다.
-- `completed` step의 필수 산출물 규격과 복구 절차는 `.codex/skills/dev-start/references/phase-files.md`를 따른다.
+- 실행기 output json은 로컬 실행 산출물일 뿐 기능 구현 산출물과 다를 수 있다.
+- phase index 상태는 step 진행 기준이며 phase 종료 시 커밋한다. 실행기 output json과 `workflow-checklist.json`은 로컬에만 둔다.
+- `completed` step의 상태와 복구 절차는 `.codex/skills/dev-start/references/phase-files.md`를 따른다.
 - 이전 step 변경이 커밋되지 않은 상태로 다음 step을 바로 재실행하면 scope validation에 다시 걸릴 수 있다.
 - 따라서 재실행 전에는 아래를 먼저 확인한다.
-  - 현재 워킹트리에 남은 변경이 어떤 step 산출물인지
+  - 현재 워킹트리에 남은 변경이 기능 변경인지 로컬 실행 산출물인지
   - 해당 변경이 현재 step의 `수정 가능 경로`에 포함되는지
-  - 이전 step 산출물이 아직 미커밋 상태인지
+  - 이전 step의 기능 변경이 아직 미커밋 상태인지
 
 ## 문서 우선순위
 

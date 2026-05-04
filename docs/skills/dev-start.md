@@ -41,8 +41,12 @@ flowchart TD
 
 작업을 `docs/features/<feature-name>/phases/<phase-name>/step{N}.md` 단위로 쪼갠다.
 
-- 한 step은 하나의 레이어 또는 하나의 핵심 관심사만 다룬다.
+- 한 step은 테스트 가능한 사용자 기능 단위를 기본값으로 삼는다.
+- 같은 기능 완성에 필요한 domain, repository, service, controller, test는 한 step에 함께 포함할 수 있다.
+- 레이어별 step은 공통 도메인 선행 작업이나 독립 DB 마이그레이션처럼 분리 검증이 명확한 경우에만 사용한다.
+- root docs sync는 구현과 전체 테스트가 끝난 뒤 마지막 step에서 한 번 수행한다.
 - 모든 step의 `수정 가능 경로`에는 `docs/features/<feature-name>/**`를 포함한다.
+- 커밋 단위는 파일 단위가 아니라 명확한 기능/정책 목적 단위로 나누고, 메시지는 `docs/commit-conventions.md`를 따른다.
 - Acceptance Criteria는 실행 가능한 커맨드로 작성한다.
 
 ### 3. File Drafting
@@ -70,6 +74,7 @@ flowchart TD
 - 수정 가능 경로 밖으로 나가지 않는다.
 - Acceptance Criteria를 직접 실행해 본다.
 - step 상태를 `completed`, `error`, `blocked` 중 하나로 갱신하고 필요한 필드를 남긴다.
+- phase index는 step 진행 상태로 사용하고 phase 종료 시 커밋한다. output, AC output, review output, workflow checklist는 로컬 실행 산출물이며 커밋하지 않는다.
 - 실패 회피 목적으로 step 요구사항, Acceptance Criteria, feature 문서, root docs, `수정 가능 경로`를 임의 수정하지 않는다.
 
 현재 구현상 이 역할은 `developer_guardrails` + `developer_worker` 조합으로 동작한다.
@@ -103,7 +108,7 @@ developer가 만든 결과를 read-only 관점에서 한 번 더 본다.
 - AC 재검증 실패 -> 재시도
 - reviewer `retryable_error` -> 재시도
 - reviewer `blocked` -> 즉시 차단 종료
-- 모두 통과한 경우에만 완료와 커밋으로 간다
+- 모두 통과한 경우에만 완료와 기능 변경 커밋으로 간다
 - `blocked` 또는 최종 `error`는 자동 복구하지 않고 사용자에게 실패 step, 실패 사유, output 파일을 보고한다.
 - 실행 중 재시도 reset은 `execute.py` 내부 동작이고, 최종 실패 후 상태 복구는 사용자 승인 후에만 한다.
 

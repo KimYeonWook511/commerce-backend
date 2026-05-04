@@ -60,8 +60,20 @@ class StepExecutorTest(unittest.TestCase):
                 "phase": "mvp",
                 "feature": "skill-test",
                 "steps": [
-                    {"step": 0, "name": "setup", "status": "completed", "summary": "프로젝트 초기화 완료"},
-                    {"step": 1, "name": "core", "status": "completed", "summary": "핵심 로직 구현"},
+                    {
+                        "step": 0,
+                        "name": "setup",
+                        "status": "completed",
+                        "summary": "프로젝트 초기화 완료",
+                        "completed_at": "2026-04-30T15:00:00+0900",
+                    },
+                    {
+                        "step": 1,
+                        "name": "core",
+                        "status": "completed",
+                        "summary": "핵심 로직 구현",
+                        "completed_at": "2026-04-30T15:10:00+0900",
+                    },
                     {"step": 2, "name": "api", "status": "pending"},
                 ],
             },
@@ -79,6 +91,14 @@ class StepExecutorTest(unittest.TestCase):
         (self.root / "docs" / "features" / "skill-test" / "phases" / "0-mvp" / "step2.md").write_text(
             (self.root / "docs" / "features" / "skill-test" / "phases" / "0-mvp" / "step2.md").read_text(encoding="utf-8")
             + "\n## Acceptance Criteria\n\n```bash\n./gradlew test\n```\n",
+            encoding="utf-8",
+        )
+        (self.root / "docs" / "features" / "skill-test" / "phases" / "0-mvp" / "step0.md").write_text(
+            "# Step 0: setup\n",
+            encoding="utf-8",
+        )
+        (self.root / "docs" / "features" / "skill-test" / "phases" / "0-mvp" / "step1.md").write_text(
+            "# Step 1: core\n",
             encoding="utf-8",
         )
 
@@ -272,9 +292,9 @@ class StepExecutorTest(unittest.TestCase):
         executor = self.make_executor()
         result = executor.build_developer_guardrails(prev_error="타입 에러")
         self.assertIn("이전 시도 실패", result)
-        self.assertIn("feat: mvp N단계 <step-name> 작업을 반영한다", result)
         self.assertIn("/docs/features/skill-test/phases/0-mvp/index.json", result)
         self.assertIn("git add/commit/push/checkout은 실행하지 마라", result)
+        self.assertIn("커밋하지 않는다", result)
 
     def test_parse_editable_paths_returns_declared_paths(self):
         executor = self.make_executor()
@@ -494,15 +514,7 @@ class StepExecutorTest(unittest.TestCase):
         self.assertEqual(2, exc.exception.code)
         self.assertIn("사용자 승인 후 차단 사유를 해결", output.getvalue())
 
-    def test_validate_completed_step_artifacts_exits_when_output_missing(self):
-        output = io.StringIO()
-        with self.assertRaises(SystemExit) as exc:
-            with redirect_stdout(output):
-                self.make_executor().validate_completed_step_artifacts()
-        self.assertEqual(1, exc.exception.code)
-        self.assertIn("사용자 승인 후 해당 step의 status를 'pending'으로 복구", output.getvalue())
-
-    def test_validate_completed_step_artifacts_passes_when_completed_outputs_exist(self):
+    def write_completed_step_outputs(self):
         for step_num in (0, 1):
             phase_dir = self.root / "docs" / "features" / "skill-test" / "phases" / "0-mvp"
             self.write_json(
@@ -511,7 +523,36 @@ class StepExecutorTest(unittest.TestCase):
             )
             self.write_review_output(step_num)
 
+    def test_validate_completed_step_artifacts_passes_from_index_state_without_local_outputs(self):
         self.make_executor().validate_completed_step_artifacts()
+
+    def test_validate_completed_step_artifacts_exits_when_summary_missing(self):
+        index = self.read_json(self.root / "docs" / "features" / "skill-test" / "phases" / "0-mvp" / "index.json")
+        index["steps"][0].pop("summary")
+        self.write_json(self.root / "docs" / "features" / "skill-test" / "phases" / "0-mvp" / "index.json", index)
+
+        with self.assertRaises(SystemExit) as exc:
+            self.make_executor().validate_completed_step_artifacts()
+
+        self.assertEqual(1, exc.exception.code)
+
+    def test_validate_completed_step_artifacts_exits_when_completed_at_missing(self):
+        index = self.read_json(self.root / "docs" / "features" / "skill-test" / "phases" / "0-mvp" / "index.json")
+        index["steps"][0].pop("completed_at")
+        self.write_json(self.root / "docs" / "features" / "skill-test" / "phases" / "0-mvp" / "index.json", index)
+
+        with self.assertRaises(SystemExit) as exc:
+            self.make_executor().validate_completed_step_artifacts()
+
+        self.assertEqual(1, exc.exception.code)
+
+    def test_validate_completed_step_artifacts_exits_when_step_file_missing(self):
+        (self.root / "docs" / "features" / "skill-test" / "phases" / "0-mvp" / "step0.md").unlink()
+
+        with self.assertRaises(SystemExit) as exc:
+            self.make_executor().validate_completed_step_artifacts()
+
+        self.assertEqual(1, exc.exception.code)
 
     def test_mark_started_writes_once(self):
         executor = self.make_executor()
@@ -573,7 +614,47 @@ class StepExecutorTest(unittest.TestCase):
 
         self.assertEqual(1, exc.exception.code)
 
-    def test_commit_step_uses_two_phase_commit(self):
+    def test_build_commit_uses_summary_and_infers_feat(self):
+        executor = self.make_executor()
+        current = {"status": "completed", "summary": "관리자 재고 조정 기능을 추가한다"}
+
+        result = executor.build_commit(current, ["src/main/java/com/commerce/stock/StockService.java"])
+
+        self.assertEqual("feat: 관리자 재고 조정 기능을 추가한다", result)
+
+    def test_build_commit_infers_docs_type(self):
+        executor = self.make_executor()
+        current = {"status": "completed", "summary": "재고 관리 문서를 동기화한다"}
+
+        result = executor.build_commit(current, ["docs/api-spec.md", "docs/db-schema.md"])
+
+        self.assertEqual("docs: 재고 관리 문서를 동기화한다", result)
+
+    def test_build_commit_infers_test_type(self):
+        executor = self.make_executor()
+        current = {"status": "completed", "summary": "재고 관리 서비스 테스트를 추가한다"}
+
+        result = executor.build_commit(current, ["src/test/java/com/commerce/stock/StockServiceTest.java"])
+
+        self.assertEqual("test: 재고 관리 서비스 테스트를 추가한다", result)
+
+    def test_build_commit_infers_chore_type(self):
+        executor = self.make_executor()
+        current = {"status": "completed", "summary": "dev-start 하네스 실행 안정성을 개선한다"}
+
+        result = executor.build_commit(current, [".codex/skills/dev-start/scripts/execute.py"])
+
+        self.assertEqual("chore: dev-start 하네스 실행 안정성을 개선한다", result)
+
+    def test_build_commit_exits_when_summary_missing(self):
+        executor = self.make_executor()
+
+        with self.assertRaises(SystemExit) as exc:
+            executor.build_commit({"status": "completed"}, ["src/main/java/com/commerce/skilltest/ApiService.java"])
+
+        self.assertEqual(1, exc.exception.code)
+
+    def test_commit_step_commits_only_feature_change(self):
         executor = self.make_executor()
         calls = []
 
@@ -585,27 +666,15 @@ class StepExecutorTest(unittest.TestCase):
 
         executor.run_git = fake_git
         with patch.object(self.execute.git_ops, "list_worktree_paths", return_value=["src/main/java/com/commerce/skilltest/ApiService.java"]):
-            executor.commit_step(2, "api", ["src/main/java/com/commerce/skilltest/**"])
+            executor.commit_step(2, "feat: 스킬 테스트 API를 추가한다", ["src/main/java/com/commerce/skilltest/**"])
         commit_calls = [call for call in calls if call[0] == "commit"]
-        self.assertEqual(2, len(commit_calls))
-        self.assertIn("feat: mvp 2단계 api 작업을 반영한다", commit_calls[0][2])
-        self.assertIn("chore: mvp 2단계 실행 결과를 기록한다", commit_calls[1][2])
+        self.assertEqual(1, len(commit_calls))
+        self.assertIn("feat: 스킬 테스트 API를 추가한다", commit_calls[0][2])
         self.assertNotIn(("add", "-A"), calls)
         self.assertIn(("add", "--all", "--", "src/main/java/com/commerce/skilltest"), calls)
-        self.assertIn(
-            (
-                "add",
-                "--all",
-                "--",
-                "docs/features/skill-test/phases/0-mvp/step2-output.json",
-                "docs/features/skill-test/phases/0-mvp/step2-ac-output.json",
-                "docs/features/skill-test/phases/0-mvp/step2-review-output.json",
-                "docs/features/skill-test/phases/0-mvp/index.json",
-                "docs/features/skill-test/phases/0-mvp/workflow-checklist.json",
-                "docs/features/skill-test/phases/index.json",
-            ),
-            calls,
-        )
+        add_calls = [call for call in calls if call[0] == "add"]
+        self.assertNotIn("docs/features/skill-test/phases/0-mvp/step2-output.json", str(add_calls))
+        self.assertNotIn("docs/features/skill-test/phases/0-mvp/workflow-checklist.json", str(add_calls))
 
     def test_commit_step_exits_when_disallowed_change_exists(self):
         executor = self.make_executor()
@@ -616,7 +685,7 @@ class StepExecutorTest(unittest.TestCase):
             return_value=["src/main/java/com/commerce/auth/AuthService.java"],
         ):
             with self.assertRaises(SystemExit) as exc:
-                executor.commit_step(2, "api", ["src/main/java/com/commerce/skilltest/**"])
+                executor.commit_step(2, "feat: 스킬 테스트 API를 추가한다", ["src/main/java/com/commerce/skilltest/**"])
         self.assertEqual(1, exc.exception.code)
 
     def test_run_developer_worker_writes_output_json(self):
@@ -647,7 +716,7 @@ class StepExecutorTest(unittest.TestCase):
             index = self.read_json(self.root / "docs" / "features" / "skill-test" / "phases" / "0-mvp" / "index.json")
             current = next(item for item in index["steps"] if item["step"] == step["step"])
             current["status"] = "completed"
-            current["summary"] = "API 구현 완료"
+            current["summary"] = "스킬 테스트 API를 추가한다"
             self.write_json(self.root / "docs" / "features" / "skill-test" / "phases" / "0-mvp" / "index.json", index)
             return {}
 
@@ -664,7 +733,7 @@ class StepExecutorTest(unittest.TestCase):
         self.assertTrue(result)
         executor.commit_step.assert_called_once_with(
             2,
-            "api",
+            "feat: 스킬 테스트 API를 추가한다",
             [
                 "src/main/java/com/commerce/skilltest/**",
                 "src/test/java/com/commerce/skilltest/**",
@@ -731,17 +800,9 @@ class StepExecutorTest(unittest.TestCase):
         self.assertEqual("error", index["steps"][2]["status"])
         feature = self.read_json(self.root / "docs" / "features" / "skill-test" / "phases" / "index.json")
         self.assertEqual("error", feature["phases"][0]["status"])
-        executor.commit_step.assert_called_once_with(
-            2,
-            "api",
-            [
-                "src/main/java/com/commerce/skilltest/**",
-                "src/test/java/com/commerce/skilltest/**",
-                "docs/features/skill-test/**",
-            ],
-        )
+        executor.commit_step.assert_not_called()
 
-    def test_finalize_marks_completed_and_pushes_when_enabled(self):
+    def test_finalize_commits_index_state_and_pushes_when_enabled(self):
         executor = self.make_executor(auto_push=True)
         calls = []
 
@@ -752,7 +813,16 @@ class StepExecutorTest(unittest.TestCase):
             return MagicMock(returncode=0, stdout="", stderr="")
 
         executor.run_git = fake_git
-        with patch.object(self.execute.git_ops, "list_worktree_paths", return_value=["docs/features/skill-test/phases/0-mvp/index.json"]):
+        with patch.object(
+            self.execute.git_ops,
+            "list_worktree_paths",
+            return_value=[
+                "docs/features/skill-test/phases/0-mvp/index.json",
+                "docs/features/skill-test/phases/index.json",
+                "docs/features/skill-test/phases/0-mvp/workflow-checklist.json",
+                "docs/features/skill-test/phases/0-mvp/step2-output.json",
+            ],
+        ):
             executor.finalize()
 
         index = self.read_json(self.root / "docs" / "features" / "skill-test" / "phases" / "0-mvp" / "index.json")
@@ -766,11 +836,13 @@ class StepExecutorTest(unittest.TestCase):
                 "--all",
                 "--",
                 "docs/features/skill-test/phases/0-mvp/index.json",
-                "docs/features/skill-test/phases/0-mvp/workflow-checklist.json",
                 "docs/features/skill-test/phases/index.json",
             ),
             calls,
         )
+        commit_calls = [call for call in calls if call[0] == "commit"]
+        self.assertEqual(1, len(commit_calls))
+        self.assertIn("chore: mvp 실행 상태를 기록한다", commit_calls[0])
 
     def test_execute_single_step_retries_when_completed_has_no_summary(self):
         executor = self.make_executor()

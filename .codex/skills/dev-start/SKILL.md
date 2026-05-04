@@ -11,9 +11,8 @@ description: 개발 시작 전 문서 탐색, 논의, step 설계, phases 초안
 - 기능별 `phases/` 구조의 계획 파일 초안이 필요할 때
 - 큰 작업을 자기완결적인 step으로 분해해야 할 때
 
-이 skill은 개발 시작 전 workflow, feature/phases 초안 작성, 준비된 phase의 실행기 연결까지 담당한다.
-수동 리뷰 절차와 수동 commit/push 운영 절차는 이 skill의 범위가 아니다.
-다만 skill 내부 실행기 `execute.py`는 브랜치 생성, 자동 커밋, 선택적 push를 수행할 수 있다.
+이 skill은 개발 전 탐색, step 설계, feature/phases 초안 작성, 준비된 phase의 실행기 연결을 담당한다.
+실행기 `execute.py`는 브랜치 생성, 커밋, 선택적 push를 수행할 수 있다.
 
 ## 필수 준수 규칙
 
@@ -40,20 +39,14 @@ description: 개발 시작 전 문서 탐색, 논의, step 설계, phases 초안
 | 5 | Execution Authorization |  |
 | 6 | Execution |  |
 
-상태 표 규칙:
-
-- 완료된 단계는 `✅`, 아직 완료되지 않은 단계는 빈칸으로 표시한다.
-- `workflow-checklist.json`이 생성된 뒤에는 checklist 값을 기준으로 표시한다.
-- checklist 생성 전에는 현재 대화에서 실제 완료한 단계만 `✅`로 표시한다.
-- `File Drafting` 완료 보고 시 표는 1~4번만 `✅`, 5~6번은 빈칸이어야 한다.
-- `Execution Authorization` 완료 보고 시 표는 1~5번이 `✅`, 6번은 빈칸이어야 한다.
-- `Execution` 시작 후에는 6번을 진행 중으로 설명하되, checklist status는 실행기가 `in_progress`로 기록한다.
+상태 표는 `workflow-checklist.json`이 있으면 그 값을 기준으로 표시한다. checklist 생성 전에는 현재 대화에서 실제 완료한 단계만 `✅`로 표시한다.
 
 ## 먼저 읽을 것
 
 항상 먼저 아래를 읽는다.
 
 - `AGENTS.md`
+- `docs/commit-conventions.md`
 
 그 다음 현재 작업 대상 feature 문서를 먼저 읽는다.
 
@@ -92,12 +85,15 @@ feature 문서와 `phases` 문서로 부족한 공통 맥락이 있을 때만 `A
 
 설계 원칙:
 
-- 한 step은 하나의 레이어 또는 하나의 핵심 관심사만 다룬다.
-- API feature는 domain/service/controller/test/docs sync를 한 step에 몰아넣지 않는다.
-- command API가 여러 동작을 포함하면 create, update/delete, controller test, docs sync처럼 나눈다.
-- 모든 step의 `수정 가능 경로`에는 `docs/features/<feature-name>/**`를 포함한다. feature 문서, phase index, workflow checklist, step 산출물이 실행 메타데이터로 함께 갱신되기 때문이다.
+- 한 step은 테스트 가능한 사용자 기능 단위를 기본값으로 삼는다.
+- API feature는 domain, repository, service, controller, test가 같은 사용자 기능 완성에 필요하면 한 step에 함께 포함한다.
+- 레이어별 step 분리는 공통 도메인 선행 작업, 독립 DB 마이그레이션처럼 분리 검증이 명확히 필요한 경우에만 사용한다.
+- command/query는 데이터 흐름과 검증 기준이 다르면 분리하고, 같은 정책과 aggregate를 공유하는 command 동작은 묶을 수 있다.
+- root docs 동기화는 최종 구현과 전체 테스트가 끝난 뒤 마지막 step에서 한 번 수행한다.
+- 모든 step의 `수정 가능 경로`에는 `docs/features/<feature-name>/**`를 포함한다. feature 문서와 phase index는 실행 중 함께 갱신될 수 있기 때문이다.
 - 각 step 문서는 독립 실행 가능한 자기완결 문서여야 한다.
-- 관련 문서 경로와 이전 step 산출물 경로를 명시한다.
+- step 설계 시 구현 단위와 커밋 단위가 같은 기능/정책 목적을 가리키도록 나눈다. 파일 단위로 과도하게 쪼개지 말고 커밋 메시지는 `docs/commit-conventions.md`를 따른다.
+- 관련 문서 경로와 이전 step 결과를 이해하는 데 필요한 파일 경로를 명시한다.
 - 구현 지시는 인터페이스와 핵심 제약 위주로 작성하고, 내부 구현은 과도하게 고정하지 않는다.
 - Acceptance Criteria는 실행 가능한 커맨드로만 적는다.
 - 주의사항은 `하지 마라. 이유: ...` 형식으로 구체적으로 작성한다.
@@ -166,7 +162,7 @@ python3 .codex/skills/dev-start/scripts/execute.py docs/features/<feature-name>/
 - 실행기는 `workflow-checklist.json` 승인 상태를 검증한 뒤 가장 앞의 `pending` step부터 순차 실행한다.
 - 성공한 step은 `completed`로 기록하고 다음 `pending` step으로 자동 진행한다.
 - 실행기는 developer worker, Acceptance Criteria 재검증, reviewer worker를 통해 step 완료 여부를 검증한다. 상세 산출물과 파일 포맷은 `references/phase-files.md`를 따른다.
-- 정상 실행 메타데이터 갱신은 자동화 범위다. 현재 step의 `completed` 처리, `summary`, 실행 output, Acceptance Criteria output, review output, workflow checklist 갱신은 허용한다.
+- 실행 상태 갱신은 자동화 범위다. phase index는 phase 종료 시 커밋하고, 실행 output, Acceptance Criteria output, review output, workflow checklist는 로컬 산출물로만 둔다.
 - 실행 중 재시도를 위한 step `pending` reset은 `execute.py` 내부 동작으로만 허용된다.
 - `blocked` 또는 3회 재시도 후 최종 `error`가 발생하면 즉시 중단하고 사용자에게 실패 step, 실패 사유, 관련 output 파일 경로를 보고한다.
 - 최종 `error` 또는 `blocked` 이후 agent는 사용자 승인 없이 step 상태를 `pending`으로 되돌리지 않는다.
