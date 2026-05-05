@@ -20,7 +20,7 @@ import com.commerce.outbox.domain.ProcessedEvent;
 import com.commerce.outbox.domain.ProcessedEventConsumerType;
 import com.commerce.outbox.repository.ProcessedEventRepository;
 import com.commerce.outbox.stock.service.command.StockRestoreConsumeCommand;
-import com.commerce.stock.service.StockService;
+import com.commerce.stock.application.OrderStockService;
 
 @ExtendWith(MockitoExtension.class)
 class StockRestoreOutboxConsumeServiceTest {
@@ -29,7 +29,7 @@ class StockRestoreOutboxConsumeServiceTest {
 	private ProcessedEventRepository processedEventRepository;
 
 	@Mock
-	private StockService stockService;
+	private OrderStockService stockService;
 
 	@InjectMocks
 	private StockRestoreOutboxConsumeService stockRestoreOutboxConsumeService;

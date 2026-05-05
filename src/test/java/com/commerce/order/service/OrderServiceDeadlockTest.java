@@ -34,7 +34,7 @@ import com.commerce.product.domain.ProductStatus;
 import com.commerce.product.repository.ProductRepository;
 import com.commerce.stock.domain.Stock;
 import com.commerce.stock.repository.StockRepository;
-import com.commerce.stock.service.StockService;
+import com.commerce.stock.application.OrderStockService;
 
 @Tag("concurrency")
 @SpringBootTest
@@ -51,7 +51,7 @@ class OrderServiceDeadlockTest {
 	private OrderService orderService;
 
 	@MockitoSpyBean
-	private StockService stockService;
+	private OrderStockService stockService;
 
 	@Autowired
 	private MemberRepository memberRepository;

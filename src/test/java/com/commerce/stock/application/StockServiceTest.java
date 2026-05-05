@@ -1,4 +1,4 @@
-package com.commerce.stock.service;
+package com.commerce.stock.application;
 
 import static org.assertj.core.api.Assertions.*;
 import static org.mockito.ArgumentMatchers.argThat;
@@ -26,19 +26,19 @@ import com.commerce.product.repository.ProductRepository;
 import com.commerce.stock.domain.StockAdjustmentReason;
 import com.commerce.stock.domain.StockHistory;
 import com.commerce.stock.domain.Stock;
+import com.commerce.stock.domain.repository.StockHistoryRepository;
+import com.commerce.stock.domain.repository.StockRepository;
 import com.commerce.stock.exception.StockErrorCode;
 import com.commerce.stock.exception.StockException;
-import com.commerce.stock.repository.StockHistoryRepository;
-import com.commerce.stock.repository.StockRepository;
-import com.commerce.stock.service.command.AdminStockAdjustCommand;
-import com.commerce.stock.service.command.AdminStockCreateCommand;
-import com.commerce.stock.service.command.StockDecreaseBatchCommand;
-import com.commerce.stock.service.result.AdminStockResult;
-import com.commerce.stock.service.result.StockDecreaseBatchResult;
-import com.commerce.stock.service.result.StockHistoryResult;
+import com.commerce.stock.application.command.AdminStockAdjustCommand;
+import com.commerce.stock.application.command.AdminStockCreateCommand;
+import com.commerce.stock.application.command.StockDecreaseBatchCommand;
+import com.commerce.stock.application.result.AdminStockResult;
+import com.commerce.stock.application.result.StockDecreaseBatchResult;
+import com.commerce.stock.application.result.StockHistoryResult;
 
 @ExtendWith(MockitoExtension.class)
-class StockServiceTest {
+class StockServicesTest {
 
 	@Mock
 	private StockRepository stockRepository;
@@ -50,7 +50,13 @@ class StockServiceTest {
 	private ProductRepository productRepository;
 
 	@InjectMocks
-	private StockService stockService;
+	private AdminStockService adminStockService;
+
+	@InjectMocks
+	private OrderStockService orderStockService;
+
+	@InjectMocks
+	private StockConcurrencyService stockConcurrencyService;
 
 	@DisplayName("관리자 초기 재고 생성은 재고와 양수 이력을 저장한다")
 	@Test
@@ -73,7 +79,7 @@ class StockServiceTest {
 		});
 
 		// when
-		AdminStockResult result = stockService.createInitialStock(command);
+		AdminStockResult result = adminStockService.createInitialStock(command);
 
 		// then
 		assertThat(result.getProductId()).isEqualTo(1L);
@@ -103,7 +109,7 @@ class StockServiceTest {
 		given(productRepository.findByIdAndDeletedAtIsNull(1L)).willReturn(Optional.empty());
 
 		// when & then
-		assertThatThrownBy(() -> stockService.createInitialStock(command))
+		assertThatThrownBy(() -> adminStockService.createInitialStock(command))
 			.isInstanceOf(ProductException.class)
 			.satisfies(exception -> {
 				ProductException productException = (ProductException) exception;
@@ -132,7 +138,7 @@ class StockServiceTest {
 		});
 
 		// when
-		AdminStockResult result = stockService.createInitialStock(command);
+		AdminStockResult result = adminStockService.createInitialStock(command);
 
 		// then
 		assertThat(result.getProductId()).isEqualTo(1L);
@@ -165,7 +171,7 @@ class StockServiceTest {
 		given(stockRepository.findByProductId(1L)).willReturn(Optional.of(stock));
 
 		// when & then
-		assertThatThrownBy(() -> stockService.createInitialStock(command))
+		assertThatThrownBy(() -> adminStockService.createInitialStock(command))
 			.isInstanceOf(StockException.class)
 			.satisfies(exception -> {
 				StockException stockException = (StockException) exception;
@@ -190,7 +196,7 @@ class StockServiceTest {
 		given(stockRepository.findByProductIdWithPessimisticLock(1L)).willReturn(Optional.of(stock));
 
 		// when
-		AdminStockResult result = stockService.increaseByAdmin(command);
+		AdminStockResult result = adminStockService.increaseByAdmin(command);
 
 		// then
 		assertThat(stock.getQuantity()).isEqualTo(15);
@@ -219,7 +225,7 @@ class StockServiceTest {
 		given(stockRepository.findByProductIdWithPessimisticLock(1L)).willReturn(Optional.of(stock));
 
 		// when
-		AdminStockResult result = stockService.decreaseByAdmin(command);
+		AdminStockResult result = adminStockService.decreaseByAdmin(command);
 
 		// then
 		assertThat(stock.getQuantity()).isEqualTo(7);
@@ -247,7 +253,7 @@ class StockServiceTest {
 		given(stockRepository.findByProductIdWithPessimisticLock(1L)).willReturn(Optional.of(stock));
 
 		// when & then
-		assertThatThrownBy(() -> stockService.decreaseByAdmin(command))
+		assertThatThrownBy(() -> adminStockService.decreaseByAdmin(command))
 			.isInstanceOf(StockException.class)
 			.satisfies(exception -> {
 				StockException stockException = (StockException) exception;
@@ -273,7 +279,7 @@ class StockServiceTest {
 			.willReturn(List.of(latestHistory, firstHistory));
 
 		// when
-		List<StockHistoryResult> results = stockService.getHistoriesByProductId(1L);
+		List<StockHistoryResult> results = adminStockService.getHistoriesByProductId(1L);
 
 		// then
 		assertThat(results).hasSize(2);
@@ -293,7 +299,7 @@ class StockServiceTest {
 		given(stockRepository.findByProductId(1L)).willReturn(Optional.of(stock));
 
 		// when
-		stockService.decrease(1L, 3);
+		stockConcurrencyService.decrease(1L, 3);
 
 		// then
 		assertThat(stock.getQuantity()).isEqualTo(7);
@@ -307,7 +313,7 @@ class StockServiceTest {
 		given(stockRepository.findByProductIdWithPessimisticLock(1L)).willReturn(Optional.of(stock));
 
 		// when
-		stockService.decreaseWithPessimisticLock(1L, 4);
+		orderStockService.decreaseWithPessimisticLock(1L, 4);
 
 		// then
 		assertThat(stock.getQuantity()).isEqualTo(6);
@@ -321,7 +327,7 @@ class StockServiceTest {
 		given(stockRepository.findByProductIdWithPessimisticLock(1L)).willReturn(Optional.of(stock));
 
 		// when
-		stockService.increaseWithPessimisticLock(1L, 3);
+		orderStockService.increaseWithPessimisticLock(1L, 3);
 
 		// then
 		assertThat(stock.getQuantity()).isEqualTo(8);
@@ -346,7 +352,7 @@ class StockServiceTest {
 			.willReturn(List.of(stock1, stock2));
 
 		// when
-		stockService.decreaseBatchWithPessimisticLock(command);
+		orderStockService.decreaseBatchWithPessimisticLock(command);
 
 		// then
 		assertThat(stock1.getQuantity()).isEqualTo(9);
@@ -372,7 +378,7 @@ class StockServiceTest {
 			.willReturn(List.of(stock1, stock2));
 
 		// when
-		StockDecreaseBatchResult result = stockService.decreaseBatchWithPessimisticLock(command);
+		StockDecreaseBatchResult result = orderStockService.decreaseBatchWithPessimisticLock(command);
 
 		// then
 		assertThat(stock1.getQuantity()).isEqualTo(8);
@@ -398,7 +404,7 @@ class StockServiceTest {
 			.willReturn(List.of(stock1));
 
 		// when & then
-		assertThatThrownBy(() -> stockService.decreaseBatchWithPessimisticLock(command))
+		assertThatThrownBy(() -> orderStockService.decreaseBatchWithPessimisticLock(command))
 			.isInstanceOf(StockException.class)
 			.satisfies(exception -> {
 				StockException stockException = (StockException) exception;
@@ -413,7 +419,7 @@ class StockServiceTest {
 		given(stockRepository.findByProductId(1L)).willReturn(Optional.empty());
 
 		// when & then
-		assertThatThrownBy(() -> stockService.decrease(1L, 1))
+		assertThatThrownBy(() -> stockConcurrencyService.decrease(1L, 1))
 			.isInstanceOf(StockException.class)
 			.satisfies(exception -> {
 				StockException stockException = (StockException) exception;
@@ -429,7 +435,7 @@ class StockServiceTest {
 		given(stockRepository.findByProductId(1L)).willReturn(Optional.of(stock));
 
 		// when & then
-		assertThatThrownBy(() -> stockService.decrease(1L, 2))
+		assertThatThrownBy(() -> stockConcurrencyService.decrease(1L, 2))
 			.isInstanceOf(StockException.class)
 			.satisfies(exception -> {
 				StockException stockException = (StockException) exception;

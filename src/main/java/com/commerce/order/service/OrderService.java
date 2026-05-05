@@ -38,8 +38,9 @@ import com.commerce.product.domain.Product;
 import com.commerce.product.exception.ProductErrorCode;
 import com.commerce.product.exception.ProductException;
 import com.commerce.product.repository.ProductRepository;
-import com.commerce.stock.service.StockService;
-import com.commerce.stock.service.command.StockDecreaseBatchCommand;
+import com.commerce.stock.application.OrderStockService;
+import com.commerce.stock.application.StockConcurrencyService;
+import com.commerce.stock.application.command.StockDecreaseBatchCommand;
 
 import lombok.RequiredArgsConstructor;
 
@@ -52,7 +53,8 @@ public class OrderService {
 	private final ProductRepository productRepository;
 	private final OrderRepository orderRepository;
 	private final OrderIdempotencyStore orderIdempotencyStore;
-	private final StockService stockService;
+	private final OrderStockService orderStockService;
+	private final StockConcurrencyService stockConcurrencyService;
 	private final OutboxService outboxService;
 
 	@Value("${order.idempotency.ttl-seconds:600}")
@@ -109,7 +111,7 @@ public class OrderService {
 
 			// 비관적 락을 이용하여 재고 수량 복구
 			sortedList.forEach(item ->
-				stockService.increaseWithPessimisticLock(item.getProduct().getId(), item.getQuantity())
+					orderStockService.increaseWithPessimisticLock(item.getProduct().getId(), item.getQuantity())
 			);
 
 			// OrderException의 형태로 바꾸기 위한 try-catch and flush()
@@ -129,38 +131,38 @@ public class OrderService {
 
 	@Transactional
 	public OrderCreateResult createOrderWithoutLock(OrderCreateCommand command) {
-		return createOrderWithStockDecrease(command, stockService::decrease);
+		return createOrderWithStockDecrease(command, stockConcurrencyService::decrease);
 	}
 
 	@Transactional
 	public OrderCreateResult createOrderWithSynchronized(OrderCreateCommand command) {
-		return createOrderWithStockDecrease(command, stockService::decreaseWithSynchronized);
+		return createOrderWithStockDecrease(command, stockConcurrencyService::decreaseWithSynchronized);
 	}
 
 	@Transactional
 	public OrderCreateResult createOrderWithSynchronizedAndTransaction(OrderCreateCommand command) {
-		return createOrderWithStockDecrease(command, stockService::decreaseWithSynchronizedAndTransaction);
+		return createOrderWithStockDecrease(command, stockConcurrencyService::decreaseWithSynchronizedAndTransaction);
 	}
 
 	@Transactional
 	public OrderCreateResult createOrderWithReentrantLockAndTransaction(OrderCreateCommand command) {
-		return createOrderWithStockDecrease(command, stockService::decreaseWithReentrantLockAndTransaction);
+		return createOrderWithStockDecrease(command, stockConcurrencyService::decreaseWithReentrantLockAndTransaction);
 	}
 
 	@Transactional
 	public OrderCreateResult createOrderWithOptimisticLock(OrderCreateCommand command) {
-		return createOrderWithStockDecrease(command, stockService::decreaseWithOptimisticLock);
+		return createOrderWithStockDecrease(command, stockConcurrencyService::decreaseWithOptimisticLock);
 	}
 
 	@Transactional
 	public OrderCreateResult createOrderWithPessimisticLock(OrderCreateCommand command) {
-		return createOrderWithStockDecrease(command, stockService::decreaseWithPessimisticLock);
+		return createOrderWithStockDecrease(command, orderStockService::decreaseWithPessimisticLock);
 	}
 
 	@Transactional
 	public OrderCreateResult createOrderWithPessimisticLockOrdered(OrderCreateCommand command) {
 		OrderCreateCommand sortedRequest = sortItemsByProductId(command);
-		return createOrderWithStockDecrease(sortedRequest, stockService::decreaseWithPessimisticLock);
+		return createOrderWithStockDecrease(sortedRequest, orderStockService::decreaseWithPessimisticLock);
 	}
 
 	@Transactional
@@ -179,7 +181,7 @@ public class OrderService {
 			throw new ProductException(ProductErrorCode.PRODUCT_NOT_FOUND);
 		}
 
-		stockService.decreaseBatchWithPessimisticLock(
+		orderStockService.decreaseBatchWithPessimisticLock(
 			StockDecreaseBatchCommand.from(quantitiesByProductId)
 		);
 

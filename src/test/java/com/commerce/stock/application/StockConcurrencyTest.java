@@ -1,4 +1,4 @@
-package com.commerce.stock.service;
+package com.commerce.stock.application;
 
 import static org.assertj.core.api.Assertions.*;
 
@@ -19,9 +19,9 @@ import org.springframework.test.context.ActiveProfiles;
 import com.commerce.product.domain.Product;
 import com.commerce.product.domain.ProductStatus;
 import com.commerce.product.repository.ProductRepository;
+import com.commerce.stock.application.command.StockDecreaseBatchCommand;
 import com.commerce.stock.domain.Stock;
 import com.commerce.stock.repository.StockRepository;
-import com.commerce.stock.service.command.StockDecreaseBatchCommand;
 
 @Tag("concurrency")
 @SpringBootTest
@@ -29,7 +29,10 @@ import com.commerce.stock.service.command.StockDecreaseBatchCommand;
 class StockConcurrencyTest {
 
 	@Autowired
-	private StockService stockService;
+	private StockConcurrencyService stockConcurrencyService;
+
+	@Autowired
+	private OrderStockService orderStockService;
 
 	@Autowired
 	private StockRepository stockRepository;
@@ -56,7 +59,7 @@ class StockConcurrencyTest {
 		measureConcurrent(
 			"no-lock",
 			threadCount,
-			() -> stockService.decrease(product.getId(), 1),
+			() -> stockConcurrencyService.decrease(product.getId(), 1),
 			errors
 		);
 
@@ -78,7 +81,7 @@ class StockConcurrencyTest {
 		measureConcurrent(
 			"synchronized",
 			threadCount,
-			() -> stockService.decreaseWithSynchronized(product.getId(), 1),
+			() -> stockConcurrencyService.decreaseWithSynchronized(product.getId(), 1),
 			errors
 		);
 
@@ -101,7 +104,7 @@ class StockConcurrencyTest {
 		measureConcurrent(
 			"synchronized-tx",
 			threadCount,
-			() -> stockService.decreaseWithSynchronizedAndTransaction(product.getId(), 1),
+			() -> stockConcurrencyService.decreaseWithSynchronizedAndTransaction(product.getId(), 1),
 			errors
 		);
 
@@ -123,7 +126,7 @@ class StockConcurrencyTest {
 		measureConcurrent(
 			"reentrant-lock-tx",
 			threadCount,
-			() -> stockService.decreaseWithReentrantLockAndTransaction(product.getId(), 1),
+			() -> stockConcurrencyService.decreaseWithReentrantLockAndTransaction(product.getId(), 1),
 			errors
 		);
 
@@ -145,7 +148,7 @@ class StockConcurrencyTest {
 		measureConcurrent(
 			"optimistic-lock",
 			threadCount,
-			() -> stockService.decreaseWithOptimisticLock(product.getId(), 1),
+			() -> stockConcurrencyService.decreaseWithOptimisticLock(product.getId(), 1),
 			errors
 		);
 
@@ -168,7 +171,7 @@ class StockConcurrencyTest {
 		measureConcurrent(
 			"pessimistic-lock",
 			threadCount,
-			() -> stockService.decreaseWithPessimisticLock(product.getId(), 1),
+			() -> orderStockService.decreaseWithPessimisticLock(product.getId(), 1),
 			errors
 		);
 
@@ -191,7 +194,7 @@ class StockConcurrencyTest {
 		measureConcurrent(
 			"pessimistic-lock-batch",
 			threadCount,
-			() -> stockService.decreaseBatchWithPessimisticLock(
+			() -> orderStockService.decreaseBatchWithPessimisticLock(
 				StockDecreaseBatchCommand.from(java.util.Map.of(product.getId(), 1))
 			),
 			errors
@@ -216,7 +219,7 @@ class StockConcurrencyTest {
 		measureConcurrent(
 			"1",
 			threadCount,
-			() -> stockService.decreaseWithSynchronized(product.getId(), 1),
+			() -> stockConcurrencyService.decreaseWithSynchronized(product.getId(), 1),
 			errors
 		);
 
