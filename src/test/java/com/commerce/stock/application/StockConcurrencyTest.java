@@ -32,7 +32,7 @@ class StockConcurrencyTest {
 	private StockConcurrencyService stockConcurrencyService;
 
 	@Autowired
-	private OrderStockService orderStockService;
+	private StockInventoryService stockInventoryService;
 
 	@Autowired
 	private StockRepository stockRepository;
@@ -171,7 +171,7 @@ class StockConcurrencyTest {
 		measureConcurrent(
 			"pessimistic-lock",
 			threadCount,
-			() -> orderStockService.decreaseWithPessimisticLock(product.getId(), 1),
+			() -> stockInventoryService.decrease(product.getId(), 1),
 			errors
 		);
 
@@ -194,7 +194,7 @@ class StockConcurrencyTest {
 		measureConcurrent(
 			"pessimistic-lock-batch",
 			threadCount,
-			() -> orderStockService.decreaseBatchWithPessimisticLock(
+			() -> stockInventoryService.decreaseBatch(
 				StockDecreaseBatchCommand.from(java.util.Map.of(product.getId(), 1))
 			),
 			errors

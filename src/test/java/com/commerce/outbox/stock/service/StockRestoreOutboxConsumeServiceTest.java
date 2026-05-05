@@ -20,7 +20,7 @@ import com.commerce.outbox.domain.ProcessedEvent;
 import com.commerce.outbox.domain.ProcessedEventConsumerType;
 import com.commerce.outbox.repository.ProcessedEventRepository;
 import com.commerce.outbox.stock.service.command.StockRestoreConsumeCommand;
-import com.commerce.stock.application.OrderStockService;
+import com.commerce.stock.application.StockInventoryService;
 
 @ExtendWith(MockitoExtension.class)
 class StockRestoreOutboxConsumeServiceTest {
@@ -29,7 +29,7 @@ class StockRestoreOutboxConsumeServiceTest {
 	private ProcessedEventRepository processedEventRepository;
 
 	@Mock
-	private OrderStockService stockService;
+	private StockInventoryService stockService;
 
 	@InjectMocks
 	private StockRestoreOutboxConsumeService stockRestoreOutboxConsumeService;
@@ -57,8 +57,8 @@ class StockRestoreOutboxConsumeServiceTest {
 		org.assertj.core.api.Assertions.assertThat(processedEvent.getConsumerType())
 			.isEqualTo(ProcessedEventConsumerType.STOCK_RESTORE);
 
-		then(stockService).should().increaseWithPessimisticLock(1L, 2);
-		then(stockService).should().increaseWithPessimisticLock(2L, 3);
+		then(stockService).should().increase(1L, 2);
+		then(stockService).should().increase(2L, 3);
 	}
 
 	@DisplayName("중복 소비면 ProcessedEvent 저장 충돌 후 재고 복구를 건너뛴다")
@@ -76,7 +76,7 @@ class StockRestoreOutboxConsumeServiceTest {
 		stockRestoreOutboxConsumeService.consume(command);
 
 		// then
-		then(stockService).should(never()).increaseWithPessimisticLock(org.mockito.ArgumentMatchers.anyLong(),
+		then(stockService).should(never()).increase(org.mockito.ArgumentMatchers.anyLong(),
 			org.mockito.ArgumentMatchers.anyInt());
 	}
 
@@ -90,7 +90,7 @@ class StockRestoreOutboxConsumeServiceTest {
 			.build();
 		willThrow(new IllegalStateException("restore failed"))
 			.given(stockService)
-			.increaseWithPessimisticLock(1L, 2);
+			.increase(1L, 2);
 
 		// when & then
 		org.assertj.core.api.Assertions.assertThatThrownBy(() -> stockRestoreOutboxConsumeService.consume(command))

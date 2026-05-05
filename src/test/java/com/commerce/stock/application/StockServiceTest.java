@@ -53,7 +53,7 @@ class StockServicesTest {
 	private AdminStockService adminStockService;
 
 	@InjectMocks
-	private OrderStockService orderStockService;
+	private StockInventoryService stockInventoryService;
 
 	@InjectMocks
 	private StockConcurrencyService stockConcurrencyService;
@@ -293,7 +293,7 @@ class StockServicesTest {
 
 	@DisplayName("재고가 존재하면 차감된다")
 	@Test
-	void decrease_whenStockExists_decreaseQuantity() {
+	void decreaseByInventory_whenStockExists_decreaseQuantity() {
 		// given
 		Stock stock = createStock(10);
 		given(stockRepository.findByProductId(1L)).willReturn(Optional.of(stock));
@@ -307,13 +307,13 @@ class StockServicesTest {
 
 	@DisplayName("비관적 락으로 조회한 재고는 차감된다")
 	@Test
-	void decreaseWithPessimisticLock_whenStockExists_decreaseQuantity() {
+	void decrease_whenStockExists_decreaseQuantity() {
 		// given
 		Stock stock = createStock(10);
 		given(stockRepository.findByProductIdWithPessimisticLock(1L)).willReturn(Optional.of(stock));
 
 		// when
-		orderStockService.decreaseWithPessimisticLock(1L, 4);
+		stockInventoryService.decrease(1L, 4);
 
 		// then
 		assertThat(stock.getQuantity()).isEqualTo(6);
@@ -321,13 +321,13 @@ class StockServicesTest {
 
 	@DisplayName("비관적 락으로 조회한 재고는 증가한다")
 	@Test
-	void increaseWithPessimisticLock_whenStockExists_increaseQuantity() {
+	void increaseByInventory_whenStockExists_increaseQuantity() {
 		// given
 		Stock stock = createStock(5);
 		given(stockRepository.findByProductIdWithPessimisticLock(1L)).willReturn(Optional.of(stock));
 
 		// when
-		orderStockService.increaseWithPessimisticLock(1L, 3);
+		stockInventoryService.increase(1L, 3);
 
 		// then
 		assertThat(stock.getQuantity()).isEqualTo(8);
@@ -335,7 +335,7 @@ class StockServicesTest {
 
 	@DisplayName("비관적 락으로 여러 재고를 조회하면 모두 차감된다")
 	@Test
-	void decreaseBatchWithPessimisticLock_whenStocksExist_decreaseQuantities() {
+	void decreaseBatchByInventory_whenStocksExist_decreaseQuantities() {
 		// given
 		Product product1 = createProduct(1L, "product-1", 1000);
 		Product product2 = createProduct(2L, "product-2", 1200);
@@ -352,7 +352,7 @@ class StockServicesTest {
 			.willReturn(List.of(stock1, stock2));
 
 		// when
-		orderStockService.decreaseBatchWithPessimisticLock(command);
+		stockInventoryService.decreaseBatch(command);
 
 		// then
 		assertThat(stock1.getQuantity()).isEqualTo(9);
@@ -361,7 +361,7 @@ class StockServicesTest {
 
 	@DisplayName("비관적 락 배치 요청은 차감 후 요약 정보를 반환한다")
 	@Test
-	void decreaseBatchWithPessimisticLock_whenRequest_returnSummary() {
+	void decreaseBatchByInventory_whenRequest_returnSummary() {
 		// given
 		Product product1 = createProduct(1L, "product-1", 1000);
 		Product product2 = createProduct(2L, "product-2", 1200);
@@ -378,7 +378,7 @@ class StockServicesTest {
 			.willReturn(List.of(stock1, stock2));
 
 		// when
-		StockDecreaseBatchResult result = orderStockService.decreaseBatchWithPessimisticLock(command);
+		StockDecreaseBatchResult result = stockInventoryService.decreaseBatch(command);
 
 		// then
 		assertThat(stock1.getQuantity()).isEqualTo(8);
@@ -389,7 +389,7 @@ class StockServicesTest {
 
 	@DisplayName("비관적 락 조회 결과가 부족하면 예외가 발생한다")
 	@Test
-	void decreaseBatchWithPessimisticLock_whenStockMissing_throwException() {
+	void decreaseBatchByInventory_whenStockMissing_throwException() {
 		// given
 		Product product1 = createProduct(1L, "product-1", 1000);
 		Stock stock1 = createStock(product1, 10);
@@ -404,7 +404,7 @@ class StockServicesTest {
 			.willReturn(List.of(stock1));
 
 		// when & then
-		assertThatThrownBy(() -> orderStockService.decreaseBatchWithPessimisticLock(command))
+		assertThatThrownBy(() -> stockInventoryService.decreaseBatch(command))
 			.isInstanceOf(StockException.class)
 			.satisfies(exception -> {
 				StockException stockException = (StockException) exception;

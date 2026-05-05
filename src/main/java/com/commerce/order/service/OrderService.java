@@ -38,7 +38,7 @@ import com.commerce.product.domain.Product;
 import com.commerce.product.exception.ProductErrorCode;
 import com.commerce.product.exception.ProductException;
 import com.commerce.product.repository.ProductRepository;
-import com.commerce.stock.application.OrderStockService;
+import com.commerce.stock.application.StockInventoryService;
 import com.commerce.stock.application.StockConcurrencyService;
 import com.commerce.stock.application.command.StockDecreaseBatchCommand;
 
@@ -53,7 +53,7 @@ public class OrderService {
 	private final ProductRepository productRepository;
 	private final OrderRepository orderRepository;
 	private final OrderIdempotencyStore orderIdempotencyStore;
-	private final OrderStockService orderStockService;
+	private final StockInventoryService stockInventoryService;
 	private final StockConcurrencyService stockConcurrencyService;
 	private final OutboxService outboxService;
 
@@ -111,7 +111,7 @@ public class OrderService {
 
 			// 비관적 락을 이용하여 재고 수량 복구
 			sortedList.forEach(item ->
-					orderStockService.increaseWithPessimisticLock(item.getProduct().getId(), item.getQuantity())
+					stockInventoryService.increase(item.getProduct().getId(), item.getQuantity())
 			);
 
 			// OrderException의 형태로 바꾸기 위한 try-catch and flush()
@@ -156,13 +156,13 @@ public class OrderService {
 
 	@Transactional
 	public OrderCreateResult createOrderWithPessimisticLock(OrderCreateCommand command) {
-		return createOrderWithStockDecrease(command, orderStockService::decreaseWithPessimisticLock);
+		return createOrderWithStockDecrease(command, stockInventoryService::decrease);
 	}
 
 	@Transactional
 	public OrderCreateResult createOrderWithPessimisticLockOrdered(OrderCreateCommand command) {
 		OrderCreateCommand sortedRequest = sortItemsByProductId(command);
-		return createOrderWithStockDecrease(sortedRequest, orderStockService::decreaseWithPessimisticLock);
+		return createOrderWithStockDecrease(sortedRequest, stockInventoryService::decrease);
 	}
 
 	@Transactional
@@ -181,7 +181,7 @@ public class OrderService {
 			throw new ProductException(ProductErrorCode.PRODUCT_NOT_FOUND);
 		}
 
-		orderStockService.decreaseBatchWithPessimisticLock(
+		stockInventoryService.decreaseBatch(
 			StockDecreaseBatchCommand.from(quantitiesByProductId)
 		);
 

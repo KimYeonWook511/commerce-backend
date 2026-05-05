@@ -41,7 +41,7 @@ import com.commerce.product.exception.ProductException;
 import com.commerce.product.repository.ProductRepository;
 import com.commerce.stock.exception.StockErrorCode;
 import com.commerce.stock.exception.StockException;
-import com.commerce.stock.application.OrderStockService;
+import com.commerce.stock.application.StockInventoryService;
 import com.commerce.stock.application.StockConcurrencyService;
 import com.commerce.stock.application.command.StockDecreaseBatchCommand;
 
@@ -55,7 +55,7 @@ class OrderServiceTest {
 	private ProductRepository productRepository;
 
 	@Mock
-	private OrderStockService orderStockService;
+	private StockInventoryService stockInventoryService;
 
 	@Mock
 	private StockConcurrencyService stockConcurrencyService;
@@ -86,8 +86,8 @@ class OrderServiceTest {
 		OrderCreateResult result = orderService.createOrder(command);
 
 		// then
-		then(orderStockService).should().decreaseWithPessimisticLock(10L, 2);
-		then(orderStockService).should().decreaseWithPessimisticLock(11L, 1);
+		then(stockInventoryService).should().decrease(10L, 2);
+		then(stockInventoryService).should().decrease(11L, 1);
 
 		ArgumentCaptor<Order> orderCaptor = ArgumentCaptor.forClass(Order.class);
 		then(orderRepository).should().save(orderCaptor.capture());
@@ -134,7 +134,7 @@ class OrderServiceTest {
 		OrderCancelResult result = orderService.cancelOrder(1L, 100L);
 
 		// then
-		then(orderStockService).should().increaseWithPessimisticLock(10L, 2);
+		then(stockInventoryService).should().increase(10L, 2);
 		assertThat(result.getOrderId()).isEqualTo(100L);
 		assertThat(result.getStatus()).isEqualTo(OrderStatus.CANCELED);
 	}
@@ -157,9 +157,9 @@ class OrderServiceTest {
 		orderService.cancelOrder(1L, 100L);
 
 		// then
-		InOrder inOrder = org.mockito.Mockito.inOrder(orderStockService);
-		inOrder.verify(orderStockService).increaseWithPessimisticLock(2L, 1);
-		inOrder.verify(orderStockService).increaseWithPessimisticLock(5L, 1);
+		InOrder inOrder = org.mockito.Mockito.inOrder(stockInventoryService);
+		inOrder.verify(stockInventoryService).increase(2L, 1);
+		inOrder.verify(stockInventoryService).increase(5L, 1);
 	}
 
 	@DisplayName("주문 상태가 초기 상태가 아니면 취소에 실패한다")
@@ -321,8 +321,8 @@ class OrderServiceTest {
 		orderService.createOrderWithPessimisticLock(command);
 
 		// then
-		then(orderStockService).should().decreaseWithPessimisticLock(10L, 2);
-		then(orderStockService).should().decreaseWithPessimisticLock(11L, 1);
+		then(stockInventoryService).should().decrease(10L, 2);
+		then(stockInventoryService).should().decrease(11L, 1);
 	}
 
 	@DisplayName("비관적 락 차감 방식(정렬)을 사용해서 주문을 생성한다")
@@ -339,8 +339,8 @@ class OrderServiceTest {
 		orderService.createOrderWithPessimisticLockOrdered(command);
 
 		// then
-		then(orderStockService).should().decreaseWithPessimisticLock(10L, 2);
-		then(orderStockService).should().decreaseWithPessimisticLock(11L, 1);
+		then(stockInventoryService).should().decrease(10L, 2);
+		then(stockInventoryService).should().decrease(11L, 1);
 	}
 
 	@DisplayName("비관적 락 차감 방식(배치)을 사용해서 주문을 생성한다")
@@ -359,7 +359,7 @@ class OrderServiceTest {
 		// then
 		ArgumentCaptor<StockDecreaseBatchCommand> requestCaptor =
 			ArgumentCaptor.forClass(StockDecreaseBatchCommand.class);
-		then(orderStockService).should().decreaseBatchWithPessimisticLock(requestCaptor.capture());
+		then(stockInventoryService).should().decreaseBatch(requestCaptor.capture());
 		assertThat(requestCaptor.getValue().getQuantitiesByProductId())
 			.containsEntry(10L, 2)
 			.containsEntry(11L, 1);
@@ -429,8 +429,8 @@ class OrderServiceTest {
 		given(memberRepository.findById(1L)).willReturn(Optional.of(member));
 		given(productRepository.findById(10L)).willReturn(Optional.of(product));
 		willThrow(new StockException(StockErrorCode.STOCK_NOT_FOUND))
-			.given(orderStockService)
-			.decreaseWithPessimisticLock(10L, 1);
+			.given(stockInventoryService)
+			.decrease(10L, 1);
 
 		// when & then
 		assertThatThrownBy(() -> orderService.createOrder(command))

@@ -20,12 +20,13 @@ import lombok.RequiredArgsConstructor;
 @Service
 @Transactional(readOnly = true)
 @RequiredArgsConstructor
-public class OrderStockService {
+public class StockInventoryService {
 
 	private final StockRepository stockRepository;
 
 	@Transactional
-	public void decreaseWithPessimisticLock(Long productId, int quantity) {
+	public void decrease(Long productId, int quantity) {
+		// 주문/복구 흐름의 실제 재고 변경은 동시 요청 정합성을 위해 비관적 락으로 처리한다.
 		Stock stock = stockRepository.findByProductIdWithPessimisticLock(productId)
 			.orElseThrow(() -> new StockException(StockErrorCode.STOCK_NOT_FOUND));
 
@@ -33,7 +34,8 @@ public class OrderStockService {
 	}
 
 	@Transactional
-	public void increaseWithPessimisticLock(Long productId, int quantity) {
+	public void increase(Long productId, int quantity) {
+		// 주문/복구 흐름의 실제 재고 변경은 동시 요청 정합성을 위해 비관적 락으로 처리한다.
 		Stock stock = stockRepository.findByProductIdWithPessimisticLock(productId)
 			.orElseThrow(() -> new StockException(StockErrorCode.STOCK_NOT_FOUND));
 
@@ -41,10 +43,11 @@ public class OrderStockService {
 	}
 
 	@Transactional
-	public StockDecreaseBatchResult decreaseBatchWithPessimisticLock(StockDecreaseBatchCommand command) {
+	public StockDecreaseBatchResult decreaseBatch(StockDecreaseBatchCommand command) {
 		Map<Long, Integer> quantitiesByProductId = command.getQuantitiesByProductId();
 		List<Long> productIds = quantitiesByProductId.keySet().stream()
 			.toList();
+		// 여러 상품 재고를 한 트랜잭션에서 비관적 락으로 조회한 뒤 일괄 차감한다.
 		List<Stock> findStocks = stockRepository.findAllByProductIdInWithPessimisticLock(productIds);
 		if (findStocks.size() != productIds.size()) {
 			throw new StockException(StockErrorCode.STOCK_NOT_FOUND);
