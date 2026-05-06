@@ -3,7 +3,9 @@ package com.commerce.order.application;
 import java.time.Duration;
 import java.util.Comparator;
 import java.util.List;
-import java.util.function.BiConsumer;
+import java.util.Map;
+import java.util.function.Function;
+import java.util.stream.Collectors;
 
 import org.springframework.beans.factory.annotation.Value;
 import org.springframework.stereotype.Service;
@@ -79,7 +81,7 @@ public class OrderCreateService {
 
 	private OrderCreateResult createOrderWithPessimisticLockOrdered(OrderCreateCommand command) {
 		OrderCreateCommand sortedCommand = sortItemsByProductId(command);
-		return createOrderWithStockDecrease(sortedCommand, stockInventoryService::decrease);
+		return createOrderWithStockDecrease(sortedCommand);
 	}
 
 	private OrderCreateCommand sortItemsByProductId(OrderCreateCommand command) {
@@ -94,25 +96,38 @@ public class OrderCreateService {
 			.build();
 	}
 
-	private OrderCreateResult createOrderWithStockDecrease(
-		OrderCreateCommand command,
-		BiConsumer<Long, Integer> stockDecrease
-	) {
+	private OrderCreateResult createOrderWithStockDecrease(OrderCreateCommand command) {
 		Member member = memberRepository.findById(command.getMemberId())
 			.orElseThrow(() -> new MemberException(MemberErrorCode.MEMBER_NOT_FOUND));
+
+		List<Long> productIds = extractDistinctProductIds(command);
+		Map<Long, Product> productsById = productRepository.findAllById(productIds).stream()
+			.collect(Collectors.toMap(Product::getId, Function.identity()));
+		if (productsById.size() != productIds.size()) {
+			throw new ProductException(ProductErrorCode.PRODUCT_NOT_FOUND);
+		}
 
 		Order order = Order.create(member);
 
 		for (OrderCreateItem item : command.getItems()) {
-			Product product = productRepository.findById(item.getProductId())
-				.orElseThrow(() -> new ProductException(ProductErrorCode.PRODUCT_NOT_FOUND));
+			Product product = productsById.get(item.getProductId());
+			if (product == null) {
+				throw new ProductException(ProductErrorCode.PRODUCT_NOT_FOUND);
+			}
 
-			stockDecrease.accept(product.getId(), item.getQuantity());
+			stockInventoryService.decrease(product.getId(), item.getQuantity());
 			order.addOrderItem(product, item.getQuantity());
 		}
 
 		orderRepository.save(order);
 
 		return OrderCreateResult.from(order);
+	}
+
+	private List<Long> extractDistinctProductIds(OrderCreateCommand command) {
+		return command.getItems().stream()
+			.map(OrderCreateItem::getProductId)
+			.distinct()
+			.toList();
 	}
 }

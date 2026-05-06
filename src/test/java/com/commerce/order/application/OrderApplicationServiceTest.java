@@ -88,7 +88,7 @@ class OrderApplicationServiceTest {
 		Product product1 = createProduct(10L, "product-1", 1000);
 		Product product2 = createProduct(11L, "product-2", 2000);
 		OrderCreateCommand command = createDefaultRequest();
-		stubForSuccess(member, product1, product2);
+		stubForOrderCreateSuccess(member, product1, product2);
 		stubForIdempotencyReserved();
 
 		// when
@@ -107,6 +107,41 @@ class OrderApplicationServiceTest {
 		assertThat(result.getOrderId()).isEqualTo(100L);
 		assertThat(result.getTotalPrice()).isEqualTo(4000);
 		assertThat(result.getStatus()).isEqualTo(OrderStatus.INIT);
+	}
+
+	@DisplayName("같은 상품이 여러 항목으로 들어오면 상품은 한 번만 조회하고 재고는 항목별로 차감한다")
+	@Test
+	void createOrder_whenDuplicateProductItems_findProductOnceAndDecreaseEachItem() {
+		// given
+		Member member = createMember(1L);
+		Product product1 = createProduct(10L, "product-1", 1000);
+		Product product2 = createProduct(11L, "product-2", 2000);
+		OrderCreateCommand command = OrderCreateCommand.builder()
+			.memberId(1L)
+			.idempotencyKey(idempotencyKey)
+			.items(List.of(
+				OrderCreateItem.builder().productId(10L).quantity(2).build(),
+				OrderCreateItem.builder().productId(11L).quantity(1).build(),
+				OrderCreateItem.builder().productId(10L).quantity(3).build()
+			))
+			.build();
+
+		stubForOrderCreateSuccess(member, product1, product2);
+		stubForIdempotencyReserved();
+
+		// when
+		OrderCreateResult result = orderCreateService.createOrder(command);
+
+		// then
+		then(productRepository).should().findAllById(List.of(10L, 11L));
+		then(stockInventoryService).should().decrease(10L, 2);
+		then(stockInventoryService).should().decrease(10L, 3);
+		then(stockInventoryService).should().decrease(11L, 1);
+
+		ArgumentCaptor<Order> orderCaptor = ArgumentCaptor.forClass(Order.class);
+		then(orderRepository).should().save(orderCaptor.capture());
+		assertThat(orderCaptor.getValue().getOrderItems()).hasSize(3);
+		assertThat(result.getTotalPrice()).isEqualTo(7000);
 	}
 
 	@DisplayName("락 없이 주문을 생성하면 기본 차감 로직을 사용한다")
@@ -410,7 +445,7 @@ class OrderApplicationServiceTest {
 
 		stubForIdempotencyReserved();
 		given(memberRepository.findById(1L)).willReturn(Optional.of(member));
-		given(productRepository.findById(10L)).willReturn(Optional.empty());
+		given(productRepository.findAllById(List.of(10L))).willReturn(List.of());
 
 		// when & then
 		assertThatThrownBy(() -> orderCreateService.createOrder(command))
@@ -436,7 +471,7 @@ class OrderApplicationServiceTest {
 
 		stubForIdempotencyReserved();
 		given(memberRepository.findById(1L)).willReturn(Optional.of(member));
-		given(productRepository.findById(10L)).willReturn(Optional.of(product));
+		given(productRepository.findAllById(List.of(10L))).willReturn(List.of(product));
 		willThrow(new StockException(StockErrorCode.STOCK_NOT_FOUND))
 			.given(stockInventoryService)
 			.decrease(10L, 1);
@@ -485,6 +520,17 @@ class OrderApplicationServiceTest {
 		given(memberRepository.findById(1L)).willReturn(Optional.of(member));
 		given(productRepository.findById(10L)).willReturn(Optional.of(product1));
 		given(productRepository.findById(11L)).willReturn(Optional.of(product2));
+		given(orderRepository.save(any(Order.class))).willAnswer(invocation -> {
+			Order saved = invocation.getArgument(0);
+			ReflectionTestUtils.setField(saved, "id", 100L);
+			return saved;
+		});
+	}
+
+	private void stubForOrderCreateSuccess(Member member, Product product1, Product product2) {
+		given(memberRepository.findById(1L)).willReturn(Optional.of(member));
+		given(productRepository.findAllById(List.of(product1.getId(), product2.getId())))
+			.willReturn(List.of(product1, product2));
 		given(orderRepository.save(any(Order.class))).willAnswer(invocation -> {
 			Order saved = invocation.getArgument(0);
 			ReflectionTestUtils.setField(saved, "id", 100L);
