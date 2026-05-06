@@ -191,8 +191,7 @@ class AdminProductControllerTest {
 		String requestBody = """
 			{
 			  "name": " ",
-			  "price": 0,
-			  "status": "INVALID"
+			  "price": 0
 			}
 			""";
 
@@ -206,7 +205,33 @@ class AdminProductControllerTest {
 			.andExpect(jsonPath("$.message").value("요청 값이 올바르지 않습니다"))
 			.andExpect(jsonPath("$.data.name").value("상품명은 필수입니다"))
 			.andExpect(jsonPath("$.data.price").value("가격은 양수여야 합니다"))
-			.andExpect(jsonPath("$.data.status").value("판매 상태가 올바르지 않습니다"));
+			.andExpect(jsonPath("$.data.status").value("판매 상태는 필수입니다"));
+
+		then(adminProductService).should(never()).createProduct(any(AdminProductCreateCommand.class));
+	}
+
+	@DisplayName("상품 등록 요청의 판매 상태가 enum 값이 아니면 잘못된 요청을 반환한다")
+	@Test
+	void createProduct_whenStatusIsInvalidEnum_returnBadRequest() throws Exception {
+		// given
+		stubForToken("ROLE_ADMIN");
+		String requestBody = """
+			{
+			  "name": "product",
+			  "price": 10000,
+			  "status": "INVALID"
+			}
+			""";
+
+		// when & then
+		mockMvc.perform(post("/admin/products")
+				.header("Authorization", "Bearer access-token")
+				.contentType(MediaType.APPLICATION_JSON)
+				.content(requestBody))
+			.andExpect(status().isBadRequest())
+			.andExpect(jsonPath("$.code").value("COMMON-400"))
+			.andExpect(jsonPath("$.message").value("요청 값이 올바르지 않습니다"))
+			.andExpect(jsonPath("$.data").value(Matchers.nullValue()));
 
 		then(adminProductService).should(never()).createProduct(any(AdminProductCreateCommand.class));
 	}

@@ -2,6 +2,7 @@ package com.commerce.common.exception;
 
 import org.springframework.dao.DataIntegrityViolationException;
 import org.springframework.http.ResponseEntity;
+import org.springframework.http.converter.HttpMessageNotReadableException;
 import org.springframework.web.bind.annotation.ExceptionHandler;
 import org.springframework.web.bind.annotation.RestControllerAdvice;
 import org.springframework.web.bind.MethodArgumentNotValidException;
@@ -46,6 +47,15 @@ public class GlobalExceptionHandler {
 			.forEach(error -> errors.put(error.getField(), error.getDefaultMessage()));
 		return ResponseEntity.status(CommonErrorCode.INVALID_REQUEST.getStatus())
 			.body(ApiResponse.error(CommonErrorCode.INVALID_REQUEST, errors));
+	}
+
+	@ExceptionHandler(HttpMessageNotReadableException.class)
+	public ResponseEntity<ApiResponse<Void>> handleHttpMessageNotReadableException(
+		HttpMessageNotReadableException ex
+	) {
+		log.error("요청 본문 파싱 실패: {}", ex.getMessage());
+		return ResponseEntity.status(CommonErrorCode.INVALID_REQUEST.getStatus())
+			.body(ApiResponse.error(CommonErrorCode.INVALID_REQUEST));
 	}
 
 	@ExceptionHandler(DataIntegrityViolationException.class)

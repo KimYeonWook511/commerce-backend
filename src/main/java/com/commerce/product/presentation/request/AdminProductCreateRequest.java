@@ -5,7 +5,6 @@ import com.commerce.product.domain.ProductStatus;
 
 import jakarta.validation.constraints.NotBlank;
 import jakarta.validation.constraints.NotNull;
-import jakarta.validation.constraints.Pattern;
 import jakarta.validation.constraints.Positive;
 import lombok.Getter;
 
@@ -23,9 +22,8 @@ public class AdminProductCreateRequest {
 
 	private String imageUrl;
 
-	@NotBlank(message = "판매 상태는 필수입니다")
-	@Pattern(regexp = "ON_SALE|SOLD_OUT|STOPPED", message = "판매 상태가 올바르지 않습니다")
-	private String status;
+	@NotNull(message = "판매 상태는 필수입니다")
+	private ProductStatus status;
 
 	public AdminProductCreateCommand toCommand() {
 		return AdminProductCreateCommand.builder()
@@ -33,7 +31,7 @@ public class AdminProductCreateRequest {
 			.price(price)
 			.description(description)
 			.imageUrl(imageUrl)
-			.status(ProductStatus.valueOf(status))
+			.status(status)
 			.build();
 	}
 }
