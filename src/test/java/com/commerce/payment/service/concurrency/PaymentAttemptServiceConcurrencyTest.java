@@ -23,7 +23,7 @@ import org.springframework.test.context.DynamicPropertySource;
 import com.commerce.member.domain.Member;
 import com.commerce.member.repository.MemberRepository;
 import com.commerce.order.domain.Order;
-import com.commerce.order.repository.OrderRepository;
+import com.commerce.order.infrastructure.JpaOrderRepository;
 import com.commerce.orderitem.repository.OrderItemRepository;
 import com.commerce.payment.domain.PaymentAttempt;
 import com.commerce.payment.domain.PaymentAttemptFailCode;
@@ -55,7 +55,7 @@ class PaymentAttemptServiceConcurrencyTest {
 	private ProductRepository productRepository;
 
 	@Autowired
-	private OrderRepository orderRepository;
+	private JpaOrderRepository orderRepository;
 
 	@Autowired
 	private OrderItemRepository orderItemRepository;

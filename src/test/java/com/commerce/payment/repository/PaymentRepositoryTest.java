@@ -14,7 +14,7 @@ import org.springframework.test.context.ActiveProfiles;
 import com.commerce.member.domain.Member;
 import com.commerce.member.repository.MemberRepository;
 import com.commerce.order.domain.Order;
-import com.commerce.order.repository.OrderRepository;
+import com.commerce.order.infrastructure.JpaOrderRepository;
 import com.commerce.payment.domain.Payment;
 import com.commerce.payment.domain.PaymentProvider;
 import jakarta.persistence.EntityManager;
@@ -30,7 +30,7 @@ class PaymentRepositoryTest {
 	private MemberRepository memberRepository;
 
 	@Autowired
-	private OrderRepository orderRepository;
+	private JpaOrderRepository orderRepository;
 
 	@Autowired
 	private EntityManager em;

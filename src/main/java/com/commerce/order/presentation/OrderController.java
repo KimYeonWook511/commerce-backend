@@ -1,4 +1,4 @@
-package com.commerce.order.controller;
+package com.commerce.order.presentation;
 
 import org.springframework.http.HttpStatus;
 import org.springframework.http.ResponseEntity;
@@ -7,6 +7,8 @@ import org.springframework.web.bind.annotation.PathVariable;
 import org.springframework.web.bind.annotation.PostMapping;
 import org.springframework.web.bind.annotation.RequestBody;
 import org.springframework.web.bind.annotation.RequestHeader;
+import org.springframework.web.bind.annotation.RequestMapping;
+import org.springframework.web.bind.annotation.RestController;
 
 import com.commerce.auth.resolver.AuthenticatedMemberId;
 import com.commerce.common.ApiResponse;
@@ -23,7 +25,9 @@ import com.commerce.order.presentation.request.OrderCreateRequest;
 import jakarta.validation.Valid;
 import lombok.RequiredArgsConstructor;
 
+@RestController
 @RequiredArgsConstructor
+@RequestMapping("/orders")
 public class OrderController {
 
 	private final OrderCreateService orderCreateService;

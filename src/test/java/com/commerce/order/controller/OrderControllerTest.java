@@ -1,4 +1,4 @@
-package com.commerce.order.controller;
+package com.commerce.order.presentation;
 
 import static org.mockito.ArgumentMatchers.any;
 import static org.mockito.BDDMockito.given;
@@ -26,10 +26,11 @@ import com.commerce.auth.jwt.JwtTokenValidator;
 import com.commerce.auth.resolver.AuthenticatedMemberIdArgumentResolver;
 import com.commerce.common.config.WebConfig;
 import com.commerce.order.domain.OrderStatus;
-import com.commerce.order.service.OrderService;
-import com.commerce.order.service.command.OrderCreateCommand;
-import com.commerce.order.service.result.OrderCancelResult;
-import com.commerce.order.service.result.OrderCreateResult;
+import com.commerce.order.application.OrderCancelService;
+import com.commerce.order.application.OrderCreateService;
+import com.commerce.order.application.command.OrderCreateCommand;
+import com.commerce.order.application.result.OrderCancelResult;
+import com.commerce.order.application.result.OrderCreateResult;
 
 import io.jsonwebtoken.Claims;
 import io.jsonwebtoken.Jwts;
@@ -49,7 +50,10 @@ class OrderControllerTest {
 	private MockMvc mockMvc;
 
 	@MockitoBean
-	private OrderService orderService;
+	private OrderCreateService orderCreateService;
+
+	@MockitoBean
+	private OrderCancelService orderCancelService;
 
 	@MockitoBean
 	private JwtTokenValidator jwtTokenValidator;
@@ -65,7 +69,7 @@ class OrderControllerTest {
 			.status(OrderStatus.INIT)
 			.build();
 
-		given(orderService.createOrder(any(OrderCreateCommand.class)))
+		given(orderCreateService.createOrder(any(OrderCreateCommand.class)))
 			.willReturn(result);
 
 		String requestBody = """
@@ -119,7 +123,7 @@ class OrderControllerTest {
 			.andExpect(jsonPath("$.message").value("요청 값이 올바르지 않습니다"))
 			.andExpect(jsonPath("$.data").value(Matchers.nullValue()));
 
-		then(orderService).should(never()).createOrder(any(OrderCreateCommand.class));
+		then(orderCreateService).should(never()).createOrder(any(OrderCreateCommand.class));
 	}
 
 	@DisplayName("주문 취소 요청이 유효하면 상태를 반환한다")
@@ -132,7 +136,7 @@ class OrderControllerTest {
 			.status(OrderStatus.CANCELED)
 			.build();
 
-		given(orderService.cancelOrder(1L, 10L)).willReturn(result);
+		given(orderCancelService.cancelOrder(1L, 10L)).willReturn(result);
 
 		// when & then
 		mockMvc.perform(post("/orders/10/cancel")

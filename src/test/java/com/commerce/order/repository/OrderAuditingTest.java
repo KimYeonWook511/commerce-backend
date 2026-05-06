@@ -1,4 +1,4 @@
-package com.commerce.order.repository;
+package com.commerce.order.infrastructure;
 
 import static org.assertj.core.api.Assertions.assertThat;
 
@@ -26,7 +26,7 @@ import com.commerce.product.repository.ProductRepository;
 class OrderAuditingTest {
 
 	@Autowired
-	private OrderRepository orderRepository;
+	private JpaOrderRepository orderRepository;
 
 	@Autowired
 	private MemberRepository memberRepository;

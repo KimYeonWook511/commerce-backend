@@ -1,4 +1,4 @@
-package com.commerce.order.service;
+package com.commerce.order.application;
 
 import static org.assertj.core.api.Assertions.*;
 
@@ -24,10 +24,10 @@ import org.springframework.test.context.DynamicPropertySource;
 
 import com.commerce.member.domain.Member;
 import com.commerce.member.repository.MemberRepository;
-import com.commerce.order.repository.OrderRepository;
-import com.commerce.order.service.command.OrderCreateItem;
-import com.commerce.order.service.command.OrderCreateCommand;
-import com.commerce.order.service.result.OrderCreateResult;
+import com.commerce.order.infrastructure.JpaOrderRepository;
+import com.commerce.order.application.command.OrderCreateItem;
+import com.commerce.order.application.command.OrderCreateCommand;
+import com.commerce.order.application.result.OrderCreateResult;
 import com.commerce.orderitem.repository.OrderItemRepository;
 import com.commerce.product.domain.Product;
 import com.commerce.product.domain.ProductStatus;
@@ -40,10 +40,13 @@ import com.commerce.test.support.TestcontainersSupport;
 @Tag("docker")
 @SpringBootTest
 @ActiveProfiles("test")
-class OrderServiceDeadlockMysqlTest {
+class OrderConcurrencyServiceDeadlockMysqlTest {
 
 	@Autowired
-	private OrderService orderService;
+	private OrderConcurrencyService orderConcurrencyService;
+
+	@Autowired
+	private OrderCancelService orderCancelService;
 
 	@Autowired
 	private MemberRepository memberRepository;
@@ -55,7 +58,7 @@ class OrderServiceDeadlockMysqlTest {
 	private StockRepository stockRepository;
 
 	@Autowired
-	private OrderRepository orderRepository;
+	private JpaOrderRepository orderRepository;
 
 	@Autowired
 	private OrderItemRepository orderItemRepository;
@@ -109,9 +112,9 @@ class OrderServiceDeadlockMysqlTest {
 		runConcurrent(2, () -> {
 			int index = sequence.getAndIncrement();
 			if (index == 0) {
-				orderService.createOrderWithPessimisticLockBatch(requestA);
+				orderConcurrencyService.createOrderWithPessimisticLockBatch(requestA);
 			} else {
-				orderService.createOrderWithPessimisticLockBatch(requestB);
+				orderConcurrencyService.createOrderWithPessimisticLockBatch(requestB);
 			}
 		}, errors);
 
@@ -155,7 +158,7 @@ class OrderServiceDeadlockMysqlTest {
 			int index = sequence.getAndIncrement();
 			List<Long> productIds = (index % 2 == 0) ? orderedIds : reversedIds;
 			OrderCreateCommand command = createRequest(member.getId(), productIds);
-			orderService.createOrderWithPessimisticLockBatch(command);
+			orderConcurrencyService.createOrderWithPessimisticLockBatch(command);
 		}, errors);
 
 		long orderCount = orderRepository.count();
@@ -201,7 +204,7 @@ class OrderServiceDeadlockMysqlTest {
 			int index = sequence.getAndIncrement();
 			List<Long> productIds = orders.get(index % orders.size());
 			OrderCreateCommand command = createRequest(member.getId(), productIds);
-			orderService.createOrderWithPessimisticLockBatch(command);
+			orderConcurrencyService.createOrderWithPessimisticLockBatch(command);
 		}, errors);
 
 		// then
@@ -227,7 +230,7 @@ class OrderServiceDeadlockMysqlTest {
 		OrderCreateCommand cancelRequest = createRequest(
 			member.getId(), List.of(product2.getId(), product1.getId())
 		);
-		OrderCreateResult created = orderService.createOrderWithPessimisticLockOrdered(cancelRequest);
+		OrderCreateResult created = orderConcurrencyService.createOrderWithPessimisticLockOrdered(cancelRequest);
 
 		OrderCreateCommand createRequest = createRequest(
 			member.getId(), List.of(product1.getId(), product2.getId())
@@ -239,9 +242,9 @@ class OrderServiceDeadlockMysqlTest {
 		runConcurrent(2, () -> {
 			int index = sequence.getAndIncrement();
 			if (index == 0) {
-				orderService.cancelOrder(member.getId(), created.getOrderId());
+				orderCancelService.cancelOrder(member.getId(), created.getOrderId());
 			} else {
-				orderService.createOrderWithPessimisticLockOrdered(createRequest);
+				orderConcurrencyService.createOrderWithPessimisticLockOrdered(createRequest);
 			}
 		}, errors);
 

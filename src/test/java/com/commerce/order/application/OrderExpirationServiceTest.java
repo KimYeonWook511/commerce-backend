@@ -1,4 +1,4 @@
-package com.commerce.order.service;
+package com.commerce.order.application;
 
 import static org.assertj.core.api.Assertions.assertThat;
 import static org.assertj.core.api.Assertions.assertThatThrownBy;
@@ -6,6 +6,7 @@ import static org.mockito.BDDMockito.given;
 import static org.mockito.BDDMockito.then;
 import static org.mockito.Mockito.never;
 
+import java.time.LocalDateTime;
 import java.util.Optional;
 
 import org.junit.jupiter.api.DisplayName;
@@ -21,34 +22,35 @@ import com.commerce.order.domain.Order;
 import com.commerce.order.domain.OrderStatus;
 import com.commerce.order.exception.OrderErrorCode;
 import com.commerce.order.exception.OrderException;
-import com.commerce.order.repository.OrderRepository;
+import com.commerce.order.infrastructure.JpaOrderRepository;
 import com.commerce.outbox.service.OutboxService;
 import com.commerce.outbox.stock.service.command.StockRestoreOutboxCreateCommand;
 import com.commerce.product.domain.Product;
 import com.commerce.product.domain.ProductStatus;
 
 @ExtendWith(MockitoExtension.class)
-class OrderServiceExpirationTest {
+class OrderExpirationServiceTest {
 
 	@Mock
-	private OrderRepository orderRepository;
+	private JpaOrderRepository orderRepository;
 
 	@Mock
 	private OutboxService stockRestoreOutboxService;
 
 	@InjectMocks
-	private OrderService orderService;
+	private OrderExpirationService orderExpirationService;
 
 	@DisplayName("만료 주문을 취소하고 재고 복구 outbox 이벤트를 저장한다")
 	@Test
 	void expireOrder_whenExpired_cancelOrderAndSaveOutbox() {
 		// given
 		Order order = createOrderWithItem();
+		LocalDateTime requestedAt = LocalDateTime.of(2026, 5, 6, 10, 0);
 
 		given(orderRepository.findByIdWithItems(order.getId())).willReturn(Optional.of(order));
 
 		// when
-		orderService.expireOrder(order.getId());
+		orderExpirationService.expireOrder(order.getId(), requestedAt);
 
 		// then
 		assertThat(order.getStatus()).isEqualTo(OrderStatus.CANCELED);
@@ -58,6 +60,7 @@ class OrderServiceExpirationTest {
 					&& command.getItems().size() == 1
 					&& command.getItems().getFirst().getProductId().equals(1L)
 					&& command.getItems().getFirst().getQuantity() == 2
+					&& command.getRequestedAt().equals(requestedAt)
 			));
 	}
 
@@ -65,10 +68,11 @@ class OrderServiceExpirationTest {
 	@Test
 	void expireOrder_whenOrderNotFound_throwException() {
 		// given
+		LocalDateTime requestedAt = LocalDateTime.of(2026, 5, 6, 10, 0);
 		given(orderRepository.findByIdWithItems(100L)).willReturn(Optional.empty());
 
 		// when & then
-		assertThatThrownBy(() -> orderService.expireOrder(100L))
+		assertThatThrownBy(() -> orderExpirationService.expireOrder(100L, requestedAt))
 			.isInstanceOf(OrderException.class)
 			.extracting("errorCode")
 			.isEqualTo(OrderErrorCode.ORDER_NOT_FOUND);
@@ -79,12 +83,13 @@ class OrderServiceExpirationTest {
 	void expireOrder_whenOrderAlreadyCanceled_throwException() {
 		// given
 		Order order = createOrderWithItem();
+		LocalDateTime requestedAt = LocalDateTime.of(2026, 5, 6, 10, 0);
 		ReflectionTestUtils.setField(order, "status", OrderStatus.CANCELED);
 
 		given(orderRepository.findByIdWithItems(order.getId())).willReturn(Optional.of(order));
 
 		// when & then
-		assertThatThrownBy(() -> orderService.expireOrder(order.getId()))
+		assertThatThrownBy(() -> orderExpirationService.expireOrder(order.getId(), requestedAt))
 			.isInstanceOf(OrderException.class)
 			.extracting("errorCode")
 			.isEqualTo(OrderErrorCode.ORDER_CANCEL_NOT_ALLOWED);
