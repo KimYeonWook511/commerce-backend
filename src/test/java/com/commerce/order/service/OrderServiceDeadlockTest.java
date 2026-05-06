@@ -34,7 +34,7 @@ import com.commerce.product.domain.ProductStatus;
 import com.commerce.product.repository.ProductRepository;
 import com.commerce.stock.domain.Stock;
 import com.commerce.stock.repository.StockRepository;
-import com.commerce.stock.service.StockService;
+import com.commerce.stock.application.StockInventoryService;
 
 @Tag("concurrency")
 @SpringBootTest
@@ -51,7 +51,7 @@ class OrderServiceDeadlockTest {
 	private OrderService orderService;
 
 	@MockitoSpyBean
-	private StockService stockService;
+	private StockInventoryService stockService;
 
 	@Autowired
 	private MemberRepository memberRepository;
@@ -114,7 +114,7 @@ class OrderServiceDeadlockTest {
 			}
 			callCount.set(count + 1);
 			return result;
-		}).given(stockService).decreaseWithPessimisticLock(anyLong(), anyInt());
+		}).given(stockService).decrease(anyLong(), anyInt());
 
 		// when
 		ConcurrentLinkedQueue<Throwable> errors = new ConcurrentLinkedQueue<>();

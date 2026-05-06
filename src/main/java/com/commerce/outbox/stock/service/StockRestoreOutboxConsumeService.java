@@ -10,7 +10,7 @@ import com.commerce.outbox.domain.ProcessedEvent;
 import com.commerce.outbox.domain.ProcessedEventConsumerType;
 import com.commerce.outbox.repository.ProcessedEventRepository;
 import com.commerce.outbox.stock.service.command.StockRestoreConsumeCommand;
-import com.commerce.stock.service.StockService;
+import com.commerce.stock.application.StockInventoryService;
 
 import lombok.RequiredArgsConstructor;
 import lombok.extern.slf4j.Slf4j;
@@ -23,7 +23,7 @@ public class StockRestoreOutboxConsumeService {
 	private static final ProcessedEventConsumerType CONSUMER_TYPE = ProcessedEventConsumerType.STOCK_RESTORE;
 
 	private final ProcessedEventRepository processedEventRepository;
-	private final StockService stockService;
+	private final StockInventoryService stockInventoryService;
 
 	@Transactional
 	public void consume(StockRestoreConsumeCommand command) {
@@ -50,7 +50,7 @@ public class StockRestoreOutboxConsumeService {
 
 	private void restoreStock(List<StockRestoreConsumeCommand.Item> items) {
 		for (StockRestoreConsumeCommand.Item item : items) {
-			stockService.increaseWithPessimisticLock(item.getProductId(), item.getQuantity());
+			stockInventoryService.increase(item.getProductId(), item.getQuantity());
 		}
 	}
 

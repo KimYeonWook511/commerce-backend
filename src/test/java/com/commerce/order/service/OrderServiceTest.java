@@ -41,8 +41,9 @@ import com.commerce.product.exception.ProductException;
 import com.commerce.product.repository.ProductRepository;
 import com.commerce.stock.exception.StockErrorCode;
 import com.commerce.stock.exception.StockException;
-import com.commerce.stock.service.StockService;
-import com.commerce.stock.service.command.StockDecreaseBatchCommand;
+import com.commerce.stock.application.StockInventoryService;
+import com.commerce.stock.application.StockConcurrencyService;
+import com.commerce.stock.application.command.StockDecreaseBatchCommand;
 
 @ExtendWith(MockitoExtension.class)
 class OrderServiceTest {
@@ -54,7 +55,10 @@ class OrderServiceTest {
 	private ProductRepository productRepository;
 
 	@Mock
-	private StockService stockService;
+	private StockInventoryService stockInventoryService;
+
+	@Mock
+	private StockConcurrencyService stockConcurrencyService;
 
 	@Mock
 	private OrderRepository orderRepository;
@@ -82,8 +86,8 @@ class OrderServiceTest {
 		OrderCreateResult result = orderService.createOrder(command);
 
 		// then
-		then(stockService).should().decreaseWithPessimisticLock(10L, 2);
-		then(stockService).should().decreaseWithPessimisticLock(11L, 1);
+		then(stockInventoryService).should().decrease(10L, 2);
+		then(stockInventoryService).should().decrease(11L, 1);
 
 		ArgumentCaptor<Order> orderCaptor = ArgumentCaptor.forClass(Order.class);
 		then(orderRepository).should().save(orderCaptor.capture());
@@ -110,8 +114,8 @@ class OrderServiceTest {
 		orderService.createOrderWithoutLock(command);
 
 		// then
-		then(stockService).should().decrease(10L, 2);
-		then(stockService).should().decrease(11L, 1);
+		then(stockConcurrencyService).should().decrease(10L, 2);
+		then(stockConcurrencyService).should().decrease(11L, 1);
 	}
 
 	@DisplayName("주문 취소를 요청하면 재고가 복구된다")
@@ -130,7 +134,7 @@ class OrderServiceTest {
 		OrderCancelResult result = orderService.cancelOrder(1L, 100L);
 
 		// then
-		then(stockService).should().increaseWithPessimisticLock(10L, 2);
+		then(stockInventoryService).should().increase(10L, 2);
 		assertThat(result.getOrderId()).isEqualTo(100L);
 		assertThat(result.getStatus()).isEqualTo(OrderStatus.CANCELED);
 	}
@@ -153,9 +157,9 @@ class OrderServiceTest {
 		orderService.cancelOrder(1L, 100L);
 
 		// then
-		InOrder inOrder = org.mockito.Mockito.inOrder(stockService);
-		inOrder.verify(stockService).increaseWithPessimisticLock(2L, 1);
-		inOrder.verify(stockService).increaseWithPessimisticLock(5L, 1);
+		InOrder inOrder = org.mockito.Mockito.inOrder(stockInventoryService);
+		inOrder.verify(stockInventoryService).increase(2L, 1);
+		inOrder.verify(stockInventoryService).increase(5L, 1);
 	}
 
 	@DisplayName("주문 상태가 초기 상태가 아니면 취소에 실패한다")
@@ -245,8 +249,8 @@ class OrderServiceTest {
 		orderService.createOrderWithSynchronized(command);
 
 		// then
-		then(stockService).should().decreaseWithSynchronized(10L, 2);
-		then(stockService).should().decreaseWithSynchronized(11L, 1);
+		then(stockConcurrencyService).should().decreaseWithSynchronized(10L, 2);
+		then(stockConcurrencyService).should().decreaseWithSynchronized(11L, 1);
 	}
 
 	@DisplayName("동기화+트랜잭션 차감 방식을 사용해서 주문을 생성한다")
@@ -263,8 +267,8 @@ class OrderServiceTest {
 		orderService.createOrderWithSynchronizedAndTransaction(command);
 
 		// then
-		then(stockService).should().decreaseWithSynchronizedAndTransaction(10L, 2);
-		then(stockService).should().decreaseWithSynchronizedAndTransaction(11L, 1);
+		then(stockConcurrencyService).should().decreaseWithSynchronizedAndTransaction(10L, 2);
+		then(stockConcurrencyService).should().decreaseWithSynchronizedAndTransaction(11L, 1);
 	}
 
 	@DisplayName("ReentrantLock+트랜잭션 차감 방식을 사용해서 주문을 생성한다")
@@ -281,8 +285,8 @@ class OrderServiceTest {
 		orderService.createOrderWithReentrantLockAndTransaction(command);
 
 		// then
-		then(stockService).should().decreaseWithReentrantLockAndTransaction(10L, 2);
-		then(stockService).should().decreaseWithReentrantLockAndTransaction(11L, 1);
+		then(stockConcurrencyService).should().decreaseWithReentrantLockAndTransaction(10L, 2);
+		then(stockConcurrencyService).should().decreaseWithReentrantLockAndTransaction(11L, 1);
 	}
 
 	@DisplayName("낙관적 락 차감 방식을 사용해서 주문을 생성한다")
@@ -299,8 +303,8 @@ class OrderServiceTest {
 		orderService.createOrderWithOptimisticLock(command);
 
 		// then
-		then(stockService).should().decreaseWithOptimisticLock(10L, 2);
-		then(stockService).should().decreaseWithOptimisticLock(11L, 1);
+		then(stockConcurrencyService).should().decreaseWithOptimisticLock(10L, 2);
+		then(stockConcurrencyService).should().decreaseWithOptimisticLock(11L, 1);
 	}
 
 	@DisplayName("비관적 락 차감 방식을 사용해서 주문을 생성한다")
@@ -317,8 +321,8 @@ class OrderServiceTest {
 		orderService.createOrderWithPessimisticLock(command);
 
 		// then
-		then(stockService).should().decreaseWithPessimisticLock(10L, 2);
-		then(stockService).should().decreaseWithPessimisticLock(11L, 1);
+		then(stockInventoryService).should().decrease(10L, 2);
+		then(stockInventoryService).should().decrease(11L, 1);
 	}
 
 	@DisplayName("비관적 락 차감 방식(정렬)을 사용해서 주문을 생성한다")
@@ -335,8 +339,8 @@ class OrderServiceTest {
 		orderService.createOrderWithPessimisticLockOrdered(command);
 
 		// then
-		then(stockService).should().decreaseWithPessimisticLock(10L, 2);
-		then(stockService).should().decreaseWithPessimisticLock(11L, 1);
+		then(stockInventoryService).should().decrease(10L, 2);
+		then(stockInventoryService).should().decrease(11L, 1);
 	}
 
 	@DisplayName("비관적 락 차감 방식(배치)을 사용해서 주문을 생성한다")
@@ -355,7 +359,7 @@ class OrderServiceTest {
 		// then
 		ArgumentCaptor<StockDecreaseBatchCommand> requestCaptor =
 			ArgumentCaptor.forClass(StockDecreaseBatchCommand.class);
-		then(stockService).should().decreaseBatchWithPessimisticLock(requestCaptor.capture());
+		then(stockInventoryService).should().decreaseBatch(requestCaptor.capture());
 		assertThat(requestCaptor.getValue().getQuantitiesByProductId())
 			.containsEntry(10L, 2)
 			.containsEntry(11L, 1);
@@ -425,8 +429,8 @@ class OrderServiceTest {
 		given(memberRepository.findById(1L)).willReturn(Optional.of(member));
 		given(productRepository.findById(10L)).willReturn(Optional.of(product));
 		willThrow(new StockException(StockErrorCode.STOCK_NOT_FOUND))
-			.given(stockService)
-			.decreaseWithPessimisticLock(10L, 1);
+			.given(stockInventoryService)
+			.decrease(10L, 1);
 
 		// when & then
 		assertThatThrownBy(() -> orderService.createOrder(command))

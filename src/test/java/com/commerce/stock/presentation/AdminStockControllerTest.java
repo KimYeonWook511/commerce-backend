@@ -1,4 +1,4 @@
-package com.commerce.stock.controller;
+package com.commerce.stock.presentation;
 
 import static org.assertj.core.api.Assertions.assertThat;
 import static org.mockito.ArgumentMatchers.any;
@@ -32,11 +32,11 @@ import com.commerce.auth.jwt.JwtTokenValidator;
 import com.commerce.auth.resolver.AuthenticatedMemberIdArgumentResolver;
 import com.commerce.common.config.WebConfig;
 import com.commerce.stock.domain.StockAdjustmentReason;
-import com.commerce.stock.service.StockService;
-import com.commerce.stock.service.command.AdminStockAdjustCommand;
-import com.commerce.stock.service.command.AdminStockCreateCommand;
-import com.commerce.stock.service.result.AdminStockResult;
-import com.commerce.stock.service.result.StockHistoryResult;
+import com.commerce.stock.application.AdminStockService;
+import com.commerce.stock.application.command.AdminStockAdjustCommand;
+import com.commerce.stock.application.command.AdminStockCreateCommand;
+import com.commerce.stock.application.result.AdminStockResult;
+import com.commerce.stock.application.result.StockHistoryResult;
 
 import io.jsonwebtoken.Claims;
 import io.jsonwebtoken.Jwts;
@@ -56,7 +56,7 @@ class AdminStockControllerTest {
 	private MockMvc mockMvc;
 
 	@MockitoBean
-	private StockService stockService;
+	private AdminStockService stockService;
 
 	@MockitoBean
 	private JwtTokenValidator jwtTokenValidator;

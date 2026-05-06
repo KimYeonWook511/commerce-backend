@@ -1,12 +1,10 @@
-package com.commerce.stock.service;
+package com.commerce.stock.application;
 
 import static org.assertj.core.api.Assertions.*;
-import static org.mockito.ArgumentMatchers.argThat;
 import static org.mockito.BDDMockito.*;
 
 import java.time.LocalDateTime;
 import java.util.List;
-import java.util.Map;
 import java.util.Optional;
 
 import org.junit.jupiter.api.DisplayName;
@@ -23,22 +21,20 @@ import com.commerce.product.domain.ProductStatus;
 import com.commerce.product.exception.ProductErrorCode;
 import com.commerce.product.exception.ProductException;
 import com.commerce.product.repository.ProductRepository;
+import com.commerce.stock.application.command.AdminStockAdjustCommand;
+import com.commerce.stock.application.command.AdminStockCreateCommand;
+import com.commerce.stock.application.result.AdminStockResult;
+import com.commerce.stock.application.result.StockHistoryResult;
+import com.commerce.stock.domain.Stock;
 import com.commerce.stock.domain.StockAdjustmentReason;
 import com.commerce.stock.domain.StockHistory;
-import com.commerce.stock.domain.Stock;
+import com.commerce.stock.domain.repository.StockHistoryRepository;
+import com.commerce.stock.domain.repository.StockRepository;
 import com.commerce.stock.exception.StockErrorCode;
 import com.commerce.stock.exception.StockException;
-import com.commerce.stock.repository.StockHistoryRepository;
-import com.commerce.stock.repository.StockRepository;
-import com.commerce.stock.service.command.AdminStockAdjustCommand;
-import com.commerce.stock.service.command.AdminStockCreateCommand;
-import com.commerce.stock.service.command.StockDecreaseBatchCommand;
-import com.commerce.stock.service.result.AdminStockResult;
-import com.commerce.stock.service.result.StockDecreaseBatchResult;
-import com.commerce.stock.service.result.StockHistoryResult;
 
 @ExtendWith(MockitoExtension.class)
-class StockServiceTest {
+class AdminStockServiceTest {
 
 	@Mock
 	private StockRepository stockRepository;
@@ -50,7 +46,7 @@ class StockServiceTest {
 	private ProductRepository productRepository;
 
 	@InjectMocks
-	private StockService stockService;
+	private AdminStockService adminStockService;
 
 	@DisplayName("관리자 초기 재고 생성은 재고와 양수 이력을 저장한다")
 	@Test
@@ -73,7 +69,7 @@ class StockServiceTest {
 		});
 
 		// when
-		AdminStockResult result = stockService.createInitialStock(command);
+		AdminStockResult result = adminStockService.createInitialStock(command);
 
 		// then
 		assertThat(result.getProductId()).isEqualTo(1L);
@@ -103,7 +99,7 @@ class StockServiceTest {
 		given(productRepository.findByIdAndDeletedAtIsNull(1L)).willReturn(Optional.empty());
 
 		// when & then
-		assertThatThrownBy(() -> stockService.createInitialStock(command))
+		assertThatThrownBy(() -> adminStockService.createInitialStock(command))
 			.isInstanceOf(ProductException.class)
 			.satisfies(exception -> {
 				ProductException productException = (ProductException) exception;
@@ -132,7 +128,7 @@ class StockServiceTest {
 		});
 
 		// when
-		AdminStockResult result = stockService.createInitialStock(command);
+		AdminStockResult result = adminStockService.createInitialStock(command);
 
 		// then
 		assertThat(result.getProductId()).isEqualTo(1L);
@@ -165,7 +161,7 @@ class StockServiceTest {
 		given(stockRepository.findByProductId(1L)).willReturn(Optional.of(stock));
 
 		// when & then
-		assertThatThrownBy(() -> stockService.createInitialStock(command))
+		assertThatThrownBy(() -> adminStockService.createInitialStock(command))
 			.isInstanceOf(StockException.class)
 			.satisfies(exception -> {
 				StockException stockException = (StockException) exception;
@@ -190,7 +186,7 @@ class StockServiceTest {
 		given(stockRepository.findByProductIdWithPessimisticLock(1L)).willReturn(Optional.of(stock));
 
 		// when
-		AdminStockResult result = stockService.increaseByAdmin(command);
+		AdminStockResult result = adminStockService.increaseByAdmin(command);
 
 		// then
 		assertThat(stock.getQuantity()).isEqualTo(15);
@@ -219,7 +215,7 @@ class StockServiceTest {
 		given(stockRepository.findByProductIdWithPessimisticLock(1L)).willReturn(Optional.of(stock));
 
 		// when
-		AdminStockResult result = stockService.decreaseByAdmin(command);
+		AdminStockResult result = adminStockService.decreaseByAdmin(command);
 
 		// then
 		assertThat(stock.getQuantity()).isEqualTo(7);
@@ -247,7 +243,7 @@ class StockServiceTest {
 		given(stockRepository.findByProductIdWithPessimisticLock(1L)).willReturn(Optional.of(stock));
 
 		// when & then
-		assertThatThrownBy(() -> stockService.decreaseByAdmin(command))
+		assertThatThrownBy(() -> adminStockService.decreaseByAdmin(command))
 			.isInstanceOf(StockException.class)
 			.satisfies(exception -> {
 				StockException stockException = (StockException) exception;
@@ -273,7 +269,7 @@ class StockServiceTest {
 			.willReturn(List.of(latestHistory, firstHistory));
 
 		// when
-		List<StockHistoryResult> results = stockService.getHistoriesByProductId(1L);
+		List<StockHistoryResult> results = adminStockService.getHistoriesByProductId(1L);
 
 		// then
 		assertThat(results).hasSize(2);
@@ -283,164 +279,6 @@ class StockServiceTest {
 		assertThat(results.get(1).getHistoryId()).isEqualTo(1L);
 		assertThat(results.get(1).getQuantityChange()).isEqualTo(10);
 		assertThat(results.get(1).getCreatedAt()).isEqualTo(LocalDateTime.of(2026, 4, 30, 12, 0));
-	}
-
-	@DisplayName("재고가 존재하면 차감된다")
-	@Test
-	void decrease_whenStockExists_decreaseQuantity() {
-		// given
-		Stock stock = createStock(10);
-		given(stockRepository.findByProductId(1L)).willReturn(Optional.of(stock));
-
-		// when
-		stockService.decrease(1L, 3);
-
-		// then
-		assertThat(stock.getQuantity()).isEqualTo(7);
-	}
-
-	@DisplayName("비관적 락으로 조회한 재고는 차감된다")
-	@Test
-	void decreaseWithPessimisticLock_whenStockExists_decreaseQuantity() {
-		// given
-		Stock stock = createStock(10);
-		given(stockRepository.findByProductIdWithPessimisticLock(1L)).willReturn(Optional.of(stock));
-
-		// when
-		stockService.decreaseWithPessimisticLock(1L, 4);
-
-		// then
-		assertThat(stock.getQuantity()).isEqualTo(6);
-	}
-
-	@DisplayName("비관적 락으로 조회한 재고는 증가한다")
-	@Test
-	void increaseWithPessimisticLock_whenStockExists_increaseQuantity() {
-		// given
-		Stock stock = createStock(5);
-		given(stockRepository.findByProductIdWithPessimisticLock(1L)).willReturn(Optional.of(stock));
-
-		// when
-		stockService.increaseWithPessimisticLock(1L, 3);
-
-		// then
-		assertThat(stock.getQuantity()).isEqualTo(8);
-	}
-
-	@DisplayName("비관적 락으로 여러 재고를 조회하면 모두 차감된다")
-	@Test
-	void decreaseBatchWithPessimisticLock_whenStocksExist_decreaseQuantities() {
-		// given
-		Product product1 = createProduct(1L, "product-1", 1000);
-		Product product2 = createProduct(2L, "product-2", 1200);
-		Stock stock1 = createStock(product1, 10);
-		Stock stock2 = createStock(product2, 9);
-
-		StockDecreaseBatchCommand command = StockDecreaseBatchCommand.from(
-			Map.of(1L, 1, 2L, 1)
-		);
-
-		given(stockRepository.findAllByProductIdInWithPessimisticLock(argThat(ids ->
-			ids.containsAll(List.of(1L, 2L)) && ids.size() == 2
-		)))
-			.willReturn(List.of(stock1, stock2));
-
-		// when
-		stockService.decreaseBatchWithPessimisticLock(command);
-
-		// then
-		assertThat(stock1.getQuantity()).isEqualTo(9);
-		assertThat(stock2.getQuantity()).isEqualTo(8);
-	}
-
-	@DisplayName("비관적 락 배치 요청은 차감 후 요약 정보를 반환한다")
-	@Test
-	void decreaseBatchWithPessimisticLock_whenRequest_returnSummary() {
-		// given
-		Product product1 = createProduct(1L, "product-1", 1000);
-		Product product2 = createProduct(2L, "product-2", 1200);
-		Stock stock1 = createStock(product1, 10);
-		Stock stock2 = createStock(product2, 9);
-
-		StockDecreaseBatchCommand command = StockDecreaseBatchCommand.builder()
-			.quantitiesByProductId(Map.of(1L, 2, 2L, 1))
-			.build();
-
-		given(stockRepository.findAllByProductIdInWithPessimisticLock(argThat(ids ->
-			ids.containsAll(List.of(1L, 2L)) && ids.size() == 2
-		)))
-			.willReturn(List.of(stock1, stock2));
-
-		// when
-		StockDecreaseBatchResult result = stockService.decreaseBatchWithPessimisticLock(command);
-
-		// then
-		assertThat(stock1.getQuantity()).isEqualTo(8);
-		assertThat(stock2.getQuantity()).isEqualTo(8);
-		assertThat(result.getItemCount()).isEqualTo(2);
-		assertThat(result.getTotalQuantity()).isEqualTo(3);
-	}
-
-	@DisplayName("비관적 락 조회 결과가 부족하면 예외가 발생한다")
-	@Test
-	void decreaseBatchWithPessimisticLock_whenStockMissing_throwException() {
-		// given
-		Product product1 = createProduct(1L, "product-1", 1000);
-		Stock stock1 = createStock(product1, 10);
-
-		StockDecreaseBatchCommand command = StockDecreaseBatchCommand.from(
-			Map.of(1L, 1, 2L, 1)
-		);
-
-		given(stockRepository.findAllByProductIdInWithPessimisticLock(argThat(ids ->
-			ids.containsAll(List.of(1L, 2L)) && ids.size() == 2
-		)))
-			.willReturn(List.of(stock1));
-
-		// when & then
-		assertThatThrownBy(() -> stockService.decreaseBatchWithPessimisticLock(command))
-			.isInstanceOf(StockException.class)
-			.satisfies(exception -> {
-				StockException stockException = (StockException) exception;
-				assertThat(stockException.getErrorCode()).isEqualTo(StockErrorCode.STOCK_NOT_FOUND);
-			});
-	}
-
-	@DisplayName("재고가 없으면 예외가 발생한다")
-	@Test
-	void decrease_whenStockNotFound_throwException() {
-		// given
-		given(stockRepository.findByProductId(1L)).willReturn(Optional.empty());
-
-		// when & then
-		assertThatThrownBy(() -> stockService.decrease(1L, 1))
-			.isInstanceOf(StockException.class)
-			.satisfies(exception -> {
-				StockException stockException = (StockException) exception;
-				assertThat(stockException.getErrorCode()).isEqualTo(StockErrorCode.STOCK_NOT_FOUND);
-			});
-	}
-
-	@DisplayName("재고가 부족하면 예외가 발생한다")
-	@Test
-	void decrease_whenOutOfStock_throwException() {
-		// given
-		Stock stock = createStock(1);
-		given(stockRepository.findByProductId(1L)).willReturn(Optional.of(stock));
-
-		// when & then
-		assertThatThrownBy(() -> stockService.decrease(1L, 2))
-			.isInstanceOf(StockException.class)
-			.satisfies(exception -> {
-				StockException stockException = (StockException) exception;
-				assertThat(stockException.getErrorCode()).isEqualTo(StockErrorCode.OUT_OF_STOCK);
-			});
-	}
-
-	private Stock createStock(int quantity) {
-		return Stock.builder()
-			.quantity(quantity)
-			.build();
 	}
 
 	private Stock createStock(Product product, int quantity) {
