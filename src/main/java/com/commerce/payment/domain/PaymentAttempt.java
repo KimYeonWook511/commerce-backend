@@ -103,14 +103,14 @@ public class PaymentAttempt extends BaseTimeEntity {
 			.build();
 	}
 
-	public void approveSucceed(LocalDateTime respondedAt) {
+	public void markApproveSucceeded(LocalDateTime respondedAt) {
 		this.status = PaymentAttemptStatus.SUCCEEDED;
 		this.failCode = null;
 		this.failDetail = null;
 		this.respondedAt = respondedAt;
 	}
 
-	public void approveFail(PaymentAttemptFailCode failCode, String failDetail, LocalDateTime respondedAt) {
+	public void markApproveFailed(PaymentAttemptFailCode failCode, String failDetail, LocalDateTime respondedAt) {
 		this.status = PaymentAttemptStatus.FAILED;
 		this.failCode = failCode;
 		this.failDetail = failDetail;
@@ -133,14 +133,14 @@ public class PaymentAttempt extends BaseTimeEntity {
 			.build();
 	}
 
-	public void cancelSucceed(LocalDateTime respondedAt) {
+	public void markCancelSucceeded(LocalDateTime respondedAt) {
 		this.status = PaymentAttemptStatus.SUCCEEDED;
 		this.failCode = null;
 		this.failDetail = null;
 		this.respondedAt = respondedAt;
 	}
 
-	public void failCancel(PaymentAttemptFailCode failCode, String failDetail, LocalDateTime respondedAt) {
+	public void markCancelFailed(PaymentAttemptFailCode failCode, String failDetail, LocalDateTime respondedAt) {
 		this.status = PaymentAttemptStatus.FAILED;
 		this.failCode = failCode;
 		this.failDetail = failDetail;

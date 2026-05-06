@@ -1,21 +1,22 @@
-package com.commerce.payment.service;
+package com.commerce.payment.application;
 
 import java.time.LocalDateTime;
 
 import org.springframework.dao.DataIntegrityViolationException;
+import org.springframework.stereotype.Service;
 import org.springframework.transaction.annotation.Propagation;
 import org.springframework.transaction.annotation.Transactional;
 
 import com.commerce.payment.domain.PaymentAttempt;
 import com.commerce.payment.domain.PaymentAttemptFailCode;
-import com.commerce.payment.domain.PaymentAttemptType;
 import com.commerce.payment.domain.PaymentProvider;
+import com.commerce.payment.domain.repository.PaymentAttemptRepository;
 import com.commerce.payment.exception.PaymentErrorCode;
 import com.commerce.payment.exception.PaymentException;
-import com.commerce.payment.repository.PaymentAttemptRepository;
 
 import lombok.RequiredArgsConstructor;
 
+@Service
 @RequiredArgsConstructor
 @Transactional(readOnly = true)
 public class PaymentAttemptService {
@@ -37,8 +38,7 @@ public class PaymentAttemptService {
 				PaymentAttempt.createApproveRequested(merchantPayKey, paymentId, amount, provider)
 			);
 		} catch (DataIntegrityViolationException ex) {
-			return paymentAttemptRepository.findByMerchantPayKeyAndProviderAndPaymentIdAndType(
-					merchantPayKey, provider, paymentId, PaymentAttemptType.APPROVE)
+			return paymentAttemptRepository.findApproveAttempt(merchantPayKey, provider, paymentId)
 				.orElseThrow(() -> ex);
 		}
 	}
@@ -58,8 +58,7 @@ public class PaymentAttemptService {
 				PaymentAttempt.createCancelRequested(merchantPayKey, paymentId, cancelAmount, provider)
 			);
 		} catch (DataIntegrityViolationException ex) {
-			return paymentAttemptRepository.findByMerchantPayKeyAndProviderAndPaymentIdAndType(
-					merchantPayKey, provider, paymentId, PaymentAttemptType.CANCEL)
+			return paymentAttemptRepository.findCancelAttempt(merchantPayKey, provider, paymentId)
 				.orElseThrow(() -> ex);
 		}
 	}
@@ -71,8 +70,7 @@ public class PaymentAttemptService {
 		String pgPaymentId,
 		LocalDateTime respondedAt
 	) {
-		PaymentAttempt attempt = paymentAttemptRepository.findByMerchantPayKeyAndProviderAndPaymentIdAndType(
-				merchantPayKey, provider, pgPaymentId, PaymentAttemptType.APPROVE)
+		PaymentAttempt attempt = paymentAttemptRepository.findApproveAttempt(merchantPayKey, provider, pgPaymentId)
 			.orElseThrow(() -> new PaymentException(PaymentErrorCode.PAYMENT_ATTEMPT_NOT_FOUND));
 		attempt.markApproveSucceeded(respondedAt);
 	}
@@ -86,8 +84,7 @@ public class PaymentAttemptService {
 		String failDetail,
 		LocalDateTime respondedAt
 	) {
-		PaymentAttempt attempt = paymentAttemptRepository.findByMerchantPayKeyAndProviderAndPaymentIdAndType(
-				merchantPayKey, provider, pgPaymentId, PaymentAttemptType.APPROVE)
+		PaymentAttempt attempt = paymentAttemptRepository.findApproveAttempt(merchantPayKey, provider, pgPaymentId)
 			.orElseThrow(() -> new PaymentException(PaymentErrorCode.PAYMENT_ATTEMPT_NOT_FOUND));
 		attempt.markApproveFailed(failCode, failDetail, respondedAt);
 	}
@@ -99,8 +96,7 @@ public class PaymentAttemptService {
 		String paymentId,
 		LocalDateTime respondedAt
 	) {
-		PaymentAttempt attempt = paymentAttemptRepository.findByMerchantPayKeyAndProviderAndPaymentIdAndType(
-				merchantPayKey, provider, paymentId, PaymentAttemptType.CANCEL)
+		PaymentAttempt attempt = paymentAttemptRepository.findCancelAttempt(merchantPayKey, provider, paymentId)
 			.orElseThrow(() -> new PaymentException(PaymentErrorCode.PAYMENT_ATTEMPT_NOT_FOUND));
 		attempt.markCancelSucceeded(respondedAt);
 	}
@@ -114,8 +110,7 @@ public class PaymentAttemptService {
 		String failDetail,
 		LocalDateTime respondedAt
 	) {
-		PaymentAttempt attempt = paymentAttemptRepository.findByMerchantPayKeyAndProviderAndPaymentIdAndType(
-				merchantPayKey, provider, paymentId, PaymentAttemptType.CANCEL)
+		PaymentAttempt attempt = paymentAttemptRepository.findCancelAttempt(merchantPayKey, provider, paymentId)
 			.orElseThrow(() -> new PaymentException(PaymentErrorCode.PAYMENT_ATTEMPT_NOT_FOUND));
 		attempt.markCancelFailed(failCode, failDetail, respondedAt);
 	}
