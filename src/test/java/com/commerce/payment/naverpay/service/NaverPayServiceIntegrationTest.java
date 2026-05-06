@@ -18,6 +18,7 @@ import org.junit.jupiter.api.Test;
 import org.mockito.Mockito;
 import org.springframework.beans.factory.annotation.Autowired;
 import org.springframework.boot.test.context.SpringBootTest;
+import org.springframework.context.annotation.Import;
 import org.springframework.test.context.ActiveProfiles;
 import org.springframework.test.context.bean.override.mockito.MockitoBean;
 import org.springframework.test.context.bean.override.mockito.MockitoSpyBean;
@@ -48,16 +49,16 @@ import com.commerce.payment.naverpay.exception.NaverPayErrorCode;
 import com.commerce.payment.naverpay.exception.NaverPayException;
 import com.commerce.payment.naverpay.service.result.NaverPayApproveResult;
 import com.commerce.payment.naverpay.service.result.NaverPayApproveStatus;
-import com.commerce.payment.repository.PaymentAttemptRepository;
-import com.commerce.payment.repository.PaymentRepository;
-import com.commerce.payment.service.PaymentAttemptService;
-import com.commerce.payment.service.PaymentService;
+import com.commerce.payment.application.PaymentAttemptService;
+import com.commerce.payment.application.PaymentApprovalService;
+import com.commerce.payment.integration.support.PaymentPersistenceTestSupport;
 import com.commerce.product.domain.Product;
 import com.commerce.product.domain.ProductStatus;
 import com.commerce.product.infrastructure.JpaProductRepository;
 
 @SpringBootTest
 @ActiveProfiles("test")
+@Import(PaymentPersistenceTestSupport.class)
 class NaverPayServiceIntegrationTest {
 
 	@Autowired
@@ -76,25 +77,21 @@ class NaverPayServiceIntegrationTest {
 	private OrderItemRepository orderItemRepository;
 
 	@Autowired
-	private PaymentRepository paymentRepository;
-
-	@Autowired
-	private PaymentAttemptRepository paymentAttemptRepository;
+	private PaymentPersistenceTestSupport paymentPersistence;
 
 	@MockitoBean
 	private NaverPayClient naverPayClient;
 
 	@MockitoSpyBean
-	private PaymentService paymentService;
+	private PaymentApprovalService paymentApprovalService;
 
 	@MockitoSpyBean
 	private PaymentAttemptService paymentAttemptService;
 
 	@AfterEach
 	void tearDown() {
-		Mockito.reset(naverPayClient, paymentService, paymentAttemptService);
-		paymentAttemptRepository.deleteAllInBatch();
-		paymentRepository.deleteAllInBatch();
+		Mockito.reset(naverPayClient, paymentApprovalService, paymentAttemptService);
+		paymentPersistence.deleteAllInBatch();
 		orderItemRepository.deleteAllInBatch();
 		orderRepository.deleteAllInBatch();
 		productRepository.deleteAllInBatch();
@@ -121,7 +118,7 @@ class NaverPayServiceIntegrationTest {
 		// then
 		assertThat(result.getStatus()).isEqualTo(NaverPayApproveStatus.SUCCESS);
 		assertThat(result.getPgPaymentId()).isEqualTo("pg-int-1");
-		assertThat(paymentRepository.findByMerchantPayKey("PAY-INT-1")).isPresent();
+		assertThat(paymentPersistence.findPaymentByMerchantPayKey("PAY-INT-1")).isPresent();
 		assertThat(orderRepository.findByMerchantPayKey("PAY-INT-1").orElseThrow().getStatus()).isEqualTo(OrderStatus.PAID);
 		assertThat(getAttempt("PAY-INT-1", "pg-int-1", PaymentAttemptType.APPROVE).getStatus())
 			.isEqualTo(PaymentAttemptStatus.SUCCEEDED);
@@ -146,7 +143,7 @@ class NaverPayServiceIntegrationTest {
 
 		// then
 		assertThat(result.getStatus()).isEqualTo(NaverPayApproveStatus.PROCESSING);
-		assertThat(paymentRepository.findByMerchantPayKey("PAY-INT-2-1")).isEmpty();
+		assertThat(paymentPersistence.findPaymentByMerchantPayKey("PAY-INT-2-1")).isEmpty();
 		assertThat(getAttempt("PAY-INT-2-1", "pg-int-2-1", PaymentAttemptType.APPROVE).getStatus())
 			.isEqualTo(PaymentAttemptStatus.REQUESTED);
 	}
@@ -167,7 +164,7 @@ class NaverPayServiceIntegrationTest {
 
 		// then
 		assertThat(result.getStatus()).isEqualTo(NaverPayApproveStatus.SUCCESS);
-		assertThat(paymentRepository.findByMerchantPayKey("PAY-INT-2-2")).isPresent();
+		assertThat(paymentPersistence.findPaymentByMerchantPayKey("PAY-INT-2-2")).isPresent();
 		then(naverPayClient).should().getAllHistory("pg-int-2-2");
 	}
 
@@ -395,7 +392,7 @@ class NaverPayServiceIntegrationTest {
 		// given
 		Member member = createMember();
 		Order order = createOrder(member, "PAY-INT-6-1", 1000);
-		paymentRepository.saveAndFlush(
+		paymentPersistence.savePayment(
 			Payment.createCompleted(order, PaymentProvider.NAVERPAY, "PAY-INT-6-1", "pg-existing", LocalDateTime.now())
 		);
 
@@ -408,7 +405,7 @@ class NaverPayServiceIntegrationTest {
 		then(naverPayClient).should(never()).approve(any());
 	}
 
-	@DisplayName("completeApprove에서 PAYMENT_DUPLICATE가 발생하면 현재 승인건 취소를 요청한다")
+	@DisplayName("completeApprovedPayment에서 PAYMENT_DUPLICATE가 발생하면 현재 승인건 취소를 요청한다")
 	@Test
 	void approve_whenCompleteApproveThrowsDuplicate_cancelApprovedPayment() {
 		// given
@@ -419,8 +416,8 @@ class NaverPayServiceIntegrationTest {
 		given(naverPayClient.cancel(any()))
 			.willReturn(buildCancelResponse("Success", "pg-int-6-2"));
 		Mockito.doThrow(new PaymentException(PaymentErrorCode.PAYMENT_DUPLICATE))
-			.when(paymentService)
-			.completeApprove(eq("PAY-INT-6-2"), eq(PaymentProvider.NAVERPAY), eq("pg-int-6-2"), any(LocalDateTime.class));
+			.when(paymentApprovalService)
+			.completeApprovedPayment(eq("PAY-INT-6-2"), eq(PaymentProvider.NAVERPAY), eq("pg-int-6-2"), any(LocalDateTime.class));
 
 		// when & then
 		assertThatThrownBy(() -> naverPayService.approve(member.getId(), "PAY-INT-6-2", "pg-int-6-2"))
@@ -435,7 +432,7 @@ class NaverPayServiceIntegrationTest {
 			.isEqualTo(PaymentAttemptStatus.SUCCEEDED);
 	}
 
-	@DisplayName("이미 취소 완료된 시도가 있으면 completeApprove 중복 예외에서도 취소를 다시 요청하지 않는다")
+	@DisplayName("이미 취소 완료된 시도가 있으면 completeApprovedPayment 중복 예외에서도 취소를 다시 요청하지 않는다")
 	@Test
 	void approve_whenCompleteApproveThrowsDuplicateAndCancelAlreadySucceeded_skipCancelRequest() {
 		// given
@@ -444,14 +441,14 @@ class NaverPayServiceIntegrationTest {
 		PaymentAttempt cancelAttempt = PaymentAttempt.createCancelRequested(
 			"PAY-INT-6-3", "pg-int-6-3", 1000, PaymentProvider.NAVERPAY
 		);
-		cancelAttempt.cancelSucceed(LocalDateTime.now());
-		paymentAttemptRepository.saveAndFlush(cancelAttempt);
+		cancelAttempt.markCancelSucceeded(LocalDateTime.now());
+		paymentPersistence.saveAttempt(cancelAttempt);
 
 		given(naverPayClient.approve("pg-int-6-3"))
 			.willReturn(buildApprovalResponse("PAY-INT-6-3", 1000, "Success", "SUCCESS", "pg-int-6-3"));
 		Mockito.doThrow(new PaymentException(PaymentErrorCode.PAYMENT_DUPLICATE))
-			.when(paymentService)
-			.completeApprove(eq("PAY-INT-6-3"), eq(PaymentProvider.NAVERPAY), eq("pg-int-6-3"), any(LocalDateTime.class));
+			.when(paymentApprovalService)
+			.completeApprovedPayment(eq("PAY-INT-6-3"), eq(PaymentProvider.NAVERPAY), eq("pg-int-6-3"), any(LocalDateTime.class));
 
 		// when & then
 		assertThatThrownBy(() -> naverPayService.approve(member.getId(), "PAY-INT-6-3", "pg-int-6-3"))
@@ -463,7 +460,7 @@ class NaverPayServiceIntegrationTest {
 		then(naverPayClient).should(never()).cancel(any());
 	}
 
-	@DisplayName("completeApprove에서 PAYMENT_DUPLICATE가 발생하고 취소가 실패하면 cancel attempt를 FAILED로 저장한다")
+	@DisplayName("completeApprovedPayment에서 PAYMENT_DUPLICATE가 발생하고 취소가 실패하면 cancel attempt를 FAILED로 저장한다")
 	@Test
 	void approve_whenCompleteApproveThrowsDuplicateAndCancelFail_markCancelFailed() {
 		// given
@@ -474,8 +471,8 @@ class NaverPayServiceIntegrationTest {
 		given(naverPayClient.cancel(any()))
 			.willReturn(buildCancelResponse("Fail", "pg-int-6-4"));
 		Mockito.doThrow(new PaymentException(PaymentErrorCode.PAYMENT_DUPLICATE))
-			.when(paymentService)
-			.completeApprove(eq("PAY-INT-6-4"), eq(PaymentProvider.NAVERPAY), eq("pg-int-6-4"), any(LocalDateTime.class));
+			.when(paymentApprovalService)
+			.completeApprovedPayment(eq("PAY-INT-6-4"), eq(PaymentProvider.NAVERPAY), eq("pg-int-6-4"), any(LocalDateTime.class));
 
 		// when & then
 		assertThatThrownBy(() -> naverPayService.approve(member.getId(), "PAY-INT-6-4", "pg-int-6-4"))
@@ -490,13 +487,13 @@ class NaverPayServiceIntegrationTest {
 			.isEqualTo(PaymentAttemptStatus.FAILED);
 	}
 
-	@DisplayName("이미 취소 진행 중인 시도가 있으면 completeApprove 중복 예외에서도 cancel attempt를 REQUESTED로 유지한다")
+	@DisplayName("이미 취소 진행 중인 시도가 있으면 completeApprovedPayment 중복 예외에서도 cancel attempt를 REQUESTED로 유지한다")
 	@Test
 	void approve_whenCompleteApproveThrowsDuplicateAndCancelAlreadyOnGoing_keepCancelRequested() {
 		// given
 		Member member = createMember();
 		createOrder(member, "PAY-INT-6-5", 1000);
-		paymentAttemptRepository.saveAndFlush(
+		paymentPersistence.saveAttempt(
 			PaymentAttempt.createCancelRequested("PAY-INT-6-5", "pg-int-6-5", 1000, PaymentProvider.NAVERPAY)
 		);
 
@@ -505,8 +502,8 @@ class NaverPayServiceIntegrationTest {
 		given(naverPayClient.cancel(any()))
 			.willReturn(buildCancelResponse("AlreadyOnGoing", "pg-int-6-5"));
 		Mockito.doThrow(new PaymentException(PaymentErrorCode.PAYMENT_DUPLICATE))
-			.when(paymentService)
-			.completeApprove(eq("PAY-INT-6-5"), eq(PaymentProvider.NAVERPAY), eq("pg-int-6-5"), any(LocalDateTime.class));
+			.when(paymentApprovalService)
+			.completeApprovedPayment(eq("PAY-INT-6-5"), eq(PaymentProvider.NAVERPAY), eq("pg-int-6-5"), any(LocalDateTime.class));
 
 		// when & then
 		assertThatThrownBy(() -> naverPayService.approve(member.getId(), "PAY-INT-6-5", "pg-int-6-5"))
@@ -532,8 +529,8 @@ class NaverPayServiceIntegrationTest {
 		PaymentAttempt attempt = PaymentAttempt.createApproveRequested(
 			"PAY-INT-7-1", "pg-int-7-1", 1000, PaymentProvider.NAVERPAY
 		);
-		attempt.approveFail(PaymentAttemptFailCode.TIME_EXPIRED, "expired", LocalDateTime.now());
-		paymentAttemptRepository.saveAndFlush(attempt);
+		attempt.markApproveFailed(PaymentAttemptFailCode.TIME_EXPIRED, "expired", LocalDateTime.now());
+		paymentPersistence.saveAttempt(attempt);
 
 		// when & then
 		assertThatThrownBy(() -> naverPayService.approve(member.getId(), "PAY-INT-7-1", "pg-int-7-1"))
@@ -627,7 +624,7 @@ class NaverPayServiceIntegrationTest {
 	 * 9. DB/서버 장애
 	 * ===================================================
 	 */
-	@DisplayName("completeApprove 중 주문 상태 예외가 발생하면 승인 취소를 요청한다")
+	@DisplayName("completeApprovedPayment 중 주문 상태 예외가 발생하면 승인 취소를 요청한다")
 	@Test
 	void approve_whenOrderAlreadyPaid_cancelApprovedPaymentAndThrowException() {
 		// given
@@ -650,7 +647,7 @@ class NaverPayServiceIntegrationTest {
 			.isEqualTo(PaymentAttemptStatus.SUCCEEDED);
 	}
 
-	@DisplayName("completeApprove에서 예상치 못한 예외가 발생하면 승인 취소를 요청하고 예외를 그대로 던진다")
+	@DisplayName("completeApprovedPayment에서 예상치 못한 예외가 발생하면 승인 취소를 요청하고 예외를 그대로 던진다")
 	@Test
 	void approve_whenCompleteApproveThrowsUnexpectedException_cancelApprovedPaymentAndThrowException() {
 		// given
@@ -661,8 +658,8 @@ class NaverPayServiceIntegrationTest {
 		given(naverPayClient.cancel(any()))
 			.willReturn(buildCancelResponse("Success", "pg-int-9-2"));
 		Mockito.doThrow(new RuntimeException("db write failed"))
-			.when(paymentService)
-			.completeApprove(eq("PAY-INT-9-2"), eq(PaymentProvider.NAVERPAY), eq("pg-int-9-2"), any(LocalDateTime.class));
+			.when(paymentApprovalService)
+			.completeApprovedPayment(eq("PAY-INT-9-2"), eq(PaymentProvider.NAVERPAY), eq("pg-int-9-2"), any(LocalDateTime.class));
 
 		// when & then
 		assertThatThrownBy(() -> naverPayService.approve(member.getId(), "PAY-INT-9-2", "pg-int-9-2"))
@@ -761,7 +758,7 @@ class NaverPayServiceIntegrationTest {
 			.isInstanceOf(PaymentException.class)
 			.satisfies(exception -> assertThat(((PaymentException)exception).getErrorCode())
 				.isEqualTo(PaymentErrorCode.PAYMENT_MERCHANT_KEY_MISMATCH));
-		assertThat(paymentRepository.findByMerchantPayKey("PAY-INT-10-2")).isEmpty();
+		assertThat(paymentPersistence.findPaymentByMerchantPayKey("PAY-INT-10-2")).isEmpty();
 		assertThat(getAttempt("PAY-INT-10-2", "pg-foreign-10-2", PaymentAttemptType.APPROVE).getStatus())
 			.isEqualTo(PaymentAttemptStatus.FAILED);
 		assertCancelAttemptEmpty("PAY-INT-10-2", "pg-foreign-10-2");
@@ -784,7 +781,7 @@ class NaverPayServiceIntegrationTest {
 			.isInstanceOf(PaymentException.class)
 			.satisfies(exception -> assertThat(((PaymentException)exception).getErrorCode())
 				.isEqualTo(PaymentErrorCode.PAYMENT_NOT_FOUND));
-		assertThat(paymentRepository.findByMerchantPayKey("PAY-INT-10-3")).isEmpty();
+		assertThat(paymentPersistence.findPaymentByMerchantPayKey("PAY-INT-10-3")).isEmpty();
 		assertThat(getAttempt("PAY-INT-10-3", "pg-foreign-10-3", PaymentAttemptType.APPROVE).getStatus())
 			.isEqualTo(PaymentAttemptStatus.FAILED);
 		assertCancelAttemptEmpty("PAY-INT-10-3", "pg-foreign-10-3");
@@ -812,8 +809,8 @@ class NaverPayServiceIntegrationTest {
 		PaymentAttempt attempt = PaymentAttempt.createApproveRequested(
 			"PAY-INT-12-1", "pg-int-12-1", 1000, PaymentProvider.NAVERPAY
 		);
-		attempt.approveSucceed(LocalDateTime.now());
-		paymentAttemptRepository.saveAndFlush(attempt);
+		attempt.markApproveSucceeded(LocalDateTime.now());
+		paymentPersistence.saveAttempt(attempt);
 		given(naverPayClient.getAllHistory("pg-int-12-1"))
 			.willReturn(buildHistoryResponse("PAY-INT-12-1", 1000, "SUCCESS", "01", "pg-int-12-1"));
 
@@ -822,7 +819,7 @@ class NaverPayServiceIntegrationTest {
 
 		// then
 		assertThat(result.getStatus()).isEqualTo(NaverPayApproveStatus.SUCCESS);
-		assertThat(paymentRepository.findByMerchantPayKey("PAY-INT-12-1")).isPresent();
+		assertThat(paymentPersistence.findPaymentByMerchantPayKey("PAY-INT-12-1")).isPresent();
 		then(naverPayClient).should(never()).approve(any());
 		then(naverPayClient).should().getAllHistory("pg-int-12-1");
 	}
@@ -854,16 +851,16 @@ class NaverPayServiceIntegrationTest {
 	}
 
 	private PaymentAttempt getAttempt(String merchantPayKey, String paymentId, PaymentAttemptType type) {
-		return paymentAttemptRepository.findByMerchantPayKeyAndProviderAndPaymentIdAndType(
+		return paymentPersistence.getAttempt(
 			merchantPayKey,
 			PaymentProvider.NAVERPAY,
 			paymentId,
 			type
-		).orElseThrow();
+		);
 	}
 
 	private void assertCancelAttemptEmpty(String merchantPayKey, String paymentId) {
-		assertThat(paymentAttemptRepository.findByMerchantPayKeyAndProviderAndPaymentIdAndType(
+		assertThat(paymentPersistence.findAttempt(
 			merchantPayKey, PaymentProvider.NAVERPAY, paymentId, PaymentAttemptType.CANCEL
 		)).isEmpty();
 	}

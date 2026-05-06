@@ -1,4 +1,4 @@
-package com.commerce.payment.service;
+package com.commerce.payment.integration;
 
 import static org.assertj.core.api.Assertions.assertThat;
 import static org.assertj.core.api.Assertions.assertThatThrownBy;
@@ -14,6 +14,7 @@ import org.junit.jupiter.api.Test;
 import org.springframework.beans.factory.annotation.Autowired;
 import org.springframework.boot.test.context.SpringBootTest;
 import org.springframework.dao.DataIntegrityViolationException;
+import org.springframework.context.annotation.Import;
 import org.springframework.test.context.ActiveProfiles;
 import org.springframework.test.context.bean.override.mockito.MockitoSpyBean;
 
@@ -27,20 +28,22 @@ import com.commerce.payment.domain.PaymentAttempt;
 import com.commerce.payment.domain.PaymentAttemptStatus;
 import com.commerce.payment.domain.PaymentAttemptType;
 import com.commerce.payment.domain.PaymentProvider;
+import com.commerce.payment.application.PaymentApprovalService;
+import com.commerce.payment.domain.repository.PaymentRepository;
 import com.commerce.payment.exception.PaymentErrorCode;
 import com.commerce.payment.exception.PaymentException;
-import com.commerce.payment.repository.PaymentAttemptRepository;
-import com.commerce.payment.repository.PaymentRepository;
+import com.commerce.payment.integration.support.PaymentPersistenceTestSupport;
 import com.commerce.product.domain.Product;
 import com.commerce.product.domain.ProductStatus;
 import com.commerce.product.infrastructure.JpaProductRepository;
 
 @SpringBootTest
 @ActiveProfiles("test")
-class PaymentServiceRollbackStateTest {
+@Import(PaymentPersistenceTestSupport.class)
+class PaymentApprovalServiceIntegrationTest {
 
 	@Autowired
-	private PaymentService paymentService;
+	private PaymentApprovalService paymentApprovalService;
 
 	@Autowired
 	private MemberRepository memberRepository;
@@ -58,12 +61,11 @@ class PaymentServiceRollbackStateTest {
 	private PaymentRepository paymentRepository;
 
 	@Autowired
-	private PaymentAttemptRepository paymentAttemptRepository;
+	private PaymentPersistenceTestSupport paymentPersistence;
 
 	@AfterEach
 	void tearDown() {
-		paymentAttemptRepository.deleteAllInBatch();
-		paymentRepository.deleteAllInBatch();
+		paymentPersistence.deleteAllInBatch();
 		orderItemRepository.deleteAllInBatch();
 		orderRepository.deleteAllInBatch();
 		productRepository.deleteAllInBatch();
@@ -72,19 +74,17 @@ class PaymentServiceRollbackStateTest {
 
 	@DisplayName("payment 저장이 실패하면 approve attempt는 REQUESTED로 남고 order는 INIT를 유지한다")
 	@Test
-	void completeApprove_whenPersistingPaymentFails_keepApproveAttemptRequestedAndOrderInit() {
+	void completeApprovedPayment_whenPersistingPaymentFails_keepApproveAttemptRequestedAndOrderInit() {
 		// given
 		Member member = createMember();
 		createOrder(member, "PAY-ROLLBACK-1", 1000);
-		paymentAttemptRepository.saveAndFlush(
-			PaymentAttempt.createApproveRequested("PAY-ROLLBACK-1", "pg-rollback-1", 1000, PaymentProvider.NAVERPAY)
-		);
+		paymentPersistence.saveApproveAttempt("PAY-ROLLBACK-1", "pg-rollback-1", 1000, PaymentProvider.NAVERPAY);
 		doThrow(new DataIntegrityViolationException("duplicate key"))
 			.when(paymentRepository)
-			.saveAndFlush(any());
+			.save(any());
 
 		// when & then
-		assertThatThrownBy(() -> paymentService.completeApprove(
+		assertThatThrownBy(() -> paymentApprovalService.completeApprovedPayment(
 			"PAY-ROLLBACK-1",
 			PaymentProvider.NAVERPAY,
 			"pg-rollback-1",
@@ -94,7 +94,7 @@ class PaymentServiceRollbackStateTest {
 			.satisfies(exception -> assertThat(((PaymentException)exception).getErrorCode())
 				.isEqualTo(PaymentErrorCode.PAYMENT_DUPLICATE));
 
-		assertThat(paymentRepository.findByMerchantPayKey("PAY-ROLLBACK-1")).isEmpty();
+		assertThat(paymentPersistence.findPaymentByMerchantPayKey("PAY-ROLLBACK-1")).isEmpty();
 		assertThat(orderRepository.findByMerchantPayKey("PAY-ROLLBACK-1").orElseThrow().getStatus())
 			.isEqualTo(OrderStatus.INIT);
 		assertThat(getAttempt("PAY-ROLLBACK-1", "pg-rollback-1", PaymentAttemptType.APPROVE).getStatus())
@@ -128,11 +128,11 @@ class PaymentServiceRollbackStateTest {
 	}
 
 	private PaymentAttempt getAttempt(String merchantPayKey, String paymentId, PaymentAttemptType type) {
-		return paymentAttemptRepository.findByMerchantPayKeyAndProviderAndPaymentIdAndType(
+		return paymentPersistence.getAttempt(
 			merchantPayKey,
 			PaymentProvider.NAVERPAY,
 			paymentId,
 			type
-		).orElseThrow();
+		);
 	}
 }

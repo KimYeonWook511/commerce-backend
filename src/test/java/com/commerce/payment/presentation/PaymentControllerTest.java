@@ -1,4 +1,4 @@
-package com.commerce.payment.controller;
+package com.commerce.payment.presentation;
 
 import static org.mockito.ArgumentMatchers.any;
 import static org.mockito.BDDMockito.given;
@@ -22,9 +22,9 @@ import com.commerce.auth.interceptor.AuthorizationInterceptor;
 import com.commerce.auth.jwt.JwtTokenValidator;
 import com.commerce.auth.resolver.AuthenticatedMemberIdArgumentResolver;
 import com.commerce.common.config.WebConfig;
-import com.commerce.payment.service.PaymentService;
-import com.commerce.payment.service.command.PaymentReadyCommand;
-import com.commerce.payment.service.result.PaymentReadyResult;
+import com.commerce.payment.application.PaymentReadyService;
+import com.commerce.payment.application.command.PaymentReadyCommand;
+import com.commerce.payment.application.result.PaymentReadyResult;
 
 import io.jsonwebtoken.Claims;
 import io.jsonwebtoken.Jwts;
@@ -44,7 +44,7 @@ class PaymentControllerTest {
 	private MockMvc mockMvc;
 
 	@MockitoBean
-	private PaymentService paymentService;
+	private PaymentReadyService paymentReadyService;
 
 	@MockitoBean
 	private JwtTokenValidator jwtTokenValidator;
@@ -66,7 +66,7 @@ class PaymentControllerTest {
 			.taxExScopeAmount(0)
 			.returnUrl("https://return-url")
 			.build();
-		given(paymentService.readyPayment(any(PaymentReadyCommand.class)))
+		given(paymentReadyService.readyPayment(any(PaymentReadyCommand.class)))
 			.willReturn(result);
 
 		String requestBody = """

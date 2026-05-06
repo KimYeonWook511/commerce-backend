@@ -25,6 +25,7 @@ import org.junit.jupiter.api.Test;
 import org.mockito.Mockito;
 import org.springframework.beans.factory.annotation.Autowired;
 import org.springframework.boot.test.context.SpringBootTest;
+import org.springframework.context.annotation.Import;
 import org.springframework.test.context.ActiveProfiles;
 import org.springframework.test.context.DynamicPropertyRegistry;
 import org.springframework.test.context.DynamicPropertySource;
@@ -36,8 +37,6 @@ import com.commerce.member.domain.Member;
 import com.commerce.member.repository.MemberRepository;
 import com.commerce.order.domain.Order;
 import com.commerce.order.domain.OrderStatus;
-import com.commerce.order.exception.OrderErrorCode;
-import com.commerce.order.exception.OrderException;
 import com.commerce.order.infrastructure.JpaOrderRepository;
 import com.commerce.orderitem.repository.OrderItemRepository;
 import com.commerce.payment.domain.PaymentAttempt;
@@ -55,9 +54,8 @@ import com.commerce.payment.naverpay.client.response.body.NaverPayHistoryBody;
 import com.commerce.payment.naverpay.service.NaverPayService;
 import com.commerce.payment.naverpay.service.result.NaverPayApproveResult;
 import com.commerce.payment.naverpay.service.result.NaverPayApproveStatus;
-import com.commerce.payment.repository.PaymentAttemptRepository;
-import com.commerce.payment.repository.PaymentRepository;
-import com.commerce.payment.service.PaymentService;
+import com.commerce.payment.application.PaymentApprovalService;
+import com.commerce.payment.integration.support.PaymentPersistenceTestSupport;
 import com.commerce.product.domain.Product;
 import com.commerce.product.domain.ProductStatus;
 import com.commerce.product.infrastructure.JpaProductRepository;
@@ -67,6 +65,7 @@ import com.commerce.test.support.TestcontainersSupport;
 @Tag("docker")
 @SpringBootTest
 @ActiveProfiles("test")
+@Import(PaymentPersistenceTestSupport.class)
 class NaverPayServiceConcurrencyTest {
 
 	@Autowired
@@ -85,16 +84,13 @@ class NaverPayServiceConcurrencyTest {
 	private OrderItemRepository orderItemRepository;
 
 	@Autowired
-	private PaymentRepository paymentRepository;
-
-	@Autowired
-	private PaymentAttemptRepository paymentAttemptRepository;
+	private PaymentPersistenceTestSupport paymentPersistence;
 
 	@MockitoBean
 	private NaverPayClient naverPayClient;
 
 	@MockitoSpyBean
-	private PaymentService paymentService;
+	private PaymentApprovalService paymentApprovalService;
 
 	@DynamicPropertySource
 	static void registerProperties(DynamicPropertyRegistry registry) {
@@ -103,8 +99,7 @@ class NaverPayServiceConcurrencyTest {
 
 	@AfterEach
 	void tearDown() {
-		paymentAttemptRepository.deleteAllInBatch();
-		paymentRepository.deleteAllInBatch();
+		paymentPersistence.deleteAllInBatch();
 		orderItemRepository.deleteAllInBatch();
 		orderRepository.deleteAllInBatch();
 		productRepository.deleteAllInBatch();
@@ -135,23 +130,21 @@ class NaverPayServiceConcurrencyTest {
 
 		// then
 		assertThat(errors).isEmpty();
-		assertThat(paymentRepository.findAll().stream()
-			.filter(payment -> payment.getMerchantPayKey().equals(merchantPayKey))
-			.count()).isEqualTo(1L);
+		assertThat(paymentPersistence.countPaymentsByMerchantPayKey(merchantPayKey)).isEqualTo(1L);
 		assertThat(orderRepository.findByMerchantPayKey(merchantPayKey).orElseThrow().getStatus())
 			.isEqualTo(OrderStatus.PAID);
-		assertThat(paymentAttemptRepository.findByMerchantPayKeyAndProviderAndPaymentIdAndType(
+		assertThat(paymentPersistence.getAttempt(
 			merchantPayKey,
 			PaymentProvider.NAVERPAY,
 			paymentId,
 			PaymentAttemptType.APPROVE
-		).orElseThrow().getStatus()).isEqualTo(PaymentAttemptStatus.SUCCEEDED);
+		).getStatus()).isEqualTo(PaymentAttemptStatus.SUCCEEDED);
 		assertThat(results).isNotEmpty();
 		assertThat(results.stream().map(NaverPayApproveResult::getStatus))
 			.allMatch(status -> status == NaverPayApproveStatus.SUCCESS || status == NaverPayApproveStatus.PROCESSING);
 		assertThat(results.stream().map(NaverPayApproveResult::getStatus))
 			.anyMatch(status -> status == NaverPayApproveStatus.SUCCESS);
-		assertThat(paymentAttemptRepository.findByMerchantPayKeyAndProviderAndPaymentIdAndType(
+		assertThat(paymentPersistence.findAttempt(
 			merchantPayKey,
 			PaymentProvider.NAVERPAY,
 			paymentId,
@@ -186,17 +179,15 @@ class NaverPayServiceConcurrencyTest {
 
 		// then
 		assertThat(errors).isEmpty();
-		assertThat(paymentRepository.findAll().stream()
-			.filter(payment -> payment.getMerchantPayKey().equals(merchantPayKey))
-			.count()).isEqualTo(1L);
+		assertThat(paymentPersistence.countPaymentsByMerchantPayKey(merchantPayKey)).isEqualTo(1L);
 		assertThat(orderRepository.findByMerchantPayKey(merchantPayKey).orElseThrow().getStatus())
 			.isEqualTo(OrderStatus.PAID);
-		assertThat(paymentAttemptRepository.findByMerchantPayKeyAndProviderAndPaymentIdAndType(
+		assertThat(paymentPersistence.getAttempt(
 			merchantPayKey,
 			PaymentProvider.NAVERPAY,
 			paymentId,
 			PaymentAttemptType.APPROVE
-		).orElseThrow().getStatus()).isEqualTo(PaymentAttemptStatus.SUCCEEDED);
+		).getStatus()).isEqualTo(PaymentAttemptStatus.SUCCEEDED);
 		assertThat(results.stream().map(NaverPayApproveResult::getStatus))
 			.allMatch(status -> status == NaverPayApproveStatus.SUCCESS || status == NaverPayApproveStatus.PROCESSING);
 		then(naverPayClient).should(never()).cancel(any());
@@ -226,14 +217,14 @@ class NaverPayServiceConcurrencyTest {
 				assertThat(((PaymentException)error).getErrorCode())
 					.isIn(PaymentErrorCode.PAYMENT_MERCHANT_KEY_MISMATCH, PaymentErrorCode.PAYMENT_NOT_FOUND);
 			});
-		assertThat(paymentRepository.findByMerchantPayKey(merchantPayKey)).isEmpty();
-		assertThat(paymentAttemptRepository.findByMerchantPayKeyAndProviderAndPaymentIdAndType(
+		assertThat(paymentPersistence.findPaymentByMerchantPayKey(merchantPayKey)).isEmpty();
+		assertThat(paymentPersistence.getAttempt(
 			merchantPayKey,
 			PaymentProvider.NAVERPAY,
 			paymentId,
 			PaymentAttemptType.APPROVE
-		).orElseThrow().getStatus()).isEqualTo(PaymentAttemptStatus.FAILED);
-		assertThat(paymentAttemptRepository.findByMerchantPayKeyAndProviderAndPaymentIdAndType(
+		).getStatus()).isEqualTo(PaymentAttemptStatus.FAILED);
+		assertThat(paymentPersistence.findAttempt(
 			merchantPayKey,
 			PaymentProvider.NAVERPAY,
 			paymentId,
@@ -267,19 +258,19 @@ class NaverPayServiceConcurrencyTest {
 				assertThat(error).isInstanceOf(PaymentException.class);
 				assertThat(((PaymentException)error).getErrorCode()).isEqualTo(PaymentErrorCode.PAYMENT_AMOUNT_MISMATCH);
 			});
-		assertThat(paymentRepository.findByMerchantPayKey(merchantPayKey)).isEmpty();
-		assertThat(paymentAttemptRepository.findByMerchantPayKeyAndProviderAndPaymentIdAndType(
+		assertThat(paymentPersistence.findPaymentByMerchantPayKey(merchantPayKey)).isEmpty();
+		assertThat(paymentPersistence.getAttempt(
 			merchantPayKey,
 			PaymentProvider.NAVERPAY,
 			paymentId,
 			PaymentAttemptType.APPROVE
-		).orElseThrow().getFailCode()).isEqualTo(PaymentAttemptFailCode.AMOUNT_MISMATCH);
-		assertThat(paymentAttemptRepository.findByMerchantPayKeyAndProviderAndPaymentIdAndType(
+		).getFailCode()).isEqualTo(PaymentAttemptFailCode.AMOUNT_MISMATCH);
+		assertThat(paymentPersistence.getAttempt(
 			merchantPayKey,
 			PaymentProvider.NAVERPAY,
 			paymentId,
 			PaymentAttemptType.CANCEL
-		).orElseThrow().getStatus()).isEqualTo(PaymentAttemptStatus.REQUESTED);
+		).getStatus()).isEqualTo(PaymentAttemptStatus.REQUESTED);
 	}
 
 	@DisplayName("동시에 복구 요청이 들어와도 SUCCEEDED approve attempt는 history 기반으로 payment 하나만 반영한다")
@@ -293,8 +284,8 @@ class NaverPayServiceConcurrencyTest {
 		PaymentAttempt attempt = PaymentAttempt.createApproveRequested(
 			merchantPayKey, paymentId, 1000, PaymentProvider.NAVERPAY
 		);
-		attempt.approveSucceed(LocalDateTime.now());
-		paymentAttemptRepository.saveAndFlush(attempt);
+		attempt.markApproveSucceeded(LocalDateTime.now());
+		paymentPersistence.saveAttempt(attempt);
 
 		ConcurrentLinkedQueue<NaverPayApproveResult> results = new ConcurrentLinkedQueue<>();
 		ConcurrentLinkedQueue<Throwable> errors = new ConcurrentLinkedQueue<>();
@@ -306,9 +297,7 @@ class NaverPayServiceConcurrencyTest {
 
 		// then
 		assertThat(errors).isEmpty();
-		assertThat(paymentRepository.findAll().stream()
-			.filter(payment -> payment.getMerchantPayKey().equals(merchantPayKey))
-			.count()).isEqualTo(1L);
+		assertThat(paymentPersistence.countPaymentsByMerchantPayKey(merchantPayKey)).isEqualTo(1L);
 		assertThat(orderRepository.findByMerchantPayKey(merchantPayKey).orElseThrow().getStatus())
 			.isEqualTo(OrderStatus.PAID);
 		assertThat(results).isNotEmpty();
@@ -331,8 +320,8 @@ class NaverPayServiceConcurrencyTest {
 		given(naverPayClient.cancel(any()))
 			.willReturn(buildCancelResponse("AlreadyOnGoing", paymentId));
 		Mockito.doThrow(new PaymentException(PaymentErrorCode.PAYMENT_DUPLICATE))
-			.when(paymentService)
-			.completeApprove(eq(merchantPayKey), eq(PaymentProvider.NAVERPAY), eq(paymentId), any(LocalDateTime.class));
+			.when(paymentApprovalService)
+			.completeApprovedPayment(eq(merchantPayKey), eq(PaymentProvider.NAVERPAY), eq(paymentId), any(LocalDateTime.class));
 
 		// when
 		runConcurrent(20, () -> naverPayService.approve(member.getId(), merchantPayKey, paymentId), errors);
@@ -344,16 +333,13 @@ class NaverPayServiceConcurrencyTest {
 				assertThat(error).isInstanceOf(PaymentException.class);
 				assertThat(((PaymentException)error).getErrorCode()).isEqualTo(PaymentErrorCode.PAYMENT_DUPLICATE);
 			});
-		assertThat(paymentAttemptRepository.findAll().stream()
-			.filter(attempt -> attempt.getMerchantPayKey().equals(merchantPayKey))
-			.filter(attempt -> attempt.getType() == PaymentAttemptType.CANCEL)
-			.count()).isEqualTo(1L);
-		assertThat(paymentAttemptRepository.findByMerchantPayKeyAndProviderAndPaymentIdAndType(
+		assertThat(paymentPersistence.countCancelAttempts(merchantPayKey)).isEqualTo(1L);
+		assertThat(paymentPersistence.getAttempt(
 			merchantPayKey,
 			PaymentProvider.NAVERPAY,
 			paymentId,
 			PaymentAttemptType.CANCEL
-			).orElseThrow().getStatus()).isEqualTo(PaymentAttemptStatus.REQUESTED);
+			).getStatus()).isEqualTo(PaymentAttemptStatus.REQUESTED);
 		then(naverPayClient).should(atLeastOnce()).cancel(any());
 	}
 
@@ -388,20 +374,20 @@ class NaverPayServiceConcurrencyTest {
 				assertThat(((PaymentException)error).getErrorCode())
 					.isIn(PaymentErrorCode.PAYMENT_MERCHANT_KEY_MISMATCH, PaymentErrorCode.PAYMENT_NOT_FOUND);
 			});
-		assertThat(paymentRepository.findByMerchantPayKey(merchantPayKey)).isEmpty();
-		assertThat(paymentAttemptRepository.findByMerchantPayKeyAndProviderAndPaymentIdAndType(
+		assertThat(paymentPersistence.findPaymentByMerchantPayKey(merchantPayKey)).isEmpty();
+		assertThat(paymentPersistence.getAttempt(
 			merchantPayKey,
 			PaymentProvider.NAVERPAY,
 			paymentId,
 			PaymentAttemptType.APPROVE
-		).orElseThrow().getStatus()).isEqualTo(PaymentAttemptStatus.FAILED);
-		assertThat(paymentAttemptRepository.findByMerchantPayKeyAndProviderAndPaymentIdAndType(
+		).getStatus()).isEqualTo(PaymentAttemptStatus.FAILED);
+		assertThat(paymentPersistence.getAttempt(
 			merchantPayKey,
 			PaymentProvider.NAVERPAY,
 			paymentId,
 			PaymentAttemptType.APPROVE
-		).orElseThrow().getFailCode()).isEqualTo(PaymentAttemptFailCode.MERCHANT_PAY_KEY_MISMATCH);
-		assertThat(paymentAttemptRepository.findByMerchantPayKeyAndProviderAndPaymentIdAndType(
+		).getFailCode()).isEqualTo(PaymentAttemptFailCode.MERCHANT_PAY_KEY_MISMATCH);
+		assertThat(paymentPersistence.findAttempt(
 			merchantPayKey,
 			PaymentProvider.NAVERPAY,
 			paymentId,
