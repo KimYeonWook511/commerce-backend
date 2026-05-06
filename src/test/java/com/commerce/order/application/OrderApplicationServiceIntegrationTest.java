@@ -1,4 +1,4 @@
-package com.commerce.order.service;
+package com.commerce.order.application;
 
 import static org.assertj.core.api.Assertions.assertThat;
 import static org.assertj.core.api.Assertions.assertThatThrownBy;
@@ -17,10 +17,10 @@ import org.springframework.test.context.DynamicPropertySource;
 
 import com.commerce.member.domain.Member;
 import com.commerce.member.repository.MemberRepository;
-import com.commerce.order.repository.OrderRepository;
-import com.commerce.order.service.command.OrderCreateItem;
-import com.commerce.order.service.command.OrderCreateCommand;
-import com.commerce.order.service.result.OrderCreateResult;
+import com.commerce.order.infrastructure.JpaOrderRepository;
+import com.commerce.order.application.command.OrderCreateItem;
+import com.commerce.order.application.command.OrderCreateCommand;
+import com.commerce.order.application.result.OrderCreateResult;
 import com.commerce.orderitem.repository.OrderItemRepository;
 import com.commerce.product.domain.Product;
 import com.commerce.product.domain.ProductStatus;
@@ -34,10 +34,13 @@ import com.commerce.test.support.TestcontainersSupport;
 @SpringBootTest
 @ActiveProfiles("test")
 @Tag("docker")
-class OrderServiceIntegrationTest {
+class OrderApplicationServiceIntegrationTest {
 
 	@Autowired
-	private OrderService orderService;
+	private OrderCreateService orderCreateService;
+
+	@Autowired
+	private OrderCancelService orderCancelService;
 
 	@Autowired
 	private MemberRepository memberRepository;
@@ -49,7 +52,7 @@ class OrderServiceIntegrationTest {
 	private StockRepository stockRepository;
 
 	@Autowired
-	private OrderRepository orderRepository;
+	private JpaOrderRepository orderRepository;
 
 	@Autowired
 	private OrderItemRepository orderItemRepository;
@@ -106,19 +109,19 @@ class OrderServiceIntegrationTest {
 			.build();
 
 		// when
-		OrderCreateResult created = orderService.createOrder(firstRequest);
+		OrderCreateResult created = orderCreateService.createOrder(firstRequest);
 
 		// then
-		assertThatThrownBy(() -> orderService.createOrder(secondRequest))
+		assertThatThrownBy(() -> orderCreateService.createOrder(secondRequest))
 			.isInstanceOf(StockException.class)
 			.satisfies(exception -> {
 				StockException stockException = (StockException) exception;
 				assertThat(stockException.getErrorCode()).isEqualTo(StockErrorCode.OUT_OF_STOCK);
 			});
 
-		orderService.cancelOrder(member.getId(), created.getOrderId());
+		orderCancelService.cancelOrder(member.getId(), created.getOrderId());
 
-		OrderCreateResult recreated = orderService.createOrder(secondRequest);
+		OrderCreateResult recreated = orderCreateService.createOrder(secondRequest);
 		assertThat(recreated.getOrderId()).isNotNull();
 		assertThat(stockRepository.findByProductId(product.getId()).orElseThrow().getQuantity()).isZero();
 	}

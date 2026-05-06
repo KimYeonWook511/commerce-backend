@@ -1,4 +1,4 @@
-package com.commerce.order.service;
+package com.commerce.order.application;
 
 import static org.assertj.core.api.Assertions.assertThat;
 import static org.assertj.core.api.Assertions.assertThatThrownBy;
@@ -19,13 +19,13 @@ import org.springframework.test.context.DynamicPropertySource;
 
 import com.commerce.member.domain.Member;
 import com.commerce.member.repository.MemberRepository;
-import com.commerce.order.repository.OrderRepository;
+import com.commerce.order.infrastructure.JpaOrderRepository;
 import com.commerce.order.exception.OrderErrorCode;
 import com.commerce.order.exception.OrderException;
 import com.commerce.order.redis.OrderIdempotencyStatus;
-import com.commerce.order.service.command.OrderCreateItem;
-import com.commerce.order.service.command.OrderCreateCommand;
-import com.commerce.order.service.result.OrderCreateResult;
+import com.commerce.order.application.command.OrderCreateItem;
+import com.commerce.order.application.command.OrderCreateCommand;
+import com.commerce.order.application.result.OrderCreateResult;
 import com.commerce.orderitem.repository.OrderItemRepository;
 import com.commerce.product.domain.Product;
 import com.commerce.product.domain.ProductStatus;
@@ -37,10 +37,10 @@ import com.commerce.test.support.TestcontainersSupport;
 @SpringBootTest
 @ActiveProfiles("test")
 @Tag("docker")
-class OrderServiceIdempotencyTest {
+class OrderCreateServiceIdempotencyTest {
 
 	@Autowired
-	private OrderService orderService;
+	private OrderCreateService orderCreateService;
 
 	@Autowired
 	private MemberRepository memberRepository;
@@ -52,7 +52,7 @@ class OrderServiceIdempotencyTest {
 	private StockRepository stockRepository;
 
 	@Autowired
-	private OrderRepository orderRepository;
+	private JpaOrderRepository orderRepository;
 
 	@Autowired
 	private OrderItemRepository orderItemRepository;
@@ -106,8 +106,8 @@ class OrderServiceIdempotencyTest {
 			.build();
 
 		// when
-		OrderCreateResult first = orderService.createOrder(command);
-		OrderCreateResult second = orderService.createOrder(command);
+		OrderCreateResult first = orderCreateService.createOrder(command);
+		OrderCreateResult second = orderCreateService.createOrder(command);
 
 		// then
 		assertThat(first.getOrderId()).isEqualTo(second.getOrderId());
@@ -157,7 +157,7 @@ class OrderServiceIdempotencyTest {
 		);
 
 		// then
-		assertThatThrownBy(() -> orderService.createOrder(command))
+		assertThatThrownBy(() -> orderCreateService.createOrder(command))
 			.isInstanceOf(OrderException.class)
 			.satisfies(exception -> {
 				OrderException orderException = (OrderException) exception;

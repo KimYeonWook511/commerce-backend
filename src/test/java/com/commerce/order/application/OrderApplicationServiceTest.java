@@ -1,4 +1,4 @@
-package com.commerce.order.service;
+package com.commerce.order.application;
 
 import static org.assertj.core.api.Assertions.assertThat;
 import static org.assertj.core.api.Assertions.assertThatThrownBy;
@@ -28,12 +28,12 @@ import com.commerce.order.domain.Order;
 import com.commerce.order.domain.OrderStatus;
 import com.commerce.order.exception.OrderErrorCode;
 import com.commerce.order.exception.OrderException;
-import com.commerce.order.repository.OrderRepository;
+import com.commerce.order.infrastructure.JpaOrderRepository;
 import com.commerce.order.redis.OrderIdempotencyStore;
-import com.commerce.order.service.command.OrderCreateItem;
-import com.commerce.order.service.command.OrderCreateCommand;
-import com.commerce.order.service.result.OrderCancelResult;
-import com.commerce.order.service.result.OrderCreateResult;
+import com.commerce.order.application.command.OrderCreateItem;
+import com.commerce.order.application.command.OrderCreateCommand;
+import com.commerce.order.application.result.OrderCancelResult;
+import com.commerce.order.application.result.OrderCreateResult;
 import com.commerce.product.domain.Product;
 import com.commerce.product.domain.ProductStatus;
 import com.commerce.product.exception.ProductErrorCode;
@@ -46,7 +46,7 @@ import com.commerce.stock.application.StockConcurrencyService;
 import com.commerce.stock.application.command.StockDecreaseBatchCommand;
 
 @ExtendWith(MockitoExtension.class)
-class OrderServiceTest {
+class OrderApplicationServiceTest {
 
 	@Mock
 	private MemberRepository memberRepository;
@@ -61,13 +61,22 @@ class OrderServiceTest {
 	private StockConcurrencyService stockConcurrencyService;
 
 	@Mock
-	private OrderRepository orderRepository;
+	private JpaOrderRepository orderRepository;
 
 	@Mock
 	private OrderIdempotencyStore orderIdempotencyStore;
 
 	@InjectMocks
-	private OrderService orderService;
+	private OrderCreateService orderCreateService;
+
+	@InjectMocks
+	private OrderCancelService orderCancelService;
+
+	@InjectMocks
+	private OrderQueryService orderQueryService;
+
+	@InjectMocks
+	private OrderConcurrencyService orderConcurrencyService;
 
 	private final String idempotencyKey = "idempotency-key";
 
@@ -83,7 +92,7 @@ class OrderServiceTest {
 		stubForIdempotencyReserved();
 
 		// when
-		OrderCreateResult result = orderService.createOrder(command);
+		OrderCreateResult result = orderCreateService.createOrder(command);
 
 		// then
 		then(stockInventoryService).should().decrease(10L, 2);
@@ -111,7 +120,7 @@ class OrderServiceTest {
 		stubForSuccess(member, product1, product2);
 
 		// when
-		orderService.createOrderWithoutLock(command);
+		orderConcurrencyService.createOrderWithoutLock(command);
 
 		// then
 		then(stockConcurrencyService).should().decrease(10L, 2);
@@ -131,7 +140,7 @@ class OrderServiceTest {
 		given(orderRepository.findByIdAndMemberIdWithItems(100L, 1L)).willReturn(Optional.of(order));
 
 		// when
-		OrderCancelResult result = orderService.cancelOrder(1L, 100L);
+		OrderCancelResult result = orderCancelService.cancelOrder(1L, 100L);
 
 		// then
 		then(stockInventoryService).should().increase(10L, 2);
@@ -154,7 +163,7 @@ class OrderServiceTest {
 		given(orderRepository.findByIdAndMemberIdWithItems(100L, 1L)).willReturn(Optional.of(order));
 
 		// when
-		orderService.cancelOrder(1L, 100L);
+		orderCancelService.cancelOrder(1L, 100L);
 
 		// then
 		InOrder inOrder = org.mockito.Mockito.inOrder(stockInventoryService);
@@ -176,7 +185,7 @@ class OrderServiceTest {
 		given(orderRepository.findByIdAndMemberIdWithItems(100L, 1L)).willReturn(Optional.of(order));
 
 		// when & then
-		assertThatThrownBy(() -> orderService.cancelOrder(1L, 100L))
+		assertThatThrownBy(() -> orderCancelService.cancelOrder(1L, 100L))
 			.isInstanceOf(OrderException.class)
 			.satisfies(exception -> {
 				OrderException orderException = (OrderException) exception;
@@ -197,7 +206,7 @@ class OrderServiceTest {
 		given(orderRepository.findByIdAndMemberIdWithItems(100L, 1L)).willReturn(Optional.empty());
 
 		// when & then
-		assertThatThrownBy(() -> orderService.cancelOrder(1L, 100L))
+		assertThatThrownBy(() -> orderCancelService.cancelOrder(1L, 100L))
 			.isInstanceOf(OrderException.class)
 			.satisfies(exception -> {
 				OrderException orderException = (OrderException) exception;
@@ -214,7 +223,7 @@ class OrderServiceTest {
 		given(orderRepository.findByMerchantPayKeyAndMemberId("PAY-1", 1L)).willReturn(Optional.of(order));
 
 		// when
-		Order result = orderService.getOrderByMerchantPayKeyAndMemberId("PAY-1", 1L);
+		Order result = orderQueryService.getOrderByMerchantPayKeyAndMemberId("PAY-1", 1L);
 
 		// then
 		assertThat(result).isEqualTo(order);
@@ -227,7 +236,7 @@ class OrderServiceTest {
 		given(orderRepository.findByMerchantPayKeyAndMemberId("PAY-1", 1L)).willReturn(Optional.empty());
 
 		// when & then
-		assertThatThrownBy(() -> orderService.getOrderByMerchantPayKeyAndMemberId("PAY-1", 1L))
+		assertThatThrownBy(() -> orderQueryService.getOrderByMerchantPayKeyAndMemberId("PAY-1", 1L))
 			.isInstanceOf(OrderException.class)
 			.satisfies(exception -> {
 				OrderException orderException = (OrderException)exception;
@@ -246,7 +255,7 @@ class OrderServiceTest {
 		stubForSuccess(member, product1, product2);
 
 		// when
-		orderService.createOrderWithSynchronized(command);
+		orderConcurrencyService.createOrderWithSynchronized(command);
 
 		// then
 		then(stockConcurrencyService).should().decreaseWithSynchronized(10L, 2);
@@ -264,7 +273,7 @@ class OrderServiceTest {
 		stubForSuccess(member, product1, product2);
 
 		// when
-		orderService.createOrderWithSynchronizedAndTransaction(command);
+		orderConcurrencyService.createOrderWithSynchronizedAndTransaction(command);
 
 		// then
 		then(stockConcurrencyService).should().decreaseWithSynchronizedAndTransaction(10L, 2);
@@ -282,7 +291,7 @@ class OrderServiceTest {
 		stubForSuccess(member, product1, product2);
 
 		// when
-		orderService.createOrderWithReentrantLockAndTransaction(command);
+		orderConcurrencyService.createOrderWithReentrantLockAndTransaction(command);
 
 		// then
 		then(stockConcurrencyService).should().decreaseWithReentrantLockAndTransaction(10L, 2);
@@ -300,7 +309,7 @@ class OrderServiceTest {
 		stubForSuccess(member, product1, product2);
 
 		// when
-		orderService.createOrderWithOptimisticLock(command);
+		orderConcurrencyService.createOrderWithOptimisticLock(command);
 
 		// then
 		then(stockConcurrencyService).should().decreaseWithOptimisticLock(10L, 2);
@@ -318,7 +327,7 @@ class OrderServiceTest {
 		stubForSuccess(member, product1, product2);
 
 		// when
-		orderService.createOrderWithPessimisticLock(command);
+		orderConcurrencyService.createOrderWithPessimisticLock(command);
 
 		// then
 		then(stockInventoryService).should().decrease(10L, 2);
@@ -336,7 +345,7 @@ class OrderServiceTest {
 		stubForSuccess(member, product1, product2);
 
 		// when
-		orderService.createOrderWithPessimisticLockOrdered(command);
+		orderConcurrencyService.createOrderWithPessimisticLockOrdered(command);
 
 		// then
 		then(stockInventoryService).should().decrease(10L, 2);
@@ -354,7 +363,7 @@ class OrderServiceTest {
 		stubForSuccessBatch(member, product1, product2);
 
 		// when
-		orderService.createOrderWithPessimisticLockBatch(command);
+		orderConcurrencyService.createOrderWithPessimisticLockBatch(command);
 
 		// then
 		ArgumentCaptor<StockDecreaseBatchCommand> requestCaptor =
@@ -379,7 +388,7 @@ class OrderServiceTest {
 		given(memberRepository.findById(1L)).willReturn(Optional.empty());
 
 		// when & then
-		assertThatThrownBy(() -> orderService.createOrder(command))
+		assertThatThrownBy(() -> orderCreateService.createOrder(command))
 			.isInstanceOf(MemberException.class)
 			.satisfies(exception -> {
 				MemberException memberException = (MemberException) exception;
@@ -404,7 +413,7 @@ class OrderServiceTest {
 		given(productRepository.findById(10L)).willReturn(Optional.empty());
 
 		// when & then
-		assertThatThrownBy(() -> orderService.createOrder(command))
+		assertThatThrownBy(() -> orderCreateService.createOrder(command))
 			.isInstanceOf(ProductException.class)
 			.satisfies(exception -> {
 				ProductException productException = (ProductException) exception;
@@ -433,7 +442,7 @@ class OrderServiceTest {
 			.decrease(10L, 1);
 
 		// when & then
-		assertThatThrownBy(() -> orderService.createOrder(command))
+		assertThatThrownBy(() -> orderCreateService.createOrder(command))
 			.isInstanceOf(StockException.class)
 			.satisfies(exception -> {
 				StockException stockException = (StockException) exception;

@@ -1,4 +1,4 @@
-package com.commerce.order.service;
+package com.commerce.order.application;
 
 import static org.assertj.core.api.Assertions.*;
 import static org.mockito.ArgumentMatchers.any;
@@ -29,11 +29,11 @@ import org.springframework.test.context.bean.override.mockito.MockitoBean;
 
 import com.commerce.member.domain.Member;
 import com.commerce.member.repository.MemberRepository;
-import com.commerce.order.repository.OrderRepository;
+import com.commerce.order.infrastructure.JpaOrderRepository;
 import com.commerce.order.redis.OrderIdempotencyStore;
-import com.commerce.order.service.command.OrderCreateItem;
-import com.commerce.order.service.command.OrderCreateCommand;
-import com.commerce.order.service.result.OrderCreateResult;
+import com.commerce.order.application.command.OrderCreateItem;
+import com.commerce.order.application.command.OrderCreateCommand;
+import com.commerce.order.application.result.OrderCreateResult;
 import com.commerce.orderitem.repository.OrderItemRepository;
 import com.commerce.product.domain.Product;
 import com.commerce.product.domain.ProductStatus;
@@ -54,10 +54,16 @@ import com.commerce.order.exception.OrderException;
 	"spring.datasource.hikari.minimum-idle=30",
 	"spring.datasource.hikari.connection-timeout=30000"
 })
-class OrderServiceConcurrencyTest {
+class OrderConcurrencyServiceTest {
 
 	@Autowired
-	private OrderService orderService;
+	private OrderConcurrencyService orderConcurrencyService;
+
+	@Autowired
+	private OrderCreateService orderCreateService;
+
+	@Autowired
+	private OrderCancelService orderCancelService;
 
 	@Autowired
 	private MemberRepository memberRepository;
@@ -69,7 +75,7 @@ class OrderServiceConcurrencyTest {
 	private StockRepository stockRepository;
 
 	@Autowired
-	private OrderRepository orderRepository;
+	private JpaOrderRepository orderRepository;
 
 	@MockitoBean
 	private OrderIdempotencyStore orderIdempotencyStore;
@@ -106,7 +112,7 @@ class OrderServiceConcurrencyTest {
 
 		// when
 		ConcurrentLinkedQueue<Throwable> errors = new ConcurrentLinkedQueue<>();
-		runConcurrent(threadCount, () -> orderService.createOrderWithoutLock(command), errors);
+		runConcurrent(threadCount, () -> orderConcurrencyService.createOrderWithoutLock(command), errors);
 
 		// then
 		Stock updated = stockRepository.findByProductId(product.getId()).orElseThrow();
@@ -129,7 +135,7 @@ class OrderServiceConcurrencyTest {
 
 		// when
 		ConcurrentLinkedQueue<Throwable> errors = new ConcurrentLinkedQueue<>();
-		runConcurrent(threadCount, () -> orderService.createOrderWithSynchronizedAndTransaction(command), errors);
+		runConcurrent(threadCount, () -> orderConcurrencyService.createOrderWithSynchronizedAndTransaction(command), errors);
 
 		// then
 		Stock updated = stockRepository.findByProductId(product.getId()).orElseThrow();
@@ -150,7 +156,7 @@ class OrderServiceConcurrencyTest {
 
 		// when
 		ConcurrentLinkedQueue<Throwable> errors = new ConcurrentLinkedQueue<>();
-		runConcurrent(threadCount, () -> orderService.createOrderWithReentrantLockAndTransaction(command), errors);
+		runConcurrent(threadCount, () -> orderConcurrencyService.createOrderWithReentrantLockAndTransaction(command), errors);
 
 		// then
 		Stock updated = stockRepository.findByProductId(product.getId()).orElseThrow();
@@ -171,7 +177,7 @@ class OrderServiceConcurrencyTest {
 
 		// when
 		ConcurrentLinkedQueue<Throwable> errors = new ConcurrentLinkedQueue<>();
-		runConcurrent(threadCount, () -> orderService.createOrderWithOptimisticLock(command), errors);
+		runConcurrent(threadCount, () -> orderConcurrencyService.createOrderWithOptimisticLock(command), errors);
 
 		// then
 		Stock updated = stockRepository.findByProductId(product.getId()).orElseThrow();
@@ -195,7 +201,7 @@ class OrderServiceConcurrencyTest {
 
 		// when
 		ConcurrentLinkedQueue<Throwable> errors = new ConcurrentLinkedQueue<>();
-		runConcurrent(threadCount, () -> orderService.createOrderWithPessimisticLock(command), errors);
+		runConcurrent(threadCount, () -> orderConcurrencyService.createOrderWithPessimisticLock(command), errors);
 
 		// then
 		Stock updated = stockRepository.findByProductId(product.getId()).orElseThrow();
@@ -221,7 +227,7 @@ class OrderServiceConcurrencyTest {
 			String idempotencyKey = "idempotency-" + sequence.incrementAndGet();
 			OrderCreateCommand command =
 				createRequest(member.getId(), product.getId(), 1, idempotencyKey);
-			orderService.createOrder(command);
+			orderCreateService.createOrder(command);
 		}, errors);
 
 		// then
@@ -247,13 +253,13 @@ class OrderServiceConcurrencyTest {
 		Product product = createProduct("cancel-product", 1000);
 		createStock(product, 5);
 
-		OrderCreateResult created = orderService.createOrder(
+		OrderCreateResult created = orderCreateService.createOrder(
 			createRequest(member.getId(), product.getId(), 2, "cancel-key")
 		);
 
 		// when
 		ConcurrentLinkedQueue<Throwable> errors = new ConcurrentLinkedQueue<>();
-		runConcurrent(threadCount, () -> orderService.cancelOrder(member.getId(), created.getOrderId()), errors);
+		runConcurrent(threadCount, () -> orderCancelService.cancelOrder(member.getId(), created.getOrderId()), errors);
 
 		// then
 		Stock updated = stockRepository.findByProductId(product.getId()).orElseThrow();

@@ -1,4 +1,4 @@
-package com.commerce.order.repository;
+package com.commerce.order.infrastructure;
 
 import static org.assertj.core.api.Assertions.assertThat;
 
@@ -31,7 +31,7 @@ import jakarta.persistence.EntityManager;
 class OrderRepositoryTest {
 
 	@Autowired
-	private OrderRepository orderRepository;
+	private JpaOrderRepository orderRepository;
 
 	@Autowired
 	private MemberRepository memberRepository;

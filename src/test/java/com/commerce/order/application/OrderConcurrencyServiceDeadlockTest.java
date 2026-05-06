@@ -1,4 +1,4 @@
-package com.commerce.order.service;
+package com.commerce.order.application;
 
 import static org.assertj.core.api.Assertions.assertThat;
 import static org.mockito.ArgumentMatchers.anyInt;
@@ -25,9 +25,9 @@ import org.springframework.test.context.bean.override.mockito.MockitoSpyBean;
 
 import com.commerce.member.domain.Member;
 import com.commerce.member.repository.MemberRepository;
-import com.commerce.order.repository.OrderRepository;
-import com.commerce.order.service.command.OrderCreateItem;
-import com.commerce.order.service.command.OrderCreateCommand;
+import com.commerce.order.infrastructure.JpaOrderRepository;
+import com.commerce.order.application.command.OrderCreateItem;
+import com.commerce.order.application.command.OrderCreateCommand;
 import com.commerce.orderitem.repository.OrderItemRepository;
 import com.commerce.product.domain.Product;
 import com.commerce.product.domain.ProductStatus;
@@ -45,10 +45,10 @@ import com.commerce.stock.application.StockInventoryService;
 	"spring.datasource.hikari.minimum-idle=2",
 	"spring.datasource.hikari.connection-timeout=30000"
 })
-class OrderServiceDeadlockTest {
+class OrderConcurrencyServiceDeadlockTest {
 
 	@Autowired
-	private OrderService orderService;
+	private OrderConcurrencyService orderConcurrencyService;
 
 	@MockitoSpyBean
 	private StockInventoryService stockService;
@@ -63,7 +63,7 @@ class OrderServiceDeadlockTest {
 	private StockRepository stockRepository;
 
 	@Autowired
-	private OrderRepository orderRepository;
+	private JpaOrderRepository orderRepository;
 
 	@Autowired
 	private OrderItemRepository orderItemRepository;
@@ -123,9 +123,9 @@ class OrderServiceDeadlockTest {
 			runConcurrent(2, () -> {
 				int index = sequence.getAndIncrement();
 				if (index == 0) {
-					orderService.createOrderWithPessimisticLock(requestA);
+					orderConcurrencyService.createOrderWithPessimisticLock(requestA);
 				} else {
-					orderService.createOrderWithPessimisticLock(requestB);
+					orderConcurrencyService.createOrderWithPessimisticLock(requestB);
 				}
 			}, errors);
 		} finally {
@@ -177,9 +177,9 @@ class OrderServiceDeadlockTest {
 		runConcurrent(2, () -> {
 			int index = sequence.getAndIncrement();
 			if (index == 0) {
-				orderService.createOrderWithPessimisticLockOrdered(requestA);
+				orderConcurrencyService.createOrderWithPessimisticLockOrdered(requestA);
 			} else {
-				orderService.createOrderWithPessimisticLockOrdered(requestB);
+				orderConcurrencyService.createOrderWithPessimisticLockOrdered(requestB);
 			}
 		}, errors);
 

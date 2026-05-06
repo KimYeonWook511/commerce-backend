@@ -1,4 +1,4 @@
-package com.commerce.order.service;
+package com.commerce.order.application;
 
 import static org.assertj.core.api.Assertions.*;
 
@@ -23,9 +23,9 @@ import org.springframework.test.context.TestPropertySource;
 
 import com.commerce.member.domain.Member;
 import com.commerce.member.repository.MemberRepository;
-import com.commerce.order.repository.OrderRepository;
-import com.commerce.order.service.command.OrderCreateItem;
-import com.commerce.order.service.command.OrderCreateCommand;
+import com.commerce.order.infrastructure.JpaOrderRepository;
+import com.commerce.order.application.command.OrderCreateItem;
+import com.commerce.order.application.command.OrderCreateCommand;
 import com.commerce.orderitem.repository.OrderItemRepository;
 import com.commerce.product.domain.Product;
 import com.commerce.product.domain.ProductStatus;
@@ -43,10 +43,10 @@ import com.commerce.stock.repository.StockRepository;
 	"logging.level.com.zaxxer.hikari=TRACE",
 	"logging.level.com.zaxxer.hikari.pool=TRACE"
 })
-class OrderServiceConcurrencyDebugTest {
+class OrderConcurrencyServiceDebugTest {
 
 	@Autowired
-	private OrderService orderService;
+	private OrderConcurrencyService orderConcurrencyService;
 
 	@Autowired
 	private MemberRepository memberRepository;
@@ -58,7 +58,7 @@ class OrderServiceConcurrencyDebugTest {
 	private StockRepository stockRepository;
 
 	@Autowired
-	private OrderRepository orderRepository;
+	private JpaOrderRepository orderRepository;
 
 	@Autowired
 	private OrderItemRepository orderItemRepository;
@@ -87,7 +87,7 @@ class OrderServiceConcurrencyDebugTest {
 
 		// when
 		ConcurrentLinkedQueue<Throwable> errors = new ConcurrentLinkedQueue<>();
-		runConcurrent(threadCount, () -> orderService.createOrderWithSynchronizedAndTransaction(command), errors);
+		runConcurrent(threadCount, () -> orderConcurrencyService.createOrderWithSynchronizedAndTransaction(command), errors);
 
 		// then
 		Stock updated = stockRepository.findByProductId(product.getId()).orElseThrow();

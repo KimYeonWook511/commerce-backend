@@ -29,7 +29,7 @@ import com.commerce.order.domain.Order;
 import com.commerce.order.domain.OrderStatus;
 import com.commerce.order.exception.OrderErrorCode;
 import com.commerce.order.exception.OrderException;
-import com.commerce.order.repository.OrderRepository;
+import com.commerce.order.infrastructure.JpaOrderRepository;
 import com.commerce.orderitem.repository.OrderItemRepository;
 import com.commerce.payment.domain.Payment;
 import com.commerce.payment.domain.PaymentAttempt;
@@ -70,7 +70,7 @@ class NaverPayServiceIntegrationTest {
 	private ProductRepository productRepository;
 
 	@Autowired
-	private OrderRepository orderRepository;
+	private JpaOrderRepository orderRepository;
 
 	@Autowired
 	private OrderItemRepository orderItemRepository;
