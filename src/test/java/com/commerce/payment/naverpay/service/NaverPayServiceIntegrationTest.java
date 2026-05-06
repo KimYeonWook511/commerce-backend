@@ -54,7 +54,7 @@ import com.commerce.payment.service.PaymentAttemptService;
 import com.commerce.payment.service.PaymentService;
 import com.commerce.product.domain.Product;
 import com.commerce.product.domain.ProductStatus;
-import com.commerce.product.repository.ProductRepository;
+import com.commerce.product.infrastructure.JpaProductRepository;
 
 @SpringBootTest
 @ActiveProfiles("test")
@@ -67,7 +67,7 @@ class NaverPayServiceIntegrationTest {
 	private MemberRepository memberRepository;
 
 	@Autowired
-	private ProductRepository productRepository;
+	private JpaProductRepository productRepository;
 
 	@Autowired
 	private JpaOrderRepository orderRepository;

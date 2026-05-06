@@ -8,7 +8,7 @@ import org.springframework.transaction.annotation.Transactional;
 import com.commerce.product.domain.Product;
 import com.commerce.product.exception.ProductErrorCode;
 import com.commerce.product.exception.ProductException;
-import com.commerce.product.repository.ProductRepository;
+import com.commerce.product.domain.repository.ProductRepository;
 import com.commerce.stock.application.command.AdminStockAdjustCommand;
 import com.commerce.stock.application.command.AdminStockCreateCommand;
 import com.commerce.stock.application.result.AdminStockResult;
@@ -38,7 +38,7 @@ public class AdminStockService {
 			throw new StockException(StockErrorCode.INVALID_STOCK_QUANTITY);
 		}
 
-		Product product = productRepository.findByIdAndDeletedAtIsNull(command.getProductId())
+		Product product = productRepository.findNotDeletedProduct(command.getProductId())
 			.orElseThrow(() -> new ProductException(ProductErrorCode.PRODUCT_NOT_FOUND));
 
 		if (stockRepository.findByProductId(command.getProductId()).isPresent()) {

@@ -21,7 +21,7 @@ import com.commerce.order.domain.Order;
 import com.commerce.order.domain.OrderStatus;
 import com.commerce.product.domain.Product;
 import com.commerce.product.domain.ProductStatus;
-import com.commerce.product.repository.ProductRepository;
+import com.commerce.product.infrastructure.JpaProductRepository;
 
 import jakarta.persistence.EntityManager;
 
@@ -37,7 +37,7 @@ class OrderRepositoryTest {
 	private MemberRepository memberRepository;
 
 	@Autowired
-	private ProductRepository productRepository;
+	private JpaProductRepository productRepository;
 
 	@Autowired
 	private EntityManager entityManager;

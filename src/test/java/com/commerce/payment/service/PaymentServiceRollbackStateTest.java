@@ -33,7 +33,7 @@ import com.commerce.payment.repository.PaymentAttemptRepository;
 import com.commerce.payment.repository.PaymentRepository;
 import com.commerce.product.domain.Product;
 import com.commerce.product.domain.ProductStatus;
-import com.commerce.product.repository.ProductRepository;
+import com.commerce.product.infrastructure.JpaProductRepository;
 
 @SpringBootTest
 @ActiveProfiles("test")
@@ -46,7 +46,7 @@ class PaymentServiceRollbackStateTest {
 	private MemberRepository memberRepository;
 
 	@Autowired
-	private ProductRepository productRepository;
+	private JpaProductRepository productRepository;
 
 	@Autowired
 	private JpaOrderRepository orderRepository;

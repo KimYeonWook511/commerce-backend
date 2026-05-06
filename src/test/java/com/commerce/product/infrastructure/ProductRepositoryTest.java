@@ -1,4 +1,4 @@
-package com.commerce.product.repository;
+package com.commerce.product.infrastructure;
 
 import static org.assertj.core.api.Assertions.assertThat;
 
@@ -23,7 +23,7 @@ import jakarta.persistence.EntityManager;
 class ProductRepositoryTest {
 
 	@Autowired
-	private ProductRepository productRepository;
+	private JpaProductRepository productRepository;
 
 	@Autowired
 	private EntityManager entityManager;
@@ -41,7 +41,7 @@ class ProductRepositoryTest {
 		entityManager.clear();
 
 		// when
-		List<Product> results = productRepository.findAllByDeletedAtIsNullAndStatusInOrderByCreatedAtDesc(
+		List<Product> results = productRepository.findVisibleProducts(
 			ProductStatus.publicStatuses()
 		);
 
@@ -62,11 +62,11 @@ class ProductRepositoryTest {
 		entityManager.clear();
 
 		// when & then
-		assertThat(productRepository.findByIdAndDeletedAtIsNullAndStatusIn(
+		assertThat(productRepository.findVisibleProduct(
 			stoppedProduct.getId(),
 			ProductStatus.publicStatuses()
 		)).isEmpty();
-		assertThat(productRepository.findByIdAndDeletedAtIsNullAndStatusIn(
+		assertThat(productRepository.findVisibleProduct(
 			savedDeletedProduct.getId(),
 			ProductStatus.publicStatuses()
 		)).isEmpty();

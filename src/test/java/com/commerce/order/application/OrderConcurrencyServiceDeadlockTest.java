@@ -31,7 +31,7 @@ import com.commerce.order.application.command.OrderCreateCommand;
 import com.commerce.orderitem.repository.OrderItemRepository;
 import com.commerce.product.domain.Product;
 import com.commerce.product.domain.ProductStatus;
-import com.commerce.product.repository.ProductRepository;
+import com.commerce.product.infrastructure.JpaProductRepository;
 import com.commerce.stock.domain.Stock;
 import com.commerce.stock.repository.StockRepository;
 import com.commerce.stock.application.StockInventoryService;
@@ -57,7 +57,7 @@ class OrderConcurrencyServiceDeadlockTest {
 	private MemberRepository memberRepository;
 
 	@Autowired
-	private ProductRepository productRepository;
+	private JpaProductRepository productRepository;
 
 	@Autowired
 	private StockRepository stockRepository;

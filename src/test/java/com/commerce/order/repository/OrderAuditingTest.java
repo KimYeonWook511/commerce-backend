@@ -18,7 +18,7 @@ import com.commerce.member.repository.MemberRepository;
 import com.commerce.order.domain.Order;
 import com.commerce.product.domain.Product;
 import com.commerce.product.domain.ProductStatus;
-import com.commerce.product.repository.ProductRepository;
+import com.commerce.product.infrastructure.JpaProductRepository;
 
 @DataJpaTest
 @Import(JpaConfig.class)
@@ -32,7 +32,7 @@ class OrderAuditingTest {
 	private MemberRepository memberRepository;
 
 	@Autowired
-	private ProductRepository productRepository;
+	private JpaProductRepository productRepository;
 
 	@DisplayName("주문을 저장하면 생성/수정 시간이 채워진다")
 	@Test

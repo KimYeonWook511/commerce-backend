@@ -1,4 +1,4 @@
-package com.commerce.product.controller;
+package com.commerce.product.presentation;
 
 import static org.mockito.BDDMockito.given;
 import static org.mockito.BDDMockito.then;
@@ -25,11 +25,11 @@ import com.commerce.auth.interceptor.AuthorizationInterceptor;
 import com.commerce.auth.jwt.JwtTokenValidator;
 import com.commerce.auth.resolver.AuthenticatedMemberIdArgumentResolver;
 import com.commerce.common.config.WebConfig;
+import com.commerce.product.application.ProductQueryService;
+import com.commerce.product.application.result.ProductDetailResult;
+import com.commerce.product.application.result.ProductSummaryResult;
 import com.commerce.product.exception.ProductErrorCode;
 import com.commerce.product.exception.ProductException;
-import com.commerce.product.service.ProductService;
-import com.commerce.product.service.result.ProductDetailResult;
-import com.commerce.product.service.result.ProductSummaryResult;
 
 @WebMvcTest(ProductController.class)
 @AutoConfigureMockMvc(addFilters = true)
@@ -46,7 +46,7 @@ class ProductControllerTest {
 	private MockMvc mockMvc;
 
 	@MockitoBean
-	private ProductService productService;
+	private ProductQueryService productQueryService;
 
 	@MockitoBean
 	private JwtTokenValidator jwtTokenValidator;
@@ -55,7 +55,7 @@ class ProductControllerTest {
 	@Test
 	void getProducts_whenAnonymousRequest_returnOk() throws Exception {
 		// given
-		given(productService.getProducts()).willReturn(List.of(
+		given(productQueryService.getProducts()).willReturn(List.of(
 			ProductSummaryResult.builder()
 				.productId(2L)
 				.name("latest-product")
@@ -88,7 +88,7 @@ class ProductControllerTest {
 	@Test
 	void getProduct_whenAnonymousRequest_returnOk() throws Exception {
 		// given
-		given(productService.getProduct(2L)).willReturn(ProductDetailResult.builder()
+		given(productQueryService.getProduct(2L)).willReturn(ProductDetailResult.builder()
 			.productId(2L)
 			.name("latest-product")
 			.price(3000)
@@ -110,7 +110,7 @@ class ProductControllerTest {
 	@Test
 	void getProduct_whenProductMissing_returnNotFound() throws Exception {
 		// given
-		given(productService.getProduct(999L))
+		given(productQueryService.getProduct(999L))
 			.willThrow(new ProductException(ProductErrorCode.PRODUCT_NOT_FOUND));
 
 		// when & then
@@ -120,7 +120,7 @@ class ProductControllerTest {
 			.andExpect(jsonPath("$.message").value("상품을 찾을 수 없습니다"))
 			.andExpect(jsonPath("$.data").value(Matchers.nullValue()));
 
-		then(productService).should(never()).getProducts();
+		then(productQueryService).should(never()).getProducts();
 	}
 
 	@DisplayName("상품 ID가 양수가 아니면 잘못된 요청을 반환한다")
@@ -133,6 +133,6 @@ class ProductControllerTest {
 			.andExpect(jsonPath("$.message").value("요청 값이 올바르지 않습니다"))
 			.andExpect(jsonPath("$.data").value(Matchers.nullValue()));
 
-		then(productService).should(never()).getProduct(0L);
+		then(productQueryService).should(never()).getProduct(0L);
 	}
 }

@@ -60,7 +60,7 @@ import com.commerce.payment.repository.PaymentRepository;
 import com.commerce.payment.service.PaymentService;
 import com.commerce.product.domain.Product;
 import com.commerce.product.domain.ProductStatus;
-import com.commerce.product.repository.ProductRepository;
+import com.commerce.product.infrastructure.JpaProductRepository;
 import com.commerce.test.support.TestcontainersSupport;
 
 @Tag("concurrency")
@@ -76,7 +76,7 @@ class NaverPayServiceConcurrencyTest {
 	private MemberRepository memberRepository;
 
 	@Autowired
-	private ProductRepository productRepository;
+	private JpaProductRepository productRepository;
 
 	@Autowired
 	private JpaOrderRepository orderRepository;

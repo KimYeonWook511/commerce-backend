@@ -42,7 +42,7 @@ import com.commerce.outbox.service.OutboxService;
 import com.commerce.outbox.stock.service.command.StockRestoreOutboxCreateCommand;
 import com.commerce.product.domain.Product;
 import com.commerce.product.domain.ProductStatus;
-import com.commerce.product.repository.ProductRepository;
+import com.commerce.product.infrastructure.JpaProductRepository;
 
 @Tag("batch")
 @SpringBatchTest
@@ -61,7 +61,7 @@ class OrderExpirationBatchTest {
 	private MemberRepository memberRepository;
 
 	@Autowired
-	private ProductRepository productRepository;
+	private JpaProductRepository productRepository;
 
 	@Autowired
 	private JpaOrderRepository orderRepository;
