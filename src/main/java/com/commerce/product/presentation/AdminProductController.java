@@ -1,4 +1,4 @@
-package com.commerce.product.controller;
+package com.commerce.product.presentation;
 
 import org.springframework.http.HttpStatus;
 import org.springframework.http.ResponseEntity;
@@ -8,33 +8,35 @@ import org.springframework.web.bind.annotation.PathVariable;
 import org.springframework.web.bind.annotation.PostMapping;
 import org.springframework.web.bind.annotation.RequestBody;
 import org.springframework.web.bind.annotation.RequestMapping;
+import org.springframework.web.bind.annotation.RestController;
 
 import com.commerce.auth.interceptor.RequireRole;
 import com.commerce.common.ApiResponse;
 import com.commerce.common.exception.CommonErrorCode;
 import com.commerce.common.exception.CommonException;
 import com.commerce.member.domain.MemberRole;
-import com.commerce.product.controller.request.AdminProductCreateRequest;
-import com.commerce.product.controller.request.AdminProductUpdateRequest;
-import com.commerce.product.service.ProductService;
-import com.commerce.product.service.result.AdminProductDeleteResult;
-import com.commerce.product.service.result.AdminProductResult;
+import com.commerce.product.application.AdminProductService;
+import com.commerce.product.application.result.AdminProductDeleteResult;
+import com.commerce.product.application.result.AdminProductResult;
+import com.commerce.product.presentation.request.AdminProductCreateRequest;
+import com.commerce.product.presentation.request.AdminProductUpdateRequest;
 
 import jakarta.validation.Valid;
 import lombok.RequiredArgsConstructor;
 
+@RestController
 @RequiredArgsConstructor
 @RequestMapping("/admin/products")
 public class AdminProductController {
 
-	private final ProductService productService;
+	private final AdminProductService adminProductService;
 
 	@PostMapping
 	@RequireRole(MemberRole.ROLE_ADMIN)
 	public ResponseEntity<ApiResponse<AdminProductResult>> createProduct(
 		@Valid @RequestBody AdminProductCreateRequest request
 	) {
-		AdminProductResult result = productService.createProduct(request.toCommand());
+		AdminProductResult result = adminProductService.createProduct(request.toCommand());
 
 		return ResponseEntity.status(HttpStatus.CREATED)
 			.body(ApiResponse.of(result));
@@ -48,7 +50,7 @@ public class AdminProductController {
 	) {
 		validateProductId(productId);
 
-		AdminProductResult result = productService.updateProduct(request.toCommand(productId));
+		AdminProductResult result = adminProductService.updateProduct(request.toCommand(productId));
 
 		return ResponseEntity.status(HttpStatus.OK)
 			.body(ApiResponse.of(result));
@@ -59,7 +61,7 @@ public class AdminProductController {
 	public ResponseEntity<ApiResponse<AdminProductDeleteResult>> deleteProduct(@PathVariable Long productId) {
 		validateProductId(productId);
 
-		AdminProductDeleteResult result = productService.deleteProduct(productId);
+		AdminProductDeleteResult result = adminProductService.deleteProduct(productId);
 
 		return ResponseEntity.status(HttpStatus.OK)
 			.body(ApiResponse.of(result));

@@ -38,7 +38,7 @@ import com.commerce.product.domain.Product;
 import com.commerce.product.domain.ProductStatus;
 import com.commerce.product.exception.ProductErrorCode;
 import com.commerce.product.exception.ProductException;
-import com.commerce.product.repository.ProductRepository;
+import com.commerce.product.domain.repository.ProductRepository;
 import com.commerce.stock.exception.StockErrorCode;
 import com.commerce.stock.exception.StockException;
 import com.commerce.stock.application.StockInventoryService;

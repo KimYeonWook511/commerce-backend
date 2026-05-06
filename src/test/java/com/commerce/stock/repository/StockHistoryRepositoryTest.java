@@ -15,7 +15,7 @@ import org.springframework.test.context.ActiveProfiles;
 import com.commerce.common.jpa.JpaConfig;
 import com.commerce.product.domain.Product;
 import com.commerce.product.domain.ProductStatus;
-import com.commerce.product.repository.ProductRepository;
+import com.commerce.product.infrastructure.JpaProductRepository;
 import com.commerce.stock.domain.Stock;
 import com.commerce.stock.domain.StockAdjustmentReason;
 import com.commerce.stock.domain.StockHistory;
@@ -34,7 +34,7 @@ class StockHistoryRepositoryTest {
 	private StockRepository stockRepository;
 
 	@Autowired
-	private ProductRepository productRepository;
+	private JpaProductRepository productRepository;
 
 	@Autowired
 	private EntityManager entityManager;

@@ -143,8 +143,73 @@ payment.approve();
 
 ## Repository 역할
 
-- 인터페이스만 정의
-- 구현은 infrastructure에 위치
+- `domain.repository`에는 application 의도가 드러나는 repository port만 정의한다
+- domain repository는 Spring Data JPA의 `JpaRepository`를 상속하지 않는다
+- domain repository 메서드명은 JPA 파생 쿼리명이 아니라 도메인 조회 의도를 기준으로 정한다
+- Spring Data JPA repository는 `infrastructure`의 `JpaXxxRepository`에 둔다
+- domain repository 구현은 `infrastructure`의 `XxxRepositoryAdapter`가 담당한다
+- `JpaXxxRepository`는 `XxxRepositoryAdapter` 내부에서만 사용한다
+
+예시:
+
+```text
+order.domain.repository.OrderRepository
+order.infrastructure.JpaOrderRepository
+order.infrastructure.OrderRepositoryAdapter
+```
+
+domain repository:
+
+```java
+public interface ProductRepository {
+    Product save(Product product);
+    Optional<Product> findVisibleProduct(Long productId, List<ProductStatus> statuses);
+}
+```
+
+JPA repository:
+
+```java
+public interface JpaProductRepository extends JpaRepository<Product, Long> {
+    @Query("""
+            select p
+            from Product p
+            where p.id = :productId
+              and p.deletedAt is null
+              and p.status in :statuses
+            """)
+    Optional<Product> findVisibleProduct(Long productId, List<ProductStatus> statuses);
+}
+```
+
+adapter:
+
+```java
+@Repository
+public class ProductRepositoryAdapter implements ProductRepository {
+
+    private final JpaProductRepository jpaProductRepository;
+
+    @Override
+    public Product save(Product product) {
+        return jpaProductRepository.save(product);
+    }
+
+    @Override
+    public Optional<Product> findVisibleProduct(Long productId, List<ProductStatus> statuses) {
+        return jpaProductRepository.findVisibleProduct(productId, statuses);
+    }
+}
+```
+
+피해야 할 방식:
+
+```java
+public interface JpaProductRepository extends JpaRepository<Product, Long>, ProductRepository {
+}
+```
+
+이 방식은 domain repository가 `JpaRepository.save`의 generic 시그니처에 맞춰져야 하고, port가 Spring Data JPA 구현 세부사항에 끌려간다. 따라서 새 DDD 마이그레이션에서는 adapter 방식을 기본 원칙으로 둔다.
 
 ---
 

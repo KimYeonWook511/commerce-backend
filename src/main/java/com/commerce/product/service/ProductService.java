@@ -2,7 +2,6 @@ package com.commerce.product.service;
 
 import java.util.List;
 
-import org.springframework.stereotype.Service;
 import org.springframework.transaction.annotation.Transactional;
 
 import com.commerce.product.domain.Product;
@@ -20,7 +19,6 @@ import com.commerce.stock.repository.StockRepository;
 
 import lombok.RequiredArgsConstructor;
 
-@Service
 @RequiredArgsConstructor
 public class ProductService {
 

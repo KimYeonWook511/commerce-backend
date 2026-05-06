@@ -20,7 +20,7 @@ import com.commerce.product.domain.Product;
 import com.commerce.product.domain.ProductStatus;
 import com.commerce.product.exception.ProductErrorCode;
 import com.commerce.product.exception.ProductException;
-import com.commerce.product.repository.ProductRepository;
+import com.commerce.product.domain.repository.ProductRepository;
 import com.commerce.stock.application.command.AdminStockAdjustCommand;
 import com.commerce.stock.application.command.AdminStockCreateCommand;
 import com.commerce.stock.application.result.AdminStockResult;
@@ -60,7 +60,7 @@ class AdminStockServiceTest {
 			.adminMemberId(10L)
 			.build();
 
-		given(productRepository.findByIdAndDeletedAtIsNull(1L)).willReturn(Optional.of(product));
+		given(productRepository.findNotDeletedProduct(1L)).willReturn(Optional.of(product));
 		given(stockRepository.findByProductId(1L)).willReturn(Optional.empty());
 		given(stockRepository.save(any(Stock.class))).willAnswer(invocation -> {
 			Stock stock = invocation.getArgument(0);
@@ -96,7 +96,7 @@ class AdminStockServiceTest {
 			.adminMemberId(10L)
 			.build();
 
-		given(productRepository.findByIdAndDeletedAtIsNull(1L)).willReturn(Optional.empty());
+		given(productRepository.findNotDeletedProduct(1L)).willReturn(Optional.empty());
 
 		// when & then
 		assertThatThrownBy(() -> adminStockService.createInitialStock(command))
@@ -119,7 +119,7 @@ class AdminStockServiceTest {
 			.adminMemberId(10L)
 			.build();
 
-		given(productRepository.findByIdAndDeletedAtIsNull(1L)).willReturn(Optional.of(product));
+		given(productRepository.findNotDeletedProduct(1L)).willReturn(Optional.of(product));
 		given(stockRepository.findByProductId(1L)).willReturn(Optional.empty());
 		given(stockRepository.save(any(Stock.class))).willAnswer(invocation -> {
 			Stock stock = invocation.getArgument(0);
@@ -157,7 +157,7 @@ class AdminStockServiceTest {
 			.adminMemberId(10L)
 			.build();
 
-		given(productRepository.findByIdAndDeletedAtIsNull(1L)).willReturn(Optional.of(product));
+		given(productRepository.findNotDeletedProduct(1L)).willReturn(Optional.of(product));
 		given(stockRepository.findByProductId(1L)).willReturn(Optional.of(stock));
 
 		// when & then
