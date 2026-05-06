@@ -113,14 +113,16 @@ public class OrderExpirationBatchConfig {
 		// return new ItemWriter<Order>() {
 		// 	@Override
 		// 	public void write(@NonNull Chunk<? extends Order> chunk) throws Exception {
+		// 		LocalDateTime requestedAt = LocalDateTime.now();
 		// 		for (Order order : chunk) {
-		// 			orderExpirationService.expireOrder(order.getId());
+		// 			orderExpirationService.expireOrder(order.getId(), requestedAt);
 		// 		}
 		// 	}
 		// };
-		return chunk -> chunk.forEach(order -> {
-			orderExpirationService.expireOrder(order.getId());
-		});
+		return chunk -> {
+			LocalDateTime requestedAt = LocalDateTime.now();
+			chunk.forEach(order -> orderExpirationService.expireOrder(order.getId(), requestedAt));
+		};
 	}
 
 	/**

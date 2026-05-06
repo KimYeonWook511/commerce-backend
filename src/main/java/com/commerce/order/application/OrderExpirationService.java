@@ -28,14 +28,13 @@ public class OrderExpirationService {
 	private final OutboxService outboxService;
 
 	@Transactional
-	public void expireOrder(Long orderId) {
+	public void expireOrder(Long orderId, LocalDateTime requestedAt) {
 		Order order = orderRepository.findByIdWithItems(orderId)
 			.orElseThrow(() -> new OrderException(OrderErrorCode.ORDER_NOT_FOUND));
 
 		order.cancel();
 
-		LocalDateTime now = LocalDateTime.now();
-		outboxService.createStockRestoreOutboxEvent(toStockRestoreOutboxCreateCommand(order, now));
+		outboxService.createStockRestoreOutboxEvent(toStockRestoreOutboxCreateCommand(order, requestedAt));
 	}
 
 	private StockRestoreOutboxCreateCommand toStockRestoreOutboxCreateCommand(Order order, LocalDateTime requestedAt) {

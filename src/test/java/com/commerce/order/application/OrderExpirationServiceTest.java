@@ -6,6 +6,7 @@ import static org.mockito.BDDMockito.given;
 import static org.mockito.BDDMockito.then;
 import static org.mockito.Mockito.never;
 
+import java.time.LocalDateTime;
 import java.util.Optional;
 
 import org.junit.jupiter.api.DisplayName;
@@ -44,11 +45,12 @@ class OrderExpirationServiceTest {
 	void expireOrder_whenExpired_cancelOrderAndSaveOutbox() {
 		// given
 		Order order = createOrderWithItem();
+		LocalDateTime requestedAt = LocalDateTime.of(2026, 5, 6, 10, 0);
 
 		given(orderRepository.findByIdWithItems(order.getId())).willReturn(Optional.of(order));
 
 		// when
-		orderExpirationService.expireOrder(order.getId());
+		orderExpirationService.expireOrder(order.getId(), requestedAt);
 
 		// then
 		assertThat(order.getStatus()).isEqualTo(OrderStatus.CANCELED);
@@ -58,6 +60,7 @@ class OrderExpirationServiceTest {
 					&& command.getItems().size() == 1
 					&& command.getItems().getFirst().getProductId().equals(1L)
 					&& command.getItems().getFirst().getQuantity() == 2
+					&& command.getRequestedAt().equals(requestedAt)
 			));
 	}
 
@@ -65,10 +68,11 @@ class OrderExpirationServiceTest {
 	@Test
 	void expireOrder_whenOrderNotFound_throwException() {
 		// given
+		LocalDateTime requestedAt = LocalDateTime.of(2026, 5, 6, 10, 0);
 		given(orderRepository.findByIdWithItems(100L)).willReturn(Optional.empty());
 
 		// when & then
-		assertThatThrownBy(() -> orderExpirationService.expireOrder(100L))
+		assertThatThrownBy(() -> orderExpirationService.expireOrder(100L, requestedAt))
 			.isInstanceOf(OrderException.class)
 			.extracting("errorCode")
 			.isEqualTo(OrderErrorCode.ORDER_NOT_FOUND);
@@ -79,12 +83,13 @@ class OrderExpirationServiceTest {
 	void expireOrder_whenOrderAlreadyCanceled_throwException() {
 		// given
 		Order order = createOrderWithItem();
+		LocalDateTime requestedAt = LocalDateTime.of(2026, 5, 6, 10, 0);
 		ReflectionTestUtils.setField(order, "status", OrderStatus.CANCELED);
 
 		given(orderRepository.findByIdWithItems(order.getId())).willReturn(Optional.of(order));
 
 		// when & then
-		assertThatThrownBy(() -> orderExpirationService.expireOrder(order.getId()))
+		assertThatThrownBy(() -> orderExpirationService.expireOrder(order.getId(), requestedAt))
 			.isInstanceOf(OrderException.class)
 			.extracting("errorCode")
 			.isEqualTo(OrderErrorCode.ORDER_CANCEL_NOT_ALLOWED);
