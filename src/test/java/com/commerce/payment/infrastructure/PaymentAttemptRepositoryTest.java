@@ -1,4 +1,4 @@
-package com.commerce.payment.repository;
+package com.commerce.payment.infrastructure;
 
 import static org.assertj.core.api.Assertions.assertThat;
 
@@ -9,18 +9,20 @@ import org.junit.jupiter.api.DisplayName;
 import org.junit.jupiter.api.Test;
 import org.springframework.beans.factory.annotation.Autowired;
 import org.springframework.boot.test.autoconfigure.orm.jpa.DataJpaTest;
+import org.springframework.context.annotation.Import;
 import org.springframework.test.context.ActiveProfiles;
 
 import com.commerce.payment.domain.PaymentAttempt;
 import com.commerce.payment.domain.PaymentAttemptFailCode;
 import com.commerce.payment.domain.PaymentAttemptStatus;
-import com.commerce.payment.domain.PaymentAttemptType;
 import com.commerce.payment.domain.PaymentProvider;
+import com.commerce.payment.domain.repository.PaymentAttemptRepository;
 
 import jakarta.persistence.EntityManager;
 
 @DataJpaTest
 @ActiveProfiles("test")
+@Import(PaymentAttemptRepositoryAdapter.class)
 class PaymentAttemptRepositoryTest {
 
 	@Autowired
@@ -41,12 +43,7 @@ class PaymentAttemptRepositoryTest {
 
 		// when
 		Optional<PaymentAttempt> result =
-			paymentAttemptRepository.findByMerchantPayKeyAndProviderAndPaymentIdAndType(
-				"PAY-1",
-				PaymentProvider.NAVERPAY,
-				"payment-id-1",
-				PaymentAttemptType.APPROVE
-			);
+			paymentAttemptRepository.findApproveAttempt("PAY-1", PaymentProvider.NAVERPAY, "payment-id-1");
 
 		// then
 		assertThat(result).isPresent();
@@ -61,7 +58,7 @@ class PaymentAttemptRepositoryTest {
 		LocalDateTime respondedAt = LocalDateTime.of(2026, 3, 3, 16, 0);
 		PaymentAttempt attempt =
 			PaymentAttempt.createApproveRequested("PAY-1", "payment-id-1", 1000, PaymentProvider.NAVERPAY);
-		attempt.approveFail(PaymentAttemptFailCode.PG_NETWORK_ERROR, "network error", respondedAt);
+		attempt.markApproveFailed(PaymentAttemptFailCode.PG_NETWORK_ERROR, "network error", respondedAt);
 
 		// when
 		PaymentAttempt saved = paymentAttemptRepository.save(attempt);
@@ -81,7 +78,7 @@ class PaymentAttemptRepositoryTest {
 			PaymentAttempt.createCancelRequested("PAY-1", "payment-id-1", 1000, PaymentProvider.NAVERPAY);
 
 		// when
-		PaymentAttempt saved = paymentAttemptRepository.saveAndFlush(attempt);
+		PaymentAttempt saved = paymentAttemptRepository.save(attempt);
 
 		// then
 		assertThat(saved.getStatus()).isEqualTo(PaymentAttemptStatus.REQUESTED);
@@ -98,10 +95,13 @@ class PaymentAttemptRepositoryTest {
 			PaymentAttempt.createCancelRequested("PAY-1", "payment-id-1", 1000, PaymentProvider.NAVERPAY);
 
 		// when
-		paymentAttemptRepository.saveAndFlush(approveAttempt);
-		paymentAttemptRepository.saveAndFlush(cancelAttempt);
+		paymentAttemptRepository.save(approveAttempt);
+		paymentAttemptRepository.save(cancelAttempt);
 
 		// then
-		assertThat(paymentAttemptRepository.count()).isEqualTo(2);
+		assertThat(paymentAttemptRepository.findApproveAttempt("PAY-1", PaymentProvider.NAVERPAY, "payment-id-1"))
+			.isPresent();
+		assertThat(paymentAttemptRepository.findCancelAttempt("PAY-1", PaymentProvider.NAVERPAY, "payment-id-1"))
+			.isPresent();
 	}
 }

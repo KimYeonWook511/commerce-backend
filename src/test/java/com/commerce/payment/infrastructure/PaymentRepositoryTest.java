@@ -1,4 +1,4 @@
-package com.commerce.payment.repository;
+package com.commerce.payment.infrastructure;
 
 import static org.assertj.core.api.Assertions.assertThat;
 
@@ -9,6 +9,7 @@ import org.junit.jupiter.api.DisplayName;
 import org.junit.jupiter.api.Test;
 import org.springframework.beans.factory.annotation.Autowired;
 import org.springframework.boot.test.autoconfigure.orm.jpa.DataJpaTest;
+import org.springframework.context.annotation.Import;
 import org.springframework.test.context.ActiveProfiles;
 
 import com.commerce.member.domain.Member;
@@ -17,10 +18,12 @@ import com.commerce.order.domain.Order;
 import com.commerce.order.infrastructure.JpaOrderRepository;
 import com.commerce.payment.domain.Payment;
 import com.commerce.payment.domain.PaymentProvider;
+import com.commerce.payment.domain.repository.PaymentRepository;
 import jakarta.persistence.EntityManager;
 
 @DataJpaTest
 @ActiveProfiles("test")
+@Import(PaymentRepositoryAdapter.class)
 class PaymentRepositoryTest {
 
 	@Autowired

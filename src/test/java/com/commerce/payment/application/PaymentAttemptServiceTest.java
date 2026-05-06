@@ -1,4 +1,4 @@
-package com.commerce.payment.service;
+package com.commerce.payment.application;
 
 import static org.assertj.core.api.Assertions.assertThat;
 import static org.assertj.core.api.Assertions.assertThatThrownBy;
@@ -25,7 +25,7 @@ import com.commerce.payment.domain.PaymentAttemptFailCode;
 import com.commerce.payment.domain.PaymentAttemptStatus;
 import com.commerce.payment.domain.PaymentAttemptType;
 import com.commerce.payment.domain.PaymentProvider;
-import com.commerce.payment.repository.PaymentAttemptRepository;
+import com.commerce.payment.domain.repository.PaymentAttemptRepository;
 
 @ExtendWith(MockitoExtension.class)
 class PaymentAttemptServiceTest {
@@ -38,13 +38,13 @@ class PaymentAttemptServiceTest {
 
 	@DisplayName("같은 결제 시도 이력이 없으면 승인 요청 이력을 생성한다")
 	@Test
-	void getOrCreateApproveRequested_whenAttemptNotExists_createAttempt() {
+	void getOrCreateApproveAttempt_whenAttemptNotExists_createAttempt() {
 		// given
-		given(paymentAttemptRepository.saveAndFlush(any(PaymentAttempt.class)))
+		given(paymentAttemptRepository.save(any(PaymentAttempt.class)))
 			.willAnswer(invocation -> invocation.getArgument(0, PaymentAttempt.class));
 
 		// when
-		PaymentAttempt result = paymentAttemptService.getOrCreateApproveRequested(
+		PaymentAttempt result = paymentAttemptService.getOrCreateApproveAttempt(
 			"PAY-1", PaymentProvider.NAVERPAY, "payment-id-1", 1000);
 
 		// then
@@ -54,18 +54,18 @@ class PaymentAttemptServiceTest {
 
 	@DisplayName("승인 시도 생성 중 유니크 충돌이 나면 재조회 결과를 반환한다")
 	@Test
-	void getOrCreateApproveRequested_whenDuplicateOnSave_returnRefetchedAttempt() {
+	void getOrCreateApproveAttempt_whenDuplicateOnSave_returnRefetchedAttempt() {
 		// given
 		PaymentAttempt existingAttempt = PaymentAttempt.createApproveRequested("PAY-1", "payment-id-1", 1000,
 			PaymentProvider.NAVERPAY);
-		given(paymentAttemptRepository.findByMerchantPayKeyAndProviderAndPaymentIdAndType(
-			eq("PAY-1"), eq(PaymentProvider.NAVERPAY), eq("payment-id-1"), eq(PaymentAttemptType.APPROVE)))
+		given(paymentAttemptRepository.findApproveAttempt(
+			eq("PAY-1"), eq(PaymentProvider.NAVERPAY), eq("payment-id-1")))
 			.willReturn(Optional.of(existingAttempt));
-		given(paymentAttemptRepository.saveAndFlush(any(PaymentAttempt.class)))
+		given(paymentAttemptRepository.save(any(PaymentAttempt.class)))
 			.willThrow(new DataIntegrityViolationException("duplicate key"));
 
 		// when
-		PaymentAttempt result = paymentAttemptService.getOrCreateApproveRequested(
+		PaymentAttempt result = paymentAttemptService.getOrCreateApproveAttempt(
 			"PAY-1", PaymentProvider.NAVERPAY, "payment-id-1", 1000);
 
 		// then
@@ -79,8 +79,8 @@ class PaymentAttemptServiceTest {
 		LocalDateTime respondedAt = LocalDateTime.of(2026, 3, 3, 16, 21);
 		PaymentAttempt attempt = PaymentAttempt.createApproveRequested("PAY-1", "payment-id-1", 1000,
 			PaymentProvider.NAVERPAY);
-		given(paymentAttemptRepository.findByMerchantPayKeyAndProviderAndPaymentIdAndType(
-			eq("PAY-1"), eq(PaymentProvider.NAVERPAY), eq("payment-id-1"), eq(PaymentAttemptType.APPROVE)))
+		given(paymentAttemptRepository.findApproveAttempt(
+			eq("PAY-1"), eq(PaymentProvider.NAVERPAY), eq("payment-id-1")))
 			.willReturn(Optional.of(attempt));
 
 		// when
@@ -99,13 +99,13 @@ class PaymentAttemptServiceTest {
 
 	@DisplayName("취소 요청 이력이 없으면 취소 요청 이력을 생성한다")
 	@Test
-	void getOrCreateCancelRequested_whenCancelAttemptNotExists_createCancelAttempt() {
+	void getOrCreateCancelAttempt_whenCancelAttemptNotExists_createCancelAttempt() {
 		// given
-		given(paymentAttemptRepository.saveAndFlush(any(PaymentAttempt.class)))
+		given(paymentAttemptRepository.save(any(PaymentAttempt.class)))
 			.willAnswer(invocation -> invocation.getArgument(0, PaymentAttempt.class));
 
 		// when
-		PaymentAttempt result = paymentAttemptService.getOrCreateCancelRequested(
+		PaymentAttempt result = paymentAttemptService.getOrCreateCancelAttempt(
 			"PAY-1", PaymentProvider.NAVERPAY, "payment-id-1", 1000);
 
 		// then
@@ -116,16 +116,16 @@ class PaymentAttemptServiceTest {
 
 	@DisplayName("취소 요청 생성 중 유니크 충돌이 나고 재조회도 실패하면 예외를 던진다")
 	@Test
-	void getOrCreateCancelRequested_whenDuplicateOnSaveAndRefetchMissing_throwException() {
+	void getOrCreateCancelAttempt_whenDuplicateOnSaveAndRefetchMissing_throwException() {
 		// given
-		given(paymentAttemptRepository.findByMerchantPayKeyAndProviderAndPaymentIdAndType(
-			eq("PAY-1"), eq(PaymentProvider.NAVERPAY), eq("payment-id-1"), eq(PaymentAttemptType.CANCEL)))
+		given(paymentAttemptRepository.findCancelAttempt(
+			eq("PAY-1"), eq(PaymentProvider.NAVERPAY), eq("payment-id-1")))
 			.willReturn(Optional.<PaymentAttempt>empty());
-		given(paymentAttemptRepository.saveAndFlush(any(PaymentAttempt.class)))
+		given(paymentAttemptRepository.save(any(PaymentAttempt.class)))
 			.willThrow(new DataIntegrityViolationException("duplicate key"));
 
 		// when & then
-		assertThatThrownBy(() -> paymentAttemptService.getOrCreateCancelRequested(
+		assertThatThrownBy(() -> paymentAttemptService.getOrCreateCancelAttempt(
 			"PAY-1", PaymentProvider.NAVERPAY, "payment-id-1", 1000))
 			.isInstanceOf(DataIntegrityViolationException.class);
 	}
