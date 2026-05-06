@@ -6,8 +6,8 @@ import java.util.NoSuchElementException;
 import org.springframework.stereotype.Service;
 
 import com.commerce.common.exception.CustomException;
+import com.commerce.order.application.OrderQueryService;
 import com.commerce.order.domain.Order;
-import com.commerce.order.service.OrderService;
 import com.commerce.payment.domain.Payment;
 import com.commerce.payment.domain.PaymentAttempt;
 import com.commerce.payment.domain.PaymentAttemptFailCode;
@@ -39,13 +39,13 @@ import lombok.extern.slf4j.Slf4j;
 public class NaverPayService {
 
 	private final NaverPayClient naverPayClient;
-	private final OrderService orderService;
+	private final OrderQueryService orderQueryService;
 	private final PaymentService paymentService;
 	private final PaymentAttemptService paymentAttemptService;
 
 	public NaverPayApproveResult approve(Long memberId, String merchantPayKey, String paymentId) {
 		// 주문 확인
-		Order order = orderService.getOrderByMerchantPayKeyAndMemberId(merchantPayKey, memberId);
+		Order order = orderQueryService.getOrderByMerchantPayKeyAndMemberId(merchantPayKey, memberId);
 
 		// 이미 결제가 완료됐는지 확인
 		Payment existingPayment = paymentService.findPaymentByMerchantPayKeyOrNull(merchantPayKey);

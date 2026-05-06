@@ -27,10 +27,10 @@ import com.commerce.order.batch.listener.OrderExpirationItemReadListener;
 import com.commerce.order.batch.listener.OrderExpirationItemWriteListener;
 import com.commerce.order.batch.listener.OrderExpirationRetryListener;
 import com.commerce.order.batch.listener.OrderExpirationSkipListener;
+import com.commerce.order.application.OrderExpirationService;
 import com.commerce.order.domain.Order;
 import com.commerce.order.domain.OrderStatus;
-import com.commerce.order.repository.OrderRepository;
-import com.commerce.order.service.OrderService;
+import com.commerce.order.domain.repository.OrderRepository;
 
 @Configuration
 public class OrderExpirationBatchConfig {
@@ -109,17 +109,17 @@ public class OrderExpirationBatchConfig {
 	}
 
 	@Bean
-	public ItemWriter<Order> expiredOrderWriter(OrderService orderService) {
+	public ItemWriter<Order> expiredOrderWriter(OrderExpirationService orderExpirationService) {
 		// return new ItemWriter<Order>() {
 		// 	@Override
 		// 	public void write(@NonNull Chunk<? extends Order> chunk) throws Exception {
 		// 		for (Order order : chunk) {
-		// 			orderService.expireOrder(order.getId());
+		// 			orderExpirationService.expireOrder(order.getId());
 		// 		}
 		// 	}
 		// };
 		return chunk -> chunk.forEach(order -> {
-			orderService.expireOrder(order.getId());
+			orderExpirationService.expireOrder(order.getId());
 		});
 	}
 
