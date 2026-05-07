@@ -11,8 +11,7 @@ public enum AuthErrorCode implements ErrorCode {
 	TOKEN_INVALID(HttpStatus.UNAUTHORIZED, "AUTH-401-3", "유효하지 않은 토큰입니다"),
 	TOKEN_EMPTY(HttpStatus.UNAUTHORIZED, "AUTH-401-4", "토큰이 비어있습니다"),
 	REFRESH_TOKEN_NOT_FOUND(HttpStatus.UNAUTHORIZED, "AUTH-401-5", "리프레시 토큰이 유효하지 않습니다"),
-	FORBIDDEN(HttpStatus.FORBIDDEN, "AUTH-403", "권한이 없습니다"),
-	DUPLICATE_EMAIL(HttpStatus.CONFLICT, "AUTH-409", "이미 가입된 이메일입니다");
+	FORBIDDEN(HttpStatus.FORBIDDEN, "AUTH-403", "권한이 없습니다");
 
 	private final HttpStatus status;
 	private final String code;

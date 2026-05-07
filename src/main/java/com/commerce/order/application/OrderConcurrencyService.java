@@ -11,9 +11,9 @@ import org.springframework.stereotype.Service;
 import org.springframework.transaction.annotation.Transactional;
 
 import com.commerce.member.domain.Member;
+import com.commerce.member.domain.repository.MemberRepository;
 import com.commerce.member.exception.MemberErrorCode;
 import com.commerce.member.exception.MemberException;
-import com.commerce.member.repository.MemberRepository;
 import com.commerce.order.application.command.OrderCreateCommand;
 import com.commerce.order.application.command.OrderCreateItem;
 import com.commerce.order.application.result.OrderCreateResult;
