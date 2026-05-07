@@ -7,7 +7,7 @@ import org.springframework.web.bind.annotation.RequestBody;
 import org.springframework.web.bind.annotation.RequestMapping;
 import org.springframework.web.bind.annotation.RestController;
 
-import com.commerce.auth.resolver.AuthenticatedMemberId;
+import com.commerce.security.annotation.AuthenticatedMemberId;
 import com.commerce.common.ApiResponse;
 import com.commerce.payment.application.PaymentReadyService;
 import com.commerce.payment.application.command.PaymentReadyCommand;

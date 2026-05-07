@@ -6,6 +6,7 @@
 
 - `ddd-migration-plan.md`: DDD 마이그레이션의 공통 방향과 패키지 구조 기준
 - `<domain>-ddd-migration-retrospective.md`: 도메인별 DDD 마이그레이션 회고와 후속 작업
+- `auth-ddd-migration-retrospective.md`: 인증 bounded context와 security 웹 adapter 분리 기준
 
 ## 작성 원칙
 

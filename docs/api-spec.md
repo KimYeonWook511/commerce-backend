@@ -82,7 +82,7 @@
   "code": "SUCCESS",
   "message": "OK",
   "data": {
-    "memberDetailResult": {
+    "member": {
       "memberId": 1,
       "email": "user@example.com",
       "username": "tester"
@@ -119,7 +119,7 @@
   "code": "SUCCESS",
   "message": "OK",
   "data": {
-    "memberDetailResult": {
+    "member": {
       "memberId": 1,
       "email": "user@example.com",
       "username": "tester"

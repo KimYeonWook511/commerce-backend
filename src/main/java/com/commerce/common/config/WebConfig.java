@@ -2,8 +2,8 @@ package com.commerce.common.config;
 
 import java.util.List;
 
-import com.commerce.auth.interceptor.AuthorizationInterceptor;
-import com.commerce.auth.resolver.AuthenticatedMemberIdArgumentResolver;
+import com.commerce.security.interceptor.AuthorizationInterceptor;
+import com.commerce.security.resolver.AuthenticatedMemberIdArgumentResolver;
 import org.springframework.context.annotation.Configuration;
 import org.springframework.web.method.support.HandlerMethodArgumentResolver;
 import org.springframework.web.servlet.config.annotation.*;
