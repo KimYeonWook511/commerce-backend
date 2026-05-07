@@ -1,4 +1,4 @@
-package com.commerce.auth.service;
+package com.commerce.auth.application;
 
 import static org.assertj.core.api.Assertions.assertThat;
 import static org.mockito.ArgumentMatchers.any;
@@ -14,12 +14,10 @@ import org.mockito.Mock;
 import org.mockito.junit.jupiter.MockitoExtension;
 import org.springframework.test.util.ReflectionTestUtils;
 
-import com.commerce.auth.jwt.JwtProperties;
-import com.commerce.auth.jwt.JwtTokenProvider;
-import com.commerce.auth.redis.RefreshTokenStore;
-import com.commerce.auth.service.command.AuthSignUpCommand;
-import com.commerce.auth.service.result.AuthSignUpResult;
-import com.commerce.auth.util.PasswordHasher;
+import com.commerce.auth.application.command.AuthSignUpCommand;
+import com.commerce.auth.application.result.AuthSignUpResult;
+import com.commerce.auth.application.result.AuthTokenIssueResult;
+import com.commerce.auth.infrastructure.PasswordHasher;
 import com.commerce.member.application.MemberRegistrationService;
 import com.commerce.member.application.command.MemberRegistrationCommand;
 import com.commerce.member.domain.Member;
@@ -31,16 +29,10 @@ class AuthSignUpServiceTest {
 	private MemberRegistrationService memberRegistrationService;
 
 	@Mock
-	private JwtTokenProvider jwtTokenProvider;
+	private AuthTokenIssueService authTokenIssueService;
 
 	@Mock
 	private PasswordHasher passwordHasher;
-
-	@Mock
-	private RefreshTokenStore refreshTokenStore;
-
-	@Mock
-	private JwtProperties jwtProperties;
 
 	@InjectMocks
 	private AuthSignUpService authSignUpService;
@@ -60,9 +52,7 @@ class AuthSignUpServiceTest {
 
 		given(passwordHasher.hash("password123")).willReturn("hashed-password");
 		given(memberRegistrationService.register(any(MemberRegistrationCommand.class))).willReturn(member);
-		given(jwtTokenProvider.createAccessToken(any())).willReturn("access-token");
-		given(jwtTokenProvider.createRefreshToken(any())).willReturn("refresh-token");
-		given(jwtProperties.getRefreshExpiration()).willReturn(604800000L);
+		given(authTokenIssueService.issue(member)).willReturn(AuthTokenIssueResult.of("access-token", "refresh-token"));
 
 		// when
 		AuthSignUpResult result = authSignUpService.signUp(command);
@@ -70,7 +60,7 @@ class AuthSignUpServiceTest {
 		// then
 		ArgumentCaptor<MemberRegistrationCommand> commandCaptor = ArgumentCaptor.forClass(MemberRegistrationCommand.class);
 		then(memberRegistrationService).should().register(commandCaptor.capture());
-		then(refreshTokenStore).should().save(any(Long.class), any(String.class), any());
+		then(authTokenIssueService).should().issue(member);
 		assertThat(commandCaptor.getValue().getEmail()).isEqualTo("test@example.com");
 		assertThat(commandCaptor.getValue().getPasswordHash()).isEqualTo("hashed-password");
 		assertThat(commandCaptor.getValue().getUsername()).isEqualTo("user1");

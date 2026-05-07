@@ -22,10 +22,11 @@ import org.springframework.test.context.ActiveProfiles;
 import org.springframework.test.context.bean.override.mockito.MockitoBean;
 import org.springframework.test.web.servlet.MockMvc;
 
-import com.commerce.auth.filter.JwtAuthenticationFilter;
-import com.commerce.auth.interceptor.AuthorizationInterceptor;
-import com.commerce.auth.jwt.JwtTokenValidator;
-import com.commerce.auth.resolver.AuthenticatedMemberIdArgumentResolver;
+import com.commerce.security.filter.JwtAuthenticationFilter;
+import com.commerce.security.interceptor.AuthorizationInterceptor;
+import com.commerce.auth.application.TokenAuthenticationService;
+import com.commerce.auth.application.result.TokenAuthenticationResult;
+import com.commerce.security.resolver.AuthenticatedMemberIdArgumentResolver;
 import com.commerce.common.config.WebConfig;
 import com.commerce.product.application.AdminProductService;
 import com.commerce.product.application.command.AdminProductCreateCommand;
@@ -34,8 +35,6 @@ import com.commerce.product.application.result.AdminProductDeleteResult;
 import com.commerce.product.application.result.AdminProductResult;
 import com.commerce.product.domain.ProductStatus;
 
-import io.jsonwebtoken.Claims;
-import io.jsonwebtoken.Jwts;
 
 @WebMvcTest(AdminProductController.class)
 @AutoConfigureMockMvc(addFilters = true)
@@ -55,7 +54,7 @@ class AdminProductControllerTest {
 	private AdminProductService adminProductService;
 
 	@MockitoBean
-	private JwtTokenValidator jwtTokenValidator;
+	private TokenAuthenticationService tokenAuthenticationService;
 
 	@DisplayName("관리자는 상품을 등록할 수 있다")
 	@Test
@@ -263,8 +262,7 @@ class AdminProductControllerTest {
 	}
 
 	private void stubForToken(String role) {
-		Claims claims = Jwts.claims().setSubject("1");
-		claims.put("role", role);
-		given(jwtTokenValidator.validateAccessToken("access-token")).willReturn(claims);
+		given(tokenAuthenticationService.authenticateAccessToken("access-token"))
+			.willReturn(TokenAuthenticationResult.of(1L, role));
 	}
 }

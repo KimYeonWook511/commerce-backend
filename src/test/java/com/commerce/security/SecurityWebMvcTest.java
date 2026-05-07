@@ -1,6 +1,9 @@
-package com.commerce.auth.controller;
+package com.commerce.security;
 
 import static org.mockito.BDDMockito.given;
+import static org.mockito.BDDMockito.then;
+import static org.mockito.ArgumentMatchers.any;
+import static org.mockito.Mockito.never;
 import static org.springframework.test.web.servlet.request.MockMvcRequestBuilders.get;
 import static org.springframework.test.web.servlet.result.MockMvcResultMatchers.content;
 import static org.springframework.test.web.servlet.result.MockMvcResultMatchers.jsonPath;
@@ -16,32 +19,38 @@ import org.springframework.context.annotation.Import;
 import org.springframework.test.context.ActiveProfiles;
 import org.springframework.test.context.bean.override.mockito.MockitoBean;
 import org.springframework.test.web.servlet.MockMvc;
+import org.springframework.http.ResponseEntity;
+import org.springframework.web.bind.annotation.GetMapping;
+import org.springframework.web.bind.annotation.RestController;
 
-import com.commerce.auth.filter.JwtAuthenticationFilter;
-import com.commerce.auth.interceptor.AuthorizationInterceptor;
-import com.commerce.auth.jwt.JwtTokenValidator;
-import com.commerce.auth.resolver.AuthenticatedMemberIdArgumentResolver;
+import com.commerce.security.filter.JwtAuthenticationFilter;
+import com.commerce.security.interceptor.AuthorizationInterceptor;
+import com.commerce.auth.application.TokenAuthenticationService;
+import com.commerce.auth.application.result.TokenAuthenticationResult;
+import com.commerce.security.resolver.AuthenticatedMemberIdArgumentResolver;
 import com.commerce.common.config.WebConfig;
+import com.commerce.member.domain.MemberRole;
+import com.commerce.security.annotation.AuthenticatedMemberId;
+import com.commerce.security.annotation.RequireRole;
 
-import io.jsonwebtoken.Claims;
-import io.jsonwebtoken.Jwts;
 
-@WebMvcTest(controllers = AuthTestController.class)
+@WebMvcTest(controllers = SecurityWebMvcTest.TestController.class)
 @AutoConfigureMockMvc(addFilters = true)
 @ActiveProfiles("test")
 @Import({
 	WebConfig.class,
 	AuthenticatedMemberIdArgumentResolver.class,
 	AuthorizationInterceptor.class,
-	JwtAuthenticationFilter.class
+	JwtAuthenticationFilter.class,
+	SecurityWebMvcTest.TestController.class
 })
-class AuthWebSecurityTest {
+class SecurityWebMvcTest {
 
 	@Autowired
 	private MockMvc mockMvc;
 
 	@MockitoBean
-	private JwtTokenValidator jwtTokenValidator;
+	private TokenAuthenticationService tokenAuthenticationService;
 
 	@DisplayName("토큰이 없으면 인증 오류를 반환한다")
 	@Test
@@ -58,9 +67,8 @@ class AuthWebSecurityTest {
 	@Test
 	void secureEndpoint_whenTokenValid_returnOk() throws Exception {
 		// given
-		Claims claims = Jwts.claims().setSubject("1");
-		claims.put("role", "ROLE_USER");
-		given(jwtTokenValidator.validateAccessToken("access-token")).willReturn(claims);
+		given(tokenAuthenticationService.authenticateAccessToken("access-token"))
+			.willReturn(TokenAuthenticationResult.of(1L, "ROLE_USER"));
 
 		// when & then
 		mockMvc.perform(get("/test/secure")
@@ -72,9 +80,8 @@ class AuthWebSecurityTest {
 	@Test
 	void adminEndpoint_whenRoleMismatch_returnForbidden() throws Exception {
 		// given
-		Claims claims = Jwts.claims().setSubject("1");
-		claims.put("role", "ROLE_USER");
-		given(jwtTokenValidator.validateAccessToken("access-token")).willReturn(claims);
+		given(tokenAuthenticationService.authenticateAccessToken("access-token"))
+			.willReturn(TokenAuthenticationResult.of(1L, "ROLE_USER"));
 
 		// when & then
 		mockMvc.perform(get("/test/admin")
@@ -89,14 +96,50 @@ class AuthWebSecurityTest {
 	@Test
 	void memberIdEndpoint_whenAuthenticated_returnMemberId() throws Exception {
 		// given
-		Claims claims = Jwts.claims().setSubject("10");
-		claims.put("role", "ROLE_USER");
-		given(jwtTokenValidator.validateAccessToken("access-token")).willReturn(claims);
+		given(tokenAuthenticationService.authenticateAccessToken("access-token"))
+			.willReturn(TokenAuthenticationResult.of(10L, "ROLE_USER"));
 
 		// when & then
 		mockMvc.perform(get("/test/member-id")
 				.header("Authorization", "Bearer access-token"))
 			.andExpect(status().isOk())
 			.andExpect(content().string("10"));
+	}
+
+	@DisplayName("인증 제외 경로는 토큰 인증 서비스를 호출하지 않는다")
+	@Test
+	void whitelistEndpoint_whenRequested_doNotAuthenticateToken() throws Exception {
+		// when & then
+		mockMvc.perform(get("/products"))
+			.andExpect(status().isOk());
+
+		then(tokenAuthenticationService).should(never()).authenticateAccessToken(any());
+	}
+
+	@RestController
+	public static class TestController {
+
+		@GetMapping("/test/secure")
+		public ResponseEntity<Void> secure() {
+			return ResponseEntity.ok().build();
+		}
+
+		@RequireRole(MemberRole.ROLE_ADMIN)
+		@GetMapping("/test/admin")
+		public ResponseEntity<Void> admin() {
+			return ResponseEntity.ok().build();
+		}
+
+		@GetMapping("/test/member-id")
+		public ResponseEntity<String> memberId(
+			@AuthenticatedMemberId Long memberId
+		) {
+			return ResponseEntity.ok(String.valueOf(memberId));
+		}
+
+		@GetMapping("/products")
+		public ResponseEntity<Void> products() {
+			return ResponseEntity.ok().build();
+		}
 	}
 }

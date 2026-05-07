@@ -20,10 +20,11 @@ import org.springframework.test.context.ActiveProfiles;
 import org.springframework.test.context.bean.override.mockito.MockitoBean;
 import org.springframework.test.web.servlet.MockMvc;
 
-import com.commerce.auth.filter.JwtAuthenticationFilter;
-import com.commerce.auth.interceptor.AuthorizationInterceptor;
-import com.commerce.auth.jwt.JwtTokenValidator;
-import com.commerce.auth.resolver.AuthenticatedMemberIdArgumentResolver;
+import com.commerce.security.filter.JwtAuthenticationFilter;
+import com.commerce.security.interceptor.AuthorizationInterceptor;
+import com.commerce.auth.application.TokenAuthenticationService;
+import com.commerce.auth.application.result.TokenAuthenticationResult;
+import com.commerce.security.resolver.AuthenticatedMemberIdArgumentResolver;
 import com.commerce.common.config.WebConfig;
 import com.commerce.order.domain.OrderStatus;
 import com.commerce.order.application.OrderCancelService;
@@ -32,8 +33,6 @@ import com.commerce.order.application.command.OrderCreateCommand;
 import com.commerce.order.application.result.OrderCancelResult;
 import com.commerce.order.application.result.OrderCreateResult;
 
-import io.jsonwebtoken.Claims;
-import io.jsonwebtoken.Jwts;
 
 @WebMvcTest(OrderController.class)
 @AutoConfigureMockMvc(addFilters = true)
@@ -56,7 +55,7 @@ class OrderControllerTest {
 	private OrderCancelService orderCancelService;
 
 	@MockitoBean
-	private JwtTokenValidator jwtTokenValidator;
+	private TokenAuthenticationService tokenAuthenticationService;
 
 	@DisplayName("멱등키가 있으면 주문 생성 응답을 반환한다")
 	@Test
@@ -149,8 +148,7 @@ class OrderControllerTest {
 	}
 
 	private void stubForValidToken() {
-		Claims claims = Jwts.claims().setSubject("1");
-		claims.put("role", "ROLE_USER");
-		given(jwtTokenValidator.validateAccessToken("access-token")).willReturn(claims);
+		given(tokenAuthenticationService.authenticateAccessToken("access-token"))
+			.willReturn(TokenAuthenticationResult.of(1L, "ROLE_USER"));
 	}
 }

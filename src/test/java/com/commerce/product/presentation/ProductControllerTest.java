@@ -20,10 +20,10 @@ import org.springframework.test.context.ActiveProfiles;
 import org.springframework.test.context.bean.override.mockito.MockitoBean;
 import org.springframework.test.web.servlet.MockMvc;
 
-import com.commerce.auth.filter.JwtAuthenticationFilter;
-import com.commerce.auth.interceptor.AuthorizationInterceptor;
-import com.commerce.auth.jwt.JwtTokenValidator;
-import com.commerce.auth.resolver.AuthenticatedMemberIdArgumentResolver;
+import com.commerce.security.filter.JwtAuthenticationFilter;
+import com.commerce.security.interceptor.AuthorizationInterceptor;
+import com.commerce.auth.application.TokenAuthenticationService;
+import com.commerce.security.resolver.AuthenticatedMemberIdArgumentResolver;
 import com.commerce.common.config.WebConfig;
 import com.commerce.product.application.ProductQueryService;
 import com.commerce.product.application.result.ProductDetailResult;
@@ -49,7 +49,7 @@ class ProductControllerTest {
 	private ProductQueryService productQueryService;
 
 	@MockitoBean
-	private JwtTokenValidator jwtTokenValidator;
+	private TokenAuthenticationService tokenAuthenticationService;
 
 	@DisplayName("상품 목록 조회는 인증 없이 성공한다")
 	@Test

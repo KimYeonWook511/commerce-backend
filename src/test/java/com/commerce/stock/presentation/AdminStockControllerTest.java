@@ -26,10 +26,11 @@ import org.springframework.test.context.ActiveProfiles;
 import org.springframework.test.context.bean.override.mockito.MockitoBean;
 import org.springframework.test.web.servlet.MockMvc;
 
-import com.commerce.auth.filter.JwtAuthenticationFilter;
-import com.commerce.auth.interceptor.AuthorizationInterceptor;
-import com.commerce.auth.jwt.JwtTokenValidator;
-import com.commerce.auth.resolver.AuthenticatedMemberIdArgumentResolver;
+import com.commerce.security.filter.JwtAuthenticationFilter;
+import com.commerce.security.interceptor.AuthorizationInterceptor;
+import com.commerce.auth.application.TokenAuthenticationService;
+import com.commerce.auth.application.result.TokenAuthenticationResult;
+import com.commerce.security.resolver.AuthenticatedMemberIdArgumentResolver;
 import com.commerce.common.config.WebConfig;
 import com.commerce.stock.domain.StockAdjustmentReason;
 import com.commerce.stock.application.AdminStockService;
@@ -38,8 +39,6 @@ import com.commerce.stock.application.command.AdminStockCreateCommand;
 import com.commerce.stock.application.result.AdminStockResult;
 import com.commerce.stock.application.result.StockHistoryResult;
 
-import io.jsonwebtoken.Claims;
-import io.jsonwebtoken.Jwts;
 
 @WebMvcTest(AdminStockController.class)
 @AutoConfigureMockMvc(addFilters = true)
@@ -59,7 +58,7 @@ class AdminStockControllerTest {
 	private AdminStockService stockService;
 
 	@MockitoBean
-	private JwtTokenValidator jwtTokenValidator;
+	private TokenAuthenticationService tokenAuthenticationService;
 
 	@DisplayName("관리자는 초기 재고를 생성할 수 있다")
 	@Test
@@ -464,8 +463,7 @@ class AdminStockControllerTest {
 	}
 
 	private void stubForToken(String role) {
-		Claims claims = Jwts.claims().setSubject("1");
-		claims.put("role", role);
-		given(jwtTokenValidator.validateAccessToken("access-token")).willReturn(claims);
+		given(tokenAuthenticationService.authenticateAccessToken("access-token"))
+			.willReturn(TokenAuthenticationResult.of(1L, role));
 	}
 }

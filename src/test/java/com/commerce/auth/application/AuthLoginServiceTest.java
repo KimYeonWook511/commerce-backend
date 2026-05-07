@@ -1,10 +1,11 @@
-package com.commerce.auth.service;
+package com.commerce.auth.application;
 
 import static org.assertj.core.api.Assertions.assertThat;
 import static org.assertj.core.api.Assertions.assertThatThrownBy;
 import static org.mockito.ArgumentMatchers.any;
 import static org.mockito.BDDMockito.given;
 import static org.mockito.BDDMockito.then;
+import static org.mockito.Mockito.never;
 
 import java.util.Optional;
 
@@ -18,12 +19,10 @@ import org.springframework.test.util.ReflectionTestUtils;
 
 import com.commerce.auth.exception.AuthErrorCode;
 import com.commerce.auth.exception.AuthException;
-import com.commerce.auth.jwt.JwtProperties;
-import com.commerce.auth.jwt.JwtTokenProvider;
-import com.commerce.auth.redis.RefreshTokenStore;
-import com.commerce.auth.service.command.AuthLoginCommand;
-import com.commerce.auth.service.result.AuthLoginResult;
-import com.commerce.auth.util.PasswordHasher;
+import com.commerce.auth.application.command.AuthLoginCommand;
+import com.commerce.auth.application.result.AuthLoginResult;
+import com.commerce.auth.application.result.AuthTokenIssueResult;
+import com.commerce.auth.infrastructure.PasswordHasher;
 import com.commerce.member.application.MemberQueryService;
 import com.commerce.member.domain.Member;
 
@@ -34,16 +33,10 @@ class AuthLoginServiceTest {
 	private MemberQueryService memberQueryService;
 
 	@Mock
-	private JwtTokenProvider jwtTokenProvider;
+	private AuthTokenIssueService authTokenIssueService;
 
 	@Mock
 	private PasswordHasher passwordHasher;
-
-	@Mock
-	private RefreshTokenStore refreshTokenStore;
-
-	@Mock
-	private JwtProperties jwtProperties;
 
 	@InjectMocks
 	private AuthLoginService authLoginService;
@@ -57,9 +50,7 @@ class AuthLoginServiceTest {
 
 		given(memberQueryService.findByEmail("test@example.com")).willReturn(Optional.of(member));
 		given(passwordHasher.matches("password123", "hashed-password")).willReturn(true);
-		given(jwtTokenProvider.createAccessToken(any())).willReturn("access-token");
-		given(jwtTokenProvider.createRefreshToken(any())).willReturn("refresh-token");
-		given(jwtProperties.getRefreshExpiration()).willReturn(604800000L);
+		given(authTokenIssueService.issue(member)).willReturn(AuthTokenIssueResult.of("access-token", "refresh-token"));
 
 		AuthLoginCommand command = AuthLoginCommand.builder()
 			.email("test@example.com")
@@ -72,7 +63,7 @@ class AuthLoginServiceTest {
 		// then
 		assertThat(result.getAccessToken()).isEqualTo("access-token");
 		assertThat(result.getRefreshToken()).isEqualTo("refresh-token");
-		then(refreshTokenStore).should().save(any(Long.class), any(String.class), any());
+		then(authTokenIssueService).should().issue(member);
 	}
 
 	@DisplayName("로그인 시 이메일에 해당하는 회원이 없으면 예외가 발생한다")
@@ -93,6 +84,7 @@ class AuthLoginServiceTest {
 				AuthException authException = (AuthException) exception;
 				assertThat(authException.getErrorCode()).isEqualTo(AuthErrorCode.INVALID_CREDENTIALS);
 			});
+		then(authTokenIssueService).should(never()).issue(any());
 	}
 
 	@DisplayName("로그인 시 비밀번호가 불일치하면 예외가 발생한다")
@@ -117,5 +109,6 @@ class AuthLoginServiceTest {
 				AuthException authException = (AuthException) exception;
 				assertThat(authException.getErrorCode()).isEqualTo(AuthErrorCode.INVALID_CREDENTIALS);
 			});
+		then(authTokenIssueService).should(never()).issue(any());
 	}
 }

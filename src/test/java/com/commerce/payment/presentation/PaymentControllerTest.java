@@ -17,17 +17,16 @@ import org.springframework.test.context.ActiveProfiles;
 import org.springframework.test.context.bean.override.mockito.MockitoBean;
 import org.springframework.test.web.servlet.MockMvc;
 
-import com.commerce.auth.filter.JwtAuthenticationFilter;
-import com.commerce.auth.interceptor.AuthorizationInterceptor;
-import com.commerce.auth.jwt.JwtTokenValidator;
-import com.commerce.auth.resolver.AuthenticatedMemberIdArgumentResolver;
+import com.commerce.security.filter.JwtAuthenticationFilter;
+import com.commerce.security.interceptor.AuthorizationInterceptor;
+import com.commerce.auth.application.TokenAuthenticationService;
+import com.commerce.auth.application.result.TokenAuthenticationResult;
+import com.commerce.security.resolver.AuthenticatedMemberIdArgumentResolver;
 import com.commerce.common.config.WebConfig;
 import com.commerce.payment.application.PaymentReadyService;
 import com.commerce.payment.application.command.PaymentReadyCommand;
 import com.commerce.payment.application.result.PaymentReadyResult;
 
-import io.jsonwebtoken.Claims;
-import io.jsonwebtoken.Jwts;
 
 @WebMvcTest(PaymentController.class)
 @AutoConfigureMockMvc(addFilters = true)
@@ -47,7 +46,7 @@ class PaymentControllerTest {
 	private PaymentReadyService paymentReadyService;
 
 	@MockitoBean
-	private JwtTokenValidator jwtTokenValidator;
+	private TokenAuthenticationService tokenAuthenticationService;
 
 	@DisplayName("결제 준비 요청이 유효하면 결제 준비 응답을 반환한다")
 	@Test
@@ -162,8 +161,7 @@ class PaymentControllerTest {
 	}
 
 	private void stubForValidToken() {
-		Claims claims = Jwts.claims().setSubject("1");
-		claims.put("role", "ROLE_USER");
-		given(jwtTokenValidator.validateAccessToken("access-token")).willReturn(claims);
+		given(tokenAuthenticationService.authenticateAccessToken("access-token"))
+			.willReturn(TokenAuthenticationResult.of(1L, "ROLE_USER"));
 	}
 }

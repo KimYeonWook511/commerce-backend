@@ -1,8 +1,7 @@
-package com.commerce.auth.service;
+package com.commerce.auth.application;
 
 import static org.assertj.core.api.Assertions.assertThat;
 import static org.assertj.core.api.Assertions.assertThatThrownBy;
-import static org.mockito.ArgumentMatchers.any;
 import static org.mockito.BDDMockito.given;
 import static org.mockito.BDDMockito.then;
 
@@ -18,13 +17,12 @@ import org.springframework.test.util.ReflectionTestUtils;
 
 import com.commerce.auth.exception.AuthErrorCode;
 import com.commerce.auth.exception.AuthException;
-import com.commerce.auth.jwt.JwtProperties;
-import com.commerce.auth.jwt.JwtTokenProvider;
-import com.commerce.auth.jwt.JwtTokenType;
-import com.commerce.auth.jwt.JwtTokenValidator;
-import com.commerce.auth.redis.RefreshTokenStore;
-import com.commerce.auth.service.command.AuthTokenReissueCommand;
-import com.commerce.auth.service.result.AuthTokenReissueResult;
+import com.commerce.auth.application.result.AuthTokenIssueResult;
+import com.commerce.auth.infrastructure.jwt.JwtType;
+import com.commerce.auth.infrastructure.jwt.JwtValidator;
+import com.commerce.auth.infrastructure.RefreshTokenStore;
+import com.commerce.auth.application.command.AuthTokenReissueCommand;
+import com.commerce.auth.application.result.AuthTokenReissueResult;
 import com.commerce.member.application.MemberQueryService;
 import com.commerce.member.domain.Member;
 
@@ -38,16 +36,13 @@ class AuthTokenReissueServiceTest {
 	private MemberQueryService memberQueryService;
 
 	@Mock
-	private JwtTokenProvider jwtTokenProvider;
+	private AuthTokenIssueService authTokenIssueService;
 
 	@Mock
-	private JwtTokenValidator jwtTokenValidator;
+	private JwtValidator jwtValidator;
 
 	@Mock
 	private RefreshTokenStore refreshTokenStore;
-
-	@Mock
-	private JwtProperties jwtProperties;
 
 	@InjectMocks
 	private AuthTokenReissueService authTokenReissueService;
@@ -61,12 +56,11 @@ class AuthTokenReissueServiceTest {
 
 		Claims claims = refreshTokenClaims("1");
 
-		given(jwtTokenValidator.validateRefreshToken("refresh-token")).willReturn(claims);
+		given(jwtValidator.validateRefreshToken("refresh-token")).willReturn(claims);
 		given(refreshTokenStore.get(1L)).willReturn(Optional.of("refresh-token"));
 		given(memberQueryService.findById(1L)).willReturn(Optional.of(member));
-		given(jwtTokenProvider.createAccessToken(any())).willReturn("new-access-token");
-		given(jwtTokenProvider.createRefreshToken(any())).willReturn("new-refresh-token");
-		given(jwtProperties.getRefreshExpiration()).willReturn(604800000L);
+		given(authTokenIssueService.issue(member))
+			.willReturn(AuthTokenIssueResult.of("new-access-token", "new-refresh-token"));
 
 		AuthTokenReissueCommand command = AuthTokenReissueCommand.builder()
 			.refreshToken("refresh-token")
@@ -78,7 +72,7 @@ class AuthTokenReissueServiceTest {
 		// then
 		assertThat(result.getAccessToken()).isEqualTo("new-access-token");
 		assertThat(result.getRefreshToken()).isEqualTo("new-refresh-token");
-		then(refreshTokenStore).should().save(any(Long.class), any(String.class), any());
+		then(authTokenIssueService).should().issue(member);
 	}
 
 	@DisplayName("리프레시 토큰이 일치하지 않으면 예외가 발생한다")
@@ -87,7 +81,7 @@ class AuthTokenReissueServiceTest {
 		// given
 		Claims claims = refreshTokenClaims("1");
 
-		given(jwtTokenValidator.validateRefreshToken("refresh-token")).willReturn(claims);
+		given(jwtValidator.validateRefreshToken("refresh-token")).willReturn(claims);
 		given(refreshTokenStore.get(1L)).willReturn(Optional.of("other-token"));
 
 		AuthTokenReissueCommand command = AuthTokenReissueCommand.builder()
@@ -109,9 +103,9 @@ class AuthTokenReissueServiceTest {
 		// given
 		Claims claims = Jwts.claims();
 		claims.setSubject("1");
-		claims.put("type", JwtTokenType.ACCESS_TOKEN.name());
+		claims.put("type", JwtType.ACCESS_TOKEN.name());
 
-		given(jwtTokenValidator.validateRefreshToken("refresh-token")).willReturn(claims);
+		given(jwtValidator.validateRefreshToken("refresh-token")).willReturn(claims);
 
 		AuthTokenReissueCommand command = AuthTokenReissueCommand.builder()
 			.refreshToken("refresh-token")
@@ -132,7 +126,7 @@ class AuthTokenReissueServiceTest {
 		// given
 		Claims claims = refreshTokenClaims("invalid-member-id");
 
-		given(jwtTokenValidator.validateRefreshToken("refresh-token")).willReturn(claims);
+		given(jwtValidator.validateRefreshToken("refresh-token")).willReturn(claims);
 
 		AuthTokenReissueCommand command = AuthTokenReissueCommand.builder()
 			.refreshToken("refresh-token")
@@ -153,7 +147,7 @@ class AuthTokenReissueServiceTest {
 		// given
 		Claims claims = refreshTokenClaims("1");
 
-		given(jwtTokenValidator.validateRefreshToken("refresh-token")).willReturn(claims);
+		given(jwtValidator.validateRefreshToken("refresh-token")).willReturn(claims);
 		given(refreshTokenStore.get(1L)).willReturn(Optional.empty());
 
 		AuthTokenReissueCommand command = AuthTokenReissueCommand.builder()
@@ -175,7 +169,7 @@ class AuthTokenReissueServiceTest {
 		// given
 		Claims claims = refreshTokenClaims("1");
 
-		given(jwtTokenValidator.validateRefreshToken("refresh-token")).willReturn(claims);
+		given(jwtValidator.validateRefreshToken("refresh-token")).willReturn(claims);
 		given(refreshTokenStore.get(1L)).willReturn(Optional.of("refresh-token"));
 		given(memberQueryService.findById(1L)).willReturn(Optional.empty());
 
@@ -195,7 +189,7 @@ class AuthTokenReissueServiceTest {
 	private Claims refreshTokenClaims(String subject) {
 		Claims claims = Jwts.claims();
 		claims.setSubject(subject);
-		claims.put("type", JwtTokenType.REFRESH_TOKEN.name());
+		claims.put("type", JwtType.REFRESH_TOKEN.name());
 		return claims;
 	}
 }
