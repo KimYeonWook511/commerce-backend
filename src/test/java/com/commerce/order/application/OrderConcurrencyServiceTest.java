@@ -34,7 +34,7 @@ import com.commerce.order.redis.OrderIdempotencyStore;
 import com.commerce.order.application.command.OrderCreateItem;
 import com.commerce.order.application.command.OrderCreateCommand;
 import com.commerce.order.application.result.OrderCreateResult;
-import com.commerce.orderitem.repository.OrderItemRepository;
+import com.commerce.order.infrastructure.JpaOrderItemRepository;
 import com.commerce.product.domain.Product;
 import com.commerce.product.domain.ProductStatus;
 import com.commerce.product.infrastructure.JpaProductRepository;
@@ -81,7 +81,7 @@ class OrderConcurrencyServiceTest {
 	private OrderIdempotencyStore orderIdempotencyStore;
 
 	@Autowired
-	private OrderItemRepository orderItemRepository;
+	private JpaOrderItemRepository orderItemRepository;
 
 	@AfterEach
 	void tearDown() {

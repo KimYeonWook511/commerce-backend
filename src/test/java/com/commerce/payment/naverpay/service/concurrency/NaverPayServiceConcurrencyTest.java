@@ -38,7 +38,7 @@ import com.commerce.member.repository.MemberRepository;
 import com.commerce.order.domain.Order;
 import com.commerce.order.domain.OrderStatus;
 import com.commerce.order.infrastructure.JpaOrderRepository;
-import com.commerce.orderitem.repository.OrderItemRepository;
+import com.commerce.order.infrastructure.JpaOrderItemRepository;
 import com.commerce.payment.domain.PaymentAttempt;
 import com.commerce.payment.domain.PaymentAttemptFailCode;
 import com.commerce.payment.domain.PaymentAttemptStatus;
@@ -81,7 +81,7 @@ class NaverPayServiceConcurrencyTest {
 	private JpaOrderRepository orderRepository;
 
 	@Autowired
-	private OrderItemRepository orderItemRepository;
+	private JpaOrderItemRepository orderItemRepository;
 
 	@Autowired
 	private PaymentPersistenceTestSupport paymentPersistence;

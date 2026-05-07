@@ -31,7 +31,7 @@ import com.commerce.order.domain.OrderStatus;
 import com.commerce.order.exception.OrderErrorCode;
 import com.commerce.order.exception.OrderException;
 import com.commerce.order.infrastructure.JpaOrderRepository;
-import com.commerce.orderitem.repository.OrderItemRepository;
+import com.commerce.order.infrastructure.JpaOrderItemRepository;
 import com.commerce.payment.domain.Payment;
 import com.commerce.payment.domain.PaymentAttempt;
 import com.commerce.payment.domain.PaymentAttemptFailCode;
@@ -74,7 +74,7 @@ class NaverPayServiceIntegrationTest {
 	private JpaOrderRepository orderRepository;
 
 	@Autowired
-	private OrderItemRepository orderItemRepository;
+	private JpaOrderItemRepository orderItemRepository;
 
 	@Autowired
 	private PaymentPersistenceTestSupport paymentPersistence;

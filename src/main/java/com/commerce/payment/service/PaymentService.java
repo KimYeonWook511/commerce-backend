@@ -12,7 +12,7 @@ import com.commerce.order.domain.Order;
 import com.commerce.order.exception.OrderErrorCode;
 import com.commerce.order.exception.OrderException;
 import com.commerce.order.domain.repository.OrderRepository;
-import com.commerce.orderitem.domain.OrderItem;
+import com.commerce.order.domain.OrderItem;
 import com.commerce.payment.domain.Payment;
 import com.commerce.payment.domain.PaymentProvider;
 import com.commerce.payment.domain.PaymentStatus;

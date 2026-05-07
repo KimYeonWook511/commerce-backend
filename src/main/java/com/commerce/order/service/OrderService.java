@@ -31,7 +31,7 @@ import com.commerce.order.service.command.OrderCreateItem;
 import com.commerce.order.service.command.OrderCreateCommand;
 import com.commerce.order.service.result.OrderCancelResult;
 import com.commerce.order.service.result.OrderCreateResult;
-import com.commerce.orderitem.domain.OrderItem;
+import com.commerce.order.domain.OrderItem;
 import com.commerce.outbox.service.OutboxService;
 import com.commerce.outbox.stock.service.command.StockRestoreOutboxCreateCommand;
 import com.commerce.product.domain.Product;
