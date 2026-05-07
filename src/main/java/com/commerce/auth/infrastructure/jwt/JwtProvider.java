@@ -17,7 +17,7 @@ public class JwtProvider {
 	private final JwtProperties jwtProperties;
 
 	public String createAccessToken(JwtClaims claims) {
-		return createToken(claims, jwtProperties.getAccessSecretKey(),  jwtProperties.getAccessExpiration());
+		return createToken(claims, jwtProperties.getAccessSecretKey(), jwtProperties.getAccessExpiration());
 	}
 
 	public String createRefreshToken(JwtClaims claims) {
@@ -26,7 +26,7 @@ public class JwtProvider {
 
 	private String createToken(JwtClaims claims, SecretKey secretKey, Long expiration) {
 		Instant now = Instant.now();
-		Instant expiredAt = now.plusSeconds(expiration);
+		Instant expiredAt = now.plusMillis(expiration);
 
 		return Jwts.builder()
 			.setSubject(claims.getMemberId().toString()) // 커스텀 클레임으로 넣어도 되지만 sub에 넣는게 정석

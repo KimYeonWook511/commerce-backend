@@ -97,15 +97,12 @@ class AuthTokenReissueServiceTest {
 			});
 	}
 
-	@DisplayName("리프레시 토큰 타입이 아니면 예외가 발생한다")
+	@DisplayName("리프레시 토큰 검증에 실패하면 예외가 발생한다")
 	@Test
-	void reissue_whenTokenTypeIsNotRefreshToken_throwException() {
+	void reissue_whenRefreshTokenInvalid_throwException() {
 		// given
-		Claims claims = Jwts.claims();
-		claims.setSubject("1");
-		claims.put("type", JwtType.ACCESS_TOKEN.name());
-
-		given(jwtValidator.validateRefreshToken("refresh-token")).willReturn(claims);
+		given(jwtValidator.validateRefreshToken("refresh-token"))
+			.willThrow(new AuthException(AuthErrorCode.TOKEN_INVALID));
 
 		AuthTokenReissueCommand command = AuthTokenReissueCommand.builder()
 			.refreshToken("refresh-token")

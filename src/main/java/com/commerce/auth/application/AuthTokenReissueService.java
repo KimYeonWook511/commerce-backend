@@ -5,7 +5,6 @@ import org.springframework.transaction.annotation.Transactional;
 
 import com.commerce.auth.exception.AuthErrorCode;
 import com.commerce.auth.exception.AuthException;
-import com.commerce.auth.infrastructure.jwt.JwtType;
 import com.commerce.auth.infrastructure.jwt.JwtValidator;
 import com.commerce.auth.infrastructure.RefreshTokenStore;
 import com.commerce.auth.application.command.AuthTokenReissueCommand;
@@ -31,8 +30,6 @@ public class AuthTokenReissueService {
 		String refreshToken = command.getRefreshToken();
 		Claims claims = jwtValidator.validateRefreshToken(refreshToken);
 
-		validateRefreshTokenType(claims);
-
 		Long memberId = parseMemberId(claims.getSubject());
 
 		validateStoredRefreshToken(memberId, refreshToken);
@@ -46,14 +43,6 @@ public class AuthTokenReissueService {
 			tokenIssueResult.getAccessToken(),
 			tokenIssueResult.getRefreshToken()
 		);
-	}
-
-	private void validateRefreshTokenType(Claims claims) {
-		String tokenType = claims.get("type", String.class);
-
-		if (!JwtType.REFRESH_TOKEN.name().equals(tokenType)) {
-			throw new AuthException(AuthErrorCode.TOKEN_INVALID);
-		}
 	}
 
 	private Long parseMemberId(String subject) {

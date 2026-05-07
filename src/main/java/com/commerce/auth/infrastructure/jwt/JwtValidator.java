@@ -22,11 +22,15 @@ public class JwtValidator {
 	private final JwtProperties jwtProperties;
 
 	public Claims validateAccessToken(String token) {
-		return validate(token, jwtProperties.getAccessSecretKey());
+		Claims claims = validate(token, jwtProperties.getAccessSecretKey());
+		validateTokenType(claims, JwtType.ACCESS_TOKEN);
+		return claims;
 	}
 
 	public Claims validateRefreshToken(String token) {
-		return validate(token, jwtProperties.getRefreshSecretKey());
+		Claims claims = validate(token, jwtProperties.getRefreshSecretKey());
+		validateTokenType(claims, JwtType.REFRESH_TOKEN);
+		return claims;
 	}
 
 	private Claims validate(String token, SecretKey secretKey) {
@@ -45,6 +49,14 @@ public class JwtValidator {
 		} catch (IllegalArgumentException e) {
 			log.warn("Empty or null JWT");
 			throw new AuthException(AuthErrorCode.TOKEN_EMPTY);
+		}
+	}
+
+	private void validateTokenType(Claims claims, JwtType expectedType) {
+		String tokenType = claims.get("type", String.class);
+
+		if (!expectedType.name().equals(tokenType)) {
+			throw new AuthException(AuthErrorCode.TOKEN_INVALID);
 		}
 	}
 
