@@ -17,7 +17,9 @@ import com.commerce.auth.controller.request.AuthLoginRequest;
 import com.commerce.auth.controller.request.AuthSignUpRequest;
 import com.commerce.auth.controller.request.AuthTokenReissueRequest;
 import com.commerce.auth.jwt.JwtProperties;
-import com.commerce.auth.service.AuthService;
+import com.commerce.auth.service.AuthLoginService;
+import com.commerce.auth.service.AuthSignUpService;
+import com.commerce.auth.service.AuthTokenReissueService;
 import com.commerce.auth.service.command.AuthLoginCommand;
 import com.commerce.auth.service.command.AuthSignUpCommand;
 import com.commerce.auth.service.command.AuthTokenReissueCommand;
@@ -36,14 +38,16 @@ import lombok.RequiredArgsConstructor;
 @RequestMapping("/auth")
 public class AuthController {
 
-	private final AuthService authService;
+	private final AuthSignUpService authSignUpService;
+	private final AuthLoginService authLoginService;
+	private final AuthTokenReissueService authTokenReissueService;
 	private final JwtProperties jwtProperties;
 
 	@PostMapping("/signup")
 	public ResponseEntity<ApiResponse<AuthSignUpResult>> signUp(
 		@Valid @RequestBody AuthSignUpRequest request
 	) {
-		AuthSignUpResult signUpResult = authService.signUp(
+		AuthSignUpResult signUpResult = authSignUpService.signUp(
 			AuthSignUpCommand.builder()
 				.email(request.getEmail())
 				.password(request.getPassword())
@@ -62,7 +66,7 @@ public class AuthController {
 	public ResponseEntity<ApiResponse<AuthLoginResult>> login(
 		@Valid @RequestBody AuthLoginRequest request
 	) {
-		AuthLoginResult loginResult = authService.login(
+		AuthLoginResult loginResult = authLoginService.login(
 			AuthLoginCommand.builder()
 				.email(request.getEmail())
 				.password(request.getPassword())
@@ -82,7 +86,7 @@ public class AuthController {
 		@RequestBody(required = false) AuthTokenReissueRequest request
 	) {
 		String resolvedRefreshToken = resolveRefreshToken(refreshToken, request);
-		AuthTokenReissueResult reissueResult = authService.reissue(
+		AuthTokenReissueResult reissueResult = authTokenReissueService.reissue(
 			AuthTokenReissueCommand.builder()
 				.refreshToken(resolvedRefreshToken)
 				.build()

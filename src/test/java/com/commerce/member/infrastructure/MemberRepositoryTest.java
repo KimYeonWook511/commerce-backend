@@ -1,17 +1,22 @@
-package com.commerce.member.repository;
+package com.commerce.member.infrastructure;
 
 import static org.assertj.core.api.Assertions.assertThat;
+import static org.assertj.core.api.Assertions.assertThatThrownBy;
 
 import org.junit.jupiter.api.DisplayName;
 import org.junit.jupiter.api.Test;
 import org.springframework.beans.factory.annotation.Autowired;
 import org.springframework.boot.test.autoconfigure.orm.jpa.DataJpaTest;
+import org.springframework.dao.DataIntegrityViolationException;
+import org.springframework.context.annotation.Import;
 import org.springframework.test.context.ActiveProfiles;
 
 import com.commerce.member.domain.Member;
+import com.commerce.member.domain.repository.MemberRepository;
 
 @DataJpaTest
 @ActiveProfiles("test")
+@Import(MemberRepositoryAdapter.class)
 class MemberRepositoryTest {
 
 	@Autowired
@@ -21,11 +26,7 @@ class MemberRepositoryTest {
 	@Test
 	void findByEmail_whenMemberExists_returnMember() {
 		// given
-		Member member = Member.builder()
-			.email("test@example.com")
-			.password("hashed-pass")
-			.username("user1")
-			.build();
+		Member member = Member.createUser("test@example.com", "hashed-pass", "user1");
 		memberRepository.save(member);
 
 		// when
@@ -39,11 +40,7 @@ class MemberRepositoryTest {
 	@Test
 	void existsByEmail_whenMemberExists_returnTrue() {
 		// given
-		Member member = Member.builder()
-			.email("exists@example.com")
-			.password("hashed-pass")
-			.username("user2")
-			.build();
+		Member member = Member.createUser("exists@example.com", "hashed-pass", "user2");
 		memberRepository.save(member);
 
 		// when
@@ -51,5 +48,18 @@ class MemberRepositoryTest {
 
 		// then
 		assertThat(exists).isTrue();
+	}
+
+	@DisplayName("이메일이 중복되면 저장 시점에 예외가 발생한다")
+	@Test
+	void save_whenEmailDuplicated_throwDataIntegrityViolationException() {
+		// given
+		Member firstMember = Member.createUser("duplicate@example.com", "hashed-pass", "user1");
+		Member secondMember = Member.createUser("duplicate@example.com", "hashed-pass", "user2");
+		memberRepository.save(firstMember);
+
+		// when & then
+		assertThatThrownBy(() -> memberRepository.save(secondMember))
+			.isInstanceOf(DataIntegrityViolationException.class);
 	}
 }

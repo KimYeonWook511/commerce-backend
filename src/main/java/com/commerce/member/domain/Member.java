@@ -46,4 +46,22 @@ public class Member extends BaseTimeEntity {
 		this.role = MemberRole.ROLE_USER; // default로 ROLE_USER
 	}
 
+	public static Member createUser(String email, String passwordHash, String username) {
+		validateRequired(email, "Member email is required.");
+		validateRequired(passwordHash, "Member password hash is required.");
+		validateRequired(username, "Member username is required.");
+
+		return Member.builder()
+			.email(email)
+			.password(passwordHash)
+			.username(username)
+			.build();
+	}
+
+	private static void validateRequired(String value, String message) {
+		if (value == null || value.isBlank()) {
+			throw new IllegalArgumentException(message);
+		}
+	}
+
 }

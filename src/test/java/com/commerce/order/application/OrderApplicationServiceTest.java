@@ -21,9 +21,9 @@ import org.mockito.junit.jupiter.MockitoExtension;
 import org.springframework.test.util.ReflectionTestUtils;
 
 import com.commerce.member.domain.Member;
+import com.commerce.member.domain.repository.MemberRepository;
 import com.commerce.member.exception.MemberErrorCode;
 import com.commerce.member.exception.MemberException;
-import com.commerce.member.repository.MemberRepository;
 import com.commerce.order.domain.Order;
 import com.commerce.order.domain.OrderStatus;
 import com.commerce.order.exception.OrderErrorCode;
