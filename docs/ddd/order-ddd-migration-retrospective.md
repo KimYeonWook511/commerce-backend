@@ -62,6 +62,13 @@ rg "com\.commerce\.order\.(service|controller|repository)" src/main/java src/tes
 refactor: order legacy 패키지를 정리한다
 ```
 
+## OrderItem 경계 정리
+
+- `orderitem`은 독립 유스케이스가 없고 `Order` aggregate 내부 구성요소로만 사용된다.
+- 따라서 별도 최상위 도메인 패키지로 두지 않고 `order.domain.OrderItem`으로 이동한다.
+- 테스트 fixture용 JPA repository는 domain repository port를 만들지 않고 `order.infrastructure.JpaOrderItemRepository`로 둔다.
+- 이 작업은 legacy 삭제와 repository adapter 일관성 정리보다 먼저 진행하되, API와 DB 계약은 바꾸지 않는다.
+
 ## 다음 DDD 작업에 적용할 원칙
 
 - 다음 대상은 `payment`로 진행한다.

@@ -1,7 +1,6 @@
-package com.commerce.orderitem.domain;
+package com.commerce.order.domain;
 
 import com.commerce.common.jpa.BaseTimeEntity;
-import com.commerce.order.domain.Order;
 import com.commerce.product.domain.Product;
 
 import jakarta.persistence.Column;

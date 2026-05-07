@@ -28,7 +28,7 @@ import com.commerce.order.domain.OrderStatus;
 import com.commerce.order.exception.OrderErrorCode;
 import com.commerce.order.exception.OrderException;
 import com.commerce.order.infrastructure.JpaOrderRepository;
-import com.commerce.orderitem.repository.OrderItemRepository;
+import com.commerce.order.infrastructure.JpaOrderItemRepository;
 import com.commerce.payment.domain.PaymentProvider;
 import com.commerce.payment.exception.PaymentErrorCode;
 import com.commerce.payment.exception.PaymentException;
@@ -62,7 +62,7 @@ class PaymentApprovalServiceConcurrencyTest {
 	private JpaOrderRepository orderRepository;
 
 	@Autowired
-	private OrderItemRepository orderItemRepository;
+	private JpaOrderItemRepository orderItemRepository;
 
 	@DynamicPropertySource
 	static void registerProperties(DynamicPropertyRegistry registry) {

@@ -37,7 +37,7 @@ import com.commerce.member.repository.MemberRepository;
 import com.commerce.order.domain.Order;
 import com.commerce.order.domain.OrderStatus;
 import com.commerce.order.infrastructure.JpaOrderRepository;
-import com.commerce.orderitem.repository.OrderItemRepository;
+import com.commerce.order.infrastructure.JpaOrderItemRepository;
 import com.commerce.outbox.service.OutboxService;
 import com.commerce.outbox.stock.service.command.StockRestoreOutboxCreateCommand;
 import com.commerce.product.domain.Product;
@@ -67,7 +67,7 @@ class OrderExpirationBatchTest {
 	private JpaOrderRepository orderRepository;
 
 	@Autowired
-	private OrderItemRepository orderItemRepository;
+	private JpaOrderItemRepository orderItemRepository;
 
 	@MockitoBean
 	private OutboxService outboxService;

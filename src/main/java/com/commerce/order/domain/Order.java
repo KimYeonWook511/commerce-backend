@@ -5,7 +5,6 @@ import java.util.List;
 
 import com.commerce.common.jpa.BaseTimeEntity;
 import com.commerce.member.domain.Member;
-import com.commerce.orderitem.domain.OrderItem;
 import com.commerce.product.domain.Product;
 import com.commerce.order.exception.OrderErrorCode;
 import com.commerce.order.exception.OrderException;
