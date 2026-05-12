@@ -1,4 +1,4 @@
-package com.commerce.order.batch;
+package com.commerce.order.integration.batch;
 
 import static org.assertj.core.api.Assertions.assertThat;
 import static org.mockito.ArgumentMatchers.*;
@@ -27,27 +27,29 @@ import org.springframework.batch.test.JobLauncherTestUtils;
 import org.springframework.batch.test.context.SpringBatchTest;
 import org.springframework.beans.factory.annotation.Autowired;
 import org.springframework.boot.test.context.SpringBootTest;
+import org.springframework.context.annotation.Import;
 import org.springframework.test.context.ActiveProfiles;
 import org.springframework.test.context.bean.override.mockito.MockitoBean;
 
 import com.commerce.order.exception.OrderErrorCode;
 import com.commerce.order.exception.OrderException;
 import com.commerce.member.domain.Member;
-import com.commerce.member.repository.MemberRepository;
 import com.commerce.order.domain.Order;
 import com.commerce.order.domain.OrderStatus;
-import com.commerce.order.infrastructure.JpaOrderRepository;
-import com.commerce.order.infrastructure.JpaOrderItemRepository;
 import com.commerce.outbox.service.OutboxService;
 import com.commerce.outbox.stock.service.command.StockRestoreOutboxCreateCommand;
 import com.commerce.product.domain.Product;
 import com.commerce.product.domain.ProductStatus;
-import com.commerce.product.infrastructure.JpaProductRepository;
+import com.commerce.member.integration.support.MemberPersistenceTestSupport;
+import com.commerce.order.integration.support.OrderPersistenceTestSupport;
+import com.commerce.product.integration.support.ProductPersistenceTestSupport;
+import com.commerce.test.support.PersistenceCleanupTestSupport;
 
 @Tag("batch")
 @SpringBatchTest
 @SpringBootTest
 @ActiveProfiles("test")
+@Import({PersistenceCleanupTestSupport.class, MemberPersistenceTestSupport.class, ProductPersistenceTestSupport.class, OrderPersistenceTestSupport.class})
 class OrderExpirationBatchTest {
 
 	@SuppressWarnings("SpringJavaInjectionPointsAutowiringInspection")
@@ -58,16 +60,16 @@ class OrderExpirationBatchTest {
 	private Job orderExpirationJob;
 
 	@Autowired
-	private MemberRepository memberRepository;
+	private PersistenceCleanupTestSupport persistenceCleanup;
 
 	@Autowired
-	private JpaProductRepository productRepository;
+	private MemberPersistenceTestSupport memberPersistence;
 
 	@Autowired
-	private JpaOrderRepository orderRepository;
+	private ProductPersistenceTestSupport productPersistence;
 
 	@Autowired
-	private JpaOrderItemRepository orderItemRepository;
+	private OrderPersistenceTestSupport orderPersistence;
 
 	@MockitoBean
 	private OutboxService outboxService;
@@ -79,10 +81,9 @@ class OrderExpirationBatchTest {
 
 	@AfterEach
 	void tearDown() {
-		orderItemRepository.deleteAllInBatch();
-		orderRepository.deleteAllInBatch();
-		productRepository.deleteAllInBatch();
-		memberRepository.deleteAllInBatch();
+		persistenceCleanup.deleteAllInBatch(
+			memberPersistence, productPersistence, orderPersistence
+		);
 	}
 
 	@DisplayName("만료된 주문은 배치에서 취소되고 outbox 이벤트가 생성된다")
@@ -90,7 +91,9 @@ class OrderExpirationBatchTest {
 	void orderExpirationJob_whenOrderExpired_cancelOrder() throws Exception {
 		// given
 		LocalDateTime now = LocalDateTime.now();
-		Order order = saveOrder();
+		Member member = memberPersistence.save(createMember());
+		Product product = productPersistence.save(createProduct());
+		Order order = orderPersistence.save(createOrder(member, product));
 		JobParameters parameters = jobParameters(now.plusMinutes(10));
 
 		// when
@@ -98,7 +101,7 @@ class OrderExpirationBatchTest {
 
 		// then
 		assertThat(execution.getStatus()).isEqualTo(BatchStatus.COMPLETED);
-		Order result = orderRepository.findById(order.getId()).orElseThrow();
+		Order result = orderPersistence.findById(order.getId()).orElseThrow();
 		assertThat(result.getStatus()).isEqualTo(OrderStatus.CANCELED);
 		then(outboxService).should()
 			.createStockRestoreOutboxEvent(argThat(command -> command.getOrderId().equals(result.getId())));
@@ -109,7 +112,9 @@ class OrderExpirationBatchTest {
 	void orderExpirationJob_whenNoExpiredOrders_writeNothing() throws Exception {
 		// given
 		LocalDateTime now = LocalDateTime.now();
-		saveOrder();
+		Member member = memberPersistence.save(createMember());
+		Product product = productPersistence.save(createProduct());
+		orderPersistence.save(createOrder(member, product));
 		JobParameters parameters = jobParameters(now.minusMinutes(60));
 
 		// when
@@ -129,7 +134,9 @@ class OrderExpirationBatchTest {
 	void orderExpirationJob_whenOrderNotExpired_keepOrder() throws Exception {
 		// given
 		LocalDateTime now = LocalDateTime.now();
-		Order order = saveOrder();
+		Member member = memberPersistence.save(createMember());
+		Product product = productPersistence.save(createProduct());
+		Order order = orderPersistence.save(createOrder(member, product));
 		JobParameters parameters = jobParameters(now.minusMinutes(60));
 
 		// when
@@ -137,7 +144,7 @@ class OrderExpirationBatchTest {
 
 		// then
 		assertThat(execution.getStatus()).isEqualTo(BatchStatus.COMPLETED);
-		Order result = orderRepository.findById(order.getId()).orElseThrow();
+		Order result = orderPersistence.findById(order.getId()).orElseThrow();
 		assertThat(result.getStatus()).isEqualTo(OrderStatus.INIT);
 		then(outboxService).should(never())
 			.createStockRestoreOutboxEvent(any(StockRestoreOutboxCreateCommand.class));
@@ -148,10 +155,13 @@ class OrderExpirationBatchTest {
 	void orderExpirationJob_whenOrdersExceedChunk_processAllOrders() throws Exception {
 		// given
 		LocalDateTime now = LocalDateTime.now();
-		Member member = saveMember();
-		Product product = saveProduct();
+		Member member = memberPersistence.save(createMember());
+		Product product = productPersistence.save(createProduct());
 		int totalOrders = 120;
-		List<Order> orders = saveOrders(member, product, totalOrders);
+		List<Order> orders = new ArrayList<>();
+		for (int i = 0; i < totalOrders; i++) {
+			orders.add(orderPersistence.save(createOrder(member, product)));
+		}
 		JobParameters parameters = jobParameters(now.plusMinutes(10));
 
 		// when
@@ -164,7 +174,7 @@ class OrderExpirationBatchTest {
 		assertThat(stepExecution.getWriteCount()).isEqualTo(totalOrders);
 
 		List<Long> orderIds = orders.stream().map(Order::getId).toList();
-		List<Order> updatedOrders = orderRepository.findAllById(orderIds);
+		List<Order> updatedOrders = orderPersistence.findAllById(orderIds);
 		assertThat(updatedOrders).allMatch(order -> order.getStatus() == OrderStatus.CANCELED);
 		then(outboxService).should(times(totalOrders))
 			.createStockRestoreOutboxEvent(any(StockRestoreOutboxCreateCommand.class));
@@ -175,9 +185,11 @@ class OrderExpirationBatchTest {
 	void orderExpirationJob_whenRunTwice_doNothingOnSecondRun() throws Exception {
 		// given
 		LocalDateTime now = LocalDateTime.now();
-		Member member = saveMember();
-		Product product = saveProduct();
-		Order order = saveOrder(member, product);
+		Member member = memberPersistence.save(createMember());
+		Product product = productPersistence.save(createProduct());
+		Order order = orderPersistence.save(createOrder(member, product));
+		orderPersistence.save(createOrder(member, product, 2));
+
 		JobParameters firstParameters = jobParameters(now.plusMinutes(10));
 		JobParameters secondParameters = jobParameters(now.plusMinutes(10));
 
@@ -189,7 +201,7 @@ class OrderExpirationBatchTest {
 		assertThat(firstExecution.getStatus()).isEqualTo(BatchStatus.COMPLETED);
 		assertThat(secondExecution.getStatus()).isEqualTo(BatchStatus.COMPLETED);
 
-		Order result = orderRepository.findById(order.getId()).orElseThrow();
+		Order result = orderPersistence.findById(order.getId()).orElseThrow();
 		assertThat(result.getStatus()).isEqualTo(OrderStatus.CANCELED);
 
 		StepExecution secondStep = secondExecution.getStepExecutions().iterator().next();
@@ -204,7 +216,9 @@ class OrderExpirationBatchTest {
 	void orderExpirationJob_whenCustomExceptionOccurs_skipItem() throws Exception {
 		// given
 		LocalDateTime now = LocalDateTime.now();
-		Order order = saveOrder();
+		Member member = memberPersistence.save(createMember());
+		Product product = productPersistence.save(createProduct());
+		Order order = orderPersistence.save(createOrder(member, product));
 		doThrow(new OrderException(OrderErrorCode.ORDER_CANCEL_NOT_ALLOWED))
 			.when(outboxService)
 			.createStockRestoreOutboxEvent(any(StockRestoreOutboxCreateCommand.class));
@@ -218,7 +232,7 @@ class OrderExpirationBatchTest {
 		StepExecution stepExecution = execution.getStepExecutions().iterator().next();
 		assertThat(stepExecution.getWriteSkipCount()).isGreaterThanOrEqualTo(1);
 		assertThat(stepExecution.getRollbackCount()).isGreaterThan(0);
-		Order result = orderRepository.findById(order.getId()).orElseThrow();
+		Order result = orderPersistence.findById(order.getId()).orElseThrow();
 		assertThat(result.getStatus()).isEqualTo(OrderStatus.INIT);
 	}
 
@@ -247,44 +261,31 @@ class OrderExpirationBatchTest {
 			.toJobParameters();
 	}
 
-	private Order saveOrder() {
-		Member member = saveMember();
-		Product product = saveProduct();
-		return saveOrder(member, product);
-	}
-
-	private Order saveOrder(Member member, Product product) {
-		Order order = Order.create(member);
-		order.addOrderItem(product, 2);
-		return orderRepository.save(order);
-	}
-
-	private List<Order> saveOrders(Member member, Product product, int count) {
-		List<Order> orders = new ArrayList<>();
-		for (int i = 0; i < count; i++) {
-			orders.add(saveOrder(member, product));
-		}
-		return orders;
-	}
-
-	private Member saveMember() {
-		String uniqueSuffix = UUID.randomUUID().toString().substring(0, 8);
-		Member member = Member.builder()
-			.email("batch-expire-" + uniqueSuffix + "@example.com")
+	private Member createMember() {
+		String suffix = UUID.randomUUID().toString().substring(0, 8);
+		return Member.builder()
+			.email("batch-expire-" + suffix + "@example.com")
 			.password("password123")
-			.username("u" + uniqueSuffix)
+			.username("u" + suffix)
 			.build();
-		return memberRepository.save(member);
 	}
 
-	private Product saveProduct() {
-		String uniqueSuffix = UUID.randomUUID().toString().substring(0, 8);
-		Product product = Product.builder()
-			.name("batch-product-" + uniqueSuffix)
+	private Product createProduct() {
+		return Product.builder()
+			.name("batch-product")
 			.price(1000)
 			.status(ProductStatus.ON_SALE)
 			.build();
-		return productRepository.save(product);
+	}
+
+	private Order createOrder(Member member, Product product) {
+		return createOrder(member, product, 1);
+	}
+
+	private Order createOrder(Member member, Product product, int quantity) {
+		Order order = Order.create(member);
+		order.addOrderItem(product, quantity);
+		return order;
 	}
 
 }

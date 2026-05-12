@@ -5,7 +5,8 @@ import org.springframework.http.HttpStatus;
 public enum CommonErrorCode implements ErrorCode {
 	INTERNAL_ERROR(HttpStatus.INTERNAL_SERVER_ERROR, "COMMON-500", "예상치 못한 오류가 발생했습니다"),
 	INVALID_REQUEST(HttpStatus.BAD_REQUEST, "COMMON-400", "요청 값이 올바르지 않습니다"),
-	DATA_INTEGRITY_VIOLATION(HttpStatus.CONFLICT, "COMMON-409", "데이터 무결성 위반입니다");
+	DATA_INTEGRITY_VIOLATION(HttpStatus.CONFLICT, "COMMON-409", "데이터 무결성 위반입니다"),
+	OPTIMISTIC_LOCK_CONFLICT(HttpStatus.CONFLICT, "COMMON-409-1", "동시 요청으로 인한 충돌이 발생했습니다");
 
 	private final HttpStatus status;
 	private final String code;

@@ -1,4 +1,4 @@
-package com.commerce.order.application;
+package com.commerce.order.integration.concurrency;
 
 import static org.assertj.core.api.Assertions.assertThat;
 import static org.mockito.ArgumentMatchers.anyInt;
@@ -6,6 +6,7 @@ import static org.mockito.ArgumentMatchers.anyLong;
 import static org.mockito.BDDMockito.*;
 
 import java.util.List;
+import java.util.UUID;
 import java.util.concurrent.ConcurrentLinkedQueue;
 import java.util.concurrent.CountDownLatch;
 import java.util.concurrent.ExecutorService;
@@ -19,26 +20,31 @@ import org.junit.jupiter.api.Tag;
 import org.junit.jupiter.api.Test;
 import org.springframework.beans.factory.annotation.Autowired;
 import org.springframework.boot.test.context.SpringBootTest;
+import org.springframework.context.annotation.Import;
 import org.springframework.test.context.ActiveProfiles;
 import org.springframework.test.context.TestPropertySource;
 import org.springframework.test.context.bean.override.mockito.MockitoSpyBean;
 
 import com.commerce.member.domain.Member;
-import com.commerce.member.repository.MemberRepository;
-import com.commerce.order.infrastructure.JpaOrderRepository;
-import com.commerce.order.application.command.OrderCreateItem;
+import com.commerce.member.integration.support.MemberPersistenceTestSupport;
+import com.commerce.order.application.OrderCancelService;
+import com.commerce.order.application.OrderConcurrencyService;
+import com.commerce.order.application.OrderCreateService;
 import com.commerce.order.application.command.OrderCreateCommand;
-import com.commerce.order.infrastructure.JpaOrderItemRepository;
+import com.commerce.order.application.command.OrderCreateItem;
+import com.commerce.order.integration.support.OrderPersistenceTestSupport;
 import com.commerce.product.domain.Product;
 import com.commerce.product.domain.ProductStatus;
-import com.commerce.product.infrastructure.JpaProductRepository;
-import com.commerce.stock.domain.Stock;
-import com.commerce.stock.repository.StockRepository;
+import com.commerce.product.integration.support.ProductPersistenceTestSupport;
 import com.commerce.stock.application.StockInventoryService;
+import com.commerce.stock.domain.Stock;
+import com.commerce.stock.integration.support.StockPersistenceTestSupport;
+import com.commerce.test.support.PersistenceCleanupTestSupport;
 
 @Tag("concurrency")
 @SpringBootTest
 @ActiveProfiles("test")
+@Import({PersistenceCleanupTestSupport.class, MemberPersistenceTestSupport.class, ProductPersistenceTestSupport.class, StockPersistenceTestSupport.class, OrderPersistenceTestSupport.class})
 @TestPropertySource(properties = {
 	"spring.datasource.url=jdbc:h2:mem:testdb;LOCK_TIMEOUT=1000",
 	"spring.datasource.hikari.maximum-pool-size=10",
@@ -54,38 +60,36 @@ class OrderConcurrencyServiceDeadlockTest {
 	private StockInventoryService stockService;
 
 	@Autowired
-	private MemberRepository memberRepository;
+	private PersistenceCleanupTestSupport persistenceCleanup;
 
 	@Autowired
-	private JpaProductRepository productRepository;
+	private MemberPersistenceTestSupport memberPersistence;
 
 	@Autowired
-	private StockRepository stockRepository;
+	private ProductPersistenceTestSupport productPersistence;
 
 	@Autowired
-	private JpaOrderRepository orderRepository;
+	private StockPersistenceTestSupport stockPersistence;
 
 	@Autowired
-	private JpaOrderItemRepository orderItemRepository;
+	private OrderPersistenceTestSupport orderPersistence;
 
 	@AfterEach
 	void tearDown() {
-		orderItemRepository.deleteAllInBatch();
-		orderRepository.deleteAllInBatch();
-		stockRepository.deleteAllInBatch();
-		productRepository.deleteAllInBatch();
-		memberRepository.deleteAllInBatch();
+		persistenceCleanup.deleteAllInBatch(
+			memberPersistence, productPersistence, stockPersistence, orderPersistence
+		);
 	}
 
 	@DisplayName("동시 요청에서 반대 순서로 락을 잡으면 락 대기/타임아웃이 발생할 수 있다")
 	@Test
 	void createOrderWithPessimisticLock_whenOppositeOrder_mayFailWithLockTimeout() throws Exception {
 		// given
-		Member member = createMember();
-		Product product1 = createProduct("order-product-pessimistic-1", 1000);
-		Product product2 = createProduct("order-product-pessimistic-2", 1500);
-		createStock(product1, 2);
-		createStock(product2, 2);
+		Member member = memberPersistence.save(createMember());
+		Product product1 = productPersistence.save(createProduct("order-product-pessimistic-1", 1000));
+		Product product2 = productPersistence.save(createProduct("order-product-pessimistic-2", 1500));
+		stockPersistence.save(createStock(product1, 2));
+		stockPersistence.save(createStock(product2, 2));
 
 		OrderCreateCommand requestA = OrderCreateCommand.builder()
 			.memberId(member.getId())
@@ -135,7 +139,7 @@ class OrderConcurrencyServiceDeadlockTest {
 		}
 
 		// then
-		long orderCount = orderRepository.count();
+		long orderCount = orderPersistence.count();
 		assertThat(errors).isNotEmpty();
 		assertThat(orderCount).isLessThan(2L);
 	}
@@ -144,15 +148,15 @@ class OrderConcurrencyServiceDeadlockTest {
 	@Test
 	void createOrderWithPessimisticLockOrdered_whenOppositeOrder_avoidDeadlock() throws Exception {
 		// given
-		Member member = createMember();
-		Product product1 = createProduct("order-product-pessimistic-ordered-1", 1000);
-		Product product2 = createProduct("order-product-pessimistic-ordered-2", 1500);
-		Product product3 = createProduct("order-product-pessimistic-ordered-3", 2000);
-		Product product4 = createProduct("order-product-pessimistic-ordered-4", 2500);
-		createStock(product1, 2);
-		createStock(product2, 2);
-		createStock(product3, 2);
-		createStock(product4, 2);
+		Member member = memberPersistence.save(createMember());
+		Product product1 = productPersistence.save(createProduct("order-product-pessimistic-ordered-1", 1000));
+		Product product2 = productPersistence.save(createProduct("order-product-pessimistic-ordered-2", 1500));
+		Product product3 = productPersistence.save(createProduct("order-product-pessimistic-ordered-3", 2000));
+		Product product4 = productPersistence.save(createProduct("order-product-pessimistic-ordered-4", 2500));
+		stockPersistence.save(createStock(product1, 2));
+		stockPersistence.save(createStock(product2, 2));
+		stockPersistence.save(createStock(product3, 2));
+		stockPersistence.save(createStock(product4, 2));
 
 		OrderCreateCommand requestA = OrderCreateCommand.builder()
 			.memberId(member.getId())
@@ -184,7 +188,7 @@ class OrderConcurrencyServiceDeadlockTest {
 		}, errors);
 
 		// then
-		long orderCount = orderRepository.count();
+		long orderCount = orderPersistence.count();
 		assertThat(errors).isEmpty();
 		assertThat(orderCount).isEqualTo(2L);
 	}
@@ -227,31 +231,26 @@ class OrderConcurrencyServiceDeadlockTest {
 	}
 
 	private Member createMember() {
-		return memberRepository.save(
-			Member.builder()
-				.email("test@example.com")
-				.password("password123")
-				.username("user1")
-				.build()
-		);
+		String suffix = UUID.randomUUID().toString().substring(0, 8);
+		return Member.builder()
+			.email("order-deadlock-" + suffix + "@example.com")
+			.password("password123")
+			.username("u" + suffix)
+			.build();
 	}
 
 	private Product createProduct(String name, int price) {
-		return productRepository.save(
-			Product.builder()
-				.name(name)
-				.price(price)
-				.status(ProductStatus.ON_SALE)
-				.build()
-		);
+		return Product.builder()
+			.name(name)
+			.price(price)
+			.status(ProductStatus.ON_SALE)
+			.build();
 	}
 
 	private Stock createStock(Product product, int quantity) {
-		return stockRepository.save(
-			Stock.builder()
-				.product(product)
-				.quantity(quantity)
-				.build()
-		);
+		return Stock.builder()
+			.product(product)
+			.quantity(quantity)
+			.build();
 	}
 }

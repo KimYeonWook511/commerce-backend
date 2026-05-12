@@ -9,11 +9,10 @@ import org.springframework.data.jpa.repository.Query;
 import org.springframework.data.repository.query.Param;
 
 import com.commerce.stock.domain.Stock;
-import com.commerce.stock.domain.repository.StockRepository;
 
 import jakarta.persistence.LockModeType;
 
-public interface JpaStockRepository extends JpaRepository<Stock, Long>, StockRepository {
+public interface JpaStockRepository extends JpaRepository<Stock, Long> {
 
 	Optional<Stock> findByProductId(Long productId);
 

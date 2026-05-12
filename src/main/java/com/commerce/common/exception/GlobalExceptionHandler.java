@@ -3,6 +3,7 @@ package com.commerce.common.exception;
 import org.springframework.dao.DataIntegrityViolationException;
 import org.springframework.http.ResponseEntity;
 import org.springframework.http.converter.HttpMessageNotReadableException;
+import org.springframework.dao.OptimisticLockingFailureException;
 import org.springframework.web.bind.annotation.ExceptionHandler;
 import org.springframework.web.bind.annotation.RestControllerAdvice;
 import org.springframework.web.bind.MethodArgumentNotValidException;
@@ -56,6 +57,15 @@ public class GlobalExceptionHandler {
 		log.error("요청 본문 파싱 실패: {}", ex.getMessage());
 		return ResponseEntity.status(CommonErrorCode.INVALID_REQUEST.getStatus())
 			.body(ApiResponse.error(CommonErrorCode.INVALID_REQUEST));
+	}
+
+	@ExceptionHandler(OptimisticLockingFailureException.class)
+	public ResponseEntity<ApiResponse<Void>> handleOptimisticLockingFailureException(
+		OptimisticLockingFailureException ex
+	) {
+		log.warn("낙관적 락 충돌 발생: {}", ex.getMessage());
+		return ResponseEntity.status(CommonErrorCode.OPTIMISTIC_LOCK_CONFLICT.getStatus())
+			.body(ApiResponse.error(CommonErrorCode.OPTIMISTIC_LOCK_CONFLICT));
 	}
 
 	@ExceptionHandler(DataIntegrityViolationException.class)

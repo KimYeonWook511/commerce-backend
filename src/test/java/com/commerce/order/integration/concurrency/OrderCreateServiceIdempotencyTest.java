@@ -1,10 +1,10 @@
-package com.commerce.order.application;
+package com.commerce.order.integration.concurrency;
 
 import static org.assertj.core.api.Assertions.assertThat;
 import static org.assertj.core.api.Assertions.assertThatThrownBy;
 
-import java.util.List;
 import java.time.Duration;
+import java.util.List;
 
 import org.junit.jupiter.api.AfterEach;
 import org.junit.jupiter.api.DisplayName;
@@ -12,53 +12,55 @@ import org.junit.jupiter.api.Tag;
 import org.junit.jupiter.api.Test;
 import org.springframework.beans.factory.annotation.Autowired;
 import org.springframework.boot.test.context.SpringBootTest;
-import org.springframework.data.redis.core.StringRedisTemplate;
+import org.springframework.context.annotation.Import;
 import org.springframework.test.context.ActiveProfiles;
 import org.springframework.test.context.DynamicPropertyRegistry;
 import org.springframework.test.context.DynamicPropertySource;
 
 import com.commerce.member.domain.Member;
-import com.commerce.member.repository.MemberRepository;
-import com.commerce.order.infrastructure.JpaOrderRepository;
+import com.commerce.member.integration.support.MemberPersistenceTestSupport;
+import com.commerce.order.application.OrderCreateService;
+import com.commerce.order.application.command.OrderCreateCommand;
+import com.commerce.order.application.command.OrderCreateItem;
+import com.commerce.order.application.result.OrderCreateResult;
 import com.commerce.order.exception.OrderErrorCode;
 import com.commerce.order.exception.OrderException;
-import com.commerce.order.redis.OrderIdempotencyStatus;
-import com.commerce.order.application.command.OrderCreateItem;
-import com.commerce.order.application.command.OrderCreateCommand;
-import com.commerce.order.application.result.OrderCreateResult;
-import com.commerce.order.infrastructure.JpaOrderItemRepository;
+import com.commerce.order.integration.support.OrderPersistenceTestSupport;
+import com.commerce.order.redis.OrderIdempotencyStore;
 import com.commerce.product.domain.Product;
 import com.commerce.product.domain.ProductStatus;
-import com.commerce.product.infrastructure.JpaProductRepository;
+import com.commerce.product.integration.support.ProductPersistenceTestSupport;
 import com.commerce.stock.domain.Stock;
-import com.commerce.stock.repository.StockRepository;
+import com.commerce.stock.integration.support.StockPersistenceTestSupport;
+import com.commerce.test.support.PersistenceCleanupTestSupport;
 import com.commerce.test.support.TestcontainersSupport;
 
 @SpringBootTest
 @ActiveProfiles("test")
 @Tag("docker")
+@Import({PersistenceCleanupTestSupport.class, MemberPersistenceTestSupport.class, ProductPersistenceTestSupport.class, StockPersistenceTestSupport.class, OrderPersistenceTestSupport.class})
 class OrderCreateServiceIdempotencyTest {
 
 	@Autowired
 	private OrderCreateService orderCreateService;
 
 	@Autowired
-	private MemberRepository memberRepository;
+	private OrderIdempotencyStore orderIdempotencyStore;
 
 	@Autowired
-	private JpaProductRepository productRepository;
+	private PersistenceCleanupTestSupport persistenceCleanup;
 
 	@Autowired
-	private StockRepository stockRepository;
+	private MemberPersistenceTestSupport memberPersistence;
 
 	@Autowired
-	private JpaOrderRepository orderRepository;
+	private ProductPersistenceTestSupport productPersistence;
 
 	@Autowired
-	private JpaOrderItemRepository orderItemRepository;
+	private StockPersistenceTestSupport stockPersistence;
 
 	@Autowired
-	private StringRedisTemplate redisTemplate;
+	private OrderPersistenceTestSupport orderPersistence;
 
 	@DynamicPropertySource
 	static void registerRedis(DynamicPropertyRegistry registry) {
@@ -67,37 +69,18 @@ class OrderCreateServiceIdempotencyTest {
 
 	@AfterEach
 	void tearDown() {
-		orderItemRepository.deleteAllInBatch();
-		orderRepository.deleteAllInBatch();
-		stockRepository.deleteAllInBatch();
-		productRepository.deleteAllInBatch();
-		memberRepository.deleteAllInBatch();
+		persistenceCleanup.deleteAllInBatch(
+			memberPersistence, productPersistence, stockPersistence, orderPersistence
+		);
 	}
 
 	@DisplayName("같은 멱등키로 재요청하면 주문이 중복 생성되지 않는다")
 	@Test
 	void createOrder_whenSameIdempotencyKey_returnSameOrder() {
 		// given
-		Member member = memberRepository.save(
-			Member.builder()
-				.email("test@example.com")
-				.password("password123")
-				.username("user1")
-				.build()
-		);
-		Product product = productRepository.save(
-			Product.builder()
-				.name("product-1")
-				.price(1000)
-				.status(ProductStatus.ON_SALE)
-				.build()
-		);
-		stockRepository.save(
-			Stock.builder()
-				.product(product)
-				.quantity(10)
-				.build()
-		);
+		Member member = memberPersistence.save(createMember("order-idempotency"));
+		Product product = productPersistence.save(createProduct("product-1", 1000));
+		stockPersistence.save(createStock(product, 10));
 
 		OrderCreateCommand command = OrderCreateCommand.builder()
 			.memberId(member.getId())
@@ -111,9 +94,9 @@ class OrderCreateServiceIdempotencyTest {
 
 		// then
 		assertThat(first.getOrderId()).isEqualTo(second.getOrderId());
-		assertThat(orderRepository.count()).isEqualTo(1);
-		assertThat(orderItemRepository.count()).isEqualTo(1);
-		assertThat(stockRepository.findByProductId(product.getId()).orElseThrow().getQuantity())
+		assertThat(orderPersistence.count()).isEqualTo(1);
+		assertThat(orderPersistence.countItems()).isEqualTo(1);
+		assertThat(stockPersistence.findByProductId(product.getId()).orElseThrow().getQuantity())
 			.isEqualTo(8);
 	}
 
@@ -121,26 +104,9 @@ class OrderCreateServiceIdempotencyTest {
 	@Test
 	void createOrder_whenIdempotencyProcessing_throwException() {
 		// given
-		Member member = memberRepository.save(
-			Member.builder()
-				.email("test2@example.com")
-				.password("password123")
-				.username("user2")
-				.build()
-		);
-		Product product = productRepository.save(
-			Product.builder()
-				.name("product-2")
-				.price(2000)
-				.status(ProductStatus.ON_SALE)
-				.build()
-		);
-		stockRepository.save(
-			Stock.builder()
-				.product(product)
-				.quantity(10)
-				.build()
-		);
+		Member member = memberPersistence.save(createMember("order-idempotency-processing"));
+		Product product = productPersistence.save(createProduct("product-2", 2000));
+		stockPersistence.save(createStock(product, 10));
 
 		OrderCreateCommand command = OrderCreateCommand.builder()
 			.memberId(member.getId())
@@ -149,12 +115,7 @@ class OrderCreateServiceIdempotencyTest {
 			.build();
 
 		// when
-		String redisKey = "order:idempotency:" + member.getId() + ":processing-key";
-		redisTemplate.opsForValue().set(
-			redisKey,
-			OrderIdempotencyStatus.PROCESSING.value(),
-			Duration.ofSeconds(60)
-		);
+		orderIdempotencyStore.reserve(member.getId(), "processing-key", Duration.ofSeconds(60));
 
 		// then
 		assertThatThrownBy(() -> orderCreateService.createOrder(command))
@@ -163,5 +124,28 @@ class OrderCreateServiceIdempotencyTest {
 				OrderException orderException = (OrderException) exception;
 				assertThat(orderException.getErrorCode()).isEqualTo(OrderErrorCode.ORDER_IDEMPOTENCY_IN_PROGRESS);
 			});
+	}
+
+	private Member createMember(String emailPrefix) {
+		return Member.builder()
+			.email(emailPrefix + "@example.com")
+			.password("password123")
+			.username("uorder")
+			.build();
+	}
+
+	private Product createProduct(String name, int price) {
+		return Product.builder()
+			.name(name)
+			.price(price)
+			.status(ProductStatus.ON_SALE)
+			.build();
+	}
+
+	private Stock createStock(Product product, int quantity) {
+		return Stock.builder()
+			.product(product)
+			.quantity(quantity)
+			.build();
 	}
 }

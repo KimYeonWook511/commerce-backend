@@ -1,4 +1,4 @@
-package com.commerce.payment.naverpay.service.concurrency;
+package com.commerce.payment.integration.naverpay.concurrency;
 
 import static org.assertj.core.api.Assertions.assertThat;
 import static org.mockito.ArgumentMatchers.any;
@@ -34,11 +34,8 @@ import org.springframework.test.context.bean.override.mockito.MockitoSpyBean;
 import org.springframework.test.util.ReflectionTestUtils;
 
 import com.commerce.member.domain.Member;
-import com.commerce.member.repository.MemberRepository;
 import com.commerce.order.domain.Order;
 import com.commerce.order.domain.OrderStatus;
-import com.commerce.order.infrastructure.JpaOrderRepository;
-import com.commerce.order.infrastructure.JpaOrderItemRepository;
 import com.commerce.payment.domain.PaymentAttempt;
 import com.commerce.payment.domain.PaymentAttemptFailCode;
 import com.commerce.payment.domain.PaymentAttemptStatus;
@@ -46,42 +43,42 @@ import com.commerce.payment.domain.PaymentAttemptType;
 import com.commerce.payment.domain.PaymentProvider;
 import com.commerce.payment.exception.PaymentErrorCode;
 import com.commerce.payment.exception.PaymentException;
+import com.commerce.payment.naverpay.service.NaverPayService;
 import com.commerce.payment.naverpay.client.NaverPayClient;
 import com.commerce.payment.naverpay.client.response.NaverPayResponse;
 import com.commerce.payment.naverpay.client.response.body.NaverPayApproveBody;
 import com.commerce.payment.naverpay.client.response.body.NaverPayCancelBody;
 import com.commerce.payment.naverpay.client.response.body.NaverPayHistoryBody;
-import com.commerce.payment.naverpay.service.NaverPayService;
 import com.commerce.payment.naverpay.service.result.NaverPayApproveResult;
 import com.commerce.payment.naverpay.service.result.NaverPayApproveStatus;
 import com.commerce.payment.application.PaymentApprovalService;
 import com.commerce.payment.integration.support.PaymentPersistenceTestSupport;
+import com.commerce.member.integration.support.MemberPersistenceTestSupport;
+import com.commerce.order.integration.support.OrderPersistenceTestSupport;
 import com.commerce.product.domain.Product;
 import com.commerce.product.domain.ProductStatus;
-import com.commerce.product.infrastructure.JpaProductRepository;
+import com.commerce.product.integration.support.ProductPersistenceTestSupport;
 import com.commerce.test.support.TestcontainersSupport;
+import com.commerce.test.support.PersistenceCleanupTestSupport;
 
 @Tag("concurrency")
 @Tag("docker")
 @SpringBootTest
 @ActiveProfiles("test")
-@Import(PaymentPersistenceTestSupport.class)
+@Import({PersistenceCleanupTestSupport.class, PaymentPersistenceTestSupport.class, MemberPersistenceTestSupport.class, ProductPersistenceTestSupport.class, OrderPersistenceTestSupport.class})
 class NaverPayServiceConcurrencyTest {
 
 	@Autowired
 	private NaverPayService naverPayService;
 
 	@Autowired
-	private MemberRepository memberRepository;
+	private MemberPersistenceTestSupport memberPersistence;
 
 	@Autowired
-	private JpaProductRepository productRepository;
+	private ProductPersistenceTestSupport productPersistence;
 
 	@Autowired
-	private JpaOrderRepository orderRepository;
-
-	@Autowired
-	private JpaOrderItemRepository orderItemRepository;
+	private OrderPersistenceTestSupport orderPersistence;
 
 	@Autowired
 	private PaymentPersistenceTestSupport paymentPersistence;
@@ -97,13 +94,14 @@ class NaverPayServiceConcurrencyTest {
 		TestcontainersSupport.registerMySql(registry);
 	}
 
+	@Autowired
+	private PersistenceCleanupTestSupport persistenceCleanup;
+
 	@AfterEach
 	void tearDown() {
-		paymentPersistence.deleteAllInBatch();
-		orderItemRepository.deleteAllInBatch();
-		orderRepository.deleteAllInBatch();
-		productRepository.deleteAllInBatch();
-		memberRepository.deleteAllInBatch();
+		persistenceCleanup.deleteAllInBatch(
+			paymentPersistence, memberPersistence, productPersistence, orderPersistence
+		);
 	}
 
 	@DisplayName("같은 결제 승인 요청이 동시에 들어와도 payment는 하나만 생성되고 cancel은 호출되지 않는다")
@@ -112,8 +110,8 @@ class NaverPayServiceConcurrencyTest {
 		// given
 		String merchantPayKey = "PAY-NAVER-CON-1";
 		String paymentId = "pg-naver-con-1";
-		Member member = createMember();
-		createOrder(member, merchantPayKey, 1000);
+		Member member = memberPersistence.save(createMember());
+		persistOrder(member, merchantPayKey, 1000);
 		AtomicInteger approveCallCount = new AtomicInteger();
 		ConcurrentLinkedQueue<NaverPayApproveResult> results = new ConcurrentLinkedQueue<>();
 		ConcurrentLinkedQueue<Throwable> errors = new ConcurrentLinkedQueue<>();
@@ -131,7 +129,7 @@ class NaverPayServiceConcurrencyTest {
 		// then
 		assertThat(errors).isEmpty();
 		assertThat(paymentPersistence.countPaymentsByMerchantPayKey(merchantPayKey)).isEqualTo(1L);
-		assertThat(orderRepository.findByMerchantPayKey(merchantPayKey).orElseThrow().getStatus())
+		assertThat(orderPersistence.getOrderStatusByMerchantPayKey(merchantPayKey))
 			.isEqualTo(OrderStatus.PAID);
 		assertThat(paymentPersistence.getAttempt(
 			merchantPayKey,
@@ -159,8 +157,8 @@ class NaverPayServiceConcurrencyTest {
 		// given
 		String merchantPayKey = "PAY-NAVER-CON-2";
 		String paymentId = "pg-naver-con-2";
-		Member member = createMember();
-		createOrder(member, merchantPayKey, 1000);
+		Member member = memberPersistence.save(createMember());
+		persistOrder(member, merchantPayKey, 1000);
 		AtomicInteger approveCallCount = new AtomicInteger();
 		ConcurrentLinkedQueue<NaverPayApproveResult> results = new ConcurrentLinkedQueue<>();
 		ConcurrentLinkedQueue<Throwable> errors = new ConcurrentLinkedQueue<>();
@@ -180,7 +178,7 @@ class NaverPayServiceConcurrencyTest {
 		// then
 		assertThat(errors).isEmpty();
 		assertThat(paymentPersistence.countPaymentsByMerchantPayKey(merchantPayKey)).isEqualTo(1L);
-		assertThat(orderRepository.findByMerchantPayKey(merchantPayKey).orElseThrow().getStatus())
+		assertThat(orderPersistence.getOrderStatusByMerchantPayKey(merchantPayKey))
 			.isEqualTo(OrderStatus.PAID);
 		assertThat(paymentPersistence.getAttempt(
 			merchantPayKey,
@@ -199,8 +197,8 @@ class NaverPayServiceConcurrencyTest {
 		// given
 		String merchantPayKey = "PAY-NAVER-CON-3";
 		String paymentId = "pg-naver-con-3";
-		Member member = createMember();
-		createOrder(member, merchantPayKey, 1000);
+		Member member = memberPersistence.save(createMember());
+		persistOrder(member, merchantPayKey, 1000);
 		ConcurrentLinkedQueue<Throwable> errors = new ConcurrentLinkedQueue<>();
 
 		given(naverPayClient.approve(paymentId))
@@ -239,8 +237,8 @@ class NaverPayServiceConcurrencyTest {
 		// given
 		String merchantPayKey = "PAY-NAVER-CON-4";
 		String paymentId = "pg-naver-con-4";
-		Member member = createMember();
-		createOrder(member, merchantPayKey, 1000);
+		Member member = memberPersistence.save(createMember());
+		persistOrder(member, merchantPayKey, 1000);
 		ConcurrentLinkedQueue<Throwable> errors = new ConcurrentLinkedQueue<>();
 
 		given(naverPayClient.approve(paymentId))
@@ -279,13 +277,13 @@ class NaverPayServiceConcurrencyTest {
 		// given
 		String merchantPayKey = "PAY-NAVER-CON-5";
 		String paymentId = "pg-naver-con-5";
-		Member member = createMember();
-		createOrder(member, merchantPayKey, 1000);
+		Member member = memberPersistence.save(createMember());
+		persistOrder(member, merchantPayKey, 1000);
 		PaymentAttempt attempt = PaymentAttempt.createApproveRequested(
 			merchantPayKey, paymentId, 1000, PaymentProvider.NAVERPAY
 		);
 		attempt.markApproveSucceeded(LocalDateTime.now());
-		paymentPersistence.saveAttempt(attempt);
+		paymentPersistence.save(attempt);
 
 		ConcurrentLinkedQueue<NaverPayApproveResult> results = new ConcurrentLinkedQueue<>();
 		ConcurrentLinkedQueue<Throwable> errors = new ConcurrentLinkedQueue<>();
@@ -298,7 +296,7 @@ class NaverPayServiceConcurrencyTest {
 		// then
 		assertThat(errors).isEmpty();
 		assertThat(paymentPersistence.countPaymentsByMerchantPayKey(merchantPayKey)).isEqualTo(1L);
-		assertThat(orderRepository.findByMerchantPayKey(merchantPayKey).orElseThrow().getStatus())
+		assertThat(orderPersistence.getOrderStatusByMerchantPayKey(merchantPayKey))
 			.isEqualTo(OrderStatus.PAID);
 		assertThat(results).isNotEmpty();
 		assertThat(results.stream().map(NaverPayApproveResult::getStatus))
@@ -311,8 +309,8 @@ class NaverPayServiceConcurrencyTest {
 		// given
 		String merchantPayKey = "PAY-NAVER-CON-6";
 		String paymentId = "pg-naver-con-6";
-		Member member = createMember();
-		createOrder(member, merchantPayKey, 1000);
+		Member member = memberPersistence.save(createMember());
+		persistOrder(member, merchantPayKey, 1000);
 		ConcurrentLinkedQueue<Throwable> errors = new ConcurrentLinkedQueue<>();
 
 		given(naverPayClient.approve(paymentId))
@@ -349,8 +347,8 @@ class NaverPayServiceConcurrencyTest {
 		// given
 		String merchantPayKey = "PAY-NAVER-CON-7";
 		String paymentId = "pg-naver-con-7";
-		Member member = createMember();
-		createOrder(member, merchantPayKey, 1000);
+		Member member = memberPersistence.save(createMember());
+		persistOrder(member, merchantPayKey, 1000);
 		AtomicInteger approveCallCount = new AtomicInteger();
 		ConcurrentLinkedQueue<Throwable> errors = new ConcurrentLinkedQueue<>();
 
@@ -426,28 +424,31 @@ class NaverPayServiceConcurrencyTest {
 
 	private Member createMember() {
 		String suffix = UUID.randomUUID().toString().substring(0, 8);
-		return memberRepository.save(
-			Member.builder()
-				.email("naverpay-con-" + suffix + "@example.com")
-				.password("password123")
-				.username("u" + suffix)
-				.build()
-		);
+		return Member.builder()
+			.email("naverpay-con-" + suffix + "@example.com")
+			.password("password123")
+			.username("u" + suffix)
+			.build();
 	}
 
-	private Order createOrder(Member member, String merchantPayKey, int totalPrice) {
-		Product product = productRepository.save(
-			Product.builder()
-				.name("product-" + merchantPayKey)
-				.price(totalPrice)
-				.status(ProductStatus.ON_SALE)
-				.build()
-		);
+	private Order persistOrder(Member member, String merchantPayKey, int totalPrice) {
+		Product product = productPersistence.save(createProduct("product-" + merchantPayKey, totalPrice));
+		return orderPersistence.saveAndFlush(createOrder(member, product, merchantPayKey));
+	}
 
+	private Product createProduct(String name, int price) {
+		return Product.builder()
+			.name(name)
+			.price(price)
+			.status(ProductStatus.ON_SALE)
+			.build();
+	}
+
+	private Order createOrder(Member member, Product product, String merchantPayKey) {
 		Order order = Order.create(member);
 		order.addOrderItem(product, 1);
 		order.assignMerchantPayKey(merchantPayKey);
-		return orderRepository.saveAndFlush(order);
+		return order;
 	}
 
 	private NaverPayResponse<NaverPayApproveBody> buildApprovalResponse(

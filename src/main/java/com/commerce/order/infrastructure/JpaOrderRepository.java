@@ -14,15 +14,8 @@ import jakarta.persistence.LockModeType;
 
 import com.commerce.order.domain.Order;
 import com.commerce.order.domain.OrderStatus;
-import com.commerce.order.domain.repository.OrderRepository;
 
-public interface JpaOrderRepository extends JpaRepository<Order, Long>, OrderRepository {
-
-	@Override
-	<S extends Order> S save(S order);
-
-	@Override
-	Optional<Order> findById(Long orderId);
+public interface JpaOrderRepository extends JpaRepository<Order, Long> {
 
 	@Query("""
 		select distinct o from Order o

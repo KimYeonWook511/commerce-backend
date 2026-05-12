@@ -1,4 +1,4 @@
-package com.commerce.order.application;
+package com.commerce.order.integration.concurrency;
 
 import static org.assertj.core.api.Assertions.*;
 
@@ -9,6 +9,7 @@ import java.util.concurrent.CountDownLatch;
 import java.util.concurrent.ExecutorService;
 import java.util.concurrent.Executors;
 import java.util.concurrent.TimeUnit;
+import java.util.UUID;
 
 import javax.sql.DataSource;
 
@@ -18,24 +19,29 @@ import org.junit.jupiter.api.Tag;
 import org.junit.jupiter.api.Test;
 import org.springframework.beans.factory.annotation.Autowired;
 import org.springframework.boot.test.context.SpringBootTest;
+import org.springframework.context.annotation.Import;
 import org.springframework.test.context.ActiveProfiles;
 import org.springframework.test.context.TestPropertySource;
 
+import com.commerce.order.application.OrderCancelService;
+import com.commerce.order.application.OrderConcurrencyService;
+import com.commerce.order.application.OrderCreateService;
 import com.commerce.member.domain.Member;
-import com.commerce.member.repository.MemberRepository;
-import com.commerce.order.infrastructure.JpaOrderRepository;
 import com.commerce.order.application.command.OrderCreateItem;
 import com.commerce.order.application.command.OrderCreateCommand;
-import com.commerce.order.infrastructure.JpaOrderItemRepository;
 import com.commerce.product.domain.Product;
 import com.commerce.product.domain.ProductStatus;
-import com.commerce.product.infrastructure.JpaProductRepository;
 import com.commerce.stock.domain.Stock;
-import com.commerce.stock.repository.StockRepository;
+import com.commerce.member.integration.support.MemberPersistenceTestSupport;
+import com.commerce.order.integration.support.OrderPersistenceTestSupport;
+import com.commerce.product.integration.support.ProductPersistenceTestSupport;
+import com.commerce.stock.integration.support.StockPersistenceTestSupport;
+import com.commerce.test.support.PersistenceCleanupTestSupport;
 
 @Tag("concurrency")
 @SpringBootTest
 @ActiveProfiles("test")
+@Import({PersistenceCleanupTestSupport.class, MemberPersistenceTestSupport.class, ProductPersistenceTestSupport.class, StockPersistenceTestSupport.class, OrderPersistenceTestSupport.class})
 @TestPropertySource(properties = {
 	"spring.datasource.hikari.maximum-pool-size=51",
 	"spring.datasource.hikari.minimum-idle=10",
@@ -49,30 +55,28 @@ class OrderConcurrencyServiceDebugTest {
 	private OrderConcurrencyService orderConcurrencyService;
 
 	@Autowired
-	private MemberRepository memberRepository;
+	private PersistenceCleanupTestSupport persistenceCleanup;
 
 	@Autowired
-	private JpaProductRepository productRepository;
+	private MemberPersistenceTestSupport memberPersistence;
 
 	@Autowired
-	private StockRepository stockRepository;
+	private ProductPersistenceTestSupport productPersistence;
 
 	@Autowired
-	private JpaOrderRepository orderRepository;
+	private StockPersistenceTestSupport stockPersistence;
 
 	@Autowired
-	private JpaOrderItemRepository orderItemRepository;
+	private OrderPersistenceTestSupport orderPersistence;
 
 	@Autowired
 	private DataSource dataSource;
 
 	@AfterEach
 	void tearDown() {
-		orderItemRepository.deleteAllInBatch();
-		orderRepository.deleteAllInBatch();
-		stockRepository.deleteAllInBatch();
-		productRepository.deleteAllInBatch();
-		memberRepository.deleteAllInBatch();
+		persistenceCleanup.deleteAllInBatch(
+			memberPersistence, productPersistence, stockPersistence, orderPersistence
+		);
 	}
 
 	@DisplayName("동시 주문 시 2초와 30초 지연이 갈리는 원인을 디버깅한다")
@@ -80,9 +84,9 @@ class OrderConcurrencyServiceDebugTest {
 	void createOrderWithSynchronizedAndTransaction_whenConcurrentRequests_debugLatencyGapBetween2sAnd30s() throws Exception {
 		// given
 		int threadCount = 50;
-		Member member = createMember();
-		Product product = createProduct("order-product-sync", 1000);
-		createStock(product, threadCount);
+		Member member = memberPersistence.save(createMember());
+		Product product = productPersistence.save(createProduct("order-product-sync", 1000));
+		stockPersistence.save(createStock(product, threadCount));
 		OrderCreateCommand command = createRequest(member.getId(), product.getId(), 1);
 
 		// when
@@ -90,9 +94,9 @@ class OrderConcurrencyServiceDebugTest {
 		runConcurrent(threadCount, () -> orderConcurrencyService.createOrderWithSynchronizedAndTransaction(command), errors);
 
 		// then
-		Stock updated = stockRepository.findByProductId(product.getId()).orElseThrow();
+		Stock updated = stockPersistence.findByProductId(product.getId()).orElseThrow();
 		assertThat(updated.getQuantity()).isZero();
-		assertThat(orderRepository.count()).isEqualTo(threadCount);
+		assertThat(orderPersistence.count()).isEqualTo(threadCount);
 		assertThat(errors).isEmpty();
 	}
 
@@ -174,32 +178,27 @@ class OrderConcurrencyServiceDebugTest {
 	}
 
 	private Member createMember() {
-		return memberRepository.save(
-			Member.builder()
-				.email("test@example.com")
-				.password("password123")
-				.username("user1")
-				.build()
-		);
+		String suffix = UUID.randomUUID().toString().substring(0, 8);
+		return Member.builder()
+			.email("order-debug-" + suffix + "@example.com")
+			.password("password123")
+			.username("u" + suffix)
+			.build();
 	}
 
 	private Product createProduct(String name, int price) {
-		return productRepository.save(
-			Product.builder()
-				.name(name)
-				.price(price)
-				.status(ProductStatus.ON_SALE)
-				.build()
-		);
+		return Product.builder()
+			.name(name)
+			.price(price)
+			.status(ProductStatus.ON_SALE)
+			.build();
 	}
 
 	private Stock createStock(Product product, int quantity) {
-		return stockRepository.save(
-			Stock.builder()
-				.product(product)
-				.quantity(quantity)
-				.build()
-		);
+		return Stock.builder()
+			.product(product)
+			.quantity(quantity)
+			.build();
 	}
 
 	private OrderCreateCommand createRequest(Long memberId, Long productId, int quantity) {

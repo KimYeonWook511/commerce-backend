@@ -1,4 +1,4 @@
-package com.commerce.payment.naverpay.service;
+package com.commerce.payment.integration.naverpay;
 
 import static org.assertj.core.api.Assertions.assertThat;
 import static org.assertj.core.api.Assertions.assertThatThrownBy;
@@ -25,13 +25,10 @@ import org.springframework.test.context.bean.override.mockito.MockitoSpyBean;
 import org.springframework.test.util.ReflectionTestUtils;
 
 import com.commerce.member.domain.Member;
-import com.commerce.member.repository.MemberRepository;
 import com.commerce.order.domain.Order;
 import com.commerce.order.domain.OrderStatus;
 import com.commerce.order.exception.OrderErrorCode;
 import com.commerce.order.exception.OrderException;
-import com.commerce.order.infrastructure.JpaOrderRepository;
-import com.commerce.order.infrastructure.JpaOrderItemRepository;
 import com.commerce.payment.domain.Payment;
 import com.commerce.payment.domain.PaymentAttempt;
 import com.commerce.payment.domain.PaymentAttemptFailCode;
@@ -40,6 +37,7 @@ import com.commerce.payment.domain.PaymentAttemptType;
 import com.commerce.payment.domain.PaymentProvider;
 import com.commerce.payment.exception.PaymentErrorCode;
 import com.commerce.payment.exception.PaymentException;
+import com.commerce.payment.naverpay.service.NaverPayService;
 import com.commerce.payment.naverpay.client.NaverPayClient;
 import com.commerce.payment.naverpay.client.response.NaverPayResponse;
 import com.commerce.payment.naverpay.client.response.body.NaverPayApproveBody;
@@ -52,29 +50,29 @@ import com.commerce.payment.naverpay.service.result.NaverPayApproveStatus;
 import com.commerce.payment.application.PaymentAttemptService;
 import com.commerce.payment.application.PaymentApprovalService;
 import com.commerce.payment.integration.support.PaymentPersistenceTestSupport;
+import com.commerce.member.integration.support.MemberPersistenceTestSupport;
+import com.commerce.order.integration.support.OrderPersistenceTestSupport;
 import com.commerce.product.domain.Product;
 import com.commerce.product.domain.ProductStatus;
-import com.commerce.product.infrastructure.JpaProductRepository;
+import com.commerce.product.integration.support.ProductPersistenceTestSupport;
+import com.commerce.test.support.PersistenceCleanupTestSupport;
 
 @SpringBootTest
 @ActiveProfiles("test")
-@Import(PaymentPersistenceTestSupport.class)
+@Import({PersistenceCleanupTestSupport.class, PaymentPersistenceTestSupport.class, MemberPersistenceTestSupport.class, ProductPersistenceTestSupport.class, OrderPersistenceTestSupport.class})
 class NaverPayServiceIntegrationTest {
 
 	@Autowired
 	private NaverPayService naverPayService;
 
 	@Autowired
-	private MemberRepository memberRepository;
+	private MemberPersistenceTestSupport memberPersistence;
 
 	@Autowired
-	private JpaProductRepository productRepository;
+	private ProductPersistenceTestSupport productPersistence;
 
 	@Autowired
-	private JpaOrderRepository orderRepository;
-
-	@Autowired
-	private JpaOrderItemRepository orderItemRepository;
+	private OrderPersistenceTestSupport orderPersistence;
 
 	@Autowired
 	private PaymentPersistenceTestSupport paymentPersistence;
@@ -88,14 +86,15 @@ class NaverPayServiceIntegrationTest {
 	@MockitoSpyBean
 	private PaymentAttemptService paymentAttemptService;
 
+	@Autowired
+	private PersistenceCleanupTestSupport persistenceCleanup;
+
 	@AfterEach
 	void tearDown() {
 		Mockito.reset(naverPayClient, paymentApprovalService, paymentAttemptService);
-		paymentPersistence.deleteAllInBatch();
-		orderItemRepository.deleteAllInBatch();
-		orderRepository.deleteAllInBatch();
-		productRepository.deleteAllInBatch();
-		memberRepository.deleteAllInBatch();
+		persistenceCleanup.deleteAllInBatch(
+			paymentPersistence, memberPersistence, productPersistence, orderPersistence
+		);
 	}
 
 	/**
@@ -107,8 +106,8 @@ class NaverPayServiceIntegrationTest {
 	@Test
 	void approve_whenSuccess_createPaymentAndMarkOrderPaidAndSucceedAttempt() {
 		// given
-		Member member = createMember();
-		createOrder(member, "PAY-INT-1", 1000);
+		Member member = memberPersistence.save(createMember());
+		persistOrder(member, "PAY-INT-1", 1000);
 		given(naverPayClient.approve("pg-int-1"))
 			.willReturn(buildApprovalResponse("PAY-INT-1", 1000, "Success", "SUCCESS", "pg-int-1"));
 
@@ -119,7 +118,7 @@ class NaverPayServiceIntegrationTest {
 		assertThat(result.getStatus()).isEqualTo(NaverPayApproveStatus.SUCCESS);
 		assertThat(result.getPgPaymentId()).isEqualTo("pg-int-1");
 		assertThat(paymentPersistence.findPaymentByMerchantPayKey("PAY-INT-1")).isPresent();
-		assertThat(orderRepository.findByMerchantPayKey("PAY-INT-1").orElseThrow().getStatus()).isEqualTo(OrderStatus.PAID);
+		assertThat(orderPersistence.getOrderStatusByMerchantPayKey("PAY-INT-1")).isEqualTo(OrderStatus.PAID);
 		assertThat(getAttempt("PAY-INT-1", "pg-int-1", PaymentAttemptType.APPROVE).getStatus())
 			.isEqualTo(PaymentAttemptStatus.SUCCEEDED);
 	}
@@ -133,8 +132,8 @@ class NaverPayServiceIntegrationTest {
 	@Test
 	void approve_whenAlreadyOnGoing_returnProcessingWithoutPersistingPayment() {
 		// given
-		Member member = createMember();
-		createOrder(member, "PAY-INT-2-1", 1000);
+		Member member = memberPersistence.save(createMember());
+		persistOrder(member, "PAY-INT-2-1", 1000);
 		given(naverPayClient.approve("pg-int-2-1"))
 			.willReturn(buildApprovalResponse("PAY-INT-2-1", 1000, "AlreadyOnGoing", "SUCCESS", "pg-int-2-1"));
 
@@ -152,8 +151,8 @@ class NaverPayServiceIntegrationTest {
 	@Test
 	void approve_whenAlreadyComplete_completeByHistory() {
 		// given
-		Member member = createMember();
-		createOrder(member, "PAY-INT-2-2", 1000);
+		Member member = memberPersistence.save(createMember());
+		persistOrder(member, "PAY-INT-2-2", 1000);
 		given(naverPayClient.approve("pg-int-2-2"))
 			.willReturn(buildApprovalResponse("PAY-INT-2-2", 1000, "AlreadyComplete", "SUCCESS", "pg-int-2-2"));
 		given(naverPayClient.getAllHistory("pg-int-2-2"))
@@ -177,8 +176,8 @@ class NaverPayServiceIntegrationTest {
 	@Test
 	void approve_whenAlreadyCompleteAndHistoryCodeInvalid_throwInvalidMerchant() {
 		// given
-		Member member = createMember();
-		createOrder(member, "PAY-INT-3-1", 1000);
+		Member member = memberPersistence.save(createMember());
+		persistOrder(member, "PAY-INT-3-1", 1000);
 		given(naverPayClient.approve("pg-int-3-1"))
 			.willReturn(buildApprovalResponse("PAY-INT-3-1", 1000, "AlreadyComplete", "SUCCESS", "pg-int-3-1"));
 		given(naverPayClient.getAllHistory("pg-int-3-1"))
@@ -195,8 +194,8 @@ class NaverPayServiceIntegrationTest {
 	@Test
 	void approve_whenAlreadyCompleteAndHistoryNotCompleted_throwNotFound() {
 		// given
-		Member member = createMember();
-		createOrder(member, "PAY-INT-3-2", 1000);
+		Member member = memberPersistence.save(createMember());
+		persistOrder(member, "PAY-INT-3-2", 1000);
 		given(naverPayClient.approve("pg-int-3-2"))
 			.willReturn(buildApprovalResponse("PAY-INT-3-2", 1000, "AlreadyComplete", "SUCCESS", "pg-int-3-2"));
 		given(naverPayClient.getAllHistory("pg-int-3-2"))
@@ -213,8 +212,8 @@ class NaverPayServiceIntegrationTest {
 	@Test
 	void approve_whenAlreadyCompleteAndHistoryCanceled_throwAlreadyCanceled() {
 		// given
-		Member member = createMember();
-		createOrder(member, "PAY-INT-3-2-C", 1000);
+		Member member = memberPersistence.save(createMember());
+		persistOrder(member, "PAY-INT-3-2-C", 1000);
 		given(naverPayClient.approve("pg-int-3-2-c"))
 			.willReturn(buildApprovalResponse("PAY-INT-3-2-C", 1000, "AlreadyComplete", "SUCCESS", "pg-int-3-2-c"));
 		given(naverPayClient.getAllHistory("pg-int-3-2-c"))
@@ -235,8 +234,8 @@ class NaverPayServiceIntegrationTest {
 	@Test
 	void approve_whenAlreadyCompleteAndHistoryEmpty_throwNotFound() {
 		// given
-		Member member = createMember();
-		createOrder(member, "PAY-INT-3-3", 1000);
+		Member member = memberPersistence.save(createMember());
+		persistOrder(member, "PAY-INT-3-3", 1000);
 		given(naverPayClient.approve("pg-int-3-3"))
 			.willReturn(buildApprovalResponse("PAY-INT-3-3", 1000, "AlreadyComplete", "SUCCESS", "pg-int-3-3"));
 		given(naverPayClient.getAllHistory("pg-int-3-3"))
@@ -258,8 +257,8 @@ class NaverPayServiceIntegrationTest {
 	@Test
 	void approve_whenApproveMerchantPayKeyMismatch_failAttemptWithoutCancel() {
 		// given
-		Member member = createMember();
-		createOrder(member, "PAY-INT-4-1", 1000);
+		Member member = memberPersistence.save(createMember());
+		persistOrder(member, "PAY-INT-4-1", 1000);
 		given(naverPayClient.approve("pg-int-4-1"))
 			.willReturn(buildApprovalResponse("OTHER-PAY", 1000, "Success", "SUCCESS", "pg-int-4-1"));
 
@@ -278,8 +277,8 @@ class NaverPayServiceIntegrationTest {
 	@Test
 	void approve_whenHistoryMerchantPayKeyMismatch_failAttemptWithoutCancel() {
 		// given
-		Member member = createMember();
-		createOrder(member, "PAY-INT-4-2", 1000);
+		Member member = memberPersistence.save(createMember());
+		persistOrder(member, "PAY-INT-4-2", 1000);
 		given(naverPayClient.approve("pg-int-4-2"))
 			.willReturn(buildApprovalResponse("PAY-INT-4-2", 1000, "AlreadyComplete", "SUCCESS", "pg-int-4-2"));
 		given(naverPayClient.getAllHistory("pg-int-4-2"))
@@ -305,8 +304,8 @@ class NaverPayServiceIntegrationTest {
 	@Test
 	void approve_whenAmountMismatch_failApproveAndRequestCancel() {
 		// given
-		Member member = createMember();
-		createOrder(member, "PAY-INT-5-1", 1000);
+		Member member = memberPersistence.save(createMember());
+		persistOrder(member, "PAY-INT-5-1", 1000);
 		given(naverPayClient.approve("pg-int-5-1"))
 			.willReturn(buildApprovalResponse("PAY-INT-5-1", 2000, "Success", "SUCCESS", "pg-int-5-1"));
 		given(naverPayClient.cancel(any()))
@@ -325,8 +324,8 @@ class NaverPayServiceIntegrationTest {
 	@Test
 	void approve_whenAmountMismatchAndCancelAlreadyCanceled_markCancelSucceeded() {
 		// given
-		Member member = createMember();
-		createOrder(member, "PAY-INT-5-2", 1000);
+		Member member = memberPersistence.save(createMember());
+		persistOrder(member, "PAY-INT-5-2", 1000);
 		given(naverPayClient.approve("pg-int-5-2"))
 			.willReturn(buildApprovalResponse("PAY-INT-5-2", 2000, "Success", "SUCCESS", "pg-int-5-2"));
 		given(naverPayClient.cancel(any()))
@@ -345,8 +344,8 @@ class NaverPayServiceIntegrationTest {
 	@Test
 	void approve_whenAmountMismatchAndCancelAlreadyOnGoing_keepCancelRequested() {
 		// given
-		Member member = createMember();
-		createOrder(member, "PAY-INT-5-3", 1000);
+		Member member = memberPersistence.save(createMember());
+		persistOrder(member, "PAY-INT-5-3", 1000);
 		given(naverPayClient.approve("pg-int-5-3"))
 			.willReturn(buildApprovalResponse("PAY-INT-5-3", 2000, "Success", "SUCCESS", "pg-int-5-3"));
 		given(naverPayClient.cancel(any()))
@@ -365,8 +364,8 @@ class NaverPayServiceIntegrationTest {
 	@Test
 	void approve_whenAmountMismatchAndCancelFail_markCancelFailed() {
 		// given
-		Member member = createMember();
-		createOrder(member, "PAY-INT-5-4", 1000);
+		Member member = memberPersistence.save(createMember());
+		persistOrder(member, "PAY-INT-5-4", 1000);
 		given(naverPayClient.approve("pg-int-5-4"))
 			.willReturn(buildApprovalResponse("PAY-INT-5-4", 2000, "Success", "SUCCESS", "pg-int-5-4"));
 		given(naverPayClient.cancel(any()))
@@ -390,9 +389,9 @@ class NaverPayServiceIntegrationTest {
 	@Test
 	void approve_whenPaymentAlreadyExists_returnExistingPayment() {
 		// given
-		Member member = createMember();
-		Order order = createOrder(member, "PAY-INT-6-1", 1000);
-		paymentPersistence.savePayment(
+		Member member = memberPersistence.save(createMember());
+		Order order = persistOrder(member, "PAY-INT-6-1", 1000);
+		paymentPersistence.save(
 			Payment.createCompleted(order, PaymentProvider.NAVERPAY, "PAY-INT-6-1", "pg-existing", LocalDateTime.now())
 		);
 
@@ -409,8 +408,8 @@ class NaverPayServiceIntegrationTest {
 	@Test
 	void approve_whenCompleteApproveThrowsDuplicate_cancelApprovedPayment() {
 		// given
-		Member member = createMember();
-		createOrder(member, "PAY-INT-6-2", 1000);
+		Member member = memberPersistence.save(createMember());
+		persistOrder(member, "PAY-INT-6-2", 1000);
 		given(naverPayClient.approve("pg-int-6-2"))
 			.willReturn(buildApprovalResponse("PAY-INT-6-2", 1000, "Success", "SUCCESS", "pg-int-6-2"));
 		given(naverPayClient.cancel(any()))
@@ -436,13 +435,13 @@ class NaverPayServiceIntegrationTest {
 	@Test
 	void approve_whenCompleteApproveThrowsDuplicateAndCancelAlreadySucceeded_skipCancelRequest() {
 		// given
-		Member member = createMember();
-		createOrder(member, "PAY-INT-6-3", 1000);
+		Member member = memberPersistence.save(createMember());
+		persistOrder(member, "PAY-INT-6-3", 1000);
 		PaymentAttempt cancelAttempt = PaymentAttempt.createCancelRequested(
 			"PAY-INT-6-3", "pg-int-6-3", 1000, PaymentProvider.NAVERPAY
 		);
 		cancelAttempt.markCancelSucceeded(LocalDateTime.now());
-		paymentPersistence.saveAttempt(cancelAttempt);
+		paymentPersistence.save(cancelAttempt);
 
 		given(naverPayClient.approve("pg-int-6-3"))
 			.willReturn(buildApprovalResponse("PAY-INT-6-3", 1000, "Success", "SUCCESS", "pg-int-6-3"));
@@ -464,8 +463,8 @@ class NaverPayServiceIntegrationTest {
 	@Test
 	void approve_whenCompleteApproveThrowsDuplicateAndCancelFail_markCancelFailed() {
 		// given
-		Member member = createMember();
-		createOrder(member, "PAY-INT-6-4", 1000);
+		Member member = memberPersistence.save(createMember());
+		persistOrder(member, "PAY-INT-6-4", 1000);
 		given(naverPayClient.approve("pg-int-6-4"))
 			.willReturn(buildApprovalResponse("PAY-INT-6-4", 1000, "Success", "SUCCESS", "pg-int-6-4"));
 		given(naverPayClient.cancel(any()))
@@ -491,9 +490,9 @@ class NaverPayServiceIntegrationTest {
 	@Test
 	void approve_whenCompleteApproveThrowsDuplicateAndCancelAlreadyOnGoing_keepCancelRequested() {
 		// given
-		Member member = createMember();
-		createOrder(member, "PAY-INT-6-5", 1000);
-		paymentPersistence.saveAttempt(
+		Member member = memberPersistence.save(createMember());
+		persistOrder(member, "PAY-INT-6-5", 1000);
+		paymentPersistence.save(
 			PaymentAttempt.createCancelRequested("PAY-INT-6-5", "pg-int-6-5", 1000, PaymentProvider.NAVERPAY)
 		);
 
@@ -523,14 +522,14 @@ class NaverPayServiceIntegrationTest {
 	@Test
 	void approve_whenAttemptAlreadyFailed_throwImmediatelyWithoutPgCall() {
 		// given
-		Member member = createMember();
-		createOrder(member, "PAY-INT-7-1", 1000);
+		Member member = memberPersistence.save(createMember());
+		persistOrder(member, "PAY-INT-7-1", 1000);
 
 		PaymentAttempt attempt = PaymentAttempt.createApproveRequested(
 			"PAY-INT-7-1", "pg-int-7-1", 1000, PaymentProvider.NAVERPAY
 		);
 		attempt.markApproveFailed(PaymentAttemptFailCode.TIME_EXPIRED, "expired", LocalDateTime.now());
-		paymentPersistence.saveAttempt(attempt);
+		paymentPersistence.save(attempt);
 
 		// when & then
 		assertThatThrownBy(() -> naverPayService.approve(member.getId(), "PAY-INT-7-1", "pg-int-7-1"))
@@ -549,8 +548,8 @@ class NaverPayServiceIntegrationTest {
 	@Test
 	void approve_whenNetworkError_markApproveAttemptFailed() {
 		// given
-		Member member = createMember();
-		createOrder(member, "PAY-INT-8-1", 1000);
+		Member member = memberPersistence.save(createMember());
+		persistOrder(member, "PAY-INT-8-1", 1000);
 		given(naverPayClient.approve("pg-int-8-1"))
 			.willThrow(new NaverPayException(NaverPayErrorCode.NETWORK, "network error"));
 
@@ -567,8 +566,8 @@ class NaverPayServiceIntegrationTest {
 	@Test
 	void approve_whenServerError_markApproveAttemptFailed() {
 		// given
-		Member member = createMember();
-		createOrder(member, "PAY-INT-8-2", 1000);
+		Member member = memberPersistence.save(createMember());
+		persistOrder(member, "PAY-INT-8-2", 1000);
 		given(naverPayClient.approve("pg-int-8-2"))
 			.willThrow(new NaverPayException(NaverPayErrorCode.SERVER_ERROR, "server error"));
 
@@ -585,8 +584,8 @@ class NaverPayServiceIntegrationTest {
 	@Test
 	void approve_whenApproveResponseBodyIsNull_throwInvalidResponseException() {
 		// given
-		Member member = createMember();
-		createOrder(member, "PAY-INT-8-3", 1000);
+		Member member = memberPersistence.save(createMember());
+		persistOrder(member, "PAY-INT-8-3", 1000);
 		NaverPayResponse<NaverPayApproveBody> response = new NaverPayResponse<>();
 		ReflectionTestUtils.setField(response, "code", "Success");
 		given(naverPayClient.approve("pg-int-8-3"))
@@ -605,8 +604,8 @@ class NaverPayServiceIntegrationTest {
 	@Test
 	void approve_whenMaintenanceCode_throwPgMaintenanceException() {
 		// given
-		Member member = createMember();
-		createOrder(member, "PAY-INT-8-4", 1000);
+		Member member = memberPersistence.save(createMember());
+		persistOrder(member, "PAY-INT-8-4", 1000);
 		given(naverPayClient.approve("pg-int-8-4"))
 			.willReturn(buildApprovalResponse("PAY-INT-8-4", 1000, "MaintenanceOngoing", "SUCCESS", "pg-int-8-4"));
 
@@ -628,10 +627,10 @@ class NaverPayServiceIntegrationTest {
 	@Test
 	void approve_whenOrderAlreadyPaid_cancelApprovedPaymentAndThrowException() {
 		// given
-		Member member = createMember();
-		Order order = createOrder(member, "PAY-INT-9-1", 1000);
+		Member member = memberPersistence.save(createMember());
+		Order order = persistOrder(member, "PAY-INT-9-1", 1000);
 		order.completePayment();
-		orderRepository.saveAndFlush(order);
+		orderPersistence.save(order);
 
 		given(naverPayClient.approve("pg-int-9-1"))
 			.willReturn(buildApprovalResponse("PAY-INT-9-1", 1000, "Success", "SUCCESS", "pg-int-9-1"));
@@ -651,8 +650,8 @@ class NaverPayServiceIntegrationTest {
 	@Test
 	void approve_whenCompleteApproveThrowsUnexpectedException_cancelApprovedPaymentAndThrowException() {
 		// given
-		Member member = createMember();
-		createOrder(member, "PAY-INT-9-2", 1000);
+		Member member = memberPersistence.save(createMember());
+		persistOrder(member, "PAY-INT-9-2", 1000);
 		given(naverPayClient.approve("pg-int-9-2"))
 			.willReturn(buildApprovalResponse("PAY-INT-9-2", 1000, "Success", "SUCCESS", "pg-int-9-2"));
 		given(naverPayClient.cancel(any()))
@@ -677,8 +676,8 @@ class NaverPayServiceIntegrationTest {
 	@Test
 	void approve_whenCancelSuccessButSucceedCancelAttemptFails_keepOriginalException() {
 		// given
-		Member member = createMember();
-		createOrder(member, "PAY-INT-9-2", 1000);
+		Member member = memberPersistence.save(createMember());
+		persistOrder(member, "PAY-INT-9-2", 1000);
 		given(naverPayClient.approve("pg-int-9-2"))
 			.willReturn(buildApprovalResponse("PAY-INT-9-2", 2000, "Success", "SUCCESS", "pg-int-9-2"));
 		given(naverPayClient.cancel(any()))
@@ -699,8 +698,8 @@ class NaverPayServiceIntegrationTest {
 	@Test
 	void approve_whenCancelFailAndFailCancelAttemptFails_keepOriginalException() {
 		// given
-		Member member = createMember();
-		createOrder(member, "PAY-INT-9-3", 1000);
+		Member member = memberPersistence.save(createMember());
+		persistOrder(member, "PAY-INT-9-3", 1000);
 		given(naverPayClient.approve("pg-int-9-3"))
 			.willReturn(buildApprovalResponse("PAY-INT-9-3", 2000, "Success", "SUCCESS", "pg-int-9-3"));
 		given(naverPayClient.cancel(any()))
@@ -733,9 +732,9 @@ class NaverPayServiceIntegrationTest {
 	@Test
 	void approve_whenMemberDoesNotOwnMerchantPayKey_throwOrderNotFound() {
 		// given
-		Member owner = createMember();
-		Member attacker = createMember();
-		createOrder(owner, "PAY-INT-10-1", 1000);
+		Member owner = memberPersistence.save(createMember());
+		Member attacker = memberPersistence.save(createMember());
+		persistOrder(owner, "PAY-INT-10-1", 1000);
 
 		// when & then
 		assertThatThrownBy(() -> naverPayService.approve(attacker.getId(), "PAY-INT-10-1", "pg-int-10-1"))
@@ -748,8 +747,8 @@ class NaverPayServiceIntegrationTest {
 	@Test
 	void approve_whenForeignPaymentIdReturnsDifferentMerchantPayKey_failAttemptWithoutCancel() {
 		// given
-		Member member = createMember();
-		createOrder(member, "PAY-INT-10-2", 1000);
+		Member member = memberPersistence.save(createMember());
+		persistOrder(member, "PAY-INT-10-2", 1000);
 		given(naverPayClient.approve("pg-foreign-10-2"))
 			.willReturn(buildApprovalResponse("OTHER-PAY", 1000, "Success", "SUCCESS", "pg-foreign-10-2"));
 
@@ -769,8 +768,8 @@ class NaverPayServiceIntegrationTest {
 	@Test
 	void approve_whenForeignPaymentIdHistoryReturnsDifferentMerchantPayKey_failAttemptWithoutCancel() {
 		// given
-		Member member = createMember();
-		createOrder(member, "PAY-INT-10-3", 1000);
+		Member member = memberPersistence.save(createMember());
+		persistOrder(member, "PAY-INT-10-3", 1000);
 		given(naverPayClient.approve("pg-foreign-10-3"))
 			.willReturn(buildApprovalResponse("PAY-INT-10-3", 1000, "AlreadyComplete", "SUCCESS", "pg-foreign-10-3"));
 		given(naverPayClient.getAllHistory("pg-foreign-10-3"))
@@ -804,13 +803,13 @@ class NaverPayServiceIntegrationTest {
 	@Test
 	void approve_whenAttemptSucceededAndPaymentMissing_recoverByHistory() {
 		// given
-		Member member = createMember();
-		createOrder(member, "PAY-INT-12-1", 1000);
+		Member member = memberPersistence.save(createMember());
+		persistOrder(member, "PAY-INT-12-1", 1000);
 		PaymentAttempt attempt = PaymentAttempt.createApproveRequested(
 			"PAY-INT-12-1", "pg-int-12-1", 1000, PaymentProvider.NAVERPAY
 		);
 		attempt.markApproveSucceeded(LocalDateTime.now());
-		paymentPersistence.saveAttempt(attempt);
+		paymentPersistence.save(attempt);
 		given(naverPayClient.getAllHistory("pg-int-12-1"))
 			.willReturn(buildHistoryResponse("PAY-INT-12-1", 1000, "SUCCESS", "01", "pg-int-12-1"));
 
@@ -826,28 +825,31 @@ class NaverPayServiceIntegrationTest {
 
 	private Member createMember() {
 		String suffix = UUID.randomUUID().toString().substring(0, 8);
-		return memberRepository.save(
-			Member.builder()
-				.email("naverpay-int-" + suffix + "@example.com")
-				.password("password123")
-				.username("u" + suffix)
-				.build()
-		);
+		return Member.builder()
+			.email("naverpay-int-" + suffix + "@example.com")
+			.password("password123")
+			.username("u" + suffix)
+			.build();
 	}
 
-	private Order createOrder(Member member, String merchantPayKey, int totalPrice) {
-		Product product = productRepository.save(
-			Product.builder()
-				.name("product-" + merchantPayKey)
-				.price(totalPrice)
-				.status(ProductStatus.ON_SALE)
-				.build()
-		);
+	private Order persistOrder(Member member, String merchantPayKey, int totalPrice) {
+		Product product = productPersistence.save(createProduct("product-" + merchantPayKey, totalPrice));
+		return orderPersistence.saveAndFlush(createOrder(member, product, merchantPayKey));
+	}
 
+	private Product createProduct(String name, int price) {
+		return Product.builder()
+			.name(name)
+			.price(price)
+			.status(ProductStatus.ON_SALE)
+			.build();
+	}
+
+	private Order createOrder(Member member, Product product, String merchantPayKey) {
 		Order order = Order.create(member);
 		order.addOrderItem(product, 1);
 		order.assignMerchantPayKey(merchantPayKey);
-		return orderRepository.saveAndFlush(order);
+		return order;
 	}
 
 	private PaymentAttempt getAttempt(String merchantPayKey, String paymentId, PaymentAttemptType type) {
