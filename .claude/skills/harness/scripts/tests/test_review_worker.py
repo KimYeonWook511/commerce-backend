@@ -44,16 +44,6 @@ class ReviewerWorkerTest(unittest.TestCase):
         self.assertNotIn("## 변경 diff", prompt)
         self.assertNotIn("diff --git", prompt)
 
-    def test_build_codex_command_uses_ephemeral_read_only(self):
-        command = self.module.build_codex_command("/repo", Path("/tmp/message.txt"))
-        self.assertEqual(["codex", "exec"], command[:2])
-        self.assertIn("--ephemeral", command)
-        self.assertIn("-c", command)
-        self.assertIn('approval_policy="never"', command)
-        self.assertIn("-s", command)
-        self.assertIn("read-only", command)
-        self.assertNotIn("danger-full-access", command)
-
 
 if __name__ == "__main__":
     unittest.main()

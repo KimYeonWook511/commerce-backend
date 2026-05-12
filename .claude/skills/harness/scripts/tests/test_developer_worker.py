@@ -36,18 +36,6 @@ class DeveloperWorkerTest(unittest.TestCase):
         self.assertIn("GUARD", prompt)
         self.assertIn("STEP", prompt)
 
-    def test_build_codex_command_uses_ephemeral(self):
-        command = self.module.build_codex_command(str(self.root), self.root / "message.txt")
-        self.assertEqual(["codex", "exec"], command[:2])
-        self.assertIn("--ephemeral", command)
-        self.assertIn("-c", command)
-        self.assertIn('approval_policy="never"', command)
-        self.assertIn("-s", command)
-        self.assertIn("workspace-write", command)
-        self.assertNotIn("danger-full-access", command)
-        self.assertNotIn("--full-auto", command)
-        self.assertIn("--skip-git-repo-check", command)
-
     def test_run_writes_output_file(self):
         mock_result = MagicMock(returncode=0, stdout="ok", stderr="")
 
@@ -57,8 +45,12 @@ class DeveloperWorkerTest(unittest.TestCase):
         with patch.object(self.module.subprocess, "run", return_value=mock_result) as run_mock:
             self.module.run(str(self.root), self.phase_dir, write_json, {"step": 2, "name": "api"}, "CTX", "GUARD")
 
-        called_command = run_mock.call_args.args[0]
-        self.assertIn("--ephemeral", called_command)
+        all_calls = [call.args[0] for call in run_mock.call_args_list if call.args]
+        send_keys_call = next((c for c in all_calls if isinstance(c, list) and "send-keys" in c), None)
+        self.assertIsNotNone(send_keys_call, "tmux send-keys가 호출되지 않았다")
+        cmd_str = send_keys_call[4]
+        self.assertIn("claude -p", cmd_str)
+        self.assertIn("--dangerously-skip-permissions", cmd_str)
 
         output = json.loads((self.phase_dir / "step2-output.json").read_text(encoding="utf-8"))
         self.assertEqual(2, output["step"])
