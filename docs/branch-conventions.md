@@ -24,5 +24,6 @@
 - `fix/auth-token-expiry`
 - `docs/dev-start-guide`
 - `chore/codex-harness-engineering`
+- `chore/claude-code-harness-engineering`
 - `refactor/payment-service`
 - `test/auth-controller`
