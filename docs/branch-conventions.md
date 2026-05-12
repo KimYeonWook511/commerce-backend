@@ -17,6 +17,7 @@
 - `/` 뒤의 `name`은 kebab-case를 사용한다.
 - 하나의 브랜치는 하나의 작업 의도를 표현한다.
 - 기능 내부 `phase`는 작업 분해 단위로만 사용하고, 브랜치 이름에는 넣지 않는다.
+- 브랜치는 `develop`에서 분기하고, PR도 `develop`을 base로 생성한다.
 
 ## 예시
 
@@ -24,5 +25,6 @@
 - `fix/auth-token-expiry`
 - `docs/dev-start-guide`
 - `chore/codex-harness-engineering`
+- `chore/claude-code-harness-engineering`
 - `refactor/payment-service`
 - `test/auth-controller`

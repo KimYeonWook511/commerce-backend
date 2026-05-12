@@ -23,7 +23,7 @@
 - `test`: 테스트 코드, 테스트 fixture, 테스트 설정만 추가하거나 수정할 때 사용합니다.
 - `docs`: 문서만 변경할 때 사용합니다.
 - `chore`: 제품 기능이 아니라 개발/운영/자동화 기반을 변경할 때 사용합니다.
-  - 하네스, Codex skill, agent 설정, hook, CI, PR 템플릿, Docker/샌드박스 실행 환경, Gradle 설정, 코드 리뷰 설정은 `chore`를 사용합니다.
+  - 하네스, AI 도구 설정(skill, agent, hook, slash command 포함), CI, PR 템플릿, Docker/샌드박스 실행 환경, Gradle 설정, 코드 리뷰 설정은 `chore`를 사용합니다.
 
 ## 혼합 변경 기준
 
