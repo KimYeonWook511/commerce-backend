@@ -20,9 +20,9 @@ import org.springframework.test.util.ReflectionTestUtils;
 import com.commerce.member.domain.Member;
 import com.commerce.order.domain.Order;
 import com.commerce.order.domain.OrderStatus;
+import com.commerce.order.domain.repository.OrderRepository;
 import com.commerce.order.exception.OrderErrorCode;
 import com.commerce.order.exception.OrderException;
-import com.commerce.order.infrastructure.JpaOrderRepository;
 import com.commerce.outbox.service.OutboxService;
 import com.commerce.outbox.stock.service.command.StockRestoreOutboxCreateCommand;
 import com.commerce.product.domain.Product;
@@ -32,7 +32,7 @@ import com.commerce.product.domain.ProductStatus;
 class OrderExpirationServiceTest {
 
 	@Mock
-	private JpaOrderRepository orderRepository;
+	private OrderRepository orderRepository;
 
 	@Mock
 	private OutboxService stockRestoreOutboxService;

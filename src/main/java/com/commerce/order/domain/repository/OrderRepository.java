@@ -4,14 +4,12 @@ import java.time.LocalDateTime;
 import java.util.List;
 import java.util.Optional;
 
-import org.springframework.data.domain.Pageable;
-
 import com.commerce.order.domain.Order;
 import com.commerce.order.domain.OrderStatus;
 
 public interface OrderRepository {
 
-	<S extends Order> S save(S order);
+	Order save(Order order);
 
 	Optional<Order> findById(Long orderId);
 
@@ -25,7 +23,5 @@ public interface OrderRepository {
 
 	Optional<Order> findByMerchantPayKeyForUpdate(String merchantPayKey);
 
-	List<Order> findExpiredOrdersAfterId(OrderStatus status, LocalDateTime cutoff, Long lastId, Pageable pageable);
-
-	void flush();
+	List<Order> findExpiredOrdersAfterId(OrderStatus status, LocalDateTime cutoff, Long lastId, int limit);
 }

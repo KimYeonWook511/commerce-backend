@@ -26,9 +26,9 @@ import com.commerce.member.exception.MemberErrorCode;
 import com.commerce.member.exception.MemberException;
 import com.commerce.order.domain.Order;
 import com.commerce.order.domain.OrderStatus;
+import com.commerce.order.domain.repository.OrderRepository;
 import com.commerce.order.exception.OrderErrorCode;
 import com.commerce.order.exception.OrderException;
-import com.commerce.order.infrastructure.JpaOrderRepository;
 import com.commerce.order.redis.OrderIdempotencyStore;
 import com.commerce.order.application.command.OrderCreateItem;
 import com.commerce.order.application.command.OrderCreateCommand;
@@ -61,7 +61,7 @@ class OrderApplicationServiceTest {
 	private StockConcurrencyService stockConcurrencyService;
 
 	@Mock
-	private JpaOrderRepository orderRepository;
+	private OrderRepository orderRepository;
 
 	@Mock
 	private OrderIdempotencyStore orderIdempotencyStore;

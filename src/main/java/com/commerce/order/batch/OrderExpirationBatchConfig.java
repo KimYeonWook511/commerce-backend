@@ -17,8 +17,6 @@ import org.springframework.beans.factory.annotation.Value;
 import org.springframework.context.annotation.Bean;
 import org.springframework.context.annotation.Configuration;
 import org.springframework.dao.OptimisticLockingFailureException;
-import org.springframework.data.domain.PageRequest;
-import org.springframework.data.domain.Sort;
 import org.springframework.transaction.PlatformTransactionManager;
 
 import com.commerce.common.exception.CustomException;
@@ -96,7 +94,7 @@ public class OrderExpirationBatchConfig {
 						OrderStatus.INIT,
 						cutoffTime,
 						lastId,
-						PageRequest.of(0, chunkSize, Sort.by("id").ascending())
+						chunkSize
 					);
 					if (!orders.isEmpty()) {
 						lastId = orders.getLast().getId();
@@ -146,7 +144,7 @@ public class OrderExpirationBatchConfig {
 	// 					OrderStatus.INIT,
 	// 					cutoffTime,
 	// 					lastId,
-	// 					PageRequest.of(0, chunkSize, Sort.by("id").ascending())
+	// 					chunkSize
 	// 				);
 	// 				if (!orders.isEmpty()) {
 	// 					lastId = orders.getLast().getId();
