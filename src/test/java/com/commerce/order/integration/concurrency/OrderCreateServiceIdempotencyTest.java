@@ -46,7 +46,7 @@ class OrderCreateServiceIdempotencyTest {
 	private OrderCreateService orderCreateService;
 
 	@Autowired
-	private StringRedisTemplate redisTemplate; // TokenStore로 사용해야하지 않나
+	private StringRedisTemplate redisTemplate;
 
 	@Autowired
 	private PersistenceCleanupTestSupport persistenceCleanup;
