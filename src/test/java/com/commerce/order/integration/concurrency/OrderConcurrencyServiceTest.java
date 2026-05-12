@@ -43,6 +43,8 @@ import com.commerce.stock.domain.Stock;
 import com.commerce.stock.exception.StockErrorCode;
 import com.commerce.stock.exception.StockException;
 import com.commerce.order.domain.OrderStatus;
+import org.springframework.dao.OptimisticLockingFailureException;
+
 import com.commerce.order.exception.OrderErrorCode;
 import com.commerce.order.exception.OrderException;
 import com.commerce.member.integration.support.MemberPersistenceTestSupport;
@@ -271,11 +273,9 @@ class OrderConcurrencyServiceTest {
 		assertThat(orderPersistence.findById(created.getOrderId()).orElseThrow().getStatus())
 			.isEqualTo(OrderStatus.CANCELED);
 		assertThat(errors).hasSize(threadCount - 1)
-			.allSatisfy(error -> {
-				assertThat(error).isInstanceOf(OrderException.class);
-				OrderException orderException = (OrderException) error;
-				assertThat(orderException.getErrorCode()).isEqualTo(OrderErrorCode.ORDER_CANCEL_NOT_ALLOWED);
-			});
+			.allSatisfy(error ->
+				assertThat(error).isInstanceOf(OptimisticLockingFailureException.class)
+			);
 	}
 
 	private void runConcurrent(int threadCount, Runnable task, ConcurrentLinkedQueue<Throwable> errors)
