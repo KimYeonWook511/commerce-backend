@@ -25,11 +25,12 @@ def ensure_tmux_session(session: str):
         )
 
 
-def run_claude_in_pane(root: str, session: str, pane_name: str, prompt_path: Path, output_path: Path) -> int:
+def run_claude_in_pane(root: str, session: str, pane_name: str, prompt_path: Path, output_path: Path, cwd: str | None = None) -> int:
     """tmux pane을 생성하고 claude -p를 실행한다. 완료까지 대기한다."""
     done_signal = f"{pane_name}-done-{uuid.uuid4().hex[:8]}"
+    cd_prefix = f"cd {cwd} && " if cwd else ""
     cmd = (
-        f"claude -p --dangerously-skip-permissions"
+        f"{cd_prefix}claude -p --dangerously-skip-permissions"
         f" < {prompt_path}"
         f" > {output_path}"
         f" 2>&1"
@@ -76,7 +77,7 @@ def run(root: str, phase_dir: Path, write_json, step: dict, context_text: str, g
     output_path = phase_dir / f"step{step_num}-raw-output.txt"
 
     try:
-        run_claude_in_pane(root, session, pane_name, prompt_path, output_path)
+        run_claude_in_pane(root, session, pane_name, prompt_path, output_path, cwd=root)
         last_message = output_path.read_text(encoding="utf-8") if output_path.exists() else ""
     finally:
         prompt_path.unlink(missing_ok=True)

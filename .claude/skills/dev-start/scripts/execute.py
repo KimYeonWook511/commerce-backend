@@ -88,6 +88,7 @@ class StepExecutor:
         self.root = str(ROOT)
         self.root_path = ROOT
         self.auto_push = auto_push
+        self.worktree_path: Path | None = None
         self.phase_dir = self.resolve_phase_dir(phase_path)
         self.phase_relpath = self.phase_dir.relative_to(ROOT).as_posix()
         self.phase_dir_name = self.phase_dir.name
@@ -146,11 +147,42 @@ class StepExecutor:
         self.validate_completed_step_artifacts()
         self.check_blockers()
         git_ops.preflight_git_write(self)
-        self.checkout_branch()
-        self.mark_workflow_execution_in_progress()
-        self.ensure_created_at()
-        self.execute_all_steps()
-        self.finalize()
+        self._setup_worktree()
+        try:
+            self.checkout_branch()
+            self.mark_workflow_execution_in_progress()
+            self.ensure_created_at()
+            self.execute_all_steps()
+            self.finalize()
+        finally:
+            self._teardown_worktree()
+
+    def _setup_worktree(self):
+        """phase 실행용 격리 worktree를 생성하고 self.root / self.phase_dir를 재설정한다."""
+        import uuid as _uuid
+        worktree_path = Path("/tmp") / f"dev-start-{self.feature_name}-{_uuid.uuid4().hex[:8]}"
+        git_ops.create_worktree(self.root_path, worktree_path, self.branch_name)
+        self.worktree_path = worktree_path
+
+        phase_relpath = self.phase_dir.relative_to(self.root_path)
+        self.root = str(worktree_path)
+        self.phase_dir = worktree_path / phase_relpath
+        self.phase_relpath = phase_relpath.as_posix()
+
+        feature_phases_relpath = self.feature_phases_dir.relative_to(self.root_path)
+        self.feature_phases_dir = worktree_path / feature_phases_relpath
+        self.feature_phases_relpath = feature_phases_relpath.as_posix()
+        self.feature_index_file = self.feature_phases_dir / "index.json"
+        self.feature_dir = self.feature_phases_dir.parent
+        self.index_file = self.phase_dir / "index.json"
+
+        print(f"  Worktree: {worktree_path}")
+
+    def _teardown_worktree(self):
+        """worktree를 정리한다. 성공/실패 모두 호출된다."""
+        if self.worktree_path:
+            git_ops.remove_worktree(self.root_path, self.worktree_path)
+            self.worktree_path = None
 
     # --- workflow checklist ---
 

@@ -5,6 +5,32 @@ import subprocess
 import uuid
 
 
+def create_worktree(root_path: Path, worktree_path: Path, branch: str) -> Path:
+    """격리된 실행용 git worktree를 생성한다."""
+    # 브랜치가 이미 존재하면 체크아웃, 없으면 새로 생성
+    result = subprocess.run(
+        ["git", "-C", str(root_path), "worktree", "add", str(worktree_path), branch],
+        capture_output=True, text=True,
+    )
+    if result.returncode != 0:
+        result = subprocess.run(
+            ["git", "-C", str(root_path), "worktree", "add", "-b", branch, str(worktree_path)],
+            capture_output=True, text=True,
+        )
+    if result.returncode != 0:
+        print(f"  ERROR: worktree 생성 실패: {result.stderr.strip()}")
+        raise SystemExit(1)
+    return worktree_path
+
+
+def remove_worktree(root_path: Path, worktree_path: Path):
+    """실행이 끝난 git worktree를 제거한다."""
+    subprocess.run(
+        ["git", "-C", str(root_path), "worktree", "remove", "--force", str(worktree_path)],
+        capture_output=True, text=True,
+    )
+
+
 def run_git(executor, *args) -> subprocess.CompletedProcess:
     """git 명령을 실행하고 stdout/stderr를 캡처한다."""
     return subprocess.run(
