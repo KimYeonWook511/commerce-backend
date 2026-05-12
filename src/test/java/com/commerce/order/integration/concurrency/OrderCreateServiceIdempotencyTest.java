@@ -13,7 +13,6 @@ import org.junit.jupiter.api.Test;
 import org.springframework.beans.factory.annotation.Autowired;
 import org.springframework.boot.test.context.SpringBootTest;
 import org.springframework.context.annotation.Import;
-import org.springframework.data.redis.core.StringRedisTemplate;
 import org.springframework.test.context.ActiveProfiles;
 import org.springframework.test.context.DynamicPropertyRegistry;
 import org.springframework.test.context.DynamicPropertySource;
@@ -27,7 +26,7 @@ import com.commerce.order.application.result.OrderCreateResult;
 import com.commerce.order.exception.OrderErrorCode;
 import com.commerce.order.exception.OrderException;
 import com.commerce.order.integration.support.OrderPersistenceTestSupport;
-import com.commerce.order.redis.OrderIdempotencyStatus;
+import com.commerce.order.redis.OrderIdempotencyStore;
 import com.commerce.product.domain.Product;
 import com.commerce.product.domain.ProductStatus;
 import com.commerce.product.integration.support.ProductPersistenceTestSupport;
@@ -46,7 +45,7 @@ class OrderCreateServiceIdempotencyTest {
 	private OrderCreateService orderCreateService;
 
 	@Autowired
-	private StringRedisTemplate redisTemplate;
+	private OrderIdempotencyStore orderIdempotencyStore;
 
 	@Autowired
 	private PersistenceCleanupTestSupport persistenceCleanup;
@@ -116,12 +115,7 @@ class OrderCreateServiceIdempotencyTest {
 			.build();
 
 		// when
-		String redisKey = "order:idempotency:" + member.getId() + ":processing-key";
-		redisTemplate.opsForValue().set(
-			redisKey,
-			OrderIdempotencyStatus.PROCESSING.value(),
-			Duration.ofSeconds(60)
-		);
+		orderIdempotencyStore.reserve(member.getId(), "processing-key", Duration.ofSeconds(60));
 
 		// then
 		assertThatThrownBy(() -> orderCreateService.createOrder(command))
