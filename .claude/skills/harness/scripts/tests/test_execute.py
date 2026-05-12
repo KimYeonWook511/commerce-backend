@@ -603,7 +603,7 @@ class StepExecutorTest(unittest.TestCase):
 
         self.execute.git_ops.preflight_git_write(executor)
 
-        self.assertFalse(any(git_dir.glob(".codex-write-test-*")))
+        self.assertFalse(any(git_dir.glob(".claude-write-test-*")))
 
     def test_preflight_git_write_exits_when_git_dir_missing(self):
         executor = self.make_executor()

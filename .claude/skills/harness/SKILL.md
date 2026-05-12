@@ -22,13 +22,13 @@ description: 개발 시작 전 문서 탐색, 논의, step 설계, phases 초안
 - 사용자가 명시적으로 `execute.py`를 쓰지 말라고 하지 않은 이상, agent가 직접 구현을 시작하면 안 된다.
 - `Implement the plan`은 자동으로 직접 구현을 뜻하지 않는다. `phases` 준비 여부와 실행 승인 여부를 먼저 확인해야 한다.
 - Workflow는 phase별 `workflow-checklist.json`으로 추적하며, 다음 단계로 넘어가기 전 이전 단계가 모두 `completed`여야 한다.
-- `dev-start` 진행 상태를 사용자에게 보고할 때는 1~6번 Workflow 상태 표를 함께 보여준다.
+- `harness` 진행 상태를 사용자에게 보고할 때는 1~6번 Workflow 상태 표를 함께 보여준다.
 - `File Drafting` 완료 후에는 반드시 멈추고 작성된 문서 경로를 사용자에게 보고한 뒤 검토 응답을 기다린다. 바로 `execute.py` 실행 요청으로 넘어가지 않는다.
 - `Execution Authorization`은 문서 검토 완료, Plan Mode 승인이 모두 확정되어야 `completed`가 된다.
 
 ## Workflow 상태 표
 
-`dev-start`를 진행하면서 사용자에게 상태를 보고할 때는 아래 표 형식을 사용한다.
+`harness`를 진행하면서 사용자에게 상태를 보고할 때는 아래 표 형식을 사용한다.
 
 | 단계 | Workflow | 상태 |
 | --- | --- | --- |

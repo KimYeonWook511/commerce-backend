@@ -1,6 +1,6 @@
-# dev-start 요약
+# harness 요약
 
-`dev-start`는 개발을 바로 시작하기 전에 요청을 정리하고, 필요한 문서를 좁혀 읽고, step을 설계하고, 준비된 phase는 실행기까지 연결하는 하네스성 skill이다.
+`harness`는 개발을 바로 시작하기 전에 요청을 정리하고, 필요한 문서를 좁혀 읽고, step을 설계하고, 준비된 phase는 실행기까지 연결하는 하네스성 skill이다.
 
 지금 이 Repo 기준으로 보면 `Explore → Discuss → Step Design → File Drafting → Execution Authorization → Execution` 흐름을 `workflow-checklist.json`으로 추적하고, 실행 단계에서는 `execute.py → developer worker → verifier/AC → reviewer → commit` 순서로 움직인다. 이 문서는 상세 사용법이 아니라, 나중에 다시 봤을 때 "아 지금 이런 구조였지"를 빠르게 떠올리기 위한 요약 문서다.
 

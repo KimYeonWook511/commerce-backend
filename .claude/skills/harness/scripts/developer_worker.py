@@ -66,7 +66,7 @@ def run(root: str, phase_dir: Path, write_json, step: dict, context_text: str, g
 
     prompt = build_prompt(context_text, guardrails_text, step_file.read_text(encoding="utf-8"))
 
-    session = "dev-start"
+    session = "harness"
     pane_name = f"step{step_num}-developer"
     ensure_tmux_session(session)
 

@@ -1,6 +1,6 @@
 # Phase Files Reference
 
-이 문서는 `dev-start` skill이 기능별 문서와 `phases` 구조를 설계하거나 초안을 만들 때 따르는 참조 문서다.
+이 문서는 `harness` skill이 기능별 문서와 `phases` 구조를 설계하거나 초안을 만들 때 따르는 참조 문서다.
 
 ## 기능 문서 기본 세트
 

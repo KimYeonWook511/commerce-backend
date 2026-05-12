@@ -122,7 +122,7 @@ def run(
     """reviewer worker를 tmux pane에서 실행하고 review output 파일을 기록한다."""
     prompt = build_prompt(guardrails_text, step, step_text, changed_paths, output, ac_output)
 
-    session = "dev-start"
+    session = "harness"
     pane_name = f"step{step['step']}-reviewer"
     ensure_tmux_session(session)
 
