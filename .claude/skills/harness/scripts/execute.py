@@ -143,11 +143,20 @@ class StepExecutor:
     def run(self):
         """실행 헤더 출력부터 전체 phase 완료 처리까지 오케스트레이션한다."""
         self.print_header()
+        self._preflight_tools()
         self.validate_workflow_checklist()
         self.validate_completed_step_artifacts()
         self.check_blockers()
         git_ops.preflight_git_write(self)
         self._setup_worktree()
+
+    def _preflight_tools(self):
+        """tmux와 claude CLI가 설치되어 있는지 확인한다."""
+        import shutil
+        for tool in ("tmux", "claude"):
+            if not shutil.which(tool):
+                print(f"\n  ERROR: '{tool}'이 설치되어 있지 않습니다. execute.py 실행 전 설치하세요.")
+                raise SystemExit(1)
         try:
             self.checkout_branch()
             self.mark_workflow_execution_in_progress()
