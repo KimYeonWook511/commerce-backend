@@ -28,6 +28,12 @@
 
 - 커밋 메시지에 `Co-Authored-By` 줄을 붙이지 않습니다.
 
+## 컨벤션 확인 규칙
+
+- `git commit` 실행 전: `docs/commit-conventions.md`를 읽고 타입과 형식을 확인한다.
+- `gh pr create` 실행 전: `docs/pr-conventions.md`를 읽고 타입, 형식, draft 여부를 확인한다.
+- 브랜치 생성(`git checkout -b`, `git switch -c`) 전: `docs/branch-conventions.md`를 읽고 형식을 확인한다.
+
 ## Plan Mode
 
 - 구현 전에 Plan Mode로 계획을 작성하고 `ExitPlanMode`로 사용자 승인을 받은 뒤 실행합니다.
