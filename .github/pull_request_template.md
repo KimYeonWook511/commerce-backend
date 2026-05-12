@@ -36,7 +36,7 @@ feat, fix, refactor, test, docs, chore
 - [ ] 해당 없음
 - [ ] 기능 문서(`docs/features/**`)를 함께 수정했습니다.
 - [ ] 루트 기준 문서(`docs/PRD.md`, `docs/api-spec.md`, `docs/architecture.md`, `docs/db-schema.md` 등)를 함께 수정했습니다.
-- [ ] Codex 하네스, hook, skill, agent 문서를 함께 수정했습니다.
+- [ ] AI 도구 하네스, hook, skill 문서(Codex, Claude Code)를 함께 수정했습니다.
 
 ## 테스트
 
