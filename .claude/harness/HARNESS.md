@@ -146,8 +146,8 @@ File Drafting 완료 후 필수 중단:
 `phases` 파일이 준비되면 skill 내부 실행기로 step을 순차 실행할 수 있다.
 
 ```bash
-python3 .claude/skills/dev-start/scripts/execute.py docs/features/<feature-name>/phases/<phase-name>
-python3 .claude/skills/dev-start/scripts/execute.py docs/features/<feature-name>/phases/<phase-name> --push
+python3 .claude/harness/scripts/execute.py docs/features/<feature-name>/phases/<phase-name>
+python3 .claude/harness/scripts/execute.py docs/features/<feature-name>/phases/<phase-name> --push
 ```
 
 실행 규칙:

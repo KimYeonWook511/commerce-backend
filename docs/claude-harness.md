@@ -35,8 +35,8 @@ Codex와 달리 Claude Code는 다음 방식으로 하네스를 구현한다.
 
 - **Plan Mode**: 구현 전 plan을 작성하고 `ExitPlanMode`로 사용자 승인을 받는다. Codex의 execute.py + Permission UI에 해당한다.
 - **Hooks**: `.claude/settings.json`의 `hooks` 섹션에서 shell 명령으로 실행한다. Codex의 `.codex/hooks.json` + Python 스크립트에 해당한다.
-- **Slash Commands**: `.claude/commands/*.md`에 정의된 명령으로 반복 workflow를 실행한다. Codex의 skill 진입점에 해당한다.
-- **dev-start 실행기**: `.claude/skills/dev-start/scripts/execute.py`가 tmux pane을 생성하고 `claude -p`로 worker를 실행한다. Codex의 `execute.py + codex exec`에 해당한다.
+- **Slash Commands (Skills)**: `.claude/commands/*.md`에 정의된 명령으로 반복 workflow를 실행한다. Claude Code에서 skill = slash command이며 `/project:harness` 형태로 호출한다. Codex의 skill 진입점에 해당한다.
+- **harness 실행기**: `.claude/harness/scripts/execute.py`가 tmux pane을 생성하고 `claude -p`로 worker를 실행한다. Codex의 `execute.py + codex exec`에 해당한다.
 
 ## 기대 효과
 

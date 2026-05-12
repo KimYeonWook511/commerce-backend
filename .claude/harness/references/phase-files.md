@@ -124,7 +124,7 @@ step 실행 상태 파일이다.
 }
 ```
 
-`approval_prompt_mode`는 `per_run` 또는 `saved_prefix_rule`을 사용한다. `saved_prefix_rule`이면 `prefix_rule`은 `["python3", ".claude/skills/dev-start/scripts/execute.py"]`다.
+`approval_prompt_mode`는 `per_run` 또는 `saved_prefix_rule`을 사용한다. `saved_prefix_rule`이면 `prefix_rule`은 `["python3", ".claude/harness/scripts/execute.py"]`다.
 
 ## `docs/features/<feature-name>/phases/<phase-name>/step{N}.md`
 
@@ -234,8 +234,8 @@ step 실행 상태 파일이다.
 기능별 `phases` 구조가 준비되면 아래 실행기로 현재 phase를 순차 실행할 수 있다.
 
 ```bash
-python3 .claude/skills/dev-start/scripts/execute.py docs/features/<feature-name>/phases/<phase-name>
-python3 .claude/skills/dev-start/scripts/execute.py docs/features/<feature-name>/phases/<phase-name> --push
+python3 .claude/harness/scripts/execute.py docs/features/<feature-name>/phases/<phase-name>
+python3 .claude/harness/scripts/execute.py docs/features/<feature-name>/phases/<phase-name> --push
 ```
 
 실행 개요:

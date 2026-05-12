@@ -28,7 +28,7 @@
 
 - 구현 전에 Plan Mode로 계획을 작성하고 `ExitPlanMode`로 사용자 승인을 받은 뒤 실행합니다.
 - 사용자가 승인하기 전에는 파일을 생성하거나 수정하지 않습니다.
-- dev-start skill을 사용할 때는 `workflow-checklist.json`의 `Execution Authorization`이 완료된 뒤에만 `execute.py`를 실행합니다.
+- `/project:harness` skill을 사용할 때는 `workflow-checklist.json`의 `Execution Authorization`이 완료된 뒤에만 `execute.py`를 실행합니다.
 
 ## 참고 문서
 
@@ -43,5 +43,4 @@
 - 커밋 컨벤션: `docs/commit-conventions.md`
 - Claude Code 하네스 원칙: `docs/claude-harness.md`
 - Claude Code hook 구조: `docs/claude/hooks/README.md`
-- Claude Code 에이전트 목록: `docs/claude/agents.md`
-- Claude Code dev-start 가이드: `docs/claude/skills/dev-start.md`
+- Claude Code harness 가이드: `docs/claude/harness.md`

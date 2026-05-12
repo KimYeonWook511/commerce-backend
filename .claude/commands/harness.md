@@ -10,7 +10,7 @@ dev-start workflow를 시작한다.
 6. 사용자가 승인하면 `docs/features/<feature-name>/phases/<phase-name>/` 아래 문서를 작성한다.
 7. 문서 작성 완료 후 반드시 멈추고 작성된 경로를 보고한다.
 8. Execution Authorization은 Plan Mode를 통해 사용자 승인을 받는다. 승인 전에는 파일을 수정하지 않는다.
-9. 승인 후 `python3 .claude/skills/dev-start/scripts/execute.py <phase-path>`를 실행한다.
+9. 승인 후 `python3 .claude/harness/scripts/execute.py <phase-path>`를 실행한다.
 
 workflow 상태는 `workflow-checklist.json`으로 추적한다. 각 단계 완료 후 아래 표 형식으로 보고한다.
 
@@ -23,4 +23,4 @@ workflow 상태는 `workflow-checklist.json`으로 추적한다. 각 단계 완�
 | 5 | Execution Authorization |  |
 | 6 | Execution |  |
 
-상세 규칙은 `.claude/skills/dev-start/SKILL.md`를 따른다.
+상세 규칙은 `.claude/harness/HARNESS.md`를 따른다.

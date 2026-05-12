@@ -6,7 +6,7 @@ Harness Step Executor
 필요하면 git 브랜치/커밋/푸시까지 자동으로 처리한다.
 
 Usage:
-    python3 .claude/skills/dev-start/scripts/execute.py docs/features/<feature-name>/phases/<phase-name> [--push]
+    python3 .claude/harness/scripts/execute.py docs/features/<feature-name>/phases/<phase-name> [--push]
 """
 
 from __future__ import annotations
@@ -36,7 +36,7 @@ import reviewer_worker
 import step_context
 import step_verifier
 
-# .claude/skills/dev-start/scripts/execute.py -> repository root
+# .claude/harness/scripts/execute.py -> repository root
 ROOT = Path(__file__).resolve().parents[4]
 
 
@@ -81,7 +81,7 @@ class StepExecutor:
         (5, "Execution Authorization"),
         (6, "Execution"),
     ]
-    EXECUTE_PREFIX_RULE = ["python3", ".claude/skills/dev-start/scripts/execute.py"]
+    EXECUTE_PREFIX_RULE = ["python3", ".claude/harness/scripts/execute.py"]
     APPROVAL_PROMPT_MODES = {"per_run", "saved_prefix_rule"}
 
     def __init__(self, phase_path: str, *, auto_push: bool = False):

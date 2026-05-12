@@ -453,7 +453,7 @@ class StepExecutorTest(unittest.TestCase):
                     "authorization": {
                         "escalation_approved": True,
                         "approval_prompt_mode": "saved_prefix_rule",
-                        "prefix_rule": ["python3", ".claude/skills/dev-start/scripts/execute.py"],
+                        "prefix_rule": ["python3", ".claude/harness/scripts/execute.py"],
                         "approved_by": "user",
                         "approved_at": "2026-04-30T15:30:00+0900",
                     }
@@ -642,7 +642,7 @@ class StepExecutorTest(unittest.TestCase):
         executor = self.make_executor()
         current = {"status": "completed", "summary": "dev-start 하네스 실행 안정성을 개선한다"}
 
-        result = executor.build_commit(current, [".claude/skills/dev-start/scripts/execute.py"])
+        result = executor.build_commit(current, [".claude/harness/scripts/execute.py"])
 
         self.assertEqual("chore: dev-start 하네스 실행 안정성을 개선한다", result)
 
