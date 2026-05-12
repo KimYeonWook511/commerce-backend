@@ -1,4 +1,4 @@
-package com.commerce.order.application;
+package com.commerce.order.integration.concurrency;
 
 import static org.assertj.core.api.Assertions.*;
 import static org.mockito.ArgumentMatchers.any;
@@ -8,6 +8,7 @@ import static org.mockito.BDDMockito.given;
 
 import java.util.List;
 import java.util.Optional;
+import java.util.UUID;
 import java.util.concurrent.ConcurrentLinkedDeque;
 import java.util.concurrent.ConcurrentLinkedQueue;
 import java.util.concurrent.CountDownLatch;
@@ -23,32 +24,37 @@ import org.junit.jupiter.api.Tag;
 import org.junit.jupiter.api.Test;
 import org.springframework.beans.factory.annotation.Autowired;
 import org.springframework.boot.test.context.SpringBootTest;
+import org.springframework.context.annotation.Import;
 import org.springframework.test.context.ActiveProfiles;
 import org.springframework.test.context.TestPropertySource;
 import org.springframework.test.context.bean.override.mockito.MockitoBean;
 
+import com.commerce.order.application.OrderCancelService;
+import com.commerce.order.application.OrderConcurrencyService;
+import com.commerce.order.application.OrderCreateService;
 import com.commerce.member.domain.Member;
-import com.commerce.member.repository.MemberRepository;
-import com.commerce.order.infrastructure.JpaOrderRepository;
 import com.commerce.order.redis.OrderIdempotencyStore;
 import com.commerce.order.application.command.OrderCreateItem;
 import com.commerce.order.application.command.OrderCreateCommand;
 import com.commerce.order.application.result.OrderCreateResult;
-import com.commerce.order.infrastructure.JpaOrderItemRepository;
 import com.commerce.product.domain.Product;
 import com.commerce.product.domain.ProductStatus;
-import com.commerce.product.infrastructure.JpaProductRepository;
 import com.commerce.stock.domain.Stock;
 import com.commerce.stock.exception.StockErrorCode;
 import com.commerce.stock.exception.StockException;
-import com.commerce.stock.repository.StockRepository;
 import com.commerce.order.domain.OrderStatus;
 import com.commerce.order.exception.OrderErrorCode;
 import com.commerce.order.exception.OrderException;
+import com.commerce.member.integration.support.MemberPersistenceTestSupport;
+import com.commerce.order.integration.support.OrderPersistenceTestSupport;
+import com.commerce.product.integration.support.ProductPersistenceTestSupport;
+import com.commerce.stock.integration.support.StockPersistenceTestSupport;
+import com.commerce.test.support.PersistenceCleanupTestSupport;
 
 @Tag("concurrency")
 @SpringBootTest
 @ActiveProfiles("test")
+@Import({PersistenceCleanupTestSupport.class, MemberPersistenceTestSupport.class, ProductPersistenceTestSupport.class, StockPersistenceTestSupport.class, OrderPersistenceTestSupport.class})
 @TestPropertySource(properties = {
 	"spring.datasource.hikari.maximum-pool-size=100",
 	"spring.datasource.hikari.minimum-idle=30",
@@ -66,30 +72,28 @@ class OrderConcurrencyServiceTest {
 	private OrderCancelService orderCancelService;
 
 	@Autowired
-	private MemberRepository memberRepository;
+	private PersistenceCleanupTestSupport persistenceCleanup;
 
 	@Autowired
-	private JpaProductRepository productRepository;
+	private MemberPersistenceTestSupport memberPersistence;
 
 	@Autowired
-	private StockRepository stockRepository;
+	private ProductPersistenceTestSupport productPersistence;
 
 	@Autowired
-	private JpaOrderRepository orderRepository;
+	private StockPersistenceTestSupport stockPersistence;
+
+	@Autowired
+	private OrderPersistenceTestSupport orderPersistence;
 
 	@MockitoBean
 	private OrderIdempotencyStore orderIdempotencyStore;
 
-	@Autowired
-	private JpaOrderItemRepository orderItemRepository;
-
 	@AfterEach
 	void tearDown() {
-		orderItemRepository.deleteAllInBatch();
-		orderRepository.deleteAllInBatch();
-		stockRepository.deleteAllInBatch();
-		productRepository.deleteAllInBatch();
-		memberRepository.deleteAllInBatch();
+		persistenceCleanup.deleteAllInBatch(
+			memberPersistence, productPersistence, stockPersistence, orderPersistence
+		);
 	}
 
 	@BeforeEach
@@ -105,9 +109,9 @@ class OrderConcurrencyServiceTest {
 	void createOrderWithoutLock_whenConcurrent_allowPartialSuccess() throws Exception {
 		// given
 		int threadCount = 50;
-		Member member = createMember();
-		Product product = createProduct("order-product-no-lock", 1000);
-		createStock(product, threadCount);
+		Member member = memberPersistence.save(createMember());
+		Product product = productPersistence.save(createProduct("order-product-no-lock", 1000));
+		stockPersistence.save(createStock(product, threadCount));
 		OrderCreateCommand command = createRequest(member.getId(), product.getId(), 1);
 
 		// when
@@ -115,8 +119,8 @@ class OrderConcurrencyServiceTest {
 		runConcurrent(threadCount, () -> orderConcurrencyService.createOrderWithoutLock(command), errors);
 
 		// then
-		Stock updated = stockRepository.findByProductId(product.getId()).orElseThrow();
-		long orderCount = orderRepository.count();
+		Stock updated = stockPersistence.findByProductId(product.getId()).orElseThrow();
+		long orderCount = orderPersistence.count();
 		assertThat(orderCount).isBetween(0L, (long) threadCount);
 		assertThat(updated.getQuantity()).isBetween(0, threadCount);
 		assertThat(updated.getQuantity() + orderCount).isEqualTo(threadCount);
@@ -128,9 +132,9 @@ class OrderConcurrencyServiceTest {
 	void createOrderWithSynchronizedAndTransaction_whenConcurrent_remainZero() throws Exception {
 		// given
 		int threadCount = 50;
-		Member member = createMember();
-		Product product = createProduct("order-product-sync", 1000);
-		createStock(product, threadCount);
+		Member member = memberPersistence.save(createMember());
+		Product product = productPersistence.save(createProduct("order-product-sync", 1000));
+		stockPersistence.save(createStock(product, threadCount));
 		OrderCreateCommand command = createRequest(member.getId(), product.getId(), 1);
 
 		// when
@@ -138,9 +142,9 @@ class OrderConcurrencyServiceTest {
 		runConcurrent(threadCount, () -> orderConcurrencyService.createOrderWithSynchronizedAndTransaction(command), errors);
 
 		// then
-		Stock updated = stockRepository.findByProductId(product.getId()).orElseThrow();
+		Stock updated = stockPersistence.findByProductId(product.getId()).orElseThrow();
 		assertThat(updated.getQuantity()).isZero();
-		assertThat(orderRepository.count()).isEqualTo(threadCount);
+		assertThat(orderPersistence.count()).isEqualTo(threadCount);
 		assertThat(errors).isEmpty();
 	}
 
@@ -149,9 +153,9 @@ class OrderConcurrencyServiceTest {
 	void createOrderWithReentrantLockAndTransaction_whenConcurrent_remainZero() throws Exception {
 		// given
 		int threadCount = 50;
-		Member member = createMember();
-		Product product = createProduct("order-product-reentrant", 1000);
-		createStock(product, threadCount);
+		Member member = memberPersistence.save(createMember());
+		Product product = productPersistence.save(createProduct("order-product-reentrant", 1000));
+		stockPersistence.save(createStock(product, threadCount));
 		OrderCreateCommand command = createRequest(member.getId(), product.getId(), 1);
 
 		// when
@@ -159,9 +163,9 @@ class OrderConcurrencyServiceTest {
 		runConcurrent(threadCount, () -> orderConcurrencyService.createOrderWithReentrantLockAndTransaction(command), errors);
 
 		// then
-		Stock updated = stockRepository.findByProductId(product.getId()).orElseThrow();
+		Stock updated = stockPersistence.findByProductId(product.getId()).orElseThrow();
 		assertThat(updated.getQuantity()).isZero();
-		assertThat(orderRepository.count()).isEqualTo(threadCount);
+		assertThat(orderPersistence.count()).isEqualTo(threadCount);
 		assertThat(errors).isEmpty();
 	}
 
@@ -170,9 +174,9 @@ class OrderConcurrencyServiceTest {
 	void createOrderWithOptimisticLock_whenConcurrent_allowRemainingStock() throws Exception {
 		// given
 		int threadCount = 50;
-		Member member = createMember();
-		Product product = createProduct("order-product-optimistic", 1000);
-		createStock(product, threadCount);
+		Member member = memberPersistence.save(createMember());
+		Product product = productPersistence.save(createProduct("order-product-optimistic", 1000));
+		stockPersistence.save(createStock(product, threadCount));
 		OrderCreateCommand command = createRequest(member.getId(), product.getId(), 1);
 
 		// when
@@ -180,8 +184,8 @@ class OrderConcurrencyServiceTest {
 		runConcurrent(threadCount, () -> orderConcurrencyService.createOrderWithOptimisticLock(command), errors);
 
 		// then
-		Stock updated = stockRepository.findByProductId(product.getId()).orElseThrow();
-		long orderCount = orderRepository.count();
+		Stock updated = stockPersistence.findByProductId(product.getId()).orElseThrow();
+		long orderCount = orderPersistence.count();
 		assertThat(orderCount).isBetween(0L, (long) threadCount);
 		assertThat(updated.getQuantity()).isBetween(0, threadCount);
 		assertThat(updated.getQuantity() - errors.size()).isZero();
@@ -194,9 +198,9 @@ class OrderConcurrencyServiceTest {
 	void createOrderWithPessimisticLock_whenConcurrent_remainZero() throws Exception {
 		// given
 		int threadCount = 50;
-		Member member = createMember();
-		Product product = createProduct("order-product-pessimistic", 1000);
-		createStock(product, threadCount);
+		Member member = memberPersistence.save(createMember());
+		Product product = productPersistence.save(createProduct("order-product-pessimistic", 1000));
+		stockPersistence.save(createStock(product, threadCount));
 		OrderCreateCommand command = createRequest(member.getId(), product.getId(), 1);
 
 		// when
@@ -204,9 +208,9 @@ class OrderConcurrencyServiceTest {
 		runConcurrent(threadCount, () -> orderConcurrencyService.createOrderWithPessimisticLock(command), errors);
 
 		// then
-		Stock updated = stockRepository.findByProductId(product.getId()).orElseThrow();
+		Stock updated = stockPersistence.findByProductId(product.getId()).orElseThrow();
 		assertThat(updated.getQuantity()).isZero();
-		assertThat(orderRepository.count()).isEqualTo(threadCount);
+		assertThat(orderPersistence.count()).isEqualTo(threadCount);
 		assertThat(errors).isEmpty();
 	}
 
@@ -216,9 +220,9 @@ class OrderConcurrencyServiceTest {
 		// given
 		int threadCount = 50;
 		int stockQuantity = 30;
-		Member member = createMember();
-		Product product = createProduct("order-product", 1000);
-		createStock(product, stockQuantity);
+		Member member = memberPersistence.save(createMember());
+		Product product = productPersistence.save(createProduct("order-product", 1000));
+		stockPersistence.save(createStock(product, stockQuantity));
 
 		// when
 		ConcurrentLinkedQueue<Throwable> errors = new ConcurrentLinkedQueue<>();
@@ -231,8 +235,8 @@ class OrderConcurrencyServiceTest {
 		}, errors);
 
 		// then
-		long orderCount = orderRepository.count();
-		Stock updated = stockRepository.findByProductId(product.getId()).orElseThrow();
+		long orderCount = orderPersistence.count();
+		Stock updated = stockPersistence.findByProductId(product.getId()).orElseThrow();
 
 		assertThat(orderCount).isEqualTo(stockQuantity);
 		assertThat(updated.getQuantity()).isZero();
@@ -249,9 +253,9 @@ class OrderConcurrencyServiceTest {
 	void cancelOrder_whenConcurrentRequests_onlyOneCancel() throws Exception {
 		// given
 		int threadCount = 3;
-		Member member = createMember();
-		Product product = createProduct("cancel-product", 1000);
-		createStock(product, 5);
+		Member member = memberPersistence.save(createMember());
+		Product product = productPersistence.save(createProduct("cancel-product", 1000));
+		stockPersistence.save(createStock(product, 5));
 
 		OrderCreateResult created = orderCreateService.createOrder(
 			createRequest(member.getId(), product.getId(), 2, "cancel-key")
@@ -262,9 +266,9 @@ class OrderConcurrencyServiceTest {
 		runConcurrent(threadCount, () -> orderCancelService.cancelOrder(member.getId(), created.getOrderId()), errors);
 
 		// then
-		Stock updated = stockRepository.findByProductId(product.getId()).orElseThrow();
+		Stock updated = stockPersistence.findByProductId(product.getId()).orElseThrow();
 		assertThat(updated.getQuantity()).isEqualTo(5);
-		assertThat(orderRepository.findById(created.getOrderId()).orElseThrow().getStatus())
+		assertThat(orderPersistence.findById(created.getOrderId()).orElseThrow().getStatus())
 			.isEqualTo(OrderStatus.CANCELED);
 		assertThat(errors).hasSize(threadCount - 1)
 			.allSatisfy(error -> {
@@ -320,32 +324,27 @@ class OrderConcurrencyServiceTest {
 	}
 
 	private Member createMember() {
-		return memberRepository.save(
-			Member.builder()
-				.email("test@example.com")
-				.password("password123")
-				.username("user1")
-				.build()
-		);
+		String suffix = UUID.randomUUID().toString().substring(0, 8);
+		return Member.builder()
+			.email("order-concurrency-" + suffix + "@example.com")
+			.password("password123")
+			.username("u" + suffix)
+			.build();
 	}
 
 	private Product createProduct(String name, int price) {
-		return productRepository.save(
-			Product.builder()
-				.name(name)
-				.price(price)
-				.status(ProductStatus.ON_SALE)
-				.build()
-		);
+		return Product.builder()
+			.name(name)
+			.price(price)
+			.status(ProductStatus.ON_SALE)
+			.build();
 	}
 
 	private Stock createStock(Product product, int quantity) {
-		return stockRepository.save(
-			Stock.builder()
-				.product(product)
-				.quantity(quantity)
-				.build()
-		);
+		return Stock.builder()
+			.product(product)
+			.quantity(quantity)
+			.build();
 	}
 
 	private OrderCreateCommand createRequest(Long memberId, Long productId, int quantity) {

@@ -10,36 +10,35 @@ import com.commerce.payment.domain.PaymentAttemptType;
 import com.commerce.payment.domain.PaymentProvider;
 import com.commerce.payment.infrastructure.JpaPaymentAttemptRepository;
 import com.commerce.payment.infrastructure.JpaPaymentRepository;
+import com.commerce.test.support.CleanupOrder;
+import com.commerce.test.support.PersistenceTestSupport;
 
 import lombok.RequiredArgsConstructor;
 
 @TestComponent
 @RequiredArgsConstructor
-public class PaymentPersistenceTestSupport {
+public class PaymentPersistenceTestSupport implements PersistenceTestSupport {
 
 	private final JpaPaymentRepository paymentRepository;
 	private final JpaPaymentAttemptRepository paymentAttemptRepository;
 
+	@Override
+	public CleanupOrder cleanupOrder() {
+		return CleanupOrder.PAYMENT;
+	}
+
+	@Override
 	public void deleteAllInBatch() {
 		paymentAttemptRepository.deleteAllInBatch();
 		paymentRepository.deleteAllInBatch();
 	}
 
-	public PaymentAttempt saveAttempt(PaymentAttempt paymentAttempt) {
+	public PaymentAttempt save(PaymentAttempt paymentAttempt) {
 		return paymentAttemptRepository.save(paymentAttempt);
 	}
 
-	public Payment savePayment(Payment payment) {
+	public Payment save(Payment payment) {
 		return paymentRepository.save(payment);
-	}
-
-	public PaymentAttempt saveApproveAttempt(
-		String merchantPayKey,
-		String paymentId,
-		int totalPayAmount,
-		PaymentProvider provider
-	) {
-		return saveAttempt(PaymentAttempt.createApproveRequested(merchantPayKey, paymentId, totalPayAmount, provider));
 	}
 
 	public Optional<Payment> findPaymentByMerchantPayKey(String merchantPayKey) {

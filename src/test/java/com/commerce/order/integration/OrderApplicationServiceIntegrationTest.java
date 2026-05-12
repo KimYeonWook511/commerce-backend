@@ -1,4 +1,4 @@
-package com.commerce.order.application;
+package com.commerce.order.integration;
 
 import static org.assertj.core.api.Assertions.assertThat;
 import static org.assertj.core.api.Assertions.assertThatThrownBy;
@@ -11,29 +11,39 @@ import org.junit.jupiter.api.Tag;
 import org.junit.jupiter.api.Test;
 import org.springframework.beans.factory.annotation.Autowired;
 import org.springframework.boot.test.context.SpringBootTest;
+import org.springframework.context.annotation.Import;
 import org.springframework.test.context.ActiveProfiles;
 import org.springframework.test.context.DynamicPropertyRegistry;
 import org.springframework.test.context.DynamicPropertySource;
 
 import com.commerce.member.domain.Member;
-import com.commerce.member.repository.MemberRepository;
-import com.commerce.order.infrastructure.JpaOrderRepository;
-import com.commerce.order.application.command.OrderCreateItem;
+import com.commerce.member.integration.support.MemberPersistenceTestSupport;
+import com.commerce.order.application.OrderCancelService;
+import com.commerce.order.application.OrderCreateService;
 import com.commerce.order.application.command.OrderCreateCommand;
+import com.commerce.order.application.command.OrderCreateItem;
 import com.commerce.order.application.result.OrderCreateResult;
-import com.commerce.order.infrastructure.JpaOrderItemRepository;
+import com.commerce.order.integration.support.OrderPersistenceTestSupport;
 import com.commerce.product.domain.Product;
 import com.commerce.product.domain.ProductStatus;
-import com.commerce.product.infrastructure.JpaProductRepository;
+import com.commerce.product.integration.support.ProductPersistenceTestSupport;
 import com.commerce.stock.domain.Stock;
 import com.commerce.stock.exception.StockErrorCode;
 import com.commerce.stock.exception.StockException;
-import com.commerce.stock.repository.StockRepository;
+import com.commerce.stock.integration.support.StockPersistenceTestSupport;
+import com.commerce.test.support.PersistenceCleanupTestSupport;
 import com.commerce.test.support.TestcontainersSupport;
 
 @SpringBootTest
 @ActiveProfiles("test")
 @Tag("docker")
+@Import({
+	PersistenceCleanupTestSupport.class,
+	MemberPersistenceTestSupport.class,
+	OrderPersistenceTestSupport.class,
+	ProductPersistenceTestSupport.class,
+	StockPersistenceTestSupport.class
+})
 class OrderApplicationServiceIntegrationTest {
 
 	@Autowired
@@ -43,19 +53,19 @@ class OrderApplicationServiceIntegrationTest {
 	private OrderCancelService orderCancelService;
 
 	@Autowired
-	private MemberRepository memberRepository;
+	private PersistenceCleanupTestSupport persistenceCleanup;
 
 	@Autowired
-	private JpaProductRepository productRepository;
+	private MemberPersistenceTestSupport memberPersistence;
 
 	@Autowired
-	private StockRepository stockRepository;
+	private OrderPersistenceTestSupport orderPersistence;
 
 	@Autowired
-	private JpaOrderRepository orderRepository;
+	private ProductPersistenceTestSupport productPersistence;
 
 	@Autowired
-	private JpaOrderItemRepository orderItemRepository;
+	private StockPersistenceTestSupport stockPersistence;
 
 	@DynamicPropertySource
 	static void registerProperties(DynamicPropertyRegistry registry) {
@@ -65,37 +75,18 @@ class OrderApplicationServiceIntegrationTest {
 
 	@AfterEach
 	void tearDown() {
-		orderItemRepository.deleteAllInBatch();
-		orderRepository.deleteAllInBatch();
-		stockRepository.deleteAllInBatch();
-		productRepository.deleteAllInBatch();
-		memberRepository.deleteAllInBatch();
+		persistenceCleanup.deleteAllInBatch(
+			memberPersistence, orderPersistence, productPersistence, stockPersistence
+		);
 	}
 
 	@DisplayName("재고가 부족하면 주문이 실패하고 취소 후 다시 주문할 수 있다")
 	@Test
 	void createOrder_whenOutOfStock_thenCancel_thenCreateSuccess() {
 		// given
-		Member member = memberRepository.save(
-			Member.builder()
-				.email("test@example.com")
-				.password("password123")
-				.username("user1")
-				.build()
-		);
-		Product product = productRepository.save(
-			Product.builder()
-				.name("recovery-product")
-				.price(1000)
-				.status(ProductStatus.ON_SALE)
-				.build()
-		);
-		stockRepository.save(
-			Stock.builder()
-				.product(product)
-				.quantity(1)
-				.build()
-		);
+		Member member = memberPersistence.save(createMember("order-recovery"));
+		Product product = productPersistence.save(createProduct("recovery-product", 1000));
+		stockPersistence.save(createStock(product, 1));
 
 		OrderCreateCommand firstRequest = OrderCreateCommand.builder()
 			.memberId(member.getId())
@@ -123,6 +114,29 @@ class OrderApplicationServiceIntegrationTest {
 
 		OrderCreateResult recreated = orderCreateService.createOrder(secondRequest);
 		assertThat(recreated.getOrderId()).isNotNull();
-		assertThat(stockRepository.findByProductId(product.getId()).orElseThrow().getQuantity()).isZero();
+		assertThat(stockPersistence.findByProductId(product.getId()).orElseThrow().getQuantity()).isZero();
+	}
+
+	private Member createMember(String emailPrefix) {
+		return Member.builder()
+			.email(emailPrefix + "@example.com")
+			.password("password123")
+			.username("uorder")
+			.build();
+	}
+
+	private Product createProduct(String name, int price) {
+		return Product.builder()
+			.name(name)
+			.price(price)
+			.status(ProductStatus.ON_SALE)
+			.build();
+	}
+
+	private Stock createStock(Product product, int quantity) {
+		return Stock.builder()
+			.product(product)
+			.quantity(quantity)
+			.build();
 	}
 }

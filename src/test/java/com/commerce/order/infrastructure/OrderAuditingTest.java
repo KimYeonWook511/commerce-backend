@@ -16,23 +16,29 @@ import com.commerce.common.jpa.JpaConfig;
 import com.commerce.member.domain.Member;
 import com.commerce.member.repository.MemberRepository;
 import com.commerce.order.domain.Order;
+import com.commerce.order.domain.repository.OrderRepository;
 import com.commerce.product.domain.Product;
 import com.commerce.product.domain.ProductStatus;
 import com.commerce.product.infrastructure.JpaProductRepository;
 
+import jakarta.persistence.EntityManager;
+
 @DataJpaTest
-@Import(JpaConfig.class)
+@Import({JpaConfig.class, OrderRepositoryAdapter.class})
 @ActiveProfiles("test")
 class OrderAuditingTest {
 
 	@Autowired
-	private JpaOrderRepository orderRepository;
+	private OrderRepository orderRepository;
 
 	@Autowired
 	private MemberRepository memberRepository;
 
 	@Autowired
 	private JpaProductRepository productRepository;
+
+	@Autowired
+	private EntityManager entityManager;
 
 	@DisplayName("주문을 저장하면 생성/수정 시간이 채워진다")
 	@Test
@@ -42,7 +48,8 @@ class OrderAuditingTest {
 		Order order = Order.create(member);
 
 		// when
-		Order saved = orderRepository.saveAndFlush(order);
+		Order saved = orderRepository.save(order);
+		entityManager.flush();
 
 		// then
 		assertThat(saved.getCreatedAt()).isNotNull();
@@ -55,14 +62,16 @@ class OrderAuditingTest {
 		// given
 		Member member = memberRepository.save(createMember());
 		Product product = productRepository.save(createProduct());
-		Order order = orderRepository.saveAndFlush(Order.create(member));
+		Order order = orderRepository.save(Order.create(member));
+		entityManager.flush();
 		LocalDateTime createdAt = order.getCreatedAt();
 		LocalDateTime updatedAt = order.getUpdatedAt();
 
 		// when
 		TimeUnit.MILLISECONDS.sleep(1);
 		order.addOrderItem(product, 1);
-		Order updated = orderRepository.saveAndFlush(order);
+		Order updated = orderRepository.save(order);
+		entityManager.flush();
 
 		// then
 		assertThat(updated.getCreatedAt()).isEqualTo(createdAt);

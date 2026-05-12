@@ -13,49 +13,46 @@ import org.junit.jupiter.api.DisplayName;
 import org.junit.jupiter.api.Test;
 import org.springframework.beans.factory.annotation.Autowired;
 import org.springframework.boot.test.context.SpringBootTest;
-import org.springframework.dao.DataIntegrityViolationException;
 import org.springframework.context.annotation.Import;
+import org.springframework.dao.DataIntegrityViolationException;
 import org.springframework.test.context.ActiveProfiles;
 import org.springframework.test.context.bean.override.mockito.MockitoSpyBean;
 
 import com.commerce.member.domain.Member;
-import com.commerce.member.repository.MemberRepository;
+import com.commerce.member.integration.support.MemberPersistenceTestSupport;
 import com.commerce.order.domain.Order;
 import com.commerce.order.domain.OrderStatus;
-import com.commerce.order.infrastructure.JpaOrderRepository;
-import com.commerce.order.infrastructure.JpaOrderItemRepository;
+import com.commerce.order.integration.support.OrderPersistenceTestSupport;
+import com.commerce.payment.application.PaymentApprovalService;
 import com.commerce.payment.domain.PaymentAttempt;
 import com.commerce.payment.domain.PaymentAttemptStatus;
 import com.commerce.payment.domain.PaymentAttemptType;
 import com.commerce.payment.domain.PaymentProvider;
-import com.commerce.payment.application.PaymentApprovalService;
 import com.commerce.payment.domain.repository.PaymentRepository;
 import com.commerce.payment.exception.PaymentErrorCode;
 import com.commerce.payment.exception.PaymentException;
 import com.commerce.payment.integration.support.PaymentPersistenceTestSupport;
 import com.commerce.product.domain.Product;
 import com.commerce.product.domain.ProductStatus;
-import com.commerce.product.infrastructure.JpaProductRepository;
+import com.commerce.product.integration.support.ProductPersistenceTestSupport;
+import com.commerce.test.support.PersistenceCleanupTestSupport;
 
 @SpringBootTest
 @ActiveProfiles("test")
-@Import(PaymentPersistenceTestSupport.class)
+@Import({PersistenceCleanupTestSupport.class, PaymentPersistenceTestSupport.class, MemberPersistenceTestSupport.class, ProductPersistenceTestSupport.class, OrderPersistenceTestSupport.class})
 class PaymentApprovalServiceIntegrationTest {
 
 	@Autowired
 	private PaymentApprovalService paymentApprovalService;
 
 	@Autowired
-	private MemberRepository memberRepository;
+	private MemberPersistenceTestSupport memberPersistence;
 
 	@Autowired
-	private JpaProductRepository productRepository;
+	private ProductPersistenceTestSupport productPersistence;
 
 	@Autowired
-	private JpaOrderRepository orderRepository;
-
-	@Autowired
-	private JpaOrderItemRepository orderItemRepository;
+	private OrderPersistenceTestSupport orderPersistence;
 
 	@MockitoSpyBean
 	private PaymentRepository paymentRepository;
@@ -63,22 +60,24 @@ class PaymentApprovalServiceIntegrationTest {
 	@Autowired
 	private PaymentPersistenceTestSupport paymentPersistence;
 
+	@Autowired
+	private PersistenceCleanupTestSupport persistenceCleanup;
+
 	@AfterEach
 	void tearDown() {
-		paymentPersistence.deleteAllInBatch();
-		orderItemRepository.deleteAllInBatch();
-		orderRepository.deleteAllInBatch();
-		productRepository.deleteAllInBatch();
-		memberRepository.deleteAllInBatch();
+		persistenceCleanup.deleteAllInBatch(
+			paymentPersistence, memberPersistence, productPersistence, orderPersistence
+		);
 	}
 
 	@DisplayName("payment 저장이 실패하면 approve attempt는 REQUESTED로 남고 order는 INIT를 유지한다")
 	@Test
 	void completeApprovedPayment_whenPersistingPaymentFails_keepApproveAttemptRequestedAndOrderInit() {
 		// given
-		Member member = createMember();
-		createOrder(member, "PAY-ROLLBACK-1", 1000);
-		paymentPersistence.saveApproveAttempt("PAY-ROLLBACK-1", "pg-rollback-1", 1000, PaymentProvider.NAVERPAY);
+		Member member = memberPersistence.save(createMember());
+		Product product = productPersistence.save(createProduct("product-PAY-ROLLBACK-1", 1000));
+		orderPersistence.saveAndFlush(createOrder(member, product, "PAY-ROLLBACK-1"));
+		paymentPersistence.save(createApproveAttempt("PAY-ROLLBACK-1", "pg-rollback-1", 1000));
 		doThrow(new DataIntegrityViolationException("duplicate key"))
 			.when(paymentRepository)
 			.save(any());
@@ -95,7 +94,7 @@ class PaymentApprovalServiceIntegrationTest {
 				.isEqualTo(PaymentErrorCode.PAYMENT_DUPLICATE));
 
 		assertThat(paymentPersistence.findPaymentByMerchantPayKey("PAY-ROLLBACK-1")).isEmpty();
-		assertThat(orderRepository.findByMerchantPayKey("PAY-ROLLBACK-1").orElseThrow().getStatus())
+		assertThat(orderPersistence.getOrderStatusByMerchantPayKey("PAY-ROLLBACK-1"))
 			.isEqualTo(OrderStatus.INIT);
 		assertThat(getAttempt("PAY-ROLLBACK-1", "pg-rollback-1", PaymentAttemptType.APPROVE).getStatus())
 			.isEqualTo(PaymentAttemptStatus.REQUESTED);
@@ -103,28 +102,35 @@ class PaymentApprovalServiceIntegrationTest {
 
 	private Member createMember() {
 		String suffix = UUID.randomUUID().toString().substring(0, 8);
-		return memberRepository.save(
-			Member.builder()
-				.email("payment-rollback-" + suffix + "@example.com")
-				.password("password123")
-				.username("u" + suffix)
-				.build()
-		);
+		return Member.builder()
+			.email("payment-rollback-" + suffix + "@example.com")
+			.password("password123")
+			.username("u" + suffix)
+			.build();
 	}
 
-	private Order createOrder(Member member, String merchantPayKey, int totalPrice) {
-		Product product = productRepository.save(
-			Product.builder()
-				.name("product-" + merchantPayKey)
-				.price(totalPrice)
-				.status(ProductStatus.ON_SALE)
-				.build()
-		);
+	private Product createProduct(String name, int price) {
+		return Product.builder()
+			.name(name)
+			.price(price)
+			.status(ProductStatus.ON_SALE)
+			.build();
+	}
 
+	private Order createOrder(Member member, Product product, String merchantPayKey) {
 		Order order = Order.create(member);
 		order.addOrderItem(product, 1);
 		order.assignMerchantPayKey(merchantPayKey);
-		return orderRepository.saveAndFlush(order);
+		return order;
+	}
+
+	private PaymentAttempt createApproveAttempt(String merchantPayKey, String paymentId, int totalPayAmount) {
+		return PaymentAttempt.createApproveRequested(
+			merchantPayKey,
+			paymentId,
+			totalPayAmount,
+			PaymentProvider.NAVERPAY
+		);
 	}
 
 	private PaymentAttempt getAttempt(String merchantPayKey, String paymentId, PaymentAttemptType type) {

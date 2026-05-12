@@ -1,4 +1,4 @@
-package com.commerce.stock.repository;
+package com.commerce.stock.infrastructure;
 
 import static org.assertj.core.api.Assertions.assertThat;
 
@@ -19,11 +19,13 @@ import com.commerce.product.infrastructure.JpaProductRepository;
 import com.commerce.stock.domain.Stock;
 import com.commerce.stock.domain.StockAdjustmentReason;
 import com.commerce.stock.domain.StockHistory;
+import com.commerce.stock.domain.repository.StockHistoryRepository;
+import com.commerce.stock.domain.repository.StockRepository;
 
 import jakarta.persistence.EntityManager;
 
 @DataJpaTest
-@Import(JpaConfig.class)
+@Import({JpaConfig.class, StockRepositoryAdapter.class, StockHistoryRepositoryAdapter.class})
 @ActiveProfiles("test")
 class StockHistoryRepositoryTest {
 
@@ -43,11 +45,13 @@ class StockHistoryRepositoryTest {
 	@Test
 	void findAllByStockProductIdOrderByCreatedAtDesc_whenDifferentProductHistories_excludeOtherProductHistories() {
 		// given
-		Stock firstStock = saveStock("first-product", 10);
-		Stock secondStock = saveStock("second-product", 20);
+		Product firstProduct = productRepository.save(createProduct("first-product"));
+		Product secondProduct = productRepository.save(createProduct("second-product"));
+		Stock firstStock = stockRepository.save(createStock(firstProduct, 10));
+		Stock secondStock = stockRepository.save(createStock(secondProduct, 20));
 		StockHistory firstHistory = stockHistoryRepository.save(createHistory(firstStock, 10));
 		stockHistoryRepository.save(createHistory(secondStock, 20));
-		stockHistoryRepository.flush();
+		entityManager.flush();
 		entityManager.clear();
 
 		// when
@@ -65,14 +69,17 @@ class StockHistoryRepositoryTest {
 	@Test
 	void findAllByStockProductIdOrderByCreatedAtDesc_whenMultipleHistories_returnLatestFirst() throws Exception {
 		// given
-		Stock stock = saveStock("product", 10);
-		StockHistory firstHistory = stockHistoryRepository.saveAndFlush(
+		Product product = productRepository.save(createProduct("product"));
+		Stock stock = stockRepository.save(createStock(product, 10));
+		StockHistory firstHistory = stockHistoryRepository.save(
 			createHistory(stock, 10, StockAdjustmentReason.INBOUND)
 		);
+		entityManager.flush();
 		TimeUnit.MILLISECONDS.sleep(10);
-		StockHistory latestHistory = stockHistoryRepository.saveAndFlush(
+		StockHistory latestHistory = stockHistoryRepository.save(
 			createHistory(stock, -3, StockAdjustmentReason.DISPOSAL)
 		);
+		entityManager.flush();
 		entityManager.clear();
 
 		// when
@@ -87,17 +94,19 @@ class StockHistoryRepositoryTest {
 		assertThat(results.get(0).getCreatedAt()).isAfter(results.get(1).getCreatedAt());
 	}
 
-	private Stock saveStock(String productName, int quantity) {
-		Product product = productRepository.save(Product.builder()
-			.name(productName)
+	private Product createProduct(String name) {
+		return Product.builder()
+			.name(name)
 			.price(1000)
 			.status(ProductStatus.ON_SALE)
-			.build());
+			.build();
+	}
 
-		return stockRepository.save(Stock.builder()
+	private Stock createStock(Product product, int quantity) {
+		return Stock.builder()
 			.product(product)
 			.quantity(quantity)
-			.build());
+			.build();
 	}
 
 	private StockHistory createHistory(Stock stock, int quantityChange) {

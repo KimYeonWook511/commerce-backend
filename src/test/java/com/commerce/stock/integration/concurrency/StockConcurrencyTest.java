@@ -1,4 +1,4 @@
-package com.commerce.stock.application;
+package com.commerce.stock.integration.concurrency;
 
 import static org.assertj.core.api.Assertions.*;
 
@@ -14,18 +14,23 @@ import org.junit.jupiter.api.Tag;
 import org.junit.jupiter.api.Test;
 import org.springframework.beans.factory.annotation.Autowired;
 import org.springframework.boot.test.context.SpringBootTest;
+import org.springframework.context.annotation.Import;
 import org.springframework.test.context.ActiveProfiles;
 
 import com.commerce.product.domain.Product;
 import com.commerce.product.domain.ProductStatus;
-import com.commerce.product.infrastructure.JpaProductRepository;
+import com.commerce.product.integration.support.ProductPersistenceTestSupport;
+import com.commerce.stock.application.StockConcurrencyService;
+import com.commerce.stock.application.StockInventoryService;
 import com.commerce.stock.application.command.StockDecreaseBatchCommand;
 import com.commerce.stock.domain.Stock;
-import com.commerce.stock.repository.StockRepository;
+import com.commerce.stock.integration.support.StockPersistenceTestSupport;
+import com.commerce.test.support.PersistenceCleanupTestSupport;
 
 @Tag("concurrency")
 @SpringBootTest
 @ActiveProfiles("test")
+@Import({PersistenceCleanupTestSupport.class, ProductPersistenceTestSupport.class, StockPersistenceTestSupport.class})
 class StockConcurrencyTest {
 
 	@Autowired
@@ -35,23 +40,25 @@ class StockConcurrencyTest {
 	private StockInventoryService stockInventoryService;
 
 	@Autowired
-	private StockRepository stockRepository;
+	private StockPersistenceTestSupport stockPersistence;
 
 	@Autowired
-	private JpaProductRepository productRepository;
+	private ProductPersistenceTestSupport productPersistence;
+
+	@Autowired
+	private PersistenceCleanupTestSupport persistenceCleanup;
 
 	@AfterEach
 	void tearDown() {
-		stockRepository.deleteAllInBatch();
-		productRepository.deleteAllInBatch();
+		persistenceCleanup.deleteAllInBatch(stockPersistence, productPersistence);
 	}
 
 	@DisplayName("락 없이 동시에 차감하면 재고가 예상치와 달라질 수 있다")
 	@Test
 	void decrease_whenConcurrentWithoutLock_resultMayDiffer() throws Exception {
 		// given
-		Product product = createProduct("test-product", 1000);
-		createStock(product, 100);
+		Product product = productPersistence.save(createProduct("test-product", 1000));
+		stockPersistence.save(createStock(product, 100));
 		int threadCount = 100;
 
 		// when
@@ -64,7 +71,7 @@ class StockConcurrencyTest {
 		);
 
 		// then
-		Stock updated = stockRepository.findByProductId(product.getId()).orElseThrow();
+		Stock updated = stockPersistence.findByProductId(product.getId()).orElseThrow();
 		assertThat(updated.getQuantity()).isGreaterThan(0);
 	}
 
@@ -72,8 +79,8 @@ class StockConcurrencyTest {
 	@Test
 	void decrease_whenConcurrentWithSynchronized_resultMayDiffer() throws Exception {
 		// given
-		Product product = createProduct("test-product-sync", 1000);
-		createStock(product, 100);
+		Product product = productPersistence.save(createProduct("test-product-sync", 1000));
+		stockPersistence.save(createStock(product, 100));
 		int threadCount = 100;
 
 		// when
@@ -86,7 +93,7 @@ class StockConcurrencyTest {
 		);
 
 		// then
-		Stock updated = stockRepository.findByProductId(product.getId()).orElseThrow();
+		Stock updated = stockPersistence.findByProductId(product.getId()).orElseThrow();
 		// synchronized만 사용하면 트랜잭션 커밋 시점이 락 밖에서 발생해 수량이 어긋날 수 있음
 		assertThat(updated.getQuantity()).isGreaterThanOrEqualTo(0);
 	}
@@ -95,8 +102,8 @@ class StockConcurrencyTest {
 	@Test
 	void decrease_whenConcurrentWithSynchronizedAndTransaction_remainZero() throws Exception {
 		// given
-		Product product = createProduct("test-product-sync-tx", 1000);
-		createStock(product, 100);
+		Product product = productPersistence.save(createProduct("test-product-sync-tx", 1000));
+		stockPersistence.save(createStock(product, 100));
 		int threadCount = 100;
 
 		// when
@@ -109,7 +116,7 @@ class StockConcurrencyTest {
 		);
 
 		// then
-		Stock updated = stockRepository.findByProductId(product.getId()).orElseThrow();
+		Stock updated = stockPersistence.findByProductId(product.getId()).orElseThrow();
 		assertThat(updated.getQuantity()).isZero();
 	}
 
@@ -117,8 +124,8 @@ class StockConcurrencyTest {
 	@Test
 	void decrease_whenConcurrentWithReentrantLockAndTransaction_remainZero() throws Exception {
 		// given
-		Product product = createProduct("test-product-reentrant-tx", 1000);
-		createStock(product, 100);
+		Product product = productPersistence.save(createProduct("test-product-reentrant-tx", 1000));
+		stockPersistence.save(createStock(product, 100));
 		int threadCount = 100;
 
 		// when
@@ -131,7 +138,7 @@ class StockConcurrencyTest {
 		);
 
 		// then
-		Stock updated = stockRepository.findByProductId(product.getId()).orElseThrow();
+		Stock updated = stockPersistence.findByProductId(product.getId()).orElseThrow();
 		assertThat(updated.getQuantity()).isZero();
 	}
 
@@ -139,8 +146,8 @@ class StockConcurrencyTest {
 	@Test
 	void decrease_whenConcurrentWithOptimisticLock_allowRemainingStock() throws Exception {
 		// given
-		Product product = createProduct("test-product-optimistic", 1000);
-		createStock(product, 100);
+		Product product = productPersistence.save(createProduct("test-product-optimistic", 1000));
+		stockPersistence.save(createStock(product, 100));
 		int threadCount = 100;
 
 		// when
@@ -153,7 +160,7 @@ class StockConcurrencyTest {
 		);
 
 		// then
-		Stock updated = stockRepository.findByProductId(product.getId()).orElseThrow();
+		Stock updated = stockPersistence.findByProductId(product.getId()).orElseThrow();
 		assertThat(updated.getQuantity()).isBetween(0, 100);
 		assertThat(updated.getQuantity() - errors.size()).isZero();
 	}
@@ -162,8 +169,8 @@ class StockConcurrencyTest {
 	@Test
 	void decrease_whenConcurrentWithPessimisticLock_remainZero() throws Exception {
 		// given
-		Product product = createProduct("test-product-pessimistic", 1000);
-		createStock(product, 100);
+		Product product = productPersistence.save(createProduct("test-product-pessimistic", 1000));
+		stockPersistence.save(createStock(product, 100));
 		int threadCount = 100;
 
 		// when
@@ -176,7 +183,7 @@ class StockConcurrencyTest {
 		);
 
 		// then
-		Stock updated = stockRepository.findByProductId(product.getId()).orElseThrow();
+		Stock updated = stockPersistence.findByProductId(product.getId()).orElseThrow();
 		assertThat(updated.getQuantity()).isZero();
 		assertThat(errors).isEmpty();
 	}
@@ -185,8 +192,8 @@ class StockConcurrencyTest {
 	@Test
 	void decrease_whenConcurrentWithPessimisticLockBatch_remainZero() throws Exception {
 		// given
-		Product product = createProduct("test-product-pessimistic-batch", 1000);
-		createStock(product, 100);
+		Product product = productPersistence.save(createProduct("test-product-pessimistic-batch", 1000));
+		stockPersistence.save(createStock(product, 100));
 		int threadCount = 100;
 
 		// when
@@ -201,7 +208,7 @@ class StockConcurrencyTest {
 		);
 
 		// then
-		Stock updated = stockRepository.findByProductId(product.getId()).orElseThrow();
+		Stock updated = stockPersistence.findByProductId(product.getId()).orElseThrow();
 		assertThat(updated.getQuantity()).isZero();
 		assertThat(errors).isEmpty();
 	}
@@ -210,8 +217,8 @@ class StockConcurrencyTest {
 	@Test
 	void decrease_whenConcurrentWithSynchronized_collectOptimisticLockErrors() throws Exception {
 		// given
-		Product product = createProduct("test-product-sync", 1000);
-		createStock(product, 100);
+		Product product = productPersistence.save(createProduct("test-product-sync", 1000));
+		stockPersistence.save(createStock(product, 100));
 		int threadCount = 100;
 
 		// when
@@ -224,7 +231,7 @@ class StockConcurrencyTest {
 		);
 
 		// then
-		Stock updated = stockRepository.findByProductId(product.getId()).orElseThrow();
+		Stock updated = stockPersistence.findByProductId(product.getId()).orElseThrow();
 		// synchronized만 사용하면 트랜잭션 커밋 시점이 락 밖에서 발생해 수량이 어긋날 수 있음
 		assertThat(updated.getQuantity()).isGreaterThanOrEqualTo(0);
 		assertThat(updated.getQuantity()).isEqualTo(errors.size());
@@ -271,19 +278,17 @@ class StockConcurrencyTest {
 	}
 
 	private Stock createStock(Product product, int quantity) {
-		Stock stock = Stock.builder()
+		return Stock.builder()
 			.product(product)
 			.quantity(quantity)
 			.build();
-		return stockRepository.save(stock);
 	}
 
 	private Product createProduct(String name, int price) {
-		Product product = Product.builder()
+		return Product.builder()
 			.name(name)
 			.price(price)
 			.status(ProductStatus.ON_SALE)
 			.build();
-		return productRepository.save(product);
 	}
 }

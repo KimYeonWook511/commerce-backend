@@ -11,7 +11,6 @@ import org.junit.jupiter.api.Test;
 import org.springframework.beans.factory.annotation.Autowired;
 import org.springframework.boot.test.autoconfigure.orm.jpa.DataJpaTest;
 import org.springframework.context.annotation.Import;
-import org.springframework.data.domain.PageRequest;
 import org.springframework.test.context.ActiveProfiles;
 
 import com.commerce.common.jpa.JpaConfig;
@@ -19,6 +18,7 @@ import com.commerce.member.domain.Member;
 import com.commerce.member.repository.MemberRepository;
 import com.commerce.order.domain.Order;
 import com.commerce.order.domain.OrderStatus;
+import com.commerce.order.domain.repository.OrderRepository;
 import com.commerce.product.domain.Product;
 import com.commerce.product.domain.ProductStatus;
 import com.commerce.product.infrastructure.JpaProductRepository;
@@ -26,12 +26,12 @@ import com.commerce.product.infrastructure.JpaProductRepository;
 import jakarta.persistence.EntityManager;
 
 @DataJpaTest
-@Import(JpaConfig.class)
+@Import({JpaConfig.class, OrderRepositoryAdapter.class})
 @ActiveProfiles("test")
 class OrderRepositoryTest {
 
 	@Autowired
-	private JpaOrderRepository orderRepository;
+	private OrderRepository orderRepository;
 
 	@Autowired
 	private MemberRepository memberRepository;
@@ -50,7 +50,8 @@ class OrderRepositoryTest {
 		Product product = productRepository.save(createProduct());
 		Order order = Order.create(member);
 		order.addOrderItem(product, 2);
-		Order saved = orderRepository.saveAndFlush(order);
+		Order saved = orderRepository.save(order);
+		entityManager.flush();
 		entityManager.clear();
 
 		// when
@@ -77,7 +78,7 @@ class OrderRepositoryTest {
 		Order savedFirst = orderRepository.save(first);
 		Order savedSecond = orderRepository.save(second);
 		orderRepository.save(canceled);
-		orderRepository.flush();
+		entityManager.flush();
 
 		LocalDateTime cutoff = LocalDateTime.now().plusMinutes(10);
 
@@ -86,7 +87,7 @@ class OrderRepositoryTest {
 			OrderStatus.INIT,
 			cutoff,
 			savedFirst.getId(),
-			PageRequest.of(0, 10)
+			10
 		);
 
 		// then
@@ -102,7 +103,8 @@ class OrderRepositoryTest {
 		Member member = memberRepository.save(createMember());
 		Product product = productRepository.save(createProduct());
 		Order order = createInitOrder(member, product);
-		orderRepository.saveAndFlush(order);
+		orderRepository.save(order);
+		entityManager.flush();
 
 		LocalDateTime cutoff = LocalDateTime.now().minusMinutes(10);
 
@@ -111,7 +113,7 @@ class OrderRepositoryTest {
 			OrderStatus.INIT,
 			cutoff,
 			0L,
-			PageRequest.of(0, 10)
+			10
 		);
 
 		// then
@@ -126,7 +128,8 @@ class OrderRepositoryTest {
 		Product product = productRepository.save(createProduct());
 		Order order = createInitOrder(member, product);
 		order.assignMerchantPayKey("PAY-REPO-1");
-		Order saved = orderRepository.saveAndFlush(order);
+		Order saved = orderRepository.save(order);
+		entityManager.flush();
 		entityManager.clear();
 
 		// when
@@ -144,7 +147,8 @@ class OrderRepositoryTest {
 		Product product = productRepository.save(createProduct());
 		Order order = createInitOrder(member, product);
 		order.assignMerchantPayKey("PAY-REPO-2");
-		Order saved = orderRepository.saveAndFlush(order);
+		Order saved = orderRepository.save(order);
+		entityManager.flush();
 		entityManager.clear();
 
 		// when

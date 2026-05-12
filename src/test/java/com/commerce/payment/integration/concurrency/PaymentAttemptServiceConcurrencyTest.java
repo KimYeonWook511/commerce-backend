@@ -22,26 +22,26 @@ import org.springframework.test.context.DynamicPropertyRegistry;
 import org.springframework.test.context.DynamicPropertySource;
 
 import com.commerce.member.domain.Member;
-import com.commerce.member.repository.MemberRepository;
 import com.commerce.order.domain.Order;
-import com.commerce.order.infrastructure.JpaOrderRepository;
-import com.commerce.order.infrastructure.JpaOrderItemRepository;
 import com.commerce.payment.domain.PaymentAttempt;
 import com.commerce.payment.domain.PaymentAttemptFailCode;
 import com.commerce.payment.domain.PaymentAttemptType;
 import com.commerce.payment.domain.PaymentProvider;
 import com.commerce.payment.application.PaymentAttemptService;
 import com.commerce.payment.integration.support.PaymentPersistenceTestSupport;
+import com.commerce.member.integration.support.MemberPersistenceTestSupport;
+import com.commerce.order.integration.support.OrderPersistenceTestSupport;
 import com.commerce.product.domain.Product;
 import com.commerce.product.domain.ProductStatus;
-import com.commerce.product.infrastructure.JpaProductRepository;
+import com.commerce.product.integration.support.ProductPersistenceTestSupport;
 import com.commerce.test.support.TestcontainersSupport;
+import com.commerce.test.support.PersistenceCleanupTestSupport;
 
 @Tag("concurrency")
 @Tag("docker")
 @SpringBootTest
 @ActiveProfiles("test")
-@Import(PaymentPersistenceTestSupport.class)
+@Import({PersistenceCleanupTestSupport.class, PaymentPersistenceTestSupport.class, MemberPersistenceTestSupport.class, ProductPersistenceTestSupport.class, OrderPersistenceTestSupport.class})
 class PaymentAttemptServiceConcurrencyTest {
 
 	@Autowired
@@ -51,29 +51,27 @@ class PaymentAttemptServiceConcurrencyTest {
 	private PaymentPersistenceTestSupport paymentPersistence;
 
 	@Autowired
-	private MemberRepository memberRepository;
+	private MemberPersistenceTestSupport memberPersistence;
 
 	@Autowired
-	private JpaProductRepository productRepository;
+	private ProductPersistenceTestSupport productPersistence;
 
 	@Autowired
-	private JpaOrderRepository orderRepository;
-
-	@Autowired
-	private JpaOrderItemRepository orderItemRepository;
+	private OrderPersistenceTestSupport orderPersistence;
 
 	@DynamicPropertySource
 	static void registerProperties(DynamicPropertyRegistry registry) {
 		TestcontainersSupport.registerMySql(registry);
 	}
 
+	@Autowired
+	private PersistenceCleanupTestSupport persistenceCleanup;
+
 	@AfterEach
 	void tearDown() {
-		paymentPersistence.deleteAllInBatch();
-		orderItemRepository.deleteAllInBatch();
-		orderRepository.deleteAllInBatch();
-		productRepository.deleteAllInBatch();
-		memberRepository.deleteAllInBatch();
+		persistenceCleanup.deleteAllInBatch(
+			paymentPersistence, memberPersistence, productPersistence, orderPersistence
+		);
 	}
 
 	@DisplayName("동시에 승인 시도 이력을 생성해도 approve attempt는 하나만 생성된다")
@@ -104,9 +102,10 @@ class PaymentAttemptServiceConcurrencyTest {
 		// given
 		String merchantPayKey = "PAY-ATTEMPT-CON-2";
 		String paymentId = "pg-attempt-con-2";
-		Member member = createMember();
-		createOrder(member, merchantPayKey, 1000);
-		paymentPersistence.saveAttempt(
+		Member member = memberPersistence.save(createMember());
+		Product product = productPersistence.save(createProduct("product-" + merchantPayKey, 1000));
+		orderPersistence.saveAndFlush(createOrder(member, product, merchantPayKey));
+		paymentPersistence.save(
 			PaymentAttempt.createApproveRequested(merchantPayKey, paymentId, 1000, PaymentProvider.NAVERPAY)
 		);
 		ConcurrentLinkedQueue<Throwable> errors = new ConcurrentLinkedQueue<>();
@@ -161,27 +160,25 @@ class PaymentAttemptServiceConcurrencyTest {
 
 	private Member createMember() {
 		String suffix = UUID.randomUUID().toString().substring(0, 8);
-		return memberRepository.save(
-			Member.builder()
-				.email("payment-attempt-con-" + suffix + "@example.com")
-				.password("password123")
-				.username("u" + suffix)
-				.build()
-		);
+		return Member.builder()
+			.email("payment-attempt-con-" + suffix + "@example.com")
+			.password("password123")
+			.username("u" + suffix)
+			.build();
 	}
 
-	private Order createOrder(Member member, String merchantPayKey, int totalPrice) {
-		Product product = productRepository.save(
-			Product.builder()
-				.name("product-" + merchantPayKey)
-				.price(totalPrice)
-				.status(ProductStatus.ON_SALE)
-				.build()
-		);
+	private Product createProduct(String name, int price) {
+		return Product.builder()
+			.name(name)
+			.price(price)
+			.status(ProductStatus.ON_SALE)
+			.build();
+	}
 
+	private Order createOrder(Member member, Product product, String merchantPayKey) {
 		Order order = Order.create(member);
 		order.addOrderItem(product, 1);
 		order.assignMerchantPayKey(merchantPayKey);
-		return orderRepository.saveAndFlush(order);
+		return order;
 	}
 }

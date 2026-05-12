@@ -1,10 +1,11 @@
-package com.commerce.order.application;
+package com.commerce.order.integration.concurrency;
 
 import static org.assertj.core.api.Assertions.*;
 
 import java.util.ArrayList;
 import java.util.Collections;
 import java.util.List;
+import java.util.UUID;
 import java.util.concurrent.ConcurrentLinkedQueue;
 import java.util.concurrent.CountDownLatch;
 import java.util.concurrent.ExecutorService;
@@ -18,28 +19,33 @@ import org.junit.jupiter.api.Tag;
 import org.junit.jupiter.api.Test;
 import org.springframework.beans.factory.annotation.Autowired;
 import org.springframework.boot.test.context.SpringBootTest;
+import org.springframework.context.annotation.Import;
 import org.springframework.test.context.ActiveProfiles;
 import org.springframework.test.context.DynamicPropertyRegistry;
 import org.springframework.test.context.DynamicPropertySource;
 
 import com.commerce.member.domain.Member;
-import com.commerce.member.repository.MemberRepository;
-import com.commerce.order.infrastructure.JpaOrderRepository;
-import com.commerce.order.application.command.OrderCreateItem;
+import com.commerce.member.integration.support.MemberPersistenceTestSupport;
+import com.commerce.order.application.OrderCancelService;
+import com.commerce.order.application.OrderConcurrencyService;
+import com.commerce.order.application.OrderCreateService;
 import com.commerce.order.application.command.OrderCreateCommand;
+import com.commerce.order.application.command.OrderCreateItem;
 import com.commerce.order.application.result.OrderCreateResult;
-import com.commerce.order.infrastructure.JpaOrderItemRepository;
+import com.commerce.order.integration.support.OrderPersistenceTestSupport;
 import com.commerce.product.domain.Product;
 import com.commerce.product.domain.ProductStatus;
-import com.commerce.product.infrastructure.JpaProductRepository;
+import com.commerce.product.integration.support.ProductPersistenceTestSupport;
 import com.commerce.stock.domain.Stock;
-import com.commerce.stock.repository.StockRepository;
+import com.commerce.stock.integration.support.StockPersistenceTestSupport;
+import com.commerce.test.support.PersistenceCleanupTestSupport;
 import com.commerce.test.support.TestcontainersSupport;
 
 @Tag("concurrency")
 @Tag("docker")
 @SpringBootTest
 @ActiveProfiles("test")
+@Import({PersistenceCleanupTestSupport.class, MemberPersistenceTestSupport.class, ProductPersistenceTestSupport.class, StockPersistenceTestSupport.class, OrderPersistenceTestSupport.class})
 class OrderConcurrencyServiceDeadlockMysqlTest {
 
 	@Autowired
@@ -49,19 +55,19 @@ class OrderConcurrencyServiceDeadlockMysqlTest {
 	private OrderCancelService orderCancelService;
 
 	@Autowired
-	private MemberRepository memberRepository;
+	private PersistenceCleanupTestSupport persistenceCleanup;
 
 	@Autowired
-	private JpaProductRepository productRepository;
+	private MemberPersistenceTestSupport memberPersistence;
 
 	@Autowired
-	private StockRepository stockRepository;
+	private ProductPersistenceTestSupport productPersistence;
 
 	@Autowired
-	private JpaOrderRepository orderRepository;
+	private StockPersistenceTestSupport stockPersistence;
 
 	@Autowired
-	private JpaOrderItemRepository orderItemRepository;
+	private OrderPersistenceTestSupport orderPersistence;
 
 	@DynamicPropertySource
 	static void registerProperties(DynamicPropertyRegistry registry) {
@@ -70,31 +76,29 @@ class OrderConcurrencyServiceDeadlockMysqlTest {
 
 	@AfterEach
 	void tearDown() {
-		orderItemRepository.deleteAllInBatch();
-		orderRepository.deleteAllInBatch();
-		stockRepository.deleteAllInBatch();
-		productRepository.deleteAllInBatch();
-		memberRepository.deleteAllInBatch();
+		persistenceCleanup.deleteAllInBatch(
+			memberPersistence, productPersistence, stockPersistence, orderPersistence
+		);
 	}
 
 	@DisplayName("MySQL에서 주문 항목 순서가 달라도 재고 정합성이 유지된다")
 	@Test
 	void createOrderWithPessimisticLockBatch_whenOrderItemSequenceDiffers_keepStockConsistency() throws Exception {
 		// given
-		Member member = createMember();
-		Product product1 = createProduct("mysql-order-product-1", 1000);
-		Product product2 = createProduct("mysql-order-product-2", 1100);
-		Product product3 = createProduct("mysql-order-product-3", 1200);
-		Product product4 = createProduct("mysql-order-product-4", 1300);
-		Product product5 = createProduct("mysql-order-product-5", 1400);
-		Product product6 = createProduct("mysql-order-product-6", 1500);
-		Product product7 = createProduct("mysql-order-product-7", 1600);
-		Product product8 = createProduct("mysql-order-product-8", 1700);
+		Member member = memberPersistence.save(createMember());
+		Product product1 = productPersistence.save(createProduct("mysql-order-product-1", 1000));
+		Product product2 = productPersistence.save(createProduct("mysql-order-product-2", 1100));
+		Product product3 = productPersistence.save(createProduct("mysql-order-product-3", 1200));
+		Product product4 = productPersistence.save(createProduct("mysql-order-product-4", 1300));
+		Product product5 = productPersistence.save(createProduct("mysql-order-product-5", 1400));
+		Product product6 = productPersistence.save(createProduct("mysql-order-product-6", 1500));
+		Product product7 = productPersistence.save(createProduct("mysql-order-product-7", 1600));
+		Product product8 = productPersistence.save(createProduct("mysql-order-product-8", 1700));
 		List<Product> products = List.of(
 			product1, product2, product3, product4, product5, product6, product7, product8
 		);
 		for (Product product : products) {
-			createStock(product, 2);
+			stockPersistence.save(createStock(product, 2));
 		}
 
 		OrderCreateCommand requestA = createRequest(member.getId(), List.of(
@@ -119,11 +123,11 @@ class OrderConcurrencyServiceDeadlockMysqlTest {
 		}, errors);
 
 		// then
-		long orderCount = orderRepository.count();
+		long orderCount = orderPersistence.count();
 		assertThat(orderCount).isEqualTo(2L);
 		assertThat(errors).isEmpty();
 		for (Product product : products) {
-			Stock updated = stockRepository.findByProductId(product.getId()).orElseThrow();
+			Stock updated = stockPersistence.findByProductId(product.getId()).orElseThrow();
 			// assertThat(updated.getQuantity()).isEqualTo(0L);
 		}
 	}
@@ -133,22 +137,22 @@ class OrderConcurrencyServiceDeadlockMysqlTest {
 	void createOrderWithPessimisticLockBatch_whenRepeatedConcurrency_keepStockConsistency() throws Exception {
 		// given
 		int threadCount = 20;
-		Member member = createMember();
+		Member member = memberPersistence.save(createMember());
 		List<Product> products = List.of(
-			createProduct("mysql-order-batch-1", 1000),
-			createProduct("mysql-order-batch-2", 1100),
-			createProduct("mysql-order-batch-3", 1200),
-			createProduct("mysql-order-batch-4", 1300),
-			createProduct("mysql-order-batch-5", 1400),
-			createProduct("mysql-order-batch-6", 1500),
-			createProduct("mysql-order-batch-7", 1600),
-			createProduct("mysql-order-batch-8", 1700)
+			productPersistence.save(createProduct("mysql-order-batch-1", 1000)),
+			productPersistence.save(createProduct("mysql-order-batch-2", 1100)),
+			productPersistence.save(createProduct("mysql-order-batch-3", 1200)),
+			productPersistence.save(createProduct("mysql-order-batch-4", 1300)),
+			productPersistence.save(createProduct("mysql-order-batch-5", 1400)),
+			productPersistence.save(createProduct("mysql-order-batch-6", 1500)),
+			productPersistence.save(createProduct("mysql-order-batch-7", 1600)),
+			productPersistence.save(createProduct("mysql-order-batch-8", 1700))
 		);
 		List<Long> orderedIds = products.stream().map(Product::getId).toList();
 		List<Long> reversedIds = new ArrayList<>(orderedIds);
 		Collections.reverse(reversedIds);
 		for (Product product : products) {
-			createStock(product, threadCount);
+			stockPersistence.save(createStock(product, threadCount));
 		}
 
 		// when
@@ -161,11 +165,11 @@ class OrderConcurrencyServiceDeadlockMysqlTest {
 			orderConcurrencyService.createOrderWithPessimisticLockBatch(command);
 		}, errors);
 
-		long orderCount = orderRepository.count();
+		long orderCount = orderPersistence.count();
 		assertThat(orderCount).isEqualTo(threadCount);
 		assertThat(errors).isEmpty();
 		for (Product product : products) {
-			Stock updated = stockRepository.findByProductId(product.getId()).orElseThrow();
+			Stock updated = stockPersistence.findByProductId(product.getId()).orElseThrow();
 			assertThat(updated.getQuantity()).isZero();
 		}
 	}
@@ -175,19 +179,19 @@ class OrderConcurrencyServiceDeadlockMysqlTest {
 	void createOrderWithPessimisticLockBatch_whenMixedOrders_keepStockConsistency() throws Exception {
 		// given
 		int threadCount = 16;
-		Member member = createMember();
+		Member member = memberPersistence.save(createMember());
 		List<Product> products = List.of(
-			createProduct("mysql-order-mixed-1", 1000),
-			createProduct("mysql-order-mixed-2", 1100),
-			createProduct("mysql-order-mixed-3", 1200),
-			createProduct("mysql-order-mixed-4", 1300),
-			createProduct("mysql-order-mixed-5", 1400),
-			createProduct("mysql-order-mixed-6", 1500),
-			createProduct("mysql-order-mixed-7", 1600),
-			createProduct("mysql-order-mixed-8", 1700)
+			productPersistence.save(createProduct("mysql-order-mixed-1", 1000)),
+			productPersistence.save(createProduct("mysql-order-mixed-2", 1100)),
+			productPersistence.save(createProduct("mysql-order-mixed-3", 1200)),
+			productPersistence.save(createProduct("mysql-order-mixed-4", 1300)),
+			productPersistence.save(createProduct("mysql-order-mixed-5", 1400)),
+			productPersistence.save(createProduct("mysql-order-mixed-6", 1500)),
+			productPersistence.save(createProduct("mysql-order-mixed-7", 1600)),
+			productPersistence.save(createProduct("mysql-order-mixed-8", 1700))
 		);
 		for (Product product : products) {
-			createStock(product, threadCount);
+			stockPersistence.save(createStock(product, threadCount));
 		}
 
 		List<Long> orderedIds = products.stream().map(Product::getId).toList();
@@ -208,11 +212,11 @@ class OrderConcurrencyServiceDeadlockMysqlTest {
 		}, errors);
 
 		// then
-		long orderCount = orderRepository.count();
+		long orderCount = orderPersistence.count();
 		assertThat(orderCount).isEqualTo(threadCount);
 		assertThat(errors).isEmpty();
 		for (Product product : products) {
-			Stock updated = stockRepository.findByProductId(product.getId()).orElseThrow();
+			Stock updated = stockPersistence.findByProductId(product.getId()).orElseThrow();
 			assertThat(updated.getQuantity()).isZero();
 		}
 	}
@@ -221,11 +225,11 @@ class OrderConcurrencyServiceDeadlockMysqlTest {
 	@Test
 	void createOrderAndCancelOrder_whenConcurrent_noDeadlock() throws Exception {
 		// given
-		Member member = createMember();
-		Product product1 = createProduct("mysql-order-product-1", 1000);
-		Product product2 = createProduct("mysql-order-product-2", 1200);
-		createStock(product1, 10);
-		createStock(product2, 10);
+		Member member = memberPersistence.save(createMember());
+		Product product1 = productPersistence.save(createProduct("mysql-order-product-1", 1000));
+		Product product2 = productPersistence.save(createProduct("mysql-order-product-2", 1200));
+		stockPersistence.save(createStock(product1, 10));
+		stockPersistence.save(createStock(product2, 10));
 
 		OrderCreateCommand cancelRequest = createRequest(
 			member.getId(), List.of(product2.getId(), product1.getId())
@@ -250,10 +254,10 @@ class OrderConcurrencyServiceDeadlockMysqlTest {
 
 		// then
 		assertThat(errors).isEmpty();
-		assertThat(orderRepository.count()).isEqualTo(2L);
-		assertThat(stockRepository.findByProductId(product1.getId()).orElseThrow().getQuantity())
+		assertThat(orderPersistence.count()).isEqualTo(2L);
+		assertThat(stockPersistence.findByProductId(product1.getId()).orElseThrow().getQuantity())
 			.isEqualTo(9);
-		assertThat(stockRepository.findByProductId(product2.getId()).orElseThrow().getQuantity())
+		assertThat(stockPersistence.findByProductId(product2.getId()).orElseThrow().getQuantity())
 			.isEqualTo(9);
 	}
 
@@ -295,32 +299,27 @@ class OrderConcurrencyServiceDeadlockMysqlTest {
 	}
 
 	private Member createMember() {
-		return memberRepository.save(
-			Member.builder()
-				.email("mysql-deadlock@example.com")
-				.password("password123")
-				.username("deadlock")
-				.build()
-		);
+		String suffix = UUID.randomUUID().toString().substring(0, 8);
+		return Member.builder()
+			.email("mysql-deadlock-" + suffix + "@example.com")
+			.password("password123")
+			.username("u" + suffix)
+			.build();
 	}
 
 	private Product createProduct(String name, int price) {
-		return productRepository.save(
-			Product.builder()
-				.name(name)
-				.price(price)
-				.status(ProductStatus.ON_SALE)
-				.build()
-		);
+		return Product.builder()
+			.name(name)
+			.price(price)
+			.status(ProductStatus.ON_SALE)
+			.build();
 	}
 
 	private Stock createStock(Product product, int quantity) {
-		return stockRepository.save(
-			Stock.builder()
-				.product(product)
-				.quantity(quantity)
-				.build()
-		);
+		return Stock.builder()
+			.product(product)
+			.quantity(quantity)
+			.build();
 	}
 
 	private OrderCreateCommand createRequest(Long memberId, List<Long> productIds) {
