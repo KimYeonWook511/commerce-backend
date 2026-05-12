@@ -148,7 +148,15 @@ class StepExecutor:
         self.validate_completed_step_artifacts()
         self.check_blockers()
         git_ops.preflight_git_write(self)
-        self._setup_worktree()
+        try:
+            self._setup_worktree()
+            self.checkout_branch()
+            self.mark_workflow_execution_in_progress()
+            self.ensure_created_at()
+            self.execute_all_steps()
+            self.finalize()
+        finally:
+            self._teardown_worktree()
 
     def _preflight_tools(self):
         """tmux와 claude CLI가 설치되어 있는지 확인한다."""
@@ -157,14 +165,6 @@ class StepExecutor:
             if not shutil.which(tool):
                 print(f"\n  ERROR: '{tool}'이 설치되어 있지 않습니다. execute.py 실행 전 설치하세요.")
                 raise SystemExit(1)
-        try:
-            self.checkout_branch()
-            self.mark_workflow_execution_in_progress()
-            self.ensure_created_at()
-            self.execute_all_steps()
-            self.finalize()
-        finally:
-            self._teardown_worktree()
 
     def _setup_worktree(self):
         """phase 실행용 격리 worktree를 생성하고 self.root / self.phase_dir를 재설정한다."""
