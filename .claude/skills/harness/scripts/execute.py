@@ -196,7 +196,7 @@ class StepExecutor:
     # --- workflow checklist ---
 
     def workflow_checklist_path(self) -> Path:
-        """현재 phase의 dev-start workflow checklist 경로를 반환한다."""
+        """현재 phase의 harness workflow checklist 경로를 반환한다."""
         return self.phase_dir / "workflow-checklist.json"
 
     def validate_workflow_checklist(self):

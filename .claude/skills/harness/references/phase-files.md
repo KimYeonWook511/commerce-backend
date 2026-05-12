@@ -83,7 +83,7 @@ step 실행 상태 파일이다.
 
 ## `docs/features/<feature-name>/phases/<phase-name>/workflow-checklist.json`
 
-`dev-start` workflow 진행 상태를 기록하는 checklist다. phase를 만들 때 반드시 생성하며, 항목 제목은 `SKILL.md`의 Workflow 제목과 일치해야 한다.
+`harness` workflow 진행 상태를 기록하는 checklist다. phase를 만들 때 반드시 생성하며, 항목 제목은 `SKILL.md`의 Workflow 제목과 일치해야 한다.
 
 ```json
 {
