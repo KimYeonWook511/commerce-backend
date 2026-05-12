@@ -24,15 +24,17 @@ def ensure_tmux_session(session: str):
         )
 
 
-def run_claude_in_pane(root: str, session: str, pane_name: str, prompt_path: Path, output_path: Path, cwd: str | None = None) -> int:
+def run_claude_in_pane(root: str, session: str, pane_name: str, prompt_path: Path, output_path: Path, exit_code_path: Path | None = None, cwd: str | None = None) -> int:
     """tmux pane을 생성하고 claude -p를 실행한다. 완료까지 대기한다."""
     done_signal = f"{pane_name}-done-{uuid.uuid4().hex[:8]}"
     cd_prefix = f"cd {cwd} && " if cwd else ""
+    exit_capture = f"; echo $? > {exit_code_path}" if exit_code_path else ""
     cmd = (
         f"{cd_prefix}claude -p --dangerously-skip-permissions"
         f" < {prompt_path}"
         f" > {output_path}"
         f" 2>&1"
+        f"{exit_capture}"
         f"; tmux wait-for -S {done_signal}"
     )
 
@@ -74,19 +76,23 @@ def run(root: str, phase_dir: Path, write_json, step: dict, context_text: str, g
         prompt_path = Path(prompt_file.name)
 
     output_path = phase_dir / f"step{step_num}-raw-output.txt"
+    exit_code_path = phase_dir / f"step{step_num}-exit-code.txt"
 
     try:
-        run_claude_in_pane(root, session, pane_name, prompt_path, output_path, cwd=root)
+        run_claude_in_pane(root, session, pane_name, prompt_path, output_path, exit_code_path, cwd=root)
         last_message = output_path.read_text(encoding="utf-8") if output_path.exists() else ""
+        exit_code = int(exit_code_path.read_text(encoding="utf-8").strip()) if exit_code_path.exists() else 0
     finally:
         prompt_path.unlink(missing_ok=True)
         if output_path.exists():
             output_path.unlink(missing_ok=True)
+        if exit_code_path.exists():
+            exit_code_path.unlink(missing_ok=True)
 
     output = {
         "step": step_num,
         "name": step_name,
-        "exitCode": 0,
+        "exitCode": exit_code,
         "stdout": last_message,
         "stderr": "",
         "lastMessage": last_message,

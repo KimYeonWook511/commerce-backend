@@ -25,10 +25,12 @@ def create_worktree(root_path: Path, worktree_path: Path, branch: str) -> Path:
 
 def remove_worktree(root_path: Path, worktree_path: Path):
     """실행이 끝난 git worktree를 제거한다."""
-    subprocess.run(
+    result = subprocess.run(
         ["git", "-C", str(root_path), "worktree", "remove", "--force", str(worktree_path)],
         capture_output=True, text=True,
     )
+    if result.returncode != 0:
+        print(f"  WARNING: worktree 정리 실패: {worktree_path}\n  {result.stderr.strip()}")
 
 
 def run_git(executor, *args) -> subprocess.CompletedProcess:

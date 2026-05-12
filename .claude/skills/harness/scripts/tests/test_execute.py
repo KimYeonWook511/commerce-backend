@@ -979,6 +979,12 @@ class StepExecutorTest(unittest.TestCase):
                 executor.finalize()
         self.assertEqual(1, exc.exception.code)
 
+    def test_resolve_phase_dir_exits_when_directory_missing(self):
+        executor = self.make_executor()
+        with self.assertRaises(SystemExit) as exc:
+            executor.resolve_phase_dir("docs/features/nonexistent/phases/0-mvp")
+        self.assertEqual(1, exc.exception.code)
+
     def test_main_invalid_phase_exits(self):
         argv = self.execute.sys.argv
         self.execute.sys.argv = ["execute.py", "missing"]

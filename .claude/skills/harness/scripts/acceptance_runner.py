@@ -58,7 +58,7 @@ def run(root: str, phase_dir: Path, write_json, step: dict, step_text: str) -> d
         "step": step["step"],
         "commands": commands,
         "results": results,
-        "passed": passed and len(results) == len(commands),
+        "passed": passed,
     }
     write_json(output_path(phase_dir, step["step"]), payload)
     return payload

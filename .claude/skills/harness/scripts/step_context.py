@@ -28,7 +28,11 @@ def list_agents_reference_docs(root_path: Path) -> list[Path]:
     if not claude_md:
         return []
 
-    matches = re.findall(r"`([^`]+\.md)`", claude_md.read_text(encoding="utf-8"))
+    text = claude_md.read_text(encoding="utf-8")
+    marker = "## 참고 문서"
+    idx = text.find(marker)
+    section = text[idx:] if idx != -1 else ""
+    matches = re.findall(r"`([^`]+\.md)`", section)
     docs: list[Path] = []
     for match in matches:
         path = root_path / match

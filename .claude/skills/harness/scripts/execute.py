@@ -119,7 +119,8 @@ class StepExecutor:
         direct = ROOT / phase_path
         if direct.is_dir():
             return direct
-        return direct
+        print(f"ERROR: phase 디렉토리를 찾을 수 없습니다: {direct}")
+        raise SystemExit(1)
 
     def extract_feature_name(self, index: dict) -> str:
         """phase 경로 또는 index 정보에서 기능명을 추출한다."""
@@ -168,8 +169,7 @@ class StepExecutor:
 
     def _setup_worktree(self):
         """phase 실행용 격리 worktree를 생성하고 self.root / self.phase_dir를 재설정한다."""
-        import uuid as _uuid
-        worktree_path = Path("/tmp") / f"dev-start-{self.feature_name}-{_uuid.uuid4().hex[:8]}"
+        worktree_path = Path("/tmp") / f"harness-{self.feature_name}-{uuid.uuid4().hex[:8]}"
         git_ops.create_worktree(self.root_path, worktree_path, self.branch_name)
         self.worktree_path = worktree_path
 

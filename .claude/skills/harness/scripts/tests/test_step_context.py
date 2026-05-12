@@ -42,6 +42,17 @@ class StepContextTest(unittest.TestCase):
         self.assertIn("관련 문서 (docs/ADR.md)", result)
         self.assertNotIn("관련 문서 (docs/api-spec.md)", result)
 
+    def test_list_agents_reference_docs_excludes_paths_outside_reference_section(self):
+        (self.root / "docs" / "other.md").write_text("# other", encoding="utf-8")
+        (self.root / "CLAUDE.md").write_text(
+            "## 구현 규칙\n\n`docs/other.md`를 따른다.\n\n## 참고 문서\n- `docs/ADR.md`\n",
+            encoding="utf-8",
+        )
+        result = self.module.list_agents_reference_docs(self.root)
+        paths = [str(p.relative_to(self.root)) for p in result]
+        self.assertIn("docs/ADR.md", paths)
+        self.assertNotIn("docs/other.md", paths)
+
     def test_build_previous_step_context_uses_completed_summary_only(self):
         index = {
             "steps": [

@@ -51,6 +51,7 @@ class DeveloperWorkerTest(unittest.TestCase):
         cmd_str = send_keys_call[4]
         self.assertIn("claude -p", cmd_str)
         self.assertIn("--dangerously-skip-permissions", cmd_str)
+        self.assertIn("echo $?", cmd_str)
 
         output = json.loads((self.phase_dir / "step2-output.json").read_text(encoding="utf-8"))
         self.assertEqual(2, output["step"])
