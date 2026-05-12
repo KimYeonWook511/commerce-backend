@@ -107,7 +107,7 @@ docs/features/<feature-name>/phases/<phase-name>/step0.md
 - phase index 상태는 step 진행 기준이며 phase 종료 시 커밋한다. 실행기 output json과 `workflow-checklist.json`은 로컬에만 둔다.
 - `completed` step의 상태와 복구 절차는 사용 중인 도구의 dev-start skill 문서를 따른다.
   - Codex: `.codex/skills/dev-start/references/phase-files.md`
-  - Claude Code: `.claude/harness/references/phase-files.md`
+  - Claude Code: `.claude/skills/harness/references/phase-files.md`
 - 이전 step 변경이 커밋되지 않은 상태로 다음 step을 바로 재실행하면 scope validation에 다시 걸릴 수 있다.
 - 따라서 재실행 전에는 아래를 먼저 확인한다.
   - 현재 워킹트리에 남은 변경이 기능 변경인지 로컬 실행 산출물인지

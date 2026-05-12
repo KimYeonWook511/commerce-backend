@@ -67,10 +67,10 @@ developer 결과를 read-only 관점으로 검토한다. `pass`, `retryable_erro
 
 ## 현재 Repo의 역할별 구성
 
-- Workflow policy: `.claude/harness/HARNESS.md`
-- Phase file reference: `.claude/harness/references/phase-files.md`
-- Context Manager: `.claude/harness/scripts/step_context.py`
-- Developer Worker: `.claude/harness/scripts/developer_guardrails.py`, `.claude/harness/scripts/developer_worker.py`
-- Verifier / AC 재검증: `.claude/harness/scripts/step_verifier.py`, `.claude/harness/scripts/acceptance_runner.py`
-- Reviewer Worker: `.claude/harness/scripts/reviewer_guardrails.py`, `.claude/harness/scripts/reviewer_worker.py`
-- Orchestration: `.claude/harness/scripts/execute.py`
+- Workflow policy: `.claude/skills/harness/SKILL.md`
+- Phase file reference: `.claude/skills/harness/references/phase-files.md`
+- Context Manager: `.claude/skills/harness/scripts/step_context.py`
+- Developer Worker: `.claude/skills/harness/scripts/developer_guardrails.py`, `.claude/skills/harness/scripts/developer_worker.py`
+- Verifier / AC 재검증: `.claude/skills/harness/scripts/step_verifier.py`, `.claude/skills/harness/scripts/acceptance_runner.py`
+- Reviewer Worker: `.claude/skills/harness/scripts/reviewer_guardrails.py`, `.claude/skills/harness/scripts/reviewer_worker.py`
+- Orchestration: `.claude/skills/harness/scripts/execute.py`

@@ -128,15 +128,15 @@
 2. 아래 실행 명령을 정확히 안내한다.
 
 ```bash
-python3 .claude/harness/scripts/execute.py docs/features/skill-test/phases/0-bootstrap
-python3 .claude/harness/scripts/execute.py docs/features/skill-test/phases/0-bootstrap --push
+python3 .claude/skills/harness/scripts/execute.py docs/features/skill-test/phases/0-bootstrap
+python3 .claude/skills/harness/scripts/execute.py docs/features/skill-test/phases/0-bootstrap --push
 ```
 
 3. `--push`가 마지막에 원격 브랜치를 푸시하는 옵션이라는 점을 분리해서 설명한다.
 4. 실행 전 `workflow-checklist.json`의 `Execution Authorization`이 완료되어야 한다고 안내한다.
 5. 사용자에게 받아야 하는 두 입력을 분리해서 설명한다.
    - 권한 상승 실행 허락
-   - 승인 프롬프트 처리 방식: 매번 승인 또는 `prefix_rule=["python3", ".claude/harness/scripts/execute.py"]` 저장
+   - 승인 프롬프트 처리 방식: 매번 승인 또는 `prefix_rule=["python3", ".claude/skills/harness/scripts/execute.py"]` 저장
 6. 사용자 의사 확인 후 agent가 checklist에 `authorization` 객체를 기록해야 한다고 설명한다.
 7. checklist 기록 후 Codex permission UI에서 `execute.py` 명령 자체의 권한 상승 요청을 보낸다고 설명한다.
 8. 실행 흐름이 `pending` step 순차 실행, 상태 전이, `summary` 누적 방식이라는 점을 요약한다.
