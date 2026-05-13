@@ -5,7 +5,7 @@ import subprocess
 import uuid
 
 
-def create_worktree(root_path: Path, worktree_path: Path, branch: str) -> Path:
+def create_worktree(root_path: Path, worktree_path: Path, branch: str, base_branch: str = "develop") -> Path:
     """격리된 실행용 git worktree를 생성한다."""
     # 브랜치가 이미 존재하면 체크아웃, 없으면 새로 생성
     result = subprocess.run(
@@ -14,7 +14,7 @@ def create_worktree(root_path: Path, worktree_path: Path, branch: str) -> Path:
     )
     if result.returncode != 0:
         result = subprocess.run(
-            ["git", "-C", str(root_path), "worktree", "add", "-b", branch, str(worktree_path)],
+            ["git", "-C", str(root_path), "worktree", "add", "-b", branch, str(worktree_path), base_branch],
             capture_output=True, text=True,
         )
     if result.returncode != 0:
