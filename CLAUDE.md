@@ -18,6 +18,7 @@
 - 비즈니스 로직은 Domain 또는 Service 계층에 둡니다.
 - Controller는 요청 수신, 입력 검증, 서비스 위임, 응답 반환만 담당합니다.
 - 불필요한 추상화와 과한 설계를 피합니다.
+- 코드를 수정하거나 작성할 때 기존에 작성된 주석을 삭제하지 않으며, 코드 위치가 바뀌는 경우 주석도 함께 이동합니다.
 
 ## 안전 규칙
 
@@ -30,7 +31,7 @@
 
 ## 컨벤션 확인 규칙
 
-- `git commit` 실행 전: `docs/commit-conventions.md`를 읽고 타입과 형식을 확인한다.
+- `git commit` 실행 전: `docs/commit-conventions.md`를 읽고 타입, subject 문체(`~한다`), 형식을 확인한다.
 - `gh pr create` 실행 전: `docs/pr-conventions.md`를 읽고 타입, 형식, draft 여부를 확인한다.
 - 브랜치 생성(`git worktree add`) 전: `docs/branch-conventions.md`를 읽고 형식을 확인한다.
 
