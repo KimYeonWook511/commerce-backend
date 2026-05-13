@@ -14,7 +14,7 @@ import org.springframework.test.context.ActiveProfiles;
 
 import com.commerce.common.jpa.JpaConfig;
 import com.commerce.member.domain.Member;
-import com.commerce.member.repository.MemberRepository;
+import com.commerce.member.infrastructure.JpaMemberRepository;
 import com.commerce.order.domain.Order;
 import com.commerce.order.domain.repository.OrderRepository;
 import com.commerce.product.domain.Product;
@@ -32,7 +32,7 @@ class OrderAuditingTest {
 	private OrderRepository orderRepository;
 
 	@Autowired
-	private MemberRepository memberRepository;
+	private JpaMemberRepository memberRepository;
 
 	@Autowired
 	private JpaProductRepository productRepository;
