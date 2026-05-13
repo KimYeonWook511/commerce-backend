@@ -17,6 +17,7 @@ description: PR 머지 후 develop을 최신화하고 머지된 브랜치의 wor
 ### 1. develop 최신화 및 원격 브랜치 prune
 
 ```bash
+git checkout develop
 git pull origin develop
 git fetch -p
 ```
@@ -26,7 +27,7 @@ git fetch -p
 `git fetch -p` 이후 원격이 삭제된 브랜치는 `git branch -vv`에서 `: gone]`으로 표시된다.
 
 ```bash
-git branch -vv | grep ': gone]' | awk '{print $1}'
+git branch -vv | grep ': gone]' | awk '{print ($1 == "*" || $1 == "+" ? $2 : $1)}'
 ```
 
 출력된 브랜치 목록이 정리 대상이다.
