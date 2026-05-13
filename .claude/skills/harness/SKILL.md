@@ -12,7 +12,7 @@ description: 개발 시작 전 문서 탐색, 논의, step 설계, phases 초안
 - 큰 작업을 자기완결적인 step으로 분해해야 할 때
 
 이 skill은 개발 전 탐색, step 설계, feature/phases 초안 작성, 준비된 phase의 실행기 연결을 담당한다.
-실행기 `execute.py`는 `/tmp`에 격리 worktree를 자동 생성하고, 브랜치 생성, 커밋, 선택적 push를 수행할 수 있다.
+실행기 `execute.py`는 repo 루트의 `worktrees/` 아래에 격리 worktree를 자동 생성하고, 브랜치 생성, 커밋, 선택적 push를 수행할 수 있다.
 
 ## 필수 준수 규칙
 
@@ -130,7 +130,7 @@ File Drafting 완료 후 필수 중단:
 
 `execute.py`를 실행하기 전에 Plan Mode로 사용자 승인을 받는다.
 
-- `execute.py`는 `/tmp`에 격리 worktree를 생성한 뒤 feature 브랜치 checkout/create, add, commit을 수행한다.
+- `execute.py`는 repo 루트의 `worktrees/` 아래에 격리 worktree를 생성한 뒤 feature 브랜치 checkout/create, add, commit을 수행한다.
 - 이 단계에 들어가기 전 checklist의 `Explore`, `Discuss`, `Step Design`, `File Drafting`은 모두 `completed`여야 한다.
 - 아래 순서로만 진행한다.
   1. Plan Mode로 구현 계획을 사용자에게 제시한다.
