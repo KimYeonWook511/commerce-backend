@@ -26,7 +26,7 @@ import com.commerce.order.application.result.OrderCreateResult;
 import com.commerce.order.exception.OrderErrorCode;
 import com.commerce.order.exception.OrderException;
 import com.commerce.order.integration.support.OrderPersistenceTestSupport;
-import com.commerce.order.domain.OrderIdempotencyStore;
+import com.commerce.order.domain.repository.OrderIdempotencyRepository;
 import com.commerce.product.domain.Product;
 import com.commerce.product.domain.ProductStatus;
 import com.commerce.product.integration.support.ProductPersistenceTestSupport;
@@ -45,7 +45,7 @@ class OrderCreateServiceIdempotencyTest {
 	private OrderCreateService orderCreateService;
 
 	@Autowired
-	private OrderIdempotencyStore orderIdempotencyStore;
+	private OrderIdempotencyRepository orderIdempotencyStore;
 
 	@Autowired
 	private PersistenceCleanupTestSupport persistenceCleanup;
