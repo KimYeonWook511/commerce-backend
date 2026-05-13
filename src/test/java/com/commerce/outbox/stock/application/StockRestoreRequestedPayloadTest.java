@@ -1,4 +1,4 @@
-package com.commerce.outbox.stock.service.payload;
+package com.commerce.outbox.stock.application;
 
 import static org.assertj.core.api.Assertions.assertThat;
 
@@ -6,6 +6,8 @@ import java.util.List;
 
 import org.junit.jupiter.api.DisplayName;
 import org.junit.jupiter.api.Test;
+
+import com.commerce.outbox.stock.application.payload.StockRestoreRequestedPayload;
 
 class StockRestoreRequestedPayloadTest {
 
