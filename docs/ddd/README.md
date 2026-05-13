@@ -20,6 +20,7 @@
 - `auth-ddd-migration-retrospective.md`: Auth — security 웹 adapter 분리, JWT 구현을 infrastructure에 위치
 - `repository-adapter-boundary-retrospective.md`: 전 도메인 Repository Adapter 경계 일관성 정리, 테스트 패키지 구조 확정
 - `naverpay-ddd-migration-retrospective.md`: naverpay — application/infrastructure/presentation 레이어 전환, NaverPayGateway 경계 분리
+- `outbox-ddd-migration-retrospective.md`: Outbox — DDD 구조 전환, StockRestoreOutboxService 분리(Create/Relay), 전 도메인 완료
 
 ## 작성 원칙
 
