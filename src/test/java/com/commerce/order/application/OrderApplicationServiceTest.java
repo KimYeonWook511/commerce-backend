@@ -64,7 +64,7 @@ class OrderApplicationServiceTest {
 	private OrderRepository orderRepository;
 
 	@Mock
-	private OrderIdempotencyRepository orderIdempotencyStore;
+	private OrderIdempotencyRepository orderIdempotencyRepository;
 
 	@InjectMocks
 	private OrderCreateService orderCreateService;
@@ -539,7 +539,7 @@ class OrderApplicationServiceTest {
 	}
 
 	private void stubForIdempotencyReserved() {
-		given(orderIdempotencyStore.reserve(anyLong(), anyString(), any()))
+		given(orderIdempotencyRepository.reserve(anyLong(), anyString(), any()))
 			.willReturn(true);
 	}
 

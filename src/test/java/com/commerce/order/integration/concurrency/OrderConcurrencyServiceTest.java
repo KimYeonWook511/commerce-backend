@@ -89,7 +89,7 @@ class OrderConcurrencyServiceTest {
 	private OrderPersistenceTestSupport orderPersistence;
 
 	@MockitoBean
-	private OrderIdempotencyRepository orderIdempotencyStore;
+	private OrderIdempotencyRepository orderIdempotencyRepository;
 
 	@AfterEach
 	void tearDown() {
@@ -100,9 +100,9 @@ class OrderConcurrencyServiceTest {
 
 	@BeforeEach
 	void setUpIdempotencyStore() {
-		given(orderIdempotencyStore.reserve(anyLong(), anyString(), any()))
+		given(orderIdempotencyRepository.reserve(anyLong(), anyString(), any()))
 			.willReturn(true);
-		given(orderIdempotencyStore.getCompletedOrderId(anyLong(), anyString()))
+		given(orderIdempotencyRepository.getCompletedOrderId(anyLong(), anyString()))
 			.willReturn(Optional.empty());
 	}
 

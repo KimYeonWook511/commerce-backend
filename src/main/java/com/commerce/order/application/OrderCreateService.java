@@ -42,7 +42,7 @@ public class OrderCreateService {
 	private final MemberRepository memberRepository;
 	private final ProductRepository productRepository;
 	private final OrderRepository orderRepository;
-	private final OrderIdempotencyRepository orderIdempotencyStore;
+	private final OrderIdempotencyRepository orderIdempotencyRepository;
 	private final StockInventoryService stockInventoryService;
 
 	@Value("${order.idempotency.ttl-seconds:600}")
@@ -57,10 +57,10 @@ public class OrderCreateService {
 		Long memberId = command.getMemberId();
 		String idempotencyKey = command.getIdempotencyKey();
 		Duration ttl = Duration.ofSeconds(idempotencyTtlSeconds);
-		boolean reserved = orderIdempotencyStore.reserve(memberId, idempotencyKey, ttl);
+		boolean reserved = orderIdempotencyRepository.reserve(memberId, idempotencyKey, ttl);
 
 		if (!reserved) {
-			Long orderId = orderIdempotencyStore.getCompletedOrderId(memberId, idempotencyKey)
+			Long orderId = orderIdempotencyRepository.getCompletedOrderId(memberId, idempotencyKey)
 				.orElseThrow(() -> new OrderException(OrderErrorCode.ORDER_IDEMPOTENCY_IN_PROGRESS));
 
 			Order order = orderRepository.findById(orderId)
@@ -71,10 +71,10 @@ public class OrderCreateService {
 
 		try {
 			OrderCreateResult result = createOrderWithPessimisticLockOrdered(command);
-			orderIdempotencyStore.complete(memberId, idempotencyKey, result.getOrderId(), ttl);
+			orderIdempotencyRepository.complete(memberId, idempotencyKey, result.getOrderId(), ttl);
 			return result;
 		} catch (RuntimeException ex) {
-			orderIdempotencyStore.clear(memberId, idempotencyKey);
+			orderIdempotencyRepository.clear(memberId, idempotencyKey);
 			throw ex;
 		}
 	}

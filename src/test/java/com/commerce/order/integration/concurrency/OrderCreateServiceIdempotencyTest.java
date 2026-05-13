@@ -45,7 +45,7 @@ class OrderCreateServiceIdempotencyTest {
 	private OrderCreateService orderCreateService;
 
 	@Autowired
-	private OrderIdempotencyRepository orderIdempotencyStore;
+	private OrderIdempotencyRepository orderIdempotencyRepository;
 
 	@Autowired
 	private PersistenceCleanupTestSupport persistenceCleanup;
@@ -115,7 +115,7 @@ class OrderCreateServiceIdempotencyTest {
 			.build();
 
 		// when
-		orderIdempotencyStore.reserve(member.getId(), "processing-key", Duration.ofSeconds(60));
+		orderIdempotencyRepository.reserve(member.getId(), "processing-key", Duration.ofSeconds(60));
 
 		// then
 		assertThatThrownBy(() -> orderCreateService.createOrder(command))
