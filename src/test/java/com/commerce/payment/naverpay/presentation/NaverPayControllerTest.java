@@ -1,4 +1,4 @@
-package com.commerce.payment.naverpay.controller;
+package com.commerce.payment.naverpay.presentation;
 
 import static org.mockito.BDDMockito.given;
 import static org.mockito.BDDMockito.then;
@@ -24,9 +24,9 @@ import com.commerce.auth.application.TokenAuthenticationService;
 import com.commerce.auth.application.result.TokenAuthenticationResult;
 import com.commerce.security.resolver.AuthenticatedMemberIdArgumentResolver;
 import com.commerce.common.config.WebConfig;
-import com.commerce.payment.naverpay.service.NaverPayService;
-import com.commerce.payment.naverpay.service.result.NaverPayApproveResult;
-import com.commerce.payment.naverpay.service.result.NaverPayApproveStatus;
+import com.commerce.payment.naverpay.application.NaverPayApprovalService;
+import com.commerce.payment.naverpay.application.result.NaverPayApproveResponse;
+import com.commerce.payment.naverpay.application.result.NaverPayApproveStatus;
 
 
 @WebMvcTest(NaverPayController.class)
@@ -44,7 +44,7 @@ class NaverPayControllerTest {
 	private MockMvc mockMvc;
 
 	@MockitoBean
-	private NaverPayService naverPayService;
+	private NaverPayApprovalService naverPayApprovalService;
 
 	@MockitoBean
 	private TokenAuthenticationService tokenAuthenticationService;
@@ -66,11 +66,11 @@ class NaverPayControllerTest {
 	void approveNaverPay_whenSuccess_returnOk() throws Exception {
 		// given
 		stubForValidToken();
-		NaverPayApproveResult result = NaverPayApproveResult.builder()
+		NaverPayApproveResponse response = NaverPayApproveResponse.builder()
 			.pgPaymentId("pg-payment-id")
 			.status(NaverPayApproveStatus.SUCCESS)
 			.build();
-		given(naverPayService.approve(1L, "PAY-1", "pg-payment-id")).willReturn(result);
+		given(naverPayApprovalService.approve(1L, "PAY-1", "pg-payment-id")).willReturn(response);
 
 		String requestBody = """
 			{
@@ -90,7 +90,7 @@ class NaverPayControllerTest {
 			.andExpect(jsonPath("$.data.pgPaymentId").value("pg-payment-id"))
 			.andExpect(jsonPath("$.data.status").value("SUCCESS"));
 
-		then(naverPayService).should().approve(1L, "PAY-1", "pg-payment-id");
+		then(naverPayApprovalService).should().approve(1L, "PAY-1", "pg-payment-id");
 	}
 
 	@DisplayName("merchantPayKey가 비어있으면 요청 값 검증에 실패한다")

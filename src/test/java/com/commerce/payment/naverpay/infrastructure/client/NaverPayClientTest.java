@@ -1,4 +1,4 @@
-package com.commerce.payment.naverpay.client;
+package com.commerce.payment.naverpay.infrastructure.client;
 
 import static org.assertj.core.api.Assertions.assertThat;
 import static org.assertj.core.api.Assertions.assertThatThrownBy;
@@ -21,12 +21,12 @@ import org.springframework.test.web.client.MockRestServiceServer;
 import org.springframework.web.client.ResourceAccessException;
 import org.springframework.web.client.RestTemplate;
 
-import com.commerce.payment.naverpay.client.request.NaverPayCancelRequest;
-import com.commerce.payment.naverpay.client.request.NaverPayCancelRequester;
-import com.commerce.payment.naverpay.client.response.NaverPayResponse;
-import com.commerce.payment.naverpay.client.response.body.NaverPayApproveBody;
-import com.commerce.payment.naverpay.client.response.body.NaverPayCancelBody;
-import com.commerce.payment.naverpay.config.NaverPayProperties;
+import com.commerce.payment.naverpay.infrastructure.NaverPayProperties;
+import com.commerce.payment.naverpay.infrastructure.client.request.NaverPayCancelRequest;
+import com.commerce.payment.naverpay.infrastructure.client.request.NaverPayCancelRequester;
+import com.commerce.payment.naverpay.infrastructure.client.response.NaverPayResponse;
+import com.commerce.payment.naverpay.infrastructure.client.response.body.NaverPayApproveBody;
+import com.commerce.payment.naverpay.infrastructure.client.response.body.NaverPayCancelBody;
 import com.commerce.payment.naverpay.exception.NaverPayErrorCode;
 import com.commerce.payment.naverpay.exception.NaverPayException;
 import com.fasterxml.jackson.databind.ObjectMapper;
