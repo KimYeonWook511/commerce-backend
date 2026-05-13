@@ -15,6 +15,7 @@ import org.springframework.test.context.ActiveProfiles;
 import org.springframework.test.util.ReflectionTestUtils;
 
 import com.commerce.common.jpa.JpaConfig;
+import com.commerce.common.util.UlidGenerator;
 import com.commerce.outbox.domain.OutboxAggregateType;
 import com.commerce.outbox.domain.OutboxEvent;
 import com.commerce.outbox.domain.OutboxEventStatus;
@@ -301,11 +302,8 @@ class JpaOutboxEventRepositoryTest {
 		return jpaOutboxEventRepository.save(event);
 	}
 
-	private static long sequence = 0L;
-
 	private String eventId() {
-		sequence += 1;
-		return String.format("%026d", sequence);
+		return UlidGenerator.generate();
 	}
 
 	private void updateUpdatedAt(Long id, LocalDateTime updatedAt) {
