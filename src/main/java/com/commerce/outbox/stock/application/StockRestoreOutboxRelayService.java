@@ -49,7 +49,7 @@ public class StockRestoreOutboxRelayService {
 			batchSize
 		);
 
-		int successCount = 0;
+		int publishedCount = 0;
 		int failedCount = 0;
 		int skippedCount = 0;
 		for (OutboxPublishTarget target : targets) {
@@ -60,12 +60,12 @@ public class StockRestoreOutboxRelayService {
 
 			PublishResult result = publishTarget(target, now);
 			switch (result) {
-				case PUBLISHED -> successCount += 1;
+				case PUBLISHED -> publishedCount += 1;
 				case FAILED -> failedCount += 1;
 				case SKIPPED -> skippedCount += 1;
 			}
 		}
-		return toPublishResult(targets.size(), successCount, failedCount, skippedCount);
+		return toPublishResult(targets.size(), publishedCount, failedCount, skippedCount);
 	}
 
 	@Transactional(propagation = Propagation.NOT_SUPPORTED)
@@ -76,7 +76,7 @@ public class StockRestoreOutboxRelayService {
 			batchSize
 		);
 
-		int successCount = 0;
+		int publishedCount = 0;
 		int failedCount = 0;
 		int skippedCount = 0;
 		for (OutboxPublishTarget target : targets) {
@@ -87,12 +87,12 @@ public class StockRestoreOutboxRelayService {
 
 			PublishResult result = publishTarget(target, now);
 			switch (result) {
-				case PUBLISHED -> successCount += 1;
+				case PUBLISHED -> publishedCount += 1;
 				case FAILED -> failedCount += 1;
 				case SKIPPED -> skippedCount += 1;
 			}
 		}
-		return toPublishResult(targets.size(), successCount, failedCount, skippedCount);
+		return toPublishResult(targets.size(), publishedCount, failedCount, skippedCount);
 	}
 
 	@Transactional(propagation = Propagation.NOT_SUPPORTED)
