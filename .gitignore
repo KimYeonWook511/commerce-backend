@@ -66,3 +66,6 @@ docs/features/**/phases/**/workflow-checklist.json
 ### 도커 볼륨 ###
 mysql-data-local/
 kafka-data-local/
+
+### Git Worktree ###
+worktrees/

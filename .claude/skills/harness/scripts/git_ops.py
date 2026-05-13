@@ -14,7 +14,7 @@ def create_worktree(root_path: Path, worktree_path: Path, branch: str) -> Path:
     )
     if result.returncode != 0:
         result = subprocess.run(
-            ["git", "-C", str(root_path), "worktree", "add", "-b", branch, str(worktree_path)],
+            ["git", "-C", str(root_path), "worktree", "add", "-b", branch, str(worktree_path), "develop"],
             capture_output=True, text=True,
         )
     if result.returncode != 0:

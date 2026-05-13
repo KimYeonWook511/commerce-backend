@@ -19,6 +19,7 @@ import sys
 import threading
 import time
 import types
+import uuid
 from datetime import datetime, timedelta, timezone
 from pathlib import Path
 from typing import Optional
@@ -169,7 +170,7 @@ class StepExecutor:
 
     def _setup_worktree(self):
         """phase 실행용 격리 worktree를 생성하고 self.root / self.phase_dir를 재설정한다."""
-        worktree_path = Path("/tmp") / f"harness-{self.feature_name}-{uuid.uuid4().hex[:8]}"
+        worktree_path = self.root_path / "worktrees" / f"harness-{self.feature_name}-{uuid.uuid4().hex[:8]}"
         git_ops.create_worktree(self.root_path, worktree_path, self.branch_name)
         self.worktree_path = worktree_path
 
