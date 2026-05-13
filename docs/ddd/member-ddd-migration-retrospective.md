@@ -30,9 +30,9 @@
 
 ## 남겨둔 legacy 참조
 
-- 기존 `member.repository.MemberRepository`는 즉시 삭제하지 않았다.
-- legacy `order.service.OrderService`와 일부 테스트 fixture는 기존 member repository를 계속 참조한다.
-- 이 참조들은 후속 legacy 삭제 작업에서 production/test 참조를 확인한 뒤 제거한다.
+- ✅ `member.repository.MemberRepository` 삭제 완료
+- ✅ legacy `order.service.OrderService` 삭제 완료
+- ✅ 테스트 fixture에서 `MemberRepository` 참조를 `JpaMemberRepository`로 교체 완료
 
 ## 별도 이슈로 분리한 항목
 
@@ -43,25 +43,11 @@
 
 ## 다음 legacy 삭제 작업 체크리스트
 
-- production 코드에서 legacy member repository 참조가 남았는지 확인한다.
+✅ 완료
 
-```bash
-rg "com\.commerce\.member\.repository\.MemberRepository" src/main/java src/test/java
-```
-
-- legacy `member.repository.MemberRepository`를 제거한다.
-- 테스트 fixture가 legacy repository를 쓰는 곳은 `JpaMemberRepository` 또는 테스트 helper로 정리한다.
-- 전체 테스트를 실행한다.
-
-```bash
-./gradlew test
-```
-
-권장 커밋 메시지:
-
-```text
-refactor: member legacy repository를 정리한다
-```
+- `member.repository.MemberRepository` 삭제
+- 테스트 fixture에서 legacy repository 참조를 `JpaMemberRepository`로 교체
+- 전체 테스트 통과 확인
 
 ## 다음 DDD 작업에 적용할 원칙
 

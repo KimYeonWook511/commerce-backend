@@ -71,17 +71,11 @@ Gateway 단위 테스트(`NaverPayGatewayTest`)는 이번에 작성하지 않았
 
 naverpay 경계 정리가 완료됐으므로 각 도메인 legacy 삭제를 진행한다.
 
-| 도메인 | 확인 명령 |
-|--------|----------|
-| stock | `rg "com\.commerce\.stock\.(service|controller|repository)"` |
-| order | `rg "com\.commerce\.order\.(service|controller|repository)"` |
-| product | `rg "com\.commerce\.product\.(service|controller|repository)"` |
-| payment | `rg "com\.commerce\.payment\.(service|controller|repository)"` |
-| member | `rg "com\.commerce\.member\.repository\.MemberRepository"` |
+| 도메인 | 상태 |
+|--------|------|
+| stock | ✅ 완료 |
+| order | ✅ 완료 |
+| product | ✅ 완료 |
+| payment | ✅ 완료 |
+| member | ✅ 완료 |
 | auth | 별도 확인 필요 |
-
-권장 커밋 메시지:
-
-```text
-refactor: <domain> legacy 패키지를 정리한다
-```
