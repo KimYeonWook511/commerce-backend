@@ -27,7 +27,7 @@
 
 차단 기준은 명령 문자열 자체가 아니라 shell token 기준으로 검사한다. `sudo`, `command`, `env FOO=bar ...` 같은 prefix가 있어도 실제 명령이 위 규칙에 해당하면 차단한다.
 
-`&&`, `||`, `;`로 연결된 복합 명령도 각 명령을 개별적으로 검사한다. 예를 들어 `git commit -m "fix" && git push --force`는 두 번째 명령인 `git push --force`가 위 규칙에 해당하므로 차단한다. 따옴표 안의 `&&`, `;`는 분리 대상에서 제외된다.
+`&&`, `||`, `;`, `&`, `|`로 연결된 복합 명령도 각 명령을 개별적으로 검사한다. 예를 들어 `git commit -m "fix" && git push --force`는 두 번째 명령인 `git push --force`가 위 규칙에 해당하므로 차단한다. `ls;rm -rf build`처럼 공백 없이 연결된 명령도 분리하여 검사한다. 따옴표 안의 구분자는 분리 대상에서 제외된다.
 
 현재 정책은 최소 방어선이다. 아래처럼 위험할 수 있는 다른 명령까지 모두 차단하는 것은 아니다.
 
@@ -49,7 +49,7 @@
 Claude Code가 Bash 실행을 시도하면 `PreToolUse` hook이 stdin으로 JSON payload를 받는다.
 
 - `tool_name`이 `Bash`이면 `tool_input.command`를 읽는다.
-- `&&`, `||`, `;`로 연결된 복합 명령은 개별 명령으로 분리한 뒤 각각 검사한다.
+- `&&`, `||`, `;`, `&`, `|`로 연결된 복합 명령은 개별 명령으로 분리한 뒤 각각 검사한다.
 - 하나라도 차단 대상이면 `decision: block`과 차단 사유를 포함한 JSON을 stdout에 출력한다.
 - 모두 통과하면 exit 0으로 성공 종료한다.
 - 입력 JSON이 깨졌거나 payload 타입, `tool_input`, `command` 형식이 예상과 다르면 fail-open으로 처리한다.

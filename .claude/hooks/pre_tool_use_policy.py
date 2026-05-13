@@ -149,13 +149,14 @@ def blocks_force_push(tokens: list[str]) -> bool:
     return has_flag(tokens[2:], "--force", "--force-with-lease", "-f")
 
 
-_COMPOUND_SEPARATORS = frozenset({"&&", "||", ";"})
+_COMPOUND_SEPARATORS = frozenset({"&&", "||", ";", "&", "|"})
 
 
 def split_compound_commands(command: str) -> list[str]:
-    """&&, ||, ; 로 연결된 복합 명령을 개별 명령으로 분리한다."""
+    """&&, ||, ;, &, | 로 연결된 복합 명령을 개별 명령으로 분리한다."""
     try:
-        tokens = shlex.split(command, posix=True)
+        lexer = shlex.shlex(command, posix=True, punctuation_chars=True)
+        tokens = list(lexer)
     except ValueError:
         return [command]
 
