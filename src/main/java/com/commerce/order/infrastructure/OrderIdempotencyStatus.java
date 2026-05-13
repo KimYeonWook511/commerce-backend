@@ -2,7 +2,7 @@ package com.commerce.order.infrastructure;
 
 import java.util.Optional;
 
-enum OrderIdempotencyStatus {
+public enum OrderIdempotencyStatus {
 	PROCESSING("PROCESSING"),
 	COMPLETED("COMPLETED"),
 	FAILED("FAILED");
