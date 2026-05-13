@@ -31,7 +31,7 @@
 
 ## 컨벤션 확인 규칙
 
-- `git commit` 실행 전: `docs/commit-conventions.md`를 읽고 타입과 형식을 확인한다.
+- `git commit` 실행 전: `docs/commit-conventions.md`를 읽고 타입, subject 문체(`~한다`), 형식을 확인한다.
 - `gh pr create` 실행 전: `docs/pr-conventions.md`를 읽고 타입, 형식, draft 여부를 확인한다.
 - 브랜치 생성(`git worktree add`) 전: `docs/branch-conventions.md`를 읽고 형식을 확인한다.
 
