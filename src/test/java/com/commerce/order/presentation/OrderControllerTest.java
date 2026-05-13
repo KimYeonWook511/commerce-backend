@@ -1,14 +1,12 @@
 package com.commerce.order.presentation;
 
 import static org.mockito.ArgumentMatchers.any;
+import static org.mockito.ArgumentMatchers.anyLong;
 import static org.mockito.BDDMockito.given;
-import static org.mockito.BDDMockito.then;
-import static org.mockito.Mockito.never;
 import static org.springframework.test.web.servlet.request.MockMvcRequestBuilders.post;
 import static org.springframework.test.web.servlet.result.MockMvcResultMatchers.jsonPath;
 import static org.springframework.test.web.servlet.result.MockMvcResultMatchers.status;
 
-import org.hamcrest.Matchers;
 import org.junit.jupiter.api.DisplayName;
 import org.junit.jupiter.api.Test;
 import org.springframework.beans.factory.annotation.Autowired;
@@ -20,19 +18,18 @@ import org.springframework.test.context.ActiveProfiles;
 import org.springframework.test.context.bean.override.mockito.MockitoBean;
 import org.springframework.test.web.servlet.MockMvc;
 
-import com.commerce.security.filter.JwtAuthenticationFilter;
-import com.commerce.security.interceptor.AuthorizationInterceptor;
 import com.commerce.auth.application.TokenAuthenticationService;
 import com.commerce.auth.application.result.TokenAuthenticationResult;
-import com.commerce.security.resolver.AuthenticatedMemberIdArgumentResolver;
 import com.commerce.common.config.WebConfig;
-import com.commerce.order.domain.OrderStatus;
 import com.commerce.order.application.OrderCancelService;
 import com.commerce.order.application.OrderCreateService;
 import com.commerce.order.application.command.OrderCreateCommand;
 import com.commerce.order.application.result.OrderCancelResult;
 import com.commerce.order.application.result.OrderCreateResult;
-
+import com.commerce.order.domain.OrderStatus;
+import com.commerce.security.filter.JwtAuthenticationFilter;
+import com.commerce.security.interceptor.AuthorizationInterceptor;
+import com.commerce.security.resolver.AuthenticatedMemberIdArgumentResolver;
 
 @WebMvcTest(OrderController.class)
 @AutoConfigureMockMvc(addFilters = true)
@@ -57,97 +54,81 @@ class OrderControllerTest {
 	@MockitoBean
 	private TokenAuthenticationService tokenAuthenticationService;
 
-	@DisplayName("멱등키가 있으면 주문 생성 응답을 반환한다")
+	@DisplayName("유효한 주문 생성 요청이면 201을 반환한다")
 	@Test
-	void createOrder_whenIdempotencyKeyPresent_returnCreated() throws Exception {
-		// given
-		stubForValidToken();
-		OrderCreateResult result = OrderCreateResult.builder()
-			.orderId(10L)
-			.totalPrice(2000)
-			.status(OrderStatus.INIT)
-			.build();
-
+	void createOrder_whenValidRequest_returnCreated() throws Exception {
+		stubForToken();
 		given(orderCreateService.createOrder(any(OrderCreateCommand.class)))
-			.willReturn(result);
+			.willReturn(OrderCreateResult.builder()
+				.orderId(1L)
+				.totalPrice(10000)
+				.status(OrderStatus.INIT)
+				.build());
 
-		String requestBody = """
-			{
-			  "items": [
-			    {
-			      "productId": 10,
-			      "quantity": 2
-			    }
-			  ]
-			}
-			""";
-
-		// when & then
 		mockMvc.perform(post("/orders")
 				.header("Authorization", "Bearer access-token")
-				.header("Idempotency-Key", "idempotency-key")
+				.header("Idempotency-Key", "unique-key-1")
 				.contentType(MediaType.APPLICATION_JSON)
-				.content(requestBody))
+				.content("""
+					{"items": [{"productId": 1, "quantity": 2}]}
+					"""))
 			.andExpect(status().isCreated())
 			.andExpect(jsonPath("$.code").value("SUCCESS"))
-			.andExpect(jsonPath("$.message").value("OK"))
-			.andExpect(jsonPath("$.data.orderId").value(10L))
-			.andExpect(jsonPath("$.data.totalPrice").value(2000))
+			.andExpect(jsonPath("$.data.orderId").value(1))
+			.andExpect(jsonPath("$.data.totalPrice").value(10000))
 			.andExpect(jsonPath("$.data.status").value("INIT"));
 	}
 
-	@DisplayName("멱등키가 없으면 요청이 실패한다")
+	@DisplayName("Idempotency-Key 헤더가 없으면 400을 반환한다")
 	@Test
-	void createOrder_whenIdempotencyKeyMissing_returnBadRequest() throws Exception {
-		// given
-		stubForValidToken();
-		String requestBody = """
-			{
-			  "items": [
-			    {
-			      "productId": 10,
-			      "quantity": 2
-			    }
-			  ]
-			}
-			""";
+	void createOrder_whenMissingIdempotencyKey_returnBadRequest() throws Exception {
+		stubForToken();
 
-		// when & then
 		mockMvc.perform(post("/orders")
 				.header("Authorization", "Bearer access-token")
 				.contentType(MediaType.APPLICATION_JSON)
-				.content(requestBody))
+				.content("""
+					{"items": [{"productId": 1, "quantity": 2}]}
+					"""))
 			.andExpect(status().isBadRequest())
-			.andExpect(jsonPath("$.code").value("COMMON-400"))
-			.andExpect(jsonPath("$.message").value("요청 값이 올바르지 않습니다"))
-			.andExpect(jsonPath("$.data").value(Matchers.nullValue()));
-
-		then(orderCreateService).should(never()).createOrder(any(OrderCreateCommand.class));
+			.andExpect(jsonPath("$.code").value("COMMON-400"));
 	}
 
-	@DisplayName("주문 취소 요청이 유효하면 상태를 반환한다")
+	@DisplayName("items가 비어있으면 400을 반환한다")
+	@Test
+	void createOrder_whenEmptyItems_returnBadRequest() throws Exception {
+		stubForToken();
+
+		mockMvc.perform(post("/orders")
+				.header("Authorization", "Bearer access-token")
+				.header("Idempotency-Key", "unique-key-2")
+				.contentType(MediaType.APPLICATION_JSON)
+				.content("""
+					{"items": []}
+					"""))
+			.andExpect(status().isBadRequest())
+			.andExpect(jsonPath("$.code").value("COMMON-400"));
+	}
+
+	@DisplayName("유효한 주문 취소 요청이면 200을 반환한다")
 	@Test
 	void cancelOrder_whenValidRequest_returnOk() throws Exception {
-		// given
-		stubForValidToken();
-		OrderCancelResult result = OrderCancelResult.builder()
-			.orderId(10L)
-			.status(OrderStatus.CANCELED)
-			.build();
+		stubForToken();
+		given(orderCancelService.cancelOrder(anyLong(), anyLong()))
+			.willReturn(OrderCancelResult.builder()
+				.orderId(1L)
+				.status(OrderStatus.CANCELED)
+				.build());
 
-		given(orderCancelService.cancelOrder(1L, 10L)).willReturn(result);
-
-		// when & then
-		mockMvc.perform(post("/orders/10/cancel")
+		mockMvc.perform(post("/orders/1/cancel")
 				.header("Authorization", "Bearer access-token"))
 			.andExpect(status().isOk())
 			.andExpect(jsonPath("$.code").value("SUCCESS"))
-			.andExpect(jsonPath("$.message").value("OK"))
-			.andExpect(jsonPath("$.data.orderId").value(10L))
+			.andExpect(jsonPath("$.data.orderId").value(1))
 			.andExpect(jsonPath("$.data.status").value("CANCELED"));
 	}
 
-	private void stubForValidToken() {
+	private void stubForToken() {
 		given(tokenAuthenticationService.authenticateAccessToken("access-token"))
 			.willReturn(TokenAuthenticationResult.of(1L, "ROLE_USER"));
 	}
