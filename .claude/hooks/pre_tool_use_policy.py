@@ -149,7 +149,34 @@ def blocks_force_push(tokens: list[str]) -> bool:
     return has_flag(tokens[2:], "--force", "--force-with-lease", "-f")
 
 
-def evaluate_command(command: str) -> PolicyResult:
+_COMPOUND_SEPARATORS = frozenset({"&&", "||", ";", "&", "|"})
+
+
+def split_compound_commands(command: str) -> list[str]:
+    """&&, ||, ;, &, | 로 연결된 복합 명령을 개별 명령으로 분리한다."""
+    try:
+        lexer = shlex.shlex(command, posix=True, punctuation_chars=True)
+        tokens = list(lexer)
+    except ValueError:
+        return [command]
+
+    commands: list[str] = []
+    current: list[str] = []
+    for token in tokens:
+        if token in _COMPOUND_SEPARATORS:
+            if current:
+                commands.append(shlex.join(current))
+                current = []
+        else:
+            current.append(token)
+
+    if current:
+        commands.append(shlex.join(current))
+
+    return commands if commands else [command]
+
+
+def evaluate_single_command(command: str) -> PolicyResult:
     tokens = normalize_tokens(command)
     if not tokens:
         return PolicyResult(blocked=False)
@@ -166,6 +193,14 @@ def evaluate_command(command: str) -> PolicyResult:
     if blocks_force_push(tokens):
         return PolicyResult(True, "Repo Bash 명령어 정책에 따라 강제 push는 차단됩니다.")
 
+    return PolicyResult(blocked=False)
+
+
+def evaluate_command(command: str) -> PolicyResult:
+    for sub in split_compound_commands(command):
+        result = evaluate_single_command(sub)
+        if result.blocked:
+            return result
     return PolicyResult(blocked=False)
 
 

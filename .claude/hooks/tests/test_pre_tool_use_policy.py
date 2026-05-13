@@ -49,6 +49,23 @@ class PreToolUsePolicyTest(unittest.TestCase):
         self.assertFalse(self.module.evaluate_command("./gradlew test").blocked)
         self.assertFalse(self.module.evaluate_command("ls -la").blocked)
 
+    def test_blocks_force_push_in_compound_command(self):
+        self.assertTrue(self.module.evaluate_command('git commit -m "chore: fix" && git push --force').blocked)
+        self.assertTrue(self.module.evaluate_command('git commit -m "chore: fix" && git push --force-with-lease').blocked)
+        self.assertTrue(self.module.evaluate_command('git add . ; git commit -m "fix" ; git push -f').blocked)
+        self.assertTrue(self.module.evaluate_command('git status || git push --force origin main').blocked)
+        self.assertTrue(self.module.evaluate_command('git status & git push -f').blocked)
+
+    def test_does_not_split_on_separator_inside_quotes(self):
+        self.assertFalse(self.module.evaluate_command('git commit -m "feat: add && remove"').blocked)
+        self.assertFalse(self.module.evaluate_command("git commit -m 'chore: a; b'").blocked)
+
+    def test_blocks_rm_rf_in_compound_command(self):
+        self.assertTrue(self.module.evaluate_command("./gradlew build && rm -rf build").blocked)
+        self.assertTrue(self.module.evaluate_command("rm -rf build ; echo done").blocked)
+        self.assertTrue(self.module.evaluate_command("ls;rm -rf build").blocked)
+        self.assertTrue(self.module.evaluate_command("ls | rm -rf build").blocked)
+
     def test_blocks_git_prefix_option_variants(self):
         self.assertTrue(self.module.evaluate_command("git -c core.editor=true reset --hard HEAD~1").blocked)
         self.assertTrue(self.module.evaluate_command("git --no-pager reset --hard HEAD~1").blocked)
