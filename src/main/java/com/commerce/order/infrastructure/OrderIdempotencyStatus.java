@@ -1,4 +1,4 @@
-package com.commerce.order.redis;
+package com.commerce.order.infrastructure;
 
 import java.util.Optional;
 

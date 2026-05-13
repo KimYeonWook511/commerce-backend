@@ -26,7 +26,7 @@ import com.commerce.order.application.result.OrderCreateResult;
 import com.commerce.order.exception.OrderErrorCode;
 import com.commerce.order.exception.OrderException;
 import com.commerce.order.integration.support.OrderPersistenceTestSupport;
-import com.commerce.order.redis.OrderIdempotencyStore;
+import com.commerce.order.infrastructure.OrderIdempotencyStore;
 import com.commerce.product.domain.Product;
 import com.commerce.product.domain.ProductStatus;
 import com.commerce.product.integration.support.ProductPersistenceTestSupport;
