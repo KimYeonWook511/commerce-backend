@@ -55,4 +55,4 @@
 - 테스트 컨벤션: `docs/testing-conventions.md`
 - Claude Code 하네스 원칙: `docs/claude-harness.md`
 - Claude Code hook 구조: `docs/claude/hooks/README.md`
-- Claude Code harness 가이드: `docs/claude/harness.md`
+- Claude Code skill 문서: `docs/claude/skills/*`
