@@ -1,16 +1,16 @@
-package com.commerce.payment.naverpay.service.result;
+package com.commerce.payment.naverpay.application.result;
 
 import lombok.Builder;
 import lombok.Getter;
 
 @Getter
-public class NaverPayApproveResult {
+public class NaverPayApproveResponse {
 
 	private String pgPaymentId;
 	private NaverPayApproveStatus status;
 
 	@Builder
-	private NaverPayApproveResult(String pgPaymentId, NaverPayApproveStatus status) {
+	private NaverPayApproveResponse(String pgPaymentId, NaverPayApproveStatus status) {
 		this.pgPaymentId = pgPaymentId;
 		this.status = status;
 	}

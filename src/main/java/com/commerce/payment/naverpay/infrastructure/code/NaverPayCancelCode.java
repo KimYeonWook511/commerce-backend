@@ -1,4 +1,4 @@
-package com.commerce.payment.naverpay.service;
+package com.commerce.payment.naverpay.infrastructure.code;
 
 public enum NaverPayCancelCode {
 	SUCCESS("Success", "성공"),

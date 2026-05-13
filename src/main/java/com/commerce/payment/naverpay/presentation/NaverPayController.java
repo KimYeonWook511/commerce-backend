@@ -1,4 +1,4 @@
-package com.commerce.payment.naverpay.controller;
+package com.commerce.payment.naverpay.presentation;
 
 import org.springframework.http.HttpStatus;
 import org.springframework.http.ResponseEntity;
@@ -8,11 +8,12 @@ import org.springframework.web.bind.annotation.RequestBody;
 import org.springframework.web.bind.annotation.RequestMapping;
 import org.springframework.web.bind.annotation.RequestParam;
 import org.springframework.web.bind.annotation.RestController;
+
 import com.commerce.security.annotation.AuthenticatedMemberId;
 import com.commerce.common.ApiResponse;
-import com.commerce.payment.naverpay.controller.request.NaverPayApproveRequest;
-import com.commerce.payment.naverpay.service.NaverPayService;
-import com.commerce.payment.naverpay.service.result.NaverPayApproveResult;
+import com.commerce.payment.naverpay.application.NaverPayApprovalService;
+import com.commerce.payment.naverpay.application.result.NaverPayApproveResponse;
+import com.commerce.payment.naverpay.presentation.request.NaverPayApproveRequest;
 
 import jakarta.validation.Valid;
 import lombok.RequiredArgsConstructor;
@@ -22,7 +23,7 @@ import lombok.RequiredArgsConstructor;
 @RequestMapping("/payments/naverpay")
 public class NaverPayController {
 
-	private final NaverPayService naverPayService;
+	private final NaverPayApprovalService naverPayApprovalService;
 
 	@GetMapping("/return")
 	public void returnFromNaverPay(
@@ -32,17 +33,16 @@ public class NaverPayController {
 		@RequestParam(required = false) String paymentId,
 		@RequestParam(required = false) String reserveId
 	) {
-		// 로그를 남길 것인가??
 	}
 
 	@PostMapping("/approve")
-	public ResponseEntity<ApiResponse<NaverPayApproveResult>> approveNaverPay(
+	public ResponseEntity<ApiResponse<NaverPayApproveResponse>> approveNaverPay(
 		@AuthenticatedMemberId Long memberId,
 		@Valid @RequestBody NaverPayApproveRequest request
 	) {
-		NaverPayApproveResult result = naverPayService.approve(
+		NaverPayApproveResponse response = naverPayApprovalService.approve(
 			memberId, request.getMerchantPayKey(), request.getPaymentId());
-		return ResponseEntity.status(HttpStatus.OK).body(ApiResponse.of(result));
+		return ResponseEntity.status(HttpStatus.OK).body(ApiResponse.of(response));
 	}
 
 }

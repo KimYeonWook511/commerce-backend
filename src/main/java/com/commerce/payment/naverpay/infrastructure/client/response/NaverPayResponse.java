@@ -1,6 +1,5 @@
-package com.commerce.payment.naverpay.client.response;
+package com.commerce.payment.naverpay.infrastructure.client.response;
 
-import com.commerce.common.ApiResponse;
 import com.fasterxml.jackson.annotation.JsonIgnoreProperties;
 
 import lombok.Getter;

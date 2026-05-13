@@ -1,4 +1,4 @@
-package com.commerce.payment.naverpay.controller.request;
+package com.commerce.payment.naverpay.presentation.request;
 
 import jakarta.validation.constraints.NotBlank;
 import lombok.Getter;

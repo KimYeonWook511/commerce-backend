@@ -1,4 +1,4 @@
-package com.commerce.payment.naverpay.client;
+package com.commerce.payment.naverpay.infrastructure.client;
 
 import java.util.UUID;
 
@@ -15,14 +15,14 @@ import org.springframework.web.client.ResourceAccessException;
 import org.springframework.web.client.RestClientResponseException;
 import org.springframework.web.client.RestTemplate;
 
-import com.commerce.payment.naverpay.config.NaverPayProperties;
-import com.commerce.payment.naverpay.client.request.NaverPayCancelRequest;
-import com.commerce.payment.naverpay.client.request.NaverPayApprovalType;
-import com.commerce.payment.naverpay.client.response.body.NaverPayApproveBody;
-import com.commerce.payment.naverpay.client.response.body.NaverPayCancelBody;
-import com.commerce.payment.naverpay.client.request.NaverPayHistoryRequest;
-import com.commerce.payment.naverpay.client.response.NaverPayResponse;
-import com.commerce.payment.naverpay.client.response.body.NaverPayHistoryBody;
+import com.commerce.payment.naverpay.infrastructure.NaverPayProperties;
+import com.commerce.payment.naverpay.infrastructure.client.request.NaverPayCancelRequest;
+import com.commerce.payment.naverpay.infrastructure.client.request.NaverPayApprovalType;
+import com.commerce.payment.naverpay.infrastructure.client.response.body.NaverPayApproveBody;
+import com.commerce.payment.naverpay.infrastructure.client.response.body.NaverPayCancelBody;
+import com.commerce.payment.naverpay.infrastructure.client.request.NaverPayHistoryRequest;
+import com.commerce.payment.naverpay.infrastructure.client.response.NaverPayResponse;
+import com.commerce.payment.naverpay.infrastructure.client.response.body.NaverPayHistoryBody;
 import com.commerce.payment.naverpay.exception.NaverPayErrorCode;
 import com.commerce.payment.naverpay.exception.NaverPayException;
 import com.fasterxml.jackson.core.JsonProcessingException;
@@ -112,13 +112,10 @@ public class NaverPayClient {
 			}
 			return objectMapper.readValue(response.getBody(), typeReference);
 		} catch (ResourceAccessException ex) {
-			// 네트워크 / 타임아웃 오류
 			throw new NaverPayException(NaverPayErrorCode.NETWORK, "네이버페이 요청 중 네트워크 오류가 발생했습니다", ex);
 		} catch (RestClientResponseException ex) {
-			// 4xx, 5xx 실패
 			throw mapHttpException(ex);
 		} catch (JsonProcessingException ex) {
-			// 파싱 오류
 			throw new NaverPayException(NaverPayErrorCode.INVALID_RESPONSE, "네이버페이 응답 파싱에 실패했습니다", ex);
 		} catch (Exception ex) {
 			throw new NaverPayException(NaverPayErrorCode.INVALID_RESPONSE, "네이버페이 응답 처리에 실패했습니다", ex);

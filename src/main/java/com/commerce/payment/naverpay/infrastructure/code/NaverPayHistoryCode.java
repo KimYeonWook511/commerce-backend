@@ -1,4 +1,4 @@
-package com.commerce.payment.naverpay.service;
+package com.commerce.payment.naverpay.infrastructure.code;
 
 public enum NaverPayHistoryCode {
 	SUCCESS("Success", "성공"),

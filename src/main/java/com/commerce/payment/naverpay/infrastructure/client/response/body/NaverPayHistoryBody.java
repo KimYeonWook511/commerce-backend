@@ -1,4 +1,4 @@
-package com.commerce.payment.naverpay.client.response.body;
+package com.commerce.payment.naverpay.infrastructure.client.response.body;
 
 import java.util.List;
 

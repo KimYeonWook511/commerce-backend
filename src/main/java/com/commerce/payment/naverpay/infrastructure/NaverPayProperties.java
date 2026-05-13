@@ -1,4 +1,4 @@
-package com.commerce.payment.naverpay.config;
+package com.commerce.payment.naverpay.infrastructure;
 
 import org.springframework.beans.factory.annotation.Value;
 import org.springframework.stereotype.Component;

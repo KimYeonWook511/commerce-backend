@@ -1,4 +1,4 @@
-package com.commerce.payment.naverpay.service.result;
+package com.commerce.payment.naverpay.application.result;
 
 public enum NaverPayApproveStatus {
 	SUCCESS,
