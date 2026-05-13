@@ -6,8 +6,8 @@ import org.springframework.context.annotation.Profile;
 import org.springframework.scheduling.annotation.Scheduled;
 import org.springframework.stereotype.Component;
 
-import com.commerce.outbox.stock.service.StockRestoreOutboxService;
-import com.commerce.outbox.stock.service.result.OutboxPublishResult;
+import com.commerce.outbox.stock.application.StockRestoreOutboxRelayService;
+import com.commerce.outbox.stock.application.result.OutboxPublishResult;
 
 import lombok.RequiredArgsConstructor;
 import lombok.extern.slf4j.Slf4j;
@@ -18,26 +18,26 @@ import lombok.extern.slf4j.Slf4j;
 @RequiredArgsConstructor
 public class StockRestoreOutboxScheduler {
 
-	private final StockRestoreOutboxService stockRestoreOutboxService;
+	private final StockRestoreOutboxRelayService stockRestoreOutboxRelayService;
 
 	@Scheduled(cron = "${outbox.stock-restore.producer.cron:*/10 * * * * *}")
 	public void publishPendingEvents() {
 		LocalDateTime now = LocalDateTime.now();
-		OutboxPublishResult publishResult = stockRestoreOutboxService.publishPendingEvents(now);
+		OutboxPublishResult publishResult = stockRestoreOutboxRelayService.publishPendingEvents(now);
 		logPublishResult("outbox-stock-restore-pending-publish", publishResult);
 	}
 
 	@Scheduled(cron = "${outbox.stock-restore.retry-producer.cron:*/10 * * * * *}")
 	public void publishRetryableFailedEvents() {
 		LocalDateTime now = LocalDateTime.now();
-		OutboxPublishResult publishResult = stockRestoreOutboxService.publishRetryableFailedEvents(now);
+		OutboxPublishResult publishResult = stockRestoreOutboxRelayService.publishRetryableFailedEvents(now);
 		logPublishResult("outbox-stock-restore-retry-publish", publishResult);
 	}
 
 	@Scheduled(cron = "${outbox.stock-restore.stale-recovery.cron:*/30 * * * * *}")
 	public void recoverStalePublishingEvents() {
 		LocalDateTime now = LocalDateTime.now();
-		int recoveredCount = stockRestoreOutboxService.recoverStalePublishingEvents(now);
+		int recoveredCount = stockRestoreOutboxRelayService.recoverStalePublishingEvents(now);
 		if (recoveredCount > 0) {
 			log.warn("job=outbox-stock-restore-stale-recovery recovered={}", recoveredCount);
 		}

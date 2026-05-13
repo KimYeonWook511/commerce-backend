@@ -23,8 +23,8 @@ import com.commerce.order.domain.OrderStatus;
 import com.commerce.order.domain.repository.OrderRepository;
 import com.commerce.order.exception.OrderErrorCode;
 import com.commerce.order.exception.OrderException;
-import com.commerce.outbox.service.OutboxService;
-import com.commerce.outbox.stock.service.command.StockRestoreOutboxCreateCommand;
+import com.commerce.outbox.application.OutboxService;
+import com.commerce.outbox.stock.application.command.StockRestoreOutboxCreateCommand;
 import com.commerce.product.domain.Product;
 import com.commerce.product.domain.ProductStatus;
 
