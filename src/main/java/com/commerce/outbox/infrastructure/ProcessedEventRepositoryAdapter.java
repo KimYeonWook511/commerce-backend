@@ -15,6 +15,6 @@ public class ProcessedEventRepositoryAdapter implements ProcessedEventRepository
 
 	@Override
 	public ProcessedEvent save(ProcessedEvent processedEvent) {
-		return jpaProcessedEventRepository.saveAndFlush(processedEvent);
+		return jpaProcessedEventRepository.saveAndFlush(processedEvent); // 바로 commit은 안 되지만 유니크 인덱스 점유 (동일 키 insert는 lock 대기)
 	}
 }
