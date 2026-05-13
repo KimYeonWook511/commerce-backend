@@ -28,7 +28,7 @@
 - 이메일 중복은 `MemberErrorCode.DUPLICATE_EMAIL`로 전환했다.
 - 따라서 회원가입 중복 이메일 실패 응답 코드는 `MEMBER-409`를 사용한다.
 
-## 남겨둔 legacy 참조
+## legacy 참조 정리 결과
 
 - ✅ `member.repository.MemberRepository` 삭제 완료
 - ✅ legacy `order.service.OrderService` 삭제 완료
@@ -41,7 +41,7 @@
 - auth service 테스트는 분리된 service 책임을 검증하는 수준으로 정리했다.
 - Redis 저장 인자, RDB commit 이후 저장 정책, Redis 실패 응답 정책은 별도 이슈에서 함께 테스트로 고정한다.
 
-## 다음 legacy 삭제 작업 체크리스트
+## 완료된 legacy 삭제 작업
 
 ✅ 완료
 
