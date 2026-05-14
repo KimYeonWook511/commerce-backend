@@ -19,7 +19,6 @@ import sys
 import threading
 import time
 import types
-import uuid
 from datetime import datetime, timedelta, timezone
 from pathlib import Path
 from typing import Optional
@@ -89,7 +88,6 @@ class StepExecutor:
         self.root = str(ROOT)
         self.root_path = ROOT
         self.auto_push = auto_push
-        self.worktree_path: Path | None = None
         self.phase_dir = self.resolve_phase_dir(phase_path)
         self.phase_relpath = self.phase_dir.relative_to(ROOT).as_posix()
         self.phase_dir_name = self.phase_dir.name
@@ -150,15 +148,11 @@ class StepExecutor:
         self.validate_completed_step_artifacts()
         self.check_blockers()
         git_ops.preflight_git_write(self)
-        try:
-            self._setup_worktree()
-            self.checkout_branch()
-            self.mark_workflow_execution_in_progress()
-            self.ensure_created_at()
-            self.execute_all_steps()
-            self.finalize()
-        finally:
-            self._teardown_worktree()
+        self._validate_worktree_context()
+        self.mark_workflow_execution_in_progress()
+        self.ensure_created_at()
+        self.execute_all_steps()
+        self.finalize()
 
     def _preflight_tools(self):
         """tmux와 claude CLI가 설치되어 있는지 확인한다."""
@@ -168,31 +162,20 @@ class StepExecutor:
                 print(f"\n  ERROR: '{tool}'이 설치되어 있지 않습니다. execute.py 실행 전 설치하세요.")
                 raise SystemExit(1)
 
-    def _setup_worktree(self):
-        """phase 실행용 격리 worktree를 생성하고 self.root / self.phase_dir를 재설정한다."""
-        worktree_path = self.root_path / "worktrees" / f"harness-{self.feature_name}-{uuid.uuid4().hex[:8]}"
-        git_ops.create_worktree(self.root_path, worktree_path, self.branch_name)
-        self.worktree_path = worktree_path
+    def _validate_worktree_context(self):
+        """현재 실행 위치가 올바른 feature 브랜치인지 확인한다."""
+        result = self.run_git("rev-parse", "--abbrev-ref", "HEAD")
+        if result.returncode != 0:
+            print("  ERROR: git을 사용할 수 없거나 git repo가 아닙니다.")
+            raise SystemExit(1)
 
-        phase_relpath = self.phase_dir.relative_to(self.root_path)
-        self.root = str(worktree_path)
-        self.phase_dir = worktree_path / phase_relpath
-        self.phase_relpath = phase_relpath.as_posix()
-
-        feature_phases_relpath = self.feature_phases_dir.relative_to(self.root_path)
-        self.feature_phases_dir = worktree_path / feature_phases_relpath
-        self.feature_phases_relpath = feature_phases_relpath.as_posix()
-        self.feature_index_file = self.feature_phases_dir / "index.json"
-        self.feature_dir = self.feature_phases_dir.parent
-        self.index_file = self.phase_dir / "index.json"
-
-        print(f"  Worktree: {worktree_path}")
-
-    def _teardown_worktree(self):
-        """worktree를 정리한다. 성공/실패 모두 호출된다."""
-        if self.worktree_path:
-            git_ops.remove_worktree(self.root_path, self.worktree_path)
-            self.worktree_path = None
+        current_branch = result.stdout.strip()
+        if current_branch != self.branch_name:
+            print(f"\n  ERROR: execute.py는 feature 브랜치 worktree 안에서 실행해야 합니다.")
+            print(f"  현재 브랜치: {current_branch}")
+            print(f"  필요 브랜치: {self.branch_name}")
+            print(f"  hint: worktrees/feature-{self.feature_name}/ 안에서 실행하세요.")
+            raise SystemExit(1)
 
     # --- workflow checklist ---
 
@@ -393,10 +376,6 @@ class StepExecutor:
     def run_git(self, *args):
         """git 명령을 실행하고 stdout/stderr를 캡처한다."""
         return git_ops.run_git(self, *args)
-
-    def checkout_branch(self):
-        """`feature/<feature-name>` 브랜치를 준비한다."""
-        git_ops.checkout_branch(self)
 
     def commit_step(self, step_num: int, message: str, editable_paths: list[str]):
         """현재 step의 기능 변경만 커밋한다."""

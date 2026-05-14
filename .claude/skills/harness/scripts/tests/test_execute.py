@@ -200,7 +200,9 @@ class StepExecutorTest(unittest.TestCase):
         pass
 
     def test_root_points_to_repository_root_when_loaded_normally(self):
-        self.assertEqual("commerce-backend", load_execute_module().ROOT.name)
+        module = load_execute_module()
+        expected = Path(module.__file__).resolve().parents[4]
+        self.assertEqual(expected, module.ROOT)
 
     def test_stamp_returns_kst_timestamp(self):
         result = self.make_executor().stamp()
@@ -571,28 +573,16 @@ class StepExecutorTest(unittest.TestCase):
             executor.ensure_step_file_exists(2)
         self.assertEqual(1, exc.exception.code)
 
-    def test_checkout_branch_already_on_branch(self):
+    def test_validate_worktree_context_passes_when_on_feature_branch(self):
         executor = self.make_executor()
         self.mock_git(executor, [MagicMock(returncode=0, stdout="feature/skill-test\n", stderr="")])
-        executor.checkout_branch()
+        executor._validate_worktree_context()
 
-    def test_checkout_branch_create_new_branch(self):
+    def test_validate_worktree_context_exits_when_on_wrong_branch(self):
         executor = self.make_executor()
-        self.mock_git(
-            executor,
-            [
-                MagicMock(returncode=0, stdout="main\n", stderr=""),
-                MagicMock(returncode=1, stdout="", stderr="not found"),
-                MagicMock(returncode=0, stdout="", stderr=""),
-            ],
-        )
-        executor.checkout_branch()
-
-    def test_checkout_branch_fails_when_git_unavailable(self):
-        executor = self.make_executor()
-        self.mock_git(executor, [MagicMock(returncode=1, stdout="", stderr="not a git repo")])
+        self.mock_git(executor, [MagicMock(returncode=0, stdout="develop\n", stderr="")])
         with self.assertRaises(SystemExit) as exc:
-            executor.checkout_branch()
+            executor._validate_worktree_context()
         self.assertEqual(1, exc.exception.code)
 
     def test_preflight_git_write_passes_when_git_dir_writable(self):

@@ -5,34 +5,6 @@ import subprocess
 import uuid
 
 
-def create_worktree(root_path: Path, worktree_path: Path, branch: str, base_branch: str = "develop") -> Path:
-    """격리된 실행용 git worktree를 생성한다."""
-    # 브랜치가 이미 존재하면 체크아웃, 없으면 새로 생성
-    result = subprocess.run(
-        ["git", "-C", str(root_path), "worktree", "add", str(worktree_path), branch],
-        capture_output=True, text=True,
-    )
-    if result.returncode != 0:
-        result = subprocess.run(
-            ["git", "-C", str(root_path), "worktree", "add", "-b", branch, str(worktree_path), base_branch],
-            capture_output=True, text=True,
-        )
-    if result.returncode != 0:
-        print(f"  ERROR: worktree 생성 실패: {result.stderr.strip()}")
-        raise SystemExit(1)
-    return worktree_path
-
-
-def remove_worktree(root_path: Path, worktree_path: Path):
-    """실행이 끝난 git worktree를 제거한다."""
-    result = subprocess.run(
-        ["git", "-C", str(root_path), "worktree", "remove", "--force", str(worktree_path)],
-        capture_output=True, text=True,
-    )
-    if result.returncode != 0:
-        print(f"  WARNING: worktree 정리 실패: {worktree_path}\n  {result.stderr.strip()}")
-
-
 def run_git(executor, *args) -> subprocess.CompletedProcess:
     """git 명령을 실행하고 stdout/stderr를 캡처한다."""
     return subprocess.run(
@@ -66,34 +38,6 @@ def preflight_git_write(executor):
         raise SystemExit(1)
     finally:
         probe_path.unlink(missing_ok=True)
-
-
-def checkout_branch(executor):
-    """`feature/<feature-name>` 브랜치를 준비한다."""
-    branch = executor.branch_name
-
-    current = executor.run_git("rev-parse", "--abbrev-ref", "HEAD")
-    if current.returncode != 0:
-        print("  ERROR: git을 사용할 수 없거나 git repo가 아닙니다.")
-        print(f"  {current.stderr.strip()}")
-        raise SystemExit(1)
-
-    if current.stdout.strip() == branch:
-        return
-
-    existing = executor.run_git("rev-parse", "--verify", branch)
-    result = (
-        executor.run_git("checkout", branch)
-        if existing.returncode == 0
-        else executor.run_git("checkout", "-b", branch)
-    )
-    if result.returncode != 0:
-        print(f"  ERROR: 브랜치 '{branch}' checkout 실패.")
-        print(f"  {result.stderr.strip()}")
-        print("  Hint: 변경사항을 stash하거나 commit한 후 다시 시도하세요.")
-        raise SystemExit(1)
-
-    print(f"  Branch: {branch}")
 
 
 def normalize_pathspec(pathspec: str) -> str:
