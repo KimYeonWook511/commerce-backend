@@ -29,7 +29,7 @@ import com.commerce.order.domain.OrderStatus;
 import com.commerce.order.domain.repository.OrderRepository;
 import com.commerce.order.exception.OrderErrorCode;
 import com.commerce.order.exception.OrderException;
-import com.commerce.order.domain.repository.OrderIdempotencyRepository;
+import com.commerce.order.application.port.OrderIdempotencyStore;
 import com.commerce.order.application.command.OrderCreateItem;
 import com.commerce.order.application.command.OrderCreateCommand;
 import com.commerce.order.application.result.OrderCancelResult;
@@ -64,7 +64,7 @@ class OrderApplicationServiceTest {
 	private OrderRepository orderRepository;
 
 	@Mock
-	private OrderIdempotencyRepository orderIdempotencyRepository;
+	private OrderIdempotencyStore orderIdempotencyStore;
 
 	@InjectMocks
 	private OrderCreateService orderCreateService;
@@ -539,7 +539,7 @@ class OrderApplicationServiceTest {
 	}
 
 	private void stubForIdempotencyReserved() {
-		given(orderIdempotencyRepository.reserve(anyLong(), anyString(), any()))
+		given(orderIdempotencyStore.reserve(anyLong(), anyString(), any()))
 			.willReturn(true);
 	}
 

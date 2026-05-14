@@ -1,15 +1,11 @@
 package com.commerce.auth.application;
 
-import java.time.Duration;
-
 import org.springframework.stereotype.Service;
 
+import com.commerce.auth.application.port.RefreshTokenStore;
+import com.commerce.auth.application.port.TokenIssuer;
+import com.commerce.auth.application.port.vo.TokenClaims;
 import com.commerce.auth.application.result.AuthTokenIssueResult;
-import com.commerce.auth.infrastructure.RefreshTokenStore;
-import com.commerce.auth.infrastructure.jwt.JwtProperties;
-import com.commerce.auth.infrastructure.jwt.JwtClaims;
-import com.commerce.auth.infrastructure.jwt.JwtProvider;
-import com.commerce.auth.infrastructure.jwt.JwtType;
 import com.commerce.member.domain.Member;
 
 import lombok.RequiredArgsConstructor;
@@ -18,32 +14,17 @@ import lombok.RequiredArgsConstructor;
 @RequiredArgsConstructor
 public class AuthTokenIssueService {
 
-	private final JwtProvider jwtProvider;
+	private final TokenIssuer tokenIssuer;
 	private final RefreshTokenStore refreshTokenStore;
-	private final JwtProperties jwtProperties;
 
 	public AuthTokenIssueResult issue(Member member) {
-		JwtClaims accessTokenClaims = JwtClaims.of(
-			member.getId(),
-			member.getRole(),
-			JwtType.ACCESS_TOKEN
-		);
-		JwtClaims refreshTokenClaims = JwtClaims.of(
-			member.getId(),
-			member.getRole(),
-			JwtType.REFRESH_TOKEN
-		);
+		TokenClaims claims = TokenClaims.of(member.getId(), member.getRole());
 
-		String accessToken = jwtProvider.createAccessToken(accessTokenClaims);
-		String refreshToken = jwtProvider.createRefreshToken(refreshTokenClaims);
+		String accessToken = tokenIssuer.createAccessToken(claims);
+		String refreshToken = tokenIssuer.createRefreshToken(claims);
 
-		storeRefreshToken(member.getId(), refreshToken);
+		refreshTokenStore.save(member.getId(), refreshToken);
 
 		return AuthTokenIssueResult.of(accessToken, refreshToken);
-	}
-
-	private void storeRefreshToken(Long memberId, String refreshToken) {
-		Duration ttl = Duration.ofMillis(jwtProperties.getRefreshExpiration());
-		refreshTokenStore.save(memberId, refreshToken, ttl);
 	}
 }

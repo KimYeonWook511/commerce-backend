@@ -6,13 +6,13 @@ import java.util.Optional;
 import org.springframework.data.redis.core.StringRedisTemplate;
 import org.springframework.stereotype.Component;
 
-import com.commerce.order.domain.repository.OrderIdempotencyRepository;
+import com.commerce.order.application.port.OrderIdempotencyStore;
 
 import lombok.RequiredArgsConstructor;
 
 @Component
 @RequiredArgsConstructor
-public class OrderIdempotencyRepositoryAdapter implements OrderIdempotencyRepository {
+public class RedisOrderIdempotencyStore implements OrderIdempotencyStore {
 
 	private final StringRedisTemplate redisTemplate;
 

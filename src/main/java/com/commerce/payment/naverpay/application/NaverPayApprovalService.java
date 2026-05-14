@@ -19,10 +19,10 @@ import com.commerce.payment.application.PaymentApprovalService;
 import com.commerce.payment.application.PaymentAttemptService;
 import com.commerce.payment.naverpay.application.result.NaverPayApproveResponse;
 import com.commerce.payment.naverpay.application.result.NaverPayApproveStatus;
-import com.commerce.payment.naverpay.infrastructure.NaverPayGateway;
-import com.commerce.payment.naverpay.infrastructure.result.NaverPayApproveResult;
-import com.commerce.payment.naverpay.infrastructure.result.NaverPayCancelResult;
-import com.commerce.payment.naverpay.infrastructure.result.NaverPayHistoryResult;
+import com.commerce.payment.naverpay.application.port.NaverPayGateway;
+import com.commerce.payment.naverpay.application.port.result.NaverPayApproveResult;
+import com.commerce.payment.naverpay.application.port.result.NaverPayCancelResult;
+import com.commerce.payment.naverpay.application.port.result.NaverPayHistoryResult;
 
 import lombok.RequiredArgsConstructor;
 import lombok.extern.slf4j.Slf4j;

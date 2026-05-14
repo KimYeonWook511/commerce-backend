@@ -15,19 +15,16 @@ import org.mockito.Mock;
 import org.mockito.junit.jupiter.MockitoExtension;
 import org.springframework.test.util.ReflectionTestUtils;
 
+import com.commerce.auth.application.command.AuthTokenReissueCommand;
+import com.commerce.auth.application.port.RefreshTokenStore;
+import com.commerce.auth.application.port.TokenValidator;
+import com.commerce.auth.application.port.vo.ParsedTokenClaims;
+import com.commerce.auth.application.result.AuthTokenIssueResult;
+import com.commerce.auth.application.result.AuthTokenReissueResult;
 import com.commerce.auth.exception.AuthErrorCode;
 import com.commerce.auth.exception.AuthException;
-import com.commerce.auth.application.result.AuthTokenIssueResult;
-import com.commerce.auth.infrastructure.jwt.JwtType;
-import com.commerce.auth.infrastructure.jwt.JwtValidator;
-import com.commerce.auth.infrastructure.RefreshTokenStore;
-import com.commerce.auth.application.command.AuthTokenReissueCommand;
-import com.commerce.auth.application.result.AuthTokenReissueResult;
 import com.commerce.member.application.MemberQueryService;
 import com.commerce.member.domain.Member;
-
-import io.jsonwebtoken.Claims;
-import io.jsonwebtoken.Jwts;
 
 @ExtendWith(MockitoExtension.class)
 class AuthTokenReissueServiceTest {
@@ -39,7 +36,7 @@ class AuthTokenReissueServiceTest {
 	private AuthTokenIssueService authTokenIssueService;
 
 	@Mock
-	private JwtValidator jwtValidator;
+	private TokenValidator tokenValidator;
 
 	@Mock
 	private RefreshTokenStore refreshTokenStore;
@@ -54,9 +51,9 @@ class AuthTokenReissueServiceTest {
 		Member member = Member.createUser("test@example.com", "hashed-password", "user1");
 		ReflectionTestUtils.setField(member, "id", 1L);
 
-		Claims claims = refreshTokenClaims("1");
+		ParsedTokenClaims claims = refreshTokenClaims("1");
 
-		given(jwtValidator.validateRefreshToken("refresh-token")).willReturn(claims);
+		given(tokenValidator.validateRefreshToken("refresh-token")).willReturn(claims);
 		given(refreshTokenStore.get(1L)).willReturn(Optional.of("refresh-token"));
 		given(memberQueryService.findById(1L)).willReturn(Optional.of(member));
 		given(authTokenIssueService.issue(member))
@@ -79,9 +76,9 @@ class AuthTokenReissueServiceTest {
 	@Test
 	void reissue_whenRefreshTokenMismatch_throwException() {
 		// given
-		Claims claims = refreshTokenClaims("1");
+		ParsedTokenClaims claims = refreshTokenClaims("1");
 
-		given(jwtValidator.validateRefreshToken("refresh-token")).willReturn(claims);
+		given(tokenValidator.validateRefreshToken("refresh-token")).willReturn(claims);
 		given(refreshTokenStore.get(1L)).willReturn(Optional.of("other-token"));
 
 		AuthTokenReissueCommand command = AuthTokenReissueCommand.builder()
@@ -101,7 +98,7 @@ class AuthTokenReissueServiceTest {
 	@Test
 	void reissue_whenRefreshTokenInvalid_throwException() {
 		// given
-		given(jwtValidator.validateRefreshToken("refresh-token"))
+		given(tokenValidator.validateRefreshToken("refresh-token"))
 			.willThrow(new AuthException(AuthErrorCode.TOKEN_INVALID));
 
 		AuthTokenReissueCommand command = AuthTokenReissueCommand.builder()
@@ -121,9 +118,9 @@ class AuthTokenReissueServiceTest {
 	@Test
 	void reissue_whenSubjectIsNotMemberId_throwException() {
 		// given
-		Claims claims = refreshTokenClaims("invalid-member-id");
+		ParsedTokenClaims claims = refreshTokenClaims("invalid-member-id");
 
-		given(jwtValidator.validateRefreshToken("refresh-token")).willReturn(claims);
+		given(tokenValidator.validateRefreshToken("refresh-token")).willReturn(claims);
 
 		AuthTokenReissueCommand command = AuthTokenReissueCommand.builder()
 			.refreshToken("refresh-token")
@@ -142,9 +139,9 @@ class AuthTokenReissueServiceTest {
 	@Test
 	void reissue_whenStoredRefreshTokenNotFound_throwException() {
 		// given
-		Claims claims = refreshTokenClaims("1");
+		ParsedTokenClaims claims = refreshTokenClaims("1");
 
-		given(jwtValidator.validateRefreshToken("refresh-token")).willReturn(claims);
+		given(tokenValidator.validateRefreshToken("refresh-token")).willReturn(claims);
 		given(refreshTokenStore.get(1L)).willReturn(Optional.empty());
 
 		AuthTokenReissueCommand command = AuthTokenReissueCommand.builder()
@@ -164,9 +161,9 @@ class AuthTokenReissueServiceTest {
 	@Test
 	void reissue_whenMemberNotFound_throwException() {
 		// given
-		Claims claims = refreshTokenClaims("1");
+		ParsedTokenClaims claims = refreshTokenClaims("1");
 
-		given(jwtValidator.validateRefreshToken("refresh-token")).willReturn(claims);
+		given(tokenValidator.validateRefreshToken("refresh-token")).willReturn(claims);
 		given(refreshTokenStore.get(1L)).willReturn(Optional.of("refresh-token"));
 		given(memberQueryService.findById(1L)).willReturn(Optional.empty());
 
@@ -183,10 +180,7 @@ class AuthTokenReissueServiceTest {
 			});
 	}
 
-	private Claims refreshTokenClaims(String subject) {
-		Claims claims = Jwts.claims();
-		claims.setSubject(subject);
-		claims.put("type", JwtType.REFRESH_TOKEN.name());
-		return claims;
+	private ParsedTokenClaims refreshTokenClaims(String subject) {
+		return ParsedTokenClaims.of(subject, "USER");
 	}
 }

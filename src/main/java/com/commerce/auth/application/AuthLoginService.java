@@ -8,7 +8,7 @@ import com.commerce.auth.exception.AuthException;
 import com.commerce.auth.application.command.AuthLoginCommand;
 import com.commerce.auth.application.result.AuthLoginResult;
 import com.commerce.auth.application.result.AuthTokenIssueResult;
-import com.commerce.auth.infrastructure.PasswordHasher;
+import com.commerce.auth.application.port.PasswordHasher;
 import com.commerce.member.application.MemberQueryService;
 import com.commerce.member.domain.Member;
 

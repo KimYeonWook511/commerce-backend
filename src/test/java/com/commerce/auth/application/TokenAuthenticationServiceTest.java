@@ -11,19 +11,17 @@ import org.mockito.InjectMocks;
 import org.mockito.Mock;
 import org.mockito.junit.jupiter.MockitoExtension;
 
+import com.commerce.auth.application.port.TokenValidator;
+import com.commerce.auth.application.port.vo.ParsedTokenClaims;
+import com.commerce.auth.application.result.TokenAuthenticationResult;
 import com.commerce.auth.exception.AuthErrorCode;
 import com.commerce.auth.exception.AuthException;
-import com.commerce.auth.infrastructure.jwt.JwtValidator;
-import com.commerce.auth.application.result.TokenAuthenticationResult;
-
-import io.jsonwebtoken.Claims;
-import io.jsonwebtoken.Jwts;
 
 @ExtendWith(MockitoExtension.class)
 class TokenAuthenticationServiceTest {
 
 	@Mock
-	private JwtValidator jwtValidator;
+	private TokenValidator tokenValidator;
 
 	@InjectMocks
 	private TokenAuthenticationService tokenAuthenticationService;
@@ -32,9 +30,8 @@ class TokenAuthenticationServiceTest {
 	@Test
 	void authenticateAccessToken_whenTokenValid_returnPrincipal() {
 		// given
-		Claims claims = Jwts.claims().setSubject("1");
-		claims.put("role", "ROLE_USER");
-		given(jwtValidator.validateAccessToken("access-token")).willReturn(claims);
+		ParsedTokenClaims claims = ParsedTokenClaims.of("1", "ROLE_USER");
+		given(tokenValidator.validateAccessToken("access-token")).willReturn(claims);
 
 		// when
 		TokenAuthenticationResult result = tokenAuthenticationService.authenticateAccessToken("access-token");
@@ -48,9 +45,8 @@ class TokenAuthenticationServiceTest {
 	@Test
 	void authenticateAccessToken_whenSubjectInvalid_throwException() {
 		// given
-		Claims claims = Jwts.claims().setSubject("invalid-member-id");
-		claims.put("role", "ROLE_USER");
-		given(jwtValidator.validateAccessToken("access-token")).willReturn(claims);
+		ParsedTokenClaims claims = ParsedTokenClaims.of("invalid-member-id", "ROLE_USER");
+		given(tokenValidator.validateAccessToken("access-token")).willReturn(claims);
 
 		// when & then
 		assertThatThrownBy(() -> tokenAuthenticationService.authenticateAccessToken("access-token"))

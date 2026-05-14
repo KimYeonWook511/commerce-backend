@@ -6,23 +6,24 @@ import org.junit.jupiter.api.DisplayName;
 import org.junit.jupiter.api.Test;
 import org.springframework.test.util.ReflectionTestUtils;
 
+import com.commerce.auth.application.port.vo.TokenClaims;
 import com.commerce.member.domain.MemberRole;
 
 import io.jsonwebtoken.Claims;
 import io.jsonwebtoken.Jwts;
 
-class JwtProviderTest {
+class JwtTokenIssuerTest {
 
 	@DisplayName("JWT 만료 시간 설정값을 밀리초 단위로 반영한다")
 	@Test
 	void createAccessToken_whenExpirationConfigured_applyExpirationAsMillis() {
 		// given
 		JwtProperties jwtProperties = jwtProperties(2000L, 604800000L);
-		JwtProvider jwtProvider = new JwtProvider(jwtProperties);
-		JwtClaims jwtClaims = JwtClaims.of(1L, MemberRole.ROLE_USER, JwtType.ACCESS_TOKEN);
+		JwtTokenIssuer jwtTokenIssuer = new JwtTokenIssuer(jwtProperties);
+		TokenClaims tokenClaims = TokenClaims.of(1L, MemberRole.ROLE_USER);
 
 		// when
-		String token = jwtProvider.createAccessToken(jwtClaims);
+		String token = jwtTokenIssuer.createAccessToken(tokenClaims);
 
 		// then
 		Claims claims = Jwts.parserBuilder()

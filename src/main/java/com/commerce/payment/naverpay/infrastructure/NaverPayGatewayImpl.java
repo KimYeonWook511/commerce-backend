@@ -6,6 +6,10 @@ import org.springframework.stereotype.Component;
 
 import com.commerce.payment.domain.PaymentAttemptFailCode;
 import com.commerce.payment.exception.PaymentErrorCode;
+import com.commerce.payment.naverpay.application.port.NaverPayGateway;
+import com.commerce.payment.naverpay.application.port.result.NaverPayApproveResult;
+import com.commerce.payment.naverpay.application.port.result.NaverPayCancelResult;
+import com.commerce.payment.naverpay.application.port.result.NaverPayHistoryResult;
 import com.commerce.payment.naverpay.exception.NaverPayErrorCode;
 import com.commerce.payment.naverpay.exception.NaverPayException;
 import com.commerce.payment.naverpay.infrastructure.client.NaverPayClient;
@@ -17,9 +21,6 @@ import com.commerce.payment.naverpay.infrastructure.client.response.body.NaverPa
 import com.commerce.payment.naverpay.infrastructure.code.NaverPayApproveCode;
 import com.commerce.payment.naverpay.infrastructure.code.NaverPayCancelCode;
 import com.commerce.payment.naverpay.infrastructure.code.NaverPayHistoryCode;
-import com.commerce.payment.naverpay.infrastructure.result.NaverPayApproveResult;
-import com.commerce.payment.naverpay.infrastructure.result.NaverPayCancelResult;
-import com.commerce.payment.naverpay.infrastructure.result.NaverPayHistoryResult;
 
 import lombok.RequiredArgsConstructor;
 import lombok.extern.slf4j.Slf4j;
@@ -27,10 +28,11 @@ import lombok.extern.slf4j.Slf4j;
 @Slf4j
 @Component
 @RequiredArgsConstructor
-public class NaverPayGateway {
+public class NaverPayGatewayImpl implements NaverPayGateway {
 
 	private final NaverPayClient naverPayClient;
 
+	@Override
 	public NaverPayApproveResult approve(String paymentId) {
 		NaverPayResponse<NaverPayApproveBody> response;
 		try {
@@ -67,6 +69,7 @@ public class NaverPayGateway {
 		return NaverPayApproveResult.failed(toAttemptFailCode(code), toPaymentErrorCode(code), code.getDescription());
 	}
 
+	@Override
 	public NaverPayHistoryResult getApprovalHistory(String paymentId) {
 		NaverPayResponse<NaverPayHistoryBody> response;
 		try {
@@ -100,6 +103,7 @@ public class NaverPayGateway {
 		return NaverPayHistoryResult.failed(PaymentErrorCode.PAYMENT_NOT_FOUND);
 	}
 
+	@Override
 	public NaverPayCancelResult cancel(String paymentId, int cancelAmount, String cancelReason) {
 		NaverPayResponse<?> response;
 		try {

@@ -1,9 +1,9 @@
-package com.commerce.order.domain.repository;
+package com.commerce.order.application.port;
 
 import java.time.Duration;
 import java.util.Optional;
 
-public interface OrderIdempotencyRepository {
+public interface OrderIdempotencyStore {
 
 	boolean reserve(Long memberId, String idempotencyKey, Duration ttl);
 

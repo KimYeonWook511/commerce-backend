@@ -2,24 +2,24 @@ package com.commerce.auth.application;
 
 import org.springframework.stereotype.Service;
 
+import com.commerce.auth.application.port.TokenValidator;
+import com.commerce.auth.application.port.vo.ParsedTokenClaims;
+import com.commerce.auth.application.result.TokenAuthenticationResult;
 import com.commerce.auth.exception.AuthErrorCode;
 import com.commerce.auth.exception.AuthException;
-import com.commerce.auth.application.result.TokenAuthenticationResult;
-import com.commerce.auth.infrastructure.jwt.JwtValidator;
 
-import io.jsonwebtoken.Claims;
 import lombok.RequiredArgsConstructor;
 
 @Service
 @RequiredArgsConstructor
 public class TokenAuthenticationService {
 
-	private final JwtValidator jwtValidator;
+	private final TokenValidator tokenValidator;
 
 	public TokenAuthenticationResult authenticateAccessToken(String accessToken) {
-		Claims claims = jwtValidator.validateAccessToken(accessToken);
-		Long memberId = parseMemberId(claims.getSubject());
-		String role = claims.get("role", String.class);
+		ParsedTokenClaims claims = tokenValidator.validateAccessToken(accessToken);
+		Long memberId = parseMemberId(claims.subject());
+		String role = claims.role();
 
 		return TokenAuthenticationResult.of(memberId, role);
 	}

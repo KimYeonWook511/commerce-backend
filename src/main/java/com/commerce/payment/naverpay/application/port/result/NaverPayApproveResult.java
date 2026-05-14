@@ -1,4 +1,4 @@
-package com.commerce.payment.naverpay.infrastructure.result;
+package com.commerce.payment.naverpay.application.port.result;
 
 import com.commerce.payment.domain.PaymentAttemptFailCode;
 import com.commerce.payment.exception.PaymentErrorCode;
