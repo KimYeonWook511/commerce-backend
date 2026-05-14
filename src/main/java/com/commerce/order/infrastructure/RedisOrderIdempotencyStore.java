@@ -49,8 +49,12 @@ public class RedisOrderIdempotencyStore implements OrderIdempotencyStore {
 
 	@Override
 	public void complete(Long memberId, String idempotencyKey, Long orderId, Duration ttl) {
-		String value = OrderIdempotencyStatus.completedValue(orderId);
-		redisTemplate.opsForValue().set(buildKey(memberId, idempotencyKey), value, ttl);
+		try {
+			String value = OrderIdempotencyStatus.completedValue(orderId);
+			redisTemplate.opsForValue().set(buildKey(memberId, idempotencyKey), value, ttl);
+		} catch (DataAccessException e) {
+			log.warn("Redis complete 실패 (무시): {}", e.getMessage());
+		}
 	}
 
 	@Override

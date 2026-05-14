@@ -63,9 +63,12 @@ public class OrderCreateService {
 			return orderCreateProcessor.execute(command, ttl);
 		} catch (DataIntegrityViolationException ex) {
 			// unique 위반 — 동시 요청 or TTL 만료 후 중복: Application 계층에서 처리하고 Presentation으로 넘기지 않는다.
-			orderIdempotencyStore.clear(memberId, idempotencyKey);
 			return orderRepository.findByMemberIdAndIdempotencyKey(memberId, idempotencyKey)
-				.map(OrderCreateResult::from)
+				.map(order -> {
+					// 이후 동일 키 재요청이 Redis에서 바로 처리되도록 complete 상태로 갱신한다.
+					orderIdempotencyStore.complete(memberId, idempotencyKey, order.getId(), ttl);
+					return OrderCreateResult.from(order);
+				})
 				.orElseGet(() -> {
 					log.error("멱등키 충돌이 아닌 unique 제약 위반 발생: {}", ex.getMessage());
 					throw new OrderException(OrderErrorCode.ORDER_NOT_FOUND);
