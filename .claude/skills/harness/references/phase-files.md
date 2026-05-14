@@ -231,9 +231,10 @@ step 실행 상태 파일이다.
 
 ## 실행
 
-기능별 `phases` 구조가 준비되면 아래 실행기로 현재 phase를 순차 실행할 수 있다.
+기능별 `phases` 구조가 준비되면 feature 브랜치 worktree 안에서 실행기를 순차 실행한다.
 
 ```bash
+# worktrees/feature-<feature-name>/ 안에서
 python3 .claude/skills/harness/scripts/execute.py docs/features/<feature-name>/phases/<phase-name>
 python3 .claude/skills/harness/scripts/execute.py docs/features/<feature-name>/phases/<phase-name> --push
 ```
