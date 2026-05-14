@@ -27,7 +27,7 @@ import jakarta.persistence.EntityManager;
 @DataJpaTest
 @Import({JpaConfig.class, StockRepositoryAdapter.class, StockHistoryRepositoryAdapter.class})
 @ActiveProfiles("test")
-class StockHistoryRepositoryTest {
+class StockHistoryRepositoryJpaAdapterTest {
 
 	@Autowired
 	private StockHistoryRepository stockHistoryRepository;

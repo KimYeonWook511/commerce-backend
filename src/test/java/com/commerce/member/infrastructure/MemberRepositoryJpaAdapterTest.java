@@ -17,7 +17,7 @@ import com.commerce.member.domain.repository.MemberRepository;
 @DataJpaTest
 @ActiveProfiles("test")
 @Import(MemberRepositoryAdapter.class)
-class MemberRepositoryTest {
+class MemberRepositoryJpaAdapterTest {
 
 	@Autowired
 	private MemberRepository memberRepository;

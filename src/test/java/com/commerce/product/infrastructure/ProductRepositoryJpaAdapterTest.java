@@ -20,7 +20,7 @@ import jakarta.persistence.EntityManager;
 @DataJpaTest
 @Import(JpaConfig.class)
 @ActiveProfiles("test")
-class ProductRepositoryTest {
+class ProductRepositoryJpaAdapterTest {
 
 	@Autowired
 	private JpaProductRepository productRepository;

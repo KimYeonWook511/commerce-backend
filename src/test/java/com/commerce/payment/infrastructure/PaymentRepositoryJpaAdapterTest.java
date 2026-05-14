@@ -29,7 +29,7 @@ import jakarta.persistence.EntityManager;
 @DataJpaTest
 @ActiveProfiles("test")
 @Import({PaymentRepositoryAdapter.class, MemberPersistenceTestSupport.class, ProductPersistenceTestSupport.class, OrderPersistenceTestSupport.class})
-class PaymentRepositoryTest {
+class PaymentRepositoryJpaAdapterTest {
 
 	@Autowired
 	private PaymentRepository paymentRepository;
