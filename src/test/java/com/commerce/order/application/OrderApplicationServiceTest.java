@@ -14,16 +14,14 @@ import org.junit.jupiter.api.DisplayName;
 import org.junit.jupiter.api.Test;
 import org.junit.jupiter.api.extension.ExtendWith;
 import org.mockito.ArgumentCaptor;
-import org.mockito.InjectMocks;
 import org.mockito.InOrder;
+import org.mockito.InjectMocks;
 import org.mockito.Mock;
 import org.mockito.junit.jupiter.MockitoExtension;
 import org.springframework.test.util.ReflectionTestUtils;
 
 import com.commerce.member.domain.Member;
 import com.commerce.member.domain.repository.MemberRepository;
-import com.commerce.member.exception.MemberErrorCode;
-import com.commerce.member.exception.MemberException;
 import com.commerce.order.domain.Order;
 import com.commerce.order.domain.OrderStatus;
 import com.commerce.order.domain.repository.OrderRepository;
@@ -36,8 +34,6 @@ import com.commerce.order.application.result.OrderCancelResult;
 import com.commerce.order.application.result.OrderCreateResult;
 import com.commerce.product.domain.Product;
 import com.commerce.product.domain.ProductStatus;
-import com.commerce.product.exception.ProductErrorCode;
-import com.commerce.product.exception.ProductException;
 import com.commerce.product.domain.repository.ProductRepository;
 import com.commerce.stock.exception.StockErrorCode;
 import com.commerce.stock.exception.StockException;
@@ -66,6 +62,9 @@ class OrderApplicationServiceTest {
 	@Mock
 	private OrderIdempotencyStore orderIdempotencyStore;
 
+	@Mock
+	private OrderCreateProcessor orderCreateProcessor;
+
 	@InjectMocks
 	private OrderCreateService orderCreateService;
 
@@ -80,42 +79,26 @@ class OrderApplicationServiceTest {
 
 	private final String idempotencyKey = "idempotency-key";
 
-	@DisplayName("기본 주문 생성은 비관적 락 방식으로 재고를 차감한다")
+	@DisplayName("기본 주문 생성은 멱등성 확인 후 processor에 위임한다")
 	@Test
-	void createOrder_whenValidRequest_usePessimisticLockDecrease() {
+	void createOrder_whenValidRequest_delegatesToProcessor() {
 		// given
-		Member member = createMember(1L);
-		Product product1 = createProduct(10L, "product-1", 1000);
-		Product product2 = createProduct(11L, "product-2", 2000);
 		OrderCreateCommand command = createDefaultRequest();
-		stubForOrderCreateSuccess(member, product1, product2);
 		stubForIdempotencyReserved();
+		OrderCreateResult expected = stubProcessorSuccess(command);
 
 		// when
 		OrderCreateResult result = orderCreateService.createOrder(command);
 
 		// then
-		then(stockInventoryService).should().decrease(10L, 2);
-		then(stockInventoryService).should().decrease(11L, 1);
-
-		ArgumentCaptor<Order> orderCaptor = ArgumentCaptor.forClass(Order.class);
-		then(orderRepository).should().save(orderCaptor.capture());
-
-		Order savedOrder = orderCaptor.getValue();
-		assertThat(savedOrder.getTotalPrice()).isEqualTo(4000);
-		assertThat(savedOrder.getStatus()).isEqualTo(OrderStatus.INIT);
-		assertThat(result.getOrderId()).isEqualTo(100L);
-		assertThat(result.getTotalPrice()).isEqualTo(4000);
-		assertThat(result.getStatus()).isEqualTo(OrderStatus.INIT);
+		assertThat(result.getOrderId()).isEqualTo(expected.getOrderId());
+		then(orderCreateProcessor).should().execute(eq(command), any());
 	}
 
-	@DisplayName("같은 상품이 여러 항목으로 들어오면 상품은 한 번만 조회하고 재고는 항목별로 차감한다")
+	@DisplayName("같은 상품이 여러 항목으로 들어오면 processor에 위임한다")
 	@Test
-	void createOrder_whenDuplicateProductItems_findProductOnceAndDecreaseEachItem() {
+	void createOrder_whenDuplicateProductItems_delegatesToProcessor() {
 		// given
-		Member member = createMember(1L);
-		Product product1 = createProduct(10L, "product-1", 1000);
-		Product product2 = createProduct(11L, "product-2", 2000);
 		OrderCreateCommand command = OrderCreateCommand.builder()
 			.memberId(1L)
 			.idempotencyKey(idempotencyKey)
@@ -125,23 +108,14 @@ class OrderApplicationServiceTest {
 				OrderCreateItem.builder().productId(10L).quantity(3).build()
 			))
 			.build();
-
-		stubForOrderCreateSuccess(member, product1, product2);
 		stubForIdempotencyReserved();
+		stubProcessorSuccess(command);
 
 		// when
-		OrderCreateResult result = orderCreateService.createOrder(command);
+		orderCreateService.createOrder(command);
 
 		// then
-		then(productRepository).should().findAllById(List.of(10L, 11L));
-		then(stockInventoryService).should().decrease(10L, 2);
-		then(stockInventoryService).should().decrease(10L, 3);
-		then(stockInventoryService).should().decrease(11L, 1);
-
-		ArgumentCaptor<Order> orderCaptor = ArgumentCaptor.forClass(Order.class);
-		then(orderRepository).should().save(orderCaptor.capture());
-		assertThat(orderCaptor.getValue().getOrderItems()).hasSize(3);
-		assertThat(result.getTotalPrice()).isEqualTo(7000);
+		then(orderCreateProcessor).should().execute(eq(command), any());
 	}
 
 	@DisplayName("락 없이 주문을 생성하면 기본 차감 로직을 사용한다")
@@ -409,9 +383,9 @@ class OrderApplicationServiceTest {
 			.containsEntry(11L, 1);
 	}
 
-	@DisplayName("회원이 없으면 주문 생성에 실패한다")
+	@DisplayName("processor가 예외를 던지면 멱등키를 clear하고 예외를 재발생한다")
 	@Test
-	void createOrder_whenMemberNotFound_throwException() {
+	void createOrder_whenProcessorThrows_clearAndRethrow() {
 		// given
 		OrderCreateCommand command = OrderCreateCommand.builder()
 			.memberId(1L)
@@ -420,69 +394,15 @@ class OrderApplicationServiceTest {
 			.build();
 
 		stubForIdempotencyReserved();
-		given(memberRepository.findById(1L)).willReturn(Optional.empty());
-
-		// when & then
-		assertThatThrownBy(() -> orderCreateService.createOrder(command))
-			.isInstanceOf(MemberException.class)
-			.satisfies(exception -> {
-				MemberException memberException = (MemberException) exception;
-				assertThat(memberException.getErrorCode()).isEqualTo(MemberErrorCode.MEMBER_NOT_FOUND);
-			});
-	}
-
-	@DisplayName("상품이 없으면 주문 생성에 실패한다")
-	@Test
-	void createOrder_whenProductNotFound_throwException() {
-		// given
-		Member member = createMember(1L);
-
-		OrderCreateCommand command = OrderCreateCommand.builder()
-			.memberId(1L)
-			.idempotencyKey(idempotencyKey)
-			.items(List.of(OrderCreateItem.builder().productId(10L).quantity(1).build()))
-			.build();
-
-		stubForIdempotencyReserved();
-		given(memberRepository.findById(1L)).willReturn(Optional.of(member));
-		given(productRepository.findAllById(List.of(10L))).willReturn(List.of());
-
-		// when & then
-		assertThatThrownBy(() -> orderCreateService.createOrder(command))
-			.isInstanceOf(ProductException.class)
-			.satisfies(exception -> {
-				ProductException productException = (ProductException) exception;
-				assertThat(productException.getErrorCode()).isEqualTo(ProductErrorCode.PRODUCT_NOT_FOUND);
-			});
-	}
-
-	@DisplayName("재고 차감이 실패하면 주문 생성에 실패한다")
-	@Test
-	void createOrder_whenStockDecreaseFails_throwException() {
-		// given
-		Member member = createMember(1L);
-		Product product = createProduct(10L, "product-1", 1000);
-
-		OrderCreateCommand command = OrderCreateCommand.builder()
-			.memberId(1L)
-			.idempotencyKey(idempotencyKey)
-			.items(List.of(OrderCreateItem.builder().productId(10L).quantity(1).build()))
-			.build();
-
-		stubForIdempotencyReserved();
-		given(memberRepository.findById(1L)).willReturn(Optional.of(member));
-		given(productRepository.findAllById(List.of(10L))).willReturn(List.of(product));
 		willThrow(new StockException(StockErrorCode.STOCK_NOT_FOUND))
-			.given(stockInventoryService)
-			.decrease(10L, 1);
+			.given(orderCreateProcessor)
+			.execute(eq(command), any());
 
 		// when & then
 		assertThatThrownBy(() -> orderCreateService.createOrder(command))
-			.isInstanceOf(StockException.class)
-			.satisfies(exception -> {
-				StockException stockException = (StockException) exception;
-				assertThat(stockException.getErrorCode()).isEqualTo(StockErrorCode.STOCK_NOT_FOUND);
-			});
+			.isInstanceOf(StockException.class);
+
+		then(orderIdempotencyStore).should().clear(1L, idempotencyKey);
 	}
 
 	private Member createMember(Long memberId) {
@@ -516,6 +436,19 @@ class OrderApplicationServiceTest {
 			.build();
 	}
 
+	private void stubForIdempotencyReserved() {
+		given(orderIdempotencyStore.reserve(anyLong(), anyString(), any()))
+			.willReturn(true);
+	}
+
+	private OrderCreateResult stubProcessorSuccess(OrderCreateCommand command) {
+		Order order = Order.create(createMember(1L));
+		ReflectionTestUtils.setField(order, "id", 100L);
+		OrderCreateResult result = OrderCreateResult.from(order);
+		given(orderCreateProcessor.execute(eq(command), any())).willReturn(result);
+		return result;
+	}
+
 	private void stubForSuccess(Member member, Product product1, Product product2) {
 		given(memberRepository.findById(1L)).willReturn(Optional.of(member));
 		given(productRepository.findById(10L)).willReturn(Optional.of(product1));
@@ -525,22 +458,6 @@ class OrderApplicationServiceTest {
 			ReflectionTestUtils.setField(saved, "id", 100L);
 			return saved;
 		});
-	}
-
-	private void stubForOrderCreateSuccess(Member member, Product product1, Product product2) {
-		given(memberRepository.findById(1L)).willReturn(Optional.of(member));
-		given(productRepository.findAllById(List.of(product1.getId(), product2.getId())))
-			.willReturn(List.of(product1, product2));
-		given(orderRepository.save(any(Order.class))).willAnswer(invocation -> {
-			Order saved = invocation.getArgument(0);
-			ReflectionTestUtils.setField(saved, "id", 100L);
-			return saved;
-		});
-	}
-
-	private void stubForIdempotencyReserved() {
-		given(orderIdempotencyStore.reserve(anyLong(), anyString(), any()))
-			.willReturn(true);
 	}
 
 	private void stubForSuccessBatch(Member member, Product product1, Product product2) {
