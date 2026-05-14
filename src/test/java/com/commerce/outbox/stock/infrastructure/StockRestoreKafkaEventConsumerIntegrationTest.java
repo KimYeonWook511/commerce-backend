@@ -52,7 +52,7 @@ import com.commerce.outbox.domain.OutboxEventType;
 import com.commerce.outbox.infrastructure.OutboxRelayMessage;
 import com.commerce.outbox.stock.application.StockRestoreOutboxConsumeService;
 import com.commerce.outbox.stock.application.payload.StockRestoreRequestedPayload;
-import com.commerce.test.support.TestcontainersSupport;
+import com.commerce.support.TestcontainersSupport;
 import com.fasterxml.jackson.core.JsonProcessingException;
 import com.fasterxml.jackson.databind.ObjectMapper;
 
