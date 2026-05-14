@@ -1,0 +1,9 @@
+{
+  "project": "commerce-backend",
+  "phase": "0-rdb-idempotency",
+  "steps": [
+    { "step": 0, "name": "rdb-idempotency-base", "status": "pending" },
+    { "step": 1, "name": "idempotency-logic-transition", "status": "pending" },
+    { "step": 2, "name": "docs-sync", "status": "pending" }
+  ]
+}
