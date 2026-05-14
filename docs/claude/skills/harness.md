@@ -51,7 +51,15 @@ flowchart TD
 
 ### 3. File Drafting
 
-사용자가 승인하면 feature 문서와 phase 구조를 작성한다. 작성 완료 후 반드시 멈추고 문서 경로를 보고한다.
+사용자가 승인하면 먼저 메인 repo 루트로 복귀한 뒤 feature 브랜치 worktree를 생성하고 그 안으로 이동한다.
+
+```bash
+cd "$(git rev-parse --git-common-dir)/.."
+git worktree add worktrees/feature-<feature-name> -b feature/<feature-name> develop
+cd worktrees/feature-<feature-name>
+```
+
+worktree 안에서 feature 문서와 phase 구조를 작성한다. 작성 완료 후 반드시 멈추고 문서 경로를 보고한다.
 
 ### 4. Execution Authorization
 

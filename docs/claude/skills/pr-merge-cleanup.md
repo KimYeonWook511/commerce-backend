@@ -5,6 +5,8 @@
 ## 실행 흐름
 
 ```
+cd "$(git rev-parse --git-common-dir)/.."  ← 메인 repo 루트로 복귀
+git checkout develop
 git pull origin develop
 git fetch -p
 → gone 브랜치 자동 감지 (git branch -vv | grep ': gone]')
