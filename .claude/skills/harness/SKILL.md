@@ -101,7 +101,14 @@ feature 문서와 `phases` 문서로 부족한 공통 맥락이 있을 때만 `C
 
 ### 4. File Drafting
 
-사용자가 실제 파일 생성을 승인하면 아래 파일 초안을 작성한다.
+사용자가 실제 파일 생성을 승인하면 먼저 feature 브랜치 worktree를 생성하고 그 안으로 이동한다.
+
+```bash
+git worktree add worktrees/feature-<feature-name> -b feature/<feature-name> develop
+cd worktrees/feature-<feature-name>
+```
+
+worktree로 이동한 뒤 해당 worktree 안에서 아래 파일 초안을 작성한다.
 
 - `docs/features/<feature-name>/prd.md`
 - `docs/features/<feature-name>/architecture.md`
@@ -130,7 +137,7 @@ File Drafting 완료 후 필수 중단:
 
 `execute.py`를 실행하기 전에 Plan Mode로 사용자 승인을 받는다.
 
-- `execute.py`는 repo 루트의 `worktrees/` 아래에 격리 worktree를 생성한 뒤 feature 브랜치 checkout/create, add, commit을 수행한다.
+- `execute.py`는 feature 브랜치 worktree 안에서 실행하며, add, commit을 수행한다.
 - 이 단계에 들어가기 전 checklist의 `Explore`, `Discuss`, `Step Design`, `File Drafting`은 모두 `completed`여야 한다.
 - 아래 순서로만 진행한다.
   1. Plan Mode로 구현 계획을 사용자에게 제시한다.
@@ -143,9 +150,10 @@ File Drafting 완료 후 필수 중단:
 
 ### 6. Execution
 
-`phases` 파일이 준비되면 skill 내부 실행기로 step을 순차 실행할 수 있다.
+`phases` 파일이 준비되면 feature 브랜치 worktree 안에서 실행기를 실행한다.
 
 ```bash
+# worktrees/feature-<feature-name>/ 안에서
 python3 .claude/skills/harness/scripts/execute.py docs/features/<feature-name>/phases/<phase-name>
 python3 .claude/skills/harness/scripts/execute.py docs/features/<feature-name>/phases/<phase-name> --push
 ```
