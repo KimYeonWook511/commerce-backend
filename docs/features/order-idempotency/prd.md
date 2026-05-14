@@ -33,10 +33,10 @@ Redis는 RDB 트랜잭션에 참여하지 않으므로 RDB 커밋과 Redis 저�
 
 1. **정상 요청**: `reserve()` 성공 → 주문 생성 → AFTER_COMMIT에서 Redis 캐싱
 2. **중복 요청 (Redis 캐시 hit)**: `reserve()` 실패 → COMPLETED 조회 → 기존 주문 반환
-3. **TTL 만료 후 재요청**: `reserve()` 실패 → COMPLETED 없음 → 바로 INSERT 시도 → unique 위반 → clear() → DB 재조회 → 기존 주문 반환
+3. **TTL 만료 후 재요청**: `reserve()` 실패 → COMPLETED 없음 → 바로 INSERT 시도 → unique 위반 → DB 재조회 → `complete()`로 Redis 갱신 → 기존 주문 반환
 4. **Redis 장애 시 첫 요청**: `reserve()` 예외 → fallback false → COMPLETED 없음 → INSERT 시도 → 성공
-5. **Redis 장애 시 재요청**: `reserve()` 예외 → fallback false → COMPLETED 없음 → INSERT 시도 → unique 위반 → clear() → DB 재조회 → 기존 주문 반환
-6. **동시 요청**: 두 요청이 동시에 INSERT 시도 → 하나는 unique 위반 → clear() → DB 재조회 → 기존 주문 반환
+5. **Redis 장애 시 재요청**: `reserve()` 예외 → fallback false → COMPLETED 없음 → INSERT 시도 → unique 위반 → DB 재조회 → `complete()` 시도 (Redis 장애 시 warn 후 무시) → 기존 주문 반환
+6. **동시 요청**: 두 요청이 동시에 INSERT 시도 → 하나는 unique 위반 → DB 재조회 → `complete()`로 Redis 갱신 → 기존 주문 반환
 
 ## 요구사항
 
