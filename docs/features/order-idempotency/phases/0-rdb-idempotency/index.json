@@ -1,9 +1,32 @@
 {
   "project": "commerce-backend",
   "phase": "0-rdb-idempotency",
+  "created_at": "2026-05-15T00:51:00+0900",
+  "completed_at": "2026-05-15T01:00:00+0900",
   "steps": [
-    { "step": 0, "name": "rdb-idempotency-base", "status": "pending" },
-    { "step": 1, "name": "idempotency-logic-transition", "status": "pending" },
-    { "step": 2, "name": "docs-sync", "status": "pending" }
+    {
+      "step": 0,
+      "name": "rdb-idempotency-base",
+      "status": "completed",
+      "started_at": "2026-05-15T00:51:00+0900",
+      "completed_at": "2026-05-15T00:53:00+0900",
+      "summary": "주문 테이블에 멱등성 키 컬럼 및 unique 제약을 추가한다"
+    },
+    {
+      "step": 1,
+      "name": "idempotency-logic-transition",
+      "status": "completed",
+      "started_at": "2026-05-15T00:53:00+0900",
+      "completed_at": "2026-05-15T00:58:00+0900",
+      "summary": "주문 멱등성 보장을 RDB unique 제약 기반으로 전환한다"
+    },
+    {
+      "step": 2,
+      "name": "docs-sync",
+      "status": "completed",
+      "started_at": "2026-05-15T00:58:00+0900",
+      "completed_at": "2026-05-15T01:00:00+0900",
+      "summary": "주문 멱등성 RDB 전환 내용을 문서에 반영한다"
+    }
   ]
 }
