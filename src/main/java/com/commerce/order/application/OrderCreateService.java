@@ -19,7 +19,9 @@ import com.commerce.order.exception.OrderErrorCode;
 import com.commerce.order.exception.OrderException;
 
 import lombok.RequiredArgsConstructor;
+import lombok.extern.slf4j.Slf4j;
 
+@Slf4j
 @Service
 @RequiredArgsConstructor
 @Transactional(readOnly = true)
@@ -62,10 +64,12 @@ public class OrderCreateService {
 		} catch (DataIntegrityViolationException ex) {
 			// unique 위반 — 동시 요청 or TTL 만료 후 중복: Application 계층에서 처리하고 Presentation으로 넘기지 않는다.
 			orderIdempotencyStore.clear(memberId, idempotencyKey);
-			return OrderCreateResult.from(
-				orderRepository.findByMemberIdAndIdempotencyKey(memberId, idempotencyKey)
-					.orElseThrow(() -> new OrderException(OrderErrorCode.ORDER_NOT_FOUND))
-			);
+			return orderRepository.findByMemberIdAndIdempotencyKey(memberId, idempotencyKey)
+				.map(OrderCreateResult::from)
+				.orElseGet(() -> {
+					log.error("멱등키 충돌이 아닌 unique 제약 위반 발생: {}", ex.getMessage());
+					throw new OrderException(OrderErrorCode.ORDER_NOT_FOUND);
+				});
 		} catch (RuntimeException ex) {
 			orderIdempotencyStore.clear(memberId, idempotencyKey);
 			throw ex;
