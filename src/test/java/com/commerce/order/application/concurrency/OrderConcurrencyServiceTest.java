@@ -33,7 +33,7 @@ import com.commerce.order.application.OrderCancelService;
 import com.commerce.order.application.OrderConcurrencyService;
 import com.commerce.order.application.OrderCreateService;
 import com.commerce.member.domain.Member;
-import com.commerce.order.domain.repository.OrderIdempotencyRepository;
+import com.commerce.order.application.port.OrderIdempotencyRepository;
 import com.commerce.order.application.command.OrderCreateItem;
 import com.commerce.order.application.command.OrderCreateCommand;
 import com.commerce.order.application.result.OrderCreateResult;

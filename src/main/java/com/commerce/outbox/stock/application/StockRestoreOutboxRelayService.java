@@ -8,13 +8,11 @@ import org.springframework.stereotype.Service;
 import org.springframework.transaction.annotation.Propagation;
 import org.springframework.transaction.annotation.Transactional;
 
-import com.commerce.outbox.domain.OutboxAggregateType;
 import com.commerce.outbox.domain.OutboxEventType;
 import com.commerce.outbox.domain.OutboxPublishTarget;
 import com.commerce.outbox.domain.repository.OutboxEventRepository;
-import com.commerce.outbox.infrastructure.OutboxRelayMessage;
+import com.commerce.outbox.stock.application.port.StockRestoreEventPublisher;
 import com.commerce.outbox.stock.application.result.OutboxPublishResult;
-import com.commerce.outbox.stock.infrastructure.StockRestoreKafkaEventProducer;
 
 import lombok.RequiredArgsConstructor;
 import lombok.extern.slf4j.Slf4j;
@@ -28,7 +26,7 @@ public class StockRestoreOutboxRelayService {
 	private static final OutboxEventType STOCK_RESTORE_EVENT_TYPE = OutboxEventType.STOCK_RESTORE_REQUESTED;
 
 	private final OutboxEventRepository outboxEventRepository;
-	private final StockRestoreKafkaEventProducer kafkaEventProducer;
+	private final StockRestoreEventPublisher eventPublisher;
 
 	@Value("${outbox.stock-restore.producer.batch-size:100}")
 	private int batchSize;
@@ -118,7 +116,7 @@ public class StockRestoreOutboxRelayService {
 
 	private PublishResult publishTarget(OutboxPublishTarget target, LocalDateTime now) {
 		try {
-			kafkaEventProducer.publish(toRelayMessage(target));
+			eventPublisher.publish(target);
 			if (!markSent(target)) {
 				return PublishResult.SKIPPED;
 			}
@@ -194,17 +192,6 @@ public class StockRestoreOutboxRelayService {
 
 	private boolean markSent(OutboxPublishTarget target) {
 		return outboxEventRepository.markSent(target.getId(), STOCK_RESTORE_EVENT_TYPE) > 0;
-	}
-
-	private OutboxRelayMessage toRelayMessage(OutboxPublishTarget target) {
-		return OutboxRelayMessage.builder()
-			.eventId(target.getEventId())
-			.eventType(target.getEventType())
-			.aggregateType(target.getAggregateType())
-			.aggregateId(target.getAggregateId())
-			.payload(target.getPayload())
-			.occurredAt(target.getCreatedAt())
-			.build();
 	}
 
 	private OutboxPublishResult toPublishResult(

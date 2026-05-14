@@ -6,7 +6,7 @@ import org.springframework.transaction.annotation.Transactional;
 import com.commerce.auth.application.command.AuthSignUpCommand;
 import com.commerce.auth.application.result.AuthSignUpResult;
 import com.commerce.auth.application.result.AuthTokenIssueResult;
-import com.commerce.auth.infrastructure.PasswordHasher;
+import com.commerce.auth.application.port.PasswordHasher;
 import com.commerce.member.application.MemberRegistrationService;
 import com.commerce.member.application.command.MemberRegistrationCommand;
 import com.commerce.member.domain.Member;

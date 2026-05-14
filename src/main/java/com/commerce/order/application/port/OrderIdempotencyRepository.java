@@ -1,4 +1,4 @@
-package com.commerce.order.domain.repository;
+package com.commerce.order.application.port;
 
 import java.time.Duration;
 import java.util.Optional;

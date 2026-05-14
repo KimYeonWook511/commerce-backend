@@ -5,8 +5,6 @@ import static org.mockito.ArgumentMatchers.any;
 import static org.mockito.BDDMockito.given;
 import static org.mockito.BDDMockito.then;
 
-import java.time.Duration;
-
 import org.junit.jupiter.api.DisplayName;
 import org.junit.jupiter.api.Test;
 import org.junit.jupiter.api.extension.ExtendWith;
@@ -16,24 +14,20 @@ import org.mockito.Mock;
 import org.mockito.junit.jupiter.MockitoExtension;
 import org.springframework.test.util.ReflectionTestUtils;
 
+import com.commerce.auth.application.port.RefreshTokenStore;
+import com.commerce.auth.application.port.TokenIssuer;
+import com.commerce.auth.application.port.vo.TokenClaims;
 import com.commerce.auth.application.result.AuthTokenIssueResult;
-import com.commerce.auth.infrastructure.RefreshTokenStore;
-import com.commerce.auth.infrastructure.jwt.JwtProperties;
-import com.commerce.auth.infrastructure.jwt.JwtClaims;
-import com.commerce.auth.infrastructure.jwt.JwtProvider;
 import com.commerce.member.domain.Member;
 
 @ExtendWith(MockitoExtension.class)
 class AuthTokenIssueServiceTest {
 
 	@Mock
-	private JwtProvider jwtProvider;
+	private TokenIssuer tokenIssuer;
 
 	@Mock
 	private RefreshTokenStore refreshTokenStore;
-
-	@Mock
-	private JwtProperties jwtProperties;
 
 	@InjectMocks
 	private AuthTokenIssueService authTokenIssueService;
@@ -45,9 +39,8 @@ class AuthTokenIssueServiceTest {
 		Member member = Member.createUser("test@example.com", "hashed-password", "user1");
 		ReflectionTestUtils.setField(member, "id", 1L);
 
-		given(jwtProvider.createAccessToken(any(JwtClaims.class))).willReturn("access-token");
-		given(jwtProvider.createRefreshToken(any(JwtClaims.class))).willReturn("refresh-token");
-		given(jwtProperties.getRefreshExpiration()).willReturn(604800000L);
+		given(tokenIssuer.createAccessToken(any(TokenClaims.class))).willReturn("access-token");
+		given(tokenIssuer.createRefreshToken(any(TokenClaims.class))).willReturn("refresh-token");
 
 		// when
 		AuthTokenIssueResult result = authTokenIssueService.issue(member);
@@ -55,7 +48,7 @@ class AuthTokenIssueServiceTest {
 		// then
 		assertThat(result.getAccessToken()).isEqualTo("access-token");
 		assertThat(result.getRefreshToken()).isEqualTo("refresh-token");
-		then(refreshTokenStore).should().save(1L, "refresh-token", Duration.ofMillis(604800000L));
+		then(refreshTokenStore).should().save(1L, "refresh-token");
 	}
 
 	@DisplayName("토큰 발급 시 회원 id와 role로 JWT claims를 생성한다")
@@ -64,20 +57,19 @@ class AuthTokenIssueServiceTest {
 		// given
 		Member member = Member.createUser("test@example.com", "hashed-password", "user1");
 		ReflectionTestUtils.setField(member, "id", 1L);
-		given(jwtProperties.getRefreshExpiration()).willReturn(604800000L);
 
-		ArgumentCaptor<JwtClaims> accessClaimsCaptor = ArgumentCaptor.forClass(JwtClaims.class);
-		ArgumentCaptor<JwtClaims> refreshClaimsCaptor = ArgumentCaptor.forClass(JwtClaims.class);
+		ArgumentCaptor<TokenClaims> accessClaimsCaptor = ArgumentCaptor.forClass(TokenClaims.class);
+		ArgumentCaptor<TokenClaims> refreshClaimsCaptor = ArgumentCaptor.forClass(TokenClaims.class);
 
 		// when
 		authTokenIssueService.issue(member);
 
 		// then
-		then(jwtProvider).should().createAccessToken(accessClaimsCaptor.capture());
-		then(jwtProvider).should().createRefreshToken(refreshClaimsCaptor.capture());
-		assertThat(accessClaimsCaptor.getValue().getMemberId()).isEqualTo(1L);
-		assertThat(accessClaimsCaptor.getValue().getMemberRole()).isEqualTo(member.getRole());
-		assertThat(refreshClaimsCaptor.getValue().getMemberId()).isEqualTo(1L);
-		assertThat(refreshClaimsCaptor.getValue().getMemberRole()).isEqualTo(member.getRole());
+		then(tokenIssuer).should().createAccessToken(accessClaimsCaptor.capture());
+		then(tokenIssuer).should().createRefreshToken(refreshClaimsCaptor.capture());
+		assertThat(accessClaimsCaptor.getValue().memberId()).isEqualTo(1L);
+		assertThat(accessClaimsCaptor.getValue().memberRole()).isEqualTo(member.getRole());
+		assertThat(refreshClaimsCaptor.getValue().memberId()).isEqualTo(1L);
+		assertThat(refreshClaimsCaptor.getValue().memberRole()).isEqualTo(member.getRole());
 	}
 }

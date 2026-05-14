@@ -3,17 +3,17 @@ package com.commerce.auth.application;
 import org.springframework.stereotype.Service;
 import org.springframework.transaction.annotation.Transactional;
 
-import com.commerce.auth.exception.AuthErrorCode;
-import com.commerce.auth.exception.AuthException;
-import com.commerce.auth.infrastructure.jwt.JwtValidator;
-import com.commerce.auth.infrastructure.RefreshTokenStore;
 import com.commerce.auth.application.command.AuthTokenReissueCommand;
+import com.commerce.auth.application.port.RefreshTokenStore;
+import com.commerce.auth.application.port.TokenValidator;
+import com.commerce.auth.application.port.vo.ParsedTokenClaims;
 import com.commerce.auth.application.result.AuthTokenIssueResult;
 import com.commerce.auth.application.result.AuthTokenReissueResult;
+import com.commerce.auth.exception.AuthErrorCode;
+import com.commerce.auth.exception.AuthException;
 import com.commerce.member.application.MemberQueryService;
 import com.commerce.member.domain.Member;
 
-import io.jsonwebtoken.Claims;
 import lombok.RequiredArgsConstructor;
 
 @Service
@@ -23,14 +23,14 @@ public class AuthTokenReissueService {
 
 	private final MemberQueryService memberQueryService;
 	private final AuthTokenIssueService authTokenIssueService;
-	private final JwtValidator jwtValidator;
+	private final TokenValidator tokenValidator;
 	private final RefreshTokenStore refreshTokenStore;
 
 	public AuthTokenReissueResult reissue(AuthTokenReissueCommand command) {
 		String refreshToken = command.getRefreshToken();
-		Claims claims = jwtValidator.validateRefreshToken(refreshToken);
+		ParsedTokenClaims claims = tokenValidator.validateRefreshToken(refreshToken);
 
-		Long memberId = parseMemberId(claims.getSubject());
+		Long memberId = parseMemberId(claims.subject());
 
 		validateStoredRefreshToken(memberId, refreshToken);
 

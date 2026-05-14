@@ -25,7 +25,7 @@ import com.commerce.order.domain.Order;
 import com.commerce.order.domain.repository.OrderRepository;
 import com.commerce.order.exception.OrderErrorCode;
 import com.commerce.order.exception.OrderException;
-import com.commerce.order.domain.repository.OrderIdempotencyRepository;
+import com.commerce.order.application.port.OrderIdempotencyRepository;
 import com.commerce.product.domain.Product;
 import com.commerce.product.exception.ProductErrorCode;
 import com.commerce.product.exception.ProductException;

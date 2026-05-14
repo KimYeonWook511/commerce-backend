@@ -6,7 +6,7 @@ import java.util.Optional;
 import org.springframework.data.redis.core.StringRedisTemplate;
 import org.springframework.stereotype.Component;
 
-import com.commerce.order.domain.repository.OrderIdempotencyRepository;
+import com.commerce.order.application.port.OrderIdempotencyRepository;
 
 import lombok.RequiredArgsConstructor;
 
