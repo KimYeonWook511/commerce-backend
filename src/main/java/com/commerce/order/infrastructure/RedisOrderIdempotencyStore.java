@@ -54,13 +54,21 @@ public class RedisOrderIdempotencyStore implements OrderIdempotencyStore {
 
 	@Override
 	public void clear(Long memberId, String idempotencyKey) {
-		redisTemplate.delete(buildKey(memberId, idempotencyKey));
+		try {
+			redisTemplate.delete(buildKey(memberId, idempotencyKey));
+		} catch (Exception e) {
+			log.warn("Redis clear 실패 (무시): {}", e.getMessage());
+		}
 	}
 
 	// RDB 커밋 이후에만 Redis에 캐싱한다. Redis 장애 시 RDB 롤백을 방지하기 위함이다 (ADR-005).
 	@TransactionalEventListener(phase = TransactionPhase.AFTER_COMMIT)
 	public void handle(OrderIdempotencyCacheEvent event) {
-		complete(event.getMemberId(), event.getIdempotencyKey(), event.getOrderId(), event.getTtl());
+		try {
+			complete(event.getMemberId(), event.getIdempotencyKey(), event.getOrderId(), event.getTtl());
+		} catch (Exception e) {
+			log.warn("Redis AFTER_COMMIT 캐싱 실패 (무시): {}", e.getMessage());
+		}
 	}
 
 	private String buildKey(Long memberId, String idempotencyKey) {
