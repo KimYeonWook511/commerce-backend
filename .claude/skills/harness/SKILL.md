@@ -104,6 +104,7 @@ feature 문서와 `phases` 문서로 부족한 공통 맥락이 있을 때만 `C
 사용자가 실제 파일 생성을 승인하면 먼저 feature 브랜치 worktree를 생성하고 그 안으로 이동한다.
 
 ```bash
+cd "$(git rev-parse --git-common-dir)/.."
 git worktree add worktrees/feature-<feature-name> -b feature/<feature-name> develop
 cd worktrees/feature-<feature-name>
 ```
