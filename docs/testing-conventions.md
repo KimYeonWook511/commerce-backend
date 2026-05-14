@@ -21,20 +21,20 @@ src/test/java/
     │   └── CleanupOrder.java                             ← FK 안전 삭제 순서 (enum)
     │
     └── order/
-    ├── domain/
-    │   └── OrderTest.java                                ← 단위 테스트
-    ├── application/
-    │   ├── CreateOrderServiceTest.java                    ← 단위 테스트
-    │   └── CreateOrderServiceIntegrationTest.java         ← 통합 테스트
-    ├── presentation/
-    │   └── OrderControllerTest.java                      ← 슬라이스 테스트
-    └── infrastructure/
-        ├── persistence/
-        │   ├── support/
-        │   │   └── OrderPersistenceTestSupport.java       ← 도메인별 삭제 + 테스트 데이터 헬퍼
-        │   └── OrderRepositoryJpaAdapterTest.java         ← 슬라이스 테스트 or 통합 테스트
-        └── cache/
-            └── RedisIdempotencyStoreTest.java             ← 통합 테스트
+        ├── domain/
+        │   └── OrderTest.java                            ← 단위 테스트
+        ├── application/
+        │   ├── CreateOrderServiceTest.java               ← 단위 테스트
+        │   └── CreateOrderServiceIntegrationTest.java    ← 통합 테스트
+        ├── presentation/
+        │   └── OrderControllerTest.java                  ← 슬라이스 테스트
+        └── infrastructure/
+            ├── persistence/
+            │   ├── support/
+            │   │   └── OrderPersistenceTestSupport.java  ← 도메인별 삭제 + 테스트 데이터 헬퍼
+            │   └── OrderRepositoryJpaAdapterTest.java    ← 슬라이스 테스트 or 통합 테스트
+            └── cache/
+                └── RedisIdempotencyStoreTest.java        ← 통합 테스트
 ```
 
 ---
