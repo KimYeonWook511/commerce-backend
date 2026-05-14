@@ -26,20 +26,20 @@ import org.springframework.test.context.TestPropertySource;
 import org.springframework.test.context.bean.override.mockito.MockitoSpyBean;
 
 import com.commerce.member.domain.Member;
-import com.commerce.member.integration.support.MemberPersistenceTestSupport;
+import com.commerce.member.infrastructure.persistence.support.MemberPersistenceTestSupport;
 import com.commerce.order.application.OrderCancelService;
 import com.commerce.order.application.OrderConcurrencyService;
 import com.commerce.order.application.OrderCreateService;
 import com.commerce.order.application.command.OrderCreateCommand;
 import com.commerce.order.application.command.OrderCreateItem;
-import com.commerce.order.integration.support.OrderPersistenceTestSupport;
+import com.commerce.order.infrastructure.persistence.support.OrderPersistenceTestSupport;
 import com.commerce.product.domain.Product;
 import com.commerce.product.domain.ProductStatus;
-import com.commerce.product.integration.support.ProductPersistenceTestSupport;
+import com.commerce.product.infrastructure.persistence.support.ProductPersistenceTestSupport;
 import com.commerce.stock.application.StockInventoryService;
 import com.commerce.stock.domain.Stock;
-import com.commerce.stock.integration.support.StockPersistenceTestSupport;
-import com.commerce.test.support.PersistenceCleanupTestSupport;
+import com.commerce.stock.infrastructure.persistence.support.StockPersistenceTestSupport;
+import support.PersistenceCleanupTestSupport;
 
 @Tag("concurrency")
 @SpringBootTest

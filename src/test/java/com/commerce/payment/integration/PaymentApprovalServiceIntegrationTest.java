@@ -19,10 +19,10 @@ import org.springframework.test.context.ActiveProfiles;
 import org.springframework.test.context.bean.override.mockito.MockitoSpyBean;
 
 import com.commerce.member.domain.Member;
-import com.commerce.member.integration.support.MemberPersistenceTestSupport;
+import com.commerce.member.infrastructure.persistence.support.MemberPersistenceTestSupport;
 import com.commerce.order.domain.Order;
 import com.commerce.order.domain.OrderStatus;
-import com.commerce.order.integration.support.OrderPersistenceTestSupport;
+import com.commerce.order.infrastructure.persistence.support.OrderPersistenceTestSupport;
 import com.commerce.payment.application.PaymentApprovalService;
 import com.commerce.payment.domain.PaymentAttempt;
 import com.commerce.payment.domain.PaymentAttemptStatus;
@@ -31,11 +31,11 @@ import com.commerce.payment.domain.PaymentProvider;
 import com.commerce.payment.domain.repository.PaymentRepository;
 import com.commerce.payment.exception.PaymentErrorCode;
 import com.commerce.payment.exception.PaymentException;
-import com.commerce.payment.integration.support.PaymentPersistenceTestSupport;
+import com.commerce.payment.infrastructure.persistence.support.PaymentPersistenceTestSupport;
 import com.commerce.product.domain.Product;
 import com.commerce.product.domain.ProductStatus;
-import com.commerce.product.integration.support.ProductPersistenceTestSupport;
-import com.commerce.test.support.PersistenceCleanupTestSupport;
+import com.commerce.product.infrastructure.persistence.support.ProductPersistenceTestSupport;
+import support.PersistenceCleanupTestSupport;
 
 @SpringBootTest
 @ActiveProfiles("test")

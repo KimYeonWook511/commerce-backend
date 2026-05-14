@@ -44,13 +44,13 @@ import com.commerce.payment.naverpay.infrastructure.result.NaverPayCancelResult;
 import com.commerce.payment.naverpay.infrastructure.result.NaverPayHistoryResult;
 import com.commerce.payment.application.PaymentAttemptService;
 import com.commerce.payment.application.PaymentApprovalService;
-import com.commerce.payment.integration.support.PaymentPersistenceTestSupport;
-import com.commerce.member.integration.support.MemberPersistenceTestSupport;
-import com.commerce.order.integration.support.OrderPersistenceTestSupport;
+import com.commerce.payment.infrastructure.persistence.support.PaymentPersistenceTestSupport;
+import com.commerce.member.infrastructure.persistence.support.MemberPersistenceTestSupport;
+import com.commerce.order.infrastructure.persistence.support.OrderPersistenceTestSupport;
 import com.commerce.product.domain.Product;
 import com.commerce.product.domain.ProductStatus;
-import com.commerce.product.integration.support.ProductPersistenceTestSupport;
-import com.commerce.test.support.PersistenceCleanupTestSupport;
+import com.commerce.product.infrastructure.persistence.support.ProductPersistenceTestSupport;
+import support.PersistenceCleanupTestSupport;
 
 @SpringBootTest
 @ActiveProfiles("test")

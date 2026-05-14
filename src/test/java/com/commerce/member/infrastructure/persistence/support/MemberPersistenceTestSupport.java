@@ -1,13 +1,13 @@
-package com.commerce.member.integration.support;
+package com.commerce.member.infrastructure.persistence.support;
 
 import org.springframework.boot.test.context.TestComponent;
 
 import com.commerce.member.domain.Member;
 import com.commerce.member.infrastructure.JpaMemberRepository;
-import com.commerce.test.support.CleanupOrder;
-import com.commerce.test.support.PersistenceTestSupport;
 
 import lombok.RequiredArgsConstructor;
+import support.CleanupOrder;
+import support.PersistenceTestSupport;
 
 @TestComponent
 @RequiredArgsConstructor

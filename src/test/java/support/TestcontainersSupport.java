@@ -1,4 +1,4 @@
-package com.commerce.test.support;
+package support;
 
 import java.util.Arrays;
 import java.util.List;

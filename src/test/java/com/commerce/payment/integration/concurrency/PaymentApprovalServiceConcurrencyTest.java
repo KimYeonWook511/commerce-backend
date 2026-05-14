@@ -31,14 +31,14 @@ import com.commerce.payment.domain.PaymentProvider;
 import com.commerce.payment.exception.PaymentErrorCode;
 import com.commerce.payment.exception.PaymentException;
 import com.commerce.payment.application.PaymentApprovalService;
-import com.commerce.payment.integration.support.PaymentPersistenceTestSupport;
-import com.commerce.member.integration.support.MemberPersistenceTestSupport;
-import com.commerce.order.integration.support.OrderPersistenceTestSupport;
+import com.commerce.payment.infrastructure.persistence.support.PaymentPersistenceTestSupport;
+import com.commerce.member.infrastructure.persistence.support.MemberPersistenceTestSupport;
+import com.commerce.order.infrastructure.persistence.support.OrderPersistenceTestSupport;
 import com.commerce.product.domain.Product;
 import com.commerce.product.domain.ProductStatus;
-import com.commerce.product.integration.support.ProductPersistenceTestSupport;
-import com.commerce.test.support.TestcontainersSupport;
-import com.commerce.test.support.PersistenceCleanupTestSupport;
+import com.commerce.product.infrastructure.persistence.support.ProductPersistenceTestSupport;
+import support.TestcontainersSupport;
+import support.PersistenceCleanupTestSupport;
 
 @Tag("concurrency")
 @Tag("docker")

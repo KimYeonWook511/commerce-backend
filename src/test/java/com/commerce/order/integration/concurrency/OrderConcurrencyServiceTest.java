@@ -47,11 +47,11 @@ import org.springframework.dao.OptimisticLockingFailureException;
 
 import com.commerce.order.exception.OrderErrorCode;
 import com.commerce.order.exception.OrderException;
-import com.commerce.member.integration.support.MemberPersistenceTestSupport;
-import com.commerce.order.integration.support.OrderPersistenceTestSupport;
-import com.commerce.product.integration.support.ProductPersistenceTestSupport;
-import com.commerce.stock.integration.support.StockPersistenceTestSupport;
-import com.commerce.test.support.PersistenceCleanupTestSupport;
+import com.commerce.member.infrastructure.persistence.support.MemberPersistenceTestSupport;
+import com.commerce.order.infrastructure.persistence.support.OrderPersistenceTestSupport;
+import com.commerce.product.infrastructure.persistence.support.ProductPersistenceTestSupport;
+import com.commerce.stock.infrastructure.persistence.support.StockPersistenceTestSupport;
+import support.PersistenceCleanupTestSupport;
 
 @Tag("concurrency")
 @SpringBootTest

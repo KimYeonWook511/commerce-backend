@@ -19,13 +19,13 @@ import org.springframework.test.context.ActiveProfiles;
 
 import com.commerce.product.domain.Product;
 import com.commerce.product.domain.ProductStatus;
-import com.commerce.product.integration.support.ProductPersistenceTestSupport;
+import com.commerce.product.infrastructure.persistence.support.ProductPersistenceTestSupport;
 import com.commerce.stock.application.StockConcurrencyService;
 import com.commerce.stock.application.StockInventoryService;
 import com.commerce.stock.application.command.StockDecreaseBatchCommand;
 import com.commerce.stock.domain.Stock;
-import com.commerce.stock.integration.support.StockPersistenceTestSupport;
-import com.commerce.test.support.PersistenceCleanupTestSupport;
+import com.commerce.stock.infrastructure.persistence.support.StockPersistenceTestSupport;
+import support.PersistenceCleanupTestSupport;
 
 @Tag("concurrency")
 @SpringBootTest

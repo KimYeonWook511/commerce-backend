@@ -1,4 +1,4 @@
-package com.commerce.test.support;
+package support;
 
 public interface PersistenceTestSupport {
 

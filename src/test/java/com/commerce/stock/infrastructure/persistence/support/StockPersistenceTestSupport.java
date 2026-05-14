@@ -1,4 +1,4 @@
-package com.commerce.stock.integration.support;
+package com.commerce.stock.infrastructure.persistence.support;
 
 import java.util.Optional;
 
@@ -6,10 +6,10 @@ import org.springframework.boot.test.context.TestComponent;
 
 import com.commerce.stock.domain.Stock;
 import com.commerce.stock.infrastructure.JpaStockRepository;
-import com.commerce.test.support.CleanupOrder;
-import com.commerce.test.support.PersistenceTestSupport;
 
 import lombok.RequiredArgsConstructor;
+import support.CleanupOrder;
+import support.PersistenceTestSupport;
 
 @TestComponent
 @RequiredArgsConstructor

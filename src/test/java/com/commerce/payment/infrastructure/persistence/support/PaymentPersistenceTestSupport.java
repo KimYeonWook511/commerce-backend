@@ -1,4 +1,4 @@
-package com.commerce.payment.integration.support;
+package com.commerce.payment.infrastructure.persistence.support;
 
 import java.util.Optional;
 
@@ -10,10 +10,10 @@ import com.commerce.payment.domain.PaymentAttemptType;
 import com.commerce.payment.domain.PaymentProvider;
 import com.commerce.payment.infrastructure.JpaPaymentAttemptRepository;
 import com.commerce.payment.infrastructure.JpaPaymentRepository;
-import com.commerce.test.support.CleanupOrder;
-import com.commerce.test.support.PersistenceTestSupport;
 
 import lombok.RequiredArgsConstructor;
+import support.CleanupOrder;
+import support.PersistenceTestSupport;
 
 @TestComponent
 @RequiredArgsConstructor

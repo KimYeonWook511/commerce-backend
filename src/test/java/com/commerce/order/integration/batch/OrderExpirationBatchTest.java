@@ -40,10 +40,10 @@ import com.commerce.outbox.application.OutboxService;
 import com.commerce.outbox.stock.application.command.StockRestoreOutboxCreateCommand;
 import com.commerce.product.domain.Product;
 import com.commerce.product.domain.ProductStatus;
-import com.commerce.member.integration.support.MemberPersistenceTestSupport;
-import com.commerce.order.integration.support.OrderPersistenceTestSupport;
-import com.commerce.product.integration.support.ProductPersistenceTestSupport;
-import com.commerce.test.support.PersistenceCleanupTestSupport;
+import com.commerce.member.infrastructure.persistence.support.MemberPersistenceTestSupport;
+import com.commerce.order.infrastructure.persistence.support.OrderPersistenceTestSupport;
+import com.commerce.product.infrastructure.persistence.support.ProductPersistenceTestSupport;
+import support.PersistenceCleanupTestSupport;
 
 @Tag("batch")
 @SpringBatchTest

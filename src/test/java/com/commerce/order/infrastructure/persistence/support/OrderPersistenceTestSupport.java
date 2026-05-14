@@ -1,4 +1,4 @@
-package com.commerce.order.integration.support;
+package com.commerce.order.infrastructure.persistence.support;
 
 import java.util.List;
 import java.util.Optional;
@@ -9,10 +9,10 @@ import com.commerce.order.domain.Order;
 import com.commerce.order.domain.OrderStatus;
 import com.commerce.order.infrastructure.JpaOrderItemRepository;
 import com.commerce.order.infrastructure.JpaOrderRepository;
-import com.commerce.test.support.CleanupOrder;
-import com.commerce.test.support.PersistenceTestSupport;
 
 import lombok.RequiredArgsConstructor;
+import support.CleanupOrder;
+import support.PersistenceTestSupport;
 
 @TestComponent
 @RequiredArgsConstructor
