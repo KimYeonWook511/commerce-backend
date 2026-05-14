@@ -37,9 +37,10 @@ RDB rollback 시 이벤트가 발행되지 않으므로 Redis에 COMPLETED가 �
 
 **Redis 장애 fallback**
 
-`RedisOrderIdempotencyStore.reserve()`와 `getCompletedOrderId()`에서 Redis 예외를 catch하여
-각각 `false`와 `Optional.empty()`를 반환한다.
-`OrderCreateService`는 Redis 예외를 알 필요 없이 자연스럽게 INSERT 시도 경로로 진입한다.
+`RedisOrderIdempotencyStore`의 모든 메서드에서 `DataAccessException`을 catch하여 Infrastructure 예외가 Application 계층으로 전파되지 않도록 한다.
+- `reserve()` → `false` 반환: 주문 생성 경로로 자연스럽게 진입
+- `getCompletedOrderId()` → `Optional.empty()` 반환: 마찬가지로 주문 생성 경로 진입
+- `complete()`, `clear()`, `handle()` → warn 로그 후 무시: 주문 반환 자체에 영향 없음
 
 ## 데이터 흐름
 
@@ -53,16 +54,19 @@ createOrder()
        ├─ getCompletedOrderId() → hit  → DB 조회 → 기존 주문 반환
        └─ getCompletedOrderId() → miss → OrderCreateProcessor.execute()
                                             └─ DataIntegrityViolationException
-                                                 → clear() → DB 재조회 → 기존 주문 반환
+                                                 → DB 재조회
+                                                      ├─ 주문 있음 → complete()로 Redis 갱신 → 기존 주문 반환
+                                                      └─ 주문 없음 → log.error → ORDER_NOT_FOUND
 ```
 
 ## 예외 및 실패 처리
 
 | 예외 | 발생 위치 | 처리 방식 |
 |------|-----------|-----------|
-| `DataIntegrityViolationException` | `OrderCreateProcessor.execute()` | `OrderCreateService`에서 catch → `clear()` → DB 재조회 → 기존 주문 반환 |
-| `RedisException` (reserve) | `RedisOrderIdempotencyStore.reserve()` | `false` 반환 (log.warn) |
-| `RedisException` (getCompletedOrderId) | `RedisOrderIdempotencyStore.getCompletedOrderId()` | `Optional.empty()` 반환 (log.warn) |
+| `DataIntegrityViolationException` | `OrderCreateProcessor.execute()` | `OrderCreateService`에서 catch → DB 재조회 → 주문 있으면 `complete()` 후 반환, 없으면 `log.error` + `ORDER_NOT_FOUND` |
+| `DataAccessException` (reserve) | `RedisOrderIdempotencyStore.reserve()` | `false` 반환 (log.warn) |
+| `DataAccessException` (getCompletedOrderId) | `RedisOrderIdempotencyStore.getCompletedOrderId()` | `Optional.empty()` 반환 (log.warn) |
+| `DataAccessException` (complete/clear/handle) | `RedisOrderIdempotencyStore` | warn 로그 후 무시, 주문 반환에 영향 없음 |
 
 `DataIntegrityViolationException`은 CLAUDE.md 규칙에 따라 Application 계층에서 처리하고 Presentation으로 넘기지 않는다.
 

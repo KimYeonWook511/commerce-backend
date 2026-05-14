@@ -28,6 +28,7 @@
 - TTL 만료 후 재요청 시에도 중복 주문 생성 없음
 - RDB rollback 시 Redis에 COMPLETED가 남는 불일치 해소
 - `ORDER_IDEMPOTENCY_IN_PROGRESS` 예외 제거 (더 이상 발생 경로 없음)
+- `DataIntegrityViolationException` 발생 후 기존 주문 확인 시 `complete()`로 Redis 갱신 → 이후 재요청은 DB 조회 없이 Redis hit 처리
 - trade-off: `DataIntegrityViolationException` 발생 시 재고 차감 → rollback이 드물게 발생할 수 있음 (정확성에는 문제 없음)
 
 ## ADR-002: 멱등성 처리를 위해 OrderCreateProcessor를 별도 Bean으로 분리한다
