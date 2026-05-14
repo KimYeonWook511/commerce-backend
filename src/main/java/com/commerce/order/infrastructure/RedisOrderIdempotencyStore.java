@@ -3,6 +3,7 @@ package com.commerce.order.infrastructure;
 import java.time.Duration;
 import java.util.Optional;
 
+import org.springframework.dao.DataAccessException;
 import org.springframework.data.redis.core.StringRedisTemplate;
 import org.springframework.stereotype.Component;
 import org.springframework.transaction.event.TransactionPhase;
@@ -29,7 +30,7 @@ public class RedisOrderIdempotencyStore implements OrderIdempotencyStore {
 			return Boolean.TRUE.equals(
 				redisTemplate.opsForValue().setIfAbsent(buildKey(memberId, idempotencyKey), value, ttl)
 			);
-		} catch (Exception e) {
+		} catch (DataAccessException e) {
 			log.warn("Redis reserve 실패, DB fallback으로 전환: {}", e.getMessage());
 			return false;
 		}
@@ -40,7 +41,7 @@ public class RedisOrderIdempotencyStore implements OrderIdempotencyStore {
 		try {
 			String value = redisTemplate.opsForValue().get(buildKey(memberId, idempotencyKey));
 			return OrderIdempotencyStatus.parseCompletedOrderId(value);
-		} catch (Exception e) {
+		} catch (DataAccessException e) {
 			log.warn("Redis 조회 실패, DB fallback으로 전환: {}", e.getMessage());
 			return Optional.empty();
 		}
@@ -56,7 +57,7 @@ public class RedisOrderIdempotencyStore implements OrderIdempotencyStore {
 	public void clear(Long memberId, String idempotencyKey) {
 		try {
 			redisTemplate.delete(buildKey(memberId, idempotencyKey));
-		} catch (Exception e) {
+		} catch (DataAccessException e) {
 			log.warn("Redis clear 실패 (무시): {}", e.getMessage());
 		}
 	}
@@ -66,7 +67,7 @@ public class RedisOrderIdempotencyStore implements OrderIdempotencyStore {
 	public void handle(OrderIdempotencyCacheEvent event) {
 		try {
 			complete(event.getMemberId(), event.getIdempotencyKey(), event.getOrderId(), event.getTtl());
-		} catch (Exception e) {
+		} catch (DataAccessException e) {
 			log.warn("Redis AFTER_COMMIT 캐싱 실패 (무시): {}", e.getMessage());
 		}
 	}
