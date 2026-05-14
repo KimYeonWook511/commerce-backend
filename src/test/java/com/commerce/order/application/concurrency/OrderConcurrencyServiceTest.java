@@ -33,7 +33,7 @@ import com.commerce.order.application.OrderCancelService;
 import com.commerce.order.application.OrderConcurrencyService;
 import com.commerce.order.application.OrderCreateService;
 import com.commerce.member.domain.Member;
-import com.commerce.order.application.port.OrderIdempotencyRepository;
+import com.commerce.order.application.port.OrderIdempotencyStore;
 import com.commerce.order.application.command.OrderCreateItem;
 import com.commerce.order.application.command.OrderCreateCommand;
 import com.commerce.order.application.result.OrderCreateResult;
@@ -89,7 +89,7 @@ class OrderConcurrencyServiceTest {
 	private OrderPersistenceTestSupport orderPersistence;
 
 	@MockitoBean
-	private OrderIdempotencyRepository orderIdempotencyRepository;
+	private OrderIdempotencyStore orderIdempotencyStore;
 
 	@AfterEach
 	void tearDown() {
@@ -100,9 +100,9 @@ class OrderConcurrencyServiceTest {
 
 	@BeforeEach
 	void setUpIdempotencyStore() {
-		given(orderIdempotencyRepository.reserve(anyLong(), anyString(), any()))
+		given(orderIdempotencyStore.reserve(anyLong(), anyString(), any()))
 			.willReturn(true);
-		given(orderIdempotencyRepository.getCompletedOrderId(anyLong(), anyString()))
+		given(orderIdempotencyStore.getCompletedOrderId(anyLong(), anyString()))
 			.willReturn(Optional.empty());
 	}
 

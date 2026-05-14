@@ -26,7 +26,7 @@ import com.commerce.order.application.result.OrderCreateResult;
 import com.commerce.order.exception.OrderErrorCode;
 import com.commerce.order.exception.OrderException;
 import com.commerce.order.infrastructure.persistence.support.OrderPersistenceTestSupport;
-import com.commerce.order.application.port.OrderIdempotencyRepository;
+import com.commerce.order.application.port.OrderIdempotencyStore;
 import com.commerce.product.domain.Product;
 import com.commerce.product.domain.ProductStatus;
 import com.commerce.product.infrastructure.persistence.support.ProductPersistenceTestSupport;
@@ -45,7 +45,7 @@ class OrderCreateServiceIdempotencyTest {
 	private OrderCreateService orderCreateService;
 
 	@Autowired
-	private OrderIdempotencyRepository orderIdempotencyRepository;
+	private OrderIdempotencyStore orderIdempotencyStore;
 
 	@Autowired
 	private PersistenceCleanupTestSupport persistenceCleanup;
@@ -115,7 +115,7 @@ class OrderCreateServiceIdempotencyTest {
 			.build();
 
 		// when
-		orderIdempotencyRepository.reserve(member.getId(), "processing-key", Duration.ofSeconds(60));
+		orderIdempotencyStore.reserve(member.getId(), "processing-key", Duration.ofSeconds(60));
 
 		// then
 		assertThatThrownBy(() -> orderCreateService.createOrder(command))
