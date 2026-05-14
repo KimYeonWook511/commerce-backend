@@ -58,7 +58,6 @@ Port 인터페이스 설계 원칙:
 - 처음에는 하나의 인터페이스로 시작한다
 - 특정 Service에만 필요한 메서드가 생기는 순간, 기존 인터페이스를 상속 확장하여 분리한다
 - 이름은 의도가 드러나는 방향으로 자유롭게 선택한다 (`IdempotencyStore`, `EmailSender` 등, `Port` suffix 불필요)
-- Redis 인스턴스를 분리해야 할 경우에는 인터페이스는 동일하게 유지하고, 구현체를 별도로 두어 각각 다른 `RedisTemplate`을 주입한다. Service에서는 `@Qualifier`로 구현체를 구분하며, Application Layer 코드 변경 없이 Infrastructure 설정만으로 해결한다.
 
 ---
 
