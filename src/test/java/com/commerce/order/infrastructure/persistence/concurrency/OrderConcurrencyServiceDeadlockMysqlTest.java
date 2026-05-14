@@ -1,4 +1,4 @@
-package com.commerce.order.integration.concurrency;
+package com.commerce.order.infrastructure.persistence.concurrency;
 
 import static org.assertj.core.api.Assertions.*;
 

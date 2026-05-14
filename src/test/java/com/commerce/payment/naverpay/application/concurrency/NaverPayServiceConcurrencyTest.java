@@ -1,4 +1,4 @@
-package com.commerce.payment.integration.naverpay.concurrency;
+package com.commerce.payment.naverpay.application.concurrency;
 
 import static org.assertj.core.api.Assertions.assertThat;
 import static org.mockito.ArgumentMatchers.any;

@@ -1,4 +1,4 @@
-package com.commerce.payment.integration.naverpay;
+package com.commerce.payment.naverpay.application;
 
 import static org.assertj.core.api.Assertions.assertThat;
 import static org.assertj.core.api.Assertions.assertThatThrownBy;

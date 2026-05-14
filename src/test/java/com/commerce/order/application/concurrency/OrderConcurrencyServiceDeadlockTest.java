@@ -1,4 +1,4 @@
-package com.commerce.order.integration.concurrency;
+package com.commerce.order.application.concurrency;
 
 import static org.assertj.core.api.Assertions.assertThat;
 import static org.mockito.ArgumentMatchers.anyInt;

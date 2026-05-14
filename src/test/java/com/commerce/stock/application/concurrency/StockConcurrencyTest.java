@@ -1,4 +1,4 @@
-package com.commerce.stock.integration.concurrency;
+package com.commerce.stock.application.concurrency;
 
 import static org.assertj.core.api.Assertions.*;
 

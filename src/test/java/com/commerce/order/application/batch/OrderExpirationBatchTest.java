@@ -1,4 +1,4 @@
-package com.commerce.order.integration.batch;
+package com.commerce.order.application.batch;
 
 import static org.assertj.core.api.Assertions.assertThat;
 import static org.mockito.ArgumentMatchers.*;

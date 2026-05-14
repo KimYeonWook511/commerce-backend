@@ -1,4 +1,4 @@
-package com.commerce.order.integration.concurrency;
+package com.commerce.order.infrastructure.cache;
 
 import static org.assertj.core.api.Assertions.assertThat;
 import static org.assertj.core.api.Assertions.assertThatThrownBy;

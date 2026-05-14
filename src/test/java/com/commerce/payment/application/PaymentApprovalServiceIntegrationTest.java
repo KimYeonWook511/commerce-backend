@@ -1,4 +1,4 @@
-package com.commerce.payment.integration;
+package com.commerce.payment.application;
 
 import static org.assertj.core.api.Assertions.assertThat;
 import static org.assertj.core.api.Assertions.assertThatThrownBy;
