@@ -69,4 +69,9 @@ public class OrderRepositoryAdapter implements OrderRepository {
 			PageRequest.of(0, limit, Sort.by("id").ascending())
 		);
 	}
+
+	@Override
+	public Optional<Order> findByMemberIdAndIdempotencyKey(Long memberId, String idempotencyKey) {
+		return jpaOrderRepository.findByMemberIdAndIdempotencyKey(memberId, idempotencyKey);
+	}
 }

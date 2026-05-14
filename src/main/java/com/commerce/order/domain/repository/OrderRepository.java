@@ -24,4 +24,6 @@ public interface OrderRepository {
 	Optional<Order> findByMerchantPayKeyForUpdate(String merchantPayKey);
 
 	List<Order> findExpiredOrdersAfterId(OrderStatus status, LocalDateTime cutoff, Long lastId, int limit);
+
+	Optional<Order> findByMemberIdAndIdempotencyKey(Long memberId, String idempotencyKey);
 }

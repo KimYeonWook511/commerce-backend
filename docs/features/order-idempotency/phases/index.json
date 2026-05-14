@@ -1,0 +1,5 @@
+{
+  "phases": [
+    { "dir": "0-rdb-idempotency", "status": "completed", "completed_at": "2026-05-15T01:00:00+0900" }
+  ]
+}

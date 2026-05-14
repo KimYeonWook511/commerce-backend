@@ -5,11 +5,12 @@
 - **이유**: 토큰 재발급 시 서버 검증과 강제 무효화가 가능하다.
 - **트레이드오프**: 완전한 stateless 인증보다 저장소 관리 비용이 늘어난다.
 
-### ADR-002: 주문 생성에 멱등 키 적용
-- **결정**: 주문 생성 요청은 멱등 키를 요구하고 Redis로 상태를 관리한다. `idempotencyKey`는 클라이언트가 생성한 UUID이며 HTTP Header(`Idempotency-Key`)로 전달한다.
-- **캐싱 동작**: 캐시 HIT 시 DB 조회와 도메인 로직 실행 없이 즉시 반환한다. 캐시 MISS 시 도메인 로직 실행 → DB 저장 → Spring ApplicationEvent 발행 → AFTER_COMMIT 핸들러에서 결과 캐싱 순서로 처리한다 (ADR-005 참고).
-- **이유**: 중복 요청에서도 동일 주문만 생성되도록 보장할 수 있다.
-- **트레이드오프**: 요청 계약이 복잡해지고 Redis 의존성이 추가된다.
+### ADR-002: 주문 생성에 멱등 키 적용 (Redis 1차 방어선 + RDB unique 제약 최종 보장)
+- **결정**: 주문 생성 요청은 멱등 키를 요구하며, Redis(1차)와 RDB unique 제약(최종)으로 이중 보장한다. `idempotencyKey`는 클라이언트가 생성한 UUID이며 HTTP Header(`Idempotency-Key`)로 전달한다.
+- **멱등성 처리 흐름**: Redis `reserve()` 성공 시 주문 생성 → AFTER_COMMIT 이벤트로 Redis 캐싱 (ADR-005 구현). Redis MISS(TTL 만료 or Redis 장애) 시 바로 INSERT 시도 → `(member_id, idempotency_key)` unique 위반 시 기존 주문을 조회하여 `complete()`로 Redis 갱신 후 반환. 기존 주문을 찾지 못하면 멱등키 외 다른 제약 위반이므로 `log.error` 기록 후 `ORDER_NOT_FOUND` 반환.
+- **Redis 장애 처리**: `reserve()`, `getCompletedOrderId()`, `complete()`, `clear()`, `handle()` 실패 시 모두 Infrastructure 계층에서 예외를 catch. `reserve()`→`false`, `getCompletedOrderId()`→`empty()` fallback으로 주문 생성 경로 진입. 나머지는 warn 로그 후 무시하여 주문 반환에 영향 없음.
+- **이유**: Redis TTL 만료 후 중복 주문 생성 방지 및 Redis 장애 시에도 주문 가능성 보장.
+- **트레이드오프**: TTL 만료 후 재요청 시 재고 차감 → unique 위반 → 롤백이 드물게 발생할 수 있다. 정확성에는 문제 없다.
 
 ### ADR-003: 재고 차감 기본 전략으로 비관적 락 사용
 - **결정**: 주문 경로의 재고 차감은 비관적 락 기반 흐름을 기본으로 사용한다.

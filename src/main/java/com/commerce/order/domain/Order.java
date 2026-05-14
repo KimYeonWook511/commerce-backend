@@ -22,6 +22,7 @@ import jakarta.persistence.JoinColumn;
 import jakarta.persistence.ManyToOne;
 import jakarta.persistence.OneToMany;
 import jakarta.persistence.Table;
+import jakarta.persistence.UniqueConstraint;
 import jakarta.persistence.Version;
 import lombok.AccessLevel;
 import lombok.Builder;
@@ -29,7 +30,9 @@ import lombok.Getter;
 import lombok.NoArgsConstructor;
 
 @Entity
-@Table(name = "tbl_order")
+@Table(name = "tbl_order", uniqueConstraints = {
+	@UniqueConstraint(name = "uk_order_member_idempotency", columnNames = {"member_id", "idempotency_key"})
+})
 @NoArgsConstructor(access = AccessLevel.PROTECTED)
 @Getter
 public class Order extends BaseTimeEntity {
@@ -55,13 +58,17 @@ public class Order extends BaseTimeEntity {
 	@Column(unique = true)
 	private String merchantPayKey;
 
+	@Column
+	private String idempotencyKey;
+
 	@OneToMany(mappedBy = "order", cascade = CascadeType.ALL, orphanRemoval = true)
 	private List<OrderItem> orderItems = new ArrayList<>();
 
 	@Builder
-	private Order(Member member, OrderStatus status) {
+	private Order(Member member, OrderStatus status, String idempotencyKey) {
 		this.member = member;
 		this.status = status;
+		this.idempotencyKey = idempotencyKey;
 		this.totalPrice = 0;
 	}
 
@@ -69,6 +76,14 @@ public class Order extends BaseTimeEntity {
 		return Order.builder()
 			.member(member)
 			.status(OrderStatus.INIT)
+			.build();
+	}
+
+	public static Order create(Member member, String idempotencyKey) {
+		return Order.builder()
+			.member(member)
+			.status(OrderStatus.INIT)
+			.idempotencyKey(idempotencyKey)
 			.build();
 	}
 

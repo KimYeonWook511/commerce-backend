@@ -73,4 +73,15 @@ public interface JpaOrderRepository extends JpaRepository<Order, Long> {
 		Pageable pageable
 	);
 
+	@Query("""
+		select o
+		from Order o
+		where o.member.id = :memberId
+		and o.idempotencyKey = :idempotencyKey
+		""")
+	Optional<Order> findByMemberIdAndIdempotencyKey(
+		@Param("memberId") Long memberId,
+		@Param("idempotencyKey") String idempotencyKey
+	);
+
 }

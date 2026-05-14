@@ -1,10 +1,12 @@
 package com.commerce.order.application;
 
 import static org.assertj.core.api.Assertions.assertThat;
-import static org.assertj.core.api.Assertions.assertThatThrownBy;
 
-import java.time.Duration;
 import java.util.List;
+import java.util.concurrent.CyclicBarrier;
+import java.util.concurrent.ExecutorService;
+import java.util.concurrent.Executors;
+import java.util.concurrent.Future;
 
 import org.junit.jupiter.api.AfterEach;
 import org.junit.jupiter.api.DisplayName;
@@ -19,14 +21,11 @@ import org.springframework.test.context.DynamicPropertySource;
 
 import com.commerce.member.domain.Member;
 import com.commerce.member.infrastructure.persistence.support.MemberPersistenceTestSupport;
-import com.commerce.order.application.OrderCreateService;
 import com.commerce.order.application.command.OrderCreateCommand;
 import com.commerce.order.application.command.OrderCreateItem;
-import com.commerce.order.application.result.OrderCreateResult;
-import com.commerce.order.exception.OrderErrorCode;
-import com.commerce.order.exception.OrderException;
-import com.commerce.order.infrastructure.persistence.support.OrderPersistenceTestSupport;
 import com.commerce.order.application.port.OrderIdempotencyStore;
+import com.commerce.order.application.result.OrderCreateResult;
+import com.commerce.order.infrastructure.persistence.support.OrderPersistenceTestSupport;
 import com.commerce.product.domain.Product;
 import com.commerce.product.domain.ProductStatus;
 import com.commerce.product.infrastructure.persistence.support.ProductPersistenceTestSupport;
@@ -63,7 +62,8 @@ class OrderCreateServiceIdempotencyTest {
 	private OrderPersistenceTestSupport orderPersistence;
 
 	@DynamicPropertySource
-	static void registerRedis(DynamicPropertyRegistry registry) {
+	static void registerContainers(DynamicPropertyRegistry registry) {
+		TestcontainersSupport.registerMySql(registry);
 		TestcontainersSupport.registerRedis(registry);
 	}
 
@@ -100,30 +100,73 @@ class OrderCreateServiceIdempotencyTest {
 			.isEqualTo(8);
 	}
 
-	@DisplayName("처리 중인 멱등키면 주문 생성에 실패한다")
+	@DisplayName("Redis TTL 만료 후 재요청하면 중복 주문 없이 기존 주문을 반환한다")
 	@Test
-	void createOrder_whenIdempotencyProcessing_throwException() {
+	void createOrder_whenIdempotencyKeyExpired_returnExistingOrder() {
 		// given
-		Member member = memberPersistence.save(createMember("order-idempotency-processing"));
-		Product product = productPersistence.save(createProduct("product-2", 2000));
+		Member member = memberPersistence.save(createMember("order-ttl-expired"));
+		Product product = productPersistence.save(createProduct("product-ttl", 1000));
 		stockPersistence.save(createStock(product, 10));
 
 		OrderCreateCommand command = OrderCreateCommand.builder()
 			.memberId(member.getId())
-			.idempotencyKey("processing-key")
-			.items(List.of(OrderCreateItem.builder().productId(product.getId()).quantity(1).build()))
+			.idempotencyKey("ttl-expired-key")
+			.items(List.of(OrderCreateItem.builder().productId(product.getId()).quantity(2).build()))
 			.build();
 
 		// when
-		orderIdempotencyStore.reserve(member.getId(), "processing-key", Duration.ofSeconds(60));
+		OrderCreateResult first = orderCreateService.createOrder(command);
+
+		// Redis TTL 만료 시뮬레이션: Redis 상태를 직접 제거한다
+		orderIdempotencyStore.clear(member.getId(), "ttl-expired-key");
+
+		// TTL 만료 후 동일 키로 재요청 → unique 위반 → 기존 주문 반환
+		OrderCreateResult second = orderCreateService.createOrder(command);
 
 		// then
-		assertThatThrownBy(() -> orderCreateService.createOrder(command))
-			.isInstanceOf(OrderException.class)
-			.satisfies(exception -> {
-				OrderException orderException = (OrderException) exception;
-				assertThat(orderException.getErrorCode()).isEqualTo(OrderErrorCode.ORDER_IDEMPOTENCY_IN_PROGRESS);
-			});
+		assertThat(first.getOrderId()).isEqualTo(second.getOrderId());
+		assertThat(orderPersistence.count()).isEqualTo(1);
+		assertThat(stockPersistence.findByProductId(product.getId()).orElseThrow().getQuantity())
+			.isEqualTo(8);
+	}
+
+	@DisplayName("동시에 같은 멱등키로 요청하면 하나만 생성되고 두 요청 모두 같은 주문을 반환한다")
+	@Test
+	void createOrder_whenConcurrentSameIdempotencyKey_returnSameOrder() throws Exception {
+		// given
+		Member member = memberPersistence.save(createMember("order-concurrent"));
+		Product product = productPersistence.save(createProduct("product-concurrent", 1000));
+		stockPersistence.save(createStock(product, 10));
+
+		OrderCreateCommand command = OrderCreateCommand.builder()
+			.memberId(member.getId())
+			.idempotencyKey("concurrent-key")
+			.items(List.of(OrderCreateItem.builder().productId(product.getId()).quantity(2).build()))
+			.build();
+
+		CyclicBarrier barrier = new CyclicBarrier(2);
+		ExecutorService executor = Executors.newFixedThreadPool(2);
+
+		// when
+		Future<OrderCreateResult> future1 = executor.submit(() -> {
+			barrier.await();
+			return orderCreateService.createOrder(command);
+		});
+		Future<OrderCreateResult> future2 = executor.submit(() -> {
+			barrier.await();
+			return orderCreateService.createOrder(command);
+		});
+
+		OrderCreateResult result1 = future1.get();
+		OrderCreateResult result2 = future2.get();
+
+		executor.shutdown();
+
+		// then
+		assertThat(result1.getOrderId()).isEqualTo(result2.getOrderId());
+		assertThat(orderPersistence.count()).isEqualTo(1);
+		assertThat(stockPersistence.findByProductId(product.getId()).orElseThrow().getQuantity())
+			.isEqualTo(8);
 	}
 
 	private Member createMember(String emailPrefix) {

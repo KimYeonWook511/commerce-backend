@@ -77,9 +77,14 @@ COLUMNS:
 - `total_price`
 - `status`
 - `merchant_pay_key (UNIQUE)`
+- `idempotency_key (NULL 허용)`
 
 INDEX:
 - `merchant_pay_key (UNIQUE)`
+- `uk_order_member_idempotency (member_id, idempotency_key) UNIQUE`
+
+비고:
+- `idempotency_key`는 기존 데이터 및 멱등성 없는 경로와의 호환을 위해 NULL 허용. MySQL에서 NULL 값은 unique 제약 대상에서 제외된다.
 
 ### `tbl_order_item`
 
