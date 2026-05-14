@@ -9,8 +9,8 @@ import com.commerce.outbox.infrastructure.JpaOutboxEventRepository;
 import com.commerce.outbox.infrastructure.JpaProcessedEventRepository;
 
 import lombok.RequiredArgsConstructor;
-import support.CleanupOrder;
-import support.PersistenceTestSupport;
+import com.commerce.support.CleanupOrder;
+import com.commerce.support.PersistenceTestSupport;
 
 @TestComponent
 @RequiredArgsConstructor

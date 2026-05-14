@@ -8,8 +8,8 @@ import com.commerce.stock.domain.Stock;
 import com.commerce.stock.infrastructure.JpaStockRepository;
 
 import lombok.RequiredArgsConstructor;
-import support.CleanupOrder;
-import support.PersistenceTestSupport;
+import com.commerce.support.CleanupOrder;
+import com.commerce.support.PersistenceTestSupport;
 
 @TestComponent
 @RequiredArgsConstructor

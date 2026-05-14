@@ -31,8 +31,8 @@ import com.commerce.stock.domain.Stock;
 import com.commerce.stock.exception.StockErrorCode;
 import com.commerce.stock.exception.StockException;
 import com.commerce.stock.infrastructure.persistence.support.StockPersistenceTestSupport;
-import support.PersistenceCleanupTestSupport;
-import support.TestcontainersSupport;
+import com.commerce.support.PersistenceCleanupTestSupport;
+import com.commerce.support.TestcontainersSupport;
 
 @SpringBootTest
 @ActiveProfiles("test")

@@ -6,8 +6,8 @@ import com.commerce.product.domain.Product;
 import com.commerce.product.infrastructure.JpaProductRepository;
 
 import lombok.RequiredArgsConstructor;
-import support.CleanupOrder;
-import support.PersistenceTestSupport;
+import com.commerce.support.CleanupOrder;
+import com.commerce.support.PersistenceTestSupport;
 
 @TestComponent
 @RequiredArgsConstructor

@@ -39,7 +39,7 @@ import com.commerce.product.infrastructure.persistence.support.ProductPersistenc
 import com.commerce.stock.application.StockInventoryService;
 import com.commerce.stock.domain.Stock;
 import com.commerce.stock.infrastructure.persistence.support.StockPersistenceTestSupport;
-import support.PersistenceCleanupTestSupport;
+import com.commerce.support.PersistenceCleanupTestSupport;
 
 @Tag("concurrency")
 @SpringBootTest

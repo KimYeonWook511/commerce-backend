@@ -1,4 +1,4 @@
-package support;
+package com.commerce.support;
 
 import java.util.Arrays;
 import java.util.Comparator;

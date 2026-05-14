@@ -26,7 +26,7 @@ import org.springframework.transaction.support.TransactionTemplate;
 
 import com.commerce.test.lock.domain.LockMember;
 import com.commerce.test.lock.repository.LockMemberRepository;
-import support.TestcontainersSupport;
+import com.commerce.support.TestcontainersSupport;
 
 import jakarta.persistence.EntityManager;
 

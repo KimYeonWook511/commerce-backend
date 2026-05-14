@@ -1,4 +1,4 @@
-package support;
+package com.commerce.support;
 
 public enum CleanupOrder {
 	PAYMENT(10),

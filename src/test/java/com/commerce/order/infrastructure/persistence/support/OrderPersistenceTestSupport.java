@@ -11,8 +11,8 @@ import com.commerce.order.infrastructure.JpaOrderItemRepository;
 import com.commerce.order.infrastructure.JpaOrderRepository;
 
 import lombok.RequiredArgsConstructor;
-import support.CleanupOrder;
-import support.PersistenceTestSupport;
+import com.commerce.support.CleanupOrder;
+import com.commerce.support.PersistenceTestSupport;
 
 @TestComponent
 @RequiredArgsConstructor

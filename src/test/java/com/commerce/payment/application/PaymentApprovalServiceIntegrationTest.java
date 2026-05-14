@@ -35,7 +35,7 @@ import com.commerce.payment.infrastructure.persistence.support.PaymentPersistenc
 import com.commerce.product.domain.Product;
 import com.commerce.product.domain.ProductStatus;
 import com.commerce.product.infrastructure.persistence.support.ProductPersistenceTestSupport;
-import support.PersistenceCleanupTestSupport;
+import com.commerce.support.PersistenceCleanupTestSupport;
 
 @SpringBootTest
 @ActiveProfiles("test")

@@ -36,7 +36,7 @@ import com.commerce.member.infrastructure.persistence.support.MemberPersistenceT
 import com.commerce.order.infrastructure.persistence.support.OrderPersistenceTestSupport;
 import com.commerce.product.infrastructure.persistence.support.ProductPersistenceTestSupport;
 import com.commerce.stock.infrastructure.persistence.support.StockPersistenceTestSupport;
-import support.PersistenceCleanupTestSupport;
+import com.commerce.support.PersistenceCleanupTestSupport;
 
 @Tag("concurrency")
 @SpringBootTest

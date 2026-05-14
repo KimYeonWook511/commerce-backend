@@ -43,7 +43,7 @@ import com.commerce.product.domain.ProductStatus;
 import com.commerce.member.infrastructure.persistence.support.MemberPersistenceTestSupport;
 import com.commerce.order.infrastructure.persistence.support.OrderPersistenceTestSupport;
 import com.commerce.product.infrastructure.persistence.support.ProductPersistenceTestSupport;
-import support.PersistenceCleanupTestSupport;
+import com.commerce.support.PersistenceCleanupTestSupport;
 
 @Tag("batch")
 @SpringBatchTest

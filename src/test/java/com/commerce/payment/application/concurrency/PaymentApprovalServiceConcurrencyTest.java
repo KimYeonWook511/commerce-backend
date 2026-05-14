@@ -37,8 +37,8 @@ import com.commerce.order.infrastructure.persistence.support.OrderPersistenceTes
 import com.commerce.product.domain.Product;
 import com.commerce.product.domain.ProductStatus;
 import com.commerce.product.infrastructure.persistence.support.ProductPersistenceTestSupport;
-import support.TestcontainersSupport;
-import support.PersistenceCleanupTestSupport;
+import com.commerce.support.TestcontainersSupport;
+import com.commerce.support.PersistenceCleanupTestSupport;
 
 @Tag("concurrency")
 @Tag("docker")

@@ -13,13 +13,14 @@
 
 ```
 src/test/java/
-├── support/                                              ← 공통 인프라
-│   ├── TestcontainersSupport.java                        ← 컨테이너 싱글턴 관리
-│   ├── PersistenceTestSupport.java                       ← 도메인별 cleanup 계약 (interface)
-│   ├── PersistenceCleanupTestSupport.java                ← FK 순서대로 정렬 후 일괄 삭제
-│   └── CleanupOrder.java                                 ← FK 안전 삭제 순서 (enum)
-│
-└── order/
+└── com/commerce/
+    ├── support/                                          ← 공통 인프라
+    │   ├── TestcontainersSupport.java                    ← 컨테이너 싱글턴 관리
+    │   ├── PersistenceTestSupport.java                   ← 도메인별 cleanup 계약 (interface)
+    │   ├── PersistenceCleanupTestSupport.java            ← FK 순서대로 정렬 후 일괄 삭제
+    │   └── CleanupOrder.java                             ← FK 안전 삭제 순서 (enum)
+    │
+    └── order/
     ├── domain/
     │   └── OrderTest.java                                ← 단위 테스트
     ├── application/

@@ -12,8 +12,8 @@ import com.commerce.payment.infrastructure.JpaPaymentAttemptRepository;
 import com.commerce.payment.infrastructure.JpaPaymentRepository;
 
 import lombok.RequiredArgsConstructor;
-import support.CleanupOrder;
-import support.PersistenceTestSupport;
+import com.commerce.support.CleanupOrder;
+import com.commerce.support.PersistenceTestSupport;
 
 @TestComponent
 @RequiredArgsConstructor
