@@ -96,7 +96,7 @@ docs/features/<feature-name>/phases/<phase-name>/step0.md
 ```text
 ## 수정 가능 경로
 - `src/main/java/com/commerce/product/**`
-- `src/main/java/com/commerce/auth/filter/JwtAuthenticationFilter.java`
+- `src/main/java/com/commerce/security/filter/JwtAuthenticationFilter.java`
 - `src/test/java/com/commerce/product/**`
 ```
 
