@@ -50,6 +50,7 @@ def run(root: str, phase_dir: Path, step: dict) -> None:
 
     cmd = (
         f"cd {root} && claude -p --dangerously-skip-permissions"
+        f" --allowedTools 'Bash(git *) Read'"
         f" < {prompt_path}"
         f" > {output_path}"
         f" 2>&1"
