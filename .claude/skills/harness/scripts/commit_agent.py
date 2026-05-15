@@ -63,5 +63,3 @@ def run(root: str, phase_dir: Path, step: dict) -> None:
         subprocess.run(["tmux", "kill-window", "-t", f"{session}:{pane_name}"], capture_output=True)
     finally:
         prompt_path.unlink(missing_ok=True)
-        if output_path.exists():
-            output_path.unlink(missing_ok=True)
