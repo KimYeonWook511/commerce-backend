@@ -12,7 +12,7 @@ description: 개발 시작 전 문서 탐색, 논의, step 설계, phases 초안
 - 큰 작업을 자기완결적인 step으로 분해해야 할 때
 
 이 skill은 개발 전 탐색, step 설계, feature/phases 초안 작성, 준비된 phase의 실행기 연결을 담당한다.
-실행기 `execute.py`는 repo 루트의 `worktrees/` 아래에 격리 worktree를 자동 생성하고, 브랜치 생성, 커밋, 선택적 push를 수행할 수 있다.
+실행기 `execute.py`는 step 4에서 생성한 worktree 안에서 실행되며, commit agent를 통한 커밋과 선택적 push를 수행할 수 있다.
 
 ## 필수 준수 규칙
 

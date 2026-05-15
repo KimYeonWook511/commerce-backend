@@ -186,7 +186,7 @@ step 실행 상태 파일이다.
 - command와 query는 데이터 흐름, 권한, 검증 기준이 다르면 별도 step으로 분리한다.
 - domain, repository, service, controller, request/response DTO, test는 같은 사용자 기능 완성에 필요하면 한 step에 함께 포함한다.
 - 레이어별 step은 공통 도메인 선행 작업, 독립 DB 마이그레이션, 대규모 공유 계약 변경처럼 분리 검증이 명확히 필요한 경우에만 사용한다.
-- root docs sync는 최종 구현과 전체 테스트가 끝난 뒤 마지막 step에서 한 번 수행한다.
+- phase 마지막 두 step은 `sync-root-docs`(루트 docs 동기화)와 `write-retrospective`(회고록 작성)로 표준화한다.
 - 신규 파일이 많거나 reviewer가 한 번에 판단하기 어렵다면 레이어가 아니라 사용자 기능/정책 경계를 기준으로 더 작게 나눈다.
 - “이전 대화에서 논의한 바와 같이” 같은 외부 참조를 쓰지 않는다.
 - 필요한 파일 경로와 배경은 문서 안에 직접 적는다.
