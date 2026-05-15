@@ -18,6 +18,7 @@ public class RedisRefreshTokenStore implements RefreshTokenStore {
 	private final StringRedisTemplate redisTemplate;
 	private final JwtProperties jwtProperties;
 
+	// 동일 key(refresh:{memberId})를 덮어쓰므로 기존 refresh token이 무효화된다
 	@Override
 	public void save(Long memberId, String refreshToken) {
 		Duration ttl = Duration.ofMillis(jwtProperties.getRefreshExpiration());
