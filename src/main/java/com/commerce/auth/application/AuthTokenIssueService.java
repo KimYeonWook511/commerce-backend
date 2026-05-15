@@ -31,7 +31,7 @@ public class AuthTokenIssueService {
 		try {
 			refreshTokenStore.save(member.getId(), refreshToken);
 		} catch (DataAccessException e) {
-			log.error("refresh token Redis 저장 실패 memberId={}", member.getId(), e);
+			log.error("refresh token 저장 실패: memberId={}", member.getId(), e);
 			throw new AuthException(AuthErrorCode.INTERNAL_ERROR);
 		}
 
