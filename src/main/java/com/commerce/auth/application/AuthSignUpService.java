@@ -1,6 +1,7 @@
 package com.commerce.auth.application;
 
 import org.springframework.stereotype.Service;
+import org.springframework.transaction.annotation.Propagation;
 import org.springframework.transaction.annotation.Transactional;
 
 import com.commerce.auth.application.command.AuthSignUpCommand;
@@ -22,7 +23,7 @@ public class AuthSignUpService {
 	private final AuthTokenIssueService authTokenIssueService;
 	private final PasswordHasher passwordHasher;
 
-	@Transactional
+	@Transactional(propagation = Propagation.NOT_SUPPORTED)
 	public AuthSignUpResult signUp(AuthSignUpCommand command) {
 		Member member = memberRegistrationService.register(MemberRegistrationCommand.builder()
 			.email(command.getEmail())
