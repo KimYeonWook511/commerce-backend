@@ -1,5 +1,8 @@
 package com.commerce.auth.application;
 
+import java.util.Optional;
+
+import org.springframework.dao.DataAccessException;
 import org.springframework.stereotype.Service;
 import org.springframework.transaction.annotation.Transactional;
 
@@ -15,7 +18,9 @@ import com.commerce.member.application.MemberQueryService;
 import com.commerce.member.domain.Member;
 
 import lombok.RequiredArgsConstructor;
+import lombok.extern.slf4j.Slf4j;
 
+@Slf4j
 @Service
 @RequiredArgsConstructor
 @Transactional(readOnly = true)
@@ -54,7 +59,15 @@ public class AuthTokenReissueService {
 	}
 
 	private void validateStoredRefreshToken(Long memberId, String refreshToken) {
-		String storedRefreshToken = refreshTokenStore.get(memberId)
+		Optional<String> stored;
+		try {
+			stored = refreshTokenStore.get(memberId);
+		} catch (DataAccessException e) {
+			log.error("refresh token 조회 실패: memberId={}", memberId, e);
+			throw new AuthException(AuthErrorCode.INTERNAL_ERROR);
+		}
+
+		String storedRefreshToken = stored
 			.orElseThrow(() -> new AuthException(AuthErrorCode.REFRESH_TOKEN_NOT_FOUND));
 
 		if (!storedRefreshToken.equals(refreshToken)) {

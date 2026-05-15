@@ -1,9 +1,13 @@
 package com.commerce.auth.application;
 
 import static org.assertj.core.api.Assertions.assertThat;
+import static org.assertj.core.api.Assertions.assertThatThrownBy;
 import static org.mockito.ArgumentMatchers.any;
+import static org.mockito.ArgumentMatchers.anyLong;
+import static org.mockito.ArgumentMatchers.anyString;
 import static org.mockito.BDDMockito.given;
 import static org.mockito.BDDMockito.then;
+import static org.mockito.BDDMockito.willThrow;
 
 import org.junit.jupiter.api.DisplayName;
 import org.junit.jupiter.api.Test;
@@ -12,12 +16,16 @@ import org.mockito.ArgumentCaptor;
 import org.mockito.InjectMocks;
 import org.mockito.Mock;
 import org.mockito.junit.jupiter.MockitoExtension;
+import org.springframework.dao.DataAccessException;
+import org.springframework.dao.QueryTimeoutException;
 import org.springframework.test.util.ReflectionTestUtils;
 
 import com.commerce.auth.application.port.RefreshTokenStore;
 import com.commerce.auth.application.port.TokenIssuer;
 import com.commerce.auth.application.port.vo.TokenClaims;
 import com.commerce.auth.application.result.AuthTokenIssueResult;
+import com.commerce.auth.exception.AuthErrorCode;
+import com.commerce.auth.exception.AuthException;
 import com.commerce.member.domain.Member;
 
 @ExtendWith(MockitoExtension.class)
@@ -71,5 +79,22 @@ class AuthTokenIssueServiceTest {
 		assertThat(accessClaimsCaptor.getValue().memberRole()).isEqualTo(member.getRole());
 		assertThat(refreshClaimsCaptor.getValue().memberId()).isEqualTo(1L);
 		assertThat(refreshClaimsCaptor.getValue().memberRole()).isEqualTo(member.getRole());
+	}
+
+	@DisplayName("refresh token Redis 저장 실패 시 AuthException(INTERNAL_ERROR)이 발생한다")
+	@Test
+	void issue_whenRefreshTokenStoreSaveFails_throwsAuthException() {
+		// given
+		Member member = Member.createUser("test@example.com", "hashed-password", "user1");
+		ReflectionTestUtils.setField(member, "id", 1L);
+
+		given(tokenIssuer.createAccessToken(any(TokenClaims.class))).willReturn("access-token");
+		given(tokenIssuer.createRefreshToken(any(TokenClaims.class))).willReturn("refresh-token");
+		willThrow(new QueryTimeoutException("Redis timeout")).given(refreshTokenStore).save(anyLong(), anyString());
+
+		// when & then
+		assertThatThrownBy(() -> authTokenIssueService.issue(member))
+			.isInstanceOf(AuthException.class)
+			.satisfies(e -> assertThat(((AuthException) e).getErrorCode()).isEqualTo(AuthErrorCode.INTERNAL_ERROR));
 	}
 }
