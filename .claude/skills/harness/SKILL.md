@@ -22,7 +22,7 @@ description: 개발 시작 전 문서 탐색, 논의, step 설계, phases 초안
 - 사용자가 명시적으로 `execute.py`를 쓰지 말라고 하지 않은 이상, agent가 직접 구현을 시작하면 안 된다.
 - `Implement the plan`은 자동으로 직접 구현을 뜻하지 않는다. `phases` 준비 여부와 실행 승인 여부를 먼저 확인해야 한다.
 - Workflow는 phase별 `workflow-checklist.json`으로 추적하며, 다음 단계로 넘어가기 전 이전 단계가 모두 `completed`여야 한다.
-- `harness` 진행 상태를 사용자에게 보고할 때는 1~6번 Workflow 상태 표를 함께 보여준다.
+- `harness` 진행 상태를 사용자에게 보고할 때는 1~7번 Workflow 상태 표를 함께 보여준다.
 - `File Drafting` 완료 후에는 반드시 멈추고 작성된 문서 경로를 사용자에게 보고한 뒤 검토 응답을 기다린다. 바로 `execute.py` 실행 요청으로 넘어가지 않는다.
 - `Execution Authorization`은 문서 검토 완료, Plan Mode 승인이 모두 확정되어야 `completed`가 된다.
 
@@ -35,9 +35,10 @@ description: 개발 시작 전 문서 탐색, 논의, step 설계, phases 초안
 | 1 | Explore |  |
 | 2 | Discuss |  |
 | 3 | Step Design |  |
-| 4 | File Drafting |  |
-| 5 | Execution Authorization |  |
-| 6 | Execution |  |
+| 4 | Worktree 생성 및 이동 |  |
+| 5 | File Drafting |  |
+| 6 | Execution Authorization |  |
+| 7 | Execution |  |
 
 상태 표는 `workflow-checklist.json`이 있으면 그 값을 기준으로 표시한다. checklist 생성 전에는 현재 대화에서 실제 완료한 단계만 `✅`로 표시한다.
 
@@ -89,27 +90,33 @@ feature 문서와 `phases` 문서로 부족한 공통 맥락이 있을 때만 `C
 - API feature는 domain, repository, service, controller, test가 같은 사용자 기능 완성에 필요하면 한 step에 함께 포함한다.
 - 레이어별 step 분리는 공통 도메인 선행 작업, 독립 DB 마이그레이션처럼 분리 검증이 명확히 필요한 경우에만 사용한다.
 - command/query는 데이터 흐름과 검증 기준이 다르면 분리하고, 같은 정책과 aggregate를 공유하는 command 동작은 묶을 수 있다.
-- root docs 동기화는 최종 구현과 전체 테스트가 끝난 뒤 마지막 step에서 한 번 수행한다.
-- 모든 step의 `수정 가능 경로`에는 `docs/features/<feature-name>/**`를 포함한다. feature 문서와 phase index는 실행 중 함께 갱신될 수 있기 때문이다.
 - 각 step 문서는 독립 실행 가능한 자기완결 문서여야 한다.
-- step 설계 시 구현 단위와 커밋 단위가 같은 기능/정책 목적을 가리키도록 나눈다. 파일 단위로 과도하게 쪼개지 말고 커밋 메시지는 `docs/commit-conventions.md`를 따른다.
+- step 설계 시 구현 단위와 커밋 단위가 같은 기능/정책 목적을 가리키도록 나눈다. 파일 단위로 과도하게 쪼개지 않는다.
 - 관련 문서 경로와 이전 step 결과를 이해하는 데 필요한 파일 경로를 명시한다.
+- phase 마지막 두 step은 아래처럼 표준화한다:
+  - `step(N-1)`: `sync-root-docs` — 루트 docs 동기화 (ADR, api-spec 등)
+  - `step(N)`: `write-retrospective` — 회고록 작성
 - 구현 지시는 인터페이스와 핵심 제약 위주로 작성하고, 내부 구현은 과도하게 고정하지 않는다.
 - Acceptance Criteria는 실행 가능한 커맨드로만 적는다.
 - 주의사항은 `하지 마라. 이유: ...` 형식으로 구체적으로 작성한다.
 - step name은 kebab-case slug를 사용한다.
 
-### 4. File Drafting
+### 4. Worktree 생성 및 이동
 
-사용자가 실제 파일 생성을 승인하면 먼저 feature 브랜치 worktree를 생성하고 그 안으로 이동한다.
+Step Design이 완료되면 작업 브랜치 worktree를 생성하고 그 안으로 이동한다.
 
 ```bash
 cd "$(git rev-parse --git-common-dir)/.."
-git worktree add worktrees/feature-<feature-name> -b feature/<feature-name> develop
-cd worktrees/feature-<feature-name>
+git worktree add worktrees/<type>-<feature-name> -b <type>/<feature-name> develop
+cd worktrees/<type>-<feature-name>
 ```
 
-worktree로 이동한 뒤 해당 worktree 안에서 아래 파일 초안을 작성한다.
+`git worktree add` 실행과 `cd` 이동이 모두 완료된 시점에 이 단계가 ✅ 완료된 것으로 본다.
+이후 모든 파일 작성과 `execute.py` 실행은 worktree root를 기준으로 수행한다.
+
+### 5. File Drafting
+
+worktree 안에서 아래 파일 초안을 작성한다.
 
 - `docs/features/<feature-name>/prd.md`
 - `docs/features/<feature-name>/architecture.md`
@@ -131,15 +138,15 @@ File Drafting 완료 후 필수 중단:
 - 작성 또는 수정한 feature 문서, phase index, step 문서, `workflow-checklist.json` 경로를 사용자에게 보고한다.
 - checklist의 `File Drafting`까지만 `completed`로 둔다.
 - `Execution Authorization`은 사용자가 문서 검토 완료와 실행 승인을 명시하기 전까지 `pending`으로 둔다.
-- 이 시점의 checklist는 `Explore`, `Discuss`, `Step Design`, `File Drafting`만 `completed`여야 하고, `Execution Authorization`, `Execution`은 `pending`이어야 한다.
+- 이 시점의 checklist는 `Explore`, `Discuss`, `Step Design`, `Worktree 생성 및 이동`, `File Drafting`만 `completed`여야 하고, `Execution Authorization`, `Execution`은 `pending`이어야 한다.
 - 사용자의 단순한 "진행해", "계속해", "Implement the plan"은 문서 검토 완료 또는 실행 승인으로 해석하지 않는다.
 
-### 5. Execution Authorization
+### 6. Execution Authorization
 
 `execute.py`를 실행하기 전에 Plan Mode로 사용자 승인을 받는다.
 
-- `execute.py`는 feature 브랜치 worktree 안에서 실행하며, add, commit을 수행한다.
-- 이 단계에 들어가기 전 checklist의 `Explore`, `Discuss`, `Step Design`, `File Drafting`은 모두 `completed`여야 한다.
+- `execute.py`는 worktree 안에서 실행하며, commit agent를 통해 커밋을 수행한다.
+- 이 단계에 들어가기 전 checklist의 `Explore`, `Discuss`, `Step Design`, `Worktree 생성 및 이동`, `File Drafting`은 모두 `completed`여야 한다.
 - 아래 순서로만 진행한다.
   1. Plan Mode로 구현 계획을 사용자에게 제시한다.
   2. `ExitPlanMode`로 사용자 승인을 받는다.
@@ -148,13 +155,17 @@ File Drafting 완료 후 필수 중단:
 - 사용자가 승인하지 않으면 구현으로 진행하지 않는다.
 - checklist 갱신 시 `Execution Authorization`은 `completed`, top-level `status`는 `authorized`로 기록한다.
 - `Execution Authorization.authorization`에는 `escalation_approved`, `approval_prompt_mode`, `prefix_rule`, `approved_by`, `approved_at`을 기록한다.
+- `approved_at` 기록 전 아래 명령으로 실제 시각을 확인한다:
+  ```bash
+  date '+%Y-%m-%dT%H:%M:%S+0900'
+  ```
 
-### 6. Execution
+### 7. Execution
 
 `phases` 파일이 준비되면 feature 브랜치 worktree 안에서 실행기를 실행한다.
 
 ```bash
-# worktrees/feature-<feature-name>/ 안에서
+# worktrees/<type>-<feature-name>/ 안에서
 python3 .claude/skills/harness/scripts/execute.py docs/features/<feature-name>/phases/<phase-name>
 python3 .claude/skills/harness/scripts/execute.py docs/features/<feature-name>/phases/<phase-name> --push
 ```
@@ -172,7 +183,7 @@ python3 .claude/skills/harness/scripts/execute.py docs/features/<feature-name>/p
 - 실행 중 재시도를 위한 step `pending` reset은 `execute.py` 내부 동작으로만 허용된다.
 - `blocked` 또는 3회 재시도 후 최종 `error`가 발생하면 즉시 중단하고 사용자에게 실패 step, 실패 사유, 관련 output 파일 경로를 보고한다.
 - 최종 `error` 또는 `blocked` 이후 agent는 사용자 승인 없이 step 상태를 `pending`으로 되돌리지 않는다.
-- agent는 사용자 승인 없이 실패 회피 목적으로 step 요구사항, Acceptance Criteria, feature 문서, root docs, editable path를 수정해 재시도하지 않는다.
+- agent는 사용자 승인 없이 실패 회피 목적으로 step 요구사항, Acceptance Criteria, feature 문서, root docs를 수정해 재시도하지 않는다.
 - 실패 원인이 문서 누락, scope 누락, Acceptance Criteria 오류처럼 명확해 보여도 자동 수정하지 않는다. 먼저 원인과 수정 계획을 사용자에게 제시한다.
 - 재실행은 사용자가 문서/상태 수정과 `execute.py` 재실행을 명시적으로 승인한 뒤에만 한다.
 

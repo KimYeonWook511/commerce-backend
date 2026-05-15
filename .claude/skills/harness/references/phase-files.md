@@ -93,9 +93,10 @@ step 실행 상태 파일이다.
     { "order": 1, "title": "Explore", "status": "completed" },
     { "order": 2, "title": "Discuss", "status": "completed" },
     { "order": 3, "title": "Step Design", "status": "completed" },
-    { "order": 4, "title": "File Drafting", "status": "completed" },
-    { "order": 5, "title": "Execution Authorization", "status": "pending" },
-    { "order": 6, "title": "Execution", "status": "pending" }
+    { "order": 4, "title": "Worktree 생성 및 이동", "status": "completed" },
+    { "order": 5, "title": "File Drafting", "status": "completed" },
+    { "order": 6, "title": "Execution Authorization", "status": "pending" },
+    { "order": 7, "title": "Execution", "status": "pending" }
   ]
 }
 ```
@@ -104,14 +105,14 @@ step 실행 상태 파일이다.
 
 - `workflow`: 항상 `dev-start`
 - `status`: `drafting` | `authorized` | `in_progress` | `completed`
-- `items`: `SKILL.md`의 1~6번 Workflow 순서와 제목을 그대로 사용한다.
+- `items`: `SKILL.md`의 1~7번 Workflow 순서와 제목을 그대로 사용한다.
 - `Execution Authorization`이 `completed`이면 `authorization` 객체를 포함한다.
 
 `authorization` 예시:
 
 ```json
 {
-  "order": 5,
+  "order": 6,
   "title": "Execution Authorization",
   "status": "completed",
   "authorization": {
@@ -156,12 +157,6 @@ step 실행 상태 파일이다.
 
 {구체적인 구현 지시. 파일 경로, 클래스/함수 시그니처, 핵심 제약을 포함한다.}
 
-## 수정 가능 경로
-
-- `src/main/java/com/commerce/<feature-name>/**`
-- `src/test/java/com/commerce/<feature-name>/**`
-- `docs/features/<feature-name>/**`
-
 ## Acceptance Criteria
 
 ```bash
@@ -195,13 +190,10 @@ step 실행 상태 파일이다.
 - 신규 파일이 많거나 reviewer가 한 번에 판단하기 어렵다면 레이어가 아니라 사용자 기능/정책 경계를 기준으로 더 작게 나눈다.
 - “이전 대화에서 논의한 바와 같이” 같은 외부 참조를 쓰지 않는다.
 - 필요한 파일 경로와 배경은 문서 안에 직접 적는다.
-- `수정 가능 경로` 섹션은 필수이며, 현재 step이 수정해도 되는 경로만 명시한다.
-- 모든 step의 `수정 가능 경로`에는 `docs/features/<feature-name>/**`를 포함한다. feature 문서와 phase index는 실행 중 함께 갱신될 수 있기 때문이다.
 - 구현 단위와 커밋 단위가 같은 기능/정책 목적을 가리키도록 step을 나눈다.
 - 여러 파일을 변경해도 하나의 기능 동작을 완성하기 위한 변경이면 하나의 커밋 단위로 묶는다.
 - 파일 단위로 과도하게 쪼개지 않는다.
 - 목적이 다른 변경은 step을 나누거나 별도 커밋 단위로 분리한다.
-- 커밋 메시지는 `docs/commit-conventions.md`를 따른다.
 - 구현 코드는 인터페이스와 제약 중심으로 유도하고, 내부 구현을 전부 박아넣지 않는다.
 - Acceptance Criteria는 추상 문장이 아니라 실행기가 다시 돌릴 수 있는 실제 실행 커맨드여야 한다.
 - 기본 예시는 `./gradlew test`를 사용한다.
@@ -225,7 +217,7 @@ step 실행 상태 파일이다.
 
 - `error` 또는 `blocked` 발생 시 agent는 즉시 중단하고 사용자에게 실패 step, 실패 사유, 관련 output 파일을 보고한다.
 - 실행 중 재시도를 위해 `execute.py`가 현재 step을 `pending`으로 되돌리는 것은 정상 실행 상태 갱신이다.
-- 사용자 승인 전에는 해당 step의 상태, 실패 필드, step 요구사항, Acceptance Criteria, 문서, `수정 가능 경로`를 수정하지 않는다.
+- 사용자 승인 전에는 해당 step의 상태, 실패 필드, step 요구사항, Acceptance Criteria, 문서를 수정하지 않는다.
 - 사용자가 복구를 승인한 뒤에만 상태와 실패 필드를 정리하고 재실행할 수 있다.
 - 복구 시에도 변경한 문서와 상태 파일을 보고하고, `execute.py` 재실행 승인을 별도로 받는다.
 
@@ -244,7 +236,7 @@ python3 .claude/skills/harness/scripts/execute.py docs/features/<feature-name>/p
 - 실행기는 checklist 승인 상태를 확인한 뒤 가장 앞의 `pending` step부터 순차 실행한다.
 - 각 step은 developer 실행, Acceptance Criteria 재검증, reviewer 검토를 모두 통과해야 `completed`로 인정된다.
 - 성공한 step은 phase index에 `completed`로 남긴다. 실행 output, AC output, review output, workflow checklist는 로컬 실행 산출물로만 둔다.
-- 완료된 step의 기능 변경은 review 통과 후 실행기가 커밋한다. phase index는 phase 종료 시 별도 `chore` 커밋으로 기록한다.
+- 완료된 step의 기능 변경은 review 통과 후 commit agent가 커밋한다. phase index는 phase 종료 시 별도 `chore` 커밋으로 기록한다.
 - 실행 중 retryable failure는 실행기가 같은 step을 재시도할 수 있다.
 - 최종 `blocked` 또는 `error` 발생 시 자동 복구하지 않고 사용자 검토와 승인을 기다린다.
 
