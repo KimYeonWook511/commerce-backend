@@ -13,6 +13,7 @@ from contextlib import contextmanager
 from contextlib import redirect_stdout
 from datetime import datetime, timedelta
 from pathlib import Path
+from unittest.mock import ANY
 from unittest.mock import MagicMock
 from unittest.mock import patch
 
@@ -598,7 +599,7 @@ class StepExecutorTest(unittest.TestCase):
                 result = executor.execute_single_step({"step": 2, "name": "api"})
 
         self.assertTrue(result)
-        mock_commit_agent.assert_called_once()
+        mock_commit_agent.assert_called_once_with(executor.root, executor.phase_dir, ANY)
         executor.review_step_result.assert_called_once()
 
     def test_execute_single_step_blocked_updates_top_index(self):
