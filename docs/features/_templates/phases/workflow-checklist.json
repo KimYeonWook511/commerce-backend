@@ -19,16 +19,21 @@
     },
     {
       "order": 4,
-      "title": "File Drafting",
+      "title": "Worktree 생성 및 이동",
       "status": "completed"
     },
     {
       "order": 5,
+      "title": "File Drafting",
+      "status": "completed"
+    },
+    {
+      "order": 6,
       "title": "Execution Authorization",
       "status": "pending"
     },
     {
-      "order": 6,
+      "order": 7,
       "title": "Execution",
       "status": "pending"
     }

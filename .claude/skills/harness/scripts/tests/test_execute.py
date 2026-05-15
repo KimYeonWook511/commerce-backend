@@ -13,6 +13,7 @@ from contextlib import contextmanager
 from contextlib import redirect_stdout
 from datetime import datetime, timedelta
 from pathlib import Path
+from unittest.mock import ANY
 from unittest.mock import MagicMock
 from unittest.mock import patch
 
@@ -82,15 +83,7 @@ class StepExecutorTest(unittest.TestCase):
         (self.root / "docs" / "features" / "skill-test" / "phases" / "0-mvp" / "step2.md").write_text(
             "# Step 2: api\n\n"
             "`docs/ADR.md`와 `docs/api-spec.md`를 참고해 API를 구현하세요.\n\n"
-            "## 수정 가능 경로\n\n"
-            "- `src/main/java/com/commerce/skilltest/**`\n"
-            "- `src/test/java/com/commerce/skilltest/**`\n"
-            "- `docs/features/skill-test/**`\n",
-            encoding="utf-8",
-        )
-        (self.root / "docs" / "features" / "skill-test" / "phases" / "0-mvp" / "step2.md").write_text(
-            (self.root / "docs" / "features" / "skill-test" / "phases" / "0-mvp" / "step2.md").read_text(encoding="utf-8")
-            + "\n## Acceptance Criteria\n\n```bash\n./gradlew test\n```\n",
+            "## Acceptance Criteria\n\n```bash\n./gradlew test\n```\n",
             encoding="utf-8",
         )
         (self.root / "docs" / "features" / "skill-test" / "phases" / "0-mvp" / "step0.md").write_text(
@@ -119,9 +112,10 @@ class StepExecutorTest(unittest.TestCase):
             {"order": 1, "title": "Explore", "status": "completed"},
             {"order": 2, "title": "Discuss", "status": "completed"},
             {"order": 3, "title": "Step Design", "status": "completed"},
-            {"order": 4, "title": "File Drafting", "status": "completed"},
+            {"order": 4, "title": "Worktree 생성 및 이동", "status": "completed"},
+            {"order": 5, "title": "File Drafting", "status": "completed"},
             {
-                "order": 5,
+                "order": 6,
                 "title": "Execution Authorization",
                 "status": "completed",
                 "authorization": {
@@ -132,7 +126,7 @@ class StepExecutorTest(unittest.TestCase):
                     "approved_at": "2026-04-30T15:30:00+0900",
                 },
             },
-            {"order": 6, "title": "Execution", "status": "pending"},
+            {"order": 7, "title": "Execution", "status": "pending"},
         ]
         for order, override in (overrides or {}).items():
             items[order - 1].update(override)
@@ -298,44 +292,6 @@ class StepExecutorTest(unittest.TestCase):
         self.assertIn("git add/commit/push/checkout은 실행하지 마라", result)
         self.assertIn("커밋하지 않는다", result)
 
-    def test_parse_editable_paths_returns_declared_paths(self):
-        executor = self.make_executor()
-        step_text = (self.root / "docs" / "features" / "skill-test" / "phases" / "0-mvp" / "step2.md").read_text(encoding="utf-8")
-        result = executor.parse_editable_paths(step_text)
-        self.assertEqual(
-            [
-                "src/main/java/com/commerce/skilltest/**",
-                "src/test/java/com/commerce/skilltest/**",
-                "docs/features/skill-test/**",
-            ],
-            result,
-        )
-
-    def test_parse_editable_paths_adds_feature_docs_scope_by_default(self):
-        executor = self.make_executor()
-        step_text = (
-            "# Step 2: api\n\n"
-            "## 수정 가능 경로\n\n"
-            "- `src/main/java/com/commerce/skilltest/**`\n"
-        )
-
-        result = executor.parse_editable_paths(step_text)
-
-        self.assertEqual("docs/features/skill-test/**", result[0])
-        self.assertIn("src/main/java/com/commerce/skilltest/**", result)
-
-    def test_parse_editable_paths_exits_when_section_missing(self):
-        executor = self.make_executor()
-        with self.assertRaises(SystemExit) as exc:
-            executor.parse_editable_paths("# Step 2: api\n\n## 작업\n- API를 구현한다.\n")
-        self.assertEqual(1, exc.exception.code)
-
-    def test_parse_editable_paths_exits_when_section_empty(self):
-        executor = self.make_executor()
-        with self.assertRaises(SystemExit) as exc:
-            executor.parse_editable_paths("# Step 2: api\n\n## 수정 가능 경로\n\n## 작업\n- API를 구현한다.\n")
-        self.assertEqual(1, exc.exception.code)
-
     def test_update_feature_index_completed(self):
         executor = self.make_executor()
         executor.update_feature_index("completed")
@@ -368,7 +324,7 @@ class StepExecutorTest(unittest.TestCase):
         self.assertEqual(1, exc.exception.code)
 
     def test_validate_workflow_checklist_exits_when_required_step_pending(self):
-        self.write_workflow_checklist(overrides={5: {"status": "pending"}})
+        self.write_workflow_checklist(overrides={6: {"status": "pending"}})
 
         with self.assertRaises(SystemExit) as exc:
             self.make_executor().validate_workflow_checklist()
@@ -384,7 +340,7 @@ class StepExecutorTest(unittest.TestCase):
         self.assertEqual(1, exc.exception.code)
 
     def test_validate_workflow_checklist_exits_when_execution_already_completed(self):
-        self.write_workflow_checklist(overrides={6: {"status": "completed"}})
+        self.write_workflow_checklist(overrides={7: {"status": "completed"}})
 
         with self.assertRaises(SystemExit) as exc:
             self.make_executor().validate_workflow_checklist()
@@ -392,7 +348,7 @@ class StepExecutorTest(unittest.TestCase):
         self.assertEqual(1, exc.exception.code)
 
     def test_validate_workflow_checklist_exits_when_authorization_missing(self):
-        self.write_workflow_checklist(overrides={5: {"authorization": None}})
+        self.write_workflow_checklist(overrides={6: {"authorization": None}})
 
         with self.assertRaises(SystemExit) as exc:
             self.make_executor().validate_workflow_checklist()
@@ -401,7 +357,7 @@ class StepExecutorTest(unittest.TestCase):
 
     def test_validate_workflow_checklist_exits_when_escalation_not_approved(self):
         self.write_workflow_checklist(
-            overrides={5: {"authorization": {"escalation_approved": False, "approval_prompt_mode": "per_run"}}}
+            overrides={6: {"authorization": {"escalation_approved": False, "approval_prompt_mode": "per_run"}}}
         )
 
         with self.assertRaises(SystemExit) as exc:
@@ -412,7 +368,7 @@ class StepExecutorTest(unittest.TestCase):
     def test_validate_workflow_checklist_exits_when_approval_prompt_mode_invalid(self):
         self.write_workflow_checklist(
             overrides={
-                5: {
+                6: {
                     "authorization": {
                         "escalation_approved": True,
                         "approval_prompt_mode": "always",
@@ -431,7 +387,7 @@ class StepExecutorTest(unittest.TestCase):
     def test_validate_workflow_checklist_exits_when_saved_prefix_rule_missing(self):
         self.write_workflow_checklist(
             overrides={
-                5: {
+                6: {
                     "authorization": {
                         "escalation_approved": True,
                         "approval_prompt_mode": "saved_prefix_rule",
@@ -451,7 +407,7 @@ class StepExecutorTest(unittest.TestCase):
     def test_validate_workflow_checklist_passes_when_saved_prefix_rule_matches(self):
         self.write_workflow_checklist(
             overrides={
-                5: {
+                6: {
                     "authorization": {
                         "escalation_approved": True,
                         "approval_prompt_mode": "saved_prefix_rule",
@@ -476,7 +432,7 @@ class StepExecutorTest(unittest.TestCase):
         checklist = self.read_json(
             self.root / "docs" / "features" / "skill-test" / "phases" / "0-mvp" / "workflow-checklist.json"
         )
-        execution = checklist["items"][5]
+        execution = checklist["items"][6]
         self.assertEqual("in_progress", checklist["status"])
         self.assertEqual("in_progress", execution["status"])
         self.assertIn("started_at", execution)
@@ -489,7 +445,7 @@ class StepExecutorTest(unittest.TestCase):
         checklist = self.read_json(
             self.root / "docs" / "features" / "skill-test" / "phases" / "0-mvp" / "workflow-checklist.json"
         )
-        execution = checklist["items"][5]
+        execution = checklist["items"][6]
         self.assertEqual("completed", checklist["status"])
         self.assertEqual("completed", execution["status"])
         self.assertIn("completed_at", execution)
@@ -573,109 +529,31 @@ class StepExecutorTest(unittest.TestCase):
             executor.ensure_step_file_exists(2)
         self.assertEqual(1, exc.exception.code)
 
-    def test_validate_worktree_context_passes_when_on_feature_branch(self):
+    def test_validate_worktree_context_passes_when_in_worktree_on_work_branch(self):
         executor = self.make_executor()
-        self.mock_git(executor, [MagicMock(returncode=0, stdout="feature/skill-test\n", stderr="")])
+        self.mock_git(executor, [
+            MagicMock(returncode=0, stdout="/absolute/path/.git/worktrees/chore-harness-improvement\n", stderr=""),
+            MagicMock(returncode=0, stdout="chore/harness-improvement\n", stderr=""),
+        ])
         executor._validate_worktree_context()
 
-    def test_validate_worktree_context_exits_when_on_wrong_branch(self):
+    def test_validate_worktree_context_exits_when_not_in_worktree(self):
         executor = self.make_executor()
-        self.mock_git(executor, [MagicMock(returncode=0, stdout="develop\n", stderr="")])
+        self.mock_git(executor, [
+            MagicMock(returncode=0, stdout=".git\n", stderr=""),
+        ])
         with self.assertRaises(SystemExit) as exc:
             executor._validate_worktree_context()
         self.assertEqual(1, exc.exception.code)
 
-    def test_preflight_git_write_passes_when_git_dir_writable(self):
+    def test_validate_worktree_context_exits_when_on_protected_branch(self):
         executor = self.make_executor()
-        git_dir = self.root / ".git"
-        git_dir.mkdir()
-        executor.run_git = MagicMock(return_value=MagicMock(returncode=0, stdout=".git\n", stderr=""))
-
-        self.execute.git_ops.preflight_git_write(executor)
-
-        self.assertFalse(any(git_dir.glob(".claude-write-test-*")))
-
-    def test_preflight_git_write_exits_when_git_dir_missing(self):
-        executor = self.make_executor()
-        executor.run_git = MagicMock(return_value=MagicMock(returncode=0, stdout=".git\n", stderr=""))
-
+        self.mock_git(executor, [
+            MagicMock(returncode=0, stdout="/absolute/path/.git/worktrees/develop\n", stderr=""),
+            MagicMock(returncode=0, stdout="develop\n", stderr=""),
+        ])
         with self.assertRaises(SystemExit) as exc:
-            self.execute.git_ops.preflight_git_write(executor)
-
-        self.assertEqual(1, exc.exception.code)
-
-    def test_build_commit_uses_summary_and_infers_feat(self):
-        executor = self.make_executor()
-        current = {"status": "completed", "summary": "관리자 재고 조정 기능을 추가한다"}
-
-        result = executor.build_commit(current, ["src/main/java/com/commerce/stock/StockService.java"])
-
-        self.assertEqual("feat: 관리자 재고 조정 기능을 추가한다", result)
-
-    def test_build_commit_infers_docs_type(self):
-        executor = self.make_executor()
-        current = {"status": "completed", "summary": "재고 관리 문서를 동기화한다"}
-
-        result = executor.build_commit(current, ["docs/api-spec.md", "docs/db-schema.md"])
-
-        self.assertEqual("docs: 재고 관리 문서를 동기화한다", result)
-
-    def test_build_commit_infers_test_type(self):
-        executor = self.make_executor()
-        current = {"status": "completed", "summary": "재고 관리 서비스 테스트를 추가한다"}
-
-        result = executor.build_commit(current, ["src/test/java/com/commerce/stock/StockServiceTest.java"])
-
-        self.assertEqual("test: 재고 관리 서비스 테스트를 추가한다", result)
-
-    def test_build_commit_infers_chore_type(self):
-        executor = self.make_executor()
-        current = {"status": "completed", "summary": "dev-start 하네스 실행 안정성을 개선한다"}
-
-        result = executor.build_commit(current, [".claude/skills/harness/scripts/execute.py"])
-
-        self.assertEqual("chore: dev-start 하네스 실행 안정성을 개선한다", result)
-
-    def test_build_commit_exits_when_summary_missing(self):
-        executor = self.make_executor()
-
-        with self.assertRaises(SystemExit) as exc:
-            executor.build_commit({"status": "completed"}, ["src/main/java/com/commerce/skilltest/ApiService.java"])
-
-        self.assertEqual(1, exc.exception.code)
-
-    def test_commit_step_commits_only_feature_change(self):
-        executor = self.make_executor()
-        calls = []
-
-        def fake_git(*args):
-            calls.append(args)
-            if args[:2] == ("diff", "--cached"):
-                return MagicMock(returncode=1, stdout="", stderr="")
-            return MagicMock(returncode=0, stdout="", stderr="")
-
-        executor.run_git = fake_git
-        with patch.object(self.execute.git_ops, "list_worktree_paths", return_value=["src/main/java/com/commerce/skilltest/ApiService.java"]):
-            executor.commit_step(2, "feat: 스킬 테스트 API를 추가한다", ["src/main/java/com/commerce/skilltest/**"])
-        commit_calls = [call for call in calls if call[0] == "commit"]
-        self.assertEqual(1, len(commit_calls))
-        self.assertIn("feat: 스킬 테스트 API를 추가한다", commit_calls[0][2])
-        self.assertNotIn(("add", "-A"), calls)
-        self.assertIn(("add", "--all", "--", "src/main/java/com/commerce/skilltest"), calls)
-        add_calls = [call for call in calls if call[0] == "add"]
-        self.assertNotIn("docs/features/skill-test/phases/0-mvp/step2-output.json", str(add_calls))
-        self.assertNotIn("docs/features/skill-test/phases/0-mvp/workflow-checklist.json", str(add_calls))
-
-    def test_commit_step_exits_when_disallowed_change_exists(self):
-        executor = self.make_executor()
-        executor.run_git = MagicMock(return_value=MagicMock(returncode=0, stdout="", stderr=""))
-        with patch.object(
-            self.execute.git_ops,
-            "list_worktree_paths",
-            return_value=["src/main/java/com/commerce/auth/AuthService.java"],
-        ):
-            with self.assertRaises(SystemExit) as exc:
-                executor.commit_step(2, "feat: 스킬 테스트 API를 추가한다", ["src/main/java/com/commerce/skilltest/**"])
+            executor._validate_worktree_context()
         self.assertEqual(1, exc.exception.code)
 
     def test_run_developer_worker_writes_output_json(self):
@@ -694,7 +572,7 @@ class StepExecutorTest(unittest.TestCase):
             self.assertTrue(hasattr(time_result, "__class__"))
         self.assertGreaterEqual(info.elapsed, 0.0)
 
-    def test_execute_single_step_completed_commits_and_returns_true(self):
+    def test_execute_single_step_completed_calls_commit_agent_and_returns_true(self):
         executor = self.make_executor()
 
         @contextmanager
@@ -712,24 +590,16 @@ class StepExecutorTest(unittest.TestCase):
 
         self.execute.progress_indicator = fake_progress
         executor.run_developer_worker = fake_invoke
-        executor.commit_step = MagicMock()
         executor.review_step_result = MagicMock(return_value=self.execute.reviewer_worker.ReviewResult("pass", "OK"))
-        executor.list_review_changed_paths = MagicMock(return_value=["src/main/java/com/commerce/skilltest/ApiService.java"])
         executor.run_acceptance_checks = MagicMock(return_value={"passed": True})
-        with patch.object(self.execute.git_ops, "validate_worktree_scope"):
-            self.write_ac_output()
-            result = executor.execute_single_step({"step": 2, "name": "api"})
+        self.write_ac_output()
+
+        with patch.object(self.execute.git_ops, "list_worktree_paths", return_value=["src/main/java/com/commerce/skilltest/ApiService.java"]):
+            with patch.object(self.execute.commit_agent, "run") as mock_commit_agent:
+                result = executor.execute_single_step({"step": 2, "name": "api"})
 
         self.assertTrue(result)
-        executor.commit_step.assert_called_once_with(
-            2,
-            "feat: 스킬 테스트 API를 추가한다",
-            [
-                "src/main/java/com/commerce/skilltest/**",
-                "src/test/java/com/commerce/skilltest/**",
-                "docs/features/skill-test/**",
-            ],
-        )
+        mock_commit_agent.assert_called_once_with(executor.root, executor.phase_dir, ANY)
         executor.review_step_result.assert_called_once()
 
     def test_execute_single_step_blocked_updates_top_index(self):
@@ -779,7 +649,6 @@ class StepExecutorTest(unittest.TestCase):
 
         self.execute.progress_indicator = fake_progress
         executor.run_developer_worker = fake_invoke
-        executor.commit_step = MagicMock()
         executor.run_acceptance_checks = MagicMock(return_value={"passed": False})
 
         with self.assertRaises(SystemExit) as exc:
@@ -790,10 +659,10 @@ class StepExecutorTest(unittest.TestCase):
         self.assertEqual("error", index["steps"][2]["status"])
         feature = self.read_json(self.root / "docs" / "features" / "skill-test" / "phases" / "index.json")
         self.assertEqual("error", feature["phases"][0]["status"])
-        executor.commit_step.assert_not_called()
 
     def test_finalize_commits_index_state_and_pushes_when_enabled(self):
         executor = self.make_executor(auto_push=True)
+        executor.branch_name = "feature/skill-test"
         calls = []
 
         def fake_git(*args):
@@ -803,17 +672,7 @@ class StepExecutorTest(unittest.TestCase):
             return MagicMock(returncode=0, stdout="", stderr="")
 
         executor.run_git = fake_git
-        with patch.object(
-            self.execute.git_ops,
-            "list_worktree_paths",
-            return_value=[
-                "docs/features/skill-test/phases/0-mvp/index.json",
-                "docs/features/skill-test/phases/index.json",
-                "docs/features/skill-test/phases/0-mvp/workflow-checklist.json",
-                "docs/features/skill-test/phases/0-mvp/step2-output.json",
-            ],
-        ):
-            executor.finalize()
+        executor.finalize()
 
         index = self.read_json(self.root / "docs" / "features" / "skill-test" / "phases" / "0-mvp" / "index.json")
         self.assertIn("completed_at", index)
@@ -851,7 +710,6 @@ class StepExecutorTest(unittest.TestCase):
 
         self.execute.progress_indicator = fake_progress
         executor.run_developer_worker = fake_invoke
-        executor.commit_step = MagicMock()
         executor.run_acceptance_checks = MagicMock(return_value={"passed": True})
 
         with self.assertRaises(SystemExit) as exc:
@@ -881,7 +739,6 @@ class StepExecutorTest(unittest.TestCase):
 
         self.execute.progress_indicator = fake_progress
         executor.run_developer_worker = fake_invoke
-        executor.commit_step = MagicMock()
 
         with self.assertRaises(SystemExit) as exc:
             executor.execute_single_step({"step": 2, "name": "api"})
@@ -909,12 +766,10 @@ class StepExecutorTest(unittest.TestCase):
 
         self.execute.progress_indicator = fake_progress
         executor.run_developer_worker = fake_invoke
-        executor.commit_step = MagicMock()
         executor.review_step_result = MagicMock(return_value=self.execute.reviewer_worker.ReviewResult("retryable_error", "회귀 위험이 남아 있습니다."))
-        executor.list_review_changed_paths = MagicMock(return_value=["src/main/java/com/commerce/skilltest/ApiService.java"])
         executor.run_acceptance_checks = MagicMock(return_value={"passed": True})
 
-        with patch.object(self.execute.git_ops, "validate_worktree_scope"):
+        with patch.object(self.execute.git_ops, "list_worktree_paths", return_value=["src/main/java/com/commerce/skilltest/ApiService.java"]):
             self.write_ac_output()
             with self.assertRaises(SystemExit) as exc:
                 executor.execute_single_step({"step": 2, "name": "api"})
@@ -947,7 +802,6 @@ class StepExecutorTest(unittest.TestCase):
         self.execute.progress_indicator = fake_progress
         executor.run_developer_worker = fake_invoke
         executor.run_acceptance_checks = fake_run_acceptance
-        executor.commit_step = MagicMock()
 
         with self.assertRaises(SystemExit) as exc:
             executor.execute_single_step({"step": 2, "name": "api"})
@@ -956,18 +810,6 @@ class StepExecutorTest(unittest.TestCase):
         index = self.read_json(self.root / "docs" / "features" / "skill-test" / "phases" / "0-mvp" / "index.json")
         self.assertEqual("error", index["steps"][2]["status"])
         self.assertIn("Acceptance Criteria", index["steps"][2]["error_message"])
-
-    def test_finalize_exits_when_unrelated_change_exists(self):
-        executor = self.make_executor()
-        executor.run_git = MagicMock(return_value=MagicMock(returncode=0, stdout="", stderr=""))
-        with patch.object(
-            self.execute.git_ops,
-            "list_worktree_paths",
-            return_value=["src/main/java/com/commerce/auth/AuthService.java"],
-        ):
-            with self.assertRaises(SystemExit) as exc:
-                executor.finalize()
-        self.assertEqual(1, exc.exception.code)
 
     def test_resolve_phase_dir_exits_when_directory_missing(self):
         executor = self.make_executor()
