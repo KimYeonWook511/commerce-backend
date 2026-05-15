@@ -29,11 +29,6 @@ public class RedisRefreshTokenStore implements RefreshTokenStore {
 		return Optional.ofNullable(redisTemplate.opsForValue().get(buildKey(memberId)));
 	}
 
-	@Override
-	public void delete(Long memberId) {
-		redisTemplate.delete(buildKey(memberId));
-	}
-
 	private String buildKey(Long memberId) {
 		return "refresh:" + memberId;
 	}
