@@ -111,7 +111,7 @@ class StepExecutor:
         self.phase_name = index.get("phase", self.phase_dir_name)
         self.feature_name = self.extract_feature_name(index)
         self.total_steps = len(index["steps"])
-        self.branch_name = f"feature/{self.feature_name}"  # _validate_worktree_context에서 실제 브랜치로 갱신
+        self.branch_name: str = ""  # _validate_worktree_context에서 실제 브랜치로 설정
         self.validate_feature_phase_registration()
 
     def resolve_phase_dir(self, phase_path: str) -> Path:

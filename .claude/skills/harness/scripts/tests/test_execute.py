@@ -661,6 +661,7 @@ class StepExecutorTest(unittest.TestCase):
 
     def test_finalize_commits_index_state_and_pushes_when_enabled(self):
         executor = self.make_executor(auto_push=True)
+        executor.branch_name = "feature/skill-test"
         calls = []
 
         def fake_git(*args):
