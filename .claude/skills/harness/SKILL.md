@@ -162,7 +162,7 @@ File Drafting 완료 후 필수 중단:
 
 ### 7. Execution
 
-`phases` 파일이 준비되면 feature 브랜치 worktree 안에서 실행기를 실행한다.
+`phases` 파일이 준비되면 작업 브랜치 worktree 안에서 실행기를 실행한다.
 
 ```bash
 # worktrees/<type>-<feature-name>/ 안에서
@@ -184,7 +184,7 @@ python3 .claude/skills/harness/scripts/execute.py docs/features/<feature-name>/p
 - `blocked` 또는 3회 재시도 후 최종 `error`가 발생하면 즉시 중단하고 사용자에게 실패 step, 실패 사유, 관련 output 파일 경로를 보고한다.
 - 최종 `error` 또는 `blocked` 이후 agent는 사용자 승인 없이 step 상태를 `pending`으로 되돌리지 않는다.
 - agent는 사용자 승인 없이 실패 회피 목적으로 step 요구사항, Acceptance Criteria, feature 문서, root docs를 수정해 재시도하지 않는다.
-- 실패 원인이 문서 누락, scope 누락, Acceptance Criteria 오류처럼 명확해 보여도 자동 수정하지 않는다. 먼저 원인과 수정 계획을 사용자에게 제시한다.
+- 실패 원인이 문서 누락, Acceptance Criteria 오류처럼 명확해 보여도 자동 수정하지 않는다. 먼저 원인과 수정 계획을 사용자에게 제시한다.
 - 재실행은 사용자가 문서/상태 수정과 `execute.py` 재실행을 명시적으로 승인한 뒤에만 한다.
 
 `--push`는 모든 step이 완료된 뒤 현재 feature 브랜치를 원격 저장소로 push하는 옵션이다.

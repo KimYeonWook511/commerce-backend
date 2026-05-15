@@ -143,7 +143,6 @@ step 실행 상태 파일이다.
 - `/docs/features/<feature-name>/adr.md`
 - `/docs/features/<feature-name>/api-spec.md`
 - `/docs/features/<feature-name>/db-schema.md`
-- `/docs/commit-conventions.md`
 - `{이전 step에서 생성/수정된 파일 경로}`
 
 기능 문서만으로 부족한 공통 맥락이 있으면 아래처럼 루트 문서를 추가로 읽는다.
@@ -223,10 +222,10 @@ step 실행 상태 파일이다.
 
 ## 실행
 
-기능별 `phases` 구조가 준비되면 feature 브랜치 worktree 안에서 실행기를 순차 실행한다.
+기능별 `phases` 구조가 준비되면 작업 브랜치 worktree 안에서 실행기를 순차 실행한다.
 
 ```bash
-# worktrees/feature-<feature-name>/ 안에서
+# worktrees/<type>-<feature-name>/ 안에서
 python3 .claude/skills/harness/scripts/execute.py docs/features/<feature-name>/phases/<phase-name>
 python3 .claude/skills/harness/scripts/execute.py docs/features/<feature-name>/phases/<phase-name> --push
 ```
