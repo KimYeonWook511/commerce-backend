@@ -14,7 +14,6 @@ from __future__ import annotations
 import argparse
 import contextlib
 import json
-import re
 import sys
 import threading
 import time
@@ -27,6 +26,7 @@ SCRIPT_DIR = Path(__file__).resolve().parent
 if str(SCRIPT_DIR) not in sys.path:
     sys.path.insert(0, str(SCRIPT_DIR))
 
+import commit_agent
 import developer_guardrails
 import developer_worker
 import acceptance_runner
@@ -77,9 +77,10 @@ class StepExecutor:
         (1, "Explore"),
         (2, "Discuss"),
         (3, "Step Design"),
-        (4, "File Drafting"),
-        (5, "Execution Authorization"),
-        (6, "Execution"),
+        (4, "Worktree 생성 및 이동"),
+        (5, "File Drafting"),
+        (6, "Execution Authorization"),
+        (7, "Execution"),
     ]
     EXECUTE_PREFIX_RULE = ["python3", ".claude/skills/harness/scripts/execute.py"]
     APPROVAL_PROMPT_MODES = {"per_run", "saved_prefix_rule"}
@@ -110,7 +111,7 @@ class StepExecutor:
         self.phase_name = index.get("phase", self.phase_dir_name)
         self.feature_name = self.extract_feature_name(index)
         self.total_steps = len(index["steps"])
-        self.branch_name = f"feature/{self.feature_name}"
+        self.branch_name = f"feature/{self.feature_name}"  # _validate_worktree_context에서 실제 브랜치로 갱신
         self.validate_feature_phase_registration()
 
     def resolve_phase_dir(self, phase_path: str) -> Path:
@@ -147,7 +148,6 @@ class StepExecutor:
         self.validate_workflow_checklist()
         self.validate_completed_step_artifacts()
         self.check_blockers()
-        git_ops.preflight_git_write(self)
         self._validate_worktree_context()
         self.mark_workflow_execution_in_progress()
         self.ensure_created_at()
@@ -162,19 +162,32 @@ class StepExecutor:
                 print(f"\n  ERROR: '{tool}'이 설치되어 있지 않습니다. execute.py 실행 전 설치하세요.")
                 raise SystemExit(1)
 
-    def _validate_worktree_context(self):
-        """현재 실행 위치가 올바른 feature 브랜치인지 확인한다."""
+    def _read_current_branch(self) -> str:
+        """현재 브랜치명을 git에서 읽어 반환한다."""
         result = self.run_git("rev-parse", "--abbrev-ref", "HEAD")
         if result.returncode != 0:
             print("  ERROR: git을 사용할 수 없거나 git repo가 아닙니다.")
             raise SystemExit(1)
+        return result.stdout.strip()
 
-        current_branch = result.stdout.strip()
-        if current_branch != self.branch_name:
-            print(f"\n  ERROR: execute.py는 feature 브랜치 worktree 안에서 실행해야 합니다.")
-            print(f"  현재 브랜치: {current_branch}")
-            print(f"  필요 브랜치: {self.branch_name}")
-            print(f"  hint: worktrees/feature-{self.feature_name}/ 안에서 실행하세요.")
+    def _validate_worktree_context(self):
+        """worktree 안에서 실행 중인지, 보호 브랜치가 아닌지 확인한다."""
+        git_dir_result = self.run_git("rev-parse", "--git-dir")
+        if git_dir_result.returncode != 0:
+            print("  ERROR: git을 사용할 수 없거나 git repo가 아닙니다.")
+            raise SystemExit(1)
+
+        git_dir = git_dir_result.stdout.strip()
+        if not Path(git_dir).is_absolute():
+            print("\n  ERROR: execute.py는 worktree 안에서 실행해야 합니다.")
+            print("  hint: git worktree add로 생성한 worktrees/ 디렉토리 안에서 실행하세요.")
+            raise SystemExit(1)
+
+        self.branch_name = self._read_current_branch()
+        protected = {"main", "master", "develop"}
+        if self.branch_name in protected:
+            print(f"\n  ERROR: 보호 브랜치({self.branch_name})에서 execute.py를 실행할 수 없습니다.")
+            print("  hint: 작업 브랜치 worktree 안에서 실행하세요.")
             raise SystemExit(1)
 
     # --- workflow checklist ---
@@ -198,7 +211,7 @@ class StepExecutor:
 
         items = checklist.get("items")
         if not isinstance(items, list) or len(items) != len(self.WORKFLOW_ITEMS):
-            print("\n  ERROR: workflow-checklist.json must contain the six dev-start workflow items.")
+            print("\n  ERROR: workflow-checklist.json must contain the seven dev-start workflow items.")
             raise SystemExit(1)
 
         invalid_items: list[str] = []
@@ -212,11 +225,11 @@ class StepExecutor:
                 continue
 
             status = item.get("status")
-            if expected_order <= 5 and status != "completed":
+            if expected_order <= 6 and status != "completed":
                 incomplete_items.append(expected_title)
-            if expected_order == 6 and status not in {"pending", "in_progress"}:
+            if expected_order == 7 and status not in {"pending", "in_progress"}:
                 invalid_items.append(f"{expected_order}. {expected_title} status must be pending or in_progress")
-            if expected_order == 5 and status == "completed":
+            if expected_order == 6 and status == "completed":
                 invalid_items.extend(self.validate_execution_authorization_item(item))
 
         if invalid_items:
@@ -243,23 +256,23 @@ class StepExecutor:
         errors: list[str] = []
         authorization = item.get("authorization")
         if not isinstance(authorization, dict):
-            return ["5. Execution Authorization authorization is required"]
+            return ["6. Execution Authorization authorization is required"]
 
         if authorization.get("escalation_approved") is not True:
-            errors.append("5. Execution Authorization escalation_approved must be true")
+            errors.append("6. Execution Authorization escalation_approved must be true")
 
         mode = authorization.get("approval_prompt_mode")
         if mode not in self.APPROVAL_PROMPT_MODES:
-            errors.append("5. Execution Authorization approval_prompt_mode must be per_run or saved_prefix_rule")
+            errors.append("6. Execution Authorization approval_prompt_mode must be per_run or saved_prefix_rule")
         elif mode == "saved_prefix_rule" and authorization.get("prefix_rule") != self.EXECUTE_PREFIX_RULE:
-            errors.append("5. Execution Authorization prefix_rule must match execute.py command")
+            errors.append("6. Execution Authorization prefix_rule must match execute.py command")
         elif mode == "per_run" and authorization.get("prefix_rule") not in (None, []):
-            errors.append("5. Execution Authorization prefix_rule must be null or empty for per_run")
+            errors.append("6. Execution Authorization prefix_rule must be null or empty for per_run")
 
         if authorization.get("approved_by") != "user":
-            errors.append("5. Execution Authorization approved_by must be user")
+            errors.append("6. Execution Authorization approved_by must be user")
         if not authorization.get("approved_at"):
-            errors.append("5. Execution Authorization approved_at is required")
+            errors.append("6. Execution Authorization approved_at is required")
 
         return errors
 
@@ -321,38 +334,6 @@ class StepExecutor:
             raise SystemExit(1)
         return step_file
 
-    def parse_editable_paths(self, step_text: str) -> list[str]:
-        """step 문서의 `수정 가능 경로` 섹션에서 허용 경로 목록을 추출한다."""
-        match = re.search(
-            r"^## 수정 가능 경로\s*$\n(?P<body>.*?)(?=^## |\Z)",
-            step_text,
-            re.MULTILINE | re.DOTALL,
-        )
-        if not match:
-            print(f"ERROR: {self.phase_relpath}/step*.md is missing the `수정 가능 경로` section.")
-            print("Add the allowed edit paths to the step document and retry.")
-            raise SystemExit(1)
-
-        editable_paths: list[str] = []
-        for raw_line in match.group("body").splitlines():
-            line = raw_line.strip()
-            if not line.startswith("- "):
-                continue
-            value = line[2:].strip().strip("`").strip()
-            if value:
-                editable_paths.append(value)
-
-        if not editable_paths:
-            print(f"ERROR: {self.phase_relpath}/step*.md has no editable paths.")
-            print("Add at least one allowed edit path under `수정 가능 경로` and retry.")
-            raise SystemExit(1)
-
-        feature_docs_path = f"docs/features/{self.feature_name}/**"
-        if not any(git_ops.normalize_pathspec(path) == git_ops.normalize_pathspec(feature_docs_path) for path in editable_paths):
-            editable_paths.insert(0, feature_docs_path)
-
-        return editable_paths
-
     # --- timestamps ---
 
     def stamp(self) -> str:
@@ -376,10 +357,6 @@ class StepExecutor:
     def run_git(self, *args):
         """git 명령을 실행하고 stdout/stderr를 캡처한다."""
         return git_ops.run_git(self, *args)
-
-    def commit_step(self, step_num: int, message: str, editable_paths: list[str]):
-        """현재 step의 기능 변경만 커밋한다."""
-        git_ops.commit_step(self, step_num, message, editable_paths)
 
     def update_feature_index(self, status: str):
         """기능 내부 phases index와 현재 phase 상태를 동기화한다."""
@@ -436,33 +413,6 @@ class StepExecutor:
             max_retries=self.MAX_RETRIES,
             prev_error=prev_error,
         )
-
-    def build_commit(self, current: dict, changed_paths: list[str]) -> str:
-        """변경 경로와 step summary를 기반으로 커밋 메시지를 만든다."""
-        summary = str(current.get("summary", "")).strip()
-        if not summary:
-            print("ERROR: completed step에는 summary가 필요합니다.")
-            raise SystemExit(1)
-
-        commit_type = self.infer_commit_type(changed_paths)
-        subject = summary.rstrip(".。").strip()
-        return f"{commit_type}: {subject}"
-
-    def infer_commit_type(self, changed_paths: list[str]) -> str:
-        """변경 경로로 커밋 type을 보수적으로 추론한다."""
-        code_paths = [
-            path
-            for path in changed_paths
-            if not path.startswith(f"{self.phase_relpath}/")
-            and not path.startswith(f"{self.feature_phases_relpath}/")
-        ]
-        if code_paths and all(path.startswith((".claude/", ".github/", "gradle", "docs/hooks/", "docs/agents/", "docs/skills/")) for path in code_paths):
-            return "chore"
-        if code_paths and all(path.startswith("docs/") for path in code_paths):
-            return "docs"
-        if code_paths and all(path.startswith("src/test/") for path in code_paths):
-            return "test"
-        return "feat"
 
     def build_reviewer_guardrails(self) -> str:
         """reviewer worker용 규칙 문자열을 만든다."""
@@ -522,18 +472,6 @@ class StepExecutor:
         current["failed_at"] = timestamp
         for key in ("summary", "blocked_reason", "verification_error", "completed_at", "blocked_at"):
             current.pop(key, None)
-
-    def list_review_changed_paths(self, editable_paths: list[str], metadata_paths: list[str]) -> list[str]:
-        """리뷰 대상 변경 파일만 repo-relative 경로로 추린다."""
-        changed_paths = git_ops.list_worktree_paths(self)
-        review_paths: list[str] = []
-        for path in changed_paths:
-            if any(git_ops.matches_pathspec(path, allowed_path) for allowed_path in editable_paths):
-                review_paths.append(path)
-                continue
-            if any(git_ops.matches_pathspec(path, metadata_path) for metadata_path in metadata_paths):
-                review_paths.append(path)
-        return review_paths
 
     # --- worker 호출 ---
 
@@ -624,15 +562,6 @@ class StepExecutor:
         prev_error = None
         step_file = self.ensure_step_file_exists(step_num)
         step_text = step_file.read_text(encoding="utf-8")
-        editable_paths = self.parse_editable_paths(step_text)
-        metadata_paths = [
-            f"{self.phase_relpath}/step{step_num}-output.json",
-            f"{self.phase_relpath}/step{step_num}-ac-output.json",
-            f"{self.phase_relpath}/step{step_num}-review-output.json",
-            f"{self.phase_relpath}/index.json",
-            f"{self.phase_relpath}/workflow-checklist.json",
-            f"{self.feature_phases_relpath}/index.json",
-        ]
 
         for attempt in range(1, self.MAX_RETRIES + 1):
             index = self.read_json(self.index_file)
@@ -643,7 +572,7 @@ class StepExecutor:
                 section for section in (context_text, previous_step_context) if section
             )
 
-            label = f"Step {step_num}/{self.total_steps - 1} ({done} done): {step_name}"
+            label = f"Step {step_num}/{self.total_steps} ({done} done): {step_name}"
             if attempt > 1:
                 label += f" [retry {attempt}/{self.MAX_RETRIES}]"
 
@@ -698,13 +627,7 @@ class StepExecutor:
                     self.update_feature_index("error")
                     raise SystemExit(1)
 
-                git_ops.validate_worktree_scope(
-                    self,
-                    editable_paths=editable_paths,
-                    metadata_paths=metadata_paths,
-                    context=f"step {step_num} review",
-                )
-                review_paths = self.list_review_changed_paths(editable_paths, metadata_paths)
+                review_paths = git_ops.list_worktree_paths(self)
                 review = self.review_step_result(current, step_text, review_paths)
                 if review.decision == "blocked":
                     self.mark_step_blocked_from_review(current, review.message)
@@ -732,9 +655,7 @@ class StepExecutor:
 
                 current["completed_at"] = timestamp
                 self.write_json(self.index_file, index)
-                commit_paths = self.list_review_changed_paths(editable_paths, metadata_paths)
-                message = self.build_commit(current, commit_paths)
-                self.commit_step(step_num, message, editable_paths)
+                commit_agent.run(self.root, self.phase_dir, current)
                 print(f"  ✓ Step {step_num}: {step_name} [{elapsed}s]")
                 return True
 
@@ -783,28 +704,6 @@ class StepExecutor:
         self.write_json(self.index_file, index)
         self.update_feature_index("completed")
         self.mark_workflow_execution_completed()
-        metadata_paths = [
-            f"{self.phase_relpath}/index.json",
-            f"{self.phase_relpath}/workflow-checklist.json",
-            f"{self.feature_phases_relpath}/index.json",
-        ]
-        for step in index.get("steps", []):
-            step_num = step.get("step")
-            if isinstance(step_num, int):
-                metadata_paths.extend(
-                    [
-                        f"{self.phase_relpath}/step{step_num}-output.json",
-                        f"{self.phase_relpath}/step{step_num}-ac-output.json",
-                        f"{self.phase_relpath}/step{step_num}-review-output.json",
-                    ]
-                )
-
-        git_ops.validate_worktree_scope(
-            self,
-            editable_paths=[],
-            metadata_paths=metadata_paths,
-            context="phase finalize",
-        )
         git_ops.stage_paths(
             self,
             [

@@ -2,7 +2,6 @@ from __future__ import annotations
 
 from pathlib import Path
 import subprocess
-import uuid
 
 
 def run_git(executor, *args) -> subprocess.CompletedProcess:
@@ -15,47 +14,12 @@ def run_git(executor, *args) -> subprocess.CompletedProcess:
     )
 
 
-def preflight_git_write(executor):
-    """실행 중인 execute.py 프로세스가 git 메타데이터에 쓸 수 있는지 확인한다."""
-    git_dir_result = executor.run_git("rev-parse", "--git-dir")
-    if git_dir_result.returncode != 0:
-        print("  ERROR: git을 사용할 수 없거나 git repo가 아닙니다.")
-        print(f"  {git_dir_result.stderr.strip()}")
-        raise SystemExit(1)
-
-    git_dir = Path(git_dir_result.stdout.strip())
-    if not git_dir.is_absolute():
-        git_dir = Path(executor.root) / git_dir
-
-    probe_path = git_dir / f".claude-write-test-{uuid.uuid4().hex}"
-    try:
-        probe_path.write_text("ok", encoding="utf-8")
-    except OSError as exc:
-        print("  ERROR: execute.py 프로세스가 git 메타데이터 디렉터리에 쓸 수 없습니다.")
-        print(f"  Path: {git_dir}")
-        print(f"  Reason: {exc}")
-        print("  Fix: execute.py 명령 자체를 권한 상승으로 다시 실행하세요.")
-        raise SystemExit(1)
-    finally:
-        probe_path.unlink(missing_ok=True)
-
-
 def normalize_pathspec(pathspec: str) -> str:
     """`/**` 접미사가 붙은 경로는 git add 가능한 디렉터리 경로로 정규화한다."""
     normalized = pathspec.strip().strip("`").strip()
     if normalized.endswith("/**"):
         return normalized[:-3].rstrip("/")
     return normalized
-
-
-def matches_pathspec(path: str, pathspec: str) -> bool:
-    """상대 경로가 허용 pathspec에 포함되는지 확인한다."""
-    normalized = normalize_pathspec(pathspec)
-    if not normalized:
-        return False
-    if path == normalized:
-        return True
-    return path.startswith(f"{normalized}/")
 
 
 def list_worktree_paths(executor) -> list[str]:
@@ -66,30 +30,8 @@ def list_worktree_paths(executor) -> list[str]:
     return sorted(tracked | staged | untracked)
 
 
-def validate_worktree_scope(executor, editable_paths: list[str], metadata_paths: list[str], context: str):
-    """허용 경로와 메타데이터 경로 밖의 변경이 있으면 즉시 중단한다."""
-    allowed = [normalize_pathspec(path) for path in editable_paths]
-    metadata = [normalize_pathspec(path) for path in metadata_paths]
-    changed_paths = list_worktree_paths(executor)
-
-    disallowed: list[str] = []
-    for path in changed_paths:
-        if any(matches_pathspec(path, allowed_path) for allowed_path in allowed):
-            continue
-        if any(matches_pathspec(path, metadata_path) for metadata_path in metadata):
-            continue
-        disallowed.append(path)
-
-    if disallowed:
-        print(f"  ERROR: {context} 중 허용 범위 밖 변경이 발견되었습니다.")
-        for path in disallowed:
-            print(f"  - {path}")
-        print("  Fix: step 문서의 `수정 가능 경로`를 조정하거나 범위 밖 변경을 정리한 뒤 다시 시도하세요.")
-        raise SystemExit(1)
-
-
 def stage_paths(executor, pathspecs: list[str]):
-    """허용 pathspec만 선택적으로 스테이징한다."""
+    """지정한 pathspec만 선택적으로 스테이징한다."""
     staged_targets = []
     for pathspec in pathspecs:
         normalized = normalize_pathspec(pathspec)
@@ -100,26 +42,3 @@ def stage_paths(executor, pathspecs: list[str]):
         return
 
     executor.run_git("add", "--all", "--", *staged_targets)
-
-
-def commit_step(executor, step_num: int, message: str, editable_paths: list[str]):
-    """현재 step의 기능 변경만 커밋한다."""
-    output_rel = f"{executor.phase_relpath}/step{step_num}-output.json"
-    ac_output_rel = f"{executor.phase_relpath}/step{step_num}-ac-output.json"
-    review_output_rel = f"{executor.phase_relpath}/step{step_num}-review-output.json"
-    phase_index_rel = f"{executor.phase_relpath}/index.json"
-    workflow_checklist_rel = f"{executor.phase_relpath}/workflow-checklist.json"
-    feature_index_rel = f"{executor.feature_phases_relpath}/index.json"
-    metadata_paths = [output_rel, ac_output_rel, review_output_rel, phase_index_rel, workflow_checklist_rel, feature_index_rel]
-
-    validate_worktree_scope(executor, editable_paths, metadata_paths, context=f"step {step_num} commit")
-    stage_paths(executor, editable_paths)
-    executor.run_git("reset", "HEAD", "--", *metadata_paths)
-
-    if executor.run_git("diff", "--cached", "--quiet").returncode != 0:
-        step_commit = executor.run_git("commit", "-m", message)
-        if step_commit.returncode == 0:
-            print(f"  Commit: {message}")
-        else:
-            print(f"  ERROR: 코드 커밋 실패: {step_commit.stderr.strip()}")
-            raise SystemExit(1)
