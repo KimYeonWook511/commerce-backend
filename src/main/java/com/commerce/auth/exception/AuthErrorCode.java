@@ -12,7 +12,7 @@ public enum AuthErrorCode implements ErrorCode {
 	TOKEN_EMPTY(HttpStatus.UNAUTHORIZED, "AUTH-401-4", "토큰이 비어있습니다"),
 	REFRESH_TOKEN_NOT_FOUND(HttpStatus.UNAUTHORIZED, "AUTH-401-5", "리프레시 토큰이 유효하지 않습니다"),
 	FORBIDDEN(HttpStatus.FORBIDDEN, "AUTH-403", "권한이 없습니다"),
-	INTERNAL_ERROR(HttpStatus.INTERNAL_SERVER_ERROR, "AUTH-500", "인증 처리 중 오류가 발생했습니다");
+	INTERNAL_ERROR(HttpStatus.INTERNAL_SERVER_ERROR, "AUTH-500-1", "인증 처리 중 오류가 발생했습니다");
 
 	private final HttpStatus status;
 	private final String code;
