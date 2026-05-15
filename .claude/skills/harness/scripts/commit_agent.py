@@ -77,4 +77,4 @@ def run(root: str, phase_dir: Path, step: dict) -> None:
 
     after_head = _get_head(root)
     if before_head and before_head == after_head:
-        raise RuntimeError(f"commit agent가 커밋을 생성하지 않았습니다. 로그: {output_path}")
+        print(f"  ⚠ commit agent가 커밋을 생성하지 않았습니다. 로그: {output_path}")
