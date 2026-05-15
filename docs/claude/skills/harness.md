@@ -72,7 +72,7 @@ worktree 안에서 feature 문서와 phase 구조를 작성한다. 작성 완료
 
 ### 6. Execution (내부 파이프라인)
 
-step 7인 Execution 안에서 아래 순서로 처리된다.
+Execution Authorization 승인 후 `execute.py`가 아래 순서로 step을 처리한다.
 
 - **Developer Worker**: `execute.py`가 tmux pane을 생성하고 `claude -p`로 worker를 실행한다. Acceptance Criteria를 직접 실행해 검증한다.
 - **Reviewer Worker**: developer 결과를 read-only 관점으로 검토한다. `pass`, `retryable_error`, `blocked` 중 하나를 반환한다.
