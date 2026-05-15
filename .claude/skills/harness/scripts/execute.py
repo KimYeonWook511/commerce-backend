@@ -655,7 +655,15 @@ class StepExecutor:
 
                 current["completed_at"] = timestamp
                 self.write_json(self.index_file, index)
-                commit_agent.run(self.root, self.phase_dir, current)
+                try:
+                    commit_agent.run(self.root, self.phase_dir, current)
+                except Exception as e:
+                    self.mark_step_error(current, str(e), timestamp)
+                    self.write_json(self.index_file, index)
+                    print(f"  ✗ Step {step_num}: {step_name} — commit 실패 [{elapsed}s]")
+                    print(f"    Error: {e}")
+                    self.update_feature_index("error")
+                    raise SystemExit(1)
                 print(f"  ✓ Step {step_num}: {step_name} [{elapsed}s]")
                 return True
 

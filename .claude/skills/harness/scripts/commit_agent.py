@@ -23,6 +23,11 @@ def build_prompt(step_name: str, summary: str) -> str:
     )
 
 
+def _get_head(root: str) -> str:
+    result = subprocess.run(["git", "rev-parse", "HEAD"], capture_output=True, text=True, cwd=root)
+    return result.stdout.strip() if result.returncode == 0 else ""
+
+
 def ensure_tmux_session(session: str):
     result = subprocess.run(["tmux", "has-session", "-t", session], capture_output=True)
     if result.returncode != 0:
@@ -57,10 +62,19 @@ def run(root: str, phase_dir: Path, step: dict) -> None:
         f"; tmux wait-for -S {done_signal}"
     )
 
+    before_head = _get_head(root)
     try:
         subprocess.run(["tmux", "new-window", "-t", session, "-n", pane_name], capture_output=True)
         subprocess.run(["tmux", "send-keys", "-t", f"{session}:{pane_name}", cmd, "Enter"])
-        subprocess.run(["tmux", "wait-for", done_signal])
-        subprocess.run(["tmux", "kill-window", "-t", f"{session}:{pane_name}"], capture_output=True)
+        try:
+            subprocess.run(["tmux", "wait-for", done_signal], timeout=300)
+        except subprocess.TimeoutExpired:
+            raise RuntimeError(f"commit agent가 300초 내에 완료되지 않았습니다 (step {step_num})")
+        finally:
+            subprocess.run(["tmux", "kill-window", "-t", f"{session}:{pane_name}"], capture_output=True)
     finally:
         prompt_path.unlink(missing_ok=True)
+
+    after_head = _get_head(root)
+    if before_head and before_head == after_head:
+        raise RuntimeError(f"commit agent가 커밋을 생성하지 않았습니다. 로그: {output_path}")
