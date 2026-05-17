@@ -1,0 +1,10 @@
+{
+  "phases": [
+    {
+      "dir": "1-amount-mismatch-policy",
+      "status": "completed",
+      "started_at": "2026-05-18T02:19:06+0900",
+      "completed_at": "2026-05-18T02:29:27+0900"
+    }
+  ]
+}

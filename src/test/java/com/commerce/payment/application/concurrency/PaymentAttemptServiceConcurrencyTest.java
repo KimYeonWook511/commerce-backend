@@ -28,6 +28,8 @@ import com.commerce.payment.domain.PaymentAttemptFailCode;
 import com.commerce.payment.domain.PaymentAttemptType;
 import com.commerce.payment.domain.PaymentProvider;
 import com.commerce.payment.application.PaymentAttemptService;
+import com.commerce.payment.exception.PaymentErrorCode;
+import com.commerce.payment.exception.PaymentException;
 import com.commerce.payment.infrastructure.persistence.support.PaymentPersistenceTestSupport;
 import com.commerce.member.infrastructure.persistence.support.MemberPersistenceTestSupport;
 import com.commerce.order.infrastructure.persistence.support.OrderPersistenceTestSupport;
@@ -132,6 +134,58 @@ class PaymentAttemptServiceConcurrencyTest {
 		assertThat(paymentPersistence.countAttempts(merchantPayKey, paymentId, PaymentAttemptType.CANCEL))
 			.isEqualTo(1L);
 		assertThat(errors).isEmpty();
+	}
+
+	@DisplayName("기존 승인 attempt와 다른 금액으로 동시 요청하면 모두 금액 불일치 예외가 발생한다")
+	@Test
+	void getOrCreateApproveAttempt_whenConcurrentRequestWithDifferentAmount_allThrowAmountMismatch() throws Exception {
+		// given: amount=1000으로 approve attempt 선행 생성
+		String merchantPayKey = "PAY-ATTEMPT-MISMATCH-1";
+		String paymentId = "pg-attempt-mismatch-1";
+		paymentAttemptService.getOrCreateApproveAttempt(
+			merchantPayKey, PaymentProvider.NAVERPAY, paymentId, 1000);
+
+		ConcurrentLinkedQueue<Throwable> errors = new ConcurrentLinkedQueue<>();
+
+		// when: 20개 스레드가 amount=2000으로 동시 재요청 (mismatch)
+		runConcurrent(20, () -> paymentAttemptService.getOrCreateApproveAttempt(
+			merchantPayKey, PaymentProvider.NAVERPAY, paymentId, 2000), errors);
+
+		// then: attempt는 1건, 재요청 20개 모두 mismatch 예외
+		assertThat(paymentPersistence.countAttempts(merchantPayKey, paymentId, PaymentAttemptType.APPROVE))
+			.isEqualTo(1L);
+		assertThat(errors).hasSize(20);
+		errors.forEach(e -> {
+			assertThat(e).isInstanceOf(PaymentException.class);
+			assertThat(((PaymentException) e).getErrorCode())
+				.isEqualTo(PaymentErrorCode.PAYMENT_ATTEMPT_AMOUNT_MISMATCH);
+		});
+	}
+
+	@DisplayName("기존 취소 attempt와 다른 금액으로 동시 요청하면 모두 금액 불일치 예외가 발생한다")
+	@Test
+	void getOrCreateCancelAttempt_whenConcurrentRequestWithDifferentAmount_allThrowAmountMismatch() throws Exception {
+		// given: amount=1000으로 cancel attempt 선행 생성
+		String merchantPayKey = "PAY-ATTEMPT-MISMATCH-2";
+		String paymentId = "pg-attempt-mismatch-2";
+		paymentAttemptService.getOrCreateCancelAttempt(
+			merchantPayKey, PaymentProvider.NAVERPAY, paymentId, 1000);
+
+		ConcurrentLinkedQueue<Throwable> errors = new ConcurrentLinkedQueue<>();
+
+		// when: 20개 스레드가 amount=2000으로 동시 재요청 (mismatch)
+		runConcurrent(20, () -> paymentAttemptService.getOrCreateCancelAttempt(
+			merchantPayKey, PaymentProvider.NAVERPAY, paymentId, 2000), errors);
+
+		// then: attempt는 1건, 재요청 20개 모두 mismatch 예외
+		assertThat(paymentPersistence.countAttempts(merchantPayKey, paymentId, PaymentAttemptType.CANCEL))
+			.isEqualTo(1L);
+		assertThat(errors).hasSize(20);
+		errors.forEach(e -> {
+			assertThat(e).isInstanceOf(PaymentException.class);
+			assertThat(((PaymentException) e).getErrorCode())
+				.isEqualTo(PaymentErrorCode.PAYMENT_ATTEMPT_AMOUNT_MISMATCH);
+		});
 	}
 
 	private void runConcurrent(int threadCount, Runnable task, ConcurrentLinkedQueue<Throwable> errors) throws Exception {

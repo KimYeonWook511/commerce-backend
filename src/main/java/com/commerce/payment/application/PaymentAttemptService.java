@@ -15,7 +15,9 @@ import com.commerce.payment.exception.PaymentErrorCode;
 import com.commerce.payment.exception.PaymentException;
 
 import lombok.RequiredArgsConstructor;
+import lombok.extern.slf4j.Slf4j;
 
+@Slf4j
 @Service
 @RequiredArgsConstructor
 @Transactional(readOnly = true)
@@ -38,8 +40,19 @@ public class PaymentAttemptService {
 				PaymentAttempt.createApproveRequested(merchantPayKey, paymentId, amount, provider)
 			);
 		} catch (DataIntegrityViolationException ex) {
-			return paymentAttemptRepository.findApproveAttempt(merchantPayKey, provider, paymentId)
-				.orElseThrow(() -> ex);
+			PaymentAttempt existing = paymentAttemptRepository
+				.findApproveAttempt(merchantPayKey, provider, paymentId)
+				.orElseThrow(() -> {
+					log.error("unique 충돌 후 approve attempt 재조회 실패: merchantPayKey={}, paymentId={}",
+						merchantPayKey, paymentId, ex);
+					return new PaymentException(PaymentErrorCode.PAYMENT_ATTEMPT_NOT_FOUND);
+				});
+			if (existing.getAmount() != amount) {
+				log.warn("PaymentAttempt amount mismatch - key={}, type=APPROVE, existingAmount={}, requested={}",
+					merchantPayKey, existing.getAmount(), amount);
+				throw new PaymentException(PaymentErrorCode.PAYMENT_ATTEMPT_AMOUNT_MISMATCH);
+			}
+			return existing;
 		}
 	}
 
@@ -58,8 +71,19 @@ public class PaymentAttemptService {
 				PaymentAttempt.createCancelRequested(merchantPayKey, paymentId, cancelAmount, provider)
 			);
 		} catch (DataIntegrityViolationException ex) {
-			return paymentAttemptRepository.findCancelAttempt(merchantPayKey, provider, paymentId)
-				.orElseThrow(() -> ex);
+			PaymentAttempt existing = paymentAttemptRepository
+				.findCancelAttempt(merchantPayKey, provider, paymentId)
+				.orElseThrow(() -> {
+					log.error("unique 충돌 후 cancel attempt 재조회 실패: merchantPayKey={}, paymentId={}",
+						merchantPayKey, paymentId, ex);
+					return new PaymentException(PaymentErrorCode.PAYMENT_ATTEMPT_NOT_FOUND);
+				});
+			if (existing.getAmount() != cancelAmount) {
+				log.warn("PaymentAttempt amount mismatch - key={}, type=CANCEL, existingAmount={}, requested={}",
+					merchantPayKey, existing.getAmount(), cancelAmount);
+				throw new PaymentException(PaymentErrorCode.PAYMENT_ATTEMPT_AMOUNT_MISMATCH);
+			}
+			return existing;
 		}
 	}
 
@@ -67,10 +91,10 @@ public class PaymentAttemptService {
 	public void succeedApproveAttempt(
 		String merchantPayKey,
 		PaymentProvider provider,
-		String pgPaymentId,
+		String paymentId,
 		LocalDateTime respondedAt
 	) {
-		PaymentAttempt attempt = paymentAttemptRepository.findApproveAttempt(merchantPayKey, provider, pgPaymentId)
+		PaymentAttempt attempt = paymentAttemptRepository.findApproveAttempt(merchantPayKey, provider, paymentId)
 			.orElseThrow(() -> new PaymentException(PaymentErrorCode.PAYMENT_ATTEMPT_NOT_FOUND));
 		attempt.markApproveSucceeded(respondedAt);
 	}
@@ -79,12 +103,12 @@ public class PaymentAttemptService {
 	public void failApproveAttempt(
 		String merchantPayKey,
 		PaymentProvider provider,
-		String pgPaymentId,
+		String paymentId,
 		PaymentAttemptFailCode failCode,
 		String failDetail,
 		LocalDateTime respondedAt
 	) {
-		PaymentAttempt attempt = paymentAttemptRepository.findApproveAttempt(merchantPayKey, provider, pgPaymentId)
+		PaymentAttempt attempt = paymentAttemptRepository.findApproveAttempt(merchantPayKey, provider, paymentId)
 			.orElseThrow(() -> new PaymentException(PaymentErrorCode.PAYMENT_ATTEMPT_NOT_FOUND));
 		attempt.markApproveFailed(failCode, failDetail, respondedAt);
 	}

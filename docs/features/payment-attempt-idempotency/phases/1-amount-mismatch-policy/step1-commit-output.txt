@@ -1,0 +1,5 @@
+커밋 완료했습니다.
+
+- **커밋**: `4c42f4f` — `test: PaymentAttempt amount 불일치 동시성 케이스를 추가한다`
+- **포함 내용**: APPROVE/CANCEL amount mismatch 동시성 테스트 2건 + `PaymentException`/`PaymentErrorCode` import 추가
+- **제외**: `docs/features/payment-attempt-idempotency/` (이번 step 범위 외 미추적 파일)

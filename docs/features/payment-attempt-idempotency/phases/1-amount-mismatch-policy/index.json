@@ -1,0 +1,40 @@
+{
+  "project": "commerce-backend",
+  "phase": "1-amount-mismatch-policy",
+  "steps": [
+    {
+      "step": 0,
+      "name": "amount-mismatch-policy",
+      "status": "completed",
+      "started_at": "2026-05-18T02:19:06+0900",
+      "summary": "PaymentErrorCode에 PAYMENT_ATTEMPT_AMOUNT_MISMATCH(409) 추가, getOrCreateApproveAttempt/getOrCreateCancelAttempt catch 블록에 amount 불일치 검증 및 infrastructure 예외 변환 추가, succeedApproveAttempt/failApproveAttempt 파라미터 명명 paymentId로 통일, PaymentAttemptServiceTest에 mismatch 케이스 2건 추가 및 기존 누수 케이스 1건 수정",
+      "completed_at": "2026-05-18T02:21:21+0900"
+    },
+    {
+      "step": 1,
+      "name": "concurrency-test",
+      "status": "completed",
+      "started_at": "2026-05-18T02:23:00+0900",
+      "summary": "PaymentAttemptServiceConcurrencyTest에 APPROVE/CANCEL amount mismatch 동시성 케이스 2건 추가, PaymentException/PaymentErrorCode import 추가, 기존 동시성 테스트 4건 모두 통과 확인",
+      "completed_at": "2026-05-18T02:24:23+0900"
+    },
+    {
+      "step": 2,
+      "name": "sync-root-docs",
+      "status": "completed",
+      "started_at": "2026-05-18T02:25:07+0900",
+      "summary": "docs/ADR.md에 ADR-010 추가 — PaymentAttempt 멱등 재요청 amount mismatch 명시적 예외 거부 정책 기록",
+      "completed_at": "2026-05-18T02:25:57+0900"
+    },
+    {
+      "step": 3,
+      "name": "write-retrospective",
+      "status": "completed",
+      "started_at": "2026-05-18T02:26:48+0900",
+      "summary": "docs/features/payment-attempt-idempotency/retrospective.md 신규 작성 — 작업 요약, 설계 결정(ADR-A~D), follow-up(#99/#100), 회고 4개 항목 포함",
+      "completed_at": "2026-05-18T02:28:20+0900"
+    }
+  ],
+  "created_at": "2026-05-18T02:19:06+0900",
+  "completed_at": "2026-05-18T02:29:27+0900"
+}

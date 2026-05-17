@@ -24,7 +24,9 @@ public enum PaymentErrorCode implements ErrorCode {
 	PAYMENT_PG_SERVER_ERROR(HttpStatus.BAD_GATEWAY, "PAYMENT-502-2", "PG 서버 오류가 발생했습니다"),
 	PAYMENT_PG_INVALID_RESPONSE(HttpStatus.BAD_GATEWAY, "PAYMENT-502-3", "PG 응답이 올바르지 않습니다"),
 	PAYMENT_DUPLICATE(HttpStatus.CONFLICT, "PAYMENT-409-2", "이미 다른 결제가 완료된 주문입니다"),
-	PAYMENT_STATUS_NOT_ALLOWED(HttpStatus.CONFLICT, "PAYMENT-409-1", "결제 상태 변경이 허용되지 않습니다");
+	PAYMENT_STATUS_NOT_ALLOWED(HttpStatus.CONFLICT, "PAYMENT-409-1", "결제 상태 변경이 허용되지 않습니다"),
+	PAYMENT_ATTEMPT_AMOUNT_MISMATCH(HttpStatus.CONFLICT, "PAYMENT-409-3",
+		"결제 시도 이력의 금액과 요청 금액이 일치하지 않습니다");
 
 	private final HttpStatus status;
 	private final String code;

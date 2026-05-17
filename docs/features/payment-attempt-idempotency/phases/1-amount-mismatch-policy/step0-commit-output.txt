@@ -1,0 +1,4 @@
+2개 커밋 완료했습니다.
+
+- `a0fce11` — `fix: PaymentAttempt amount 불일치 시 PAYMENT_ATTEMPT_AMOUNT_MISMATCH 예외를 발생시킨다` (`PaymentErrorCode` + `PaymentAttemptService`)
+- `db92ce0` — `test: PaymentAttempt amount 불일치 케이스를 검증한다` (`PaymentAttemptServiceTest`)
