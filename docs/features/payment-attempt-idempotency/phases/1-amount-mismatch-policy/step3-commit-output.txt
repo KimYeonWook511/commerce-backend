@@ -1,0 +1,5 @@
+커밋 완료했습니다.
+
+- **커밋**: `docs: PaymentAttempt 멱등 재요청 작업 회고를 작성한다`
+- **파일**: `docs/features/payment-attempt-idempotency/retrospective.md` (신규, 77줄)
+- **타입 근거**: 문서만 추가하는 변경이므로 `docs` 타입 적용
