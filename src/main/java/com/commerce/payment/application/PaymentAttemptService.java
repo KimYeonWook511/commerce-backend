@@ -48,7 +48,7 @@ public class PaymentAttemptService {
 					return new PaymentException(PaymentErrorCode.PAYMENT_ATTEMPT_NOT_FOUND);
 				});
 			if (existing.getAmount() != amount) {
-				log.warn("PaymentAttempt amount mismatch — key={}, type=APPROVE, existing={}, requested={}",
+				log.warn("PaymentAttempt amount mismatch - key={}, type=APPROVE, existingAmount={}, requested={}",
 					merchantPayKey, existing.getAmount(), amount);
 				throw new PaymentException(PaymentErrorCode.PAYMENT_ATTEMPT_AMOUNT_MISMATCH);
 			}
@@ -79,7 +79,7 @@ public class PaymentAttemptService {
 					return new PaymentException(PaymentErrorCode.PAYMENT_ATTEMPT_NOT_FOUND);
 				});
 			if (existing.getAmount() != cancelAmount) {
-				log.warn("PaymentAttempt amount mismatch — key={}, type=CANCEL, existing={}, requested={}",
+				log.warn("PaymentAttempt amount mismatch - key={}, type=CANCEL, existingAmount={}, requested={}",
 					merchantPayKey, existing.getAmount(), cancelAmount);
 				throw new PaymentException(PaymentErrorCode.PAYMENT_ATTEMPT_AMOUNT_MISMATCH);
 			}
