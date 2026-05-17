@@ -91,10 +91,10 @@ public class PaymentAttemptService {
 	public void succeedApproveAttempt(
 		String merchantPayKey,
 		PaymentProvider provider,
-		String pgPaymentId,
+		String paymentId,
 		LocalDateTime respondedAt
 	) {
-		PaymentAttempt attempt = paymentAttemptRepository.findApproveAttempt(merchantPayKey, provider, pgPaymentId)
+		PaymentAttempt attempt = paymentAttemptRepository.findApproveAttempt(merchantPayKey, provider, paymentId)
 			.orElseThrow(() -> new PaymentException(PaymentErrorCode.PAYMENT_ATTEMPT_NOT_FOUND));
 		attempt.markApproveSucceeded(respondedAt);
 	}
@@ -103,12 +103,12 @@ public class PaymentAttemptService {
 	public void failApproveAttempt(
 		String merchantPayKey,
 		PaymentProvider provider,
-		String pgPaymentId,
+		String paymentId,
 		PaymentAttemptFailCode failCode,
 		String failDetail,
 		LocalDateTime respondedAt
 	) {
-		PaymentAttempt attempt = paymentAttemptRepository.findApproveAttempt(merchantPayKey, provider, pgPaymentId)
+		PaymentAttempt attempt = paymentAttemptRepository.findApproveAttempt(merchantPayKey, provider, paymentId)
 			.orElseThrow(() -> new PaymentException(PaymentErrorCode.PAYMENT_ATTEMPT_NOT_FOUND));
 		attempt.markApproveFailed(failCode, failDetail, respondedAt);
 	}
