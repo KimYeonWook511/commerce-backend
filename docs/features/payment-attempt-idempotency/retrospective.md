@@ -75,3 +75,18 @@ FAILED 상태의 attempt에 amount를 바꾼 재시도를 허용하는 경우를
 - Issue #99(상태 전이 검증)가 구현되면 amount 검사와 상태 검사가 catch 블록에 함께 위치하게 된다. 블록 내 로직이 늘어나는 경우 전용 메서드로 분리해 가독성을 유지하는 것이 좋다.
 - Issue #100(catch 범위 좁히기)은 unique 위반 판별 로직을 공통 유틸로 추출할 수 있다. `OrderCreateService`도 유사한 패턴을 사용하므로 함께 정리하면 일관성이 높아진다.
 - 멱등 키 관련 정책(amount 검증, 상태 전이, catch 범위)이 각기 다른 issue로 분산됐다. 이후에는 멱등성 계층 전체 설계를 한 번에 논의해 관련 issue를 하나의 epic으로 묶어 진행하면 파편화를 줄일 수 있다.
+
+### 하네스 운영 개선
+
+**Step 4: worktree 생성 후 이동 누락**
+
+이번 작업에서 `git worktree add` 후 `cd`를 즉시 하지 않았다. SKILL.md는 두 명령 완료를 Step 4 완료 조건으로 명시하는데, cd 없이 Step 5(파일 작성)로 넘어갔다. 절대 경로로 작성해서 파일 자체는 문제없었지만, execute.py 실행 전에야 뒤늦게 이동했다.
+
+`execute.py`는 내부에서 `_validate_worktree_context`로 worktree 아닌 곳에서 실행하면 즉시 실패(`SystemExit(1)`)한다. 따라서 Step 7은 보호된다. 그러나 Step 4~6 사이에는 보호 장치가 없다. 두 가지 개선 방향을 고려할 수 있다:
+
+- **SKILL.md 강화**: Step 4 완료 확인 기준에 `pwd` 출력 또는 `git branch --show-current` 확인을 명시해 이동 여부를 강제한다.
+- **execute.py 활용**: Step 7 진입 전 execute.py가 잡아주므로, 현재 구조로도 실행 단계에서는 안전하다. 파일 작성 단계(Step 5) 자체는 절대 경로로 처리되어 실질 영향이 없으므로, 운영 규칙(agent 자율 준수)으로 관리하는 수준으로 충분할 수 있다.
+
+**`docs/features/` → `docs/tasks/`로 디렉토리 명칭 변경**
+
+현재 기능 문서 경로가 `docs/features/<name>/`인데, 이 디렉토리 아래에 신규 기능뿐 아니라 정책 fix, 리팩터링 같은 태스크 단위 작업도 함께 관리된다. `features`라는 이름이 범위를 좁게 표현한다. `tasks`로 변경하면 작업 단위를 더 정확히 표현할 수 있다. 다만 SKILL.md, CLAUDE.md, 기존 feature 폴더 참조, harness 스크립트 등 많은 파일을 일괄 수정해야 하므로 별도 작업으로 진행이 필요하다.
