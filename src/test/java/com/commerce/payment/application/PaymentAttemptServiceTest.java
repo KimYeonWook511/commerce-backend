@@ -26,6 +26,8 @@ import com.commerce.payment.domain.PaymentAttemptStatus;
 import com.commerce.payment.domain.PaymentAttemptType;
 import com.commerce.payment.domain.PaymentProvider;
 import com.commerce.payment.domain.repository.PaymentAttemptRepository;
+import com.commerce.payment.exception.PaymentErrorCode;
+import com.commerce.payment.exception.PaymentException;
 
 @ExtendWith(MockitoExtension.class)
 class PaymentAttemptServiceTest {
@@ -127,7 +129,49 @@ class PaymentAttemptServiceTest {
 		// when & then
 		assertThatThrownBy(() -> paymentAttemptService.getOrCreateCancelAttempt(
 			"PAY-1", PaymentProvider.NAVERPAY, "payment-id-1", 1000))
-			.isInstanceOf(DataIntegrityViolationException.class);
+			.isInstanceOf(PaymentException.class)
+			.extracting(e -> ((PaymentException) e).getErrorCode())
+			.isEqualTo(PaymentErrorCode.PAYMENT_ATTEMPT_NOT_FOUND);
+	}
+
+	@DisplayName("승인 시도 생성 중 유니크 충돌이 나고 기존 amount와 다르면 예외를 던진다")
+	@Test
+	void getOrCreateApproveAttempt_whenDuplicateOnSaveWithDifferentAmount_throwAmountMismatch() {
+		// given
+		PaymentAttempt existing = PaymentAttempt.createApproveRequested(
+			"PAY-1", "payment-id-1", 1000, PaymentProvider.NAVERPAY);
+		given(paymentAttemptRepository.findApproveAttempt(
+			eq("PAY-1"), eq(PaymentProvider.NAVERPAY), eq("payment-id-1")))
+			.willReturn(Optional.of(existing));
+		given(paymentAttemptRepository.save(any(PaymentAttempt.class)))
+			.willThrow(new DataIntegrityViolationException("duplicate key"));
+
+		// when & then
+		assertThatThrownBy(() -> paymentAttemptService.getOrCreateApproveAttempt(
+			"PAY-1", PaymentProvider.NAVERPAY, "payment-id-1", 2000))
+			.isInstanceOf(PaymentException.class)
+			.extracting(e -> ((PaymentException) e).getErrorCode())
+			.isEqualTo(PaymentErrorCode.PAYMENT_ATTEMPT_AMOUNT_MISMATCH);
+	}
+
+	@DisplayName("취소 시도 생성 중 유니크 충돌이 나고 기존 amount와 다르면 예외를 던진다")
+	@Test
+	void getOrCreateCancelAttempt_whenDuplicateOnSaveWithDifferentAmount_throwAmountMismatch() {
+		// given
+		PaymentAttempt existing = PaymentAttempt.createCancelRequested(
+			"PAY-1", "payment-id-1", 1000, PaymentProvider.NAVERPAY);
+		given(paymentAttemptRepository.findCancelAttempt(
+			eq("PAY-1"), eq(PaymentProvider.NAVERPAY), eq("payment-id-1")))
+			.willReturn(Optional.of(existing));
+		given(paymentAttemptRepository.save(any(PaymentAttempt.class)))
+			.willThrow(new DataIntegrityViolationException("duplicate key"));
+
+		// when & then
+		assertThatThrownBy(() -> paymentAttemptService.getOrCreateCancelAttempt(
+			"PAY-1", PaymentProvider.NAVERPAY, "payment-id-1", 2000))
+			.isInstanceOf(PaymentException.class)
+			.extracting(e -> ((PaymentException) e).getErrorCode())
+			.isEqualTo(PaymentErrorCode.PAYMENT_ATTEMPT_AMOUNT_MISMATCH);
 	}
 
 }
