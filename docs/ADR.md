@@ -51,3 +51,9 @@
 - **배경**: `RefreshTokenStore` 인터페이스에 `delete(Long memberId)`가 정의되어 있으나, 현재 로그아웃 서비스가 구현되어 있지 않아 어디서도 호출되지 않는다. 사용되지 않는 인터페이스 메서드는 CLAUDE.md 원칙("불필요한 추상화와 과한 설계를 피한다")에 어긋난다.
 - **이유**: 호출부가 없는 코드를 유지하는 것은 잠재적 혼란을 유발한다. Git 히스토리가 이 메서드의 존재와 제거 이유를 기록한다. 로그아웃 구현 시 그 PR에서 `delete()`를 재추가하고 Redis 실패 정책을 함께 설계하는 것이 더 안전하다.
 - **트레이드오프**: 인터페이스가 실제 사용 범위로 좁혀진다. 향후 과제: 로그아웃 기능 구현 시 `delete()` 재추가 및 Redis 실패 정책 결정 필요. 로그아웃은 보안 목적이므로 strict / soft 정책 선택이 신중히 검토되어야 한다.
+
+### ADR-010: PaymentAttempt 멱등 재요청 amount mismatch는 명시적 예외로 거부
+- **결정**: `(merchantPayKey, provider, paymentId, type)` 멱등 키에 대한 재요청이 기존 attempt의 amount와 다르면 `PAYMENT_ATTEMPT_AMOUNT_MISMATCH`(409 Conflict)를 던진다. 기존 attempt 상태(REQUESTED/FAILED/SUCCEEDED)와 무관하게 적용한다.
+- **배경**: 기존에는 unique 제약 충돌 시 catch 블록에서 기존 attempt를 그대로 반환했다. amount가 다른 경우에도 침묵 처리되어 호출자 측 산출 오류나 PG 응답 검증/보상 취소 흐름에서 어떤 amount를 기준으로 삼을지 모호해진다. 멱등성 계약("같은 요청 → 같은 결과") 위반이 가시화되지 않는 문제다.
+- **이유**: 호출자 측 mismatch(내부 원인)는 PG 응답 mismatch(`PAYMENT_AMOUNT_MISMATCH`, 400, 외부 원인)와 의미·모니터링 기준이 다르다. 별도 코드로 분리하면 알람/대시보드에서 원인 추적이 가능하다. 409 Conflict는 "이미 기록된 상태와 충돌한다"는 의미가 정확하다. amount 변경이 필요하면 새 `merchantPayKey`로 새 요청을 발급하는 게 정상 흐름이다.
+- **트레이드오프**: 호출자가 잘못된 amount로 재시도하면 즉시 4xx로 실패한다. 기존에는 침묵 처리되어 후속 흐름에서 뒤늦게 발견될 수 있었다.
