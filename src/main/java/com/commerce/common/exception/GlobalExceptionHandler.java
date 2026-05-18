@@ -68,11 +68,13 @@ public class GlobalExceptionHandler {
 			.body(ApiResponse.error(CommonErrorCode.OPTIMISTIC_LOCK_CONFLICT));
 	}
 
+	// 안전망: application 계층에서 catch 누락 시 fallback. 정상 흐름에서 도달하지 않는다.
+	// 도달 시 코드 버그를 의미하므로 500으로 응답하고 stack trace를 기록한다.
 	@ExceptionHandler(DataIntegrityViolationException.class)
 	public ResponseEntity<ApiResponse<Void>> handleDataIntegrityViolationException(
 		DataIntegrityViolationException ex
 	) {
-		log.error("데이터 무결성 위반: {}", ex.getMessage());
+		log.error("데이터 무결성 위반 (안전망): {}", ex.getMessage(), ex);
 		return ResponseEntity.status(CommonErrorCode.DATA_INTEGRITY_VIOLATION.getStatus())
 			.body(ApiResponse.error(CommonErrorCode.DATA_INTEGRITY_VIOLATION));
 	}
