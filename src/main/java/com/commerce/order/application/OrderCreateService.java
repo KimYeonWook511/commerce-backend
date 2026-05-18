@@ -3,7 +3,7 @@ package com.commerce.order.application;
 import java.time.Duration;
 
 import org.springframework.beans.factory.annotation.Value;
-import org.springframework.dao.DataIntegrityViolationException;
+import org.springframework.dao.DuplicateKeyException;
 import org.springframework.stereotype.Service;
 import org.springframework.transaction.annotation.Propagation;
 import org.springframework.transaction.annotation.Transactional;
@@ -61,7 +61,7 @@ public class OrderCreateService {
 	) {
 		try {
 			return orderCreateProcessor.execute(command, ttl);
-		} catch (DataIntegrityViolationException ex) {
+		} catch (DuplicateKeyException ex) {
 			// unique 위반 — 동시 요청 or TTL 만료 후 중복: Application 계층에서 처리하고 Presentation으로 넘기지 않는다.
 			return orderRepository.findByMemberIdAndIdempotencyKey(memberId, idempotencyKey)
 				.map(order -> {
@@ -70,8 +70,8 @@ public class OrderCreateService {
 					return OrderCreateResult.from(order);
 				})
 				.orElseGet(() -> {
-					log.error("멱등키 충돌이 아닌 unique 제약 위반 발생: {}", ex.getMessage());
-					throw new OrderException(OrderErrorCode.ORDER_NOT_FOUND);
+					log.error("멱등키 충돌이 아닌 unique 제약 위반 발생. memberId={}, idempotencyKey={}", memberId, idempotencyKey, ex);
+					throw ex;
 				});
 		} catch (RuntimeException ex) {
 			orderIdempotencyStore.clear(memberId, idempotencyKey);

@@ -18,7 +18,7 @@ import org.junit.jupiter.api.extension.ExtendWith;
 import org.mockito.InjectMocks;
 import org.mockito.Mock;
 import org.mockito.junit.jupiter.MockitoExtension;
-import org.springframework.dao.DataIntegrityViolationException;
+import org.springframework.dao.DuplicateKeyException;
 
 import com.commerce.payment.domain.PaymentAttempt;
 import com.commerce.payment.domain.PaymentAttemptFailCode;
@@ -64,7 +64,7 @@ class PaymentAttemptServiceTest {
 			eq("PAY-1"), eq(PaymentProvider.NAVERPAY), eq("payment-id-1")))
 			.willReturn(Optional.of(existingAttempt));
 		given(paymentAttemptRepository.save(any(PaymentAttempt.class)))
-			.willThrow(new DataIntegrityViolationException("duplicate key"));
+			.willThrow(new DuplicateKeyException("duplicate key"));
 
 		// when
 		PaymentAttempt result = paymentAttemptService.getOrCreateApproveAttempt(
@@ -124,7 +124,7 @@ class PaymentAttemptServiceTest {
 			eq("PAY-1"), eq(PaymentProvider.NAVERPAY), eq("payment-id-1")))
 			.willReturn(Optional.<PaymentAttempt>empty());
 		given(paymentAttemptRepository.save(any(PaymentAttempt.class)))
-			.willThrow(new DataIntegrityViolationException("duplicate key"));
+			.willThrow(new DuplicateKeyException("duplicate key"));
 
 		// when & then
 		assertThatThrownBy(() -> paymentAttemptService.getOrCreateCancelAttempt(
@@ -144,7 +144,7 @@ class PaymentAttemptServiceTest {
 			eq("PAY-1"), eq(PaymentProvider.NAVERPAY), eq("payment-id-1")))
 			.willReturn(Optional.of(existing));
 		given(paymentAttemptRepository.save(any(PaymentAttempt.class)))
-			.willThrow(new DataIntegrityViolationException("duplicate key"));
+			.willThrow(new DuplicateKeyException("duplicate key"));
 
 		// when & then
 		assertThatThrownBy(() -> paymentAttemptService.getOrCreateApproveAttempt(
@@ -164,7 +164,7 @@ class PaymentAttemptServiceTest {
 			eq("PAY-1"), eq(PaymentProvider.NAVERPAY), eq("payment-id-1")))
 			.willReturn(Optional.of(existing));
 		given(paymentAttemptRepository.save(any(PaymentAttempt.class)))
-			.willThrow(new DataIntegrityViolationException("duplicate key"));
+			.willThrow(new DuplicateKeyException("duplicate key"));
 
 		// when & then
 		assertThatThrownBy(() -> paymentAttemptService.getOrCreateCancelAttempt(

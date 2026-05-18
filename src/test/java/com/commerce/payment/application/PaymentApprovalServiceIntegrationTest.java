@@ -14,7 +14,7 @@ import org.junit.jupiter.api.Test;
 import org.springframework.beans.factory.annotation.Autowired;
 import org.springframework.boot.test.context.SpringBootTest;
 import org.springframework.context.annotation.Import;
-import org.springframework.dao.DataIntegrityViolationException;
+import org.springframework.dao.DuplicateKeyException;
 import org.springframework.test.context.ActiveProfiles;
 import org.springframework.test.context.bean.override.mockito.MockitoSpyBean;
 
@@ -78,7 +78,7 @@ class PaymentApprovalServiceIntegrationTest {
 		Product product = productPersistence.save(createProduct("product-PAY-ROLLBACK-1", 1000));
 		orderPersistence.saveAndFlush(createOrder(member, product, "PAY-ROLLBACK-1"));
 		paymentPersistence.save(createApproveAttempt("PAY-ROLLBACK-1", "pg-rollback-1", 1000));
-		doThrow(new DataIntegrityViolationException("duplicate key"))
+		doThrow(new DuplicateKeyException("duplicate key"))
 			.when(paymentRepository)
 			.save(any());
 

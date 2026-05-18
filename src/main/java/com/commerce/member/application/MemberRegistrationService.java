@@ -1,6 +1,6 @@
 package com.commerce.member.application;
 
-import org.springframework.dao.DataIntegrityViolationException;
+import org.springframework.dao.DuplicateKeyException;
 import org.springframework.stereotype.Service;
 import org.springframework.transaction.annotation.Transactional;
 
@@ -29,7 +29,7 @@ public class MemberRegistrationService {
 
 		try {
 			return memberRepository.save(member);
-		} catch (DataIntegrityViolationException ex) {
+		} catch (DuplicateKeyException ex) {
 			throw new MemberException(MemberErrorCode.DUPLICATE_EMAIL);
 		}
 	}

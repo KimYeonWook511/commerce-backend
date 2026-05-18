@@ -15,7 +15,7 @@ import org.junit.jupiter.api.extension.ExtendWith;
 import org.mockito.InjectMocks;
 import org.mockito.Mock;
 import org.mockito.junit.jupiter.MockitoExtension;
-import org.springframework.dao.DataIntegrityViolationException;
+import org.springframework.dao.DuplicateKeyException;
 import org.springframework.test.util.ReflectionTestUtils;
 
 import com.commerce.member.domain.Member;
@@ -139,7 +139,7 @@ class PaymentApprovalServiceTest {
 		given(orderRepository.findByMerchantPayKeyForUpdate("PAY-1")).willReturn(Optional.of(order));
 		given(paymentRepository.findByMerchantPayKey("PAY-1")).willReturn(Optional.empty());
 		given(paymentRepository.save(any(Payment.class)))
-			.willThrow(new DataIntegrityViolationException("duplicate key"));
+			.willThrow(new DuplicateKeyException("duplicate key"));
 
 		assertThatThrownBy(() -> paymentApprovalService.completeApprovedPayment(
 			"PAY-1",
