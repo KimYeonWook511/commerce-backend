@@ -235,7 +235,8 @@ python3 .claude/skills/harness/scripts/execute.py docs/tasks/<task-name>/phases/
 - 실행기는 checklist 승인 상태를 확인한 뒤 가장 앞의 `pending` step부터 순차 실행한다.
 - 각 step은 developer 실행, Acceptance Criteria 재검증, reviewer 검토를 모두 통과해야 `completed`로 인정된다.
 - 성공한 step은 phase index에 `completed`로 남긴다. 실행 output, AC output, review output, workflow checklist는 로컬 실행 산출물로만 둔다.
-- 완료된 step의 기능 변경은 review 통과 후 commit agent가 커밋한다. phase index는 phase 종료 시 별도 `chore` 커밋으로 기록한다.
+- 완료된 step의 기능 변경은 review 통과 후 commit agent가 커밋한다. step에서 코드와 task 문서를 모두 수정한 경우 commit agent가 목적별로 분리 commit한다(코드는 feat/fix/refactor 등, task 문서는 docs:). 예외: step의 메인 산출물이 task 문서이거나 코드와 문서 보정의 의도가 동일하면 한 commit으로 묶는다.
+- phase 종료 시 `execute.py finalize()`가 두 종류 커밋을 추가한다: step commit agent가 흡수하지 못한 task 문서 잔여 변경분은 `docs:` 커밋, phase index 두 개는 `chore:` 커밋.
 - 실행 중 retryable failure는 실행기가 같은 step을 재시도할 수 있다.
 - 최종 `blocked` 또는 `error` 발생 시 자동 복구하지 않고 사용자 검토와 승인을 기다린다.
 
@@ -247,6 +248,6 @@ python3 .claude/skills/harness/scripts/execute.py docs/tasks/<task-name>/phases/
 - `stepN-ac-output.json`: Acceptance Criteria 재실행 결과
 - `stepN-review-output.json`: reviewer worker 검토 결과
 
-위 output 파일과 `workflow-checklist.json`은 로컬 실행 추적용이며 커밋하지 않는다. phase index는 step 진행 기준으로 사용하고 phase 종료 시 커밋한다.
+위 output 파일과 `workflow-checklist.json`은 로컬 실행 추적용이며 커밋하지 않는다. phase index는 step 진행 기준으로 사용하고 phase 종료 시 커밋한다. task 문서 초안은 step 6(Execution Authorization) 완료 직후 `docs:` 커밋으로 등록한다.
 
 이미 `completed`인 step은 phase index의 `summary`와 `completed_at`으로 확인한다. output 파일 존재 여부는 이전 step 재개 조건으로 사용하지 않는다.

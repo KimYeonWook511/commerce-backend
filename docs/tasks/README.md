@@ -104,7 +104,7 @@ docs/tasks/<task-name>/phases/<phase-name>/step0.md
 
 - step이 중간에 blocked/error로 끝났다면 `phases/<phase-name>/index.json` 상태와 실제 Git 워킹트리를 함께 확인한다.
 - 실행기 output json은 로컬 실행 산출물일 뿐 기능 구현 산출물과 다를 수 있다.
-- phase index 상태는 step 진행 기준이며 phase 종료 시 커밋한다. 실행기 output json과 `workflow-checklist.json`은 로컬에만 둔다.
+- phase index 상태는 step 진행 기준이며 phase 종료 시 `execute.py finalize()`가 `chore:` 커밋으로 기록한다. step commit agent가 흡수하지 못한 task 문서 잔여 변경분은 같은 finalize 단계에서 `docs:` 커밋으로 묶인다. 실행기 output json과 `workflow-checklist.json`은 로컬에만 둔다.
 - `completed` step의 상태와 복구 절차는 사용 중인 도구의 dev-start skill 문서를 따른다.
   - Codex: `.codex/skills/dev-start/references/phase-files.md`
   - Claude Code: `.claude/skills/harness/references/phase-files.md`

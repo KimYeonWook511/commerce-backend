@@ -160,8 +160,10 @@ File Drafting 완료 후 필수 중단:
 - 아래 순서로만 진행한다.
   1. Plan Mode로 구현 계획을 사용자에게 제시한다.
   2. `ExitPlanMode`로 사용자 승인을 받는다.
-  3. 승인이 확정되면 `workflow-checklist.json`의 `Execution Authorization`을 `completed`로 갱신한다.
-  4. checklist 기록이 끝난 뒤에만 `execute.py` 실행으로 넘어간다.
+  3. 승인이 확정되면 `workflow-checklist.json`의 `Execution Authorization`을 `completed`로,
+     top-level `status`를 `authorized`로 갱신하고 `authorization` 객체에 `approved_at`을 기록한다.
+  4. File Drafting에서 작성한 task 문서를 한 커밋으로 묶어 `docs:` 타입으로 커밋한다. (대상 파일은 아래 목록 참고)
+  5. 커밋이 끝난 뒤에만 `execute.py` 실행으로 넘어간다.
 - 사용자가 승인하지 않으면 구현으로 진행하지 않는다.
 - checklist 갱신 시 `Execution Authorization`은 `completed`, top-level `status`는 `authorized`로 기록한다.
 - `Execution Authorization.authorization`에는 `escalation_approved`, `approval_prompt_mode`, `prefix_rule`, `approved_by`, `approved_at`을 기록한다.
@@ -169,6 +171,18 @@ File Drafting 완료 후 필수 중단:
   ```bash
   date '+%Y-%m-%dT%H:%M:%S+0900'
   ```
+- task 문서 초안 커밋 대상:
+  - `docs/tasks/<task-name>/prd.md`
+  - `docs/tasks/<task-name>/architecture.md`
+  - `docs/tasks/<task-name>/adr.md`
+  - `docs/tasks/<task-name>/api-spec.md`
+  - `docs/tasks/<task-name>/db-schema.md`
+  - `docs/tasks/<task-name>/phases/index.json`
+  - `docs/tasks/<task-name>/phases/<phase-name>/index.json`
+  - `docs/tasks/<task-name>/phases/<phase-name>/step{N}.md`
+- `workflow-checklist.json`은 `.gitignore`로 제외되어 자동으로 커밋에서 빠진다. 별도 처리 불필요.
+- 커밋 메시지 타입은 `docs:`를 사용하고 `docs/commit-conventions.md`를 따른다.
+- 이 초안 커밋이 누락되면 첫 step의 commit agent가 task 문서를 step 변경분과 어색하게 섞거나 누락할 위험이 있다. `execute.py` 실행 전에 반드시 있어야 한다.
 
 ### 7. Execution
 
@@ -196,5 +210,12 @@ python3 .claude/skills/harness/scripts/execute.py docs/tasks/<task-name>/phases/
 - agent는 사용자 승인 없이 실패 회피 목적으로 step 요구사항, Acceptance Criteria, task 문서, root docs를 수정해 재시도하지 않는다.
 - 실패 원인이 문서 누락, Acceptance Criteria 오류처럼 명확해 보여도 자동 수정하지 않는다. 먼저 원인과 수정 계획을 사용자에게 제시한다.
 - 재실행은 사용자가 문서/상태 수정과 `execute.py` 재실행을 명시적으로 승인한 뒤에만 한다.
+
+phase 종료 시점에 `execute.py finalize()`는 두 종류 커밋을 만든다:
+
+1. `docs/tasks/<task-name>/` 아래에서 step commit agent가 흡수하지 못한 task 문서 잔여 변경분이 있으면 `docs: <task-name> 태스크 문서 변경분을 반영한다` 커밋으로 묶는다. (`phases/index.json`, `phases/<phase-name>/index.json`은 다음 chore 커밋용이므로 제외)
+2. phase index 두 개를 `chore: <phase-name> 실행 상태를 기록한다` 커밋으로 기록한다.
+
+step 실행 중 task 문서가 수정된 경우 1차로 step commit agent가 분리 commit으로 처리하고, 누락 시 finalize 안전망이 PR 누락을 방지한다.
 
 `--push`는 모든 step이 완료된 뒤 현재 feature 브랜치를 원격 저장소로 push하는 옵션이다.
