@@ -37,7 +37,10 @@
     {
       "step": 4,
       "name": "outbox-find-first",
-      "status": "pending"
+      "status": "completed",
+      "started_at": "2026-05-19T00:37:35+0900",
+      "completed_at": "2026-05-19T00:40:43+0900",
+      "summary": "StockRestoreOutboxConsumeService.markProcessed 를 try-save-catch 에서 find-first 패턴으로 리팩토링한다. ProcessedEventRepository 도메인 인터페이스 / Adapter / JpaProcessedEventRepository 에 existsByEventIdAndConsumerType 메서드를 추가하고, 사전 체크로 중복 이벤트를 skip 한 뒤 신규 이벤트만 save 한다. DuplicateKeyException 임포트를 제거하고 race window 시 unique 위반은 안전망 500 으로 도달해 Kafka consumer 재시도로 복구된다. StockRestoreOutboxConsumeServiceTest 의 중복 시나리오를 existsByEventIdAndConsumerType mock 으로 교체한다. ./gradlew test 통과."
     },
     {
       "step": 5,
