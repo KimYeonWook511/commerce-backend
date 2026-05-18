@@ -60,7 +60,7 @@ git worktree add worktrees/<type>-<feature-name> -b <type>/<feature-name> develo
 cd worktrees/<type>-<feature-name>
 ```
 
-`git worktree add`와 `cd` 이동이 모두 완료돼야 이 단계가 완료다.
+`git worktree add`와 `cd` 이동이 모두 완료돼야 이 단계가 완료다. 이동 직후 `pwd` 또는 `git branch --show-current`로 worktree 이동 여부를 확인하고, 확인 전에는 다음 단계로 넘어가지 않는다.
 
 ### 4. File Drafting
 

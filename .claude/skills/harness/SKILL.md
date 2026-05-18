@@ -114,6 +114,16 @@ cd worktrees/<type>-<feature-name>
 `git worktree add` 실행과 `cd` 이동이 모두 완료된 시점에 이 단계가 ✅ 완료된 것으로 본다.
 이후 모든 파일 작성과 `execute.py` 실행은 worktree root를 기준으로 수행한다.
 
+이동 직후 아래 중 하나를 실행해 worktree 이동 여부를 반드시 확인한다.
+
+```bash
+pwd
+# 또는
+git branch --show-current
+```
+
+`pwd` 결과가 `worktrees/<type>-<feature-name>` 경로여야 하고, `git branch --show-current` 결과가 `<type>/<feature-name>` 브랜치여야 한다. 확인 없이 Step 5로 넘어가지 않는다.
+
 ### 5. File Drafting
 
 worktree 안에서 아래 파일 초안을 작성한다.
