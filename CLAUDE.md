@@ -19,7 +19,7 @@
 - Controller는 요청 수신, 입력 검증, 서비스 위임, 응답 반환만 담당합니다.
 - 외부 시스템 연동(Redis, 이메일, 결제 PG 등)은 `application/port/` 인터페이스로만 의존합니다.
 - Service 클래스는 유스케이스 단위로 단일 행위만 담당합니다 (`CreateOrderService`, `CancelOrderService` 형식).
-- 정상 흐름은 사전 `find` 로 처리하고, DB 무결성 위반(unique 포함) 은 Application/Adapter 어디에서도 catch 하지 않고 `GlobalExceptionHandler` 안전망 500 으로 위임합니다. 트랜잭션이 짧고 동시 충돌 확률이 낮은 시나리오에 적용하는 기본 정책이며, 충돌이 잦은 시나리오에서만 try-save-catch 패턴을 사용하되 이때도 인프라 예외 타입(`DuplicateKeyException`, `DataIntegrityViolationException` 등) 에 직접 의존하지 않도록 처리합니다.
+- DB 무결성 위반은 Application/Adapter 에서 catch 하지 않고 `GlobalExceptionHandler` 안전망(500)으로 위임합니다.
 - 불필요한 추상화와 과한 설계를 피합니다.
 - 코드를 수정하거나 작성할 때 기존에 작성된 주석을 삭제하지 않으며, 코드 위치가 바뀌는 경우 주석도 함께 이동합니다.
 
