@@ -136,20 +136,50 @@ OrderExpirationBatchConfig (Spring Batch)
 
 ## 예외 처리 전략
 
-Infrastructure 레벨 예외는 Application Layer를 넘어가지 않는다.
+Infrastructure 레벨 예외는 Application Layer를 넘어가지 않는다.  
+Application은 `DuplicateKeyException`(unique 위반)만 좁게 catch하여 도메인 의미에 맞게 처리하고, 나머지 무결성 위반은 `GlobalExceptionHandler` 안전망에 위임한다.
 
-- `DataIntegrityViolationException` 같은 인프라 예외는 Service에서 도메인 예외로 변환한다
-- `GlobalExceptionHandler`는 도메인/애플리케이션 예외를 HTTP 응답으로 변환하는 역할이며, 인프라 예외를 직접 처리하지 않는다
-- 예측하지 못한 인프라 예외는 `GlobalExceptionHandler`가 500으로 처리하는 최후의 보루다
+### 3계층 책임 분리
 
-판단 기준: "이 예외가 도메인 언어로 표현될 수 있는가" — 표현될 수 있으면 Application에서 변환하고, 그렇지 않으면 `GlobalExceptionHandler`가 잡는다.
+| 위반 종류 | Spring 예외 타입 | Application 처리 | 최종 응답 |
+|---|---|---|---|
+| **Unique** | `DuplicateKeyException` | 좁게 catch → 도메인 의미에 맞게 처리 | 도메인 4xx 또는 정상 흐름 |
+| **NOT NULL / FK / CHECK** | `DataIntegrityViolationException` (unique 제외) | **catch 안 함** → 그대로 전파 | 안전망 **500** + ERROR 로그 |
 
-```
-# 변환 흐름 예시
-Infrastructure  → DataIntegrityViolationException 발생
-Application     → catch → OrderAlreadyExistsException (도메인 언어로 변환)
-Presentation    → GlobalExceptionHandler → OrderAlreadyExistsException → 409
-```
+### Unique 위반의 두 종류
+
+| 종류 | 예시 | 대응 |
+|---|---|---|
+| **비즈니스 unique** | email, idempotency_key, merchantPayKey, eventId | catch → 도메인 의미에 맞게 처리 |
+| **기술적 unique** (시스템 생성 ID) | orderNumber(ULID) | catch 안 함 → 안전망 (충돌 = 코드 버그) |
+
+### 두 처리 모드
+
+- **모드 A (도메인 예외 변환)**: catch → 도메인 예외 throw (e.g. `MemberException(DUPLICATE_EMAIL)`)
+- **모드 B (멱등 흡수)**: catch → 기존 엔티티 재조회 후 반환. 재조회 실패 시 rethrow → 안전망 500
+
+### Unique 종류를 코드에서 분리하는 방법
+
+Spring의 `DuplicateKeyException`은 어느 unique 제약을 위반했는지 표준 메서드를 제공하지 않는다. 다음 세 가지 케이스로 자연스럽게 해결한다.
+
+**케이스 1 — unique 하나뿐**: 분기 불필요. catch되면 그 unique 의미로 확정.
+- `Member.email`, `PaymentAttempt(paymentId, type)`, `ProcessedEvent(eventId, consumerType)`
+
+**케이스 2 — unique 여러 개지만 의미 통일**: 어느 unique가 터졌든 도메인 응답이 같음.
+- `Payment`의 `merchantPayKey` / `order_id` / `pgPaymentId` 모두 `PAYMENT_DUPLICATE`로 통일
+
+**케이스 3 — unique 여러 개고 의미가 다름**: fallback 재조회 시도 결과로 분리.
+- `Order`의 `(member_id, idempotency_key)`(비즈니스) vs `orderNumber`(기술적 ULID)
+- 비즈니스 키로 재조회 성공 → 멱등 흡수
+- 비즈니스 키로 재조회 실패 → 다른 unique 위반 또는 데이터 소멸 = 코드 버그 → rethrow → 안전망 500
+
+### GlobalExceptionHandler 역할
+
+- `DataIntegrityViolationException` 핸들러는 **안전망**으로만 존재. 정상 흐름에선 도달하지 않음.
+- 도달했다면 application catch 누락 = 코드 버그.
+- 응답: **500**, 로그: ERROR + stack trace 포함.
+- `DuplicateKeyException` 전용 핸들러는 **신설하지 않음** (unique도 application에서 다 처리).
+- `OptimisticLockingFailureException` 핸들러는 **변경 없음** (낙관적 락 = 정상 시나리오 → 409 유지).
 
 ---
 
