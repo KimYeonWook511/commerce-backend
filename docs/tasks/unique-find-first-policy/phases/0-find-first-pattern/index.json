@@ -45,7 +45,10 @@
     {
       "step": 5,
       "name": "integration-tests-update",
-      "status": "pending"
+      "status": "completed",
+      "started_at": "2026-05-19T00:42:10+0900",
+      "completed_at": "2026-05-19T01:05:00+0900",
+      "summary": "통합 테스트를 새 find-first 정책에 맞춰 갱신한다. NaverPayServiceIntegrationTest 의 H2 우회용 doReturn 스텁 4건을 제거하고 spy 어노테이션은 succeedCancelAttempt/failCancelAttempt 강제 예외 주입용으로만 유지한다. PaymentAttemptServiceConcurrencyTest 의 동시 create 시나리오를 사전 attempt + 멱등 재요청으로 단순화하고, OrderCreateServiceIdempotencyTest 와 NaverPayServiceConcurrencyTest 의 race window 단언을 도메인 예외 또는 DataIntegrityViolationException(안전망 500) 을 허용하도록 갱신한다. DuplicateKeyExceptionMappingTest 는 JPA Repository 직접 호출 기반이라 새 정책과 호환되어 그대로 둔다. ./gradlew test 와 ./gradlew dockerTest 모두 통과."
     },
     {
       "step": 6,
