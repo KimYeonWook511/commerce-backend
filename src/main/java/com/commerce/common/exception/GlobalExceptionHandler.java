@@ -74,7 +74,7 @@ public class GlobalExceptionHandler {
 	public ResponseEntity<ApiResponse<Void>> handleDataIntegrityViolationException(
 		DataIntegrityViolationException ex
 	) {
-		log.error("데이터 무결성 위반 (안전망): {}", ex.getMessage(), ex);
+		log.error("데이터 무결성 위반 (안전망)", ex);
 		return ResponseEntity.status(CommonErrorCode.DATA_INTEGRITY_VIOLATION.getStatus())
 			.body(ApiResponse.error(CommonErrorCode.DATA_INTEGRITY_VIOLATION));
 	}
