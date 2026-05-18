@@ -70,7 +70,7 @@ public class OrderCreateService {
 					return OrderCreateResult.from(order);
 				})
 				.orElseGet(() -> {
-					log.error("멱등키 충돌이 아닌 unique 제약 위반 발생", ex);
+					log.error("멱등키 충돌이 아닌 unique 제약 위반 발생. memberId={}, idempotencyKey={}", memberId, idempotencyKey, ex);
 					throw ex;
 				});
 		} catch (RuntimeException ex) {
