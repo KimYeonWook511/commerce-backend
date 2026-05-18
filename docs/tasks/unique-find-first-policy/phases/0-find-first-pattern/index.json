@@ -21,7 +21,10 @@
     {
       "step": 2,
       "name": "payment-attempt-find-first",
-      "status": "pending"
+      "status": "completed",
+      "started_at": "2026-05-19T00:24:35+0900",
+      "completed_at": "2026-05-19T00:27:50+0900",
+      "summary": "PaymentAttemptService 의 getOrCreateApproveAttempt 와 getOrCreateCancelAttempt 를 try-save-catch 에서 find-first 패턴으로 리팩토링한다. findApproveAttempt / findCancelAttempt 결과로 멱등 흡수 또는 amount mismatch 검증을 수행하고, 결과가 없으면 save 한다. DuplicateKeyException 임포트와 PAYMENT_ATTEMPT_NOT_FOUND throw 분기를 제거하고 race window 시 unique 위반은 안전망 500 으로 도달한다. PaymentAttemptServiceTest 를 신규/멱등/amount mismatch 3 케이스 × approve/cancel 로 갱신한다. ./gradlew test 통과."
     },
     {
       "step": 3,
