@@ -1,6 +1,5 @@
 package com.commerce.member.application;
 
-import org.springframework.dao.DuplicateKeyException;
 import org.springframework.stereotype.Service;
 import org.springframework.transaction.annotation.Transactional;
 
@@ -27,10 +26,6 @@ public class MemberRegistrationService {
 
 		Member member = Member.createUser(command.getEmail(), command.getPasswordHash(), command.getUsername());
 
-		try {
-			return memberRepository.save(member);
-		} catch (DuplicateKeyException ex) {
-			throw new MemberException(MemberErrorCode.DUPLICATE_EMAIL);
-		}
+		return memberRepository.save(member);
 	}
 }

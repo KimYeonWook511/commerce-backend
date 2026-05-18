@@ -78,6 +78,8 @@ class NaverPayServiceIntegrationTest {
 	@MockitoSpyBean
 	private PaymentApprovalService paymentApprovalService;
 
+	// succeedCancelAttempt / failCancelAttempt 강제 예외 주입 시나리오용 spy.
+	// find-first 리팩토링 이후 H2 우회용 getOrCreate*Attempt doReturn 스텁은 모두 제거됐다.
 	@MockitoSpyBean
 	private PaymentAttemptService paymentAttemptService;
 
@@ -436,14 +438,10 @@ class NaverPayServiceIntegrationTest {
 			"PAY-INT-6-3", "pg-int-6-3", 1000, PaymentProvider.NAVERPAY
 		);
 		cancelAttempt.markCancelSucceeded(LocalDateTime.now());
-		PaymentAttempt savedCancelAttempt = paymentPersistence.save(cancelAttempt);
+		paymentPersistence.save(cancelAttempt);
 
 		given(naverPayGateway.approve("pg-int-6-3"))
 			.willReturn(NaverPayApproveResult.success("PAY-INT-6-3", 1000));
-		// H2+JPA는 DuplicateKeyException 대신 DataIntegrityViolationException을 던지므로 spy로 직접 대체한다
-		Mockito.doReturn(savedCancelAttempt)
-			.when(paymentAttemptService)
-			.getOrCreateCancelAttempt(eq("PAY-INT-6-3"), eq(PaymentProvider.NAVERPAY), eq("pg-int-6-3"), anyInt());
 		Mockito.doThrow(new PaymentException(PaymentErrorCode.PAYMENT_DUPLICATE))
 			.when(paymentApprovalService)
 			.completeApprovedPayment(eq("PAY-INT-6-3"), eq(PaymentProvider.NAVERPAY), eq("pg-int-6-3"), any(LocalDateTime.class));
@@ -491,7 +489,7 @@ class NaverPayServiceIntegrationTest {
 		// given
 		Member member = memberPersistence.save(createMember());
 		persistOrder(member, "PAY-INT-6-5", 1000);
-		PaymentAttempt existingCancelAttempt = paymentPersistence.save(
+		paymentPersistence.save(
 			PaymentAttempt.createCancelRequested("PAY-INT-6-5", "pg-int-6-5", 1000, PaymentProvider.NAVERPAY)
 		);
 
@@ -499,10 +497,6 @@ class NaverPayServiceIntegrationTest {
 			.willReturn(NaverPayApproveResult.success("PAY-INT-6-5", 1000));
 		given(naverPayGateway.cancel(any(), anyInt(), any()))
 			.willReturn(NaverPayCancelResult.processing());
-		// H2+JPA는 DuplicateKeyException 대신 DataIntegrityViolationException을 던지므로 spy로 직접 대체한다
-		Mockito.doReturn(existingCancelAttempt)
-			.when(paymentAttemptService)
-			.getOrCreateCancelAttempt(eq("PAY-INT-6-5"), eq(PaymentProvider.NAVERPAY), eq("pg-int-6-5"), anyInt());
 		Mockito.doThrow(new PaymentException(PaymentErrorCode.PAYMENT_DUPLICATE))
 			.when(paymentApprovalService)
 			.completeApprovedPayment(eq("PAY-INT-6-5"), eq(PaymentProvider.NAVERPAY), eq("pg-int-6-5"), any(LocalDateTime.class));
@@ -532,12 +526,7 @@ class NaverPayServiceIntegrationTest {
 			"PAY-INT-7-1", "pg-int-7-1", 1000, PaymentProvider.NAVERPAY
 		);
 		attempt.markApproveFailed(PaymentAttemptFailCode.TIME_EXPIRED, "expired", LocalDateTime.now());
-		PaymentAttempt savedAttempt = paymentPersistence.save(attempt);
-
-		// H2+JPA는 DuplicateKeyException 대신 DataIntegrityViolationException을 던지므로 spy로 직접 대체한다
-		Mockito.doReturn(savedAttempt)
-			.when(paymentAttemptService)
-			.getOrCreateApproveAttempt(eq("PAY-INT-7-1"), eq(PaymentProvider.NAVERPAY), eq("pg-int-7-1"), anyInt());
+		paymentPersistence.save(attempt);
 
 		// when & then
 		assertThatThrownBy(() -> naverPayApprovalService.approve(member.getId(), "PAY-INT-7-1", "pg-int-7-1"))
@@ -821,13 +810,9 @@ class NaverPayServiceIntegrationTest {
 			"PAY-INT-12-1", "pg-int-12-1", 1000, PaymentProvider.NAVERPAY
 		);
 		attempt.markApproveSucceeded(LocalDateTime.now());
-		PaymentAttempt savedAttempt = paymentPersistence.save(attempt);
+		paymentPersistence.save(attempt);
 		given(naverPayGateway.getApprovalHistory("pg-int-12-1"))
 			.willReturn(NaverPayHistoryResult.approved("PAY-INT-12-1", 1000));
-		// H2+JPA는 DuplicateKeyException 대신 DataIntegrityViolationException을 던지므로 spy로 직접 대체한다
-		Mockito.doReturn(savedAttempt)
-			.when(paymentAttemptService)
-			.getOrCreateApproveAttempt(eq("PAY-INT-12-1"), eq(PaymentProvider.NAVERPAY), eq("pg-int-12-1"), anyInt());
 
 		// when
 		NaverPayApproveResponse result = naverPayApprovalService.approve(member.getId(), "PAY-INT-12-1", "pg-int-12-1");

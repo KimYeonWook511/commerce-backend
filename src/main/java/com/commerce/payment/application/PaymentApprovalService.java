@@ -3,7 +3,6 @@ package com.commerce.payment.application;
 import java.time.LocalDateTime;
 import java.util.Optional;
 
-import org.springframework.dao.DuplicateKeyException;
 import org.springframework.stereotype.Service;
 import org.springframework.transaction.annotation.Transactional;
 
@@ -59,15 +58,10 @@ public class PaymentApprovalService {
 		// 주문 결제 완료 처리
 		order.completePayment();
 
-		try {
-			// 결제 최종 정보 저장
-			return paymentRepository.save(
-				Payment.createCompleted(order, provider, merchantPayKey, pgPaymentId, approvedAt)
-			);
-		} catch (DuplicateKeyException ex) {
-			// 저장하는 사이 payment가 생성됨
-			throw new PaymentException(PaymentErrorCode.PAYMENT_DUPLICATE);
-		}
+		// 결제 최종 정보 저장
+		return paymentRepository.save(
+			Payment.createCompleted(order, provider, merchantPayKey, pgPaymentId, approvedAt)
+		);
 	}
 
 	private Payment validateCompletedPaymentOrThrow(

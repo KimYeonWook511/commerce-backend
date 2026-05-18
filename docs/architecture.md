@@ -137,49 +137,47 @@ OrderExpirationBatchConfig (Spring Batch)
 ## 예외 처리 전략
 
 Infrastructure 레벨 예외는 Application Layer를 넘어가지 않는다.  
-Application은 `DuplicateKeyException`(unique 위반)만 좁게 catch하여 도메인 의미에 맞게 처리하고, 나머지 무결성 위반은 `GlobalExceptionHandler` 안전망에 위임한다.
+Application 과 Adapter 어디서도 Spring DAO 예외(`DuplicateKeyException`, `DataIntegrityViolationException` 등) 를 catch 하지 않으며, 정상 흐름은 사전 `find` 로 처리하고 DB 무결성 위반은 `GlobalExceptionHandler` 안전망에 위임한다.
 
-### 3계층 책임 분리
+### 본질 흐름 — find-first 패턴
 
-| 위반 종류 | Spring 예외 타입 | Application 처리 | 최종 응답 |
-|---|---|---|---|
-| **Unique** | `DuplicateKeyException` | 좁게 catch → 도메인 의미에 맞게 처리 | 도메인 4xx 또는 정상 흐름 |
-| **NOT NULL / FK / CHECK** | `DataIntegrityViolationException` (unique 제외) | **catch 안 함** → 그대로 전파 | 안전망 **500** + ERROR 로그 |
+```
+DB find → 없으면 insert → 충돌 시 500
+```
 
-### Unique 위반의 두 종류
+- 사전 `find` 가 정상 멱등/중복 시나리오를 흡수한다 (도메인 4xx 또는 정상 200 흐름).
+- `insert` 시점의 unique 위반은 race window 한정이며, 안전망 500 으로 코드 버그처럼 가시화한다.
+- NOT NULL / FK / CHECK 위반도 동일하게 안전망 500 으로 전파된다.
 
-| 종류 | 예시 | 대응 |
-|---|---|---|
-| **비즈니스 unique** | email, idempotency_key, merchantPayKey, eventId | catch → 도메인 의미에 맞게 처리 |
-| **기술적 unique** (시스템 생성 ID) | orderNumber(ULID) | catch 안 함 → 안전망 (충돌 = 코드 버그) |
+### 정책 적용 조건과 한계
 
-### 두 처리 모드
+본 정책은 다음 두 조건이 모두 만족될 때 유효하다.
 
-- **모드 A (도메인 예외 변환)**: catch → 도메인 예외 throw (e.g. `MemberException(DUPLICATE_EMAIL)`)
-- **모드 B (멱등 흡수)**: catch → 기존 엔티티 재조회 후 반환. 재조회 실패 시 rethrow → 안전망 500
+1. **트랜잭션이 짧다** — race window 가 좁아 안전망 500 의 발생률이 무시 가능한 수준이다.
+2. **정상 흐름에서 동시 충돌 확률이 낮다** — 사용자 입력 식별자(email, merchantPayKey) 나 idempotency key 기반 unique.
 
-### Unique 종류를 코드에서 분리하는 방법
+조건을 만족하는 현재 적용 대상은 `MemberRegistrationService`, `PaymentApprovalService`, `PaymentAttemptService`, `OrderCreateService`, `StockRestoreOutboxConsumeService` 5곳이다.
 
-Spring의 `DuplicateKeyException`은 어느 unique 제약을 위반했는지 표준 메서드를 제공하지 않는다. 다음 세 가지 케이스로 자연스럽게 해결한다.
+**비적용 상황**: 충돌이 잦을 것으로 예상되는 시나리오(예: 캐시 미스 후 동시 다발 insert, 대규모 일괄 처리 race) 에는 본 정책을 적용하지 않고 **try-save-catch** 패턴이 더 적합하다. 향후 새 unique 제약을 도입할 때 위 두 조건으로 패턴을 선택하며, try-save-catch 를 선택하더라도 인프라 예외 타입(`DuplicateKeyException` 등) 에 직접 의존하지 않도록 처리한다.
 
-**케이스 1 — unique 하나뿐**: 분기 불필요. catch되면 그 unique 의미로 확정.
-- `Member.email`, `PaymentAttempt(paymentId, type)`, `ProcessedEvent(eventId, consumerType)`
+### GlobalExceptionHandler 안전망 계층
 
-**케이스 2 — unique 여러 개지만 의미 통일**: 어느 unique가 터졌든 도메인 응답이 같음.
-- `Payment`의 `merchantPayKey` / `order_id` / `pgPaymentId` 모두 `PAYMENT_DUPLICATE`로 통일
+```
+DataAccessException (부모 핸들러, COMMON-500-2)
+├─ DataIntegrityViolationException (COMMON-500-1)            ← unique / NOT NULL / FK / CHECK
+│  └─ DuplicateKeyException                                   ← 자동 흡수
+└─ OptimisticLockingFailureException (COMMON-409-1)           ← 409 (낙관적 락 정상 시나리오)
+```
 
-**케이스 3 — unique 여러 개고 의미가 다름**: fallback 재조회 시도 결과로 분리.
-- `Order`의 `(member_id, idempotency_key)`(비즈니스) vs `orderNumber`(기술적 ULID)
-- 비즈니스 키로 재조회 성공 → 멱등 흡수
-- 비즈니스 키로 재조회 실패 → 다른 unique 위반 또는 데이터 소멸 = 코드 버그 → rethrow → 안전망 500
+- Spring `@ExceptionHandler` 는 가장 구체적인 타입을 먼저 매칭한다. 두 구체 핸들러(`DataIntegrityViolationException`, `OptimisticLockingFailureException`) 가 우선 매칭되고, 부모 `DataAccessException` 핸들러는 그 외 DAO 예외(`BadSqlGrammarException`, `CannotAcquireLockException`, `DataAccessResourceFailureException` 등) 만 받는다.
+- `DuplicateKeyException` 은 `DataIntegrityViolationException` 의 하위라 별도 등록 없이 자동 흡수된다.
+- `DataIntegrityViolationException` 핸들러는 unique race window 와 NOT NULL/FK/CHECK 위반을 모두 잡아 500 + stack trace 로그(`COMMON-500-1`) 를 남긴다.
+- `DataAccessException` 부모 핸들러는 DAO 카테고리 fallback 으로 500 + stack trace + `COMMON-500-2` 를 남겨 운영 모니터링에서 일반 `Exception` fallback 과 구분 가능하게 한다.
+- `OptimisticLockingFailureException` 핸들러는 낙관적 락 충돌(정상 시나리오) 을 409 로 유지한다.
 
-### GlobalExceptionHandler 역할
+### JpaConfig 빈 등록 목적
 
-- `DataIntegrityViolationException` 핸들러는 **안전망**으로만 존재. 정상 흐름에선 도달하지 않음.
-- 도달했다면 application catch 누락 = 코드 버그.
-- 응답: **500**, 로그: ERROR + stack trace 포함.
-- `DuplicateKeyException` 전용 핸들러는 **신설하지 않음** (unique도 application에서 다 처리).
-- `OptimisticLockingFailureException` 핸들러는 **변경 없음** (낙관적 락 = 정상 시나리오 → 409 유지).
+`JpaConfig` 의 `SQLErrorCodeSQLExceptionTranslator` 빈은 안전망 핸들러가 unique 위반을 `DuplicateKeyException` 으로 정확히 분류해 로깅하도록 한다. 코드가 직접 catch 하지는 않지만, 운영 환경(JPA + MySQL) 에서 unique 위반과 그 외 무결성 위반을 로그 레벨로 구분하기 위해 빈 등록은 유지된다.
 
 ---
 

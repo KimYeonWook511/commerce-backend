@@ -1,5 +1,6 @@
 package com.commerce.common.exception;
 
+import org.springframework.dao.DataAccessException;
 import org.springframework.dao.DataIntegrityViolationException;
 import org.springframework.http.ResponseEntity;
 import org.springframework.http.converter.HttpMessageNotReadableException;
@@ -77,5 +78,17 @@ public class GlobalExceptionHandler {
 		log.error("데이터 무결성 위반 (안전망)", ex);
 		return ResponseEntity.status(CommonErrorCode.DATA_INTEGRITY_VIOLATION.getStatus())
 			.body(ApiResponse.error(CommonErrorCode.DATA_INTEGRITY_VIOLATION));
+	}
+
+	// 안전망: 위 구체 DAO 핸들러(DataIntegrityViolationException, OptimisticLockingFailureException)에
+	// 매칭되지 않는 모든 DAO 예외(BadSqlGrammarException, CannotAcquireLockException 등)를 받는다.
+	// stack trace 와 함께 500 으로 응답해 운영 모니터링에서 DAO 카테고리(COMMON-500-2)로 분류된다.
+	@ExceptionHandler(DataAccessException.class)
+	public ResponseEntity<ApiResponse<Void>> handleDataAccessException(
+		DataAccessException ex
+	) {
+		log.error("DAO 예외 (안전망)", ex);
+		return ResponseEntity.status(CommonErrorCode.DATA_ACCESS_ERROR.getStatus())
+			.body(ApiResponse.error(CommonErrorCode.DATA_ACCESS_ERROR));
 	}
 }

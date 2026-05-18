@@ -19,7 +19,7 @@
 - Controller는 요청 수신, 입력 검증, 서비스 위임, 응답 반환만 담당합니다.
 - 외부 시스템 연동(Redis, 이메일, 결제 PG 등)은 `application/port/` 인터페이스로만 의존합니다.
 - Service 클래스는 유스케이스 단위로 단일 행위만 담당합니다 (`CreateOrderService`, `CancelOrderService` 형식).
-- Infrastructure 예외(`DataIntegrityViolationException` 등)는 Application 계층에서 도메인 예외로 변환하고 Presentation으로 넘기지 않습니다.
+- DB 무결성 위반은 Application/Adapter 에서 catch 하지 않고 `GlobalExceptionHandler` 안전망(500)으로 위임합니다.
 - 불필요한 추상화와 과한 설계를 피합니다.
 - 코드를 수정하거나 작성할 때 기존에 작성된 주석을 삭제하지 않으며, 코드 위치가 바뀌는 경우 주석도 함께 이동합니다.
 

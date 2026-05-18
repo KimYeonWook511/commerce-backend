@@ -1,5 +1,8 @@
 # 태스크 아키텍처
 
+> [!NOTE]
+> 본 문서의 정책은 후속 태스크 `docs/tasks/unique-find-first-policy/` 에서 재정의되었다. 현재 정책은 루트 `docs/architecture.md` 의 예외 처리 섹션과 `docs/tasks/unique-find-first-policy/adr.md` 를 참조한다.
+
 ## 개요
 
 DB 무결성 예외 처리 정책을 3계층(Application / GlobalExceptionHandler / Spring 안전망)으로 명확히 분리한다.

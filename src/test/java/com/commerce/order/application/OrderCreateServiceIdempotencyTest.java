@@ -4,6 +4,7 @@ import static org.assertj.core.api.Assertions.assertThat;
 
 import java.util.List;
 import java.util.concurrent.CyclicBarrier;
+import java.util.concurrent.ExecutionException;
 import java.util.concurrent.ExecutorService;
 import java.util.concurrent.Executors;
 import java.util.concurrent.Future;
@@ -15,6 +16,7 @@ import org.junit.jupiter.api.Test;
 import org.springframework.beans.factory.annotation.Autowired;
 import org.springframework.boot.test.context.SpringBootTest;
 import org.springframework.context.annotation.Import;
+import org.springframework.dao.DataIntegrityViolationException;
 import org.springframework.test.context.ActiveProfiles;
 import org.springframework.test.context.DynamicPropertyRegistry;
 import org.springframework.test.context.DynamicPropertySource;
@@ -130,9 +132,9 @@ class OrderCreateServiceIdempotencyTest {
 			.isEqualTo(8);
 	}
 
-	@DisplayName("동시에 같은 멱등키로 요청하면 하나만 생성되고 두 요청 모두 같은 주문을 반환한다")
+	@DisplayName("동시에 같은 멱등키로 요청하면 한 요청만 주문을 생성하고 다른 요청은 같은 주문을 반환하거나 race window 로 실패한다")
 	@Test
-	void createOrder_whenConcurrentSameIdempotencyKey_returnSameOrder() throws Exception {
+	void createOrder_whenConcurrentSameIdempotencyKey_returnSameOrderOrRaceFailure() throws Exception {
 		// given
 		Member member = memberPersistence.save(createMember("order-concurrent"));
 		Product product = productPersistence.save(createProduct("product-concurrent", 1000));
@@ -157,16 +159,38 @@ class OrderCreateServiceIdempotencyTest {
 			return orderCreateService.createOrder(command);
 		});
 
-		OrderCreateResult result1 = future1.get();
-		OrderCreateResult result2 = future2.get();
+		OrderCreateResult winnerResult = null;
+		Throwable raceError = null;
+		try {
+			winnerResult = future1.get();
+		} catch (ExecutionException ex) {
+			raceError = ex.getCause();
+		}
+		try {
+			OrderCreateResult other = future2.get();
+			if (winnerResult == null) {
+				winnerResult = other;
+			} else {
+				// 두 요청 모두 성공한 경우 같은 주문을 반환해야 한다.
+				assertThat(other.getOrderId()).isEqualTo(winnerResult.getOrderId());
+			}
+		} catch (ExecutionException ex) {
+			raceError = ex.getCause();
+		}
 
 		executor.shutdown();
 
 		// then
-		assertThat(result1.getOrderId()).isEqualTo(result2.getOrderId());
+		// 적어도 한 요청은 성공해 주문을 생성한다.
+		assertThat(winnerResult).isNotNull();
+		// unique 제약으로 주문은 정확히 1건만 저장되고 재고도 한 번만 차감된다.
 		assertThat(orderPersistence.count()).isEqualTo(1);
 		assertThat(stockPersistence.findByProductId(product.getId()).orElseThrow().getQuantity())
 			.isEqualTo(8);
+		// race window 가 발생했다면 find-first 정책상 unique 위반이 안전망 500 으로 도달한다.
+		if (raceError != null) {
+			assertThat(raceError).isInstanceOf(DataIntegrityViolationException.class);
+		}
 	}
 
 	private Member createMember(String emailPrefix) {

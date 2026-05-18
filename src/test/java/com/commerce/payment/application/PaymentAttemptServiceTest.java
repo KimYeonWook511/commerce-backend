@@ -11,14 +11,12 @@ import static org.mockito.Mockito.never;
 import java.time.LocalDateTime;
 import java.util.Optional;
 
-import org.junit.jupiter.api.BeforeEach;
 import org.junit.jupiter.api.DisplayName;
 import org.junit.jupiter.api.Test;
 import org.junit.jupiter.api.extension.ExtendWith;
 import org.mockito.InjectMocks;
 import org.mockito.Mock;
 import org.mockito.junit.jupiter.MockitoExtension;
-import org.springframework.dao.DuplicateKeyException;
 
 import com.commerce.payment.domain.PaymentAttempt;
 import com.commerce.payment.domain.PaymentAttemptFailCode;
@@ -42,6 +40,9 @@ class PaymentAttemptServiceTest {
 	@Test
 	void getOrCreateApproveAttempt_whenAttemptNotExists_createAttempt() {
 		// given
+		given(paymentAttemptRepository.findApproveAttempt(
+			eq("PAY-1"), eq(PaymentProvider.NAVERPAY), eq("payment-id-1")))
+			.willReturn(Optional.empty());
 		given(paymentAttemptRepository.save(any(PaymentAttempt.class)))
 			.willAnswer(invocation -> invocation.getArgument(0, PaymentAttempt.class));
 
@@ -54,17 +55,15 @@ class PaymentAttemptServiceTest {
 		assertThat(result.getAmount()).isEqualTo(1000);
 	}
 
-	@DisplayName("승인 시도 생성 중 유니크 충돌이 나면 재조회 결과를 반환한다")
+	@DisplayName("승인 시도 이력이 이미 존재하고 amount 가 같으면 기존 이력을 반환한다")
 	@Test
-	void getOrCreateApproveAttempt_whenDuplicateOnSave_returnRefetchedAttempt() {
+	void getOrCreateApproveAttempt_whenAttemptExistsWithSameAmount_returnExistingAttempt() {
 		// given
 		PaymentAttempt existingAttempt = PaymentAttempt.createApproveRequested("PAY-1", "payment-id-1", 1000,
 			PaymentProvider.NAVERPAY);
 		given(paymentAttemptRepository.findApproveAttempt(
 			eq("PAY-1"), eq(PaymentProvider.NAVERPAY), eq("payment-id-1")))
 			.willReturn(Optional.of(existingAttempt));
-		given(paymentAttemptRepository.save(any(PaymentAttempt.class)))
-			.willThrow(new DuplicateKeyException("duplicate key"));
 
 		// when
 		PaymentAttempt result = paymentAttemptService.getOrCreateApproveAttempt(
@@ -72,6 +71,26 @@ class PaymentAttemptServiceTest {
 
 		// then
 		assertThat(result).isSameAs(existingAttempt);
+		then(paymentAttemptRepository).should(never()).save(any(PaymentAttempt.class));
+	}
+
+	@DisplayName("승인 시도 이력이 이미 존재하고 amount 가 다르면 예외를 던진다")
+	@Test
+	void getOrCreateApproveAttempt_whenAttemptExistsWithDifferentAmount_throwAmountMismatch() {
+		// given
+		PaymentAttempt existing = PaymentAttempt.createApproveRequested(
+			"PAY-1", "payment-id-1", 1000, PaymentProvider.NAVERPAY);
+		given(paymentAttemptRepository.findApproveAttempt(
+			eq("PAY-1"), eq(PaymentProvider.NAVERPAY), eq("payment-id-1")))
+			.willReturn(Optional.of(existing));
+
+		// when & then
+		assertThatThrownBy(() -> paymentAttemptService.getOrCreateApproveAttempt(
+			"PAY-1", PaymentProvider.NAVERPAY, "payment-id-1", 2000))
+			.isInstanceOf(PaymentException.class)
+			.extracting(e -> ((PaymentException) e).getErrorCode())
+			.isEqualTo(PaymentErrorCode.PAYMENT_ATTEMPT_AMOUNT_MISMATCH);
+		then(paymentAttemptRepository).should(never()).save(any(PaymentAttempt.class));
 	}
 
 	@DisplayName("승인 실패 시 결제 시도 이력의 실패 사유를 저장한다")
@@ -103,6 +122,9 @@ class PaymentAttemptServiceTest {
 	@Test
 	void getOrCreateCancelAttempt_whenCancelAttemptNotExists_createCancelAttempt() {
 		// given
+		given(paymentAttemptRepository.findCancelAttempt(
+			eq("PAY-1"), eq(PaymentProvider.NAVERPAY), eq("payment-id-1")))
+			.willReturn(Optional.empty());
 		given(paymentAttemptRepository.save(any(PaymentAttempt.class)))
 			.willAnswer(invocation -> invocation.getArgument(0, PaymentAttempt.class));
 
@@ -116,55 +138,34 @@ class PaymentAttemptServiceTest {
 		assertThat(result.getAmount()).isEqualTo(1000);
 	}
 
-	@DisplayName("취소 요청 생성 중 유니크 충돌이 나고 재조회도 실패하면 예외를 던진다")
+	@DisplayName("취소 요청 이력이 이미 존재하고 amount 가 같으면 기존 이력을 반환한다")
 	@Test
-	void getOrCreateCancelAttempt_whenDuplicateOnSaveAndRefetchMissing_throwException() {
+	void getOrCreateCancelAttempt_whenCancelAttemptExistsWithSameAmount_returnExistingAttempt() {
 		// given
+		PaymentAttempt existingAttempt = PaymentAttempt.createCancelRequested("PAY-1", "payment-id-1", 1000,
+			PaymentProvider.NAVERPAY);
 		given(paymentAttemptRepository.findCancelAttempt(
 			eq("PAY-1"), eq(PaymentProvider.NAVERPAY), eq("payment-id-1")))
-			.willReturn(Optional.<PaymentAttempt>empty());
-		given(paymentAttemptRepository.save(any(PaymentAttempt.class)))
-			.willThrow(new DuplicateKeyException("duplicate key"));
+			.willReturn(Optional.of(existingAttempt));
 
-		// when & then
-		assertThatThrownBy(() -> paymentAttemptService.getOrCreateCancelAttempt(
-			"PAY-1", PaymentProvider.NAVERPAY, "payment-id-1", 1000))
-			.isInstanceOf(PaymentException.class)
-			.extracting(e -> ((PaymentException) e).getErrorCode())
-			.isEqualTo(PaymentErrorCode.PAYMENT_ATTEMPT_NOT_FOUND);
+		// when
+		PaymentAttempt result = paymentAttemptService.getOrCreateCancelAttempt(
+			"PAY-1", PaymentProvider.NAVERPAY, "payment-id-1", 1000);
+
+		// then
+		assertThat(result).isSameAs(existingAttempt);
+		then(paymentAttemptRepository).should(never()).save(any(PaymentAttempt.class));
 	}
 
-	@DisplayName("승인 시도 생성 중 유니크 충돌이 나고 기존 amount와 다르면 예외를 던진다")
+	@DisplayName("취소 요청 이력이 이미 존재하고 amount 가 다르면 예외를 던진다")
 	@Test
-	void getOrCreateApproveAttempt_whenDuplicateOnSaveWithDifferentAmount_throwAmountMismatch() {
-		// given
-		PaymentAttempt existing = PaymentAttempt.createApproveRequested(
-			"PAY-1", "payment-id-1", 1000, PaymentProvider.NAVERPAY);
-		given(paymentAttemptRepository.findApproveAttempt(
-			eq("PAY-1"), eq(PaymentProvider.NAVERPAY), eq("payment-id-1")))
-			.willReturn(Optional.of(existing));
-		given(paymentAttemptRepository.save(any(PaymentAttempt.class)))
-			.willThrow(new DuplicateKeyException("duplicate key"));
-
-		// when & then
-		assertThatThrownBy(() -> paymentAttemptService.getOrCreateApproveAttempt(
-			"PAY-1", PaymentProvider.NAVERPAY, "payment-id-1", 2000))
-			.isInstanceOf(PaymentException.class)
-			.extracting(e -> ((PaymentException) e).getErrorCode())
-			.isEqualTo(PaymentErrorCode.PAYMENT_ATTEMPT_AMOUNT_MISMATCH);
-	}
-
-	@DisplayName("취소 시도 생성 중 유니크 충돌이 나고 기존 amount와 다르면 예외를 던진다")
-	@Test
-	void getOrCreateCancelAttempt_whenDuplicateOnSaveWithDifferentAmount_throwAmountMismatch() {
+	void getOrCreateCancelAttempt_whenCancelAttemptExistsWithDifferentAmount_throwAmountMismatch() {
 		// given
 		PaymentAttempt existing = PaymentAttempt.createCancelRequested(
 			"PAY-1", "payment-id-1", 1000, PaymentProvider.NAVERPAY);
 		given(paymentAttemptRepository.findCancelAttempt(
 			eq("PAY-1"), eq(PaymentProvider.NAVERPAY), eq("payment-id-1")))
 			.willReturn(Optional.of(existing));
-		given(paymentAttemptRepository.save(any(PaymentAttempt.class)))
-			.willThrow(new DuplicateKeyException("duplicate key"));
 
 		// when & then
 		assertThatThrownBy(() -> paymentAttemptService.getOrCreateCancelAttempt(
@@ -172,6 +173,7 @@ class PaymentAttemptServiceTest {
 			.isInstanceOf(PaymentException.class)
 			.extracting(e -> ((PaymentException) e).getErrorCode())
 			.isEqualTo(PaymentErrorCode.PAYMENT_ATTEMPT_AMOUNT_MISMATCH);
+		then(paymentAttemptRepository).should(never()).save(any(PaymentAttempt.class));
 	}
 
 }

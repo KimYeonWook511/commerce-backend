@@ -18,7 +18,6 @@ import org.mockito.InOrder;
 import org.mockito.InjectMocks;
 import org.mockito.Mock;
 import org.mockito.junit.jupiter.MockitoExtension;
-import org.springframework.dao.DuplicateKeyException;
 import org.springframework.test.util.ReflectionTestUtils;
 
 import com.commerce.member.domain.Member;
@@ -384,9 +383,9 @@ class OrderApplicationServiceTest {
 			.containsEntry(11L, 1);
 	}
 
-	@DisplayName("processor가 DuplicateKeyException을 던지고 멱등키로 재조회 성공하면 기존 주문을 반환한다")
+	@DisplayName("Redis reserve 성공 후 DB에 기존 주문이 있으면 Redis complete 후 기존 주문을 반환한다")
 	@Test
-	void createOrder_whenDuplicateKeyExceptionAndRefetchSucceeds_returnExistingOrder() {
+	void createOrder_whenReservedAndExistingOrderInDb_returnExistingOrderAndComplete() {
 		// given
 		OrderCreateCommand command = OrderCreateCommand.builder()
 			.memberId(1L)
@@ -398,9 +397,6 @@ class OrderApplicationServiceTest {
 		ReflectionTestUtils.setField(existingOrder, "id", 99L);
 
 		stubForIdempotencyReserved();
-		willThrow(new DuplicateKeyException("duplicate"))
-			.given(orderCreateProcessor)
-			.execute(eq(command), any());
 		given(orderRepository.findByMemberIdAndIdempotencyKey(1L, idempotencyKey))
 			.willReturn(Optional.of(existingOrder));
 
@@ -409,11 +405,13 @@ class OrderApplicationServiceTest {
 
 		// then
 		assertThat(result.getOrderId()).isEqualTo(99L);
+		then(orderIdempotencyStore).should().complete(eq(1L), eq(idempotencyKey), eq(99L), any());
+		then(orderCreateProcessor).shouldHaveNoInteractions();
 	}
 
-	@DisplayName("processor가 DuplicateKeyException을 던지고 멱등키로 재조회 실패하면 원래 예외를 rethrow한다")
+	@DisplayName("Redis reserve 실패 후 completed orderId가 존재하면 기존 주문을 반환한다")
 	@Test
-	void createOrder_whenDuplicateKeyExceptionAndRefetchFails_rethrowOriginalException() {
+	void createOrder_whenReserveFailedAndCompletedOrderExists_returnExistingOrder() {
 		// given
 		OrderCreateCommand command = OrderCreateCommand.builder()
 			.memberId(1L)
@@ -421,16 +419,20 @@ class OrderApplicationServiceTest {
 			.items(List.of(OrderCreateItem.builder().productId(10L).quantity(1).build()))
 			.build();
 
-		stubForIdempotencyReserved();
-		willThrow(new DuplicateKeyException("duplicate"))
-			.given(orderCreateProcessor)
-			.execute(eq(command), any());
-		given(orderRepository.findByMemberIdAndIdempotencyKey(1L, idempotencyKey))
-			.willReturn(Optional.empty());
+		Order existingOrder = Order.create(createMember(1L));
+		ReflectionTestUtils.setField(existingOrder, "id", 77L);
 
-		// when & then
-		assertThatThrownBy(() -> orderCreateService.createOrder(command))
-			.isInstanceOf(DuplicateKeyException.class);
+		given(orderIdempotencyStore.reserve(anyLong(), anyString(), any())).willReturn(false);
+		given(orderIdempotencyStore.getCompletedOrderId(1L, idempotencyKey))
+			.willReturn(Optional.of(77L));
+		given(orderRepository.findById(77L)).willReturn(Optional.of(existingOrder));
+
+		// when
+		OrderCreateResult result = orderCreateService.createOrder(command);
+
+		// then
+		assertThat(result.getOrderId()).isEqualTo(77L);
+		then(orderCreateProcessor).shouldHaveNoInteractions();
 	}
 
 	@DisplayName("processor가 예외를 던지면 멱등키를 clear하고 예외를 재발생한다")

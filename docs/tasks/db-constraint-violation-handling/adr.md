@@ -1,5 +1,8 @@
 # 태스크 ADR
 
+> [!NOTE]
+> 본 문서의 정책은 후속 태스크 `docs/tasks/unique-find-first-policy/` 에서 재정의되었다. 현재 정책은 루트 `docs/architecture.md` 의 예외 처리 섹션과 `docs/tasks/unique-find-first-policy/adr.md` 를 참조한다.
+
 ## 결정 제목
 
 DB 무결성 예외 catch 범위 정책 — Application 계층에서 `DuplicateKeyException`만 좁게 catch한다.

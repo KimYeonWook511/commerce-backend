@@ -1,9 +1,9 @@
 package com.commerce.order.application;
 
 import java.time.Duration;
+import java.util.Optional;
 
 import org.springframework.beans.factory.annotation.Value;
-import org.springframework.dao.DuplicateKeyException;
 import org.springframework.stereotype.Service;
 import org.springframework.transaction.annotation.Propagation;
 import org.springframework.transaction.annotation.Transactional;
@@ -19,9 +19,7 @@ import com.commerce.order.exception.OrderErrorCode;
 import com.commerce.order.exception.OrderException;
 
 import lombok.RequiredArgsConstructor;
-import lombok.extern.slf4j.Slf4j;
 
-@Slf4j
 @Service
 @RequiredArgsConstructor
 @Transactional(readOnly = true)
@@ -59,20 +57,22 @@ public class OrderCreateService {
 	private OrderCreateResult attemptCreateOrder(
 		OrderCreateCommand command, Long memberId, String idempotencyKey, Duration ttl
 	) {
+		// Redis 만료 후 정당한 재요청을 멱등 흡수하기 위한 DB 사전 체크.
+		// race 충돌(Redis 통과 + DB find empty + insert 시 unique 위반) 과
+		// ULID 충돌은 RuntimeException catch 가 Redis 정리 후 rethrow → 안전망 500.
+		Optional<OrderCreateResult> existing = orderRepository
+			.findByMemberIdAndIdempotencyKey(memberId, idempotencyKey)
+			.map(order -> {
+				// 이후 동일 키 재요청이 Redis에서 바로 처리되도록 complete 상태로 갱신한다.
+				orderIdempotencyStore.complete(memberId, idempotencyKey, order.getId(), ttl);
+				return OrderCreateResult.from(order);
+			});
+		if (existing.isPresent()) {
+			return existing.get();
+		}
+
 		try {
 			return orderCreateProcessor.execute(command, ttl);
-		} catch (DuplicateKeyException ex) {
-			// unique 위반 — 동시 요청 or TTL 만료 후 중복: Application 계층에서 처리하고 Presentation으로 넘기지 않는다.
-			return orderRepository.findByMemberIdAndIdempotencyKey(memberId, idempotencyKey)
-				.map(order -> {
-					// 이후 동일 키 재요청이 Redis에서 바로 처리되도록 complete 상태로 갱신한다.
-					orderIdempotencyStore.complete(memberId, idempotencyKey, order.getId(), ttl);
-					return OrderCreateResult.from(order);
-				})
-				.orElseGet(() -> {
-					log.error("멱등키 충돌이 아닌 unique 제약 위반 발생. memberId={}, idempotencyKey={}", memberId, idempotencyKey, ex);
-					throw ex;
-				});
 		} catch (RuntimeException ex) {
 			orderIdempotencyStore.clear(memberId, idempotencyKey);
 			throw ex;

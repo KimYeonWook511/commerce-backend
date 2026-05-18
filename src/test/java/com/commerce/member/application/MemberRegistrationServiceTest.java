@@ -13,7 +13,6 @@ import org.mockito.ArgumentCaptor;
 import org.mockito.InjectMocks;
 import org.mockito.Mock;
 import org.mockito.junit.jupiter.MockitoExtension;
-import org.springframework.dao.DuplicateKeyException;
 
 import com.commerce.member.application.command.MemberRegistrationCommand;
 import com.commerce.member.domain.Member;
@@ -66,28 +65,6 @@ class MemberRegistrationServiceTest {
 			.build();
 
 		given(memberRepository.existsByEmail("test@example.com")).willReturn(true);
-
-		// when & then
-		assertThatThrownBy(() -> memberRegistrationService.register(command))
-			.isInstanceOf(MemberException.class)
-			.satisfies(exception -> {
-				MemberException memberException = (MemberException) exception;
-				assertThat(memberException.getErrorCode()).isEqualTo(MemberErrorCode.DUPLICATE_EMAIL);
-			});
-	}
-
-	@DisplayName("회원 등록 저장 중 이메일 unique 제약이 충돌하면 중복 이메일 예외가 발생한다")
-	@Test
-	void register_whenEmailUniqueConstraintViolated_throwDuplicateEmailException() {
-		// given
-		MemberRegistrationCommand command = MemberRegistrationCommand.builder()
-			.email("test@example.com")
-			.passwordHash("hashed-password")
-			.username("user1")
-			.build();
-
-		given(memberRepository.existsByEmail("test@example.com")).willReturn(false);
-		given(memberRepository.save(any(Member.class))).willThrow(new DuplicateKeyException("duplicate email"));
 
 		// when & then
 		assertThatThrownBy(() -> memberRegistrationService.register(command))

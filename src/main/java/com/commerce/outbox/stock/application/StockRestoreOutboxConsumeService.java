@@ -2,7 +2,6 @@ package com.commerce.outbox.stock.application;
 
 import java.util.List;
 
-import org.springframework.dao.DuplicateKeyException;
 import org.springframework.stereotype.Service;
 import org.springframework.transaction.annotation.Transactional;
 
@@ -39,13 +38,12 @@ public class StockRestoreOutboxConsumeService {
 	}
 
 	private boolean markProcessed(String eventId) {
-		try {
-			ProcessedEvent processedEvent = ProcessedEvent.create(eventId, CONSUMER_TYPE);
-			processedEventRepository.save(processedEvent);
-			return true;
-		} catch (DuplicateKeyException ex) {
+		if (processedEventRepository.existsByEventIdAndConsumerType(eventId, CONSUMER_TYPE)) {
 			return false;
 		}
+		ProcessedEvent processedEvent = ProcessedEvent.create(eventId, CONSUMER_TYPE);
+		processedEventRepository.save(processedEvent);
+		return true;
 	}
 
 	private void restoreStock(List<StockRestoreConsumeCommand.Item> items) {
