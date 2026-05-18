@@ -13,7 +13,10 @@
     {
       "step": 1,
       "name": "remove-direct-catch-blocks",
-      "status": "pending"
+      "status": "completed",
+      "started_at": "2026-05-19T00:19:25+0900",
+      "completed_at": "2026-05-19T00:22:14+0900",
+      "summary": "MemberRegistrationService 와 PaymentApprovalService 에서 DuplicateKeyException try/catch 블록과 import 를 제거한다. 사전 체크(existsByEmail, findByMerchantPayKey + validateCompletedPaymentOrThrow) 분기는 그대로 유지해 정상 멱등/중복 흐름의 4xx 응답을 보존한다. 단위 테스트(MemberRegistrationServiceTest, PaymentApprovalServiceTest) 에서 DuplicateKeyException race 케이스를 제거하고, race 케이스만 검증하던 PaymentApprovalServiceIntegrationTest 는 파일 전체를 삭제한다. ./gradlew test 통과."
     },
     {
       "step": 2,
