@@ -1,0 +1,14 @@
+{
+  "project": "commerce-backend",
+  "phase": "0-find-first-pattern",
+  "steps": [
+    { "step": 0, "name": "data-access-safety-net", "status": "pending" },
+    { "step": 1, "name": "remove-direct-catch-blocks", "status": "pending" },
+    { "step": 2, "name": "payment-attempt-find-first", "status": "pending" },
+    { "step": 3, "name": "order-create-find-first", "status": "pending" },
+    { "step": 4, "name": "outbox-find-first", "status": "pending" },
+    { "step": 5, "name": "integration-tests-update", "status": "pending" },
+    { "step": 6, "name": "sync-root-docs", "status": "pending" },
+    { "step": 7, "name": "write-retrospective", "status": "pending" }
+  ]
+}
