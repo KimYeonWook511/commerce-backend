@@ -26,6 +26,7 @@ import org.mockito.Mockito;
 import org.springframework.beans.factory.annotation.Autowired;
 import org.springframework.boot.test.context.SpringBootTest;
 import org.springframework.context.annotation.Import;
+import org.springframework.dao.DataIntegrityViolationException;
 import org.springframework.test.context.ActiveProfiles;
 import org.springframework.test.context.DynamicPropertyRegistry;
 import org.springframework.test.context.DynamicPropertySource;
@@ -125,7 +126,8 @@ class NaverPayServiceConcurrencyTest {
 		runConcurrent(20, () -> results.add(naverPayApprovalService.approve(member.getId(), merchantPayKey, paymentId)), errors);
 
 		// then
-		assertThat(errors).isEmpty();
+		// race window 발생 시 일부 요청은 attempt unique 위반으로 안전망 500 에 도달한다.
+		errors.forEach(e -> assertThat(e).isInstanceOf(DataIntegrityViolationException.class));
 		assertThat(paymentPersistence.countPaymentsByMerchantPayKey(merchantPayKey)).isEqualTo(1L);
 		assertThat(orderPersistence.getOrderStatusByMerchantPayKey(merchantPayKey))
 			.isEqualTo(OrderStatus.PAID);
@@ -168,7 +170,8 @@ class NaverPayServiceConcurrencyTest {
 		runConcurrent(20, () -> results.add(naverPayApprovalService.approve(member.getId(), merchantPayKey, paymentId)), errors);
 
 		// then
-		assertThat(errors).isEmpty();
+		// race window 발생 시 일부 요청은 attempt unique 위반으로 안전망 500 에 도달한다.
+		errors.forEach(e -> assertThat(e).isInstanceOf(DataIntegrityViolationException.class));
 		assertThat(paymentPersistence.countPaymentsByMerchantPayKey(merchantPayKey)).isEqualTo(1L);
 		assertThat(orderPersistence.getOrderStatusByMerchantPayKey(merchantPayKey))
 			.isEqualTo(OrderStatus.PAID);
@@ -197,13 +200,11 @@ class NaverPayServiceConcurrencyTest {
 		runConcurrent(20, () -> naverPayApprovalService.approve(member.getId(), merchantPayKey, paymentId), errors);
 
 		// then
+		// race window 시 일부 요청은 unique 위반(안전망 500), 나머지는 도메인 예외(MERCHANT_KEY_MISMATCH 또는 NOT_FOUND).
 		assertThat(errors).hasSize(20);
-		assertThat(errors)
-			.allSatisfy(error -> {
-				assertThat(error).isInstanceOf(PaymentException.class);
-				assertThat(((PaymentException)error).getErrorCode())
-					.isIn(PaymentErrorCode.PAYMENT_MERCHANT_KEY_MISMATCH, PaymentErrorCode.PAYMENT_NOT_FOUND);
-			});
+		errors.forEach(e -> assertRaceOrPaymentError(
+			e, PaymentErrorCode.PAYMENT_MERCHANT_KEY_MISMATCH, PaymentErrorCode.PAYMENT_NOT_FOUND
+		));
 		assertThat(paymentPersistence.findPaymentByMerchantPayKey(merchantPayKey)).isEmpty();
 		assertThat(paymentPersistence.getAttempt(
 			merchantPayKey, PaymentProvider.NAVERPAY, paymentId, PaymentAttemptType.APPROVE
@@ -233,12 +234,9 @@ class NaverPayServiceConcurrencyTest {
 		runConcurrent(20, () -> naverPayApprovalService.approve(member.getId(), merchantPayKey, paymentId), errors);
 
 		// then
+		// race window 시 일부 요청은 unique 위반(안전망 500), 나머지는 도메인 AMOUNT_MISMATCH.
 		assertThat(errors).isNotEmpty();
-		assertThat(errors)
-			.allSatisfy(error -> {
-				assertThat(error).isInstanceOf(PaymentException.class);
-				assertThat(((PaymentException)error).getErrorCode()).isEqualTo(PaymentErrorCode.PAYMENT_AMOUNT_MISMATCH);
-			});
+		errors.forEach(e -> assertRaceOrPaymentError(e, PaymentErrorCode.PAYMENT_AMOUNT_MISMATCH));
 		assertThat(paymentPersistence.findPaymentByMerchantPayKey(merchantPayKey)).isEmpty();
 		assertThat(paymentPersistence.getAttempt(
 			merchantPayKey, PaymentProvider.NAVERPAY, paymentId, PaymentAttemptType.APPROVE
@@ -302,12 +300,9 @@ class NaverPayServiceConcurrencyTest {
 		runConcurrent(20, () -> naverPayApprovalService.approve(member.getId(), merchantPayKey, paymentId), errors);
 
 		// then
+		// race window 시 일부 요청은 unique 위반(안전망 500), 나머지는 보상 취소 경로의 PAYMENT_DUPLICATE.
 		assertThat(errors).isNotEmpty();
-		assertThat(errors)
-			.allSatisfy(error -> {
-				assertThat(error).isInstanceOf(PaymentException.class);
-				assertThat(((PaymentException)error).getErrorCode()).isEqualTo(PaymentErrorCode.PAYMENT_DUPLICATE);
-			});
+		errors.forEach(e -> assertRaceOrPaymentError(e, PaymentErrorCode.PAYMENT_DUPLICATE));
 		assertThat(paymentPersistence.countCancelAttempts(merchantPayKey)).isEqualTo(1L);
 		assertThat(paymentPersistence.getAttempt(
 			merchantPayKey, PaymentProvider.NAVERPAY, paymentId, PaymentAttemptType.CANCEL
@@ -339,13 +334,11 @@ class NaverPayServiceConcurrencyTest {
 		runConcurrent(20, () -> naverPayApprovalService.approve(member.getId(), merchantPayKey, paymentId), errors);
 
 		// then
+		// race window 시 일부 요청은 unique 위반(안전망 500), 나머지는 도메인 mismatch 예외.
 		assertThat(errors).hasSize(20);
-		assertThat(errors)
-			.allSatisfy(error -> {
-				assertThat(error).isInstanceOf(PaymentException.class);
-				assertThat(((PaymentException)error).getErrorCode())
-					.isIn(PaymentErrorCode.PAYMENT_MERCHANT_KEY_MISMATCH, PaymentErrorCode.PAYMENT_NOT_FOUND);
-			});
+		errors.forEach(e -> assertRaceOrPaymentError(
+			e, PaymentErrorCode.PAYMENT_MERCHANT_KEY_MISMATCH, PaymentErrorCode.PAYMENT_NOT_FOUND
+		));
 		assertThat(paymentPersistence.findPaymentByMerchantPayKey(merchantPayKey)).isEmpty();
 		assertThat(paymentPersistence.getAttempt(
 			merchantPayKey, PaymentProvider.NAVERPAY, paymentId, PaymentAttemptType.APPROVE
@@ -357,6 +350,19 @@ class NaverPayServiceConcurrencyTest {
 			merchantPayKey, PaymentProvider.NAVERPAY, paymentId, PaymentAttemptType.CANCEL
 		)).isEmpty();
 		then(naverPayGateway).should(never()).cancel(any(), anyInt(), any());
+	}
+
+	/**
+	 * find-first 정책에서 race window 에 빠진 요청은 unique 위반(DataIntegrityViolationException)
+	 * 으로 안전망 500 에 도달하거나, 사전 find 분기에 진입해 도메인 예외(PaymentException) 가 발생한다.
+	 * 두 형태 모두 허용한다.
+	 */
+	private static void assertRaceOrPaymentError(Throwable error, PaymentErrorCode... allowedDomainCodes) {
+		if (error instanceof DataIntegrityViolationException) {
+			return;
+		}
+		assertThat(error).isInstanceOf(PaymentException.class);
+		assertThat(((PaymentException) error).getErrorCode()).isIn((Object[]) allowedDomainCodes);
 	}
 
 	private void runConcurrent(

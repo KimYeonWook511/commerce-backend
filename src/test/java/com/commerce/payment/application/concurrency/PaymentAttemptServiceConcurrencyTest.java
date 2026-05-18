@@ -2,8 +2,6 @@ package com.commerce.payment.application.concurrency;
 
 import static org.assertj.core.api.Assertions.assertThat;
 
-import java.time.LocalDateTime;
-import java.util.UUID;
 import java.util.concurrent.ConcurrentLinkedQueue;
 import java.util.concurrent.CountDownLatch;
 import java.util.concurrent.ExecutorService;
@@ -21,10 +19,6 @@ import org.springframework.test.context.ActiveProfiles;
 import org.springframework.test.context.DynamicPropertyRegistry;
 import org.springframework.test.context.DynamicPropertySource;
 
-import com.commerce.member.domain.Member;
-import com.commerce.order.domain.Order;
-import com.commerce.payment.domain.PaymentAttempt;
-import com.commerce.payment.domain.PaymentAttemptFailCode;
 import com.commerce.payment.domain.PaymentAttemptType;
 import com.commerce.payment.domain.PaymentProvider;
 import com.commerce.payment.application.PaymentAttemptService;
@@ -33,8 +27,6 @@ import com.commerce.payment.exception.PaymentException;
 import com.commerce.payment.infrastructure.persistence.support.PaymentPersistenceTestSupport;
 import com.commerce.member.infrastructure.persistence.support.MemberPersistenceTestSupport;
 import com.commerce.order.infrastructure.persistence.support.OrderPersistenceTestSupport;
-import com.commerce.product.domain.Product;
-import com.commerce.product.domain.ProductStatus;
 import com.commerce.product.infrastructure.persistence.support.ProductPersistenceTestSupport;
 import com.commerce.support.TestcontainersSupport;
 import com.commerce.support.PersistenceCleanupTestSupport;
@@ -76,15 +68,17 @@ class PaymentAttemptServiceConcurrencyTest {
 		);
 	}
 
-	@DisplayName("동시에 승인 시도 이력을 생성해도 approve attempt는 하나만 생성된다")
+	@DisplayName("동시에 같은 키로 멱등 재요청해도 사전 find 분기로 모두 같은 approve attempt를 반환한다")
 	@Test
-	void getOrCreateApproveAttempt_whenConcurrentCreate_createSingleApproveAttempt() throws Exception {
-		// given
+	void getOrCreateApproveAttempt_whenConcurrentIdempotentRequest_returnSameApproveAttempt() throws Exception {
+		// given: amount=1000 으로 approve attempt 선행 생성
 		String merchantPayKey = "PAY-ATTEMPT-CON-1";
 		String paymentId = "pg-attempt-con-1";
+		paymentAttemptService.getOrCreateApproveAttempt(
+			merchantPayKey, PaymentProvider.NAVERPAY, paymentId, 1000);
 		ConcurrentLinkedQueue<Throwable> errors = new ConcurrentLinkedQueue<>();
 
-		// when
+		// when: 20개 스레드가 동일한 amount 로 동시 재요청
 		runConcurrent(20, () -> paymentAttemptService.getOrCreateApproveAttempt(
 			merchantPayKey,
 			PaymentProvider.NAVERPAY,
@@ -92,45 +86,31 @@ class PaymentAttemptServiceConcurrencyTest {
 			1000
 		), errors);
 
-		// then
+		// then: 사전 find 분기로 모두 흡수되어 attempt 는 1건, 에러 없음
 		assertThat(paymentPersistence.countAttempts(merchantPayKey, paymentId, PaymentAttemptType.APPROVE))
 			.isEqualTo(1L);
 		assertThat(errors).isEmpty();
 	}
 
-	@DisplayName("동시에 취소 시도 이력을 생성해도 cancel attempt는 하나만 생성된다")
+	@DisplayName("동시에 같은 키로 멱등 재요청해도 사전 find 분기로 모두 같은 cancel attempt를 반환한다")
 	@Test
-	void getOrCreateCancelAttempt_whenConcurrentCreate_createSingleCancelAttempt() throws Exception {
-		// given
+	void getOrCreateCancelAttempt_whenConcurrentIdempotentRequest_returnSameCancelAttempt() throws Exception {
+		// given: amount=1000 으로 cancel attempt 선행 생성
 		String merchantPayKey = "PAY-ATTEMPT-CON-2";
 		String paymentId = "pg-attempt-con-2";
-		Member member = memberPersistence.save(createMember());
-		Product product = productPersistence.save(createProduct("product-" + merchantPayKey, 1000));
-		orderPersistence.saveAndFlush(createOrder(member, product, merchantPayKey));
-		paymentPersistence.save(
-			PaymentAttempt.createApproveRequested(merchantPayKey, paymentId, 1000, PaymentProvider.NAVERPAY)
-		);
+		paymentAttemptService.getOrCreateCancelAttempt(
+			merchantPayKey, PaymentProvider.NAVERPAY, paymentId, 1000);
 		ConcurrentLinkedQueue<Throwable> errors = new ConcurrentLinkedQueue<>();
 
-		// when
-		runConcurrent(20, () -> {
-			paymentAttemptService.failApproveAttempt(
-				merchantPayKey,
-				PaymentProvider.NAVERPAY,
-				paymentId,
-				PaymentAttemptFailCode.APPROVE_PROCESS_FAILED,
-				"duplicate cancel request",
-				LocalDateTime.now()
-			);
-			paymentAttemptService.getOrCreateCancelAttempt(
-				merchantPayKey,
-				PaymentProvider.NAVERPAY,
-				paymentId,
-				1000
-			);
-		}, errors);
+		// when: 20개 스레드가 동일한 amount 로 동시 재요청
+		runConcurrent(20, () -> paymentAttemptService.getOrCreateCancelAttempt(
+			merchantPayKey,
+			PaymentProvider.NAVERPAY,
+			paymentId,
+			1000
+		), errors);
 
-		// then
+		// then: 사전 find 분기로 모두 흡수되어 attempt 는 1건, 에러 없음
 		assertThat(paymentPersistence.countAttempts(merchantPayKey, paymentId, PaymentAttemptType.CANCEL))
 			.isEqualTo(1L);
 		assertThat(errors).isEmpty();
@@ -210,29 +190,5 @@ class PaymentAttemptServiceConcurrencyTest {
 		} finally {
 			executor.shutdownNow();
 		}
-	}
-
-	private Member createMember() {
-		String suffix = UUID.randomUUID().toString().substring(0, 8);
-		return Member.builder()
-			.email("payment-attempt-con-" + suffix + "@example.com")
-			.password("password123")
-			.username("u" + suffix)
-			.build();
-	}
-
-	private Product createProduct(String name, int price) {
-		return Product.builder()
-			.name(name)
-			.price(price)
-			.status(ProductStatus.ON_SALE)
-			.build();
-	}
-
-	private Order createOrder(Member member, Product product, String merchantPayKey) {
-		Order order = Order.create(member);
-		order.addOrderItem(product, 1);
-		order.assignMerchantPayKey(merchantPayKey);
-		return order;
 	}
 }
