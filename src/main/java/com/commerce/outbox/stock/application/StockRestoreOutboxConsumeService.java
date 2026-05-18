@@ -2,7 +2,7 @@ package com.commerce.outbox.stock.application;
 
 import java.util.List;
 
-import org.springframework.dao.DataIntegrityViolationException;
+import org.springframework.dao.DuplicateKeyException;
 import org.springframework.stereotype.Service;
 import org.springframework.transaction.annotation.Transactional;
 
@@ -43,7 +43,7 @@ public class StockRestoreOutboxConsumeService {
 			ProcessedEvent processedEvent = ProcessedEvent.create(eventId, CONSUMER_TYPE);
 			processedEventRepository.save(processedEvent);
 			return true;
-		} catch (DataIntegrityViolationException ex) {
+		} catch (DuplicateKeyException ex) {
 			return false;
 		}
 	}

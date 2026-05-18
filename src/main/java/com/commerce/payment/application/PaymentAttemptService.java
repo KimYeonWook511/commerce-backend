@@ -2,7 +2,7 @@ package com.commerce.payment.application;
 
 import java.time.LocalDateTime;
 
-import org.springframework.dao.DataIntegrityViolationException;
+import org.springframework.dao.DuplicateKeyException;
 import org.springframework.stereotype.Service;
 import org.springframework.transaction.annotation.Propagation;
 import org.springframework.transaction.annotation.Transactional;
@@ -39,7 +39,7 @@ public class PaymentAttemptService {
 			return paymentAttemptRepository.save(
 				PaymentAttempt.createApproveRequested(merchantPayKey, paymentId, amount, provider)
 			);
-		} catch (DataIntegrityViolationException ex) {
+		} catch (DuplicateKeyException ex) {
 			PaymentAttempt existing = paymentAttemptRepository
 				.findApproveAttempt(merchantPayKey, provider, paymentId)
 				.orElseThrow(() -> {
@@ -70,7 +70,7 @@ public class PaymentAttemptService {
 			return paymentAttemptRepository.save(
 				PaymentAttempt.createCancelRequested(merchantPayKey, paymentId, cancelAmount, provider)
 			);
-		} catch (DataIntegrityViolationException ex) {
+		} catch (DuplicateKeyException ex) {
 			PaymentAttempt existing = paymentAttemptRepository
 				.findCancelAttempt(merchantPayKey, provider, paymentId)
 				.orElseThrow(() -> {

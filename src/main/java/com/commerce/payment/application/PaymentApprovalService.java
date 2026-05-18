@@ -3,7 +3,7 @@ package com.commerce.payment.application;
 import java.time.LocalDateTime;
 import java.util.Optional;
 
-import org.springframework.dao.DataIntegrityViolationException;
+import org.springframework.dao.DuplicateKeyException;
 import org.springframework.stereotype.Service;
 import org.springframework.transaction.annotation.Transactional;
 
@@ -64,7 +64,7 @@ public class PaymentApprovalService {
 			return paymentRepository.save(
 				Payment.createCompleted(order, provider, merchantPayKey, pgPaymentId, approvedAt)
 			);
-		} catch (DataIntegrityViolationException ex) {
+		} catch (DuplicateKeyException ex) {
 			// 저장하는 사이 payment가 생성됨
 			throw new PaymentException(PaymentErrorCode.PAYMENT_DUPLICATE);
 		}
