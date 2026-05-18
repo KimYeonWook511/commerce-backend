@@ -2,8 +2,9 @@
   "phases": [
     {
       "dir": "0-find-first-pattern",
-      "status": "in_progress",
-      "started_at": "2026-05-19T00:16:04+0900"
+      "status": "completed",
+      "started_at": "2026-05-19T00:16:04+0900",
+      "completed_at": "2026-05-19T02:27:46+0900"
     }
   ]
 }
