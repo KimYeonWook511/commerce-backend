@@ -722,12 +722,13 @@ class StepExecutorTest(unittest.TestCase):
         self.assertIn("chore: mvp 실행 상태를 기록한다", commit_calls[1])
 
         # phase index reset 호출 검증 (chore 커밋용으로 분리되었는지)
+        # task-level index와 모든 phase index를 와일드카드로 제외
         reset_calls = [call for call in calls if call[0] == "reset"]
         self.assertTrue(
-            any("docs/tasks/skill-test/phases/0-mvp/index.json" in call for call in reset_calls)
+            any("docs/tasks/skill-test/phases/index.json" in call for call in reset_calls)
         )
         self.assertTrue(
-            any("docs/tasks/skill-test/phases/index.json" in call for call in reset_calls)
+            any("docs/tasks/skill-test/phases/*/index.json" in call for call in reset_calls)
         )
 
     def test_execute_single_step_retries_when_completed_has_no_summary(self):

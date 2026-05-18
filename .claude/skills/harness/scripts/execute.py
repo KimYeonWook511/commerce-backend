@@ -746,12 +746,12 @@ class StepExecutor:
     def _commit_remaining_task_docs(self):
         """step commit agent가 흡수하지 못한 task 문서 변경분을 docs: 커밋으로 묶는다.
 
-        phase index 두 개(phase/index.json, task_phases/index.json)는 다음 chore 커밋용이므로 제외한다.
+        task-level과 모든 phase의 index.json은 다음 chore 커밋용이므로 와일드카드로 제외한다.
         """
         task_relpath = Path(self.task_phases_relpath).parent.as_posix()
         self.run_git("add", "--", task_relpath)
-        self.run_git("reset", "HEAD", "--", f"{self.phase_relpath}/index.json")
         self.run_git("reset", "HEAD", "--", f"{self.task_phases_relpath}/index.json")
+        self.run_git("reset", "HEAD", "--", f"{self.task_phases_relpath}/*/index.json")
         if self.run_git("diff", "--cached", "--quiet").returncode != 0:
             message = f"docs: {self.task_name} 태스크 문서 변경분을 반영한다"
             result = self.run_git("commit", "-m", message)
