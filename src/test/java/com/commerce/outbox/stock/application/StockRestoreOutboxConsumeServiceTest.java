@@ -14,7 +14,6 @@ import org.mockito.ArgumentCaptor;
 import org.mockito.InjectMocks;
 import org.mockito.Mock;
 import org.mockito.junit.jupiter.MockitoExtension;
-import org.springframework.dao.DuplicateKeyException;
 
 import com.commerce.outbox.domain.ProcessedEvent;
 import com.commerce.outbox.domain.ProcessedEventConsumerType;
@@ -45,6 +44,8 @@ class StockRestoreOutboxConsumeServiceTest {
 				StockRestoreConsumeCommand.Item.builder().productId(2L).quantity(3).build()
 			))
 			.build();
+		given(processedEventRepository.existsByEventIdAndConsumerType(command.getEventId(),
+			ProcessedEventConsumerType.STOCK_RESTORE)).willReturn(false);
 
 		// when
 		stockRestoreOutboxConsumeService.consume(command);
@@ -61,7 +62,7 @@ class StockRestoreOutboxConsumeServiceTest {
 		then(stockService).should().increase(2L, 3);
 	}
 
-	@DisplayName("중복 소비면 ProcessedEvent 저장 충돌 후 재고 복구를 건너뛴다")
+	@DisplayName("중복 소비면 사전 체크에서 걸러내고 저장과 재고 복구를 건너뛴다")
 	@Test
 	void consume_whenDuplicatedMessage_skipRestoreStock() {
 		// given
@@ -69,13 +70,14 @@ class StockRestoreOutboxConsumeServiceTest {
 			.eventId("01ARZ3NDEKTSV4RRFFQ69G5FAV")
 			.items(List.of(StockRestoreConsumeCommand.Item.builder().productId(1L).quantity(2).build()))
 			.build();
-		given(processedEventRepository.save(org.mockito.ArgumentMatchers.any(ProcessedEvent.class)))
-			.willThrow(new DuplicateKeyException("duplicate"));
+		given(processedEventRepository.existsByEventIdAndConsumerType(command.getEventId(),
+			ProcessedEventConsumerType.STOCK_RESTORE)).willReturn(true);
 
 		// when
 		stockRestoreOutboxConsumeService.consume(command);
 
 		// then
+		then(processedEventRepository).should(never()).save(org.mockito.ArgumentMatchers.any(ProcessedEvent.class));
 		then(stockService).should(never()).increase(org.mockito.ArgumentMatchers.anyLong(),
 			org.mockito.ArgumentMatchers.anyInt());
 	}
