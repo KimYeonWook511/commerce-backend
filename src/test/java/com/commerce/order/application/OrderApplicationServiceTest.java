@@ -18,6 +18,7 @@ import org.mockito.InOrder;
 import org.mockito.InjectMocks;
 import org.mockito.Mock;
 import org.mockito.junit.jupiter.MockitoExtension;
+import org.springframework.dao.DuplicateKeyException;
 import org.springframework.test.util.ReflectionTestUtils;
 
 import com.commerce.member.domain.Member;
@@ -381,6 +382,55 @@ class OrderApplicationServiceTest {
 		assertThat(requestCaptor.getValue().getQuantitiesByProductId())
 			.containsEntry(10L, 2)
 			.containsEntry(11L, 1);
+	}
+
+	@DisplayName("processor가 DuplicateKeyException을 던지고 멱등키로 재조회 성공하면 기존 주문을 반환한다")
+	@Test
+	void createOrder_whenDuplicateKeyExceptionAndRefetchSucceeds_returnExistingOrder() {
+		// given
+		OrderCreateCommand command = OrderCreateCommand.builder()
+			.memberId(1L)
+			.idempotencyKey(idempotencyKey)
+			.items(List.of(OrderCreateItem.builder().productId(10L).quantity(1).build()))
+			.build();
+
+		Order existingOrder = Order.create(createMember(1L));
+		ReflectionTestUtils.setField(existingOrder, "id", 99L);
+
+		stubForIdempotencyReserved();
+		willThrow(new DuplicateKeyException("duplicate"))
+			.given(orderCreateProcessor)
+			.execute(eq(command), any());
+		given(orderRepository.findByMemberIdAndIdempotencyKey(1L, idempotencyKey))
+			.willReturn(Optional.of(existingOrder));
+
+		// when
+		OrderCreateResult result = orderCreateService.createOrder(command);
+
+		// then
+		assertThat(result.getOrderId()).isEqualTo(99L);
+	}
+
+	@DisplayName("processor가 DuplicateKeyException을 던지고 멱등키로 재조회 실패하면 원래 예외를 rethrow한다")
+	@Test
+	void createOrder_whenDuplicateKeyExceptionAndRefetchFails_rethrowOriginalException() {
+		// given
+		OrderCreateCommand command = OrderCreateCommand.builder()
+			.memberId(1L)
+			.idempotencyKey(idempotencyKey)
+			.items(List.of(OrderCreateItem.builder().productId(10L).quantity(1).build()))
+			.build();
+
+		stubForIdempotencyReserved();
+		willThrow(new DuplicateKeyException("duplicate"))
+			.given(orderCreateProcessor)
+			.execute(eq(command), any());
+		given(orderRepository.findByMemberIdAndIdempotencyKey(1L, idempotencyKey))
+			.willReturn(Optional.empty());
+
+		// when & then
+		assertThatThrownBy(() -> orderCreateService.createOrder(command))
+			.isInstanceOf(DuplicateKeyException.class);
 	}
 
 	@DisplayName("processor가 예외를 던지면 멱등키를 clear하고 예외를 재발생한다")
