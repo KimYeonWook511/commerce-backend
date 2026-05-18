@@ -1,5 +1,8 @@
 # API 스펙
 
+> [!NOTE]
+> 본 문서의 정책은 후속 태스크 `docs/tasks/unique-find-first-policy/` 에서 재정의되었다. 현재 정책은 루트 `docs/architecture.md` 의 예외 처리 섹션과 `docs/tasks/unique-find-first-policy/adr.md` 를 참조한다.
+
 이 태스크는 API 인터페이스를 변경하지 않는다.
 
 ## 변경 내용
