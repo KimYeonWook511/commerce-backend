@@ -2,7 +2,6 @@ package com.commerce.payment.application;
 
 import java.time.LocalDateTime;
 
-import org.springframework.dao.DuplicateKeyException;
 import org.springframework.stereotype.Service;
 import org.springframework.transaction.annotation.Propagation;
 import org.springframework.transaction.annotation.Transactional;
@@ -35,25 +34,18 @@ public class PaymentAttemptService {
 		String paymentId,
 		int amount
 	) {
-		try {
-			return paymentAttemptRepository.save(
+		return paymentAttemptRepository.findApproveAttempt(merchantPayKey, provider, paymentId)
+			.map(existing -> {
+				if (existing.getAmount() != amount) {
+					log.warn("PaymentAttempt amount mismatch - key={}, type=APPROVE, existingAmount={}, requested={}",
+						merchantPayKey, existing.getAmount(), amount);
+					throw new PaymentException(PaymentErrorCode.PAYMENT_ATTEMPT_AMOUNT_MISMATCH);
+				}
+				return existing;
+			})
+			.orElseGet(() -> paymentAttemptRepository.save(
 				PaymentAttempt.createApproveRequested(merchantPayKey, paymentId, amount, provider)
-			);
-		} catch (DuplicateKeyException ex) {
-			PaymentAttempt existing = paymentAttemptRepository
-				.findApproveAttempt(merchantPayKey, provider, paymentId)
-				.orElseThrow(() -> {
-					log.error("unique 충돌 후 approve attempt 재조회 실패: merchantPayKey={}, paymentId={}",
-						merchantPayKey, paymentId, ex);
-					return new PaymentException(PaymentErrorCode.PAYMENT_ATTEMPT_NOT_FOUND);
-				});
-			if (existing.getAmount() != amount) {
-				log.warn("PaymentAttempt amount mismatch - key={}, type=APPROVE, existingAmount={}, requested={}",
-					merchantPayKey, existing.getAmount(), amount);
-				throw new PaymentException(PaymentErrorCode.PAYMENT_ATTEMPT_AMOUNT_MISMATCH);
-			}
-			return existing;
-		}
+			));
 	}
 
 	/**
@@ -66,25 +58,18 @@ public class PaymentAttemptService {
 		String paymentId,
 		int cancelAmount
 	) {
-		try {
-			return paymentAttemptRepository.save(
+		return paymentAttemptRepository.findCancelAttempt(merchantPayKey, provider, paymentId)
+			.map(existing -> {
+				if (existing.getAmount() != cancelAmount) {
+					log.warn("PaymentAttempt amount mismatch - key={}, type=CANCEL, existingAmount={}, requested={}",
+						merchantPayKey, existing.getAmount(), cancelAmount);
+					throw new PaymentException(PaymentErrorCode.PAYMENT_ATTEMPT_AMOUNT_MISMATCH);
+				}
+				return existing;
+			})
+			.orElseGet(() -> paymentAttemptRepository.save(
 				PaymentAttempt.createCancelRequested(merchantPayKey, paymentId, cancelAmount, provider)
-			);
-		} catch (DuplicateKeyException ex) {
-			PaymentAttempt existing = paymentAttemptRepository
-				.findCancelAttempt(merchantPayKey, provider, paymentId)
-				.orElseThrow(() -> {
-					log.error("unique 충돌 후 cancel attempt 재조회 실패: merchantPayKey={}, paymentId={}",
-						merchantPayKey, paymentId, ex);
-					return new PaymentException(PaymentErrorCode.PAYMENT_ATTEMPT_NOT_FOUND);
-				});
-			if (existing.getAmount() != cancelAmount) {
-				log.warn("PaymentAttempt amount mismatch - key={}, type=CANCEL, existingAmount={}, requested={}",
-					merchantPayKey, existing.getAmount(), cancelAmount);
-				throw new PaymentException(PaymentErrorCode.PAYMENT_ATTEMPT_AMOUNT_MISMATCH);
-			}
-			return existing;
-		}
+			));
 	}
 
 	@Transactional
