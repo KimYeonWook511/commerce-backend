@@ -22,7 +22,7 @@ class DeveloperGuardrailsTest(unittest.TestCase):
         result = self.module.build(
             project="TestProject",
             phase_name="mvp",
-            phase_index_relpath="docs/features/skill-test/phases/0-mvp/index.json",
+            phase_index_relpath="docs/tasks/skill-test/phases/0-mvp/index.json",
             max_retries=3,
             prev_error="타입 에러",
         )

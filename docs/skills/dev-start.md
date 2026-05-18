@@ -11,7 +11,7 @@ flowchart TD
     A["사용자 요청"] --> B["Explore<br>문서와 코드 탐색"]
     B --> C["Discuss<br>요구사항 확정"]
     C --> D["Step Design<br>step 분해"]
-    D --> E["File Drafting<br>feature/phases 문서 작성"]
+    D --> E["File Drafting<br>task 문서/phases 작성"]
     E --> M["Execution Authorization<br>사용자 의사 확인"]
     M --> N["workflow-checklist.json<br>authorization 기록"]
     N --> O["Codex Permission UI<br>권한 상승 요청"]
@@ -31,27 +31,27 @@ flowchart TD
 
 ### 1. Explore / Discuss
 
-구현 전에 repo 규칙, feature 문서, phase 문서, 관련 코드와 테스트를 좁혀 읽는다.
+구현 전에 repo 규칙, task 문서, phase 문서, 관련 코드와 테스트를 좁혀 읽는다.
 
 - 요구사항이 모호하면 바로 구현하지 않고 사용자와 논의한다.
 - 이미 문서나 코드에서 답할 수 있는 질문은 사용자에게 다시 묻지 않는다.
-- 공통 문서는 feature 문서만으로 부족할 때만 추가로 읽는다.
+- 공통 문서는 task 문서만으로 부족할 때만 추가로 읽는다.
 
 ### 2. Step Design
 
-작업을 `docs/features/<feature-name>/phases/<phase-name>/step{N}.md` 단위로 쪼갠다.
+작업을 `docs/tasks/<task-name>/phases/<phase-name>/step{N}.md` 단위로 쪼갠다.
 
 - 한 step은 테스트 가능한 사용자 기능 단위를 기본값으로 삼는다.
 - 같은 기능 완성에 필요한 domain, repository, service, controller, test는 한 step에 함께 포함할 수 있다.
 - 레이어별 step은 공통 도메인 선행 작업이나 독립 DB 마이그레이션처럼 분리 검증이 명확한 경우에만 사용한다.
 - root docs sync는 구현과 전체 테스트가 끝난 뒤 마지막 step에서 한 번 수행한다.
-- 모든 step의 `수정 가능 경로`에는 `docs/features/<feature-name>/**`를 포함한다.
+- 모든 step의 `수정 가능 경로`에는 `docs/tasks/<task-name>/**`를 포함한다.
 - 커밋 단위는 파일 단위가 아니라 명확한 기능/정책 목적 단위로 나누고, 메시지는 `docs/commit-conventions.md`를 따른다.
 - Acceptance Criteria는 실행 가능한 커맨드로 작성한다.
 
 ### 3. File Drafting
 
-사용자가 파일 생성을 승인하면 feature 문서와 phase 문서를 작성한다.
+사용자가 파일 생성을 승인하면 task 문서와 phase 문서를 작성한다.
 
 - `workflow-checklist.json`은 phase마다 반드시 만든다.
 - 초안 작성 직후 checklist는 1~4번만 `completed`, 5~6번은 `pending`이어야 한다.
@@ -75,7 +75,7 @@ flowchart TD
 - Acceptance Criteria를 직접 실행해 본다.
 - step 상태를 `completed`, `error`, `blocked` 중 하나로 갱신하고 필요한 필드를 남긴다.
 - phase index는 step 진행 상태로 사용하고 phase 종료 시 커밋한다. output, AC output, review output, workflow checklist는 로컬 실행 산출물이며 커밋하지 않는다.
-- 실패 회피 목적으로 step 요구사항, Acceptance Criteria, feature 문서, root docs, `수정 가능 경로`를 임의 수정하지 않는다.
+- 실패 회피 목적으로 step 요구사항, Acceptance Criteria, task 문서, root docs, `수정 가능 경로`를 임의 수정하지 않는다.
 
 현재 구현상 이 역할은 `developer_guardrails` + `developer_worker` 조합으로 동작한다.
 

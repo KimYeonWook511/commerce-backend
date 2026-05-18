@@ -8,10 +8,10 @@ description: 개발 시작 전 문서 탐색, 논의, step 설계, phases 초안
 이 skill은 아래 상황에서 사용한다.
 
 - 구현 전에 작업을 단계별로 나누고 싶을 때
-- 기능별 `phases/` 구조의 계획 파일 초안이 필요할 때
+- 태스크별 `phases/` 구조의 계획 파일 초안이 필요할 때
 - 큰 작업을 자기완결적인 step으로 분해해야 할 때
 
-이 skill은 개발 전 탐색, step 설계, feature/phases 초안 작성, 준비된 phase의 실행기 연결을 담당한다.
+이 skill은 개발 전 탐색, step 설계, task 문서/phases 초안 작성, 준비된 phase의 실행기 연결을 담당한다.
 실행기 `execute.py`는 브랜치 생성, 커밋, 선택적 push를 수행할 수 있다.
 
 ## 필수 준수 규칙
@@ -48,15 +48,15 @@ description: 개발 시작 전 문서 탐색, 논의, step 설계, phases 초안
 - `AGENTS.md`
 - `docs/commit-conventions.md`
 
-그 다음 현재 작업 대상 feature 문서를 먼저 읽는다.
+그 다음 현재 작업 대상 task 문서를 먼저 읽는다.
 
-- `docs/features/<feature-name>/prd.md`
-- `docs/features/<feature-name>/architecture.md`
-- `docs/features/<feature-name>/adr.md`
-- `docs/features/<feature-name>/api-spec.md`
-- `docs/features/<feature-name>/db-schema.md`
+- `docs/tasks/<task-name>/prd.md`
+- `docs/tasks/<task-name>/architecture.md`
+- `docs/tasks/<task-name>/adr.md`
+- `docs/tasks/<task-name>/api-spec.md`
+- `docs/tasks/<task-name>/db-schema.md`
 
-feature 문서와 `phases` 문서로 부족한 공통 맥락이 있을 때만 `AGENTS.md`의 `참고 문서` 섹션을 따라 루트 `docs/` 기준 문서를 추가로 읽는다.
+task 문서와 `phases` 문서로 부족한 공통 맥락이 있을 때만 `AGENTS.md`의 `참고 문서` 섹션을 따라 루트 `docs/` 기준 문서를 추가로 읽는다.
 작업 범위에 직접 연결된 코드와 테스트도 함께 읽는다.
 
 ## Workflow
@@ -64,7 +64,7 @@ feature 문서와 `phases` 문서로 부족한 공통 맥락이 있을 때만 `A
 ### 1. Explore
 
 - `AGENTS.md`를 읽고 현재 Repo 규칙을 파악한다.
-- 현재 작업 대상 feature 폴더의 문서와 `phases` 문서를 우선 읽고 현재 구조와 변경 범위를 파악한다.
+- 현재 작업 대상 task 폴더의 문서와 `phases` 문서를 우선 읽고 현재 구조와 변경 범위를 파악한다.
 - 공통 아키텍처, 다른 도메인 ERD, 전역 ADR 같은 정보가 더 필요할 때만 루트 `docs/` 기준 문서를 추가로 읽는다.
 - 작업 범위에 직접 연결된 코드와 테스트를 함께 읽는다.
 - 이미 답할 수 있는 질문은 하지 않는다.
@@ -90,7 +90,7 @@ feature 문서와 `phases` 문서로 부족한 공통 맥락이 있을 때만 `A
 - 레이어별 step 분리는 공통 도메인 선행 작업, 독립 DB 마이그레이션처럼 분리 검증이 명확히 필요한 경우에만 사용한다.
 - command/query는 데이터 흐름과 검증 기준이 다르면 분리하고, 같은 정책과 aggregate를 공유하는 command 동작은 묶을 수 있다.
 - root docs 동기화는 최종 구현과 전체 테스트가 끝난 뒤 마지막 step에서 한 번 수행한다.
-- 모든 step의 `수정 가능 경로`에는 `docs/features/<feature-name>/**`를 포함한다. feature 문서와 phase index는 실행 중 함께 갱신될 수 있기 때문이다.
+- 모든 step의 `수정 가능 경로`에는 `docs/tasks/<task-name>/**`를 포함한다. task 문서와 phase index는 실행 중 함께 갱신될 수 있기 때문이다.
 - 각 step 문서는 독립 실행 가능한 자기완결 문서여야 한다.
 - step 설계 시 구현 단위와 커밋 단위가 같은 기능/정책 목적을 가리키도록 나눈다. 파일 단위로 과도하게 쪼개지 말고 커밋 메시지는 `docs/commit-conventions.md`를 따른다.
 - 관련 문서 경로와 이전 step 결과를 이해하는 데 필요한 파일 경로를 명시한다.
@@ -103,24 +103,24 @@ feature 문서와 `phases` 문서로 부족한 공통 맥락이 있을 때만 `A
 
 사용자가 실제 파일 생성을 승인하면 아래 파일 초안을 작성한다.
 
-- `docs/features/<feature-name>/prd.md`
-- `docs/features/<feature-name>/architecture.md`
-- `docs/features/<feature-name>/adr.md`
-- `docs/features/<feature-name>/api-spec.md`
-- `docs/features/<feature-name>/db-schema.md`
-- `docs/features/<feature-name>/phases/index.json`
-- `docs/features/<feature-name>/phases/<phase-name>/index.json`
-- `docs/features/<feature-name>/phases/<phase-name>/workflow-checklist.json`
-- `docs/features/<feature-name>/phases/<phase-name>/step{N}.md`
+- `docs/tasks/<task-name>/prd.md`
+- `docs/tasks/<task-name>/architecture.md`
+- `docs/tasks/<task-name>/adr.md`
+- `docs/tasks/<task-name>/api-spec.md`
+- `docs/tasks/<task-name>/db-schema.md`
+- `docs/tasks/<task-name>/phases/index.json`
+- `docs/tasks/<task-name>/phases/<phase-name>/index.json`
+- `docs/tasks/<task-name>/phases/<phase-name>/workflow-checklist.json`
+- `docs/tasks/<task-name>/phases/<phase-name>/step{N}.md`
 
 포맷과 상세 규칙은 `references/phase-files.md`를 따른다.
 
 파일 생성 승인 전 금지:
-- feature 문서 초안, `phases/index.json`, step 문서를 직접 만들지 않는다.
+- task 문서 초안, `phases/index.json`, step 문서를 직접 만들지 않는다.
 - 계획이 완성됐더라도 승인 없이 repo 파일을 수정하지 않는다.
 
 File Drafting 완료 후 필수 중단:
-- 작성 또는 수정한 feature 문서, phase index, step 문서, `workflow-checklist.json` 경로를 사용자에게 보고한다.
+- 작성 또는 수정한 task 문서, phase index, step 문서, `workflow-checklist.json` 경로를 사용자에게 보고한다.
 - checklist의 `File Drafting`까지만 `completed`로 둔다.
 - `Execution Authorization`은 사용자가 문서 검토 완료와 실행 승인을 명시하기 전까지 `pending`으로 둔다.
 - 이 시점의 checklist는 `Explore`, `Discuss`, `Step Design`, `File Drafting`만 `completed`여야 하고, `Execution Authorization`, `Execution`은 `pending`이어야 한다.
@@ -148,8 +148,8 @@ File Drafting 완료 후 필수 중단:
 `phases` 파일이 준비되면 skill 내부 실행기로 step을 순차 실행할 수 있다.
 
 ```bash
-python3 .codex/skills/dev-start/scripts/execute.py docs/features/<feature-name>/phases/<phase-name>
-python3 .codex/skills/dev-start/scripts/execute.py docs/features/<feature-name>/phases/<phase-name> --push
+python3 .codex/skills/dev-start/scripts/execute.py docs/tasks/<task-name>/phases/<phase-name>
+python3 .codex/skills/dev-start/scripts/execute.py docs/tasks/<task-name>/phases/<phase-name> --push
 ```
 
 실행 규칙:
@@ -166,7 +166,7 @@ python3 .codex/skills/dev-start/scripts/execute.py docs/features/<feature-name>/
 - 실행 중 재시도를 위한 step `pending` reset은 `execute.py` 내부 동작으로만 허용된다.
 - `blocked` 또는 3회 재시도 후 최종 `error`가 발생하면 즉시 중단하고 사용자에게 실패 step, 실패 사유, 관련 output 파일 경로를 보고한다.
 - 최종 `error` 또는 `blocked` 이후 agent는 사용자 승인 없이 step 상태를 `pending`으로 되돌리지 않는다.
-- agent는 사용자 승인 없이 실패 회피 목적으로 step 요구사항, Acceptance Criteria, feature 문서, root docs, editable path를 수정해 재시도하지 않는다.
+- agent는 사용자 승인 없이 실패 회피 목적으로 step 요구사항, Acceptance Criteria, task 문서, root docs, editable path를 수정해 재시도하지 않는다.
 - 실패 원인이 문서 누락, scope 누락, Acceptance Criteria 오류처럼 명확해 보여도 자동 수정하지 않는다. 먼저 원인과 수정 계획을 사용자에게 제시한다.
 - 재실행은 사용자가 문서/상태 수정과 `execute.py` 재실행을 명시적으로 승인한 뒤에만 한다.
 

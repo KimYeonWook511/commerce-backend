@@ -8,10 +8,10 @@ description: 개발 시작 전 문서 탐색, 논의, step 설계, phases 초안
 이 skill은 아래 상황에서 사용한다.
 
 - 구현 전에 작업을 단계별로 나누고 싶을 때
-- 기능별 `phases/` 구조의 계획 파일 초안이 필요할 때
+- 태스크별 `phases/` 구조의 계획 파일 초안이 필요할 때
 - 큰 작업을 자기완결적인 step으로 분해해야 할 때
 
-이 skill은 개발 전 탐색, step 설계, feature/phases 초안 작성, 준비된 phase의 실행기 연결을 담당한다.
+이 skill은 개발 전 탐색, step 설계, task 문서/phases 초안 작성, 준비된 phase의 실행기 연결을 담당한다.
 실행기 `execute.py`는 step 4에서 생성한 worktree 안에서 실행되며, commit agent를 통한 커밋과 선택적 push를 수행할 수 있다.
 
 ## 필수 준수 규칙
@@ -49,15 +49,15 @@ description: 개발 시작 전 문서 탐색, 논의, step 설계, phases 초안
 - `CLAUDE.md`
 - `docs/commit-conventions.md`
 
-그 다음 현재 작업 대상 feature 문서를 먼저 읽는다.
+그 다음 현재 작업 대상 task 문서를 먼저 읽는다.
 
-- `docs/features/<feature-name>/prd.md`
-- `docs/features/<feature-name>/architecture.md`
-- `docs/features/<feature-name>/adr.md`
-- `docs/features/<feature-name>/api-spec.md`
-- `docs/features/<feature-name>/db-schema.md`
+- `docs/tasks/<task-name>/prd.md`
+- `docs/tasks/<task-name>/architecture.md`
+- `docs/tasks/<task-name>/adr.md`
+- `docs/tasks/<task-name>/api-spec.md`
+- `docs/tasks/<task-name>/db-schema.md`
 
-feature 문서와 `phases` 문서로 부족한 공통 맥락이 있을 때만 `CLAUDE.md`의 `참고 문서` 섹션을 따라 루트 `docs/` 기준 문서를 추가로 읽는다.
+task 문서와 `phases` 문서로 부족한 공통 맥락이 있을 때만 `CLAUDE.md`의 `참고 문서` 섹션을 따라 루트 `docs/` 기준 문서를 추가로 읽는다.
 작업 범위에 직접 연결된 코드와 테스트도 함께 읽는다.
 
 ## Workflow
@@ -65,7 +65,7 @@ feature 문서와 `phases` 문서로 부족한 공통 맥락이 있을 때만 `C
 ### 1. Explore
 
 - `CLAUDE.md`를 읽고 현재 Repo 규칙을 파악한다.
-- 현재 작업 대상 feature 폴더의 문서와 `phases` 문서를 우선 읽고 현재 구조와 변경 범위를 파악한다.
+- 현재 작업 대상 task 폴더의 문서와 `phases` 문서를 우선 읽고 현재 구조와 변경 범위를 파악한다.
 - 공통 아키텍처, 다른 도메인 ERD, 전역 ADR 같은 정보가 더 필요할 때만 루트 `docs/` 기준 문서를 추가로 읽는다.
 - 작업 범위에 직접 연결된 코드와 테스트를 함께 읽는다.
 - 이미 답할 수 있는 질문은 하지 않는다.
@@ -107,35 +107,45 @@ Step Design이 완료되면 작업 브랜치 worktree를 생성하고 그 안으
 
 ```bash
 cd "$(git rev-parse --git-common-dir)/.."
-git worktree add worktrees/<type>-<feature-name> -b <type>/<feature-name> develop
-cd worktrees/<type>-<feature-name>
+git worktree add worktrees/<type>-<task-name> -b <type>/<task-name> develop
+cd worktrees/<type>-<task-name>
 ```
 
 `git worktree add` 실행과 `cd` 이동이 모두 완료된 시점에 이 단계가 ✅ 완료된 것으로 본다.
 이후 모든 파일 작성과 `execute.py` 실행은 worktree root를 기준으로 수행한다.
 
+이동 직후 아래 중 하나를 실행해 worktree 이동 여부를 반드시 확인한다.
+
+```bash
+pwd
+# 또는
+git branch --show-current
+```
+
+`pwd` 결과가 `worktrees/<type>-<task-name>` 경로여야 하고, `git branch --show-current` 결과가 `<type>/<task-name>` 브랜치여야 한다. 확인 없이 Step 5로 넘어가지 않는다.
+
 ### 5. File Drafting
 
 worktree 안에서 아래 파일 초안을 작성한다.
 
-- `docs/features/<feature-name>/prd.md`
-- `docs/features/<feature-name>/architecture.md`
-- `docs/features/<feature-name>/adr.md`
-- `docs/features/<feature-name>/api-spec.md`
-- `docs/features/<feature-name>/db-schema.md`
-- `docs/features/<feature-name>/phases/index.json`
-- `docs/features/<feature-name>/phases/<phase-name>/index.json`
-- `docs/features/<feature-name>/phases/<phase-name>/workflow-checklist.json`
-- `docs/features/<feature-name>/phases/<phase-name>/step{N}.md`
+- `docs/tasks/<task-name>/prd.md`
+- `docs/tasks/<task-name>/architecture.md`
+- `docs/tasks/<task-name>/adr.md`
+- `docs/tasks/<task-name>/api-spec.md`
+- `docs/tasks/<task-name>/db-schema.md`
+- `docs/tasks/<task-name>/phases/index.json`
+- `docs/tasks/<task-name>/phases/<phase-name>/index.json`
+- `docs/tasks/<task-name>/phases/<phase-name>/workflow-checklist.json`
+- `docs/tasks/<task-name>/phases/<phase-name>/step{N}.md`
 
 포맷과 상세 규칙은 `references/phase-files.md`를 따른다.
 
 파일 생성 승인 전 금지:
-- feature 문서 초안, `phases/index.json`, step 문서를 직접 만들지 않는다.
+- task 문서 초안, `phases/index.json`, step 문서를 직접 만들지 않는다.
 - 계획이 완성됐더라도 승인 없이 repo 파일을 수정하지 않는다.
 
 File Drafting 완료 후 필수 중단:
-- 작성 또는 수정한 feature 문서, phase index, step 문서, `workflow-checklist.json` 경로를 사용자에게 보고한다.
+- 작성 또는 수정한 task 문서, phase index, step 문서, `workflow-checklist.json` 경로를 사용자에게 보고한다.
 - checklist의 `File Drafting`까지만 `completed`로 둔다.
 - `Execution Authorization`은 사용자가 문서 검토 완료와 실행 승인을 명시하기 전까지 `pending`으로 둔다.
 - 이 시점의 checklist는 `Explore`, `Discuss`, `Step Design`, `Worktree 생성 및 이동`, `File Drafting`만 `completed`여야 하고, `Execution Authorization`, `Execution`은 `pending`이어야 한다.
@@ -165,9 +175,9 @@ File Drafting 완료 후 필수 중단:
 `phases` 파일이 준비되면 작업 브랜치 worktree 안에서 실행기를 실행한다.
 
 ```bash
-# worktrees/<type>-<feature-name>/ 안에서
-python3 .claude/skills/harness/scripts/execute.py docs/features/<feature-name>/phases/<phase-name>
-python3 .claude/skills/harness/scripts/execute.py docs/features/<feature-name>/phases/<phase-name> --push
+# worktrees/<type>-<task-name>/ 안에서
+python3 .claude/skills/harness/scripts/execute.py docs/tasks/<task-name>/phases/<phase-name>
+python3 .claude/skills/harness/scripts/execute.py docs/tasks/<task-name>/phases/<phase-name> --push
 ```
 
 실행 규칙:
@@ -183,7 +193,7 @@ python3 .claude/skills/harness/scripts/execute.py docs/features/<feature-name>/p
 - 실행 중 재시도를 위한 step `pending` reset은 `execute.py` 내부 동작으로만 허용된다.
 - `blocked` 또는 3회 재시도 후 최종 `error`가 발생하면 즉시 중단하고 사용자에게 실패 step, 실패 사유, 관련 output 파일 경로를 보고한다.
 - 최종 `error` 또는 `blocked` 이후 agent는 사용자 승인 없이 step 상태를 `pending`으로 되돌리지 않는다.
-- agent는 사용자 승인 없이 실패 회피 목적으로 step 요구사항, Acceptance Criteria, feature 문서, root docs를 수정해 재시도하지 않는다.
+- agent는 사용자 승인 없이 실패 회피 목적으로 step 요구사항, Acceptance Criteria, task 문서, root docs를 수정해 재시도하지 않는다.
 - 실패 원인이 문서 누락, Acceptance Criteria 오류처럼 명확해 보여도 자동 수정하지 않는다. 먼저 원인과 수정 계획을 사용자에게 제시한다.
 - 재실행은 사용자가 문서/상태 수정과 `execute.py` 재실행을 명시적으로 승인한 뒤에만 한다.
 

@@ -2,11 +2,11 @@
 """
 Harness Step Executor
 
-`docs/features/<feature-name>/phases/<phase-name>` 아래 step 문서를 순차 실행하고, 상태를 기록하고,
+`docs/tasks/<task-name>/phases/<phase-name>` 아래 step 문서를 순차 실행하고, 상태를 기록하고,
 필요하면 git 브랜치/커밋/푸시까지 자동으로 처리한다.
 
 Usage:
-    python3 .codex/skills/dev-start/scripts/execute.py docs/features/<feature-name>/phases/<phase-name> [--push]
+    python3 .codex/skills/dev-start/scripts/execute.py docs/tasks/<task-name>/phases/<phase-name> [--push]
 """
 
 from __future__ import annotations
@@ -91,10 +91,10 @@ class StepExecutor:
         self.phase_dir = self.resolve_phase_dir(phase_path)
         self.phase_relpath = self.phase_dir.relative_to(ROOT).as_posix()
         self.phase_dir_name = self.phase_dir.name
-        self.feature_phases_dir = self.phase_dir.parent
-        self.feature_phases_relpath = self.feature_phases_dir.relative_to(ROOT).as_posix()
-        self.feature_index_file = self.feature_phases_dir / "index.json"
-        self.feature_dir = self.feature_phases_dir.parent
+        self.task_phases_dir = self.phase_dir.parent
+        self.task_phases_relpath = self.task_phases_dir.relative_to(ROOT).as_posix()
+        self.task_index_file = self.task_phases_dir / "index.json"
+        self.task_dir = self.task_phases_dir.parent
 
         if not self.phase_dir.is_dir():
             print(f"ERROR: {self.phase_dir} not found")
@@ -108,35 +108,35 @@ class StepExecutor:
         index = self.read_json(self.index_file)
         self.project = index.get("project", "project")
         self.phase_name = index.get("phase", self.phase_dir_name)
-        self.feature_name = self.extract_feature_name(index)
+        self.task_name = self.extract_task_name(index)
         self.total_steps = len(index["steps"])
-        self.branch_name = f"feature/{self.feature_name}"
-        self.validate_feature_phase_registration()
+        self.branch_name = f"feature/{self.task_name}"
+        self.validate_task_phase_registration()
 
     def resolve_phase_dir(self, phase_path: str) -> Path:
-        """저장소 기준 feature phase 경로를 해석한다."""
+        """저장소 기준 task phase 경로를 해석한다."""
         direct = ROOT / phase_path
         if direct.is_dir():
             return direct
         return direct
 
-    def extract_feature_name(self, index: dict) -> str:
-        """phase 경로 또는 index 정보에서 기능명을 추출한다."""
+    def extract_task_name(self, index: dict) -> str:
+        """phase 경로 또는 index 정보에서 task명을 추출한다."""
         parts = self.phase_dir.relative_to(ROOT).parts
-        if len(parts) >= 4 and parts[0] == "docs" and parts[1] == "features":
+        if len(parts) >= 4 and parts[0] == "docs" and parts[1] == "tasks":
             return parts[2]
-        return index.get("feature", self.phase_name)
+        return index.get("task", self.phase_name)
 
-    def validate_feature_phase_registration(self):
-        """feature-level phases index가 현재 phase를 포함하는지 확인한다."""
-        if not self.feature_index_file.exists():
-            print(f"ERROR: {self.feature_index_file} not found")
+    def validate_task_phase_registration(self):
+        """task-level phases index가 현재 phase를 포함하는지 확인한다."""
+        if not self.task_index_file.exists():
+            print(f"ERROR: {self.task_index_file} not found")
             raise SystemExit(1)
 
-        feature_index = self.read_json(self.feature_index_file)
-        if not any(phase.get("dir") == self.phase_dir_name for phase in feature_index.get("phases", [])):
-            print(f"ERROR: phase '{self.phase_dir_name}' is not registered in {self.feature_index_file}")
-            print("Fix the feature phases/index.json entry and retry.")
+        task_index = self.read_json(self.task_index_file)
+        if not any(phase.get("dir") == self.phase_dir_name for phase in task_index.get("phases", [])):
+            print(f"ERROR: phase '{self.phase_dir_name}' is not registered in {self.task_index_file}")
+            print("Fix the task phases/index.json entry and retry.")
             raise SystemExit(1)
 
     def run(self):
@@ -322,9 +322,9 @@ class StepExecutor:
             print("Add at least one allowed edit path under `수정 가능 경로` and retry.")
             raise SystemExit(1)
 
-        feature_docs_path = f"docs/features/{self.feature_name}/**"
-        if not any(git_ops.normalize_pathspec(path) == git_ops.normalize_pathspec(feature_docs_path) for path in editable_paths):
-            editable_paths.insert(0, feature_docs_path)
+        task_docs_path = f"docs/tasks/{self.task_name}/**"
+        if not any(git_ops.normalize_pathspec(path) == git_ops.normalize_pathspec(task_docs_path) for path in editable_paths):
+            editable_paths.insert(0, task_docs_path)
 
         return editable_paths
 
@@ -353,19 +353,19 @@ class StepExecutor:
         return git_ops.run_git(self, *args)
 
     def checkout_branch(self):
-        """`feature/<feature-name>` 브랜치를 준비한다."""
+        """`feature/<task-name>` 브랜치를 준비한다."""
         git_ops.checkout_branch(self)
 
     def commit_step(self, step_num: int, message: str, editable_paths: list[str]):
         """현재 step의 기능 변경만 커밋한다."""
         git_ops.commit_step(self, step_num, message, editable_paths)
 
-    def update_feature_index(self, status: str):
-        """기능 내부 phases index와 현재 phase 상태를 동기화한다."""
-        if not self.feature_index_file.exists():
+    def update_task_index(self, status: str):
+        """태스크 내부 phases index와 현재 phase 상태를 동기화한다."""
+        if not self.task_index_file.exists():
             return
 
-        feature = self.read_json(self.feature_index_file)
+        task = self.read_json(self.task_index_file)
         timestamp = self.stamp()
         key = {
             "completed": "completed_at",
@@ -373,7 +373,7 @@ class StepExecutor:
             "blocked": "blocked_at",
         }.get(status)
 
-        for phase in feature.get("phases", []):
+        for phase in task.get("phases", []):
             if phase.get("dir") == self.phase_dir_name:
                 phase["status"] = status
                 for stale_key in ("completed_at", "failed_at", "blocked_at"):
@@ -385,7 +385,7 @@ class StepExecutor:
                     phase["started_at"] = phase.get("started_at", timestamp)
                 break
 
-        self.write_json(self.feature_index_file, feature)
+        self.write_json(self.task_index_file, task)
 
     # --- context & role guardrails ---
 
@@ -399,7 +399,7 @@ class StepExecutor:
 
     def load_step_context(self, step_text: str) -> str:
         """현재 step에 필요한 최소 문서만 developer 컨텍스트로 주입한다."""
-        return step_context.load_step_documents(self.root_path, self.feature_dir, step_text)
+        return step_context.load_step_documents(self.root_path, self.task_dir, step_text)
 
     @staticmethod
     def build_previous_step_context(index: dict) -> str:
@@ -433,7 +433,7 @@ class StepExecutor:
             path
             for path in changed_paths
             if not path.startswith(f"{self.phase_relpath}/")
-            and not path.startswith(f"{self.feature_phases_relpath}/")
+            and not path.startswith(f"{self.task_phases_relpath}/")
         ]
         if code_paths and all(path.startswith((".codex/", ".github/", "gradle", "docs/hooks/", "docs/agents/", "docs/skills/")) for path in code_paths):
             return "chore"
@@ -526,7 +526,7 @@ class StepExecutor:
         """실행기 시작 시 phase와 step 수를 출력한다."""
         print("\n" + "=" * 60)
         print("  Harness Step Executor")
-        print(f"  Feature: {self.feature_name} | Phase: {self.phase_name} | Steps: {self.total_steps}")
+        print(f"  Task: {self.task_name} | Phase: {self.phase_name} | Steps: {self.total_steps}")
         if self.auto_push:
             print("  Auto-push: enabled")
         print("=" * 60)
@@ -590,7 +590,7 @@ class StepExecutor:
             if step.get("step") == step_num and "started_at" not in step:
                 step["started_at"] = self.stamp()
                 self.write_json(self.index_file, index)
-                self.update_feature_index("in_progress")
+                self.update_task_index("in_progress")
                 break
 
     # --- execution loop ---
@@ -610,7 +610,7 @@ class StepExecutor:
             f"{self.phase_relpath}/step{step_num}-review-output.json",
             f"{self.phase_relpath}/index.json",
             f"{self.phase_relpath}/workflow-checklist.json",
-            f"{self.feature_phases_relpath}/index.json",
+            f"{self.task_phases_relpath}/index.json",
         ]
 
         for attempt in range(1, self.MAX_RETRIES + 1):
@@ -653,7 +653,7 @@ class StepExecutor:
                 self.write_json(self.index_file, index)
                 print(f"  ✗ Step {step_num}: {step_name} failed after {self.MAX_RETRIES} attempts [{elapsed}s]")
                 print(f"    Error: {error_message}")
-                self.update_feature_index("error")
+                self.update_task_index("error")
                 raise SystemExit(1)
 
             current.pop("verification_error", None)
@@ -674,7 +674,7 @@ class StepExecutor:
                     self.write_json(self.index_file, index)
                     print(f"  ✗ Step {step_num}: {step_name} failed after {self.MAX_RETRIES} attempts [{elapsed}s]")
                     print(f"    Error: {error_message}")
-                    self.update_feature_index("error")
+                    self.update_task_index("error")
                     raise SystemExit(1)
 
                 git_ops.validate_worktree_scope(
@@ -691,7 +691,7 @@ class StepExecutor:
                     self.write_json(self.index_file, index)
                     print(f"  ⏸ Step {step_num}: {step_name} blocked [{elapsed}s]")
                     print(f"    Reason: {review.message}")
-                    self.update_feature_index("blocked")
+                    self.update_task_index("blocked")
                     raise SystemExit(2)
                 if review.decision == "retryable_error":
                     error_message = review.message
@@ -706,7 +706,7 @@ class StepExecutor:
                     self.write_json(self.index_file, index)
                     print(f"  ✗ Step {step_num}: {step_name} failed after {self.MAX_RETRIES} attempts [{elapsed}s]")
                     print(f"    Error: {error_message}")
-                    self.update_feature_index("error")
+                    self.update_task_index("error")
                     raise SystemExit(1)
 
                 current["completed_at"] = timestamp
@@ -723,7 +723,7 @@ class StepExecutor:
                 reason = current.get("blocked_reason", "")
                 print(f"  ⏸ Step {step_num}: {step_name} blocked [{elapsed}s]")
                 print(f"    Reason: {reason}")
-                self.update_feature_index("blocked")
+                self.update_task_index("blocked")
                 raise SystemExit(2)
 
             error_message = current.get("error_message", "Step did not update status")
@@ -737,7 +737,7 @@ class StepExecutor:
                 self.write_json(self.index_file, index)
                 print(f"  ✗ Step {step_num}: {step_name} failed after {self.MAX_RETRIES} attempts [{elapsed}s]")
                 print(f"    Error: {error_message}")
-                self.update_feature_index("error")
+                self.update_task_index("error")
                 raise SystemExit(1)
 
         return False
@@ -756,16 +756,16 @@ class StepExecutor:
             self.execute_single_step(pending)
 
     def finalize(self):
-        """phase 완료 시각 기록, feature 내부 상태 동기화, 선택적 push를 수행한다."""
+        """phase 완료 시각 기록, task 내부 상태 동기화, 선택적 push를 수행한다."""
         index = self.read_json(self.index_file)
         index["completed_at"] = self.stamp()
         self.write_json(self.index_file, index)
-        self.update_feature_index("completed")
+        self.update_task_index("completed")
         self.mark_workflow_execution_completed()
         metadata_paths = [
             f"{self.phase_relpath}/index.json",
             f"{self.phase_relpath}/workflow-checklist.json",
-            f"{self.feature_phases_relpath}/index.json",
+            f"{self.task_phases_relpath}/index.json",
         ]
         for step in index.get("steps", []):
             step_num = step.get("step")
@@ -788,7 +788,7 @@ class StepExecutor:
             self,
             [
                 f"{self.phase_relpath}/index.json",
-                f"{self.feature_phases_relpath}/index.json",
+                f"{self.task_phases_relpath}/index.json",
             ],
         )
         if self.run_git("diff", "--cached", "--quiet").returncode != 0:
@@ -814,7 +814,7 @@ class StepExecutor:
 def main():
     """CLI 진입점. phase 디렉터리명을 받아 실행기를 시작한다."""
     parser = argparse.ArgumentParser(description="Harness Step Executor")
-    parser.add_argument("phase_dir", help="Phase path (e.g. docs/features/<feature-name>/phases/<phase-name>)")
+    parser.add_argument("phase_dir", help="Phase path (e.g. docs/tasks/<task-name>/phases/<phase-name>)")
     parser.add_argument("--push", action="store_true", help="Push branch after completion")
     args = parser.parse_args()
 

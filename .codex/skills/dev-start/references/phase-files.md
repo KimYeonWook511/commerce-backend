@@ -1,10 +1,10 @@
 # Phase Files Reference
 
-이 문서는 `dev-start` skill이 기능별 문서와 `phases` 구조를 설계하거나 초안을 만들 때 따르는 참조 문서다.
+이 문서는 `dev-start` skill이 태스크별 문서와 `phases` 구조를 설계하거나 초안을 만들 때 따르는 참조 문서다.
 
-## 기능 문서 기본 세트
+## 태스크 문서 기본 세트
 
-각 기능은 `docs/features/<feature-name>/` 아래에서 아래 문서를 기본 생성한다.
+각 태스크는 `docs/tasks/<task-name>/` 아래에서 아래 문서를 기본 생성한다.
 
 - `prd.md`
 - `architecture.md`
@@ -12,20 +12,20 @@
 - `api-spec.md`
 - `db-schema.md`
 
-각 문서는 `docs/features/_templates/` 템플릿을 복사해 시작한다.
+각 문서는 `docs/tasks/_templates/` 템플릿을 복사해 시작한다.
 
 phase 구조를 만들 때는 아래 파일도 반드시 생성한다.
 
-- `docs/features/<feature-name>/phases/index.json`
-- `docs/features/<feature-name>/phases/<phase-name>/index.json`
-- `docs/features/<feature-name>/phases/<phase-name>/workflow-checklist.json`
-- `docs/features/<feature-name>/phases/<phase-name>/step{N}.md`
+- `docs/tasks/<task-name>/phases/index.json`
+- `docs/tasks/<task-name>/phases/<phase-name>/index.json`
+- `docs/tasks/<task-name>/phases/<phase-name>/workflow-checklist.json`
+- `docs/tasks/<task-name>/phases/<phase-name>/step{N}.md`
 
-`workflow-checklist.json`은 `docs/features/_templates/phases/workflow-checklist.json`을 복사해 시작한다.
+`workflow-checklist.json`은 `docs/tasks/_templates/phases/workflow-checklist.json`을 복사해 시작한다.
 
-## `docs/features/<feature-name>/phases/index.json`
+## `docs/tasks/<task-name>/phases/index.json`
 
-해당 기능 내부의 phase 목록을 관리하는 인덱스다.
+해당 태스크 내부의 phase 목록을 관리하는 인덱스다.
 
 ```json
 {
@@ -38,12 +38,12 @@ phase 구조를 만들 때는 아래 파일도 반드시 생성한다.
 
 필드 규칙:
 
-- `dir`: 기능 내부 phase 디렉토리명
+- `dir`: 태스크 내부 phase 디렉토리명
 - `status`: `pending` | `completed` | `error` | `blocked`
 - 타임스탬프 필드는 생성 시 넣지 않는다
 - phase 이름은 `<순번>-<slug>` 형식을 사용한다
 
-## `docs/features/<feature-name>/phases/<phase-name>/index.json`
+## `docs/tasks/<task-name>/phases/<phase-name>/index.json`
 
 step 실행 상태 파일이다.
 
@@ -81,7 +81,7 @@ step 실행 상태 파일이다.
 - `error_message`: 실패 원인
 - `blocked_reason`: 사용자 개입 또는 외부 제약으로 인해 막힌 사유
 
-## `docs/features/<feature-name>/phases/<phase-name>/workflow-checklist.json`
+## `docs/tasks/<task-name>/phases/<phase-name>/workflow-checklist.json`
 
 `dev-start` workflow 진행 상태를 기록하는 checklist다. phase를 만들 때 반드시 생성하며, 항목 제목은 `SKILL.md`의 Workflow 제목과 일치해야 한다.
 
@@ -126,7 +126,7 @@ step 실행 상태 파일이다.
 
 `approval_prompt_mode`는 `per_run` 또는 `saved_prefix_rule`을 사용한다. `saved_prefix_rule`이면 `prefix_rule`은 `["python3", ".codex/skills/dev-start/scripts/execute.py"]`다.
 
-## `docs/features/<feature-name>/phases/<phase-name>/step{N}.md`
+## `docs/tasks/<task-name>/phases/<phase-name>/step{N}.md`
 
 각 step은 자기완결적인 작업 문서여야 한다.
 
@@ -137,20 +137,20 @@ step 실행 상태 파일이다.
 
 먼저 아래 파일들을 읽고 프로젝트의 아키텍처와 설계 의도를 파악하라:
 
-- `/docs/features/<feature-name>/prd.md`
-- `/docs/features/<feature-name>/architecture.md`
-- `/docs/features/<feature-name>/adr.md`
-- `/docs/features/<feature-name>/api-spec.md`
-- `/docs/features/<feature-name>/db-schema.md`
+- `/docs/tasks/<task-name>/prd.md`
+- `/docs/tasks/<task-name>/architecture.md`
+- `/docs/tasks/<task-name>/adr.md`
+- `/docs/tasks/<task-name>/api-spec.md`
+- `/docs/tasks/<task-name>/db-schema.md`
 - `/docs/commit-conventions.md`
 - `{이전 step에서 생성/수정된 파일 경로}`
 
-기능 문서만으로 부족한 공통 맥락이 있으면 아래처럼 루트 문서를 추가로 읽는다.
+태스크 문서만으로 부족한 공통 맥락이 있으면 아래처럼 루트 문서를 추가로 읽는다.
 
 - `/docs/architecture.md`
 - `/docs/ADR.md`
 
-이전 step에서 만들어진 코드와 feature 문서를 꼼꼼히 읽고, 설계 의도를 이해한 뒤 작업하라.
+이전 step에서 만들어진 코드와 task 문서를 꼼꼼히 읽고, 설계 의도를 이해한 뒤 작업하라.
 
 ## 작업
 
@@ -158,9 +158,9 @@ step 실행 상태 파일이다.
 
 ## 수정 가능 경로
 
-- `src/main/java/com/commerce/<feature-name>/**`
-- `src/test/java/com/commerce/<feature-name>/**`
-- `docs/features/<feature-name>/**`
+- `src/main/java/com/commerce/<task-name>/**`
+- `src/test/java/com/commerce/<task-name>/**`
+- `docs/tasks/<task-name>/**`
 
 ## Acceptance Criteria
 
@@ -196,7 +196,7 @@ step 실행 상태 파일이다.
 - “이전 대화에서 논의한 바와 같이” 같은 외부 참조를 쓰지 않는다.
 - 필요한 파일 경로와 배경은 문서 안에 직접 적는다.
 - `수정 가능 경로` 섹션은 필수이며, 현재 step이 수정해도 되는 경로만 명시한다.
-- 모든 step의 `수정 가능 경로`에는 `docs/features/<feature-name>/**`를 포함한다. feature 문서와 phase index는 실행 중 함께 갱신될 수 있기 때문이다.
+- 모든 step의 `수정 가능 경로`에는 `docs/tasks/<task-name>/**`를 포함한다. task 문서와 phase index는 실행 중 함께 갱신될 수 있기 때문이다.
 - 구현 단위와 커밋 단위가 같은 기능/정책 목적을 가리키도록 step을 나눈다.
 - 여러 파일을 변경해도 하나의 기능 동작을 완성하기 위한 변경이면 하나의 커밋 단위로 묶는다.
 - 파일 단위로 과도하게 쪼개지 않는다.
@@ -231,11 +231,11 @@ step 실행 상태 파일이다.
 
 ## 실행
 
-기능별 `phases` 구조가 준비되면 아래 실행기로 현재 phase를 순차 실행할 수 있다.
+태스크별 `phases` 구조가 준비되면 아래 실행기로 현재 phase를 순차 실행할 수 있다.
 
 ```bash
-python3 .codex/skills/dev-start/scripts/execute.py docs/features/<feature-name>/phases/<phase-name>
-python3 .codex/skills/dev-start/scripts/execute.py docs/features/<feature-name>/phases/<phase-name> --push
+python3 .codex/skills/dev-start/scripts/execute.py docs/tasks/<task-name>/phases/<phase-name>
+python3 .codex/skills/dev-start/scripts/execute.py docs/tasks/<task-name>/phases/<phase-name> --push
 ```
 
 실행 개요:
