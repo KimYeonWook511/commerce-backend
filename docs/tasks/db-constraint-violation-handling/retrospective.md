@@ -105,6 +105,12 @@ Testcontainers 통합 테스트에서 `@DataJpaTest` + MySQL 조합으로도 `Du
 
 올바른 방향은 Adapter에서 `DuplicateKeyException`을 catch해 도메인 예외로 변환하고, Application은 인프라 예외를 전혀 모르는 구조다. 이번 PR에서 문서와 코드 일관성 유지를 위해 적용을 분리했다.
 
+### harness 개선 제안 — File Drafting 커밋 타이밍 미명시
+
+SKILL.md에 File Drafting(step 5)에서 생성한 task 문서(prd.md, architecture.md, step*.md 등)의 커밋 시점이 명시되어 있지 않다. 이번 작업에서 실제로 누락되어 PR 생성 직전에 수동으로 커밋했다.
+
+올바른 타이밍: Execution Authorization(step 6) 완료 → workflow-checklist.json authorized 갱신 → **task 문서 커밋** → execute.py 실행. execute.py가 이 문서들을 참조하므로 실행 전에 커밋된 상태여야 하고, 사용자 검토 승인과 같은 타이밍에 묶는 게 자연스럽다. SKILL.md step 6에 선행 조건으로 추가 필요.
+
 ### harness 개선 제안 — 진행률 가시화
 
 `execute.py`가 `claude -p`(headless)로 worker를 실행하여 tmux pane이 있어도 실제로 무슨 작업을 하는지 실시간으로 파악하기 어렵다. output 파일에는 progress spinner만 표시되고, 파일 읽기/코드 수정/테스트 실행 등 세부 단계가 구분되지 않는다. 작업이 정상 진행 중인지 블로킹됐는지 구분이 안 되고, 오래 걸릴 때 원인 파악이 어렵다. 구체적 구현 방법은 harness 개편 시 별도 논의가 필요하다.
