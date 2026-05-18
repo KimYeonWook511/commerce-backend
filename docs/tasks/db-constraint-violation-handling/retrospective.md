@@ -99,6 +99,16 @@ Testcontainers 통합 테스트에서 `@DataJpaTest` + MySQL 조합으로도 `Du
 
 `PaymentAttempt`의 상태(REQUESTED / FAILED / SUCCEEDED)에 따른 재요청 허용 여부 검증 로직은 이번 범위에서 제외됐다. 멱등 재요청 시 현재 구현은 amount 검사만 수행하며, 상태 전이 유효성은 별도 설계가 필요하다. 이번 catch 범위 좁히기와 독립적인 논의가 필요해 분리했다.
 
+### Issue #105: unique 위반 처리를 Adapter 계층으로 이동
+
+현재 구현은 Application 5곳에서 `DuplicateKeyException`을 직접 catch해 도메인 예외로 변환한다. 이 방식의 문제는 Application이 인프라 기술 예외 타입(`DuplicateKeyException`)에 직접 의존한다는 점이다. JPA인지 JDBC인지에 따라 이 예외가 던져지는지 여부가 달라지며, `SQLErrorCodeSQLExceptionTranslator` 빈 설정에 종속된다.
+
+올바른 방향은 Adapter에서 `DuplicateKeyException`을 catch해 도메인 예외로 변환하고, Application은 인프라 예외를 전혀 모르는 구조다. 이번 PR에서 문서와 코드 일관성 유지를 위해 적용을 분리했다.
+
+### harness 개선 제안 — 진행률 가시화
+
+`execute.py`가 `claude -p`(headless)로 worker를 실행하여 tmux pane이 있어도 실제로 무슨 작업을 하는지 실시간으로 파악하기 어렵다. output 파일에는 progress spinner만 표시되고, 파일 읽기/코드 수정/테스트 실행 등 세부 단계가 구분되지 않는다. 작업이 정상 진행 중인지 블로킹됐는지 구분이 안 되고, 오래 걸릴 때 원인 파악이 어렵다. 구체적 구현 방법은 harness 개편 시 별도 논의가 필요하다.
+
 ---
 
 ## 6. 회고
