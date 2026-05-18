@@ -13,7 +13,7 @@ import org.mockito.ArgumentCaptor;
 import org.mockito.InjectMocks;
 import org.mockito.Mock;
 import org.mockito.junit.jupiter.MockitoExtension;
-import org.springframework.dao.DataIntegrityViolationException;
+import org.springframework.dao.DuplicateKeyException;
 
 import com.commerce.member.application.command.MemberRegistrationCommand;
 import com.commerce.member.domain.Member;
@@ -87,7 +87,7 @@ class MemberRegistrationServiceTest {
 			.build();
 
 		given(memberRepository.existsByEmail("test@example.com")).willReturn(false);
-		given(memberRepository.save(any(Member.class))).willThrow(new DataIntegrityViolationException("duplicate email"));
+		given(memberRepository.save(any(Member.class))).willThrow(new DuplicateKeyException("duplicate email"));
 
 		// when & then
 		assertThatThrownBy(() -> memberRegistrationService.register(command))

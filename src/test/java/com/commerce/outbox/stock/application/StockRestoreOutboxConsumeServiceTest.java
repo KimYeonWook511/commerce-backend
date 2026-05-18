@@ -14,7 +14,7 @@ import org.mockito.ArgumentCaptor;
 import org.mockito.InjectMocks;
 import org.mockito.Mock;
 import org.mockito.junit.jupiter.MockitoExtension;
-import org.springframework.dao.DataIntegrityViolationException;
+import org.springframework.dao.DuplicateKeyException;
 
 import com.commerce.outbox.domain.ProcessedEvent;
 import com.commerce.outbox.domain.ProcessedEventConsumerType;
@@ -70,7 +70,7 @@ class StockRestoreOutboxConsumeServiceTest {
 			.items(List.of(StockRestoreConsumeCommand.Item.builder().productId(1L).quantity(2).build()))
 			.build();
 		given(processedEventRepository.save(org.mockito.ArgumentMatchers.any(ProcessedEvent.class)))
-			.willThrow(new DataIntegrityViolationException("duplicate"));
+			.willThrow(new DuplicateKeyException("duplicate"));
 
 		// when
 		stockRestoreOutboxConsumeService.consume(command);
