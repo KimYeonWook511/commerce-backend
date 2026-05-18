@@ -50,7 +50,7 @@ __pycache__/
 ### Claude Code 로컬 설정 ###
 .claude/settings.local.json
 
-### dev-start 실행 산출물 ###
+### harness 실행 산출물 ###
 docs/tasks/**/phases/**/step*-output.json
 docs/tasks/**/phases/**/step*-ac-output.json
 docs/tasks/**/phases/**/step*-review-output.json
