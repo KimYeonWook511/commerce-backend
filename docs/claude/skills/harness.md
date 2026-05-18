@@ -12,7 +12,7 @@ flowchart TD
     B --> C["Discuss<br>요구사항 확정"]
     C --> D["Step Design<br>step 분해"]
     D --> W["Worktree 생성 및 이동<br>작업 브랜치 격리"]
-    W --> E["File Drafting<br>feature/phases 문서 작성"]
+    W --> E["File Drafting<br>task 문서/phases 작성"]
     E --> M["Execution Authorization<br>사용자 의사 확인"]
     M --> N["workflow-checklist.json<br>authorization 기록"]
     N --> O["Plan Mode + ExitPlanMode<br>승인 요청"]
@@ -48,7 +48,7 @@ flowchart TD
 
 ### 2. Step Design
 
-작업을 `docs/features/<feature-name>/phases/<phase-name>/step{N}.md` 단위로 분해한다.
+작업을 `docs/tasks/<task-name>/phases/<phase-name>/step{N}.md` 단위로 분해한다.
 
 ### 3. Worktree 생성 및 이동
 
@@ -56,15 +56,15 @@ Step Design 완료 후 작업 브랜치 worktree를 생성하고 이동한다.
 
 ```bash
 cd "$(git rev-parse --git-common-dir)/.."
-git worktree add worktrees/<type>-<feature-name> -b <type>/<feature-name> develop
-cd worktrees/<type>-<feature-name>
+git worktree add worktrees/<type>-<task-name> -b <type>/<task-name> develop
+cd worktrees/<type>-<task-name>
 ```
 
 `git worktree add`와 `cd` 이동이 모두 완료돼야 이 단계가 완료다. 이동 직후 `pwd` 또는 `git branch --show-current`로 worktree 이동 여부를 확인하고, 확인 전에는 다음 단계로 넘어가지 않는다.
 
 ### 4. File Drafting
 
-worktree 안에서 feature 문서와 phase 구조를 작성한다. 작성 완료 후 반드시 멈추고 문서 경로를 보고한다.
+worktree 안에서 task 문서와 phase 구조를 작성한다. 작성 완료 후 반드시 멈추고 문서 경로를 보고한다.
 
 ### 5. Execution Authorization
 
