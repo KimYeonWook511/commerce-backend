@@ -706,12 +706,17 @@ class StepExecutor:
             self.execute_single_step(pending)
 
     def finalize(self):
-        """phase 완료 시각 기록, task 내부 상태 동기화, 선택적 push를 수행한다."""
+        """phase 완료 시각 기록, task 내부 상태 동기화, 잔여 task 문서 커밋, 선택적 push를 수행한다."""
         index = self.read_json(self.index_file)
         index["completed_at"] = self.stamp()
         self.write_json(self.index_file, index)
         self.update_task_index("completed")
         self.mark_workflow_execution_completed()
+
+        # task 문서 잔여 변경분 안전망 커밋 (step commit agent가 흡수하지 못한 수정분)
+        self._commit_remaining_task_docs()
+
+        # phase index 갱신 chore 커밋
         git_ops.stage_paths(
             self,
             [
@@ -737,6 +742,23 @@ class StepExecutor:
         print("\n" + "=" * 60)
         print(f"  Phase '{self.phase_name}' completed!")
         print("=" * 60)
+
+    def _commit_remaining_task_docs(self):
+        """step commit agent가 흡수하지 못한 task 문서 변경분을 docs: 커밋으로 묶는다.
+
+        task-level과 모든 phase의 index.json은 다음 chore 커밋용이므로 와일드카드로 제외한다.
+        """
+        task_relpath = Path(self.task_phases_relpath).parent.as_posix()
+        self.run_git("add", "--", task_relpath)
+        self.run_git("reset", "HEAD", "--", f"{self.task_phases_relpath}/index.json")
+        self.run_git("reset", "HEAD", "--", f"{self.task_phases_relpath}/*/index.json")
+        if self.run_git("diff", "--cached", "--quiet").returncode != 0:
+            message = f"docs: {self.task_name} 태스크 문서 변경분을 반영한다"
+            result = self.run_git("commit", "-m", message)
+            if result.returncode != 0:
+                print(f"\n  ERROR: 태스크 문서 커밋 실패: {result.stderr.strip()}")
+                raise SystemExit(1)
+            print(f"  ✓ {message}")
 
 
 def main():

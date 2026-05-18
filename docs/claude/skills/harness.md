@@ -68,7 +68,7 @@ worktree 안에서 task 문서와 phase 구조를 작성한다. 작성 완료 �
 
 ### 5. Execution Authorization
 
-`execute.py` 실행 전 사용자 승인을 Plan Mode + `ExitPlanMode`로 받는다. 승인 전에는 파일을 수정하지 않는다. `approved_at` 기록 시 `date '+%Y-%m-%dT%H:%M:%S+0900'`으로 실제 시각을 확인한다.
+`execute.py` 실행 전 사용자 승인을 Plan Mode + `ExitPlanMode`로 받는다. 승인 전에는 파일을 수정하지 않는다. `approved_at` 기록 시 `date '+%Y-%m-%dT%H:%M:%S+0900'`으로 실제 시각을 확인한다. 승인이 확정되면 `execute.py` 실행 전에 File Drafting 결과물(task 문서 + phase 초안)을 `docs:` 커밋으로 등록한다. 자세한 절차는 SKILL.md 단계 6 참고.
 
 ### 6. Execution (내부 파이프라인)
 
@@ -76,7 +76,8 @@ Execution Authorization 승인 후 `execute.py`가 아래 순서로 step을 처�
 
 - **Developer Worker**: `execute.py`가 tmux pane을 생성하고 `claude -p`로 worker를 실행한다. Acceptance Criteria를 직접 실행해 검증한다.
 - **Reviewer Worker**: developer 결과를 read-only 관점으로 검토한다. `pass`, `retryable_error`, `blocked` 중 하나를 반환한다.
-- **Commit Agent**: reviewer pass 시 `git status`/`git diff`를 확인하고 commit-conventions.md를 읽어 커밋 단위와 메시지를 판단해 커밋한다.
+- **Commit Agent**: reviewer pass 시 `git status`/`git diff`를 확인하고 commit-conventions.md를 읽어 커밋 단위와 메시지를 판단해 커밋한다. 코드 변경과 task 문서 변경의 목적이 다르면 분리 commit(코드 → docs:)으로 나눈다. 예외(write-retrospective 등)는 한 commit으로 묶는다.
+- **Finalize**: phase 종료 시 `execute.py finalize()`가 step commit agent가 흡수하지 못한 task 문서 잔여 변경분을 `docs:` 커밋으로, phase index 두 개를 `chore:` 커밋으로 마무리한다.
 
 ## 현재 Repo의 역할별 구성
 

@@ -188,7 +188,7 @@ python3 .claude/skills/harness/scripts/execute.py docs/tasks/skill-test/phases/0
 - 사용자가 다시 `step 나눠줘`, `phase 만들어줘`라고 말하지 않아도 된다.
 - 문서 탐색 규칙이 `CLAUDE.md` -> task 문서 우선 -> 필요 시 루트 문서 추가 순서로 일관된다.
 - 태스크 문서 5개와 태스크 내부 `phases` 산출물 구조가 자기완결적으로 나온다.
-- `workflow-checklist.json`과 상태 표가 1~6번 workflow를 일관되게 보여준다.
+- `workflow-checklist.json`과 상태 표가 1~7번 workflow를 일관되게 보여준다.
 - File Drafting 후에는 멈추고 사용자 검토를 기다린다.
 - 실행 전에는 사용자 의사 확인 -> checklist authorization 기록 -> Codex permission UI 권한 상승 요청 -> `execute.py` 실행 순서를 따른다.
 - 실행기와의 연결 경로가 정확하다.

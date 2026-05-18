@@ -661,13 +661,20 @@ class StepExecutorTest(unittest.TestCase):
         self.assertEqual("error", task["phases"][0]["status"])
 
     def test_finalize_commits_index_state_and_pushes_when_enabled(self):
+        """task 문서 잔여 변경분이 없는 경우 chore: 커밋만 만들어진다 (idempotent)."""
         executor = self.make_executor(auto_push=True)
         executor.branch_name = "feature/skill-test"
         calls = []
+        diff_call_count = {"count": 0}
 
         def fake_git(*args):
             calls.append(args)
             if args[:2] == ("diff", "--cached"):
+                diff_call_count["count"] += 1
+                # 첫 번째 diff: task 문서 잔여 변경분 없음 → docs commit 생략
+                # 두 번째 diff: phase index 변경 있음 → chore commit
+                if diff_call_count["count"] == 1:
+                    return MagicMock(returncode=0, stdout="", stderr="")
                 return MagicMock(returncode=1, stdout="", stderr="")
             return MagicMock(returncode=0, stdout="", stderr="")
 
@@ -692,6 +699,37 @@ class StepExecutorTest(unittest.TestCase):
         commit_calls = [call for call in calls if call[0] == "commit"]
         self.assertEqual(1, len(commit_calls))
         self.assertIn("chore: mvp 실행 상태를 기록한다", commit_calls[0])
+
+    def test_finalize_commits_remaining_task_docs_when_changes_present(self):
+        """task 문서 잔여 변경분이 있으면 docs: 커밋과 chore: 커밋 두 개가 만들어진다."""
+        executor = self.make_executor(auto_push=False)
+        executor.branch_name = "chore/skill-test"
+        calls = []
+
+        def fake_git(*args):
+            calls.append(args)
+            # 모든 diff --cached가 returncode=1 (변경분 있음)
+            if args[:2] == ("diff", "--cached"):
+                return MagicMock(returncode=1, stdout="", stderr="")
+            return MagicMock(returncode=0, stdout="", stderr="")
+
+        executor.run_git = fake_git
+        executor.finalize()
+
+        commit_calls = [call for call in calls if call[0] == "commit"]
+        self.assertEqual(2, len(commit_calls))
+        self.assertIn("docs: skill-test 태스크 문서 변경분을 반영한다", commit_calls[0])
+        self.assertIn("chore: mvp 실행 상태를 기록한다", commit_calls[1])
+
+        # phase index reset 호출 검증 (chore 커밋용으로 분리되었는지)
+        # task-level index와 모든 phase index를 와일드카드로 제외
+        reset_calls = [call for call in calls if call[0] == "reset"]
+        self.assertTrue(
+            any("docs/tasks/skill-test/phases/index.json" in call for call in reset_calls)
+        )
+        self.assertTrue(
+            any("docs/tasks/skill-test/phases/*/index.json" in call for call in reset_calls)
+        )
 
     def test_execute_single_step_retries_when_completed_has_no_summary(self):
         executor = self.make_executor()
