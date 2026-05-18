@@ -29,7 +29,10 @@
     {
       "step": 3,
       "name": "order-create-find-first",
-      "status": "pending"
+      "status": "completed",
+      "started_at": "2026-05-19T00:29:29+0900",
+      "completed_at": "2026-05-19T00:36:01+0900",
+      "summary": "OrderCreateService.attemptCreateOrder 를 try-save-catch 에서 find-first 패턴으로 재설계한다. Redis reserve 성공 후 DB findByMemberIdAndIdempotencyKey 사전 체크를 추가해 TTL 만료 후 정당한 멱등 재요청을 흡수하고, race / ULID 충돌은 RuntimeException catch 가 Redis 정리 후 rethrow → 안전망 500 으로 통합 처리한다. DuplicateKeyException 임포트와 unused @Slf4j 어노테이션을 제거한다. OrderApplicationServiceTest 의 DuplicateKeyException race 케이스 2 건을 제거하고 Redis reserve 성공 + DB present(complete 갱신) / Redis reserve 실패 + completed orderId 존재 시나리오로 교체한다. ./gradlew test 통과."
     },
     {
       "step": 4,
