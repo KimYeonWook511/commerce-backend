@@ -1,6 +1,7 @@
 package com.commerce.payment.naverpay.application;
 
 import java.time.LocalDateTime;
+import java.util.Objects;
 
 import org.springframework.stereotype.Service;
 
@@ -312,13 +313,13 @@ public class NaverPayApprovalService {
 
 	private void compensateDuplicatePayment(PaymentAttempt attempt, Exception ex) {
 		failApproveAndCancelApprovedPayment(attempt, PaymentAttemptFailCode.DUPLICATE_PAYMENT,
-			ex.getMessage(), attempt.getAmount(), "이미 다른 결제가 완료된 주문으로 인한 취소");
+			Objects.toString(ex.getMessage(), "이미 완료된 결제 반영 시도"), attempt.getAmount(), "이미 다른 결제가 완료된 주문으로 인한 취소");
 	}
 
 	private void compensateUnexpected(PaymentAttempt attempt, Exception ex,
 		PaymentAttemptFailCode failCode, String cancelReason) {
 		failApproveAndCancelApprovedPayment(attempt, failCode,
-			ex.getMessage(), attempt.getAmount(), cancelReason);
+			Objects.toString(ex.getMessage(), "예상치 못한 오류 발생"), attempt.getAmount(), cancelReason);
 	}
 
 	private void failApprove(PaymentAttempt attempt, PaymentAttemptFailCode failCode, String failDetail) {
