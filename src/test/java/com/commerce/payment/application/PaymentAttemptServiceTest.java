@@ -143,7 +143,7 @@ class PaymentAttemptServiceTest {
 		assertThat(attempt.getRespondedAt()).isEqualTo(respondedAt);
 	}
 
-	@DisplayName("보상 흐름 실패 처리 시 REQUESTED 가 아니면 mark 없이 skip 한다")
+	@DisplayName("보상 흐름 실패 처리 시 REQUESTED 가 아니면 상태를 갱신하지 않고 종료한다")
 	@Test
 	void failApproveAttemptIfRequested_whenNotRequested_skipMark() {
 		// given
@@ -168,7 +168,7 @@ class PaymentAttemptServiceTest {
 		assertThat(attempt.getRespondedAt()).isEqualTo(succeededAt);
 	}
 
-	@DisplayName("보상 흐름 실패 처리 시 이력이 없으면 mark 없이 skip 한다")
+	@DisplayName("보상 흐름 실패 처리 시 이력이 없으면 상태를 갱신하지 않고 종료한다")
 	@Test
 	void failApproveAttemptIfRequested_whenAttemptNotFound_skipMark() {
 		// given
