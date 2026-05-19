@@ -272,7 +272,10 @@ class NaverPayServiceConcurrencyTest {
 
 		// then
 		// attempt SUCCEEDED + payment 없음 = 정상 트랜잭션 경계에서 발생할 수 없는 데이터 오염 상태.
-		// 조용히 복구하지 않고 PAYMENT_ATTEMPT_STATUS_TRANSITION_NOT_ALLOWED 를 던진다.
+		// isCompensationRequired(Payment 존재 여부)가 true 이므로 보상 cancel 진행 → attempt 가 이미 SUCCEEDED 라
+		// markApproveFailed 선조건 검증에서 PAYMENT_ATTEMPT_STATUS_TRANSITION_NOT_ALLOWED 예외가 발생한다.
+		// 이전 설계(PaymentAttempt.status 기반)에서는 조용한 복구를 시도했으나, Payment 존재 여부 기반 설계에서는
+		// 이 상태가 데이터 오염으로 간주되어 복구를 허용하지 않는다.
 		assertThat(errors).hasSize(20);
 		errors.forEach(e -> assertRaceOrPaymentError(
 			e, PaymentErrorCode.PAYMENT_ATTEMPT_STATUS_TRANSITION_NOT_ALLOWED
@@ -369,6 +372,8 @@ class NaverPayServiceConcurrencyTest {
 		given(naverPayGateway.approve(paymentId))
 			.willReturn(NaverPayApproveResult.success(merchantPayKey, 1000));
 		// Thread A가 Payment를 이미 완료한 상황을 모델링: isCompensationRequired 를 false로 직접 스텁
+		// paymentApprovalService 가 @MockitoSpyBean 이므로 given().willReturn() 은 실제 메서드를 먼저 호출한다.
+		// 실제 메서드 호출을 건너뛰려면 Mockito.doReturn() 계열을 사용해야 한다.
 		Mockito.doReturn(false).when(paymentApprovalService).isCompensationRequired(merchantPayKey);
 		Mockito.doThrow(new PaymentException(PaymentErrorCode.PAYMENT_DUPLICATE))
 			.when(paymentApprovalService)
