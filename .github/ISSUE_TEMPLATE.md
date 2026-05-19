@@ -8,7 +8,7 @@ Issue 제목은 `<type>: <변경 요약>` 형식으로 작성합니다.
 - refactor: 결제 승인 서비스 책임 분리
 - test: 인증 컨트롤러 예외 응답 테스트 추가
 - docs: 상품 조회 API 문서 보강
-- chore: PR 템플릿 추가
+- chore: 하네스 skill 추가
 
 허용 타입:
 feat, fix, refactor, test, docs, chore
