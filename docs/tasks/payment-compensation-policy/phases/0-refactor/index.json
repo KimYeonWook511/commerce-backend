@@ -29,7 +29,10 @@
     {
       "step": 3,
       "name": "sync-root-docs",
-      "status": "pending"
+      "status": "completed",
+      "started_at": "2026-05-20T00:17:58+0900",
+      "summary": "ADR-014 신설(보상 진행 여부는 Payment 존재 여부로 판단), ADR-012에 후속 노트 추가(ADR-D 임시 처방 대체 및 #117 close), exception-strategy.md 적용 예에 isCompensationRequired 캡슐화 패턴 추가, architecture.md 결제 승인 흐름에 보상 가능 여부 판단 반영",
+      "completed_at": "2026-05-20T00:19:43+0900"
     },
     {
       "step": 4,
