@@ -1,5 +1,9 @@
 {
   "phases": [
-    { "dir": "0-state-transition-validation", "status": "pending" }
+    {
+      "dir": "0-state-transition-validation",
+      "status": "in_progress",
+      "started_at": "2026-05-19T17:03:02+0900"
+    }
   ]
 }
