@@ -37,7 +37,10 @@
     {
       "step": 4,
       "name": "write-retrospective",
-      "status": "pending"
+      "status": "completed",
+      "started_at": "2026-05-20T00:21:06+0900",
+      "summary": "docs/tasks/payment-compensation-policy/retrospective.md 신규 생성 — 5단 구조(작업 요약, 설계 결정, 발견한 것, 미결 과제, 개선 제안)로 작성. ADR-1~4 결정 및 선택하지 않은 대안 요약, #114/#115/#116/#117 close 여부 명시, ArchUnit·PaymentReference VO·cancel skip 모니터링 개선 제안 포함.",
+      "completed_at": "2026-05-20T00:23:22+0900"
     }
   ],
   "created_at": "2026-05-19T23:17:01+0900"
