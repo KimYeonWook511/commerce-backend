@@ -64,7 +64,8 @@ gh pr view "$PR_NUMBER" --comments
 **(b) Inline 코멘트** (코드 라인별):
 
 ```bash
-gh api "repos/$REPO/pulls/$PR_NUMBER/comments"
+# --paginate로 30개 초과 코멘트도 모두 수집한다
+gh api "repos/$REPO/pulls/$PR_NUMBER/comments" --paginate
 ```
 
 각 inline 코멘트에서 추출할 필드:
