@@ -2,10 +2,34 @@
   "project": "commerce-backend",
   "phase": "0-refactor",
   "steps": [
-    { "step": 0, "name": "race-priority-by-payment-existence", "status": "pending" },
-    { "step": 1, "name": "split-compensation-by-failure-meaning", "status": "pending" },
-    { "step": 2, "name": "stabilize-concurrency-tests", "status": "pending" },
-    { "step": 3, "name": "sync-root-docs", "status": "pending" },
-    { "step": 4, "name": "write-retrospective", "status": "pending" }
-  ]
+    {
+      "step": 0,
+      "name": "race-priority-by-payment-existence",
+      "status": "completed",
+      "started_at": "2026-05-19T23:17:01+0900",
+      "summary": "PaymentApprovalService에 isCompensationRequired(merchantPayKey) 추가, failApproveAndCancelApprovedPayment에 Payment 존재 체크 삽입(Payment 존재 시 cancel skip), 신규 테스트 2개 추가 및 기존 cancel 경로 테스트 14개에 isCompensationRequired mock 보강",
+      "completed_at": "2026-05-19T23:22:54+0900"
+    },
+    {
+      "step": 1,
+      "name": "split-compensation-by-failure-meaning",
+      "status": "pending"
+    },
+    {
+      "step": 2,
+      "name": "stabilize-concurrency-tests",
+      "status": "pending"
+    },
+    {
+      "step": 3,
+      "name": "sync-root-docs",
+      "status": "pending"
+    },
+    {
+      "step": 4,
+      "name": "write-retrospective",
+      "status": "pending"
+    }
+  ],
+  "created_at": "2026-05-19T23:17:01+0900"
 }
