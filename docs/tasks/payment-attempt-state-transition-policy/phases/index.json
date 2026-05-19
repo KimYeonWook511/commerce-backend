@@ -1,0 +1,10 @@
+{
+  "phases": [
+    {
+      "dir": "0-state-transition-validation",
+      "status": "completed",
+      "started_at": "2026-05-19T17:03:02+0900",
+      "completed_at": "2026-05-19T17:16:44+0900"
+    }
+  ]
+}

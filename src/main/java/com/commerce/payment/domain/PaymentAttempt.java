@@ -3,6 +3,8 @@ package com.commerce.payment.domain;
 import java.time.LocalDateTime;
 
 import com.commerce.common.jpa.BaseTimeEntity;
+import com.commerce.payment.exception.PaymentErrorCode;
+import com.commerce.payment.exception.PaymentException;
 
 import jakarta.persistence.Column;
 import jakarta.persistence.Entity;
@@ -104,6 +106,12 @@ public class PaymentAttempt extends BaseTimeEntity {
 	}
 
 	public void markApproveSucceeded(LocalDateTime respondedAt) {
+		if (this.type != PaymentAttemptType.APPROVE) {
+			throw new PaymentException(PaymentErrorCode.PAYMENT_ATTEMPT_TYPE_MISMATCH);
+		}
+		if (this.status != PaymentAttemptStatus.REQUESTED) {
+			throw new PaymentException(PaymentErrorCode.PAYMENT_ATTEMPT_STATUS_TRANSITION_NOT_ALLOWED);
+		}
 		this.status = PaymentAttemptStatus.SUCCEEDED;
 		this.failCode = null;
 		this.failDetail = null;
@@ -111,6 +119,12 @@ public class PaymentAttempt extends BaseTimeEntity {
 	}
 
 	public void markApproveFailed(PaymentAttemptFailCode failCode, String failDetail, LocalDateTime respondedAt) {
+		if (this.type != PaymentAttemptType.APPROVE) {
+			throw new PaymentException(PaymentErrorCode.PAYMENT_ATTEMPT_TYPE_MISMATCH);
+		}
+		if (this.status != PaymentAttemptStatus.REQUESTED) {
+			throw new PaymentException(PaymentErrorCode.PAYMENT_ATTEMPT_STATUS_TRANSITION_NOT_ALLOWED);
+		}
 		this.status = PaymentAttemptStatus.FAILED;
 		this.failCode = failCode;
 		this.failDetail = failDetail;
@@ -134,6 +148,12 @@ public class PaymentAttempt extends BaseTimeEntity {
 	}
 
 	public void markCancelSucceeded(LocalDateTime respondedAt) {
+		if (this.type != PaymentAttemptType.CANCEL) {
+			throw new PaymentException(PaymentErrorCode.PAYMENT_ATTEMPT_TYPE_MISMATCH);
+		}
+		if (this.status != PaymentAttemptStatus.REQUESTED) {
+			throw new PaymentException(PaymentErrorCode.PAYMENT_ATTEMPT_STATUS_TRANSITION_NOT_ALLOWED);
+		}
 		this.status = PaymentAttemptStatus.SUCCEEDED;
 		this.failCode = null;
 		this.failDetail = null;
@@ -141,6 +161,12 @@ public class PaymentAttempt extends BaseTimeEntity {
 	}
 
 	public void markCancelFailed(PaymentAttemptFailCode failCode, String failDetail, LocalDateTime respondedAt) {
+		if (this.type != PaymentAttemptType.CANCEL) {
+			throw new PaymentException(PaymentErrorCode.PAYMENT_ATTEMPT_TYPE_MISMATCH);
+		}
+		if (this.status != PaymentAttemptStatus.REQUESTED) {
+			throw new PaymentException(PaymentErrorCode.PAYMENT_ATTEMPT_STATUS_TRANSITION_NOT_ALLOWED);
+		}
 		this.status = PaymentAttemptStatus.FAILED;
 		this.failCode = failCode;
 		this.failDetail = failDetail;
