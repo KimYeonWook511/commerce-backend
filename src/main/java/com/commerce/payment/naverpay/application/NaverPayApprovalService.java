@@ -295,7 +295,8 @@ public class NaverPayApprovalService {
 	}
 
 	private void failApprove(PaymentAttempt attempt, PaymentAttemptFailCode failCode, String failDetail) {
-		paymentAttemptService.failApproveAttempt(
+		// 보상 흐름에서 호출되므로 1차 예외를 가리지 않는 메서드를 사용한다 (ADR-013).
+		paymentAttemptService.failApproveAttemptIfRequested(
 			attempt.getMerchantPayKey(),
 			attempt.getProvider(),
 			attempt.getPaymentId(),
