@@ -18,7 +18,7 @@ feat, fix, refactor, test, docs, chore
 
 <!--
 이 작업이 필요한 맥락을 설명합니다.
-- 어떤 PR / 회고 / 논의에서 발견됐는지 (PR #N, 회고 경로 등)
+- 어떤 Issue / PR / 회고 / 논의에서 발견됐는지 (Issue #N, PR #N, 회고 경로 등)
 - 현재 코드 / 문서 / 정책의 상태
 -->
 
