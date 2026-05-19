@@ -128,6 +128,13 @@ public class NaverPayApprovalService {
 			);
 			return toResponse(completed);
 		} catch (PaymentException ex) {
+			log.error(
+				"NaverPay approve complete failed by payment error: merchantPayKey={}, paymentId={}, errorCode={}",
+				attempt.getMerchantPayKey(),
+				attempt.getPaymentId(),
+				ex.getErrorCode(),
+				ex
+			);
 			switch ((PaymentErrorCode)ex.getErrorCode()) {
 				case PAYMENT_MERCHANT_KEY_MISMATCH ->
 					failApprove(attempt, PaymentAttemptFailCode.MERCHANT_PAY_KEY_MISMATCH, "가맹점 결제 키 불일치");
@@ -143,6 +150,13 @@ public class NaverPayApprovalService {
 			}
 			throw ex;
 		} catch (CustomException ex) {
+			log.error(
+				"NaverPay approve complete failed by custom error: merchantPayKey={}, paymentId={}, errorCode={}",
+				attempt.getMerchantPayKey(),
+				attempt.getPaymentId(),
+				ex.getErrorCode(),
+				ex
+			);
 			failApproveAndCancelApprovedPayment(attempt, PaymentAttemptFailCode.APPROVE_PROCESS_FAILED,
 				ex.getMessage(), attempt.getAmount(), "결제 완료 반영 실패로 인한 취소");
 			throw ex;
