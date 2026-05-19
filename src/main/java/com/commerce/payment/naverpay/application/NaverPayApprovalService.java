@@ -136,17 +136,13 @@ public class NaverPayApprovalService {
 				ex
 			);
 			switch ((PaymentErrorCode)ex.getErrorCode()) {
-				case PAYMENT_MERCHANT_KEY_MISMATCH ->
-					failApprove(attempt, PaymentAttemptFailCode.MERCHANT_PAY_KEY_MISMATCH, "가맹점 결제 키 불일치");
+				case PAYMENT_MERCHANT_KEY_MISMATCH -> compensateMerchantKeyMismatch(attempt);
 				case PAYMENT_AMOUNT_MISMATCH ->
-					failApproveAndCancelApprovedPayment(attempt, PaymentAttemptFailCode.AMOUNT_MISMATCH,
-						String.format("attemptAmount=%d, responseTotalAmount=%d", attempt.getAmount(),
-							responseTotalAmount), responseTotalAmount, "승인 금액 불일치");
+					compensateAmountMismatch(attempt, responseTotalAmount);
 				case PAYMENT_DUPLICATE ->
-					failApproveAndCancelApprovedPayment(attempt, PaymentAttemptFailCode.DUPLICATE_PAYMENT,
-						ex.getMessage(), attempt.getAmount(), "이미 다른 결제가 완료된 주문으로 인한 취소");
-				default -> failApproveAndCancelApprovedPayment(attempt, PaymentAttemptFailCode.APPROVE_PROCESS_FAILED,
-					ex.getMessage(), attempt.getAmount(), "결제 완료 반영 실패로 인한 취소");
+					compensateDuplicatePayment(attempt, ex);
+				default -> compensateUnexpected(attempt, ex,
+					PaymentAttemptFailCode.APPROVE_PROCESS_FAILED, "결제 완료 반영 실패로 인한 취소");
 			}
 			throw ex;
 		} catch (CustomException ex) {
@@ -157,8 +153,8 @@ public class NaverPayApprovalService {
 				ex.getErrorCode(),
 				ex
 			);
-			failApproveAndCancelApprovedPayment(attempt, PaymentAttemptFailCode.APPROVE_PROCESS_FAILED,
-				ex.getMessage(), attempt.getAmount(), "결제 완료 반영 실패로 인한 취소");
+			compensateUnexpected(attempt, ex,
+				PaymentAttemptFailCode.APPROVE_PROCESS_FAILED, "결제 완료 반영 실패로 인한 취소");
 			throw ex;
 		} catch (Exception ex) {
 			log.error(
@@ -167,8 +163,8 @@ public class NaverPayApprovalService {
 				attempt.getPaymentId(),
 				ex
 			);
-			failApproveAndCancelApprovedPayment(attempt, PaymentAttemptFailCode.APPROVE_PROCESS_FAILED,
-				"결제 완료 반영 중 예상치 못한 오류", attempt.getAmount(), "결제 완료 반영 실패로 인한 취소");
+			compensateUnexpected(attempt, ex,
+				PaymentAttemptFailCode.APPROVE_PROCESS_FAILED, "결제 완료 반영 중 예상치 못한 오류");
 			throw ex;
 		}
 	}
@@ -301,6 +297,28 @@ public class NaverPayApprovalService {
 			case APPROVE_PROCESS_FAILED -> PaymentErrorCode.PAYMENT_APPROVE_FAILED;
 			case CANCEL_PROCESS_FAILED -> PaymentErrorCode.PAYMENT_CANCEL_FAILED;
 		};
+	}
+
+	private void compensateMerchantKeyMismatch(PaymentAttempt attempt) {
+		// 우리 시스템 키 오류이므로 PG 결제 자체가 없다. cancel 없이 failApprove만.
+		failApprove(attempt, PaymentAttemptFailCode.MERCHANT_PAY_KEY_MISMATCH, "가맹점 결제 키 불일치");
+	}
+
+	private void compensateAmountMismatch(PaymentAttempt attempt, int responseTotalAmount) {
+		failApproveAndCancelApprovedPayment(attempt, PaymentAttemptFailCode.AMOUNT_MISMATCH,
+			String.format("attemptAmount=%d, responseTotalAmount=%d", attempt.getAmount(), responseTotalAmount),
+			responseTotalAmount, "승인 금액 불일치");
+	}
+
+	private void compensateDuplicatePayment(PaymentAttempt attempt, Exception ex) {
+		failApproveAndCancelApprovedPayment(attempt, PaymentAttemptFailCode.DUPLICATE_PAYMENT,
+			ex.getMessage(), attempt.getAmount(), "이미 다른 결제가 완료된 주문으로 인한 취소");
+	}
+
+	private void compensateUnexpected(PaymentAttempt attempt, Exception ex,
+		PaymentAttemptFailCode failCode, String cancelReason) {
+		failApproveAndCancelApprovedPayment(attempt, failCode,
+			ex.getMessage(), attempt.getAmount(), cancelReason);
 	}
 
 	private void failApprove(PaymentAttempt attempt, PaymentAttemptFailCode failCode, String failDetail) {

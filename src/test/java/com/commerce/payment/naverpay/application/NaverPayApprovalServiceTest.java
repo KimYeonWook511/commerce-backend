@@ -704,7 +704,7 @@ class NaverPayApprovalServiceTest {
 			.hasMessage("db write failed");
 		then(paymentAttemptService).should().failApproveAttemptIfRequested(
 			eq("PAY-1"), eq(PaymentProvider.NAVERPAY), eq("pg-payment-id"),
-			eq(PaymentAttemptFailCode.APPROVE_PROCESS_FAILED), eq("결제 완료 반영 중 예상치 못한 오류"), any());
+			eq(PaymentAttemptFailCode.APPROVE_PROCESS_FAILED), eq("db write failed"), any());
 		then(naverPayGateway).should().cancel(eq("pg-payment-id"), anyInt(), any());
 	}
 
