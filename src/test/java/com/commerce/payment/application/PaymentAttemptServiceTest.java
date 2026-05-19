@@ -118,6 +118,75 @@ class PaymentAttemptServiceTest {
 		assertThat(attempt.getRespondedAt()).isEqualTo(respondedAt);
 	}
 
+	@DisplayName("보상 흐름 실패 처리 시 REQUESTED 상태이면 실패로 전이한다")
+	@Test
+	void failApproveAttemptIfRequested_whenRequested_updateAttempt() {
+		// given
+		LocalDateTime respondedAt = LocalDateTime.of(2026, 3, 3, 16, 21);
+		PaymentAttempt attempt = PaymentAttempt.createApproveRequested("PAY-1", "payment-id-1", 1000,
+			PaymentProvider.NAVERPAY);
+		given(paymentAttemptRepository.findApproveAttempt(
+			eq("PAY-1"), eq(PaymentProvider.NAVERPAY), eq("payment-id-1")))
+			.willReturn(Optional.of(attempt));
+
+		// when
+		paymentAttemptService.failApproveAttemptIfRequested("PAY-1", PaymentProvider.NAVERPAY, "payment-id-1",
+			PaymentAttemptFailCode.APPROVE_PROCESS_FAILED,
+			"compensation",
+			respondedAt
+		);
+
+		// then
+		assertThat(attempt.getStatus()).isEqualTo(PaymentAttemptStatus.FAILED);
+		assertThat(attempt.getFailCode()).isEqualTo(PaymentAttemptFailCode.APPROVE_PROCESS_FAILED);
+		assertThat(attempt.getFailDetail()).isEqualTo("compensation");
+		assertThat(attempt.getRespondedAt()).isEqualTo(respondedAt);
+	}
+
+	@DisplayName("보상 흐름 실패 처리 시 REQUESTED 가 아니면 상태를 갱신하지 않고 종료한다")
+	@Test
+	void failApproveAttemptIfRequested_whenNotRequested_skipMark() {
+		// given
+		LocalDateTime succeededAt = LocalDateTime.of(2026, 3, 3, 16, 21);
+		PaymentAttempt attempt = PaymentAttempt.createApproveRequested("PAY-1", "payment-id-1", 1000,
+			PaymentProvider.NAVERPAY);
+		attempt.markApproveSucceeded(succeededAt);
+		given(paymentAttemptRepository.findApproveAttempt(
+			eq("PAY-1"), eq(PaymentProvider.NAVERPAY), eq("payment-id-1")))
+			.willReturn(Optional.of(attempt));
+
+		// when
+		paymentAttemptService.failApproveAttemptIfRequested("PAY-1", PaymentProvider.NAVERPAY, "payment-id-1",
+			PaymentAttemptFailCode.APPROVE_PROCESS_FAILED,
+			"compensation",
+			LocalDateTime.of(2026, 3, 3, 16, 22)
+		);
+
+		// then
+		assertThat(attempt.getStatus()).isEqualTo(PaymentAttemptStatus.SUCCEEDED);
+		assertThat(attempt.getFailCode()).isNull();
+		assertThat(attempt.getRespondedAt()).isEqualTo(succeededAt);
+	}
+
+	@DisplayName("보상 흐름 실패 처리 시 이력이 없으면 상태를 갱신하지 않고 종료한다")
+	@Test
+	void failApproveAttemptIfRequested_whenAttemptNotFound_skipMark() {
+		// given
+		given(paymentAttemptRepository.findApproveAttempt(
+			eq("PAY-1"), eq(PaymentProvider.NAVERPAY), eq("payment-id-1")))
+			.willReturn(Optional.empty());
+
+		// when
+		paymentAttemptService.failApproveAttemptIfRequested(
+			"PAY-1", PaymentProvider.NAVERPAY, "payment-id-1",
+			PaymentAttemptFailCode.APPROVE_PROCESS_FAILED,
+			"compensation",
+			LocalDateTime.of(2026, 3, 3, 16, 21));
+
+		// then
+		then(paymentAttemptRepository).should(never()).save(any());
+	}
+
 	@DisplayName("취소 요청 이력이 없으면 취소 요청 이력을 생성한다")
 	@Test
 	void getOrCreateCancelAttempt_whenCancelAttemptNotExists_createCancelAttempt() {
