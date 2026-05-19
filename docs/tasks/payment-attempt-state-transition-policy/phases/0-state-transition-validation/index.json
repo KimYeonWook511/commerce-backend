@@ -13,7 +13,10 @@
     {
       "step": 1,
       "name": "sync-root-docs",
-      "status": "pending"
+      "status": "completed",
+      "started_at": "2026-05-19T17:12:13+0900",
+      "summary": "docs/ADR.md에 ADR-012 항목을 ADR-011 다음에 추가. 결정/배경/이유/트레이드오프 형식 준수. 후속 Issue #111 명시.",
+      "completed_at": "2026-05-19T17:13:03+0900"
     },
     {
       "step": 2,
