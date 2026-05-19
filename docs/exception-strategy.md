@@ -44,3 +44,36 @@ DataAccessException (부모 핸들러, COMMON-500-2)
 ### JpaConfig 빈 등록 목적
 
 `JpaConfig` 의 `SQLErrorCodeSQLExceptionTranslator` 빈은 안전망 핸들러가 unique 위반을 `DuplicateKeyException` 으로 정확히 분류해 로깅하도록 한다. 코드가 직접 catch 하지는 않지만, 운영 환경(JPA + MySQL) 에서 unique 위반과 그 외 무결성 위반을 로그 레벨로 구분하기 위해 빈 등록은 유지된다.
+
+## 보상 catch 2차 예외 처리
+
+보상 트랜잭션·알림 발송처럼 catch 블록 안에서 2차 작업을 시도해야 할 때의 정책이다. 2차 시도가 또 예외를 던지면 1차 예외(근본 원인)가 가려지거나 보상 흐름 자체가 중단될 수 있다. 본 섹션은 그 경우의 일관된 처리 방식을 정의한다.
+
+### 의사결정 트리
+
+```mermaid
+flowchart TD
+  A["1차 예외 발생 (catch)"] --> B["log.error()<br/>근본 원인 ERROR 레벨"]
+  A --> C["2차 작업 시도<br/>알림, 보상 트랜잭션 등"]
+  C -->|성공| D["1차 예외 전파<br/>근본 원인 보존"]
+  C -->|실패| E{"2차 중요도"}
+  E -->|덜 중요| F["log.warn() + 1차 예외 전파"]
+  E -->|치명적| G["Composite Exception<br/>(addSuppressed)로 둘 다 전파"]
+```
+
+### 원칙
+
+- 1차 예외는 catch 진입 즉시 `log.error()`로 ERROR 레벨에 남긴다.
+- 2차 시도가 성공하면 1차 예외만 전파한다(근본 원인 보존).
+- 2차 시도가 실패하고 덜 중요한 경우 `log.warn()`으로 기록하고 1차 예외만 전파한다.
+- 2차 시도가 실패하고 치명적인 경우 Composite Exception(`addSuppressed`)으로 1차·2차를 둘 다 담아 전파한다.
+- 로그 레벨 규약: **1차 = ERROR, 2차 = WARN**.
+
+### 설계 원칙
+
+catch 안에서 호출하는 메서드는 가급적 예외를 던지지 않게 설계한다. 의도(예: "가능하면 실패 처리, 아니면 skip")를 메서드 이름으로 캡슐화해 호출처가 try-catch를 쓰지 않고 의도만 표현하도록 한다. Composite Exception은 catch 안 메서드를 도저히 예외 없이 설계할 수 없는 치명적 경우에만 사용한다.
+
+### 적용 예
+
+- `NaverPayApprovalService.completeVerifiedApproval`의 상위 catch(`PaymentException`, `CustomException`, `Exception`)는 모두 진입 직후 1차 예외를 `log.error`로 남긴다.
+- `PaymentAttemptService.failApproveAttemptIfRequested`는 보상 흐름에서 "현재 상태가 REQUESTED면 실패 처리, 아니면 skip" 의도를 캡슐화해 호출처(`NaverPayApprovalService.failApproveAndCancelApprovedPayment`)가 try-catch 없이 평탄하게 보상을 진행하도록 한다.
