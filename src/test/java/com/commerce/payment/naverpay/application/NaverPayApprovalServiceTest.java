@@ -517,7 +517,7 @@ class NaverPayApprovalServiceTest {
 		then(paymentAttemptService).should().getOrCreateCancelAttempt(
 			eq("PAY-1"), eq(PaymentProvider.NAVERPAY), eq("pg-payment-id"), eq(1000));
 		then(naverPayGateway).should().cancel(eq("pg-payment-id"), anyInt(), any());
-		then(paymentAttemptService).should().failApproveAttempt(
+		then(paymentAttemptService).should().failApproveAttemptIfRequested(
 			eq("PAY-1"), eq(PaymentProvider.NAVERPAY), eq("pg-payment-id"),
 			eq(PaymentAttemptFailCode.DUPLICATE_PAYMENT), eq(PaymentErrorCode.PAYMENT_DUPLICATE.getMessage()), any());
 	}
@@ -695,7 +695,7 @@ class NaverPayApprovalServiceTest {
 		assertThatThrownBy(() -> naverPayApprovalService.approve(memberId, "PAY-1", "pg-payment-id"))
 			.isInstanceOf(RuntimeException.class)
 			.hasMessage("db write failed");
-		then(paymentAttemptService).should().failApproveAttempt(
+		then(paymentAttemptService).should().failApproveAttemptIfRequested(
 			eq("PAY-1"), eq(PaymentProvider.NAVERPAY), eq("pg-payment-id"),
 			eq(PaymentAttemptFailCode.APPROVE_PROCESS_FAILED), eq("결제 완료 반영 중 예상치 못한 오류"), any());
 		then(naverPayGateway).should().cancel(eq("pg-payment-id"), anyInt(), any());

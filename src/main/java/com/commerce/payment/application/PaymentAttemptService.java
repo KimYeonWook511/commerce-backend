@@ -8,6 +8,7 @@ import org.springframework.transaction.annotation.Transactional;
 
 import com.commerce.payment.domain.PaymentAttempt;
 import com.commerce.payment.domain.PaymentAttemptFailCode;
+import com.commerce.payment.domain.PaymentAttemptStatus;
 import com.commerce.payment.domain.PaymentProvider;
 import com.commerce.payment.domain.repository.PaymentAttemptRepository;
 import com.commerce.payment.exception.PaymentErrorCode;
@@ -95,6 +96,30 @@ public class PaymentAttemptService {
 	) {
 		PaymentAttempt attempt = paymentAttemptRepository.findApproveAttempt(merchantPayKey, provider, paymentId)
 			.orElseThrow(() -> new PaymentException(PaymentErrorCode.PAYMENT_ATTEMPT_NOT_FOUND));
+		attempt.markApproveFailed(failCode, failDetail, respondedAt);
+	}
+
+	/**
+	 * 보상 흐름 전용: REQUESTED 상태일 때만 실패 처리하고, 그 외 상태이면 조용히 skip한다.
+	 * 호출처(catch 블록)가 상태를 확인하거나 try-catch로 mark 예외를 잡지 않도록 의도를 캡슐화한다.
+	 */
+	@Transactional
+	public void failApproveAttemptIfRequested(
+		String merchantPayKey,
+		PaymentProvider provider,
+		String paymentId,
+		PaymentAttemptFailCode failCode,
+		String failDetail,
+		LocalDateTime respondedAt
+	) {
+		PaymentAttempt attempt = paymentAttemptRepository.findApproveAttempt(merchantPayKey, provider, paymentId)
+			.orElseThrow(() -> new PaymentException(PaymentErrorCode.PAYMENT_ATTEMPT_NOT_FOUND));
+		if (attempt.getStatus() != PaymentAttemptStatus.REQUESTED) {
+			log.warn(
+				"PaymentAttempt not in REQUESTED state, skipping fail mark: merchantPayKey={}, paymentId={}, status={}",
+				merchantPayKey, paymentId, attempt.getStatus());
+			return;
+		}
 		attempt.markApproveFailed(failCode, failDetail, respondedAt);
 	}
 
