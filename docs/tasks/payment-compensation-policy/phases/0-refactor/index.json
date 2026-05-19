@@ -21,7 +21,10 @@
     {
       "step": 2,
       "name": "stabilize-concurrency-tests",
-      "status": "pending"
+      "status": "completed",
+      "started_at": "2026-05-19T23:32:26+0900",
+      "summary": "PaymentApprovalServiceConcurrencyTest에 DataIntegrityViolationException·PAYMENT_ATTEMPT_STATUS_TRANSITION_NOT_ALLOWED 허용 예외 추가로 flaky 해소, NaverPayServiceConcurrencyTest의 recovery 시나리오 테스트를 데이터 오염 상태(throw) 기대로 재정의, isCompensationRequired=false 시 cancel skip을 검증하는 신규 시나리오 추가",
+      "completed_at": "2026-05-20T00:14:36+0900"
     },
     {
       "step": 3,
