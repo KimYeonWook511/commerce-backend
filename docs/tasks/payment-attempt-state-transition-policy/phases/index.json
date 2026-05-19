@@ -2,8 +2,9 @@
   "phases": [
     {
       "dir": "0-state-transition-validation",
-      "status": "in_progress",
-      "started_at": "2026-05-19T17:03:02+0900"
+      "status": "completed",
+      "started_at": "2026-05-19T17:03:02+0900",
+      "completed_at": "2026-05-19T17:16:44+0900"
     }
   ]
 }
