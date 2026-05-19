@@ -100,7 +100,7 @@ public class PaymentAttemptService {
 	}
 
 	/**
-	 * 보상 흐름 전용: REQUESTED 상태일 때만 실패 처리하고, 그 외 상태이면 조용히 skip한다.
+	 * 보상 흐름 전용: REQUESTED 상태일 때만 실패 처리하고, 그 외 상태이거나 이력이 없으면 조용히 skip한다.
 	 * 호출처(catch 블록)가 상태를 확인하거나 try-catch로 mark 예외를 잡지 않도록 의도를 캡슐화한다.
 	 */
 	@Transactional
@@ -113,7 +113,13 @@ public class PaymentAttemptService {
 		LocalDateTime respondedAt
 	) {
 		PaymentAttempt attempt = paymentAttemptRepository.findApproveAttempt(merchantPayKey, provider, paymentId)
-			.orElseThrow(() -> new PaymentException(PaymentErrorCode.PAYMENT_ATTEMPT_NOT_FOUND));
+			.orElse(null);
+		if (attempt == null) {
+			log.warn(
+				"PaymentAttempt not found, skipping fail mark: merchantPayKey={}, provider={}, paymentId={}",
+				merchantPayKey, provider, paymentId);
+			return;
+		}
 		if (attempt.getStatus() != PaymentAttemptStatus.REQUESTED) {
 			log.warn(
 				"PaymentAttempt not in REQUESTED state, skipping fail mark: merchantPayKey={}, paymentId={}, status={}",

@@ -168,23 +168,23 @@ class PaymentAttemptServiceTest {
 		assertThat(attempt.getRespondedAt()).isEqualTo(succeededAt);
 	}
 
-	@DisplayName("보상 흐름 실패 처리 시 이력이 없으면 PAYMENT_ATTEMPT_NOT_FOUND 예외를 던진다")
+	@DisplayName("보상 흐름 실패 처리 시 이력이 없으면 mark 없이 skip 한다")
 	@Test
-	void failApproveAttemptIfRequested_whenAttemptNotFound_throwNotFound() {
+	void failApproveAttemptIfRequested_whenAttemptNotFound_skipMark() {
 		// given
 		given(paymentAttemptRepository.findApproveAttempt(
 			eq("PAY-1"), eq(PaymentProvider.NAVERPAY), eq("payment-id-1")))
 			.willReturn(Optional.empty());
 
-		// when & then
-		assertThatThrownBy(() -> paymentAttemptService.failApproveAttemptIfRequested(
+		// when
+		paymentAttemptService.failApproveAttemptIfRequested(
 			"PAY-1", PaymentProvider.NAVERPAY, "payment-id-1",
 			PaymentAttemptFailCode.APPROVE_PROCESS_FAILED,
 			"compensation",
-			LocalDateTime.of(2026, 3, 3, 16, 21)))
-			.isInstanceOf(PaymentException.class)
-			.extracting(e -> ((PaymentException) e).getErrorCode())
-			.isEqualTo(PaymentErrorCode.PAYMENT_ATTEMPT_NOT_FOUND);
+			LocalDateTime.of(2026, 3, 3, 16, 21));
+
+		// then
+		then(paymentAttemptRepository).should(never()).save(any());
 	}
 
 	@DisplayName("취소 요청 이력이 없으면 취소 요청 이력을 생성한다")
