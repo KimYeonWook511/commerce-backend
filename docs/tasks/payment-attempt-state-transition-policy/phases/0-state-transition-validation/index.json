@@ -7,7 +7,7 @@
       "name": "domain-validation",
       "status": "completed",
       "started_at": "2026-05-19T17:03:02+0900",
-      "summary": "PaymentErrorCode에 PAYMENT_ATTEMPT_STATUS_TRANSITION_NOT_ALLOWED(500-1), PAYMENT_ATTEMPT_TYPE_MISMATCH(500-2) 추가. PaymentAttempt 4개 mark 메서드에 type/status 선조건 검증 추가. NaverPayApprovalService.failApproveAndCancelApprovedPayment 내 failApprove 호출을 try-catch로 보호. PaymentAttemptService.succeedApproveAttempt에 SUCCEEDED 멱등 skip 추가(복구 경로 보호). PaymentAttemptTest에 전이/type 위반 케이스 9개 추가. 전체 테스트 375개 통과.",
+      "summary": "PaymentErrorCode에 PAYMENT_ATTEMPT_STATUS_TRANSITION_NOT_ALLOWED(500-1), PAYMENT_ATTEMPT_TYPE_MISMATCH(500-2) 추가. PaymentAttempt 4개 mark 메서드에 type/status 선조건 검증 추가. NaverPayApprovalService.failApproveAndCancelApprovedPayment 내 failApprove 호출을 try-catch로 보호. PaymentAttemptTest에 전이/type 위반 케이스 9개 추가. 전체 테스트 통과. (succeedApproveAttempt SUCCEEDED skip은 초기 추가 후 분석으로 불필요함이 확인되어 제거 — 오염 상태는 500으로 노출)",
       "completed_at": "2026-05-19T17:09:50+0900"
     },
     {
@@ -23,7 +23,7 @@
       "name": "write-retrospective",
       "status": "completed",
       "started_at": "2026-05-19T17:14:13+0900",
-      "summary": "docs/tasks/payment-attempt-state-transition-policy/retrospective.md 작성. 작업 요약, ADR-A~D 설계 결정 요약(멱등 자기 전이 거부, type 정합성 검증, HTTP 500, catch swallow 회귀 방지), 발견 사항(succeedApproveAttempt SUCCEEDED skip, 상위 catch log.error 누락), 미결 과제(Issue #111), 개선 제안 포함.",
+      "summary": "docs/tasks/payment-attempt-state-transition-policy/retrospective.md 작성. 작업 요약, ADR-A~D 설계 결정 요약(멱등 자기 전이 거부, type 정합성 검증, HTTP 500, catch swallow 회귀 방지), 발견 사항(succeedApproveAttempt SUCCEEDED skip 검토 및 제거 결정, 상위 catch log.error 누락), 미결 과제(Issue #111), 개선 제안 포함.",
       "completed_at": "2026-05-19T17:16:05+0900"
     }
   ],

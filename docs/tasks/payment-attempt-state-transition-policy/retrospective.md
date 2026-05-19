@@ -10,7 +10,6 @@
 - `PaymentErrorCode`에 `PAYMENT_ATTEMPT_STATUS_TRANSITION_NOT_ALLOWED`(500-1), `PAYMENT_ATTEMPT_TYPE_MISMATCH`(500-2) 추가
 - `PaymentAttempt` 4개 mark 메서드에 type 정합성 + status REQUESTED 선조건 검증 추가
 - `NaverPayApprovalService.failApproveAndCancelApprovedPayment` 내 `failApprove` 호출을 try-catch로 보호
-- `PaymentAttemptService.succeedApproveAttempt`에 SUCCEEDED 멱등 skip 추가 (복구 경로 보호)
 - `PaymentAttemptTest`에 전이/type 위반 케이스 9개 추가
 - `docs/ADR.md`에 ADR-012 추가
 
@@ -54,13 +53,13 @@ ADR에만 명시(옵션 B)는 코드 변경 없이 문서화만 하는 것으로
 
 ## 3. 발견한 것
 
-### `PaymentAttemptService.succeedApproveAttempt` SUCCEEDED 멱등 skip
+### `PaymentAttemptService.succeedApproveAttempt` SUCCEEDED 멱등 skip — 검토 후 제거
 
-PRD에 명시되지 않았으나, 구현 중 추가 보호가 필요한 경로가 발견됐다. `failApproveAndCancelApprovedPayment` 내 `failApprove` try-catch를 추가했을 때, `succeedApproveAttempt`에도 유사한 보호가 필요한지 검토했다.
+구현 중 `succeedApproveAttempt`에 SUCCEEDED skip guard가 추가됐다. "attempt SUCCEEDED + payment 없음" 데이터 불일치 복구 경로에서 새 검증이 throw할 수 있다는 우려였다.
 
-`completeApprovedPayment`의 흐름에서 `succeedApproveAttempt`가 먼저 실행되어 attempt가 SUCCEEDED 상태가 된 뒤, `order.completePayment()`가 race로 throw하면 트랜잭션이 rollback된다. rollback 후 재시도 경로에서 동일 attempt에 `succeedApproveAttempt`가 다시 호출되면 새 검증이 throw하는 상황이 생긴다. 이를 방지하기 위해 `succeedApproveAttempt`에 SUCCEEDED 상태인 경우 skip(return)하는 멱등 처리를 추가했다.
+그러나 `succeedApproveAttempt`와 `paymentRepository.save`는 `completeApprovedPayment`의 동일 `@Transactional` 안에 묶여 있으므로, ACID 보장 하에 "attempt SUCCEEDED + payment 없음" 상태는 정상 트랜잭션 경계에서 만들어질 수 없다. 해당 상태는 오직 수동 DB 조작이나 데이터 마이그레이션 실수 같은 외부 오염으로만 발생한다.
 
-이 skip은 "이미 SUCCEEDED → 재호출 시 pass"로 ADR-A의 엄격한 검증 방향(도메인 mark 수준)과 충돌할 수 있지만, `PaymentAttemptService` 레이어의 멱등 처리이므로 도메인 mark 검증과 별개 계층의 판단이다.
+오염 상태를 조용히 복구하면 원인 파악이 어렵고 잘못된 결제가 처리될 수 있다. 정책 결정: **오염 상태는 500으로 노출해 운영팀이 원인을 조사하도록 한다.** guard를 제거하고 기존 복구 테스트를 "500 에러 노출 + payment 미생성 확인"으로 갱신했다.
 
 ### `failApproveAndCancelApprovedPayment` 호출처 3곳
 
@@ -86,10 +85,6 @@ ADR-D에서 `failApprove` try-catch 보호 대상은 `failApproveAndCancelApprov
 ### 도메인 상태 전이 표를 문서화
 
 `PaymentAttempt`의 상태 전이 규칙이 mark 메서드 내부 코드로만 표현되어 있다. `PaymentAttemptStatus` enum이나 별도 문서에 허용/거부 전이 표를 명시하면, 향후 새 mark 메서드 추가 시 설계 기준이 명확해진다. Order 도메인의 상태 전이 규칙과 함께 정리하면 일관성이 높아진다.
-
-### `PaymentAttemptService` 레이어 멱등 처리 위치 재검토
-
-이번 작업에서 `succeedApproveAttempt`에 SUCCEEDED skip을 추가했다. 동일 패턴이 `failApproveAttempt`에도 필요한지 여부가 불명확하다. 복구 경로에서 `failApproveAttempt`도 재호출될 수 있는 시나리오가 있다면 일관되게 적용해야 한다.
 
 ### NaverPayApprovalService 보상 흐름 통합 테스트
 
