@@ -102,6 +102,10 @@ ADR-012(이전 task)에서 `failApproveAndCancelApprovedPayment` 내 `failApprov
 
 `PaymentAttempt.mark*` 메서드의 직접 호출 금지를 CI에서 강제하려면 ArchUnit이 필요하다. 현재는 ADR-014와 JavaDoc 정책 명문화로 대체한다. 다른 도메인의 아키텍처 테스트와 함께 일관된 방식으로 도입할 것을 권장한다.
 
+### worker의 Acceptance Criteria 임의 변경 (harness 개선 필요)
+
+step2 worker가 step2.md에 명시된 `./gradlew test` 대신 `./gradlew dockerTest`를 임의로 실행했다. worker 에이전트가 "concurrency 테스트는 docker 태그"라고 판단해 AC를 스스로 바꾼 것이지만, step 문서의 AC는 실행 전 검증 기준이므로 worker가 임의로 변경해서는 안 된다. harness 실행기가 worker에게 "AC 명령을 그대로 실행하고, 다르게 실행해야 한다고 판단되면 blocked 상태로 중단하라"는 제약을 명시적으로 전달해야 한다.
+
 ### PaymentReference Value Object 도입 (후속 검토)
 
 `merchantPayKey`는 두 Aggregate(`Payment`, `PaymentAttempt`) 간 협력 키로 String 원시 타입으로 흐른다. `PaymentReference` 같은 Value Object로 명시화하면 협력 경계가 타입으로 드러난다. 현 시점에서 과한 추상화일 수 있으나, Payment 도메인 분리가 논의될 때 함께 검토할 가치가 있다.
@@ -130,3 +134,11 @@ Payment가 별도 서비스로 분리될 때 `isCompensationRequired`는 Payment
 ### cancel skip 시나리오 로그 모니터링
 
 `isCompensationRequired == false`일 때 log.warn("Payment already completed...") 로그가 발생한다. 정상 race 결과지만 운영 환경에서 빈도가 높으면 결제 흐름 이상의 신호일 수 있다. 모니터링 대시보드에서 이 로그 빈도를 별도 메트릭으로 수집하면 조기 이상 감지에 유용하다.
+
+### step 설계 시 테스트 태그 확인 필요
+
+step2 설계 시 Acceptance Criteria를 `./gradlew test`로 명시했으나, `concurrency` 태그 테스트가 실제로는 `dockerTest` 범주에 속해 Testcontainers + MySQL 컨테이너 기동 비용을 포함한다. "10회 반복" 안정성 검증은 이 비용을 간과한 설계였고, 결과적으로 step2가 약 40분 소요됐다. 향후 step 설계 시 Acceptance Criteria를 정하기 전에 해당 테스트의 태그(`docker`, `concurrency`, `batch`, `sandbox`)를 먼저 확인하고, `dockerTest` 범주라면 반복 횟수를 크게 줄이거나 1회 통과로 기준을 삼아야 한다.
+
+### execute.py 반복 루프 중간 진행 상황 추적 불가
+
+execute.py spinner는 "Step N/5 [Xs]" 형태로 step 단위 경과 시간만 표시한다. worker 내부에서 반복 실행(예: 10회 반복 테스트)이 진행 중일 때 "3/10 완료" 같은 중간 카운트가 외부에서 보이지 않아, 프로세스가 정상 실행 중인지 멈춘 것인지 구분하기 어렵다. worker output을 실시간으로 tail하거나 반복 카운트를 별도 파일로 기록하는 방식을 고려할 수 있다.
