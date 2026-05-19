@@ -800,9 +800,9 @@ class NaverPayServiceIntegrationTest {
 	 * 12. 운영 복구/배치
 	 * ===================================================
 	 */
-	@DisplayName("approve attempt가 SUCCEEDED인데 payment가 없으면 history 기반으로 복구 반영한다")
+	@DisplayName("approve attempt가 SUCCEEDED인데 payment가 없으면 상태 전이 불가 예외를 던진다")
 	@Test
-	void approve_whenAttemptSucceededAndPaymentMissing_recoverByHistory() {
+	void approve_whenAttemptSucceededAndPaymentMissing_throwException() {
 		// given
 		Member member = memberPersistence.save(createMember());
 		persistOrder(member, "PAY-INT-12-1", 1000);
@@ -813,15 +813,18 @@ class NaverPayServiceIntegrationTest {
 		paymentPersistence.save(attempt);
 		given(naverPayGateway.getApprovalHistory("pg-int-12-1"))
 			.willReturn(NaverPayHistoryResult.approved("PAY-INT-12-1", 1000));
+		// succeedApproveAttempt throw → failApproveAndCancelApprovedPayment 경로로 PG cancel 시도
+		given(naverPayGateway.cancel(any(), anyInt(), any()))
+			.willReturn(NaverPayCancelResult.success());
 
-		// when
-		NaverPayApproveResponse result = naverPayApprovalService.approve(member.getId(), "PAY-INT-12-1", "pg-int-12-1");
-
-		// then
-		assertThat(result.getStatus()).isEqualTo(NaverPayApproveStatus.SUCCESS);
-		assertThat(paymentPersistence.findPaymentByMerchantPayKey("PAY-INT-12-1")).isPresent();
-		then(naverPayGateway).should(never()).approve(any());
-		then(naverPayGateway).should().getApprovalHistory("pg-int-12-1");
+		// when & then
+		// attempt SUCCEEDED + payment 없음은 정상 트랜잭션 경계에서 만들어질 수 없는 데이터 오염 상태다.
+		// 조용히 복구하지 않고 500으로 터뜨려 운영팀이 원인을 조사하도록 한다.
+		assertThatThrownBy(() -> naverPayApprovalService.approve(member.getId(), "PAY-INT-12-1", "pg-int-12-1"))
+			.isInstanceOf(PaymentException.class)
+			.satisfies(exception -> assertThat(((PaymentException)exception).getErrorCode())
+				.isEqualTo(PaymentErrorCode.PAYMENT_ATTEMPT_STATUS_TRANSITION_NOT_ALLOWED));
+		assertThat(paymentPersistence.findPaymentByMerchantPayKey("PAY-INT-12-1")).isEmpty();
 	}
 
 	private Member createMember() {

@@ -8,7 +8,6 @@ import org.springframework.transaction.annotation.Transactional;
 
 import com.commerce.payment.domain.PaymentAttempt;
 import com.commerce.payment.domain.PaymentAttemptFailCode;
-import com.commerce.payment.domain.PaymentAttemptStatus;
 import com.commerce.payment.domain.PaymentProvider;
 import com.commerce.payment.domain.repository.PaymentAttemptRepository;
 import com.commerce.payment.exception.PaymentErrorCode;
@@ -82,10 +81,6 @@ public class PaymentAttemptService {
 	) {
 		PaymentAttempt attempt = paymentAttemptRepository.findApproveAttempt(merchantPayKey, provider, paymentId)
 			.orElseThrow(() -> new PaymentException(PaymentErrorCode.PAYMENT_ATTEMPT_NOT_FOUND));
-		// 이미 SUCCEEDED인 attempt는 복구 경로에서 재호출될 수 있으므로 skip (멱등 처리)
-		if (attempt.getStatus() == PaymentAttemptStatus.SUCCEEDED) {
-			return;
-		}
 		attempt.markApproveSucceeded(respondedAt);
 	}
 
