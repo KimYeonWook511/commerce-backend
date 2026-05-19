@@ -109,6 +109,22 @@ class PaymentAttemptTest {
 				.isEqualTo(PaymentErrorCode.PAYMENT_ATTEMPT_STATUS_TRANSITION_NOT_ALLOWED));
 	}
 
+	@DisplayName("FAILED 상태 attempt에 markApproveFailed 호출 시 예외가 발생한다 (자기 전이 거부)")
+	@Test
+	void markApproveFailed_whenStatusFailed_throwException() {
+		// given
+		PaymentAttempt attempt = PaymentAttempt.createApproveRequested("PAY-1", "payment-id-1", 1000,
+			PaymentProvider.NAVERPAY);
+		attempt.markApproveFailed(PaymentAttemptFailCode.TIME_EXPIRED, "timeout", LocalDateTime.now());
+
+		// when & then
+		assertThatThrownBy(
+			() -> attempt.markApproveFailed(PaymentAttemptFailCode.TIME_EXPIRED, "timeout", LocalDateTime.now()))
+			.isInstanceOf(PaymentException.class)
+			.satisfies(e -> assertThat(((PaymentException)e).getErrorCode())
+				.isEqualTo(PaymentErrorCode.PAYMENT_ATTEMPT_STATUS_TRANSITION_NOT_ALLOWED));
+	}
+
 	@DisplayName("CANCEL type attempt에 markApproveFailed 호출 시 예외가 발생한다")
 	@Test
 	void markApproveFailed_whenTypeIsCancel_throwException() {

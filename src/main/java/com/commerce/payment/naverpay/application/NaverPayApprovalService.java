@@ -193,6 +193,9 @@ public class NaverPayApprovalService {
 		try {
 			failApprove(approveAttempt, failCode, failDetail);
 		} catch (PaymentException markEx) {
+			// PaymentException만 잡는 이유: failApprove 내부에서 throw 가능한 예외는
+			// 도메인 mark 검증(PAYMENT_ATTEMPT_STATUS_TRANSITION_NOT_ALLOWED 등)뿐이다.
+			// persistence 레이어 예외는 별도 관심사이므로 의도적으로 범위를 좁혔다.
 			log.warn(
 				"Approve attempt mark failed during compensation, proceeding to PG cancel: merchantPayKey={}, paymentId={}, errorCode={}",
 				approveAttempt.getMerchantPayKey(),
