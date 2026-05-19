@@ -32,6 +32,10 @@ public class PaymentApprovalService {
 		return paymentRepository.findByMerchantPayKey(merchantPayKey);
 	}
 
+	public boolean isCompensationRequired(String merchantPayKey) {
+		return findPaymentByMerchantPayKey(merchantPayKey).isEmpty();
+	}
+
 	@Transactional
 	public Payment completeApprovedPayment(
 		String merchantPayKey,

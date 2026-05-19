@@ -214,6 +214,15 @@ public class NaverPayApprovalService {
 			LocalDateTime.now()
 		);
 
+		if (!paymentApprovalService.isCompensationRequired(approveAttempt.getMerchantPayKey())) {
+			log.warn(
+				"Payment already completed, skipping PG cancel: merchantPayKey={}, paymentId={}",
+				approveAttempt.getMerchantPayKey(),
+				approveAttempt.getPaymentId()
+			);
+			return;
+		}
+
 		PaymentAttempt cancelAttempt = paymentAttemptService.getOrCreateCancelAttempt(
 			approveAttempt.getMerchantPayKey(),
 			approveAttempt.getProvider(),
