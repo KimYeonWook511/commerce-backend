@@ -77,3 +77,4 @@ catch 안에서 호출하는 메서드는 가급적 예외를 던지지 않게 �
 
 - `NaverPayApprovalService.completeVerifiedApproval`의 상위 catch(`PaymentException`, `CustomException`, `Exception`)는 모두 진입 직후 1차 예외를 `log.error`로 남긴다.
 - `PaymentAttemptService.failApproveAttemptIfRequested`는 보상 흐름에서 "현재 상태가 REQUESTED면 실패 처리, 아니면 skip" 의도를 캡슐화해 호출처(`NaverPayApprovalService.failApproveAndCancelApprovedPayment`)가 try-catch 없이 평탄하게 보상을 진행하도록 한다.
+- `PaymentApprovalService.isCompensationRequired`는 보상 진행 여부를 Payment Aggregate 소유자가 결정하도록 캡슐화해 NaverPay adapter가 Payment 저장소에 직접 접근하지 않도록 한다.

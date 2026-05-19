@@ -1,0 +1,48 @@
+{
+  "project": "commerce-backend",
+  "phase": "0-refactor",
+  "steps": [
+    {
+      "step": 0,
+      "name": "race-priority-by-payment-existence",
+      "status": "completed",
+      "started_at": "2026-05-19T23:17:01+0900",
+      "summary": "PaymentApprovalService에 isCompensationRequired(merchantPayKey) 추가, failApproveAndCancelApprovedPayment에 Payment 존재 체크 삽입(Payment 존재 시 cancel skip), 신규 테스트 2개 추가 및 기존 cancel 경로 테스트 14개에 isCompensationRequired mock 보강",
+      "completed_at": "2026-05-19T23:22:54+0900"
+    },
+    {
+      "step": 1,
+      "name": "split-compensation-by-failure-meaning",
+      "status": "completed",
+      "started_at": "2026-05-19T23:24:42+0900",
+      "summary": "compensateMerchantKeyMismatch(cancel 없이 failApprove만), compensateAmountMismatch, compensateDuplicatePayment, compensateUnexpected 4개 private 메서드 추가, completeVerifiedApproval catch 분기를 의미별 보상 메서드 호출로 교체, catch(Exception) failDetail을 ex.getMessage()로 변경에 따라 테스트 assertion 갱신",
+      "completed_at": "2026-05-19T23:30:43+0900"
+    },
+    {
+      "step": 2,
+      "name": "stabilize-concurrency-tests",
+      "status": "completed",
+      "started_at": "2026-05-19T23:32:26+0900",
+      "summary": "PaymentApprovalServiceConcurrencyTest에 DataIntegrityViolationException·PAYMENT_ATTEMPT_STATUS_TRANSITION_NOT_ALLOWED 허용 예외 추가로 flaky 해소, NaverPayServiceConcurrencyTest의 recovery 시나리오 테스트를 데이터 오염 상태(throw) 기대로 재정의, isCompensationRequired=false 시 cancel skip을 검증하는 신규 시나리오 추가",
+      "completed_at": "2026-05-20T00:14:36+0900"
+    },
+    {
+      "step": 3,
+      "name": "sync-root-docs",
+      "status": "completed",
+      "started_at": "2026-05-20T00:17:58+0900",
+      "summary": "ADR-014 신설(보상 진행 여부는 Payment 존재 여부로 판단), ADR-012에 후속 노트 추가(ADR-D 임시 처방 대체 및 #117 close), exception-strategy.md 적용 예에 isCompensationRequired 캡슐화 패턴 추가, architecture.md 결제 승인 흐름에 보상 가능 여부 판단 반영",
+      "completed_at": "2026-05-20T00:19:43+0900"
+    },
+    {
+      "step": 4,
+      "name": "write-retrospective",
+      "status": "completed",
+      "started_at": "2026-05-20T00:21:06+0900",
+      "summary": "docs/tasks/payment-compensation-policy/retrospective.md 신규 생성 — 5단 구조(작업 요약, 설계 결정, 발견한 것, 미결 과제, 개선 제안)로 작성. ADR-1~4 결정 및 선택하지 않은 대안 요약, #114/#115/#116/#117 close 여부 명시, ArchUnit·PaymentReference VO·cancel skip 모니터링 개선 제안 포함.",
+      "completed_at": "2026-05-20T00:23:22+0900"
+    }
+  ],
+  "created_at": "2026-05-19T23:17:01+0900",
+  "completed_at": "2026-05-20T00:23:55+0900"
+}

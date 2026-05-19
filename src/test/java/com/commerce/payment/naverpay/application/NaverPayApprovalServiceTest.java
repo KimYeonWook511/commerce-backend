@@ -473,6 +473,7 @@ class NaverPayApprovalServiceTest {
 
 		given(orderQueryService.getOrderByMerchantPayKeyAndMemberId("PAY-1", memberId)).willReturn(order);
 		given(paymentApprovalService.findPaymentByMerchantPayKey("PAY-1")).willReturn(Optional.empty());
+		given(paymentApprovalService.isCompensationRequired("PAY-1")).willReturn(true);
 		given(paymentAttemptService.getOrCreateApproveAttempt("PAY-1", PaymentProvider.NAVERPAY, "pg-payment-id", 1000))
 			.willReturn(PaymentAttempt.createApproveRequested("PAY-1", "pg-payment-id", 1000, PaymentProvider.NAVERPAY));
 		given(paymentAttemptService.getOrCreateCancelAttempt(eq("PAY-1"), eq(PaymentProvider.NAVERPAY), eq("pg-payment-id"), eq(2000)))
@@ -499,6 +500,7 @@ class NaverPayApprovalServiceTest {
 
 		given(orderQueryService.getOrderByMerchantPayKeyAndMemberId("PAY-1", memberId)).willReturn(order);
 		given(paymentApprovalService.findPaymentByMerchantPayKey("PAY-1")).willReturn(Optional.empty());
+		given(paymentApprovalService.isCompensationRequired("PAY-1")).willReturn(true);
 		given(paymentAttemptService.getOrCreateApproveAttempt("PAY-1", PaymentProvider.NAVERPAY, "pg-payment-id", 1000))
 			.willReturn(PaymentAttempt.createApproveRequested("PAY-1", "pg-payment-id", 1000, PaymentProvider.NAVERPAY));
 		given(paymentAttemptService.getOrCreateCancelAttempt(eq("PAY-1"), eq(PaymentProvider.NAVERPAY), eq("pg-payment-id"), eq(1000)))
@@ -534,6 +536,7 @@ class NaverPayApprovalServiceTest {
 
 		given(orderQueryService.getOrderByMerchantPayKeyAndMemberId("PAY-1", memberId)).willReturn(order);
 		given(paymentApprovalService.findPaymentByMerchantPayKey("PAY-1")).willReturn(Optional.empty());
+		given(paymentApprovalService.isCompensationRequired("PAY-1")).willReturn(true);
 		given(paymentAttemptService.getOrCreateApproveAttempt("PAY-1", PaymentProvider.NAVERPAY, "pg-payment-id", 1000))
 			.willReturn(PaymentAttempt.createApproveRequested("PAY-1", "pg-payment-id", 1000, PaymentProvider.NAVERPAY));
 		given(naverPayGateway.approve("pg-payment-id")).willReturn(NaverPayApproveResult.success("PAY-1", 1000));
@@ -591,6 +594,7 @@ class NaverPayApprovalServiceTest {
 
 		given(orderQueryService.getOrderByMerchantPayKeyAndMemberId("PAY-1", memberId)).willReturn(order);
 		given(paymentApprovalService.findPaymentByMerchantPayKey("PAY-1")).willReturn(Optional.empty());
+		given(paymentApprovalService.isCompensationRequired("PAY-1")).willReturn(true);
 		given(paymentAttemptService.getOrCreateApproveAttempt("PAY-1", PaymentProvider.NAVERPAY, "pg-payment-id", 1000))
 			.willReturn(PaymentAttempt.createApproveRequested("PAY-1", "pg-payment-id", 1000, PaymentProvider.NAVERPAY));
 		given(naverPayGateway.approve("pg-payment-id")).willReturn(NaverPayApproveResult.success("PAY-1", 1000));
@@ -621,6 +625,7 @@ class NaverPayApprovalServiceTest {
 
 		given(orderQueryService.getOrderByMerchantPayKeyAndMemberId("PAY-1", memberId)).willReturn(order);
 		given(paymentApprovalService.findPaymentByMerchantPayKey("PAY-1")).willReturn(Optional.empty());
+		given(paymentApprovalService.isCompensationRequired("PAY-1")).willReturn(true);
 		given(paymentAttemptService.getOrCreateApproveAttempt("PAY-1", PaymentProvider.NAVERPAY, "pg-payment-id", 1000))
 			.willReturn(PaymentAttempt.createApproveRequested("PAY-1", "pg-payment-id", 1000, PaymentProvider.NAVERPAY));
 		given(naverPayGateway.approve("pg-payment-id")).willReturn(NaverPayApproveResult.success("PAY-1", 1000));
@@ -651,6 +656,7 @@ class NaverPayApprovalServiceTest {
 
 		given(orderQueryService.getOrderByMerchantPayKeyAndMemberId("PAY-1", memberId)).willReturn(order);
 		given(paymentApprovalService.findPaymentByMerchantPayKey("PAY-1")).willReturn(Optional.empty());
+		given(paymentApprovalService.isCompensationRequired("PAY-1")).willReturn(true);
 		given(paymentAttemptService.getOrCreateApproveAttempt("PAY-1", PaymentProvider.NAVERPAY, "pg-payment-id", 1000))
 			.willReturn(PaymentAttempt.createApproveRequested("PAY-1", "pg-payment-id", 1000, PaymentProvider.NAVERPAY));
 		given(naverPayGateway.approve("pg-payment-id")).willReturn(NaverPayApproveResult.success("PAY-1", 1000));
@@ -681,6 +687,7 @@ class NaverPayApprovalServiceTest {
 
 		given(orderQueryService.getOrderByMerchantPayKeyAndMemberId("PAY-1", memberId)).willReturn(order);
 		given(paymentApprovalService.findPaymentByMerchantPayKey("PAY-1")).willReturn(Optional.empty());
+		given(paymentApprovalService.isCompensationRequired("PAY-1")).willReturn(true);
 		given(paymentAttemptService.getOrCreateApproveAttempt("PAY-1", PaymentProvider.NAVERPAY, "pg-payment-id", 1000))
 			.willReturn(PaymentAttempt.createApproveRequested("PAY-1", "pg-payment-id", 1000, PaymentProvider.NAVERPAY));
 		given(naverPayGateway.approve("pg-payment-id")).willReturn(NaverPayApproveResult.success("PAY-1", 1000));
@@ -697,7 +704,7 @@ class NaverPayApprovalServiceTest {
 			.hasMessage("db write failed");
 		then(paymentAttemptService).should().failApproveAttemptIfRequested(
 			eq("PAY-1"), eq(PaymentProvider.NAVERPAY), eq("pg-payment-id"),
-			eq(PaymentAttemptFailCode.APPROVE_PROCESS_FAILED), eq("결제 완료 반영 중 예상치 못한 오류"), any());
+			eq(PaymentAttemptFailCode.APPROVE_PROCESS_FAILED), eq("db write failed"), any());
 		then(naverPayGateway).should().cancel(eq("pg-payment-id"), anyInt(), any());
 	}
 
@@ -772,6 +779,7 @@ class NaverPayApprovalServiceTest {
 
 		given(orderQueryService.getOrderByMerchantPayKeyAndMemberId("PAY-1", memberId)).willReturn(order);
 		given(paymentApprovalService.findPaymentByMerchantPayKey("PAY-1")).willReturn(Optional.empty());
+		given(paymentApprovalService.isCompensationRequired("PAY-1")).willReturn(true);
 		given(paymentAttemptService.getOrCreateApproveAttempt("PAY-1", PaymentProvider.NAVERPAY, "pg-payment-id", 1000))
 			.willReturn(PaymentAttempt.createApproveRequested("PAY-1", "pg-payment-id", 1000, PaymentProvider.NAVERPAY));
 		given(paymentAttemptService.getOrCreateCancelAttempt(eq("PAY-1"), eq(PaymentProvider.NAVERPAY), eq("pg-payment-id"), eq(2000)))
@@ -800,6 +808,7 @@ class NaverPayApprovalServiceTest {
 
 		given(orderQueryService.getOrderByMerchantPayKeyAndMemberId("PAY-1", memberId)).willReturn(order);
 		given(paymentApprovalService.findPaymentByMerchantPayKey("PAY-1")).willReturn(Optional.empty());
+		given(paymentApprovalService.isCompensationRequired("PAY-1")).willReturn(true);
 		given(paymentAttemptService.getOrCreateApproveAttempt("PAY-1", PaymentProvider.NAVERPAY, "pg-payment-id", 1000))
 			.willReturn(PaymentAttempt.createApproveRequested("PAY-1", "pg-payment-id", 1000, PaymentProvider.NAVERPAY));
 		given(paymentAttemptService.getOrCreateCancelAttempt(eq("PAY-1"), eq(PaymentProvider.NAVERPAY), eq("pg-payment-id"), eq(2000)))
@@ -830,6 +839,7 @@ class NaverPayApprovalServiceTest {
 
 		given(orderQueryService.getOrderByMerchantPayKeyAndMemberId("PAY-1", memberId)).willReturn(order);
 		given(paymentApprovalService.findPaymentByMerchantPayKey("PAY-1")).willReturn(Optional.empty());
+		given(paymentApprovalService.isCompensationRequired("PAY-1")).willReturn(true);
 		given(paymentAttemptService.getOrCreateApproveAttempt("PAY-1", PaymentProvider.NAVERPAY, "pg-payment-id", 1000))
 			.willReturn(PaymentAttempt.createApproveRequested("PAY-1", "pg-payment-id", 1000, PaymentProvider.NAVERPAY));
 		given(paymentAttemptService.getOrCreateCancelAttempt(eq("PAY-1"), eq(PaymentProvider.NAVERPAY), eq("pg-payment-id"), eq(2000)))
@@ -860,6 +870,7 @@ class NaverPayApprovalServiceTest {
 
 		given(orderQueryService.getOrderByMerchantPayKeyAndMemberId("PAY-1", memberId)).willReturn(order);
 		given(paymentApprovalService.findPaymentByMerchantPayKey("PAY-1")).willReturn(Optional.empty());
+		given(paymentApprovalService.isCompensationRequired("PAY-1")).willReturn(true);
 		given(paymentAttemptService.getOrCreateApproveAttempt("PAY-1", PaymentProvider.NAVERPAY, "pg-payment-id", 1000))
 			.willReturn(PaymentAttempt.createApproveRequested("PAY-1", "pg-payment-id", 1000, PaymentProvider.NAVERPAY));
 		given(paymentAttemptService.getOrCreateCancelAttempt(eq("PAY-1"), eq(PaymentProvider.NAVERPAY), eq("pg-payment-id"), eq(2000)))
@@ -890,6 +901,7 @@ class NaverPayApprovalServiceTest {
 
 		given(orderQueryService.getOrderByMerchantPayKeyAndMemberId("PAY-1", memberId)).willReturn(order);
 		given(paymentApprovalService.findPaymentByMerchantPayKey("PAY-1")).willReturn(Optional.empty());
+		given(paymentApprovalService.isCompensationRequired("PAY-1")).willReturn(true);
 		given(paymentAttemptService.getOrCreateApproveAttempt("PAY-1", PaymentProvider.NAVERPAY, "pg-payment-id", 1000))
 			.willReturn(PaymentAttempt.createApproveRequested("PAY-1", "pg-payment-id", 1000, PaymentProvider.NAVERPAY));
 		given(paymentAttemptService.getOrCreateCancelAttempt(eq("PAY-1"), eq(PaymentProvider.NAVERPAY), eq("pg-payment-id"), eq(2000)))
@@ -920,6 +932,7 @@ class NaverPayApprovalServiceTest {
 
 		given(orderQueryService.getOrderByMerchantPayKeyAndMemberId("PAY-1", memberId)).willReturn(order);
 		given(paymentApprovalService.findPaymentByMerchantPayKey("PAY-1")).willReturn(Optional.empty());
+		given(paymentApprovalService.isCompensationRequired("PAY-1")).willReturn(true);
 		given(paymentAttemptService.getOrCreateApproveAttempt("PAY-1", PaymentProvider.NAVERPAY, "pg-payment-id", 1000))
 			.willReturn(PaymentAttempt.createApproveRequested("PAY-1", "pg-payment-id", 1000, PaymentProvider.NAVERPAY));
 		given(paymentAttemptService.getOrCreateCancelAttempt(eq("PAY-1"), eq(PaymentProvider.NAVERPAY), eq("pg-payment-id"), eq(2000)))
@@ -952,6 +965,7 @@ class NaverPayApprovalServiceTest {
 
 		given(orderQueryService.getOrderByMerchantPayKeyAndMemberId("PAY-1", memberId)).willReturn(order);
 		given(paymentApprovalService.findPaymentByMerchantPayKey("PAY-1")).willReturn(Optional.empty());
+		given(paymentApprovalService.isCompensationRequired("PAY-1")).willReturn(true);
 		given(paymentAttemptService.getOrCreateApproveAttempt("PAY-1", PaymentProvider.NAVERPAY, "pg-payment-id", 1000))
 			.willReturn(PaymentAttempt.createApproveRequested("PAY-1", "pg-payment-id", 1000, PaymentProvider.NAVERPAY));
 		given(paymentAttemptService.getOrCreateCancelAttempt(eq("PAY-1"), eq(PaymentProvider.NAVERPAY), eq("pg-payment-id"), eq(2000)))
@@ -963,6 +977,60 @@ class NaverPayApprovalServiceTest {
 			.when(paymentAttemptService)
 			.failCancelAttempt(eq("PAY-1"), eq(PaymentProvider.NAVERPAY), eq("pg-payment-id"),
 				eq(PaymentAttemptFailCode.PG_REQUEST_REJECTED), eq("기타 실패"), any());
+
+		// when & then
+		assertThatThrownBy(() -> naverPayApprovalService.approve(memberId, "PAY-1", "pg-payment-id"))
+			.isInstanceOf(PaymentException.class)
+			.satisfies(exception -> {
+				PaymentException paymentException = (PaymentException)exception;
+				assertThat(paymentException.getErrorCode()).isEqualTo(PaymentErrorCode.PAYMENT_AMOUNT_MISMATCH);
+			});
+		then(naverPayGateway).should().cancel(eq("pg-payment-id"), anyInt(), any());
+	}
+
+	@DisplayName("Payment가 이미 존재하면 보상 cancel을 skip하고 승인 실패 예외를 유지한다")
+	@Test
+	void approve_whenPaymentAlreadyExistsDuringCompensation_skipCancelAndThrowException() {
+		// given
+		long memberId = 1L;
+		Order order = createOrder(1000);
+		order.assignMerchantPayKey("PAY-1");
+
+		given(orderQueryService.getOrderByMerchantPayKeyAndMemberId("PAY-1", memberId)).willReturn(order);
+		given(paymentApprovalService.findPaymentByMerchantPayKey("PAY-1")).willReturn(Optional.empty());
+		given(paymentApprovalService.isCompensationRequired("PAY-1")).willReturn(false); // Payment 이미 존재
+		given(paymentAttemptService.getOrCreateApproveAttempt("PAY-1", PaymentProvider.NAVERPAY, "pg-payment-id", 1000))
+			.willReturn(PaymentAttempt.createApproveRequested("PAY-1", "pg-payment-id", 1000, PaymentProvider.NAVERPAY));
+		given(naverPayGateway.approve("pg-payment-id")).willReturn(NaverPayApproveResult.success("PAY-1", 2000));
+
+		// when & then
+		assertThatThrownBy(() -> naverPayApprovalService.approve(memberId, "PAY-1", "pg-payment-id"))
+			.isInstanceOf(PaymentException.class)
+			.satisfies(exception -> {
+				PaymentException paymentException = (PaymentException)exception;
+				assertThat(paymentException.getErrorCode()).isEqualTo(PaymentErrorCode.PAYMENT_AMOUNT_MISMATCH);
+			});
+		then(naverPayGateway).should(never()).cancel(any(), anyInt(), any());
+		then(paymentAttemptService).should(never()).getOrCreateCancelAttempt(any(), any(), any(), anyInt());
+	}
+
+	@DisplayName("Payment가 없으면 보상 cancel을 정상 진행한다")
+	@Test
+	void approve_whenPaymentNotExistsDuringCompensation_proceedCancel() {
+		// given
+		long memberId = 1L;
+		Order order = createOrder(1000);
+		order.assignMerchantPayKey("PAY-1");
+
+		given(orderQueryService.getOrderByMerchantPayKeyAndMemberId("PAY-1", memberId)).willReturn(order);
+		given(paymentApprovalService.findPaymentByMerchantPayKey("PAY-1")).willReturn(Optional.empty());
+		given(paymentApprovalService.isCompensationRequired("PAY-1")).willReturn(true); // Payment 미존재
+		given(paymentAttemptService.getOrCreateApproveAttempt("PAY-1", PaymentProvider.NAVERPAY, "pg-payment-id", 1000))
+			.willReturn(PaymentAttempt.createApproveRequested("PAY-1", "pg-payment-id", 1000, PaymentProvider.NAVERPAY));
+		given(paymentAttemptService.getOrCreateCancelAttempt(eq("PAY-1"), eq(PaymentProvider.NAVERPAY), eq("pg-payment-id"), eq(2000)))
+			.willReturn(PaymentAttempt.createCancelRequested("PAY-1", "pg-payment-id", 2000, PaymentProvider.NAVERPAY));
+		given(naverPayGateway.approve("pg-payment-id")).willReturn(NaverPayApproveResult.success("PAY-1", 2000));
+		given(naverPayGateway.cancel(eq("pg-payment-id"), anyInt(), any())).willReturn(NaverPayCancelResult.success());
 
 		// when & then
 		assertThatThrownBy(() -> naverPayApprovalService.approve(memberId, "PAY-1", "pg-payment-id"))
