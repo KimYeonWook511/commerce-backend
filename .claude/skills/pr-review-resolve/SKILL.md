@@ -130,26 +130,86 @@ PR #<번호> "<제목>" review 코멘트 N개를 발견했습니다.
 
 결정은 사용자가 명시적으로 내린다. 임의로 판단하지 않는다.
 
-### 8. 결정에 따라 실행 (항목별 1커밋 원칙)
+### 8. 결정에 따라 실행
+
+전체 흐름은 다음 3단계로 진행한다.
+
+```
+[적용 단계] 모든 accept/modify를 로컬 커밋까지 진행
+    ↓
+[보고 단계] 사용자에게 전체 변경/커밋 요약 보고 + 단일 OK 게이트
+    ↓
+[일괄 처리 단계] push 한 번 + 각 thread reply + resolve
+```
 
 각 review 항목마다 **별도 커밋**을 생성한다. 여러 항목을 묶어서 하나의 커밋으로 합치지 마라. 이유: 커밋 메시지가 어떤 review에 대응하는 변경인지 명시되어야 하고, 사후 revert 단위가 review 항목과 일치해야 한다.
 
 답변은 **반드시 해당 thread 내 reply로 등록**한다. 일반 PR 코멘트(`gh pr comment`)로 등록하지 마라. 이유: 답변이 thread 외부로 새면 review 맥락이 끊긴다.
 
+### 8-1. 적용 단계 — 모든 accept/modify를 로컬 커밋까지 진행
+
+순회하며 각 항목을 처리한다. **사용자 중간 확인 없이** 적용 → 커밋까지 일괄 진행한다.
+
+**accept 인 경우**:
+
+1. 코드 변경 적용 (Edit / Write 사용)
+2. 테스트 실행으로 회귀 없음 확인 (`./gradlew test` 등)
+3. 해당 review 항목 단독 커밋 — **반드시 `docs/commit-conventions.md` 형식을 준수한다.** 타입(`feat`, `fix`, `refactor`, `test`, `docs`, `chore`)과 subject 문체(`~한다`)를 확인하고, 커밋 메시지에 어떤 review에 대한 대응인지 드러나도록 작성한다.
+
+**modify 인 경우**:
+
+사용자가 7단계 협의 시점에 제시한 변형 방향대로 적용한다. accept와 동일한 흐름(변경 → 테스트 → 커밋).
+
 **reject 인 경우**:
 
-1. Thread reply로 답변 등록 — 거부 이유를 본문에 포함
+이 단계에서는 **아무 작업도 하지 않는다.** 보고 단계에서 일괄 처리한다.
 
-```bash
-# replies 엔드포인트가 thread 내 답변을 생성한다
-gh api "repos/$REPO/pulls/$PR_NUMBER/comments/<ROOT_COMMENT_ID>/replies" \
-  -X POST \
-  -f body="<거부 사유>"
+### 8-2. 보고 단계 — 사용자에게 변경 요약 + 단일 OK 게이트
+
+모든 적용이 끝나면 사용자에게 요약 보고한다.
+
+```
+모든 review 항목 처리 준비 완료.
+
+[적용된 커밋]
+1. <hash> <커밋 메시지>  (review [N] line:M)
+2. <hash> <커밋 메시지>  (review [N] line:M)
+...
+
+[거부 항목]
+- review [N] line:M — <거부 사유>
+
+이대로 push + 각 thread 답변 + resolve로 진행할까요?
 ```
 
-2. Thread resolve
+**사용자 OK 인 경우** → 8-3 일괄 처리 단계로 진행
+
+**사용자 수정 요청인 경우**:
+
+1. 요청에 맞게 해당 항목의 변경을 수정한다.
+2. 영향받는 커밋을 정리한다.
+   - 마지막 커밋만 수정: `git commit --amend`
+   - 중간 커밋 수정 필요: `git reset --soft <대상-1>`로 되돌린 뒤 재적용 + 재커밋
+   - 모든 커밋은 로컬에만 있으므로 자유롭게 정리 가능 (push 이후 아님)
+3. 다시 보고 단계로 돌아간다.
+
+### 8-3. 일괄 처리 단계 — push + 각 thread reply + resolve
+
+사용자 OK가 확인되면 다음을 순차로 실행한다.
+
+1. **단일 push**
 
 ```bash
+git push
+```
+
+2. **각 accept/modify 항목** — thread reply (커밋 hash 포함) + resolve
+
+```bash
+gh api "repos/$REPO/pulls/$PR_NUMBER/comments/<ROOT_COMMENT_ID>/replies" \
+  -X POST \
+  -f body="반영했습니다. <요약> (커밋 <hash>)"
+
 gh api graphql -f query='
 mutation {
   resolveReviewThread(input: {threadId: "<THREAD_NODE_ID>"}) {
@@ -158,30 +218,20 @@ mutation {
 }'
 ```
 
-**accept 인 경우**:
+3. **각 reject 항목** — thread reply (거부 사유) + resolve
 
-1. 코드 변경 적용 (Edit / Write 사용)
-2. 테스트 실행으로 회귀 없음 확인 (`./gradlew test` 등)
-3. 변경된 파일의 diff 출력
-4. 해당 review 항목 단독 커밋 — **반드시 `docs/commit-conventions.md` 형식을 준수한다.** 타입(`feat`, `fix`, `refactor`, `test`, `docs`, `chore`)과 subject 문체(`~한다`)를 확인하고, 커밋 메시지에 어떤 review에 대한 대응인지 드러나도록 작성한다.
-5. **사용자 확인 대기** — 커밋 메시지와 hash를 보여주고 "push/답변/resolve로 진행할까요?" 확인. 커밋은 로컬에 머물러 있으므로 사용자가 수정 요청 시 `git reset HEAD~1`로 되돌리거나 `git commit --amend`로 수정한 뒤 다시 확인을 받는다.
-   - 사용자가 OK → 6번부터 진행
-   - 사용자가 수정 요청 → 1번부터 재시작 (필요 시 commit reset)
-6. push
-7. Thread reply로 답변 등록 (`replies` 엔드포인트 사용) — 적용 내용 + 커밋 hash 본문에 포함
-8. Thread resolve
+```bash
+gh api "repos/$REPO/pulls/$PR_NUMBER/comments/<ROOT_COMMENT_ID>/replies" \
+  -X POST \
+  -f body="<거부 사유>"
 
-**modify 인 경우**:
-
-사용자에게 변형 방향을 입력받아 accept와 동일한 흐름(코드 변경 → 테스트 → diff → 커밋 → 사용자 OK → push → thread reply → resolve)으로 진행한다.
-
-### 8-1. 여러 항목 처리 순서
-
-여러 항목이 있을 때는 한 번에 하나씩 처리한다. 한 항목의 commit → push → reply → resolve를 모두 끝낸 뒤 다음 항목으로 넘어간다. 이렇게 하면:
-
-- 항목별 커밋 1개 원칙이 자연스럽게 지켜진다
-- 중간에 사용자가 흐름을 변경하면 이미 처리된 항목은 영향 없이 보존된다
-- PR 타임라인에서 어떤 commit이 어떤 review에 대응하는지 명확하다
+gh api graphql -f query='
+mutation {
+  resolveReviewThread(input: {threadId: "<THREAD_NODE_ID>"}) {
+    thread { isResolved }
+  }
+}'
+```
 
 ### 9. 완료 보고
 
@@ -212,9 +262,10 @@ gh api graphql -f query='
 
 ## 주의사항
 
-- **사용자 결정 없이 임의로 accept/reject하지 마라.** 이유: review 의견은 코드 정책 결정이므로 사용자가 판단해야 한다.
+- **사용자 결정 없이 임의로 accept/reject하지 마라.** 이유: review 의견은 코드 정책 결정이므로 사용자가 판단해야 한다. 결정은 7단계 협의에서 일괄로 받는다.
 - **commit 메시지는 반드시 `docs/commit-conventions.md` 형식을 준수하라.** 이유: 프로젝트 컨벤션 위반은 PR 단계에서 다시 정리해야 한다.
-- **commit까지 자동으로 진행하되, push / 답변 / resolve는 사용자 OK 후에만 실행하라.** 이유: local commit은 reset/amend로 쉽게 정리되지만, push 이후에는 PR 타임라인에 영구 흔적이 남는다. 의도와 다른 변경이 원격으로 새는 것을 막아야 한다.
+- **모든 적용 단계(8-1)는 로컬 commit까지만 진행하고, push / 답변 / resolve는 보고 단계(8-2)의 사용자 OK 후 일괄 처리(8-3)에서만 실행하라.** 이유: 적용 도중 push가 섞이면 사용자가 한 묶음으로 검토할 수 없고, 의도와 다른 변경이 원격으로 새는 것을 막을 수 없다. local commit은 reset/amend로 쉽게 정리되지만 push 이후에는 PR 타임라인에 영구 흔적이 남는다.
+- **적용 단계(8-1)에서 사용자 중간 확인을 받지 마라.** 이유: 항목마다 확인을 받으면 흐름이 끊기고 보고 단계의 단일 OK 게이트 의의가 사라진다. 확인은 보고 단계에서 한 번에 받는다.
 - **accept 시 테스트 통과 없이 commit하지 마라.** 이유: 회귀가 있는 변경이 commit으로 굳어지면 정리하기 번거롭다.
 - **여러 review 항목을 하나의 커밋으로 묶지 마라.** 이유: 커밋과 review 항목이 1:1 매칭되어야 추적과 revert가 단순해진다.
 - **답변은 반드시 thread reply로 등록하라. `gh pr comment` 같은 일반 PR 코멘트로 등록하지 마라.** 이유: thread 외부에 답변이 새면 review 맥락이 끊기고 thread resolve와 답변의 매칭이 무너진다.
