@@ -1,0 +1,9 @@
+{
+  "project": "commerce-backend",
+  "phase": "0-state-transition-validation",
+  "steps": [
+    { "step": 0, "name": "domain-validation", "status": "pending" },
+    { "step": 1, "name": "sync-root-docs", "status": "pending" },
+    { "step": 2, "name": "write-retrospective", "status": "pending" }
+  ]
+}
