@@ -13,7 +13,10 @@
     {
       "step": 1,
       "name": "split-compensation-by-failure-meaning",
-      "status": "pending"
+      "status": "completed",
+      "started_at": "2026-05-19T23:24:42+0900",
+      "summary": "compensateMerchantKeyMismatch(cancel 없이 failApprove만), compensateAmountMismatch, compensateDuplicatePayment, compensateUnexpected 4개 private 메서드 추가, completeVerifiedApproval catch 분기를 의미별 보상 메서드 호출로 교체, catch(Exception) failDetail을 ex.getMessage()로 변경에 따라 테스트 assertion 갱신",
+      "completed_at": "2026-05-19T23:30:43+0900"
     },
     {
       "step": 2,
