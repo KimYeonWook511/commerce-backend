@@ -1,0 +1,10 @@
+{
+  "project": "payment-compensation-to-domain",
+  "phase": "0-refactor",
+  "steps": [
+    { "step": 0, "name": "introduce-pg-canceller-port", "status": "pending" },
+    { "step": 1, "name": "move-compensation-dispatcher", "status": "pending" },
+    { "step": 2, "name": "sync-root-docs", "status": "pending" },
+    { "step": 3, "name": "write-retrospective", "status": "pending" }
+  ]
+}
