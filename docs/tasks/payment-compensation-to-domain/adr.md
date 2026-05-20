@@ -28,6 +28,8 @@
 - `PaymentApprovalCompensationService`가 보상 정책을 소유. NaverPayApprovalService는 main flow + `pgCancel` 콜백만 남는다.
 - `NaverPayApprovalService` 라인 수가 ~330줄에서 ~150줄 이하로 감소 예상.
 - trade-off: PG가 둘 이상 추가될 때 `PgCanceller` 주입 위치(NaverPayApprovalService 필드 → 공통 팩토리)를 재설계해야 한다.
+- `compensateMerchantKeyMismatch`만 `PgCanceller`를 파라미터로 받지 않는다. PG 결제 자체가 발생하지 않은 케이스(우리 시스템 키 오류)이므로 cancel 호출이 불필요하다.
+- `compensateUnexpected`의 `failCode` 파라미터는 현재 호출처 3곳 모두 `APPROVE_PROCESS_FAILED`를 전달한다. 후속에 다른 failCode가 필요한 케이스가 생길 때를 대비해 인자로 열어뒀다.
 
 ---
 
