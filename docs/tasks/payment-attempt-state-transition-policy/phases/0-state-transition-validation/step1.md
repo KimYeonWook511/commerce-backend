@@ -1,44 +1,127 @@
-# Step 1: sync-root-docs
+# Step 1: domain-validation
 
 ## 읽어야 할 파일
 
+먼저 아래 파일들을 읽고 설계 의도를 파악하라.
+
+- `/docs/tasks/payment-attempt-state-transition-policy/prd.md`
+- `/docs/tasks/payment-attempt-state-transition-policy/architecture.md`
 - `/docs/tasks/payment-attempt-state-transition-policy/adr.md`
-- `/docs/ADR.md` (기존 ADR-010, ADR-011 형식 참고)
+- `/docs/tasks/payment-attempt-state-transition-policy/api-spec.md`
 
-step0에서 생성/수정된 파일:
+구현 대상 코드:
 
-- `/src/main/java/com/commerce/payment/exception/PaymentErrorCode.java`
 - `/src/main/java/com/commerce/payment/domain/PaymentAttempt.java`
+- `/src/main/java/com/commerce/payment/exception/PaymentErrorCode.java`
+- `/src/main/java/com/commerce/payment/naverpay/application/NaverPayApprovalService.java`
+- `/src/test/java/com/commerce/payment/domain/PaymentAttemptTest.java`
+
+일관성 참고용:
+
+- `/src/main/java/com/commerce/order/domain/Order.java` (cancel, completePayment 선조건 검증 패턴)
+- `/src/main/java/com/commerce/payment/application/PaymentAttemptService.java` (mark 호출 흐름 확인)
 
 ## 작업
 
-`docs/ADR.md`에 ADR-012 항목을 ADR-011 다음에 추가한다. 기존 ADR-010, ADR-011 형식(간결한 5~7줄 요약)과 일치시킨다.
+### 1. `PaymentErrorCode.java` — 신규 에러 코드 2개 추가
 
-추가할 내용:
+기존 에러 코드 목록에 추가한다. 두 코드 모두 HTTP 500 INTERNAL_SERVER_ERROR를 사용한다.
 
-```markdown
-### ADR-012: PaymentAttempt mark 메서드는 상태 전이와 type 정합성을 도메인에서 검증한다
-- **결정**: `PaymentAttempt`의 mark 메서드 4개(`markApproveSucceeded`, `markApproveFailed`, `markCancelSucceeded`, `markCancelFailed`)는 호출 시점에 (1) `status == REQUESTED`, (2) `type`이 메서드 의도와 일치를 검증한다. 위반 시 `PaymentException`(`PAYMENT_ATTEMPT_STATUS_TRANSITION_NOT_ALLOWED` / `PAYMENT_ATTEMPT_TYPE_MISMATCH`, 500)으로 거부. 멱등 자기 전이도 거부.
-- **배경**: 기존 mark 메서드는 검증 없이 status/failCode를 덮어써 FAILED → SUCCEEDED 시 failCode가 사라지는 위험이 있다. 정상 흐름은 application 계층 switch가 막아주지만 도메인 모델 자체에는 안전망이 없다.
-- **이유**: 멱등성은 상위 레이어(`PaymentAttemptService.getOrCreateApproveAttempt` + `NaverPayApprovalService.processApproveAttempt` switch)에서 처리되므로 mark는 멱등을 책임지지 않는다. Order 도메인의 명시적 선조건 검증 패턴과 일관. 도메인 무결성 위반은 내부 결함 신호라 외부 입력 mismatch(ADR-010, 409)와 구분되도록 500.
-- **트레이드오프**: 새 검증 도입 시 catch 블록 안에서 mark가 호출되는 호출처(예: `NaverPayApprovalService.failApproveAndCancelApprovedPayment`)는 race window에서 mark가 throw해도 보상 트랜잭션이 중단되지 않도록 적절히 보호해야 한다. 본 PR은 해당 함수 내부 한 곳을 try-catch로 보호한다. 보상 catch 2차 예외 처리의 일반 원칙(의사결정 트리)과 상위 catch 1차 예외 `log.error` 누락 보강은 #111(후속 Issue)에서 정의 예정. 상세는 `docs/tasks/payment-attempt-state-transition-policy/adr.md` 참조.
+```java
+PAYMENT_ATTEMPT_STATUS_TRANSITION_NOT_ALLOWED(HttpStatus.INTERNAL_SERVER_ERROR, "PAYMENT-500-1",
+    "결제 시도 상태 전이가 허용되지 않습니다"),
+PAYMENT_ATTEMPT_TYPE_MISMATCH(HttpStatus.INTERNAL_SERVER_ERROR, "PAYMENT-500-2",
+    "결제 시도 타입과 mark 요청이 일치하지 않습니다");
 ```
+
+### 2. `PaymentAttempt.java` — 4개 mark 메서드에 type + status 검증 추가
+
+모든 mark 메서드에 동일한 패턴을 적용한다. type 검증을 status 검증보다 먼저 배치한다.
+
+```java
+public void markApproveSucceeded(LocalDateTime respondedAt) {
+    if (this.type != PaymentAttemptType.APPROVE) {
+        throw new PaymentException(PaymentErrorCode.PAYMENT_ATTEMPT_TYPE_MISMATCH);
+    }
+    if (this.status != PaymentAttemptStatus.REQUESTED) {
+        throw new PaymentException(PaymentErrorCode.PAYMENT_ATTEMPT_STATUS_TRANSITION_NOT_ALLOWED);
+    }
+    this.status = PaymentAttemptStatus.SUCCEEDED;
+    this.failCode = null;
+    this.failDetail = null;
+    this.respondedAt = respondedAt;
+}
+```
+
+- `markApproveFailed`: `type == APPROVE` 검증 + `status == REQUESTED` 검증
+- `markCancelSucceeded`: `type == CANCEL` 검증 + `status == REQUESTED` 검증
+- `markCancelFailed`: `type == CANCEL` 검증 + `status == REQUESTED` 검증
+
+### 3. `NaverPayApprovalService.java` — `failApproveAndCancelApprovedPayment` 내 `failApprove` try-catch 보호
+
+`failApproveAndCancelApprovedPayment` 함수 내에서 `failApprove` 호출 한 곳만 try-catch로 감싼다. **return을 넣지 않는다** — PG cancel은 mark 실패 여부와 무관하게 무조건 진행해야 한다.
+
+```java
+try {
+    failApprove(approveAttempt, failCode, failDetail);
+} catch (PaymentException markEx) {
+    log.warn(
+        "Approve attempt mark failed during compensation, proceeding to PG cancel: merchantPayKey={}, paymentId={}, errorCode={}",
+        approveAttempt.getMerchantPayKey(),
+        approveAttempt.getPaymentId(),
+        markEx.getErrorCode(),
+        markEx
+    );
+    // return 없음 — PG cancel은 무조건 시도 (외부 정합성 보존)
+}
+```
+
+**다른 catch 블록은 변경하지 않는다.** 라인 130, 145, 149 catch 블록은 이번 step에서 건드리지 않는다.
+
+### 4. `PaymentAttemptTest.java` — 전이/type 위반 테스트 케이스 9개 추가
+
+기존 테스트 클래스에 추가한다. SUCCEEDED/FAILED 상태 setup은 `createApproveRequested` 또는 `createCancelRequested` 후 첫 번째 mark 호출로 상태를 이동시킨 뒤, 두 번째 mark 호출로 throw를 검증한다 (ReflectionTestUtils 불필요).
+
+추가할 테스트 목록:
+
+```
+markApproveSucceeded_whenStatusSucceeded_throwException
+markApproveSucceeded_whenStatusFailed_throwException
+markApproveSucceeded_whenTypeIsCancel_throwException
+markApproveFailed_whenStatusNotRequested_throwException
+markApproveFailed_whenTypeIsCancel_throwException
+markCancelSucceeded_whenStatusNotRequested_throwException
+markCancelSucceeded_whenTypeIsApprove_throwException
+markCancelFailed_whenStatusNotRequested_throwException
+markCancelFailed_whenTypeIsApprove_throwException
+```
+
+각 케이스는 `PaymentException`과 정확한 `PaymentErrorCode`를 검증한다. 기존 `PaymentAttemptTest`의 `satisfies` + `assertThat(orderException.getErrorCode())` 패턴을 참고한다.
 
 ## Acceptance Criteria
 
 ```bash
-grep -n "ADR-012" docs/ADR.md
+./gradlew test
 ```
 
-ADR-012 항목이 존재하면 통과.
+PaymentErrorCode enum 변경이 포함되므로 전체 테스트를 실행한다.
 
 ## 검증 절차
 
-1. `docs/ADR.md`에서 ADR-012가 ADR-011 다음에 위치하는지 확인한다.
-2. 기존 ADR-010, ADR-011과 동일한 형식(굵은 항목 제목: 결정/배경/이유/트레이드오프)인지 확인한다.
-3. 후속 Issue 번호 `#111`이 트레이드오프 항목에 명시됐는지 확인한다.
+1. 위 Acceptance Criteria 커맨드를 실행한다.
+2. 아래를 확인한다.
+   - 신규 테스트 9개가 모두 통과하는가?
+   - 기존 `PaymentAttemptTest` 케이스가 깨지지 않는가?
+   - `PaymentAttemptServiceTest`, `NaverPayApprovalServiceTest` 회귀가 없는가?
+3. mark 메서드 사용처를 탐색해 신규 검증에 걸리는 경로가 없는지 확인한다.
+   ```bash
+   rg "markApproveSucceeded\|markApproveFailed\|markCancelSucceeded\|markCancelFailed" src/main/java src/test/java
+   ```
 
 ## 금지사항
 
-- 기존 ADR-001 ~ ADR-011 내용을 수정하지 마라. 이유: ADR은 불변 결정 기록이다.
-- ADR-012에 구현 디테일(코드 라인 번호, 함수 내부 로직)을 장황하게 적지 마라. 이유: 상세는 `docs/tasks/payment-attempt-state-transition-policy/adr.md`에 있으며, 루트 ADR은 결정 요약에 집중한다.
+- `NaverPayApprovalService`의 라인 130 (`catch (PaymentException ex)`), 라인 145 (`catch (CustomException ex)`), 라인 149 (`catch (Exception ex)`) catch 블록에 log.error를 추가하지 마라. 이유: 해당 작업은 후속 Issue #111에서 처리한다.
+- `failApproveAndCancelApprovedPayment` 함수 내 `failApprove` try-catch에 `return`을 넣지 마라. 이유: PG cancel은 mark 실패 여부와 무관하게 무조건 진행해야 한다.
+- `PaymentAttemptStatus` enum을 변경하지 마라. 이유: 이번 작업 범위 외.
+- `processApproveAttempt` switch 분기를 변경하지 마라. 이유: 이미 application 레벨 안전망으로 동작 중이며 변경 불필요.
+- 기존 테스트를 깨뜨리지 마라.

@@ -1,4 +1,4 @@
-# Step 4: admin-stock-history-query-api
+# Step 4: admin-stock-adjust-api
 
 ## 읽어야 할 파일
 
@@ -12,7 +12,6 @@
 - `docs/features/stock-management/phases/0-admin-stock-management-api/step3.md`
 - `src/main/java/com/commerce/stock/controller/AdminStockController.java`
 - `src/main/java/com/commerce/stock/service/StockService.java`
-- `src/main/java/com/commerce/stock/repository/StockHistoryRepository.java`
 - `src/test/java/com/commerce/stock/controller/AdminStockControllerTest.java`
 
 기능 문서만으로 부족한 공통 맥락이 있으면 아래 문서를 추가로 읽는다.
@@ -22,19 +21,24 @@
 
 ## 작업
 
-- `AdminStockController`에 `GET /admin/products/{productId}/stock/histories` API를 추가한다.
+- `AdminStockController`에 재고 증가/감소 API를 추가한다.
+  - `POST /admin/products/{productId}/stock/increase`
+  - `POST /admin/products/{productId}/stock/decrease`
+- 두 API 모두 아래 정책을 따른다.
   - `@RequireRole(MemberRole.ROLE_ADMIN)`을 적용한다.
+  - `@AuthenticatedMemberId Long adminMemberId`를 받아 service command에 전달한다.
   - `productId`가 null 또는 1 미만이면 기존 `CommonException(CommonErrorCode.INVALID_REQUEST)`를 던진다.
-  - 성공 시 `200 OK`와 `ApiResponse<List<AdminStockHistoryResult>>`를 반환한다.
-- `StockService`의 이력 조회 결과를 controller 응답에 연결한다.
-- 이력 조회는 상품별 최신순 전체 목록을 반환한다.
+  - 성공 시 `200 OK`와 `ApiResponse<AdminStockResult>`를 반환한다.
+- 증가/감소 request DTO를 추가한다.
+  - `quantity`: 필수, 양수
+  - `reason`: 필수, `INBOUND|DISPOSAL|ADMIN_ADJUSTMENT|ORDER_CANCEL_RESTORE`
+  - request DTO에서 service command로 변환한다.
 - controller 테스트를 추가한다.
-  - 관리자 이력 조회 성공
+  - 관리자 재고 증가 성공
+  - 관리자 재고 감소 성공
   - 관리자 권한이 없으면 실패
   - `productId`가 양수가 아니면 실패
-- repository 테스트를 추가한다.
-  - 상품별 이력 조회가 다른 상품 이력을 제외하는지
-  - 최신순 정렬을 보장하는지
+  - `quantity` 또는 `reason` 검증 실패
 
 ## 수정 가능 경로
 
@@ -52,12 +56,13 @@
 
 1. 위 Acceptance Criteria 커맨드를 실행한다.
 2. 아래를 확인한다.
-   - 이력 조회 API가 pagination 파라미터를 요구하지 않는가?
-   - 응답에 `historyId`, `productId`, `stockId`, `quantityChange`, `reason`, `adminMemberId`, `createdAt`이 포함되는가?
-   - 최신순 정렬이 repository 테스트로 검증되는가?
+   - 증가와 감소 endpoint가 분리되어 있는가?
+   - 감소 API가 음수 quantity를 받는 방식으로 구현되지 않았는가?
+   - 성공 응답 HTTP status가 `200 OK`인가?
+   - 요청 검증 메시지가 기존 controller 테스트 스타일과 일관적인가?
 
 ## 금지사항
 
-- 이 단계에서 pagination을 추가하지 마라. 이유: 첫 버전의 조회 범위는 상품별 전체 최신순 조회로 결정했다.
-- request body로 `adminMemberId`를 받지 마라. 이유: 변경 주체는 인증 컨텍스트 기반으로 기록한다.
-- 이력 데이터를 수정하거나 삭제하는 API를 추가하지 마라. 이유: 이력은 감사 데이터로 append-only 성격을 가진다.
+- 증가/감소를 하나의 delta API로 합치지 마라. 이유: 사용자가 증가/감소 API 분리를 선택했다.
+- request body의 `quantity`에 음수를 허용하지 마라. 이유: API 동작은 endpoint로 구분하고 이력 부호는 service가 결정한다.
+- 기존 주문 재고 차감 API나 service 호출부를 수정하지 마라. 이유: 관리자 수동 조정과 주문 흐름은 분리한다.

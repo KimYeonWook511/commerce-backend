@@ -3,14 +3,14 @@
   "phase": "0-query-read-api",
   "steps": [
     {
-      "step": 0,
+      "step": 1,
       "name": "product-query-api",
       "status": "completed",
       "started_at": "2026-04-26T02:04:03+0900",
       "summary": "product 도메인에 공개 조회 API와 조회 전용 DTO, 서비스/컨트롤러 테스트가 반영되어 있으며 AC 명령 실행 결과 ProductServiceTest와 ProductControllerTest가 모두 통과했다."
     },
     {
-      "step": 1,
+      "step": 2,
       "name": "sync-root-docs",
       "status": "completed",
       "started_at": "2026-04-26T02:09:48+0900",

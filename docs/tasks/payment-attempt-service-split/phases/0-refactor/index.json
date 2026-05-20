@@ -3,7 +3,7 @@
   "phase": "0-refactor",
   "steps": [
     {
-      "step": 0,
+      "step": 1,
       "name": "payment-attempt-domain-cleanup",
       "status": "completed",
       "started_at": "2026-05-20T16:40:59+0900",
@@ -11,7 +11,7 @@
       "completed_at": "2026-05-20T16:46:47+0900"
     },
     {
-      "step": 1,
+      "step": 2,
       "name": "split-payment-attempt-service",
       "status": "completed",
       "started_at": "2026-05-20T16:48:47+0900",
@@ -19,7 +19,7 @@
       "completed_at": "2026-05-20T17:01:50+0900"
     },
     {
-      "step": 2,
+      "step": 3,
       "name": "sync-root-docs-task-a",
       "status": "completed",
       "started_at": "2026-05-20T17:04:25+0900",
@@ -27,7 +27,7 @@
       "completed_at": "2026-05-20T17:07:43+0900"
     },
     {
-      "step": 3,
+      "step": 4,
       "name": "write-retrospective-task-a",
       "status": "completed",
       "started_at": "2026-05-20T17:09:06+0900",

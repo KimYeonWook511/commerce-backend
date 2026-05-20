@@ -1,4 +1,4 @@
-# Step 1: split-payment-attempt-service
+# Step 1: payment-attempt-domain-cleanup
 
 ## 읽어야 할 파일
 
@@ -7,142 +7,114 @@
 - `docs/tasks/payment-attempt-service-split/prd.md`
 - `docs/tasks/payment-attempt-service-split/architecture.md`
 - `docs/tasks/payment-attempt-service-split/adr.md`
-- `src/main/java/com/commerce/payment/application/PaymentAttemptService.java` ← step 0에서 갱신된 버전
-- `src/main/java/com/commerce/payment/application/PaymentApprovalService.java`
+- `src/main/java/com/commerce/payment/domain/PaymentAttempt.java`
+- `src/main/java/com/commerce/payment/application/PaymentAttemptService.java`
 - `src/main/java/com/commerce/payment/naverpay/application/NaverPayApprovalService.java`
-- `src/test/java/com/commerce/payment/application/PaymentAttemptServiceTest.java`
-- `src/test/java/com/commerce/payment/application/concurrency/PaymentAttemptServiceConcurrencyTest.java`
+- `src/test/java/com/commerce/payment/domain/PaymentAttemptTest.java`
+
+루트 docs 추가:
+- `docs/ADR.md` — ADR-012 (mark 메서드 선조건 검증 정책) 확인 필수
 
 ## 작업
 
-### 1. `PaymentApprovalAttemptService` 신설 (`src/main/java/com/commerce/payment/application/PaymentApprovalAttemptService.java`)
+### 1. `PaymentAttempt` 도메인 메서드 통합 (`src/main/java/com/commerce/payment/domain/PaymentAttempt.java`)
 
-클래스 레벨 `@Transactional`을 붙이지 않는다. 각 메서드에 트랜잭션을 명시해 경계가 한 눈에 보이도록 한다.
+아래 변경을 적용한다:
+
+**(a) mark 4개 → succeed/fail 2개로 통합**
 
 ```java
-@Slf4j
-@Service
-@RequiredArgsConstructor
-public class PaymentApprovalAttemptService {
+// 기존 markApproveSucceeded, markCancelSucceeded 대체
+public void succeed(LocalDateTime respondedAt) {
+    if (this.status != PaymentAttemptStatus.REQUESTED) {
+        throw new PaymentException(PaymentErrorCode.PAYMENT_ATTEMPT_STATUS_TRANSITION_NOT_ALLOWED);
+    }
+    this.status = PaymentAttemptStatus.SUCCEEDED;
+    this.failCode = null;
+    this.failDetail = null;
+    this.respondedAt = respondedAt;
+}
 
-    private final PaymentAttemptRepository paymentAttemptRepository;
-
-    @Transactional(propagation = Propagation.NOT_SUPPORTED)
-    public PaymentAttempt getOrCreate(String merchantPayKey, PaymentProvider provider,
-                                      String paymentId, int amount) { ... }
-
-    @Transactional
-    public void succeed(String merchantPayKey, PaymentProvider provider,
-                        String paymentId, LocalDateTime respondedAt) { ... }
-
-    @Transactional
-    public void fail(String merchantPayKey, PaymentProvider provider,
-                     String paymentId, PaymentAttemptFailCode failCode,
-                     String failDetail, LocalDateTime respondedAt) { ... }
-
-    /**
-     * 보상 흐름 전용: REQUESTED 상태일 때만 실패 처리하고, 그 외 상태이거나 이력이 없으면 조용히 skip한다.
-     */
-    @Transactional
-    public void failIfRequested(String merchantPayKey, PaymentProvider provider,
-                                String paymentId, PaymentAttemptFailCode failCode,
-                                String failDetail, LocalDateTime respondedAt) { ... }
+// 기존 markApproveFailed, markCancelFailed 대체
+public void fail(PaymentAttemptFailCode failCode, String failDetail, LocalDateTime respondedAt) {
+    if (this.status != PaymentAttemptStatus.REQUESTED) {
+        throw new PaymentException(PaymentErrorCode.PAYMENT_ATTEMPT_STATUS_TRANSITION_NOT_ALLOWED);
+    }
+    this.status = PaymentAttemptStatus.FAILED;
+    this.failCode = failCode;
+    this.failDetail = failDetail;
+    this.respondedAt = respondedAt;
 }
 ```
 
-- `getOrCreate` 내부: `paymentAttemptRepository.findApproveAttempt(...)` → amount 검증 → 없으면 `PaymentAttempt.createApproveRequested(...)` 로 save
-- `succeed` 내부: `findApproveAttempt` orElseThrow → `attempt.succeed(respondedAt)`
-- `fail` 내부: `findApproveAttempt` orElseThrow → `attempt.fail(failCode, failDetail, respondedAt)`
-- `failIfRequested` 내부: `findApproveAttempt` orElse(null) → null이면 log.warn + return → `status != REQUESTED`이면 log.warn + return → `attempt.fail(...)`
-- log 메시지 패턴은 기존 `PaymentAttemptService`와 동일하게 유지
+- type 가드(`if (this.type != PaymentAttemptType.APPROVE) throw ...`) 제거. 호출자(Service)가 올바른 type의 attempt를 가져오므로 도메인에서 중복 검증할 이유 없음
+- `status != REQUESTED` 가드는 유지 (ADR-012 정책 보존)
+- 기존 메서드 4개 삭제: `markApproveSucceeded`, `markApproveFailed`, `markCancelSucceeded`, `markCancelFailed`
+- `PaymentAttemptType` 필드와 enum은 그대로 유지
 
-### 2. `PaymentCancellationAttemptService` 신설 (`src/main/java/com/commerce/payment/application/PaymentCancellationAttemptService.java`)
-
-동일하게 클래스 레벨 `@Transactional` 없이 메서드별 명시.
+**(b) `verifyApprovedResponse` 신설**
 
 ```java
-@Slf4j
-@Service
-@RequiredArgsConstructor
-public class PaymentCancellationAttemptService {
-
-    private final PaymentAttemptRepository paymentAttemptRepository;
-
-    @Transactional(propagation = Propagation.NOT_SUPPORTED)
-    public PaymentAttempt getOrCreate(String merchantPayKey, PaymentProvider provider,
-                                      String paymentId, int cancelAmount) { ... }
-
-    @Transactional
-    public void succeed(String merchantPayKey, PaymentProvider provider,
-                        String paymentId, LocalDateTime respondedAt) { ... }
-
-    @Transactional
-    public void fail(String merchantPayKey, PaymentProvider provider,
-                     String paymentId, PaymentAttemptFailCode failCode,
-                     String failDetail, LocalDateTime respondedAt) { ... }
+public void verifyApprovedResponse(String responseMerchantPayKey, int responseTotalAmount) {
+    if (!this.merchantPayKey.equals(responseMerchantPayKey)) {
+        throw new PaymentException(PaymentErrorCode.PAYMENT_MERCHANT_KEY_MISMATCH);
+    }
+    if (this.amount != responseTotalAmount) {
+        throw new PaymentException(PaymentErrorCode.PAYMENT_AMOUNT_MISMATCH);
+    }
 }
 ```
 
-- `getOrCreate` 내부: `paymentAttemptRepository.findCancelAttempt(...)` → amount 검증 → 없으면 `PaymentAttempt.createCancelRequested(...)` 로 save
-- `succeed` 내부: `findCancelAttempt` orElseThrow → `attempt.succeed(respondedAt)`
-- `fail` 내부: `findCancelAttempt` orElseThrow → `attempt.fail(failCode, failDetail, respondedAt)`
+- `NaverPayApprovalService.validateApprovedMerchantPayKeyOrThrow`/`validateApprovedAmountOrThrow`의 로직과 동등
+- log.warn은 NaverPayApprovalService의 private 메서드에 있었으나 도메인 메서드는 순수 검증만 담당. log는 NaverPay 쪽에서 처리하거나 생략
 
-### 3. `PaymentAttemptService.java` 삭제
+### 2. `PaymentAttemptService` 임시 갱신 (`src/main/java/com/commerce/payment/application/PaymentAttemptService.java`)
 
-step 0에서 갱신된 `PaymentAttemptService.java`를 삭제한다.
+step 2에서 Service를 분리하기 전까지 기존 Service가 새 도메인 메서드를 호출하도록 갱신한다:
+- `attempt.markApproveSucceeded(...)` → `attempt.succeed(...)`
+- `attempt.markApproveFailed(...)` → `attempt.fail(...)`
+- `attempt.markCancelSucceeded(...)` → `attempt.succeed(...)`
+- `attempt.markCancelFailed(...)` → `attempt.fail(...)`
 
-### 4. 호출처 갱신
+### 3. `NaverPayApprovalService` 검증 메서드 교체 (`src/main/java/com/commerce/payment/naverpay/application/NaverPayApprovalService.java`)
 
-**(a) `PaymentApprovalService` (`src/main/java/com/commerce/payment/application/PaymentApprovalService.java`)**
+`completeVerifiedApproval` 메서드의 try 블록 첫 두 줄 교체:
 
-- `PaymentAttemptService` 의존성 → `PaymentApprovalAttemptService` 의존성으로 교체
-- `completeApprovedPayment` 내부: `paymentAttemptService.succeedApproveAttempt(...)` → `paymentApprovalAttemptService.succeed(...)`
-- **클래스 레벨 `@Transactional(readOnly = true)` 제거** + 각 메서드에 명시:
-  - `findPaymentByMerchantPayKey` → `@Transactional(readOnly = true)`
-  - `isCompensationRequired` → `@Transactional(readOnly = true, propagation = REQUIRES_NEW)` (기존 유지)
-  - `completeApprovedPayment` → `@Transactional` (기존 유지)
+```java
+// 기존
+validateApprovedMerchantPayKeyOrThrow(attempt, responseMerchantPayKey);
+validateApprovedAmountOrThrow(attempt, responseTotalAmount);
 
-**(b) `NaverPayApprovalService` (`src/main/java/com/commerce/payment/naverpay/application/NaverPayApprovalService.java`)**
+// 변경 후
+attempt.verifyApprovedResponse(responseMerchantPayKey, responseTotalAmount);
+```
 
-- `PaymentAttemptService` 의존성 → `PaymentApprovalAttemptService` + `PaymentCancellationAttemptService` 의존성으로 교체
-- 모든 호출 치환:
-  - `paymentAttemptService.getOrCreateApproveAttempt(...)` → `paymentApprovalAttemptService.getOrCreate(...)`
-  - `paymentAttemptService.failApproveAttemptIfRequested(...)` → `paymentApprovalAttemptService.failIfRequested(...)`
-  - `paymentAttemptService.getOrCreateCancelAttempt(...)` → `paymentCancellationAttemptService.getOrCreate(...)`
-  - `paymentAttemptService.succeedCancelAttempt(...)` → `paymentCancellationAttemptService.succeed(...)`
-  - `paymentAttemptService.failCancelAttempt(...)` → `paymentCancellationAttemptService.fail(...)`
+- `validateApprovedMerchantPayKeyOrThrow`, `validateApprovedAmountOrThrow` private 메서드 삭제
+- 기존 두 메서드의 log.warn은 삭제 (도메인 메서드는 순수 검증만 담당). 기존 warn 정보는 caller의 catch 블록에서 이미 error 로그가 처리됨
 
-### 5. 테스트 분할
+### 4. 테스트 갱신
 
-**(a) `PaymentAttemptServiceTest` 삭제 및 분할**
+**(a) `PaymentAttemptTest` (`src/test/java/com/commerce/payment/domain/PaymentAttemptTest.java`)**
 
-- `PaymentApprovalAttemptServiceTest` 신설 (`src/test/java/com/commerce/payment/application/PaymentApprovalAttemptServiceTest.java`): approve 관련 케이스 (getOrCreate, succeed, fail, failIfRequested 시나리오)
-- `PaymentCancellationAttemptServiceTest` 신설 (`src/test/java/com/commerce/payment/application/PaymentCancellationAttemptServiceTest.java`): cancel 관련 케이스 (getOrCreate, succeed, fail 시나리오)
-- `PaymentAttemptServiceTest.java` 삭제
-- BDDMockito 스타일 유지 (`given()`, `then().should()`)
+- 기존 케이스 갱신: `markApproveSucceeded` → `succeed`, `markApproveFailed` → `fail` 등 메서드명/시그니처 변경
+- type 가드 관련 케이스 4개 삭제:
+  - `markApproveSucceeded_whenTypeIsCancel_throwException`
+  - `markApproveFailed_whenTypeIsCancel_throwException`
+  - `markCancelSucceeded_whenTypeIsApprove_throwException`
+  - `markCancelFailed_whenTypeIsApprove_throwException`
+- `verifyApprovedResponse` 케이스 추가 (총 3개):
+  - `verifyApprovedResponse_whenMerchantPayKeyMismatch_throwPaymentMerchantKeyMismatch`
+  - `verifyApprovedResponse_whenAmountMismatch_throwPaymentAmountMismatch`
+  - `verifyApprovedResponse_whenBothMatch_noException`
 
-**(b) `PaymentAttemptServiceConcurrencyTest` 분할**
+**(b) `PaymentAttemptServiceTest` (`src/test/java/com/commerce/payment/application/PaymentAttemptServiceTest.java`)**
 
-- `PaymentApprovalAttemptServiceConcurrencyTest` 신설 (`src/test/java/com/commerce/payment/application/concurrency/PaymentApprovalAttemptServiceConcurrencyTest.java`): approve 관련 동시성 테스트 2개 (`getOrCreate_whenConcurrentIdempotentRequest_returnSameApproveAttempt`, `getOrCreate_whenConcurrentRequestWithDifferentAmount_allThrowAmountMismatch`)
-- `PaymentCancellationAttemptServiceConcurrencyTest` 신설 (`src/test/java/com/commerce/payment/application/concurrency/PaymentCancellationAttemptServiceConcurrencyTest.java`): cancel 관련 동시성 테스트 2개
-- `PaymentAttemptServiceConcurrencyTest.java` 삭제
-- `@Tag("concurrency")`, `@Tag("docker")`, `@SpringBootTest`, `@ActiveProfiles("test")` 그대로 유지
+- mark* 호출을 succeed/fail로 갱신. 메서드 자체는 step 2에서 Service 분리 전까지 유지
 
-**(c) `PaymentApprovalServiceTest` 갱신 (`src/test/java/com/commerce/payment/application/PaymentApprovalServiceTest.java`)**
+**(c) `NaverPayApprovalServiceTest` (`src/test/java/com/commerce/payment/naverpay/application/NaverPayApprovalServiceTest.java`)**
 
-- `paymentAttemptService.succeedApproveAttempt(...)` 호출 검증 → `paymentApprovalAttemptService.succeed(...)` 호출 검증으로 갱신
-
-**(d) `NaverPayApprovalServiceTest` 호출명 갱신 (`src/test/java/com/commerce/payment/naverpay/application/NaverPayApprovalServiceTest.java`)**
-
-- `paymentAttemptService.*` 호출 검증을 새 Service 호출 검증으로 갱신
-
-**(e) `NaverPayServiceConcurrencyTest` 갱신 (`src/test/java/com/commerce/payment/naverpay/application/concurrency/NaverPayServiceConcurrencyTest.java`)**
-
-- 의존 주입명이 바뀐 경우 수정. 동시성 시나리오 의미는 그대로 유지
-
-**(f) `NaverPayServiceIntegrationTest` 갱신 (`src/test/java/com/commerce/payment/naverpay/application/NaverPayServiceIntegrationTest.java`)**
-
-- Service 분리에 따른 의존 주입명 갱신
+- `validateApprovedMerchantPayKeyOrThrow`, `validateApprovedAmountOrThrow` 관련 케이스에서 `attempt.verifyApprovedResponse` 호출 검증으로 교체
+- 단, 이 케이스들은 NaverPay 단위 테스트이므로 `attempt.verifyApprovedResponse` 를 mock하거나 실제 도메인 객체를 사용하는 방식으로 정리
 
 ## Acceptance Criteria
 
@@ -150,24 +122,18 @@ step 0에서 갱신된 `PaymentAttemptService.java`를 삭제한다.
 ./gradlew test
 ```
 
-동시성 테스트 별도 실행 (docker 필요):
-
-```bash
-./gradlew dockerTest
-```
-
 ## 검증 절차
 
 1. 위 Acceptance Criteria를 실행한다.
 2. 아래를 확인한다:
-   - `PaymentAttemptService.java`가 삭제됐는가?
-   - `PaymentApprovalAttemptService` / `PaymentCancellationAttemptService`가 각자 3-4개 메서드의 단순 구조인가?
-   - 두 Service 모두 클래스 레벨 `@Transactional`이 없고, `getOrCreate`에 `NOT_SUPPORTED`, `succeed`/`fail`/`failIfRequested`에 `REQUIRED`가 정확히 붙어 있는가?
-   - 공유 도메인 계약 변경: `rg "PaymentAttemptService" src/main/java src/test/java` 결과가 0이어야 한다
+   - `PaymentAttempt`에 `markApprove*`/`markCancel*` 메서드가 없고 `succeed`/`fail`/`verifyApprovedResponse`만 있는가?
+   - `NaverPayApprovalService`에 `validateApproved*` private 메서드가 없는가?
+   - `PAYMENT_ATTEMPT_TYPE_MISMATCH` 관련 테스트가 삭제됐는가?
 3. 결과에 따라 step 상태를 갱신한다.
 
 ## 금지사항
 
-- `@Transactional` 어노테이션을 임의로 변경하지 마라. 이유: `NOT_SUPPORTED`가 사라지면 race-safe한 find-first 정책이 깨진다
+- `PaymentAttemptService`를 이 step에서 삭제하지 마라. 이유: step 2에서 Service를 분리하기 전까지 기존 Service가 호출처 역할을 유지해야 컴파일 오류 없음
 - `NaverPayApprovalService`의 보상 메서드(`compensate*`, `failApproveAndCancelApprovedPayment`)를 건드리지 마라. 이유: task B 범위
+- type 가드만 제거하고 status 가드(`status != REQUESTED`)는 반드시 유지하라. 이유: ADR-012 정책 보존
 - 기존 테스트를 깨뜨리지 마라

@@ -572,7 +572,7 @@ class StepExecutor:
                 section for section in (context_text, previous_step_context) if section
             )
 
-            label = f"Step {step_num + 1}/{self.total_steps} ({done} done): {step_name}"
+            label = f"Step {step_num}/{self.total_steps} ({done} done): {step_name}"
             if attempt > 1:
                 label += f" [retry {attempt}/{self.MAX_RETRIES}]"
 
@@ -596,12 +596,12 @@ class StepExecutor:
                     self.reset_step_for_retry(current, error_message)
                     self.write_json(self.index_file, index)
                     prev_error = error_message
-                    print(f"  ↻ Step {step_num + 1}: retry {attempt}/{self.MAX_RETRIES} — {error_message}")
+                    print(f"  ↻ Step {step_num}: retry {attempt}/{self.MAX_RETRIES} — {error_message}")
                     continue
 
                 self.mark_step_error(current, error_message, timestamp)
                 self.write_json(self.index_file, index)
-                print(f"  ✗ Step {step_num + 1}: {step_name} failed after {self.MAX_RETRIES} attempts [{elapsed}s]")
+                print(f"  ✗ Step {step_num}: {step_name} failed after {self.MAX_RETRIES} attempts [{elapsed}s]")
                 print(f"    Error: {error_message}")
                 self.update_task_index("error")
                 raise SystemExit(1)
@@ -617,12 +617,12 @@ class StepExecutor:
                         self.reset_step_for_retry(current, error_message)
                         self.write_json(self.index_file, index)
                         prev_error = error_message
-                        print(f"  ↻ Step {step_num + 1}: retry {attempt}/{self.MAX_RETRIES} — {error_message}")
+                        print(f"  ↻ Step {step_num}: retry {attempt}/{self.MAX_RETRIES} — {error_message}")
                         continue
 
                     self.mark_step_error(current, error_message, timestamp)
                     self.write_json(self.index_file, index)
-                    print(f"  ✗ Step {step_num + 1}: {step_name} failed after {self.MAX_RETRIES} attempts [{elapsed}s]")
+                    print(f"  ✗ Step {step_num}: {step_name} failed after {self.MAX_RETRIES} attempts [{elapsed}s]")
                     print(f"    Error: {error_message}")
                     self.update_task_index("error")
                     raise SystemExit(1)
@@ -633,7 +633,7 @@ class StepExecutor:
                     self.mark_step_blocked_from_review(current, review.message)
                     current["blocked_at"] = timestamp
                     self.write_json(self.index_file, index)
-                    print(f"  ⏸ Step {step_num + 1}: {step_name} blocked [{elapsed}s]")
+                    print(f"  ⏸ Step {step_num}: {step_name} blocked [{elapsed}s]")
                     print(f"    Reason: {review.message}")
                     self.update_task_index("blocked")
                     raise SystemExit(2)
@@ -643,12 +643,12 @@ class StepExecutor:
                         self.reset_step_for_retry(current, error_message)
                         self.write_json(self.index_file, index)
                         prev_error = error_message
-                        print(f"  ↻ Step {step_num + 1}: retry {attempt}/{self.MAX_RETRIES} — {error_message}")
+                        print(f"  ↻ Step {step_num}: retry {attempt}/{self.MAX_RETRIES} — {error_message}")
                         continue
 
                     self.mark_step_error(current, error_message, timestamp)
                     self.write_json(self.index_file, index)
-                    print(f"  ✗ Step {step_num + 1}: {step_name} failed after {self.MAX_RETRIES} attempts [{elapsed}s]")
+                    print(f"  ✗ Step {step_num}: {step_name} failed after {self.MAX_RETRIES} attempts [{elapsed}s]")
                     print(f"    Error: {error_message}")
                     self.update_task_index("error")
                     raise SystemExit(1)
@@ -660,18 +660,18 @@ class StepExecutor:
                 except Exception as e:
                     self.mark_step_error(current, str(e), timestamp)
                     self.write_json(self.index_file, index)
-                    print(f"  ✗ Step {step_num + 1}: {step_name} — commit 실패 [{elapsed}s]")
+                    print(f"  ✗ Step {step_num}: {step_name} — commit 실패 [{elapsed}s]")
                     print(f"    Error: {e}")
                     self.update_task_index("error")
                     raise SystemExit(1)
-                print(f"  ✓ Step {step_num + 1}: {step_name} [{elapsed}s]")
+                print(f"  ✓ Step {step_num}: {step_name} [{elapsed}s]")
                 return True
 
             if status == "blocked":
                 current["blocked_at"] = timestamp
                 self.write_json(self.index_file, index)
                 reason = current.get("blocked_reason", "")
-                print(f"  ⏸ Step {step_num + 1}: {step_name} blocked [{elapsed}s]")
+                print(f"  ⏸ Step {step_num}: {step_name} blocked [{elapsed}s]")
                 print(f"    Reason: {reason}")
                 self.update_task_index("blocked")
                 raise SystemExit(2)
@@ -681,11 +681,11 @@ class StepExecutor:
                 self.reset_step_for_retry(current, error_message)
                 self.write_json(self.index_file, index)
                 prev_error = error_message
-                print(f"  ↻ Step {step_num + 1}: retry {attempt}/{self.MAX_RETRIES} — {error_message}")
+                print(f"  ↻ Step {step_num}: retry {attempt}/{self.MAX_RETRIES} — {error_message}")
             else:
                 self.mark_step_error(current, error_message, timestamp)
                 self.write_json(self.index_file, index)
-                print(f"  ✗ Step {step_num + 1}: {step_name} failed after {self.MAX_RETRIES} attempts [{elapsed}s]")
+                print(f"  ✗ Step {step_num}: {step_name} failed after {self.MAX_RETRIES} attempts [{elapsed}s]")
                 print(f"    Error: {error_message}")
                 self.update_task_index("error")
                 raise SystemExit(1)

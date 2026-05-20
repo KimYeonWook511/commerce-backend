@@ -1,4 +1,4 @@
-# Step 1: sync-root-docs
+# Step 1: product-query-api
 
 ## 읽어야 할 파일
 
@@ -9,25 +9,37 @@
 - `/docs/features/product-query/adr.md`
 - `/docs/features/product-query/api-spec.md`
 - `/docs/features/product-query/db-schema.md`
-- `/docs/api-spec.md`
 - `/docs/architecture.md`
-- `/docs/db-schema.md`
+- `/docs/api-spec.md`
+- `/src/main/java/com/commerce/product/domain/Product.java`
+- `/src/main/java/com/commerce/product/repository/ProductRepository.java`
+- `/src/main/java/com/commerce/stock/repository/StockRepository.java`
+- `/src/main/java/com/commerce/order/controller/OrderController.java`
+- `/src/main/java/com/commerce/payment/controller/PaymentController.java`
+- `/src/test/java/com/commerce/order/controller/OrderControllerTest.java`
+- `/src/test/java/com/commerce/payment/controller/PaymentControllerTest.java`
 
 이전 step에서 만들어진 코드와 feature 문서를 꼼꼼히 읽고, 설계 의도를 이해한 뒤 작업하라.
 
 ## 작업
 
-step0 구현 결과를 기준으로 루트 문서를 동기화하라.
+`product` 도메인에 공개 조회 API를 구현하라.
 
-- `docs/api-spec.md`에 `GET /products`, `GET /products/{productId}` 공개 조회 스펙을 추가하라.
-- `docs/architecture.md`에 `product` 도메인이 공개 조회 API를 제공한다는 설명을 반영하라.
-- 구현 결과와 어긋나는 문서 표현이 없게 정리하라.
+- `GET /products` 목록 조회와 `GET /products/{productId}` 상세 조회를 제공하는 controller를 추가하라.
+- controller는 인증 없이 동작해야 하며 `ApiResponse<T>` 형식으로 응답해야 한다.
+- service는 목록 조회와 상세 조회를 분리된 메서드로 제공하라.
+- 목록 조회는 `Product.createdAt DESC` 기준 최신순으로 전체 상품을 조회하고 `productId`, `name`, `price`만 반환하라.
+- 상세 조회는 상품 조회 후 `StockRepository`로 재고를 확인해 `productId`, `name`, `price`, `stockQuantity`를 반환하라.
+- 상세 조회에서 상품이 없으면 `ProductException(ProductErrorCode.PRODUCT_NOT_FOUND)`를 사용하라.
+- 상세 조회에서 재고 레코드가 없으면 `stockQuantity=0`으로 정규화하라.
+- 목록/상세 조회용 result DTO를 분리하고 엔티티를 직접 응답으로 노출하지 마라.
+- 서비스 테스트와 컨트롤러 테스트를 추가해 정렬, 공개 접근, 상세 재고, 없는 상품 예외를 검증하라.
 
 ## 수정 가능 경로
 
-- `docs/features/product-query/**`
-- `docs/api-spec.md`
-- `docs/architecture.md`
+- `src/main/java/com/commerce/product/**`
+- `src/main/java/com/commerce/auth/filter/JwtAuthenticationFilter.java`
+- `src/test/java/com/commerce/product/**`
 
 ## Acceptance Criteria
 
@@ -39,13 +51,13 @@ step0 구현 결과를 기준으로 루트 문서를 동기화하라.
 
 1. 위 Acceptance Criteria 커맨드를 실행한다.
 2. 아래를 확인한다.
-   - feature 문서와 루트 문서의 API 계약이 일치하는가?
-   - architecture.md 설명이 실제 구현과 충돌하지 않는가?
+   - architecture.md 디렉토리 구조를 따르는가?
+   - ADR 기술 스택을 벗어나지 않았는가?
    - 상위 작업 규칙을 위반하지 않았는가?
 3. 결과에 따라 step 상태를 갱신한다.
 
 ## 금지사항
 
-- 구현과 다른 내용을 루트 문서에 적지 마라. 이유: 기준 문서 오염을 방지해야 한다.
-- 새로운 기능 범위를 문서에 임의로 추가하지 마라. 이유: 이번 범위는 조회 API로 한정되어 있다.
+- 목록 응답에 재고 정보를 넣지 마라. 이유: 상세 전용 정보로 분리하기로 결정했다.
+- 조회 API에 인증 의존성을 추가하지 마라. 이유: 공개 API로 합의했다.
 - 기존 테스트를 깨뜨리지 마라

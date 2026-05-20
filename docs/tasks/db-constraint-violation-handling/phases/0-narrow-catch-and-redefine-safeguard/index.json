@@ -3,7 +3,7 @@
   "phase": "0-narrow-catch-and-redefine-safeguard",
   "steps": [
     {
-      "step": 0,
+      "step": 1,
       "name": "narrow-application-catch",
       "status": "completed",
       "started_at": "2026-05-18T18:11:46+0900",
@@ -11,7 +11,7 @@
       "completed_at": "2026-05-18T18:25:20+0900"
     },
     {
-      "step": 1,
+      "step": 2,
       "name": "redefine-safeguard-handler",
       "status": "completed",
       "started_at": "2026-05-18T18:28:17+0900",
@@ -19,7 +19,7 @@
       "completed_at": "2026-05-18T18:34:17+0900"
     },
     {
-      "step": 2,
+      "step": 3,
       "name": "add-testcontainers-regression",
       "status": "completed",
       "started_at": "2026-05-18T18:35:39+0900",
@@ -27,7 +27,7 @@
       "completed_at": "2026-05-18T19:07:52+0900"
     },
     {
-      "step": 3,
+      "step": 4,
       "name": "sync-root-docs",
       "status": "completed",
       "started_at": "2026-05-18T19:09:47+0900",
@@ -35,7 +35,7 @@
       "completed_at": "2026-05-18T19:10:56+0900"
     },
     {
-      "step": 4,
+      "step": 5,
       "name": "write-retrospective",
       "status": "completed",
       "started_at": "2026-05-18T19:11:48+0900",

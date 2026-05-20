@@ -52,9 +52,9 @@ step 실행 상태 파일이다.
   "project": "<project-name>",
   "phase": "<phase-name>",
   "steps": [
-    { "step": 0, "name": "project-setup", "status": "pending" },
-    { "step": 1, "name": "core-types", "status": "pending" },
-    { "step": 2, "name": "api-layer", "status": "pending" }
+    { "step": 1, "name": "project-setup", "status": "pending" },
+    { "step": 2, "name": "core-types", "status": "pending" },
+    { "step": 3, "name": "api-layer", "status": "pending" }
   ]
 }
 ```
@@ -63,7 +63,7 @@ step 실행 상태 파일이다.
 
 - `project`: 프로젝트명
 - `phase`: phase 이름이며 디렉토리명과 일치해야 한다
-- `steps[].step`: 0부터 시작하는 순번
+- `steps[].step`: 1부터 시작하는 순번
 - `steps[].name`: kebab-case slug
 - `steps[].status`: 초기값은 모두 `pending`
 

@@ -1,4 +1,4 @@
-# Step 1: concurrency-test
+# Step 1: amount-mismatch-policy
 
 ## 읽어야 할 파일
 
@@ -6,79 +6,130 @@
 
 - `docs/features/payment-attempt-idempotency/prd.md`
 - `docs/features/payment-attempt-idempotency/architecture.md`
+- `docs/features/payment-attempt-idempotency/adr.md`
 
 그 다음 실제 수정 대상 파일을 읽어라:
 
-- `src/main/java/com/commerce/payment/application/PaymentAttemptService.java` (step0에서 수정된 상태)
-- `src/test/java/com/commerce/payment/application/concurrency/PaymentAttemptServiceConcurrencyTest.java`
+- `src/main/java/com/commerce/payment/exception/PaymentErrorCode.java`
+- `src/main/java/com/commerce/payment/application/PaymentAttemptService.java`
+- `src/test/java/com/commerce/payment/application/PaymentAttemptServiceTest.java`
 
 ## 작업
 
-`PaymentAttemptServiceConcurrencyTest`에 동시 다른 amount 시나리오 2개를 추가한다.
+### 1. `PaymentErrorCode.java` — 신규 enum 값 추가
 
-### 패턴
-
-기존 동시성 테스트는 모든 스레드가 같은 amount로 시도해 1건만 저장됨을 검증한다.
-이번 테스트는 **미리 저장된 attempt(amount=X)에 대해 다른 amount(Y)로 동시 재요청**을 보내 모두 mismatch 예외를 받는지 검증한다.
-
-### 추가 테스트 1: APPROVE amount mismatch
+기존 409 코드 목록(`PAYMENT_STATUS_NOT_ALLOWED`, `PAYMENT_DUPLICATE`) 뒤에 아래를 추가한다:
 
 ```java
-@DisplayName("기존 승인 attempt와 다른 금액으로 동시 요청하면 모두 금액 불일치 예외가 발생한다")
-@Test
-void getOrCreateApproveAttempt_whenConcurrentRequestWithDifferentAmount_allThrowAmountMismatch() throws Exception {
-    // given: amount=1000으로 approve attempt 선행 생성
-    String merchantPayKey = "PAY-ATTEMPT-MISMATCH-1";
-    String paymentId = "pg-attempt-mismatch-1";
-    paymentAttemptService.getOrCreateApproveAttempt(
-        merchantPayKey, PaymentProvider.NAVERPAY, paymentId, 1000);
+PAYMENT_ATTEMPT_AMOUNT_MISMATCH(HttpStatus.CONFLICT, "PAYMENT-409-3",
+    "결제 시도 이력의 금액과 요청 금액이 일치하지 않습니다"),
+```
 
-    ConcurrentLinkedQueue<Throwable> errors = new ConcurrentLinkedQueue<>();
+### 2. `PaymentAttemptService.java` — catch 블록 보강
 
-    // when: 20개 스레드가 amount=2000으로 동시 재요청 (mismatch)
-    runConcurrent(20, () -> paymentAttemptService.getOrCreateApproveAttempt(
-        merchantPayKey, PaymentProvider.NAVERPAY, paymentId, 2000), errors);
+클래스에 `@Slf4j`를 추가한다.
 
-    // then: attempt는 1건, 재요청 20개 모두 mismatch 예외
-    assertThat(paymentPersistence.countAttempts(merchantPayKey, paymentId, PaymentAttemptType.APPROVE))
-        .isEqualTo(1L);
-    assertThat(errors).hasSize(20);
-    errors.forEach(e -> {
-        assertThat(e).isInstanceOf(PaymentException.class);
-        assertThat(((PaymentException) e).getErrorCode())
-            .isEqualTo(PaymentErrorCode.PAYMENT_ATTEMPT_AMOUNT_MISMATCH);
-    });
+`getOrCreateApproveAttempt` catch 블록을 아래와 같이 교체한다:
+
+```java
+} catch (DataIntegrityViolationException ex) {
+    PaymentAttempt existing = paymentAttemptRepository
+        .findApproveAttempt(merchantPayKey, provider, paymentId)
+        .orElseThrow(() -> {
+            log.error("unique 충돌 후 approve attempt 재조회 실패: merchantPayKey={}, paymentId={}",
+                merchantPayKey, paymentId, ex);
+            return new PaymentException(PaymentErrorCode.PAYMENT_ATTEMPT_NOT_FOUND);
+        });
+    if (existing.getAmount() != amount) {
+        log.warn("PaymentAttempt amount mismatch — key={}, type=APPROVE, existing={}, requested={}",
+            merchantPayKey, existing.getAmount(), amount);
+        throw new PaymentException(PaymentErrorCode.PAYMENT_ATTEMPT_AMOUNT_MISMATCH);
+    }
+    return existing;
 }
 ```
 
-### 추가 테스트 2: CANCEL amount mismatch
+`getOrCreateCancelAttempt` catch 블록도 동일 패턴으로 교체한다 (`findCancelAttempt` 사용, log 메시지에 `type=CANCEL`).
 
-동일 패턴. merchantPayKey, paymentId, 스레드 수 등은 겹치지 않는 별도 키를 사용한다.
+### 3. `PaymentAttemptServiceTest.java` — 테스트 추가/수정
+
+**추가 (2건)**:
+
+```java
+@DisplayName("승인 시도 생성 중 유니크 충돌이 나고 기존 amount와 다르면 예외를 던진다")
+@Test
+void getOrCreateApproveAttempt_whenDuplicateOnSaveWithDifferentAmount_throwAmountMismatch() {
+    // given
+    PaymentAttempt existing = PaymentAttempt.createApproveRequested(
+        "PAY-1", "payment-id-1", 1000, PaymentProvider.NAVERPAY);
+    given(paymentAttemptRepository.findApproveAttempt(
+        eq("PAY-1"), eq(PaymentProvider.NAVERPAY), eq("payment-id-1")))
+        .willReturn(Optional.of(existing));
+    given(paymentAttemptRepository.save(any(PaymentAttempt.class)))
+        .willThrow(new DataIntegrityViolationException("duplicate key"));
+
+    // when & then
+    assertThatThrownBy(() -> paymentAttemptService.getOrCreateApproveAttempt(
+        "PAY-1", PaymentProvider.NAVERPAY, "payment-id-1", 2000))
+        .isInstanceOf(PaymentException.class)
+        .extracting(e -> ((PaymentException) e).getErrorCode())
+        .isEqualTo(PaymentErrorCode.PAYMENT_ATTEMPT_AMOUNT_MISMATCH);
+}
+```
+
+cancel 동일 패턴 (`getOrCreateCancelAttempt_whenDuplicateOnSaveWithDifferentAmount_throwAmountMismatch`).
+
+**수정 (1건)**:
+
+`getOrCreateCancelAttempt_whenDuplicateOnSaveAndRefetchMissing_throwException` (line 117–131):
+- 기존: `.isInstanceOf(DataIntegrityViolationException.class)` 기대
+- 변경: `.isInstanceOf(PaymentException.class)` + `.extracting(e -> ((PaymentException) e).getErrorCode()).isEqualTo(PaymentErrorCode.PAYMENT_ATTEMPT_NOT_FOUND)` 기대
+
+## 커밋 분리
+
+이 step에서 두 개의 커밋을 분리해 생성한다.
+
+**커밋 1**: 정책 변경
+
+```
+fix: PaymentAttempt 멱등 재요청의 금액 불일치를 명시적 예외로 처리한다
+```
+
+포함 파일:
+- `src/main/java/com/commerce/payment/exception/PaymentErrorCode.java`
+- `src/main/java/com/commerce/payment/application/PaymentAttemptService.java` (catch 블록 + @Slf4j)
+- `src/test/java/com/commerce/payment/application/PaymentAttemptServiceTest.java`
+
+**커밋 2**: 명명 통일 (별도 목적)
+
+```
+refactor: PaymentAttemptService 파라미터 명명을 엔티티 기준으로 통일한다
+```
+
+포함 파일:
+- `src/main/java/com/commerce/payment/application/PaymentAttemptService.java` (파라미터 명명만)
+
+변경 대상: `succeedApproveAttempt`, `failApproveAttempt`의 `pgPaymentId` 파라미터 → `paymentId`.
+내부 변수명도 함께 변경.
+`succeedCancelAttempt`, `failCancelAttempt`는 이미 `paymentId` 사용 중 — 변경 없음.
 
 ## Acceptance Criteria
 
 ```bash
-./gradlew dockerTest --tests "com.commerce.payment.application.concurrency.PaymentAttemptServiceConcurrencyTest"
+./gradlew test
 ```
-
-이 테스트는 Docker가 필요하다. `@Tag("concurrency")` `@Tag("docker")`가 붙어 있으므로 `dockerTest` 태스크로만 실행된다.
 
 ## 검증 절차
 
 1. 위 명령을 실행한다.
 2. 아래를 확인한다:
-   - 기존 2개 동시성 케이스(같은 amount) 회귀 없음
-   - 새로 추가한 2개 케이스(다른 amount) 모두 통과
-   - errors queue 크기가 정확히 20인지 확인
+   - `PaymentAttemptServiceTest` 전체 통과
+   - `NaverPay` 관련 기존 테스트 회귀 없음
+   - 새로 추가된 2개 케이스와 수정된 1개 케이스가 모두 통과
 3. 결과에 따라 step 상태를 갱신한다.
-
-## 커밋
-
-```
-test: PaymentAttempt 멱등 재요청 금액 불일치 동시성 테스트를 추가한다
-```
 
 ## 금지사항
 
-- 기존 동시성 테스트 케이스를 수정하거나 삭제하지 마라. 이유: 같은 amount 재요청은 기존 동작(정상 반환)이 유지되어야 한다.
-- `@Tag` 어노테이션을 임의로 제거하지 마라. 이유: 동시성 테스트는 Docker 환경에서만 실행하도록 분리되어 있다.
+- `Payment.pgPaymentId` 필드와 `NaverPayApproveResponse.pgPaymentId`를 변경하지 마라. 이유: 내부 도메인 명명(`pgPaymentId`)과 PG API 스펙 명명(`paymentId`)은 의도된 분리다.
+- `PAYMENT_AMOUNT_MISMATCH`를 재사용하지 마라. 이유: PG 응답 mismatch(외부 원인)와 호출자 측 mismatch(내부 원인)는 의미와 모니터링 기준이 다르다.
+- 기존 "같은 amount 재조회 반환" 테스트를 깨뜨리지 마라.
