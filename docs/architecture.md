@@ -80,7 +80,7 @@ Port 인터페이스 설계 원칙:
 | product | `ProductQueryService`, `AdminProductService` |
 | stock | `StockInventoryService`, `AdminStockService`, `StockConcurrencyService` |
 | order | `OrderCreateService`, `OrderCancelService`, `OrderQueryService`, `OrderExpirationService`, `OrderConcurrencyService` |
-| payment | `PaymentReadyService`, `PaymentApprovalService`, `PaymentAttemptService` |
+| payment | `PaymentReadyService`, `PaymentApprovalService`, `PaymentApprovalAttemptService`, `PaymentCancellationAttemptService` |
 | naverpay | `NaverPayApprovalService` |
 | outbox/stock | `StockRestoreOutboxCreateService`, `StockRestoreOutboxRelayService`, `StockRestoreOutboxConsumeService` |
 
@@ -107,7 +107,8 @@ OrderController → OrderCreateService
 NaverPayController → NaverPayApprovalService
   → NaverPayGateway (PG 호출, 응답 코드 매핑)
   → PaymentApprovalService (결제 완료 반영, 보상 가능 여부 판단)
-  → PaymentAttemptService (시도 이력 기록)
+  → PaymentApprovalAttemptService (승인 시도 이력 기록)
+  → PaymentCancellationAttemptService (취소 시도 이력 기록, 보상 흐름)
 
 # 주문 만료 배치
 OrderExpirationBatchConfig (Spring Batch)
