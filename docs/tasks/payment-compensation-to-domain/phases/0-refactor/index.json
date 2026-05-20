@@ -2,9 +2,29 @@
   "project": "payment-compensation-to-domain",
   "phase": "0-refactor",
   "steps": [
-    { "step": 0, "name": "introduce-pg-canceller-port", "status": "pending" },
-    { "step": 1, "name": "move-compensation-dispatcher", "status": "pending" },
-    { "step": 2, "name": "sync-root-docs", "status": "pending" },
-    { "step": 3, "name": "write-retrospective", "status": "pending" }
-  ]
+    {
+      "step": 0,
+      "name": "introduce-pg-canceller-port",
+      "status": "completed",
+      "started_at": "2026-05-20T18:04:21+0900",
+      "summary": "PgCanceller @FunctionalInterface와 CancelOutcome record를 payment.application.port 패키지에 신설한다. CancelOutcome은 Status enum(SUCCESS/PROCESSING/FAILED)과 정적 팩토리 3개(success/processing/failed)를 포함한다. 기존 테스트 전체 통과.",
+      "completed_at": "2026-05-20T18:05:23+0900"
+    },
+    {
+      "step": 1,
+      "name": "move-compensation-dispatcher",
+      "status": "pending"
+    },
+    {
+      "step": 2,
+      "name": "sync-root-docs",
+      "status": "pending"
+    },
+    {
+      "step": 3,
+      "name": "write-retrospective",
+      "status": "pending"
+    }
+  ],
+  "created_at": "2026-05-20T18:04:21+0900"
 }

@@ -1,5 +1,9 @@
 {
   "phases": [
-    { "dir": "0-refactor", "status": "pending" }
+    {
+      "dir": "0-refactor",
+      "status": "in_progress",
+      "started_at": "2026-05-20T18:04:21+0900"
+    }
   ]
 }
