@@ -42,8 +42,8 @@ import com.commerce.payment.naverpay.application.port.NaverPayGateway;
 import com.commerce.payment.naverpay.application.port.result.NaverPayApproveResult;
 import com.commerce.payment.naverpay.application.port.result.NaverPayCancelResult;
 import com.commerce.payment.naverpay.application.port.result.NaverPayHistoryResult;
-import com.commerce.payment.application.PaymentAttemptService;
 import com.commerce.payment.application.PaymentApprovalService;
+import com.commerce.payment.application.PaymentCancellationAttemptService;
 import com.commerce.payment.infrastructure.persistence.support.PaymentPersistenceTestSupport;
 import com.commerce.member.infrastructure.persistence.support.MemberPersistenceTestSupport;
 import com.commerce.order.infrastructure.persistence.support.OrderPersistenceTestSupport;
@@ -78,17 +78,17 @@ class NaverPayServiceIntegrationTest {
 	@MockitoSpyBean
 	private PaymentApprovalService paymentApprovalService;
 
-	// succeedCancelAttempt / failCancelAttempt 강제 예외 주입 시나리오용 spy.
+	// succeed / fail 강제 예외 주입 시나리오용 spy.
 	// find-first 리팩토링 이후 H2 우회용 getOrCreate*Attempt doReturn 스텁은 모두 제거됐다.
 	@MockitoSpyBean
-	private PaymentAttemptService paymentAttemptService;
+	private PaymentCancellationAttemptService paymentCancellationAttemptService;
 
 	@Autowired
 	private PersistenceCleanupTestSupport persistenceCleanup;
 
 	@AfterEach
 	void tearDown() {
-		Mockito.reset(naverPayGateway, paymentApprovalService, paymentAttemptService);
+		Mockito.reset(naverPayGateway, paymentApprovalService, paymentCancellationAttemptService);
 		persistenceCleanup.deleteAllInBatch(
 			paymentPersistence, memberPersistence, productPersistence, orderPersistence
 		);
@@ -684,8 +684,8 @@ class NaverPayServiceIntegrationTest {
 		given(naverPayGateway.cancel(any(), anyInt(), any()))
 			.willReturn(NaverPayCancelResult.success());
 		Mockito.doThrow(new PaymentException(PaymentErrorCode.PAYMENT_ATTEMPT_NOT_FOUND))
-			.when(paymentAttemptService)
-			.succeedCancelAttempt(eq("PAY-INT-9-2"), eq(PaymentProvider.NAVERPAY), eq("pg-int-9-2"), any(LocalDateTime.class));
+			.when(paymentCancellationAttemptService)
+			.succeed(eq("PAY-INT-9-2"), eq(PaymentProvider.NAVERPAY), eq("pg-int-9-2"), any(LocalDateTime.class));
 
 		// when & then
 		assertThatThrownBy(() -> naverPayApprovalService.approve(member.getId(), "PAY-INT-9-2", "pg-int-9-2"))
@@ -706,8 +706,8 @@ class NaverPayServiceIntegrationTest {
 		given(naverPayGateway.cancel(any(), anyInt(), any()))
 			.willReturn(NaverPayCancelResult.failed(PaymentAttemptFailCode.PG_REQUEST_REJECTED, "기타 실패"));
 		Mockito.doThrow(new PaymentException(PaymentErrorCode.PAYMENT_ATTEMPT_NOT_FOUND))
-			.when(paymentAttemptService)
-			.failCancelAttempt(
+			.when(paymentCancellationAttemptService)
+			.fail(
 				eq("PAY-INT-9-3"),
 				eq(PaymentProvider.NAVERPAY),
 				eq("pg-int-9-3"),

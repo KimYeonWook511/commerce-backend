@@ -25,6 +25,7 @@ import com.commerce.payment.domain.Payment;
 import com.commerce.payment.domain.PaymentProvider;
 import com.commerce.payment.domain.PaymentStatus;
 import com.commerce.payment.domain.repository.PaymentRepository;
+import com.commerce.payment.application.PaymentApprovalAttemptService;
 import com.commerce.payment.exception.PaymentErrorCode;
 import com.commerce.payment.exception.PaymentException;
 import com.commerce.product.domain.Product;
@@ -40,7 +41,7 @@ class PaymentApprovalServiceTest {
 	private PaymentRepository paymentRepository;
 
 	@Mock
-	private PaymentAttemptService paymentAttemptService;
+	private PaymentApprovalAttemptService paymentApprovalAttemptService;
 
 	@InjectMocks
 	private PaymentApprovalService paymentApprovalService;
@@ -93,7 +94,7 @@ class PaymentApprovalServiceTest {
 
 		assertThat(result).isEqualTo(payment);
 		then(orderRepository).should().findByMerchantPayKeyForUpdate("PAY-1");
-		then(paymentAttemptService).should().succeedApproveAttempt(
+		then(paymentApprovalAttemptService).should().succeed(
 			"PAY-1",
 			PaymentProvider.NAVERPAY,
 			"pg-payment-id",
