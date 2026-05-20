@@ -149,5 +149,4 @@ public class PaymentAttempt extends BaseTimeEntity {
 			.status(PaymentAttemptStatus.REQUESTED)
 			.build();
 	}
-
 }
