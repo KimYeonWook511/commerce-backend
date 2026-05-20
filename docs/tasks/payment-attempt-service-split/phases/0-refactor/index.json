@@ -13,7 +13,10 @@
     {
       "step": 1,
       "name": "split-payment-attempt-service",
-      "status": "pending"
+      "status": "completed",
+      "started_at": "2026-05-20T16:48:47+0900",
+      "summary": "PaymentAttemptService를 PaymentApprovalAttemptService와 PaymentCancellationAttemptService로 분리하고 PaymentAttemptService.java를 삭제한다. PaymentApprovalService와 NaverPayApprovalService의 의존성을 새 Service로 교체한다. 테스트를 분할(PaymentApprovalAttemptServiceTest, PaymentCancellationAttemptServiceTest, PaymentApprovalAttemptServiceConcurrencyTest, PaymentCancellationAttemptServiceConcurrencyTest)하고 기존 테스트를 삭제한다. PaymentApprovalServiceTest, NaverPayApprovalServiceTest, NaverPayServiceIntegrationTest를 갱신한다.",
+      "completed_at": "2026-05-20T17:01:50+0900"
     },
     {
       "step": 2,
