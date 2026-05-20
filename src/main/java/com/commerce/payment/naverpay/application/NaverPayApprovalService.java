@@ -131,9 +131,11 @@ public class NaverPayApprovalService {
 			return toResponse(completed);
 		} catch (PaymentException ex) {
 			log.error(
-				"NaverPay approve complete failed by payment error: merchantPayKey={}, paymentId={}, errorCode={}",
+				"NaverPay approve complete failed by payment error: merchantPayKey={}, paymentId={}, responseMerchantPayKey={}, responseTotalAmount={}, errorCode={}",
 				attempt.getMerchantPayKey(),
 				attempt.getPaymentId(),
+				responseMerchantPayKey,
+				responseTotalAmount,
 				ex.getErrorCode(),
 				ex
 			);
