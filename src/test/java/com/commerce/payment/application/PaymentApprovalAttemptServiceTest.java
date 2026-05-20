@@ -21,6 +21,7 @@ import org.mockito.junit.jupiter.MockitoExtension;
 import com.commerce.payment.domain.PaymentAttempt;
 import com.commerce.payment.domain.PaymentAttemptFailCode;
 import com.commerce.payment.domain.PaymentAttemptStatus;
+import com.commerce.payment.domain.PaymentAttemptType;
 import com.commerce.payment.domain.PaymentProvider;
 import com.commerce.payment.domain.repository.PaymentAttemptRepository;
 import com.commerce.payment.exception.PaymentErrorCode;
@@ -51,6 +52,7 @@ class PaymentApprovalAttemptServiceTest {
 
 		// then
 		assertThat(result.getStatus()).isEqualTo(PaymentAttemptStatus.REQUESTED);
+		assertThat(result.getType()).isEqualTo(PaymentAttemptType.APPROVE);
 		assertThat(result.getAmount()).isEqualTo(1000);
 	}
 
