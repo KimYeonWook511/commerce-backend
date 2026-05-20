@@ -22,13 +22,13 @@ import lombok.RequiredArgsConstructor;
 
 @Service
 @RequiredArgsConstructor
-@Transactional(readOnly = true)
 public class PaymentApprovalService {
 
 	private final OrderRepository orderRepository;
 	private final PaymentRepository paymentRepository;
-	private final PaymentAttemptService paymentAttemptService;
+	private final PaymentApprovalAttemptService paymentApprovalAttemptService;
 
+	@Transactional(readOnly = true)
 	public Optional<Payment> findPaymentByMerchantPayKey(String merchantPayKey) {
 		return paymentRepository.findByMerchantPayKey(merchantPayKey);
 	}
@@ -56,7 +56,7 @@ public class PaymentApprovalService {
 			.orElse(null);
 
 		// 결제 시도 완료 처리
-		paymentAttemptService.succeedApproveAttempt(merchantPayKey, provider, pgPaymentId, approvedAt);
+		paymentApprovalAttemptService.succeed(merchantPayKey, provider, pgPaymentId, approvedAt);
 
 		if (completedPayment != null) {
 			return completedPayment; // 이미 해당 결제로 성공한 payment 반환

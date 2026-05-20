@@ -20,8 +20,7 @@ import lombok.extern.slf4j.Slf4j;
 @Slf4j
 @Service
 @RequiredArgsConstructor
-@Transactional(readOnly = true)
-public class PaymentAttemptService {
+public class PaymentApprovalAttemptService {
 
 	private final PaymentAttemptRepository paymentAttemptRepository;
 
@@ -29,7 +28,7 @@ public class PaymentAttemptService {
 	 * - 해당 메소드는 트랜잭션을 열지 않음 (Repository에 있는 @Transactional 사용)
 	 */
 	@Transactional(propagation = Propagation.NOT_SUPPORTED)
-	public PaymentAttempt getOrCreateApproveAttempt(
+	public PaymentAttempt getOrCreate(
 		String merchantPayKey,
 		PaymentProvider provider,
 		String paymentId,
@@ -49,32 +48,8 @@ public class PaymentAttemptService {
 			));
 	}
 
-	/**
-	 * - 해당 메소드는 트랜잭션을 열지 않음 (Repository에 있는 @Transactional 사용)
-	 */
-	@Transactional(propagation = Propagation.NOT_SUPPORTED)
-	public PaymentAttempt getOrCreateCancelAttempt(
-		String merchantPayKey,
-		PaymentProvider provider,
-		String paymentId,
-		int cancelAmount
-	) {
-		return paymentAttemptRepository.findCancelAttempt(merchantPayKey, provider, paymentId)
-			.map(existing -> {
-				if (existing.getAmount() != cancelAmount) {
-					log.warn("PaymentAttempt amount mismatch - key={}, type=CANCEL, existingAmount={}, requested={}",
-						merchantPayKey, existing.getAmount(), cancelAmount);
-					throw new PaymentException(PaymentErrorCode.PAYMENT_ATTEMPT_AMOUNT_MISMATCH);
-				}
-				return existing;
-			})
-			.orElseGet(() -> paymentAttemptRepository.save(
-				PaymentAttempt.createCancelRequested(merchantPayKey, paymentId, cancelAmount, provider)
-			));
-	}
-
 	@Transactional
-	public void succeedApproveAttempt(
+	public void succeed(
 		String merchantPayKey,
 		PaymentProvider provider,
 		String paymentId,
@@ -86,7 +61,7 @@ public class PaymentAttemptService {
 	}
 
 	@Transactional
-	public void failApproveAttempt(
+	public void fail(
 		String merchantPayKey,
 		PaymentProvider provider,
 		String paymentId,
@@ -104,7 +79,7 @@ public class PaymentAttemptService {
 	 * 호출처(catch 블록)가 상태를 확인하거나 try-catch로 mark 예외를 잡지 않도록 의도를 캡슐화한다.
 	 */
 	@Transactional
-	public void failApproveAttemptIfRequested(
+	public void failIfRequested(
 		String merchantPayKey,
 		PaymentProvider provider,
 		String paymentId,
@@ -126,32 +101,6 @@ public class PaymentAttemptService {
 				merchantPayKey, paymentId, attempt.getStatus());
 			return;
 		}
-		attempt.fail(failCode, failDetail, respondedAt);
-	}
-
-	@Transactional
-	public void succeedCancelAttempt(
-		String merchantPayKey,
-		PaymentProvider provider,
-		String paymentId,
-		LocalDateTime respondedAt
-	) {
-		PaymentAttempt attempt = paymentAttemptRepository.findCancelAttempt(merchantPayKey, provider, paymentId)
-			.orElseThrow(() -> new PaymentException(PaymentErrorCode.PAYMENT_ATTEMPT_NOT_FOUND));
-		attempt.succeed(respondedAt);
-	}
-
-	@Transactional
-	public void failCancelAttempt(
-		String merchantPayKey,
-		PaymentProvider provider,
-		String paymentId,
-		PaymentAttemptFailCode failCode,
-		String failDetail,
-		LocalDateTime respondedAt
-	) {
-		PaymentAttempt attempt = paymentAttemptRepository.findCancelAttempt(merchantPayKey, provider, paymentId)
-			.orElseThrow(() -> new PaymentException(PaymentErrorCode.PAYMENT_ATTEMPT_NOT_FOUND));
 		attempt.fail(failCode, failDetail, respondedAt);
 	}
 }
