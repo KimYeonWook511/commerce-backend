@@ -180,7 +180,7 @@ public class NaverPayApprovalService {
 		}
 	}
 
-	CancelOutcome pgCancel(PaymentAttempt cancelAttempt, String cancelReason) {
+	private CancelOutcome pgCancel(PaymentAttempt cancelAttempt, String cancelReason) {
 		NaverPayCancelResult result = naverPayGateway.cancel(
 			cancelAttempt.getPaymentId(), cancelAttempt.getAmount(), cancelReason
 		);

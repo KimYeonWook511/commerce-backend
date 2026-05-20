@@ -764,7 +764,7 @@ class NaverPayApprovalServiceTest {
 		PaymentAttempt cancelAttempt = PaymentAttempt.createCancelRequested("PAY-1", "pg-id", 1000, PaymentProvider.NAVERPAY);
 		given(naverPayGateway.cancel("pg-id", 1000, "취소 사유")).willReturn(NaverPayCancelResult.success());
 
-		CancelOutcome outcome = naverPayApprovalService.pgCancel(cancelAttempt, "취소 사유");
+		CancelOutcome outcome = ReflectionTestUtils.invokeMethod(naverPayApprovalService, "pgCancel", cancelAttempt, "취소 사유");
 
 		assertThat(outcome.status()).isEqualTo(CancelOutcome.Status.SUCCESS);
 	}
@@ -775,7 +775,7 @@ class NaverPayApprovalServiceTest {
 		PaymentAttempt cancelAttempt = PaymentAttempt.createCancelRequested("PAY-1", "pg-id", 1000, PaymentProvider.NAVERPAY);
 		given(naverPayGateway.cancel("pg-id", 1000, "취소 사유")).willReturn(NaverPayCancelResult.alreadyCanceled());
 
-		CancelOutcome outcome = naverPayApprovalService.pgCancel(cancelAttempt, "취소 사유");
+		CancelOutcome outcome = ReflectionTestUtils.invokeMethod(naverPayApprovalService, "pgCancel", cancelAttempt, "취소 사유");
 
 		assertThat(outcome.status()).isEqualTo(CancelOutcome.Status.SUCCESS);
 	}
@@ -786,7 +786,7 @@ class NaverPayApprovalServiceTest {
 		PaymentAttempt cancelAttempt = PaymentAttempt.createCancelRequested("PAY-1", "pg-id", 1000, PaymentProvider.NAVERPAY);
 		given(naverPayGateway.cancel("pg-id", 1000, "취소 사유")).willReturn(NaverPayCancelResult.processing());
 
-		CancelOutcome outcome = naverPayApprovalService.pgCancel(cancelAttempt, "취소 사유");
+		CancelOutcome outcome = ReflectionTestUtils.invokeMethod(naverPayApprovalService, "pgCancel", cancelAttempt, "취소 사유");
 
 		assertThat(outcome.status()).isEqualTo(CancelOutcome.Status.PROCESSING);
 	}
@@ -798,7 +798,7 @@ class NaverPayApprovalServiceTest {
 		given(naverPayGateway.cancel("pg-id", 1000, "취소 사유"))
 			.willReturn(NaverPayCancelResult.failed(PaymentAttemptFailCode.PG_REQUEST_REJECTED, "reject reason"));
 
-		CancelOutcome outcome = naverPayApprovalService.pgCancel(cancelAttempt, "취소 사유");
+		CancelOutcome outcome = ReflectionTestUtils.invokeMethod(naverPayApprovalService, "pgCancel", cancelAttempt, "취소 사유");
 
 		assertThat(outcome.status()).isEqualTo(CancelOutcome.Status.FAILED);
 		assertThat(outcome.failCode()).isEqualTo(PaymentAttemptFailCode.PG_REQUEST_REJECTED);
