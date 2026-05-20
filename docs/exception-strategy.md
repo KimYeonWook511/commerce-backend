@@ -22,7 +22,7 @@ DB find → 없으면 insert → 충돌 시 500
 1. **트랜잭션이 짧다** — race window 가 좁아 안전망 500 의 발생률이 무시 가능한 수준이다.
 2. **정상 흐름에서 동시 충돌 확률이 낮다** — 사용자 입력 식별자(email, merchantPayKey) 나 idempotency key 기반 unique.
 
-조건을 만족하는 현재 적용 대상은 `MemberRegistrationService`, `PaymentApprovalService`, `PaymentAttemptService`, `OrderCreateService`, `StockRestoreOutboxConsumeService` 5곳이다.
+조건을 만족하는 현재 적용 대상은 `MemberRegistrationService`, `PaymentApprovalService`, `PaymentApprovalAttemptService`, `PaymentCancellationAttemptService`, `OrderCreateService`, `StockRestoreOutboxConsumeService` 6곳이다.
 
 **비적용 상황**: 충돌이 잦을 것으로 예상되는 시나리오(예: 캐시 미스 후 동시 다발 insert, 대규모 일괄 처리 race) 에는 본 정책을 적용하지 않고 **try-save-catch** 패턴이 더 적합하다. 향후 새 unique 제약을 도입할 때 위 두 조건으로 패턴을 선택하며, try-save-catch 를 선택하더라도 인프라 예외 타입(`DuplicateKeyException` 등) 에 직접 의존하지 않도록 처리한다.
 
@@ -76,5 +76,5 @@ catch 안에서 호출하는 메서드는 가급적 예외를 던지지 않게 �
 ### 적용 예
 
 - `NaverPayApprovalService.completeVerifiedApproval`의 상위 catch(`PaymentException`, `CustomException`, `Exception`)는 모두 진입 직후 1차 예외를 `log.error`로 남긴다.
-- `PaymentAttemptService.failApproveAttemptIfRequested`는 보상 흐름에서 "현재 상태가 REQUESTED면 실패 처리, 아니면 skip" 의도를 캡슐화해 호출처(`NaverPayApprovalService.failApproveAndCancelApprovedPayment`)가 try-catch 없이 평탄하게 보상을 진행하도록 한다.
+- `PaymentApprovalAttemptService.failIfRequested`는 보상 흐름에서 "현재 상태가 REQUESTED면 실패 처리, 아니면 skip" 의도를 캡슐화해 호출처(`NaverPayApprovalService.failApproveAndCancelApprovedPayment`)가 try-catch 없이 평탄하게 보상을 진행하도록 한다.
 - `PaymentApprovalService.isCompensationRequired`는 보상 진행 여부를 Payment Aggregate 소유자가 결정하도록 캡슐화해 NaverPay adapter가 Payment 저장소에 직접 접근하지 않도록 한다.

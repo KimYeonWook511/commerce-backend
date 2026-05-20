@@ -105,10 +105,7 @@ public class PaymentAttempt extends BaseTimeEntity {
 			.build();
 	}
 
-	public void markApproveSucceeded(LocalDateTime respondedAt) {
-		if (this.type != PaymentAttemptType.APPROVE) {
-			throw new PaymentException(PaymentErrorCode.PAYMENT_ATTEMPT_TYPE_MISMATCH);
-		}
+	public void succeed(LocalDateTime respondedAt) {
 		if (this.status != PaymentAttemptStatus.REQUESTED) {
 			throw new PaymentException(PaymentErrorCode.PAYMENT_ATTEMPT_STATUS_TRANSITION_NOT_ALLOWED);
 		}
@@ -118,10 +115,7 @@ public class PaymentAttempt extends BaseTimeEntity {
 		this.respondedAt = respondedAt;
 	}
 
-	public void markApproveFailed(PaymentAttemptFailCode failCode, String failDetail, LocalDateTime respondedAt) {
-		if (this.type != PaymentAttemptType.APPROVE) {
-			throw new PaymentException(PaymentErrorCode.PAYMENT_ATTEMPT_TYPE_MISMATCH);
-		}
+	public void fail(PaymentAttemptFailCode failCode, String failDetail, LocalDateTime respondedAt) {
 		if (this.status != PaymentAttemptStatus.REQUESTED) {
 			throw new PaymentException(PaymentErrorCode.PAYMENT_ATTEMPT_STATUS_TRANSITION_NOT_ALLOWED);
 		}
@@ -129,6 +123,15 @@ public class PaymentAttempt extends BaseTimeEntity {
 		this.failCode = failCode;
 		this.failDetail = failDetail;
 		this.respondedAt = respondedAt;
+	}
+
+	public void verifyApprovedResponse(String responseMerchantPayKey, int responseTotalAmount) {
+		if (!this.merchantPayKey.equals(responseMerchantPayKey)) {
+			throw new PaymentException(PaymentErrorCode.PAYMENT_MERCHANT_KEY_MISMATCH);
+		}
+		if (this.amount != responseTotalAmount) {
+			throw new PaymentException(PaymentErrorCode.PAYMENT_AMOUNT_MISMATCH);
+		}
 	}
 
 	public static PaymentAttempt createCancelRequested(
@@ -145,31 +148,5 @@ public class PaymentAttempt extends BaseTimeEntity {
 			.type(PaymentAttemptType.CANCEL)
 			.status(PaymentAttemptStatus.REQUESTED)
 			.build();
-	}
-
-	public void markCancelSucceeded(LocalDateTime respondedAt) {
-		if (this.type != PaymentAttemptType.CANCEL) {
-			throw new PaymentException(PaymentErrorCode.PAYMENT_ATTEMPT_TYPE_MISMATCH);
-		}
-		if (this.status != PaymentAttemptStatus.REQUESTED) {
-			throw new PaymentException(PaymentErrorCode.PAYMENT_ATTEMPT_STATUS_TRANSITION_NOT_ALLOWED);
-		}
-		this.status = PaymentAttemptStatus.SUCCEEDED;
-		this.failCode = null;
-		this.failDetail = null;
-		this.respondedAt = respondedAt;
-	}
-
-	public void markCancelFailed(PaymentAttemptFailCode failCode, String failDetail, LocalDateTime respondedAt) {
-		if (this.type != PaymentAttemptType.CANCEL) {
-			throw new PaymentException(PaymentErrorCode.PAYMENT_ATTEMPT_TYPE_MISMATCH);
-		}
-		if (this.status != PaymentAttemptStatus.REQUESTED) {
-			throw new PaymentException(PaymentErrorCode.PAYMENT_ATTEMPT_STATUS_TRANSITION_NOT_ALLOWED);
-		}
-		this.status = PaymentAttemptStatus.FAILED;
-		this.failCode = failCode;
-		this.failDetail = failDetail;
-		this.respondedAt = respondedAt;
 	}
 }
