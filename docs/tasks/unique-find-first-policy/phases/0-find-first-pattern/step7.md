@@ -1,4 +1,4 @@
-# Step 7: sync-root-docs
+# Step 8: sync-root-docs
 
 ## 읽어야 할 파일
 
@@ -86,7 +86,7 @@ anchor 는 문서 제목 바로 아래(첫 헤딩 이후 첫 줄) 에 둔다.
 
 ### 5. PR #106 회고록(`docs/tasks/db-constraint-violation-handling/retrospective.md`) 은 수정 금지
 
-회고 문서 immutable 정책에 따라 손대지 않는다. 본 태스크의 retrospective 는 step 7 에서 별도로 작성한다.
+회고 문서 immutable 정책에 따라 손대지 않는다. 본 태스크의 retrospective 는 step 8 에서 별도로 작성한다.
 
 ## Acceptance Criteria
 

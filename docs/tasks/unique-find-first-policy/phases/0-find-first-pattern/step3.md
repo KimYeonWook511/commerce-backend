@@ -1,4 +1,4 @@
-# Step 3: payment-attempt-find-first
+# Step 4: payment-attempt-find-first
 
 ## 읽어야 할 파일
 
@@ -13,7 +13,7 @@
 - `/src/main/java/com/commerce/payment/exception/PaymentErrorCode.java`
 - `/src/test/java/com/commerce/payment/application/PaymentAttemptServiceTest.java`
 
-step 1 이 끝나 있어야 한다.
+step 2 이 끝나 있어야 한다.
 
 ## 작업
 
@@ -92,7 +92,7 @@ return paymentAttemptRepository.findCancelAttempt(merchantPayKey, provider, paym
   - `findApproveAttempt` 결과 존재 + 같은 amount → 기존 attempt 반환 (save 호출 안 됨)
   - `findApproveAttempt` 결과 존재 + 다른 amount → `PaymentException(PAYMENT_ATTEMPT_AMOUNT_MISMATCH)` throw
   - cancel 쪽도 동일한 3가지 케이스
-- `PaymentAttemptRepository` mock 의 `save` 가 race 시 unique 위반을 던지는 케이스는 본 단위 테스트에서 다루지 않는다 (통합 테스트와 안전망 도달은 step 5 에서 다룸).
+- `PaymentAttemptRepository` mock 의 `save` 가 race 시 unique 위반을 던지는 케이스는 본 단위 테스트에서 다루지 않는다 (통합 테스트와 안전망 도달은 step 6 에서 다룸).
 
 ## Acceptance Criteria
 

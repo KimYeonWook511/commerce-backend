@@ -1,4 +1,4 @@
-# Step 2: signup-transaction-split
+# Step 3: signup-transaction-split
 
 ## 읽어야 할 파일
 

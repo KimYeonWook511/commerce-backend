@@ -1,4 +1,4 @@
-# Step 1: domain-history-model
+# Step 2: domain-history-model
 
 ## 읽어야 할 파일
 

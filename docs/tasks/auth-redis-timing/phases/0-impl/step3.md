@@ -1,4 +1,4 @@
-# Step 3: redis-get-exception
+# Step 4: redis-get-exception
 
 ## 읽어야 할 파일
 

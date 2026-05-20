@@ -1,4 +1,4 @@
-# Step 3: admin-stock-create-api
+# Step 4: admin-stock-create-api
 
 ## 읽어야 할 파일
 

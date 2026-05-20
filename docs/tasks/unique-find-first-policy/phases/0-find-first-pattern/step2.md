@@ -1,4 +1,4 @@
-# Step 2: remove-direct-catch-blocks
+# Step 3: remove-direct-catch-blocks
 
 ## 읽어야 할 파일
 
@@ -15,7 +15,7 @@
 - `/src/test/java/com/commerce/payment/application/PaymentApprovalServiceTest.java`
 - `/src/test/java/com/commerce/payment/application/PaymentApprovalServiceIntegrationTest.java`
 
-step 0 에서 안전망 보강이 끝나 있어야 한다.
+step 1 에서 안전망 보강이 끝나 있어야 한다.
 
 ## 작업
 

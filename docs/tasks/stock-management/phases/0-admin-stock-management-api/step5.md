@@ -1,4 +1,4 @@
-# Step 5: admin-stock-history-query-api
+# Step 6: admin-stock-history-query-api
 
 ## 읽어야 할 파일
 

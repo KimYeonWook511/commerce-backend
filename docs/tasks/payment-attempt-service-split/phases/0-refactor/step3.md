@@ -1,4 +1,4 @@
-# Step 3: sync-root-docs-task-a
+# Step 4: sync-root-docs-task-a
 
 ## 읽어야 할 파일
 

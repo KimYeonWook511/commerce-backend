@@ -1,4 +1,4 @@
-# Step 5: write-retrospective
+# Step 6: write-retrospective
 
 ## 읽어야 할 파일
 
@@ -8,7 +8,7 @@
 - `/docs/tasks/payment-compensation-policy/adr.md`
 - `/docs/tasks/payment-compensation-policy/architecture.md`
 - `/docs/tasks/payment-attempt-state-transition-policy/retrospective.md` — 회고 형식 참고
-- step 0~3에서 변경된 파일들
+- step 1~4에서 변경된 파일들
 
 ## 작업
 

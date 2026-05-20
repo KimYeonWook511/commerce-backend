@@ -1,4 +1,4 @@
-# Step 2: admin-product-command-api
+# Step 3: admin-product-command-api
 
 ## 읽어야 할 파일
 

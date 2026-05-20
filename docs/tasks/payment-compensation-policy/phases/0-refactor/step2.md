@@ -1,4 +1,4 @@
-# Step 2: split-compensation-by-failure-meaning
+# Step 3: split-compensation-by-failure-meaning
 
 ## 읽어야 할 파일
 
@@ -8,7 +8,7 @@
 - `/docs/tasks/payment-compensation-policy/architecture.md`
 - `/docs/tasks/payment-compensation-policy/adr.md`
 - `/docs/exception-strategy.md` — ADR-013 보상 catch 2차 예외 처리 패턴
-- `src/main/java/com/commerce/payment/naverpay/application/NaverPayApprovalService.java` — step 1에서 변경된 파일
+- `src/main/java/com/commerce/payment/naverpay/application/NaverPayApprovalService.java` — step 2에서 변경된 파일
 
 ## 작업
 
@@ -96,7 +96,7 @@ private void compensateUnexpected(PaymentAttempt attempt, Exception ex,
 
 ## 금지사항
 
-- `failApproveAndCancelApprovedPayment` 내부 로직을 이 step에서 변경하지 마라. 이유: step 1에서 이미 Payment 체크 로직이 추가됐으며, catch 분기 분리와는 관심사가 다르다.
+- `failApproveAndCancelApprovedPayment` 내부 로직을 이 step에서 변경하지 마라. 이유: step 2에서 이미 Payment 체크 로직이 추가됐으며, catch 분기 분리와는 관심사가 다르다.
 - Strategy 패턴이나 다른 추상화를 도입하지 마라. 이유: PG가 NaverPay 하나뿐인 현 시점에서 over-design이다.
 - 기존 `log.error` 메시지 내용과 위치를 변경하지 마라. 이유: 운영 모니터링 알람 패턴이 이 메시지에 의존할 수 있다.
 - 기존 테스트를 깨뜨리지 마라.

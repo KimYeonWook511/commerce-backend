@@ -1,4 +1,4 @@
-# Step 4: write-retrospective-task-a
+# Step 5: write-retrospective-task-a
 
 ## 읽어야 할 파일
 

@@ -1,4 +1,4 @@
-# Step 4: sync-root-docs
+# Step 5: sync-root-docs
 
 ## 읽어야 할 파일
 

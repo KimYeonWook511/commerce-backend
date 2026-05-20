@@ -1,4 +1,4 @@
-# Step 8: write-retrospective
+# Step 9: write-retrospective
 
 ## 읽어야 할 파일
 
@@ -8,10 +8,10 @@
 - `/docs/tasks/unique-find-first-policy/architecture.md`
 - `/docs/tasks/unique-find-first-policy/adr.md`
 - `/docs/tasks/db-constraint-violation-handling/retrospective.md` (이전 태스크 회고 — 참고용)
-- 본 phase 의 step 0~6 문서와 각 step 의 실제 변경 내역
+- 본 phase 의 step 1~7 문서와 각 step 의 실제 변경 내역
 - 본 phase 에서 발생한 결정 변경, 보류, 우회 사례
 
-step 6 까지 모두 끝나 있어야 한다.
+step 7 까지 모두 끝나 있어야 한다.
 
 ## 작업
 

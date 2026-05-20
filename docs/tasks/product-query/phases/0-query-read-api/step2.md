@@ -1,4 +1,4 @@
-# Step 2: sync-root-docs
+# Step 3: sync-root-docs
 
 ## 읽어야 할 파일
 
@@ -17,7 +17,7 @@
 
 ## 작업
 
-step0 구현 결과를 기준으로 루트 문서를 동기화하라.
+step1 구현 결과를 기준으로 루트 문서를 동기화하라.
 
 - `docs/api-spec.md`에 `GET /products`, `GET /products/{productId}` 공개 조회 스펙을 추가하라.
 - `docs/architecture.md`에 `product` 도메인이 공개 조회 API를 제공한다는 설명을 반영하라.

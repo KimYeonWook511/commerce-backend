@@ -1,4 +1,4 @@
-# Step 2: stock-command-service
+# Step 3: stock-command-service
 
 ## 읽어야 할 파일
 

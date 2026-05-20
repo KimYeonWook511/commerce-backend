@@ -1,4 +1,4 @@
-# Step 2: split-payment-attempt-service
+# Step 3: split-payment-attempt-service
 
 ## 읽어야 할 파일
 
@@ -7,7 +7,7 @@
 - `docs/tasks/payment-attempt-service-split/prd.md`
 - `docs/tasks/payment-attempt-service-split/architecture.md`
 - `docs/tasks/payment-attempt-service-split/adr.md`
-- `src/main/java/com/commerce/payment/application/PaymentAttemptService.java` ← step 1에서 갱신된 버전
+- `src/main/java/com/commerce/payment/application/PaymentAttemptService.java` ← step 2에서 갱신된 버전
 - `src/main/java/com/commerce/payment/application/PaymentApprovalService.java`
 - `src/main/java/com/commerce/payment/naverpay/application/NaverPayApprovalService.java`
 - `src/test/java/com/commerce/payment/application/PaymentAttemptServiceTest.java`
@@ -89,7 +89,7 @@ public class PaymentCancellationAttemptService {
 
 ### 3. `PaymentAttemptService.java` 삭제
 
-step 1에서 갱신된 `PaymentAttemptService.java`를 삭제한다.
+step 2에서 갱신된 `PaymentAttemptService.java`를 삭제한다.
 
 ### 4. 호출처 갱신
 

@@ -1,4 +1,4 @@
-# Step 1: rdb-idempotency-base
+# Step 2: rdb-idempotency-base
 
 ## 읽어야 할 파일
 
@@ -88,4 +88,4 @@ entity 계약 변경(builder/constructor 오버로드 추가)이 포함되므로
 
 - `Order.create(Member member)` 기존 오버로드를 제거하거나 시그니처를 변경하지 마라. 이유: `OrderConcurrencyService`, 테스트 코드 등 기존 호출자가 다수 존재하며 이번 step 범위가 아니다.
 - 기존 테스트를 깨뜨리지 마라.
-- `OrderCreateService` 로직을 이 step에서 변경하지 마라. 이유: step1에서 처리한다.
+- `OrderCreateService` 로직을 이 step에서 변경하지 마라. 이유: step2에서 처리한다.

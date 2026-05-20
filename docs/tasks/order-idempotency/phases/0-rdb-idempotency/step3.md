@@ -1,4 +1,4 @@
-# Step 3: docs-sync
+# Step 4: docs-sync
 
 ## 읽어야 할 파일
 
@@ -20,7 +20,7 @@
 
 ## 작업
 
-step0, step1에서 변경된 내용을 루트 문서에 반영한다.
+step1, step2에서 변경된 내용을 루트 문서에 반영한다.
 
 ### 1. `docs/db-schema.md` 업데이트
 

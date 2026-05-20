@@ -1,4 +1,4 @@
-# Step 2: idempotency-logic-transition
+# Step 3: idempotency-logic-transition
 
 ## 읽어야 할 파일
 

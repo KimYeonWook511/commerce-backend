@@ -1,4 +1,4 @@
-# Step 2: redefine-safeguard-handler
+# Step 3: redefine-safeguard-handler
 
 ## 읽어야 할 파일
 

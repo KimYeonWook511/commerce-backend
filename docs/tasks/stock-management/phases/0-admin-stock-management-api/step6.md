@@ -1,4 +1,4 @@
-# Step 6: docs-sync
+# Step 7: docs-sync
 
 ## 읽어야 할 파일
 

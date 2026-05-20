@@ -1,4 +1,4 @@
-# Step 1: amount-mismatch-policy
+# Step 2: amount-mismatch-policy
 
 ## 읽어야 할 파일
 

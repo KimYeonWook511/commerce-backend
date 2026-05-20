@@ -1,4 +1,4 @@
-# Step 1: domain-validation
+# Step 2: domain-validation
 
 ## 읽어야 할 파일
 

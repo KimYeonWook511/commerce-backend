@@ -1,4 +1,4 @@
-# Step 1: product-query-api
+# Step 2: product-query-api
 
 ## 읽어야 할 파일
 

@@ -1,4 +1,4 @@
-# Step 5: outbox-find-first
+# Step 6: outbox-find-first
 
 ## 읽어야 할 파일
 
@@ -15,7 +15,7 @@
 - `/src/main/java/com/commerce/outbox/infrastructure/JpaProcessedEventRepository.java`
 - `/src/test/java/com/commerce/outbox/stock/application/StockRestoreOutboxConsumeServiceTest.java`
 
-step 3 이 끝나 있어야 한다.
+step 4 이 끝나 있어야 한다.
 
 ## 작업
 

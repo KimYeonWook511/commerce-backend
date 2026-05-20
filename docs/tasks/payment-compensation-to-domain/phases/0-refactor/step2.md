@@ -1,4 +1,4 @@
-# Step 2: move-compensation-dispatcher
+# Step 3: move-compensation-dispatcher
 
 ## 읽어야 할 파일
 
@@ -7,8 +7,8 @@
 - `docs/tasks/payment-compensation-to-domain/prd.md`
 - `docs/tasks/payment-compensation-to-domain/architecture.md`
 - `docs/tasks/payment-compensation-to-domain/adr.md`
-- `src/main/java/com/commerce/payment/application/port/PgCanceller.java` (step 0 신설)
-- `src/main/java/com/commerce/payment/application/port/result/CancelOutcome.java` (step 0 신설)
+- `src/main/java/com/commerce/payment/application/port/PgCanceller.java` (step 1 신설)
+- `src/main/java/com/commerce/payment/application/port/result/CancelOutcome.java` (step 1 신설)
 - `src/main/java/com/commerce/payment/naverpay/application/NaverPayApprovalService.java`
 - `src/main/java/com/commerce/payment/application/PaymentApprovalAttemptService.java`
 - `src/main/java/com/commerce/payment/application/PaymentCancellationAttemptService.java`

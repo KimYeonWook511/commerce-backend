@@ -1,4 +1,4 @@
-# Step 1: race-priority-by-payment-existence
+# Step 2: race-priority-by-payment-existence
 
 ## 읽어야 할 파일
 
@@ -78,7 +78,7 @@ if (!paymentApprovalService.isCompensationRequired(approveAttempt.getMerchantPay
 
 ## 금지사항
 
-- `completeVerifiedApproval`의 catch 분기 구조를 이 step에서 변경하지 마라. 이유: step 2에서 분리 처리하므로 두 변경을 혼재하면 각 step의 독립 검증이 불가능해진다.
+- `completeVerifiedApproval`의 catch 분기 구조를 이 step에서 변경하지 마라. 이유: step 3에서 분리 처리하므로 두 변경을 혼재하면 각 step의 독립 검증이 불가능해진다.
 - `isCompensationRequired` 내부에서 `paymentRepository.findByMerchantPayKey` 대신 새 쿼리를 만들지 마라. 이유: 기존 메서드 재사용으로 충분하고 중복 쿼리를 방지한다.
 - `failApproveAttemptIfRequested` 호출을 제거하거나 이동하지 마라. 이유: ADR-013 패턴(보상 흐름의 의도 캡슐화 메서드 유지)을 보존해야 한다.
 - 기존 테스트를 깨뜨리지 마라.

@@ -1,4 +1,4 @@
-# Step 2: concurrency-test
+# Step 3: concurrency-test
 
 ## 읽어야 할 파일
 
@@ -9,7 +9,7 @@
 
 그 다음 실제 수정 대상 파일을 읽어라:
 
-- `src/main/java/com/commerce/payment/application/PaymentAttemptService.java` (step0에서 수정된 상태)
+- `src/main/java/com/commerce/payment/application/PaymentAttemptService.java` (step1에서 수정된 상태)
 - `src/test/java/com/commerce/payment/application/concurrency/PaymentAttemptServiceConcurrencyTest.java`
 
 ## 작업

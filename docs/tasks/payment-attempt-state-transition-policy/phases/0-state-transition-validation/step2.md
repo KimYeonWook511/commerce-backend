@@ -1,11 +1,11 @@
-# Step 2: sync-root-docs
+# Step 3: sync-root-docs
 
 ## 읽어야 할 파일
 
 - `/docs/tasks/payment-attempt-state-transition-policy/adr.md`
 - `/docs/ADR.md` (기존 ADR-010, ADR-011 형식 참고)
 
-step0에서 생성/수정된 파일:
+step1에서 생성/수정된 파일:
 
 - `/src/main/java/com/commerce/payment/exception/PaymentErrorCode.java`
 - `/src/main/java/com/commerce/payment/domain/PaymentAttempt.java`

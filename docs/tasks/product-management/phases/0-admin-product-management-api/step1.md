@@ -1,4 +1,4 @@
-# Step 1: product-domain-fields
+# Step 2: product-domain-fields
 
 ## 읽어야 할 파일
 

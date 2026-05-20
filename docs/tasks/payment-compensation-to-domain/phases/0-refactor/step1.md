@@ -1,4 +1,4 @@
-# Step 1: introduce-pg-canceller-port
+# Step 2: introduce-pg-canceller-port
 
 ## 읽어야 할 파일
 
@@ -54,5 +54,5 @@
 
 ## 금지사항
 
-- 이 step에서 호출처(NaverPayApprovalService 등)를 수정하지 마라. 이유: step 0은 신설만이며, 호출처 변경은 step 2에서 한다.
+- 이 step에서 호출처(NaverPayApprovalService 등)를 수정하지 마라. 이유: step 1은 신설만이며, 호출처 변경은 step 3에서 한다.
 - `CancelOutcome`에 `NaverPayCancelResult`나 NaverPay 관련 클래스를 import하지 마라. 이유: `payment.application.port`가 NaverPay에 직접 의존하면 의존 방향이 역전된다.

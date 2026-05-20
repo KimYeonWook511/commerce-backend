@@ -1,4 +1,4 @@
-# Step 4: admin-stock-adjust-api
+# Step 5: admin-stock-adjust-api
 
 ## 읽어야 할 파일
 

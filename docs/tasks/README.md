@@ -34,8 +34,8 @@ docs/
             └── <phase-name>/
                 ├── index.json       # 현재 phase의 step 상태
                 ├── workflow-checklist.json # dev-start workflow 상태
-                ├── step0.md         # 첫 번째 실행 step
-                └── step1.md         # 두 번째 실행 step
+                ├── step1.md         # 첫 번째 실행 step
+                └── step2.md         # 두 번째 실행 step
 ```
 
 위 디렉터리 구조를 기준으로 보면:
@@ -45,7 +45,7 @@ docs/
 - `phases/index.json`은 해당 태스크 내부의 phase 목록을 관리한다.
 - `phases/<phase-name>/index.json`은 해당 phase의 step 상태를 관리한다.
 - `phases/<phase-name>/workflow-checklist.json`은 `dev-start`의 1~6번 workflow 진행 상태를 관리한다.
-- `phases/<phase-name>/step0.md`, `step1.md`는 실제 실행 단위 문서다.
+- `phases/<phase-name>/step1.md`, `step2.md`는 실제 실행 단위 문서다.
 
 ## 기본 생성 문서
 
@@ -77,7 +77,7 @@ workflow checklist는 `docs/tasks/_templates/phases/workflow-checklist.json`을 
 docs/tasks/<task-name>/phases/index.json
 docs/tasks/<task-name>/phases/<phase-name>/index.json
 docs/tasks/<task-name>/phases/<phase-name>/workflow-checklist.json
-docs/tasks/<task-name>/phases/<phase-name>/step0.md
+docs/tasks/<task-name>/phases/<phase-name>/step1.md
 ```
 
 ## Step 작성 원칙

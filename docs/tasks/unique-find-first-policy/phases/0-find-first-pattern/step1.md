@@ -1,4 +1,4 @@
-# Step 1: data-access-safety-net
+# Step 2: data-access-safety-net
 
 ## 읽어야 할 파일
 

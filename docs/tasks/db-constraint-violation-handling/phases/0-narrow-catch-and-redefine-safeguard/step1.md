@@ -1,4 +1,4 @@
-# Step 1: narrow-application-catch
+# Step 2: narrow-application-catch
 
 ## 읽어야 할 파일
 

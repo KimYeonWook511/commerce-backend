@@ -1,4 +1,4 @@
-# Step 3: add-testcontainers-regression
+# Step 4: add-testcontainers-regression
 
 ## 읽어야 할 파일
 

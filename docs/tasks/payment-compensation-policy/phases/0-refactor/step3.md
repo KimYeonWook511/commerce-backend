@@ -1,4 +1,4 @@
-# Step 3: stabilize-concurrency-tests
+# Step 4: stabilize-concurrency-tests
 
 ## 읽어야 할 파일
 
@@ -6,8 +6,8 @@
 
 - `/docs/tasks/payment-compensation-policy/prd.md`
 - `/docs/tasks/payment-compensation-policy/architecture.md`
-- `src/main/java/com/commerce/payment/application/PaymentApprovalService.java` — step 1에서 변경됨
-- `src/main/java/com/commerce/payment/naverpay/application/NaverPayApprovalService.java` — step 0, 1에서 변경됨
+- `src/main/java/com/commerce/payment/application/PaymentApprovalService.java` — step 2에서 변경됨
+- `src/main/java/com/commerce/payment/naverpay/application/NaverPayApprovalService.java` — step 1, 1에서 변경됨
 - `src/test/java/com/commerce/payment/application/PaymentApprovalServiceConcurrencyTest.java`
 - `src/test/java/com/commerce/payment/naverpay/application/NaverPayServiceConcurrencyTest.java` (경로 확인 필요)
 
@@ -17,7 +17,7 @@
 
 현재 flaky로 식별된 `PaymentApprovalServiceConcurrencyTest`의 assertion 실패 지점을 추적한다:
 - race window에서 어떤 assertion이 불안정한지 파악
-- step 1에서 추가한 Payment 존재 체크가 race를 흡수하는지 확인
+- step 2에서 추가한 Payment 존재 체크가 race를 흡수하는지 확인
 - 테스트 자체의 timing dependency가 있다면 보강
 
 ### 2. NaverPayServiceConcurrencyTest race cancel skip 시나리오 보강

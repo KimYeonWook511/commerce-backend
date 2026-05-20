@@ -1,4 +1,4 @@
-# Step 1: payment-attempt-domain-cleanup
+# Step 2: payment-attempt-domain-cleanup
 
 ## 읽어야 할 파일
 
@@ -70,7 +70,7 @@ public void verifyApprovedResponse(String responseMerchantPayKey, int responseTo
 
 ### 2. `PaymentAttemptService` 임시 갱신 (`src/main/java/com/commerce/payment/application/PaymentAttemptService.java`)
 
-step 2에서 Service를 분리하기 전까지 기존 Service가 새 도메인 메서드를 호출하도록 갱신한다:
+step 3에서 Service를 분리하기 전까지 기존 Service가 새 도메인 메서드를 호출하도록 갱신한다:
 - `attempt.markApproveSucceeded(...)` → `attempt.succeed(...)`
 - `attempt.markApproveFailed(...)` → `attempt.fail(...)`
 - `attempt.markCancelSucceeded(...)` → `attempt.succeed(...)`
@@ -109,7 +109,7 @@ attempt.verifyApprovedResponse(responseMerchantPayKey, responseTotalAmount);
 
 **(b) `PaymentAttemptServiceTest` (`src/test/java/com/commerce/payment/application/PaymentAttemptServiceTest.java`)**
 
-- mark* 호출을 succeed/fail로 갱신. 메서드 자체는 step 2에서 Service 분리 전까지 유지
+- mark* 호출을 succeed/fail로 갱신. 메서드 자체는 step 3에서 Service 분리 전까지 유지
 
 **(c) `NaverPayApprovalServiceTest` (`src/test/java/com/commerce/payment/naverpay/application/NaverPayApprovalServiceTest.java`)**
 
@@ -133,7 +133,7 @@ attempt.verifyApprovedResponse(responseMerchantPayKey, responseTotalAmount);
 
 ## 금지사항
 
-- `PaymentAttemptService`를 이 step에서 삭제하지 마라. 이유: step 2에서 Service를 분리하기 전까지 기존 Service가 호출처 역할을 유지해야 컴파일 오류 없음
+- `PaymentAttemptService`를 이 step에서 삭제하지 마라. 이유: step 3에서 Service를 분리하기 전까지 기존 Service가 호출처 역할을 유지해야 컴파일 오류 없음
 - `NaverPayApprovalService`의 보상 메서드(`compensate*`, `failApproveAndCancelApprovedPayment`)를 건드리지 마라. 이유: task B 범위
 - type 가드만 제거하고 status 가드(`status != REQUESTED`)는 반드시 유지하라. 이유: ADR-012 정책 보존
 - 기존 테스트를 깨뜨리지 마라

@@ -7,7 +7,7 @@
     {
       "command": "./gradlew test --tests 'com.commerce.product.*'",
       "exitCode": 0,
-      "stdout": "> Task :compileJava UP-TO-DATE\n> Task :processResources UP-TO-DATE\n> Task :classes UP-TO-DATE\n> Task :compileTestJava UP-TO-DATE\n> Task :processTestResources NO-SOURCE\n> Task :testClasses UP-TO-DATE\n> Task :test UP-TO-DATE\n\nBUILD SUCCESSFUL in 599ms\n4 actionable tasks: 4 up-to-date\n",
+      "stdout": "> Task :compileJava UP-TO-DATE\n> Task :processResources UP-TO-DATE\n> Task :classes UP-TO-DATE\n> Task :compileTestJava UP-TO-DATE\n> Task :processTestResources NO-SOURCE\n> Task :testClasses UP-TO-DATE\n> Task :test UP-TO-DATE\n\nBUILD SUCCESSFUL in 742ms\n4 actionable tasks: 4 up-to-date\n",
       "stderr": ""
     }
   ],

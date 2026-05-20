@@ -1,4 +1,4 @@
-# Step 5: write-retrospective
+# Step 6: write-retrospective
 
 ## 읽어야 할 파일
 

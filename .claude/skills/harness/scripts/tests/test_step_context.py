@@ -56,12 +56,12 @@ class StepContextTest(unittest.TestCase):
     def test_build_previous_step_context_uses_completed_summary_only(self):
         index = {
             "steps": [
-                {"step": 0, "name": "setup", "status": "completed", "summary": "초기화 완료"},
-                {"step": 1, "name": "core", "status": "pending"},
+                {"step": 1, "name": "setup", "status": "completed", "summary": "초기화 완료"},
+                {"step": 2, "name": "core", "status": "pending"},
             ]
         }
         result = self.module.build_previous_step_context(index)
-        self.assertIn("Step 0 (setup): 초기화 완료", result)
+        self.assertIn("Step 1 (setup): 초기화 완료", result)
         self.assertNotIn("core", result)
 
 

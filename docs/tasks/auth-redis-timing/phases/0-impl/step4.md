@@ -1,4 +1,4 @@
-# Step 4: remove-delete
+# Step 5: remove-delete
 
 ## 읽어야 할 파일
 
