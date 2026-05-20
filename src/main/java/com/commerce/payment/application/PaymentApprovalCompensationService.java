@@ -70,7 +70,7 @@ public class PaymentApprovalCompensationService {
 		String cancelReason,
 		PgCanceller pgCanceller
 	) {
-		// REQUESTED 상태가 아니면 mark를 skip한다. (race window에서 SUCCEEDED 상태로 도달해도 PG cancel은 그대로 진행)
+		// approve attempt가 race window에서 이미 SUCCEEDED 상태가 됐어도 PG cancel은 멈추지 않는다. REQUESTED가 아니면 mark만 skip한다.
 		paymentApprovalAttemptService.failIfRequested(
 			approveAttempt.getMerchantPayKey(), approveAttempt.getProvider(), approveAttempt.getPaymentId(),
 			failCode, failDetail, LocalDateTime.now()
