@@ -30,15 +30,16 @@ import com.commerce.payment.domain.PaymentAttemptFailCode;
 import com.commerce.payment.domain.PaymentProvider;
 import com.commerce.payment.exception.PaymentErrorCode;
 import com.commerce.payment.exception.PaymentException;
+import com.commerce.payment.application.PaymentApprovalAttemptService;
+import com.commerce.payment.application.PaymentApprovalCompensationService;
+import com.commerce.payment.application.PaymentApprovalService;
+import com.commerce.payment.application.port.result.CancelOutcome;
 import com.commerce.payment.naverpay.application.result.NaverPayApproveResponse;
 import com.commerce.payment.naverpay.application.result.NaverPayApproveStatus;
 import com.commerce.payment.naverpay.application.port.NaverPayGateway;
 import com.commerce.payment.naverpay.application.port.result.NaverPayApproveResult;
 import com.commerce.payment.naverpay.application.port.result.NaverPayCancelResult;
 import com.commerce.payment.naverpay.application.port.result.NaverPayHistoryResult;
-import com.commerce.payment.application.PaymentApprovalAttemptService;
-import com.commerce.payment.application.PaymentApprovalService;
-import com.commerce.payment.application.PaymentCancellationAttemptService;
 import com.commerce.product.domain.Product;
 import com.commerce.product.domain.ProductStatus;
 import com.commerce.order.application.OrderQueryService;
@@ -56,7 +57,7 @@ class NaverPayApprovalServiceTest {
 	private PaymentApprovalAttemptService paymentApprovalAttemptService;
 
 	@Mock
-	private PaymentCancellationAttemptService paymentCancellationAttemptService;
+	private PaymentApprovalCompensationService paymentApprovalCompensationService;
 
 	@Mock
 	private OrderQueryService orderQueryService;
@@ -439,9 +440,9 @@ class NaverPayApprovalServiceTest {
 			eq(PaymentAttemptFailCode.PG_MAINTENANCE), eq("서비스 점검중"), any());
 	}
 
-	@DisplayName("승인 응답 merchantPayKey가 다르면 실패로 기록하고 예외를 던진다")
+	@DisplayName("승인 응답 merchantPayKey가 다르면 compensateMerchantKeyMismatch를 호출하고 예외를 던진다")
 	@Test
-	void approve_whenApproveResponseMerchantPayKeyMismatch_markFailedAndThrowException() {
+	void approve_whenApproveResponseMerchantPayKeyMismatch_callsCompensateAndThrowException() {
 		// given
 		long memberId = 1L;
 		Order order = createOrder(1000);
@@ -461,15 +462,12 @@ class NaverPayApprovalServiceTest {
 				PaymentException paymentException = (PaymentException)exception;
 				assertThat(paymentException.getErrorCode()).isEqualTo(PaymentErrorCode.PAYMENT_MERCHANT_KEY_MISMATCH);
 			});
-		then(paymentApprovalAttemptService).should().failIfRequested(
-			eq("PAY-1"), eq(PaymentProvider.NAVERPAY), eq("pg-payment-id"),
-			eq(PaymentAttemptFailCode.MERCHANT_PAY_KEY_MISMATCH), eq("가맹점 결제 키 불일치"), any());
-		then(naverPayGateway).should(never()).cancel(any(), anyInt(), any());
+		then(paymentApprovalCompensationService).should().compensateMerchantKeyMismatch(any());
 	}
 
-	@DisplayName("승인 금액이 다르면 네이버페이 취소를 요청하고 예외를 던진다")
+	@DisplayName("승인 금액이 다르면 compensateAmountMismatch를 호출하고 예외를 던진다")
 	@Test
-	void approve_whenAmountMismatch_cancelAndThrowException() {
+	void approve_whenAmountMismatch_callsCompensateAndThrowException() {
 		// given
 		long memberId = 1L;
 		Order order = createOrder(1000);
@@ -477,13 +475,9 @@ class NaverPayApprovalServiceTest {
 
 		given(orderQueryService.getOrderByMerchantPayKeyAndMemberId("PAY-1", memberId)).willReturn(order);
 		given(paymentApprovalService.findPaymentByMerchantPayKey("PAY-1")).willReturn(Optional.empty());
-		given(paymentApprovalService.isCompensationRequired("PAY-1")).willReturn(true);
 		given(paymentApprovalAttemptService.getOrCreate("PAY-1", PaymentProvider.NAVERPAY, "pg-payment-id", 1000))
 			.willReturn(PaymentAttempt.createApproveRequested("PAY-1", "pg-payment-id", 1000, PaymentProvider.NAVERPAY));
-		given(paymentCancellationAttemptService.getOrCreate(eq("PAY-1"), eq(PaymentProvider.NAVERPAY), eq("pg-payment-id"), eq(2000)))
-			.willReturn(PaymentAttempt.createCancelRequested("PAY-1", "pg-payment-id", 2000, PaymentProvider.NAVERPAY));
 		given(naverPayGateway.approve("pg-payment-id")).willReturn(NaverPayApproveResult.success("PAY-1", 2000));
-		given(naverPayGateway.cancel(eq("pg-payment-id"), anyInt(), any())).willReturn(NaverPayCancelResult.success());
 
 		// when & then
 		assertThatThrownBy(() -> naverPayApprovalService.approve(memberId, "PAY-1", "pg-payment-id"))
@@ -492,27 +486,23 @@ class NaverPayApprovalServiceTest {
 				PaymentException paymentException = (PaymentException)exception;
 				assertThat(paymentException.getErrorCode()).isEqualTo(PaymentErrorCode.PAYMENT_AMOUNT_MISMATCH);
 			});
-		then(naverPayGateway).should().cancel(eq("pg-payment-id"), anyInt(), any());
+		then(paymentApprovalCompensationService).should().compensateAmountMismatch(any(), eq(2000), any());
 	}
 
-	@DisplayName("이미 다른 결제가 완료된 주문이면 현재 승인 건을 취소하고 예외를 던진다")
+	@DisplayName("이미 다른 결제가 완료된 주문이면 compensateDuplicatePayment를 호출하고 예외를 던진다")
 	@Test
-	void approve_whenDuplicateApproval_cancelCurrentApprovedPaymentAndThrowException() {
+	void approve_whenDuplicateApproval_callsCompensateAndThrowException() {
 		long memberId = 1L;
 		Order order = createOrder(1000);
 		order.assignMerchantPayKey("PAY-1");
 
 		given(orderQueryService.getOrderByMerchantPayKeyAndMemberId("PAY-1", memberId)).willReturn(order);
 		given(paymentApprovalService.findPaymentByMerchantPayKey("PAY-1")).willReturn(Optional.empty());
-		given(paymentApprovalService.isCompensationRequired("PAY-1")).willReturn(true);
 		given(paymentApprovalAttemptService.getOrCreate("PAY-1", PaymentProvider.NAVERPAY, "pg-payment-id", 1000))
 			.willReturn(PaymentAttempt.createApproveRequested("PAY-1", "pg-payment-id", 1000, PaymentProvider.NAVERPAY));
-		given(paymentCancellationAttemptService.getOrCreate(eq("PAY-1"), eq(PaymentProvider.NAVERPAY), eq("pg-payment-id"), eq(1000)))
-			.willReturn(PaymentAttempt.createCancelRequested("PAY-1", "pg-payment-id", 1000, PaymentProvider.NAVERPAY));
 		given(naverPayGateway.approve("pg-payment-id")).willReturn(NaverPayApproveResult.success("PAY-1", 1000));
 		given(paymentApprovalService.completeApprovedPayment(eq("PAY-1"), eq(PaymentProvider.NAVERPAY), eq("pg-payment-id"), any()))
 			.willThrow(new PaymentException(PaymentErrorCode.PAYMENT_DUPLICATE));
-		given(naverPayGateway.cancel(eq("pg-payment-id"), anyInt(), any())).willReturn(NaverPayCancelResult.success());
 
 		assertThatThrownBy(() -> naverPayApprovalService.approve(memberId, "PAY-1", "pg-payment-id"))
 			.isInstanceOf(PaymentException.class)
@@ -520,48 +510,12 @@ class NaverPayApprovalServiceTest {
 				PaymentException paymentException = (PaymentException)exception;
 				assertThat(paymentException.getErrorCode()).isEqualTo(PaymentErrorCode.PAYMENT_DUPLICATE);
 			});
-		then(paymentCancellationAttemptService).should().getOrCreate(
-			eq("PAY-1"), eq(PaymentProvider.NAVERPAY), eq("pg-payment-id"), eq(1000));
-		then(naverPayGateway).should().cancel(eq("pg-payment-id"), anyInt(), any());
-		then(paymentApprovalAttemptService).should().failIfRequested(
-			eq("PAY-1"), eq(PaymentProvider.NAVERPAY), eq("pg-payment-id"),
-			eq(PaymentAttemptFailCode.DUPLICATE_PAYMENT), eq(PaymentErrorCode.PAYMENT_DUPLICATE.getMessage()), any());
+		then(paymentApprovalCompensationService).should().compensateDuplicatePayment(any(), any(), any());
 	}
 
-	@DisplayName("중복 결제 보상 중 이미 취소 완료된 시도가 있으면 취소 API를 다시 호출하지 않는다")
+	@DisplayName("결제 완료 반영 중 merchantPayKey 불일치 예외가 발생하면 compensateMerchantKeyMismatch를 호출하고 예외를 던진다")
 	@Test
-	void approve_whenDuplicateApprovalAndCancelAttemptAlreadySucceeded_skipCancelApiCall() {
-		// given
-		long memberId = 1L;
-		Order order = createOrder(1000);
-		order.assignMerchantPayKey("PAY-1");
-		PaymentAttempt cancelAttempt = PaymentAttempt.createCancelRequested("PAY-1", "pg-payment-id", 1000, PaymentProvider.NAVERPAY);
-		cancelAttempt.succeed(LocalDateTime.now());
-
-		given(orderQueryService.getOrderByMerchantPayKeyAndMemberId("PAY-1", memberId)).willReturn(order);
-		given(paymentApprovalService.findPaymentByMerchantPayKey("PAY-1")).willReturn(Optional.empty());
-		given(paymentApprovalService.isCompensationRequired("PAY-1")).willReturn(true);
-		given(paymentApprovalAttemptService.getOrCreate("PAY-1", PaymentProvider.NAVERPAY, "pg-payment-id", 1000))
-			.willReturn(PaymentAttempt.createApproveRequested("PAY-1", "pg-payment-id", 1000, PaymentProvider.NAVERPAY));
-		given(naverPayGateway.approve("pg-payment-id")).willReturn(NaverPayApproveResult.success("PAY-1", 1000));
-		given(paymentApprovalService.completeApprovedPayment(eq("PAY-1"), eq(PaymentProvider.NAVERPAY), eq("pg-payment-id"), any()))
-			.willThrow(new PaymentException(PaymentErrorCode.PAYMENT_DUPLICATE));
-		given(paymentCancellationAttemptService.getOrCreate(eq("PAY-1"), eq(PaymentProvider.NAVERPAY), eq("pg-payment-id"), eq(1000)))
-			.willReturn(cancelAttempt);
-
-		// when & then
-		assertThatThrownBy(() -> naverPayApprovalService.approve(memberId, "PAY-1", "pg-payment-id"))
-			.isInstanceOf(PaymentException.class)
-			.satisfies(exception -> {
-				PaymentException paymentException = (PaymentException)exception;
-				assertThat(paymentException.getErrorCode()).isEqualTo(PaymentErrorCode.PAYMENT_DUPLICATE);
-			});
-		then(naverPayGateway).should(never()).cancel(any(), anyInt(), any());
-	}
-
-	@DisplayName("결제 완료 반영 중 merchantPayKey 불일치 예외가 발생하면 승인 시도를 실패로 기록하고 예외를 던진다")
-	@Test
-	void approve_whenCompleteApproveThrowsMerchantKeyMismatch_markAttemptFailedAndThrowException() {
+	void approve_whenCompleteApproveThrowsMerchantKeyMismatch_callsCompensateAndThrowException() {
 		// given
 		long memberId = 1L;
 		Order order = createOrder(1000);
@@ -582,15 +536,12 @@ class NaverPayApprovalServiceTest {
 				PaymentException paymentException = (PaymentException)exception;
 				assertThat(paymentException.getErrorCode()).isEqualTo(PaymentErrorCode.PAYMENT_MERCHANT_KEY_MISMATCH);
 			});
-		then(paymentApprovalAttemptService).should().failIfRequested(
-			eq("PAY-1"), eq(PaymentProvider.NAVERPAY), eq("pg-payment-id"),
-			eq(PaymentAttemptFailCode.MERCHANT_PAY_KEY_MISMATCH), eq("가맹점 결제 키 불일치"), any());
-		then(naverPayGateway).should(never()).cancel(any(), anyInt(), any());
+		then(paymentApprovalCompensationService).should().compensateMerchantKeyMismatch(any());
 	}
 
-	@DisplayName("결제 완료 반영 중 금액 불일치 예외가 발생하면 취소를 요청하고 예외를 던진다")
+	@DisplayName("결제 완료 반영 중 금액 불일치 예외가 발생하면 compensateAmountMismatch를 호출하고 예외를 던진다")
 	@Test
-	void approve_whenCompleteApproveThrowsAmountMismatch_cancelAndThrowException() {
+	void approve_whenCompleteApproveThrowsAmountMismatch_callsCompensateAndThrowException() {
 		// given
 		long memberId = 1L;
 		Order order = createOrder(1000);
@@ -598,16 +549,11 @@ class NaverPayApprovalServiceTest {
 
 		given(orderQueryService.getOrderByMerchantPayKeyAndMemberId("PAY-1", memberId)).willReturn(order);
 		given(paymentApprovalService.findPaymentByMerchantPayKey("PAY-1")).willReturn(Optional.empty());
-		given(paymentApprovalService.isCompensationRequired("PAY-1")).willReturn(true);
 		given(paymentApprovalAttemptService.getOrCreate("PAY-1", PaymentProvider.NAVERPAY, "pg-payment-id", 1000))
 			.willReturn(PaymentAttempt.createApproveRequested("PAY-1", "pg-payment-id", 1000, PaymentProvider.NAVERPAY));
 		given(naverPayGateway.approve("pg-payment-id")).willReturn(NaverPayApproveResult.success("PAY-1", 1000));
 		given(paymentApprovalService.completeApprovedPayment(eq("PAY-1"), eq(PaymentProvider.NAVERPAY), eq("pg-payment-id"), any()))
 			.willThrow(new PaymentException(PaymentErrorCode.PAYMENT_AMOUNT_MISMATCH));
-		given(paymentCancellationAttemptService.getOrCreate(
-			eq("PAY-1"), eq(PaymentProvider.NAVERPAY), eq("pg-payment-id"), eq(1000)))
-			.willReturn(PaymentAttempt.createCancelRequested("PAY-1", "pg-payment-id", 1000, PaymentProvider.NAVERPAY));
-		given(naverPayGateway.cancel(eq("pg-payment-id"), anyInt(), any())).willReturn(NaverPayCancelResult.success());
 
 		// when & then
 		assertThatThrownBy(() -> naverPayApprovalService.approve(memberId, "PAY-1", "pg-payment-id"))
@@ -616,12 +562,12 @@ class NaverPayApprovalServiceTest {
 				PaymentException paymentException = (PaymentException)exception;
 				assertThat(paymentException.getErrorCode()).isEqualTo(PaymentErrorCode.PAYMENT_AMOUNT_MISMATCH);
 			});
-		then(naverPayGateway).should().cancel(eq("pg-payment-id"), anyInt(), any());
+		then(paymentApprovalCompensationService).should().compensateAmountMismatch(any(), eq(1000), any());
 	}
 
-	@DisplayName("결제 완료 반영 중 주문 예외가 발생하면 취소를 요청하고 예외를 던진다")
+	@DisplayName("결제 완료 반영 중 주문 예외가 발생하면 compensateUnexpected를 호출하고 예외를 던진다")
 	@Test
-	void approve_whenCompleteApproveThrowsOrderException_cancelAndThrowException() {
+	void approve_whenCompleteApproveThrowsOrderException_callsCompensateAndThrowException() {
 		// given
 		long memberId = 1L;
 		Order order = createOrder(1000);
@@ -629,16 +575,11 @@ class NaverPayApprovalServiceTest {
 
 		given(orderQueryService.getOrderByMerchantPayKeyAndMemberId("PAY-1", memberId)).willReturn(order);
 		given(paymentApprovalService.findPaymentByMerchantPayKey("PAY-1")).willReturn(Optional.empty());
-		given(paymentApprovalService.isCompensationRequired("PAY-1")).willReturn(true);
 		given(paymentApprovalAttemptService.getOrCreate("PAY-1", PaymentProvider.NAVERPAY, "pg-payment-id", 1000))
 			.willReturn(PaymentAttempt.createApproveRequested("PAY-1", "pg-payment-id", 1000, PaymentProvider.NAVERPAY));
 		given(naverPayGateway.approve("pg-payment-id")).willReturn(NaverPayApproveResult.success("PAY-1", 1000));
 		given(paymentApprovalService.completeApprovedPayment(eq("PAY-1"), eq(PaymentProvider.NAVERPAY), eq("pg-payment-id"), any()))
 			.willThrow(new OrderException(OrderErrorCode.ORDER_PAYMENT_NOT_ALLOWED));
-		given(paymentCancellationAttemptService.getOrCreate(
-			eq("PAY-1"), eq(PaymentProvider.NAVERPAY), eq("pg-payment-id"), eq(1000)))
-			.willReturn(PaymentAttempt.createCancelRequested("PAY-1", "pg-payment-id", 1000, PaymentProvider.NAVERPAY));
-		given(naverPayGateway.cancel(eq("pg-payment-id"), anyInt(), any())).willReturn(NaverPayCancelResult.success());
 
 		// when & then
 		assertThatThrownBy(() -> naverPayApprovalService.approve(memberId, "PAY-1", "pg-payment-id"))
@@ -647,12 +588,13 @@ class NaverPayApprovalServiceTest {
 				OrderException orderException = (OrderException)exception;
 				assertThat(orderException.getErrorCode()).isEqualTo(OrderErrorCode.ORDER_PAYMENT_NOT_ALLOWED);
 			});
-		then(naverPayGateway).should().cancel(eq("pg-payment-id"), anyInt(), any());
+		then(paymentApprovalCompensationService).should().compensateUnexpected(
+			any(), any(), eq(PaymentAttemptFailCode.APPROVE_PROCESS_FAILED), any());
 	}
 
-	@DisplayName("결제 완료 반영 중 기타 결제 예외가 발생하면 APPROVE_PROCESS_FAILED로 취소를 요청하고 예외를 던진다")
+	@DisplayName("결제 완료 반영 중 기타 결제 예외가 발생하면 APPROVE_PROCESS_FAILED로 compensateUnexpected를 호출하고 예외를 던진다")
 	@Test
-	void approve_whenCompleteApproveThrowsUnhandledPaymentException_cancelWithApprovalFailedAndThrowException() {
+	void approve_whenCompleteApproveThrowsUnhandledPaymentException_callsCompensateAndThrowException() {
 		// given
 		long memberId = 1L;
 		Order order = createOrder(1000);
@@ -660,16 +602,11 @@ class NaverPayApprovalServiceTest {
 
 		given(orderQueryService.getOrderByMerchantPayKeyAndMemberId("PAY-1", memberId)).willReturn(order);
 		given(paymentApprovalService.findPaymentByMerchantPayKey("PAY-1")).willReturn(Optional.empty());
-		given(paymentApprovalService.isCompensationRequired("PAY-1")).willReturn(true);
 		given(paymentApprovalAttemptService.getOrCreate("PAY-1", PaymentProvider.NAVERPAY, "pg-payment-id", 1000))
 			.willReturn(PaymentAttempt.createApproveRequested("PAY-1", "pg-payment-id", 1000, PaymentProvider.NAVERPAY));
 		given(naverPayGateway.approve("pg-payment-id")).willReturn(NaverPayApproveResult.success("PAY-1", 1000));
 		given(paymentApprovalService.completeApprovedPayment(eq("PAY-1"), eq(PaymentProvider.NAVERPAY), eq("pg-payment-id"), any()))
 			.willThrow(new PaymentException(PaymentErrorCode.PAYMENT_STATUS_NOT_ALLOWED));
-		given(paymentCancellationAttemptService.getOrCreate(
-			eq("PAY-1"), eq(PaymentProvider.NAVERPAY), eq("pg-payment-id"), eq(1000)))
-			.willReturn(PaymentAttempt.createCancelRequested("PAY-1", "pg-payment-id", 1000, PaymentProvider.NAVERPAY));
-		given(naverPayGateway.cancel(eq("pg-payment-id"), anyInt(), any())).willReturn(NaverPayCancelResult.success());
 
 		// when & then
 		assertThatThrownBy(() -> naverPayApprovalService.approve(memberId, "PAY-1", "pg-payment-id"))
@@ -678,12 +615,13 @@ class NaverPayApprovalServiceTest {
 				PaymentException paymentException = (PaymentException)exception;
 				assertThat(paymentException.getErrorCode()).isEqualTo(PaymentErrorCode.PAYMENT_STATUS_NOT_ALLOWED);
 			});
-		then(naverPayGateway).should().cancel(eq("pg-payment-id"), anyInt(), any());
+		then(paymentApprovalCompensationService).should().compensateUnexpected(
+			any(), any(), eq(PaymentAttemptFailCode.APPROVE_PROCESS_FAILED), any());
 	}
 
-	@DisplayName("결제 완료 반영 중 예상하지 못한 예외가 발생하면 APPROVE_PROCESS_FAILED로 취소를 요청하고 예외를 던진다")
+	@DisplayName("결제 완료 반영 중 예상하지 못한 예외가 발생하면 APPROVE_PROCESS_FAILED로 compensateUnexpected를 호출하고 예외를 던진다")
 	@Test
-	void approve_whenCompleteApproveThrowsUnexpectedException_cancelWithApprovalFailedAndThrowException() {
+	void approve_whenCompleteApproveThrowsUnexpectedException_callsCompensateAndThrowException() {
 		// given
 		long memberId = 1L;
 		Order order = createOrder(1000);
@@ -691,30 +629,23 @@ class NaverPayApprovalServiceTest {
 
 		given(orderQueryService.getOrderByMerchantPayKeyAndMemberId("PAY-1", memberId)).willReturn(order);
 		given(paymentApprovalService.findPaymentByMerchantPayKey("PAY-1")).willReturn(Optional.empty());
-		given(paymentApprovalService.isCompensationRequired("PAY-1")).willReturn(true);
 		given(paymentApprovalAttemptService.getOrCreate("PAY-1", PaymentProvider.NAVERPAY, "pg-payment-id", 1000))
 			.willReturn(PaymentAttempt.createApproveRequested("PAY-1", "pg-payment-id", 1000, PaymentProvider.NAVERPAY));
 		given(naverPayGateway.approve("pg-payment-id")).willReturn(NaverPayApproveResult.success("PAY-1", 1000));
 		given(paymentApprovalService.completeApprovedPayment(eq("PAY-1"), eq(PaymentProvider.NAVERPAY), eq("pg-payment-id"), any()))
 			.willThrow(new RuntimeException("db write failed"));
-		given(paymentCancellationAttemptService.getOrCreate(
-			eq("PAY-1"), eq(PaymentProvider.NAVERPAY), eq("pg-payment-id"), eq(1000)))
-			.willReturn(PaymentAttempt.createCancelRequested("PAY-1", "pg-payment-id", 1000, PaymentProvider.NAVERPAY));
-		given(naverPayGateway.cancel(eq("pg-payment-id"), anyInt(), any())).willReturn(NaverPayCancelResult.success());
 
 		// when & then
 		assertThatThrownBy(() -> naverPayApprovalService.approve(memberId, "PAY-1", "pg-payment-id"))
 			.isInstanceOf(RuntimeException.class)
 			.hasMessage("db write failed");
-		then(paymentApprovalAttemptService).should().failIfRequested(
-			eq("PAY-1"), eq(PaymentProvider.NAVERPAY), eq("pg-payment-id"),
-			eq(PaymentAttemptFailCode.APPROVE_PROCESS_FAILED), eq("db write failed"), any());
-		then(naverPayGateway).should().cancel(eq("pg-payment-id"), anyInt(), any());
+		then(paymentApprovalCompensationService).should().compensateUnexpected(
+			any(), any(), eq(PaymentAttemptFailCode.APPROVE_PROCESS_FAILED), any());
 	}
 
-	@DisplayName("다른 사용자의 paymentId로 승인 응답을 받으면 merchantPayKey 불일치로 실패 처리하고 취소하지 않는다")
+	@DisplayName("다른 사용자의 paymentId로 승인 응답을 받으면 compensateMerchantKeyMismatch를 호출하고 예외를 던진다")
 	@Test
-	void approve_whenForeignPaymentIdReturnsDifferentMerchantPayKey_markFailedWithoutCancel() {
+	void approve_whenForeignPaymentIdReturnsDifferentMerchantPayKey_callsCompensateAndThrowException() {
 		// given
 		long memberId = 1L;
 		Order attackerOrder = createOrder(1000);
@@ -736,10 +667,7 @@ class NaverPayApprovalServiceTest {
 				PaymentException paymentException = (PaymentException)exception;
 				assertThat(paymentException.getErrorCode()).isEqualTo(PaymentErrorCode.PAYMENT_MERCHANT_KEY_MISMATCH);
 			});
-		then(paymentApprovalAttemptService).should().failIfRequested(
-			eq("PAY-ATTACKER"), eq(PaymentProvider.NAVERPAY), eq("pg-victim-payment-id"),
-			eq(PaymentAttemptFailCode.MERCHANT_PAY_KEY_MISMATCH), eq("가맹점 결제 키 불일치"), any());
-		then(naverPayGateway).should(never()).cancel(any(), anyInt(), any());
+		then(paymentApprovalCompensationService).should().compensateMerchantKeyMismatch(any());
 	}
 
 	@DisplayName("다른 사용자의 paymentId로 AlreadyComplete 응답을 받았고 history merchantPayKey가 다르면 실패 처리하고 취소하지 않는다")
@@ -771,279 +699,6 @@ class NaverPayApprovalServiceTest {
 			eq("PAY-ATTACKER"), eq(PaymentProvider.NAVERPAY), eq("pg-victim-payment-id"),
 			eq(PaymentAttemptFailCode.MERCHANT_PAY_KEY_MISMATCH), eq("가맹점 결제 키 불일치"), any());
 		then(naverPayGateway).should(never()).cancel(any(), anyInt(), any());
-	}
-
-	@DisplayName("취소 응답 코드가 AlreadyCanceled면 취소 시도를 성공으로 기록한다")
-	@Test
-	void approve_whenAmountMismatchAndCancelResponseAlreadyCanceled_markCancelSucceed() {
-		// given
-		long memberId = 1L;
-		Order order = createOrder(1000);
-		order.assignMerchantPayKey("PAY-1");
-
-		given(orderQueryService.getOrderByMerchantPayKeyAndMemberId("PAY-1", memberId)).willReturn(order);
-		given(paymentApprovalService.findPaymentByMerchantPayKey("PAY-1")).willReturn(Optional.empty());
-		given(paymentApprovalService.isCompensationRequired("PAY-1")).willReturn(true);
-		given(paymentApprovalAttemptService.getOrCreate("PAY-1", PaymentProvider.NAVERPAY, "pg-payment-id", 1000))
-			.willReturn(PaymentAttempt.createApproveRequested("PAY-1", "pg-payment-id", 1000, PaymentProvider.NAVERPAY));
-		given(paymentCancellationAttemptService.getOrCreate(eq("PAY-1"), eq(PaymentProvider.NAVERPAY), eq("pg-payment-id"), eq(2000)))
-			.willReturn(PaymentAttempt.createCancelRequested("PAY-1", "pg-payment-id", 2000, PaymentProvider.NAVERPAY));
-		given(naverPayGateway.approve("pg-payment-id")).willReturn(NaverPayApproveResult.success("PAY-1", 2000));
-		given(naverPayGateway.cancel(eq("pg-payment-id"), anyInt(), any())).willReturn(NaverPayCancelResult.alreadyCanceled());
-
-		// when & then
-		assertThatThrownBy(() -> naverPayApprovalService.approve(memberId, "PAY-1", "pg-payment-id"))
-			.isInstanceOf(PaymentException.class)
-			.satisfies(exception -> {
-				PaymentException paymentException = (PaymentException)exception;
-				assertThat(paymentException.getErrorCode()).isEqualTo(PaymentErrorCode.PAYMENT_AMOUNT_MISMATCH);
-			});
-		then(paymentCancellationAttemptService).should().succeed(
-			eq("PAY-1"), eq(PaymentProvider.NAVERPAY), eq("pg-payment-id"), any());
-	}
-
-	@DisplayName("취소 API는 성공했지만 취소 성공 반영에 실패해도 원래 승인 실패 예외를 유지한다")
-	@Test
-	void approve_whenAmountMismatchAndSucceedCancelAttemptFails_keepOriginalException() {
-		// given
-		long memberId = 1L;
-		Order order = createOrder(1000);
-		order.assignMerchantPayKey("PAY-1");
-
-		given(orderQueryService.getOrderByMerchantPayKeyAndMemberId("PAY-1", memberId)).willReturn(order);
-		given(paymentApprovalService.findPaymentByMerchantPayKey("PAY-1")).willReturn(Optional.empty());
-		given(paymentApprovalService.isCompensationRequired("PAY-1")).willReturn(true);
-		given(paymentApprovalAttemptService.getOrCreate("PAY-1", PaymentProvider.NAVERPAY, "pg-payment-id", 1000))
-			.willReturn(PaymentAttempt.createApproveRequested("PAY-1", "pg-payment-id", 1000, PaymentProvider.NAVERPAY));
-		given(paymentCancellationAttemptService.getOrCreate(eq("PAY-1"), eq(PaymentProvider.NAVERPAY), eq("pg-payment-id"), eq(2000)))
-			.willReturn(PaymentAttempt.createCancelRequested("PAY-1", "pg-payment-id", 2000, PaymentProvider.NAVERPAY));
-		given(naverPayGateway.approve("pg-payment-id")).willReturn(NaverPayApproveResult.success("PAY-1", 2000));
-		given(naverPayGateway.cancel(eq("pg-payment-id"), anyInt(), any())).willReturn(NaverPayCancelResult.success());
-		org.mockito.Mockito.doThrow(new PaymentException(PaymentErrorCode.PAYMENT_ATTEMPT_NOT_FOUND))
-			.when(paymentCancellationAttemptService)
-			.succeed(eq("PAY-1"), eq(PaymentProvider.NAVERPAY), eq("pg-payment-id"), any());
-
-		// when & then
-		assertThatThrownBy(() -> naverPayApprovalService.approve(memberId, "PAY-1", "pg-payment-id"))
-			.isInstanceOf(PaymentException.class)
-			.satisfies(exception -> {
-				PaymentException paymentException = (PaymentException)exception;
-				assertThat(paymentException.getErrorCode()).isEqualTo(PaymentErrorCode.PAYMENT_AMOUNT_MISMATCH);
-			});
-		then(naverPayGateway).should().cancel(eq("pg-payment-id"), anyInt(), any());
-	}
-
-	@DisplayName("취소 응답 코드가 AlreadyOnGoing이면 취소 시도 상태를 변경하지 않는다")
-	@Test
-	void approve_whenAmountMismatchAndCancelResponseAlreadyOnGoing_keepCancelAttemptRequested() {
-		// given
-		long memberId = 1L;
-		Order order = createOrder(1000);
-		order.assignMerchantPayKey("PAY-1");
-
-		given(orderQueryService.getOrderByMerchantPayKeyAndMemberId("PAY-1", memberId)).willReturn(order);
-		given(paymentApprovalService.findPaymentByMerchantPayKey("PAY-1")).willReturn(Optional.empty());
-		given(paymentApprovalService.isCompensationRequired("PAY-1")).willReturn(true);
-		given(paymentApprovalAttemptService.getOrCreate("PAY-1", PaymentProvider.NAVERPAY, "pg-payment-id", 1000))
-			.willReturn(PaymentAttempt.createApproveRequested("PAY-1", "pg-payment-id", 1000, PaymentProvider.NAVERPAY));
-		given(paymentCancellationAttemptService.getOrCreate(eq("PAY-1"), eq(PaymentProvider.NAVERPAY), eq("pg-payment-id"), eq(2000)))
-			.willReturn(PaymentAttempt.createCancelRequested("PAY-1", "pg-payment-id", 2000, PaymentProvider.NAVERPAY));
-		given(naverPayGateway.approve("pg-payment-id")).willReturn(NaverPayApproveResult.success("PAY-1", 2000));
-		given(naverPayGateway.cancel(eq("pg-payment-id"), anyInt(), any())).willReturn(NaverPayCancelResult.processing());
-
-		// when & then
-		assertThatThrownBy(() -> naverPayApprovalService.approve(memberId, "PAY-1", "pg-payment-id"))
-			.isInstanceOf(PaymentException.class)
-			.satisfies(exception -> {
-				PaymentException paymentException = (PaymentException)exception;
-				assertThat(paymentException.getErrorCode()).isEqualTo(PaymentErrorCode.PAYMENT_AMOUNT_MISMATCH);
-			});
-		then(paymentCancellationAttemptService).should(never()).succeed(
-			eq("PAY-1"), eq(PaymentProvider.NAVERPAY), eq("pg-payment-id"), any());
-		then(paymentCancellationAttemptService).should(never()).fail(
-			eq("PAY-1"), eq(PaymentProvider.NAVERPAY), eq("pg-payment-id"), any(), any(), any());
-	}
-
-	@DisplayName("취소 응답 코드가 실패면 취소 시도를 실패로 기록한다")
-	@Test
-	void approve_whenAmountMismatchAndCancelResponseFail_markCancelFailed() {
-		// given
-		long memberId = 1L;
-		Order order = createOrder(1000);
-		order.assignMerchantPayKey("PAY-1");
-
-		given(orderQueryService.getOrderByMerchantPayKeyAndMemberId("PAY-1", memberId)).willReturn(order);
-		given(paymentApprovalService.findPaymentByMerchantPayKey("PAY-1")).willReturn(Optional.empty());
-		given(paymentApprovalService.isCompensationRequired("PAY-1")).willReturn(true);
-		given(paymentApprovalAttemptService.getOrCreate("PAY-1", PaymentProvider.NAVERPAY, "pg-payment-id", 1000))
-			.willReturn(PaymentAttempt.createApproveRequested("PAY-1", "pg-payment-id", 1000, PaymentProvider.NAVERPAY));
-		given(paymentCancellationAttemptService.getOrCreate(eq("PAY-1"), eq(PaymentProvider.NAVERPAY), eq("pg-payment-id"), eq(2000)))
-			.willReturn(PaymentAttempt.createCancelRequested("PAY-1", "pg-payment-id", 2000, PaymentProvider.NAVERPAY));
-		given(naverPayGateway.approve("pg-payment-id")).willReturn(NaverPayApproveResult.success("PAY-1", 2000));
-		given(naverPayGateway.cancel(eq("pg-payment-id"), anyInt(), any()))
-			.willReturn(NaverPayCancelResult.failed(PaymentAttemptFailCode.PG_REQUEST_REJECTED, "기타 실패"));
-
-		// when & then
-		assertThatThrownBy(() -> naverPayApprovalService.approve(memberId, "PAY-1", "pg-payment-id"))
-			.isInstanceOf(PaymentException.class)
-			.satisfies(exception -> {
-				PaymentException paymentException = (PaymentException)exception;
-				assertThat(paymentException.getErrorCode()).isEqualTo(PaymentErrorCode.PAYMENT_AMOUNT_MISMATCH);
-			});
-		then(paymentCancellationAttemptService).should().fail(
-			eq("PAY-1"), eq(PaymentProvider.NAVERPAY), eq("pg-payment-id"),
-			eq(PaymentAttemptFailCode.PG_REQUEST_REJECTED), eq("기타 실패"), any());
-	}
-
-	@DisplayName("취소 응답 코드가 InvalidMerchant면 취소 시도를 INVALID_MERCHANT로 기록한다")
-	@Test
-	void approve_whenAmountMismatchAndCancelResponseInvalidMerchant_markCancelFailedWithInvalidMerchant() {
-		// given
-		long memberId = 1L;
-		Order order = createOrder(1000);
-		order.assignMerchantPayKey("PAY-1");
-
-		given(orderQueryService.getOrderByMerchantPayKeyAndMemberId("PAY-1", memberId)).willReturn(order);
-		given(paymentApprovalService.findPaymentByMerchantPayKey("PAY-1")).willReturn(Optional.empty());
-		given(paymentApprovalService.isCompensationRequired("PAY-1")).willReturn(true);
-		given(paymentApprovalAttemptService.getOrCreate("PAY-1", PaymentProvider.NAVERPAY, "pg-payment-id", 1000))
-			.willReturn(PaymentAttempt.createApproveRequested("PAY-1", "pg-payment-id", 1000, PaymentProvider.NAVERPAY));
-		given(paymentCancellationAttemptService.getOrCreate(eq("PAY-1"), eq(PaymentProvider.NAVERPAY), eq("pg-payment-id"), eq(2000)))
-			.willReturn(PaymentAttempt.createCancelRequested("PAY-1", "pg-payment-id", 2000, PaymentProvider.NAVERPAY));
-		given(naverPayGateway.approve("pg-payment-id")).willReturn(NaverPayApproveResult.success("PAY-1", 2000));
-		given(naverPayGateway.cancel(eq("pg-payment-id"), anyInt(), any()))
-			.willReturn(NaverPayCancelResult.failed(PaymentAttemptFailCode.INVALID_MERCHANT, "유효하지 않은 가맹점"));
-
-		// when & then
-		assertThatThrownBy(() -> naverPayApprovalService.approve(memberId, "PAY-1", "pg-payment-id"))
-			.isInstanceOf(PaymentException.class)
-			.satisfies(exception -> {
-				PaymentException paymentException = (PaymentException)exception;
-				assertThat(paymentException.getErrorCode()).isEqualTo(PaymentErrorCode.PAYMENT_AMOUNT_MISMATCH);
-			});
-		then(paymentCancellationAttemptService).should().fail(
-			eq("PAY-1"), eq(PaymentProvider.NAVERPAY), eq("pg-payment-id"),
-			eq(PaymentAttemptFailCode.INVALID_MERCHANT), eq("유효하지 않은 가맹점"), any());
-	}
-
-	@DisplayName("취소 응답 코드가 CancelNotComplete면 취소 시도를 CANCEL_PROCESS_FAILED로 기록한다")
-	@Test
-	void approve_whenAmountMismatchAndCancelResponseCancelNotComplete_markCancelFailedWithProcessFail() {
-		// given
-		long memberId = 1L;
-		Order order = createOrder(1000);
-		order.assignMerchantPayKey("PAY-1");
-
-		given(orderQueryService.getOrderByMerchantPayKeyAndMemberId("PAY-1", memberId)).willReturn(order);
-		given(paymentApprovalService.findPaymentByMerchantPayKey("PAY-1")).willReturn(Optional.empty());
-		given(paymentApprovalService.isCompensationRequired("PAY-1")).willReturn(true);
-		given(paymentApprovalAttemptService.getOrCreate("PAY-1", PaymentProvider.NAVERPAY, "pg-payment-id", 1000))
-			.willReturn(PaymentAttempt.createApproveRequested("PAY-1", "pg-payment-id", 1000, PaymentProvider.NAVERPAY));
-		given(paymentCancellationAttemptService.getOrCreate(eq("PAY-1"), eq(PaymentProvider.NAVERPAY), eq("pg-payment-id"), eq(2000)))
-			.willReturn(PaymentAttempt.createCancelRequested("PAY-1", "pg-payment-id", 2000, PaymentProvider.NAVERPAY));
-		given(naverPayGateway.approve("pg-payment-id")).willReturn(NaverPayApproveResult.success("PAY-1", 2000));
-		given(naverPayGateway.cancel(eq("pg-payment-id"), anyInt(), any()))
-			.willReturn(NaverPayCancelResult.failed(PaymentAttemptFailCode.CANCEL_PROCESS_FAILED,
-				"취소 처리가 완료되지 않았지만, 빠른 시일 내에 자동 취소 재처리 예정."));
-
-		// when & then
-		assertThatThrownBy(() -> naverPayApprovalService.approve(memberId, "PAY-1", "pg-payment-id"))
-			.isInstanceOf(PaymentException.class)
-			.satisfies(exception -> {
-				PaymentException paymentException = (PaymentException)exception;
-				assertThat(paymentException.getErrorCode()).isEqualTo(PaymentErrorCode.PAYMENT_AMOUNT_MISMATCH);
-			});
-		then(paymentCancellationAttemptService).should().fail(
-			eq("PAY-1"), eq(PaymentProvider.NAVERPAY), eq("pg-payment-id"),
-			eq(PaymentAttemptFailCode.CANCEL_PROCESS_FAILED),
-			eq("취소 처리가 완료되지 않았지만, 빠른 시일 내에 자동 취소 재처리 예정."), any());
-	}
-
-	@DisplayName("취소 API는 실패 응답을 줬지만 취소 실패 반영에 실패해도 원래 승인 실패 예외를 유지한다")
-	@Test
-	void approve_whenAmountMismatchAndFailCancelAttemptFails_keepOriginalException() {
-		// given
-		long memberId = 1L;
-		Order order = createOrder(1000);
-		order.assignMerchantPayKey("PAY-1");
-
-		given(orderQueryService.getOrderByMerchantPayKeyAndMemberId("PAY-1", memberId)).willReturn(order);
-		given(paymentApprovalService.findPaymentByMerchantPayKey("PAY-1")).willReturn(Optional.empty());
-		given(paymentApprovalService.isCompensationRequired("PAY-1")).willReturn(true);
-		given(paymentApprovalAttemptService.getOrCreate("PAY-1", PaymentProvider.NAVERPAY, "pg-payment-id", 1000))
-			.willReturn(PaymentAttempt.createApproveRequested("PAY-1", "pg-payment-id", 1000, PaymentProvider.NAVERPAY));
-		given(paymentCancellationAttemptService.getOrCreate(eq("PAY-1"), eq(PaymentProvider.NAVERPAY), eq("pg-payment-id"), eq(2000)))
-			.willReturn(PaymentAttempt.createCancelRequested("PAY-1", "pg-payment-id", 2000, PaymentProvider.NAVERPAY));
-		given(naverPayGateway.approve("pg-payment-id")).willReturn(NaverPayApproveResult.success("PAY-1", 2000));
-		given(naverPayGateway.cancel(eq("pg-payment-id"), anyInt(), any()))
-			.willReturn(NaverPayCancelResult.failed(PaymentAttemptFailCode.PG_REQUEST_REJECTED, "기타 실패"));
-		org.mockito.Mockito.doThrow(new PaymentException(PaymentErrorCode.PAYMENT_ATTEMPT_NOT_FOUND))
-			.when(paymentCancellationAttemptService)
-			.fail(eq("PAY-1"), eq(PaymentProvider.NAVERPAY), eq("pg-payment-id"),
-				eq(PaymentAttemptFailCode.PG_REQUEST_REJECTED), eq("기타 실패"), any());
-
-		// when & then
-		assertThatThrownBy(() -> naverPayApprovalService.approve(memberId, "PAY-1", "pg-payment-id"))
-			.isInstanceOf(PaymentException.class)
-			.satisfies(exception -> {
-				PaymentException paymentException = (PaymentException)exception;
-				assertThat(paymentException.getErrorCode()).isEqualTo(PaymentErrorCode.PAYMENT_AMOUNT_MISMATCH);
-			});
-		then(naverPayGateway).should().cancel(eq("pg-payment-id"), anyInt(), any());
-	}
-
-	@DisplayName("Payment가 이미 존재하면 보상 cancel을 skip하고 승인 실패 예외를 유지한다")
-	@Test
-	void approve_whenPaymentAlreadyExistsDuringCompensation_skipCancelAndThrowException() {
-		// given
-		long memberId = 1L;
-		Order order = createOrder(1000);
-		order.assignMerchantPayKey("PAY-1");
-
-		given(orderQueryService.getOrderByMerchantPayKeyAndMemberId("PAY-1", memberId)).willReturn(order);
-		given(paymentApprovalService.findPaymentByMerchantPayKey("PAY-1")).willReturn(Optional.empty());
-		given(paymentApprovalService.isCompensationRequired("PAY-1")).willReturn(false); // Payment 이미 존재
-		given(paymentApprovalAttemptService.getOrCreate("PAY-1", PaymentProvider.NAVERPAY, "pg-payment-id", 1000))
-			.willReturn(PaymentAttempt.createApproveRequested("PAY-1", "pg-payment-id", 1000, PaymentProvider.NAVERPAY));
-		given(naverPayGateway.approve("pg-payment-id")).willReturn(NaverPayApproveResult.success("PAY-1", 2000));
-
-		// when & then
-		assertThatThrownBy(() -> naverPayApprovalService.approve(memberId, "PAY-1", "pg-payment-id"))
-			.isInstanceOf(PaymentException.class)
-			.satisfies(exception -> {
-				PaymentException paymentException = (PaymentException)exception;
-				assertThat(paymentException.getErrorCode()).isEqualTo(PaymentErrorCode.PAYMENT_AMOUNT_MISMATCH);
-			});
-		then(naverPayGateway).should(never()).cancel(any(), anyInt(), any());
-		then(paymentCancellationAttemptService).should(never()).getOrCreate(any(), any(), any(), anyInt());
-	}
-
-	@DisplayName("Payment가 없으면 보상 cancel을 정상 진행한다")
-	@Test
-	void approve_whenPaymentNotExistsDuringCompensation_proceedCancel() {
-		// given
-		long memberId = 1L;
-		Order order = createOrder(1000);
-		order.assignMerchantPayKey("PAY-1");
-
-		given(orderQueryService.getOrderByMerchantPayKeyAndMemberId("PAY-1", memberId)).willReturn(order);
-		given(paymentApprovalService.findPaymentByMerchantPayKey("PAY-1")).willReturn(Optional.empty());
-		given(paymentApprovalService.isCompensationRequired("PAY-1")).willReturn(true); // Payment 미존재
-		given(paymentApprovalAttemptService.getOrCreate("PAY-1", PaymentProvider.NAVERPAY, "pg-payment-id", 1000))
-			.willReturn(PaymentAttempt.createApproveRequested("PAY-1", "pg-payment-id", 1000, PaymentProvider.NAVERPAY));
-		given(paymentCancellationAttemptService.getOrCreate(eq("PAY-1"), eq(PaymentProvider.NAVERPAY), eq("pg-payment-id"), eq(2000)))
-			.willReturn(PaymentAttempt.createCancelRequested("PAY-1", "pg-payment-id", 2000, PaymentProvider.NAVERPAY));
-		given(naverPayGateway.approve("pg-payment-id")).willReturn(NaverPayApproveResult.success("PAY-1", 2000));
-		given(naverPayGateway.cancel(eq("pg-payment-id"), anyInt(), any())).willReturn(NaverPayCancelResult.success());
-
-		// when & then
-		assertThatThrownBy(() -> naverPayApprovalService.approve(memberId, "PAY-1", "pg-payment-id"))
-			.isInstanceOf(PaymentException.class)
-			.satisfies(exception -> {
-				PaymentException paymentException = (PaymentException)exception;
-				assertThat(paymentException.getErrorCode()).isEqualTo(PaymentErrorCode.PAYMENT_AMOUNT_MISMATCH);
-			});
-		then(naverPayGateway).should().cancel(eq("pg-payment-id"), anyInt(), any());
 	}
 
 	@DisplayName("같은 결제 시도 이력이 실패 상태면 예외를 던진다")
@@ -1101,6 +756,53 @@ class NaverPayApprovalServiceTest {
 		assertThat(result.getStatus()).isEqualTo(NaverPayApproveStatus.SUCCESS);
 		then(naverPayGateway).should(never()).approve(any());
 		then(naverPayGateway).should().getApprovalHistory("pg-payment-id");
+	}
+
+	@DisplayName("pgCancel: NaverPayCancelResult.SUCCESS → CancelOutcome.SUCCESS")
+	@Test
+	void pgCancel_whenResultIsSuccess_returnSuccessOutcome() {
+		PaymentAttempt cancelAttempt = PaymentAttempt.createCancelRequested("PAY-1", "pg-id", 1000, PaymentProvider.NAVERPAY);
+		given(naverPayGateway.cancel("pg-id", 1000, "취소 사유")).willReturn(NaverPayCancelResult.success());
+
+		CancelOutcome outcome = naverPayApprovalService.pgCancel(cancelAttempt, "취소 사유");
+
+		assertThat(outcome.status()).isEqualTo(CancelOutcome.Status.SUCCESS);
+	}
+
+	@DisplayName("pgCancel: NaverPayCancelResult.ALREADY_CANCELED → CancelOutcome.SUCCESS")
+	@Test
+	void pgCancel_whenResultIsAlreadyCanceled_returnSuccessOutcome() {
+		PaymentAttempt cancelAttempt = PaymentAttempt.createCancelRequested("PAY-1", "pg-id", 1000, PaymentProvider.NAVERPAY);
+		given(naverPayGateway.cancel("pg-id", 1000, "취소 사유")).willReturn(NaverPayCancelResult.alreadyCanceled());
+
+		CancelOutcome outcome = naverPayApprovalService.pgCancel(cancelAttempt, "취소 사유");
+
+		assertThat(outcome.status()).isEqualTo(CancelOutcome.Status.SUCCESS);
+	}
+
+	@DisplayName("pgCancel: NaverPayCancelResult.PROCESSING → CancelOutcome.PROCESSING")
+	@Test
+	void pgCancel_whenResultIsProcessing_returnProcessingOutcome() {
+		PaymentAttempt cancelAttempt = PaymentAttempt.createCancelRequested("PAY-1", "pg-id", 1000, PaymentProvider.NAVERPAY);
+		given(naverPayGateway.cancel("pg-id", 1000, "취소 사유")).willReturn(NaverPayCancelResult.processing());
+
+		CancelOutcome outcome = naverPayApprovalService.pgCancel(cancelAttempt, "취소 사유");
+
+		assertThat(outcome.status()).isEqualTo(CancelOutcome.Status.PROCESSING);
+	}
+
+	@DisplayName("pgCancel: NaverPayCancelResult.FAILED → CancelOutcome.FAILED with failCode/failDetail")
+	@Test
+	void pgCancel_whenResultIsFailed_returnFailedOutcomeWithDetails() {
+		PaymentAttempt cancelAttempt = PaymentAttempt.createCancelRequested("PAY-1", "pg-id", 1000, PaymentProvider.NAVERPAY);
+		given(naverPayGateway.cancel("pg-id", 1000, "취소 사유"))
+			.willReturn(NaverPayCancelResult.failed(PaymentAttemptFailCode.PG_REQUEST_REJECTED, "reject reason"));
+
+		CancelOutcome outcome = naverPayApprovalService.pgCancel(cancelAttempt, "취소 사유");
+
+		assertThat(outcome.status()).isEqualTo(CancelOutcome.Status.FAILED);
+		assertThat(outcome.failCode()).isEqualTo(PaymentAttemptFailCode.PG_REQUEST_REJECTED);
+		assertThat(outcome.failDetail()).isEqualTo("reject reason");
 	}
 
 	private Order createOrder(int totalPrice) {
