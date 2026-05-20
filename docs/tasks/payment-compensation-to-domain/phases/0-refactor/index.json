@@ -29,7 +29,10 @@
     {
       "step": 3,
       "name": "write-retrospective",
-      "status": "pending"
+      "status": "completed",
+      "started_at": "2026-05-20T18:23:07+0900",
+      "summary": "docs/tasks/payment-compensation-to-domain/retrospective.md를 작성한다. 5단 구조(작업 요약, 설계 결정, 발견, 미결 과제, 개선 제안)로 구성하며, 미결 과제로 PaymentGateway port 완전 inversion/PaymentReference Value Object 도입/ArchUnit 가시성 강제 3가지를 명시한다.",
+      "completed_at": "2026-05-20T18:25:54+0900"
     }
   ],
   "created_at": "2026-05-20T18:04:21+0900"
