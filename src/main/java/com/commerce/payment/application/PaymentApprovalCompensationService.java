@@ -70,10 +70,11 @@ public class PaymentApprovalCompensationService {
 		String cancelReason,
 		PgCanceller pgCanceller
 	) {
+		LocalDateTime now = LocalDateTime.now();
 		// approve attempt가 race window에서 이미 SUCCEEDED 상태가 됐어도 PG cancel은 멈추지 않는다. REQUESTED가 아니면 mark만 skip한다.
 		paymentApprovalAttemptService.failIfRequested(
 			approveAttempt.getMerchantPayKey(), approveAttempt.getProvider(), approveAttempt.getPaymentId(),
-			failCode, failDetail, LocalDateTime.now()
+			failCode, failDetail, now
 		);
 
 		if (!paymentApprovalService.isCompensationRequired(approveAttempt.getMerchantPayKey())) {
@@ -98,12 +99,12 @@ public class PaymentApprovalCompensationService {
 			switch (outcome.status()) {
 				case SUCCESS -> paymentCancellationAttemptService.succeed(
 					cancelAttempt.getMerchantPayKey(), cancelAttempt.getProvider(),
-					cancelAttempt.getPaymentId(), LocalDateTime.now()
+					cancelAttempt.getPaymentId(), now
 				);
 				case PROCESSING -> {} // no-op
 				case FAILED -> paymentCancellationAttemptService.fail(
 					cancelAttempt.getMerchantPayKey(), cancelAttempt.getProvider(),
-					cancelAttempt.getPaymentId(), outcome.failCode(), outcome.failDetail(), LocalDateTime.now()
+					cancelAttempt.getPaymentId(), outcome.failCode(), outcome.failDetail(), now
 				);
 			}
 		} catch (PaymentException ex) {
