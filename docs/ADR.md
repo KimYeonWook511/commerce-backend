@@ -84,3 +84,11 @@
 - **이유**: Payment는 `order_id`, `merchantPayKey`, `pgPaymentId` 모두 unique 제약이 있고 `completeApprovedPayment`가 Order FOR UPDATE 안에서 저장하므로 race-safe하다. DDD 관점에서 Payment Aggregate의 불변식을 cross-Aggregate 협력으로 활용한다. 미래 Payment 도메인 분리 시 `isCompensationRequired`는 외부 API로 자연 승격 가능하다.
 - **트레이드오프**: Payment 조회 1회 추가되나 인덱스 조회라 성능 영향 미미하다.
 - **PaymentAttempt Aggregate 캡슐화**: `PaymentAttempt.succeed`/`fail` 메서드는 `PaymentApprovalAttemptService`, `PaymentCancellationAttemptService` 외부에서 직접 호출하지 않는다. 정책 강제는 코드가 아닌 ADR과 JavaDoc으로만 명시하며, ArchUnit 도입은 별도 후속 작업으로 분리한다.
+- **후속 (ADR-015, payment-compensation-to-domain task)**: 보상 owner가 `NaverPayApprovalService.failApproveAndCancelApprovedPayment`에서 payment.application의 `PaymentApprovalCompensationService.runPgCancel`로 이동했다. `isCompensationRequired` 호출자가 바뀌었을 뿐 정책 자체(Payment 존재 체크 → cancel skip)는 동일하게 유지된다.
+
+### ADR-015: 보상 정책은 payment.application 책임이고, PG 어댑터는 cancel 콜백만 제공한다
+- **결정**: `NaverPayApprovalService`에 있던 보상 dispatcher 4개와 공통 골격을 `PaymentApprovalCompensationService`(payment.application)로 이동한다. PG cancel 호출은 `PgCanceller` @FunctionalInterface 콜백으로 위임하고, PG 응답은 `CancelOutcome` record로 변환해 payment.application이 `NaverPayCancelResult`를 직접 import하지 않도록 한다.
+- **배경**: 보상 정책(어떤 실패 → cancel 필요/불필요, cancel reason, cancel amount)은 PG-agnostic 결제 도메인 책임이다. PG-specific한 부분은 cancel API 호출과 NaverPayCancelResult 응답 해석뿐이다. NaverPayApprovalService가 보상 정책을 내장하면 레이어 의존이 역전되고 PG 변경 시 정책 코드도 함께 영향받는다.
+- **이유**: `PgCanceller` 좁은 콜백은 PaymentGateway port 완전 inversion(PG 둘 이상 추가 시)보다 지금 필요한 최소 구조만 도입한다. NaverPayApprovalService가 메서드 참조(`this::pgCancel`)로 구현하므로 인터페이스 추가 없이 의존 역전이 성립한다.
+- **트랜잭션 정책**: `PaymentApprovalCompensationService`에 클래스 레벨 `@Transactional` 없음. `isCompensationRequired`의 `REQUIRES_NEW` 격리(ADR-014)를 보존하기 위해 각 단계가 자기 트랜잭션을 가진다.
+- **트레이드오프**: PG가 둘 이상 추가될 때 `PgCanceller` 주입 위치를 재설계해야 한다. 이때 PaymentGateway port 완전 inversion으로 자연 승격 가능하다.

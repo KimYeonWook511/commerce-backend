@@ -75,6 +75,22 @@ src/test/java/
 └── 예외 발생 시 트랜잭션이 의도대로 처리되는가
 ```
 
+#### PgCanceller functional interface Mock 패턴
+
+`@FunctionalInterface`를 Mockito로 Mock할 때는 일반 인터페이스와 동일하게 처리한다.
+
+```java
+@Mock PgCanceller pgCanceller;
+
+// stub 예시
+given(pgCanceller.cancel(any(), any())).willReturn(CancelOutcome.success());
+given(pgCanceller.cancel(any(), eq("취소 이유"))).willReturn(CancelOutcome.failed(failCode, "실패 상세"));
+
+// 호출 여부 검증
+then(pgCanceller).should().cancel(eq(cancelAttempt), eq("취소 이유"));
+then(pgCanceller).should(never()).cancel(any(), any());
+```
+
 ### Presentation Layer — 슬라이스 테스트 (`@WebMvcTest`)
 
 - Controller 관련 빈만 로드, Service는 `@MockitoBean`으로 대체

@@ -21,7 +21,10 @@
     {
       "step": 2,
       "name": "sync-root-docs",
-      "status": "pending"
+      "status": "completed",
+      "started_at": "2026-05-20T18:19:53+0900",
+      "summary": "docs/ADR.md에 ADR-015(보상 정책 payment.application 이동)를 신설하고 ADR-014에 후속 노트를 추가한다. docs/architecture.md 서비스 테이블과 결제 승인 데이터 흐름에 PaymentApprovalCompensationService를 추가한다. docs/exception-strategy.md의 failIfRequested 호출처 명칭을 갱신하고 PgCanceller 섹션을 추가한다. docs/testing-conventions.md Application Layer 섹션에 PgCanceller Mock 패턴을 추가한다. 기존 테스트 전체 통과.",
+      "completed_at": "2026-05-20T18:21:59+0900"
     },
     {
       "step": 3,
