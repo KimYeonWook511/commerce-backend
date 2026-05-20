@@ -572,7 +572,7 @@ class StepExecutor:
                 section for section in (context_text, previous_step_context) if section
             )
 
-            label = f"Step {step_num}/{self.total_steps} ({done} done): {step_name}"
+            label = f"Step {step_num + 1}/{self.total_steps} ({done} done): {step_name}"
             if attempt > 1:
                 label += f" [retry {attempt}/{self.MAX_RETRIES}]"
 
