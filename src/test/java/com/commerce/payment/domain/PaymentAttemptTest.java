@@ -1,6 +1,7 @@
 package com.commerce.payment.domain;
 
 import static org.assertj.core.api.Assertions.assertThat;
+import static org.assertj.core.api.Assertions.assertThatCode;
 import static org.assertj.core.api.Assertions.assertThatThrownBy;
 
 import java.time.LocalDateTime;
@@ -15,14 +16,14 @@ class PaymentAttemptTest {
 
 	@DisplayName("승인 성공 처리 시 상태와 응답 시간이 갱신된다")
 	@Test
-	void markApproveSucceeded_whenCalled_updateStatusAndRespondedAt() {
+	void succeed_whenCalled_updateStatusAndRespondedAt() {
 		// given
 		PaymentAttempt attempt = PaymentAttempt.createApproveRequested("PAY-1", "payment-id-1", 1000,
 			PaymentProvider.NAVERPAY);
 		LocalDateTime respondedAt = LocalDateTime.of(2026, 3, 5, 20, 10);
 
 		// when
-		attempt.markApproveSucceeded(respondedAt);
+		attempt.succeed(respondedAt);
 
 		// then
 		assertThat(attempt.getStatus()).isEqualTo(PaymentAttemptStatus.SUCCEEDED);
@@ -33,14 +34,14 @@ class PaymentAttemptTest {
 
 	@DisplayName("취소 실패 처리 시 실패 사유와 응답 시간이 저장된다")
 	@Test
-	void markCancelFailed_whenCalled_updateFailedState() {
+	void fail_whenCalled_updateFailedState() {
 		// given
 		PaymentAttempt attempt = PaymentAttempt.createCancelRequested("PAY-1", "payment-id-1", 1000,
 			PaymentProvider.NAVERPAY);
 		LocalDateTime respondedAt = LocalDateTime.of(2026, 3, 5, 20, 20);
 
 		// when
-		attempt.markCancelFailed(PaymentAttemptFailCode.PG_REQUEST_REJECTED, "cancel failed", respondedAt);
+		attempt.fail(PaymentAttemptFailCode.PG_REQUEST_REJECTED, "cancel failed", respondedAt);
 
 		// then
 		assertThat(attempt.getStatus()).isEqualTo(PaymentAttemptStatus.FAILED);
@@ -49,154 +50,104 @@ class PaymentAttemptTest {
 		assertThat(attempt.getRespondedAt()).isEqualTo(respondedAt);
 	}
 
-	@DisplayName("이미 SUCCEEDED 상태인 attempt에 markApproveSucceeded 호출 시 예외가 발생한다")
+	@DisplayName("이미 SUCCEEDED 상태인 attempt에 succeed 호출 시 예외가 발생한다")
 	@Test
-	void markApproveSucceeded_whenStatusSucceeded_throwException() {
+	void succeed_whenStatusSucceeded_throwException() {
 		// given
 		PaymentAttempt attempt = PaymentAttempt.createApproveRequested("PAY-1", "payment-id-1", 1000,
 			PaymentProvider.NAVERPAY);
-		attempt.markApproveSucceeded(LocalDateTime.now());
+		attempt.succeed(LocalDateTime.now());
 
 		// when & then
-		assertThatThrownBy(() -> attempt.markApproveSucceeded(LocalDateTime.now()))
+		assertThatThrownBy(() -> attempt.succeed(LocalDateTime.now()))
 			.isInstanceOf(PaymentException.class)
 			.satisfies(e -> assertThat(((PaymentException)e).getErrorCode())
 				.isEqualTo(PaymentErrorCode.PAYMENT_ATTEMPT_STATUS_TRANSITION_NOT_ALLOWED));
 	}
 
-	@DisplayName("이미 FAILED 상태인 attempt에 markApproveSucceeded 호출 시 예외가 발생한다")
+	@DisplayName("이미 FAILED 상태인 attempt에 succeed 호출 시 예외가 발생한다")
 	@Test
-	void markApproveSucceeded_whenStatusFailed_throwException() {
+	void succeed_whenStatusFailed_throwException() {
 		// given
 		PaymentAttempt attempt = PaymentAttempt.createApproveRequested("PAY-1", "payment-id-1", 1000,
 			PaymentProvider.NAVERPAY);
-		attempt.markApproveFailed(PaymentAttemptFailCode.TIME_EXPIRED, "timeout", LocalDateTime.now());
+		attempt.fail(PaymentAttemptFailCode.TIME_EXPIRED, "timeout", LocalDateTime.now());
 
 		// when & then
-		assertThatThrownBy(() -> attempt.markApproveSucceeded(LocalDateTime.now()))
+		assertThatThrownBy(() -> attempt.succeed(LocalDateTime.now()))
 			.isInstanceOf(PaymentException.class)
 			.satisfies(e -> assertThat(((PaymentException)e).getErrorCode())
 				.isEqualTo(PaymentErrorCode.PAYMENT_ATTEMPT_STATUS_TRANSITION_NOT_ALLOWED));
 	}
 
-	@DisplayName("CANCEL type attempt에 markApproveSucceeded 호출 시 예외가 발생한다")
+	@DisplayName("REQUESTED 상태가 아닌 attempt에 fail 호출 시 예외가 발생한다")
 	@Test
-	void markApproveSucceeded_whenTypeIsCancel_throwException() {
-		// given
-		PaymentAttempt attempt = PaymentAttempt.createCancelRequested("PAY-1", "payment-id-1", 1000,
-			PaymentProvider.NAVERPAY);
-
-		// when & then
-		assertThatThrownBy(() -> attempt.markApproveSucceeded(LocalDateTime.now()))
-			.isInstanceOf(PaymentException.class)
-			.satisfies(e -> assertThat(((PaymentException)e).getErrorCode())
-				.isEqualTo(PaymentErrorCode.PAYMENT_ATTEMPT_TYPE_MISMATCH));
-	}
-
-	@DisplayName("REQUESTED 상태가 아닌 attempt에 markApproveFailed 호출 시 예외가 발생한다")
-	@Test
-	void markApproveFailed_whenStatusNotRequested_throwException() {
+	void fail_whenStatusNotRequested_throwException() {
 		// given
 		PaymentAttempt attempt = PaymentAttempt.createApproveRequested("PAY-1", "payment-id-1", 1000,
 			PaymentProvider.NAVERPAY);
-		attempt.markApproveSucceeded(LocalDateTime.now());
+		attempt.succeed(LocalDateTime.now());
 
 		// when & then
 		assertThatThrownBy(
-			() -> attempt.markApproveFailed(PaymentAttemptFailCode.TIME_EXPIRED, "timeout", LocalDateTime.now()))
+			() -> attempt.fail(PaymentAttemptFailCode.TIME_EXPIRED, "timeout", LocalDateTime.now()))
 			.isInstanceOf(PaymentException.class)
 			.satisfies(e -> assertThat(((PaymentException)e).getErrorCode())
 				.isEqualTo(PaymentErrorCode.PAYMENT_ATTEMPT_STATUS_TRANSITION_NOT_ALLOWED));
 	}
 
-	@DisplayName("FAILED 상태 attempt에 markApproveFailed 호출 시 예외가 발생한다 (자기 전이 거부)")
+	@DisplayName("FAILED 상태 attempt에 fail 호출 시 예외가 발생한다 (자기 전이 거부)")
 	@Test
-	void markApproveFailed_whenStatusFailed_throwException() {
+	void fail_whenStatusFailed_throwException() {
 		// given
 		PaymentAttempt attempt = PaymentAttempt.createApproveRequested("PAY-1", "payment-id-1", 1000,
 			PaymentProvider.NAVERPAY);
-		attempt.markApproveFailed(PaymentAttemptFailCode.TIME_EXPIRED, "timeout", LocalDateTime.now());
+		attempt.fail(PaymentAttemptFailCode.TIME_EXPIRED, "timeout", LocalDateTime.now());
 
 		// when & then
 		assertThatThrownBy(
-			() -> attempt.markApproveFailed(PaymentAttemptFailCode.TIME_EXPIRED, "timeout", LocalDateTime.now()))
+			() -> attempt.fail(PaymentAttemptFailCode.TIME_EXPIRED, "timeout", LocalDateTime.now()))
 			.isInstanceOf(PaymentException.class)
 			.satisfies(e -> assertThat(((PaymentException)e).getErrorCode())
 				.isEqualTo(PaymentErrorCode.PAYMENT_ATTEMPT_STATUS_TRANSITION_NOT_ALLOWED));
 	}
 
-	@DisplayName("CANCEL type attempt에 markApproveFailed 호출 시 예외가 발생한다")
+	@DisplayName("merchantPayKey가 다르면 verifyApprovedResponse에서 PAYMENT_MERCHANT_KEY_MISMATCH를 던진다")
 	@Test
-	void markApproveFailed_whenTypeIsCancel_throwException() {
-		// given
-		PaymentAttempt attempt = PaymentAttempt.createCancelRequested("PAY-1", "payment-id-1", 1000,
-			PaymentProvider.NAVERPAY);
-
-		// when & then
-		assertThatThrownBy(
-			() -> attempt.markApproveFailed(PaymentAttemptFailCode.TIME_EXPIRED, "timeout", LocalDateTime.now()))
-			.isInstanceOf(PaymentException.class)
-			.satisfies(e -> assertThat(((PaymentException)e).getErrorCode())
-				.isEqualTo(PaymentErrorCode.PAYMENT_ATTEMPT_TYPE_MISMATCH));
-	}
-
-	@DisplayName("REQUESTED 상태가 아닌 attempt에 markCancelSucceeded 호출 시 예외가 발생한다")
-	@Test
-	void markCancelSucceeded_whenStatusNotRequested_throwException() {
-		// given
-		PaymentAttempt attempt = PaymentAttempt.createCancelRequested("PAY-1", "payment-id-1", 1000,
-			PaymentProvider.NAVERPAY);
-		attempt.markCancelSucceeded(LocalDateTime.now());
-
-		// when & then
-		assertThatThrownBy(() -> attempt.markCancelSucceeded(LocalDateTime.now()))
-			.isInstanceOf(PaymentException.class)
-			.satisfies(e -> assertThat(((PaymentException)e).getErrorCode())
-				.isEqualTo(PaymentErrorCode.PAYMENT_ATTEMPT_STATUS_TRANSITION_NOT_ALLOWED));
-	}
-
-	@DisplayName("APPROVE type attempt에 markCancelSucceeded 호출 시 예외가 발생한다")
-	@Test
-	void markCancelSucceeded_whenTypeIsApprove_throwException() {
+	void verifyApprovedResponse_whenMerchantPayKeyMismatch_throwPaymentMerchantKeyMismatch() {
 		// given
 		PaymentAttempt attempt = PaymentAttempt.createApproveRequested("PAY-1", "payment-id-1", 1000,
 			PaymentProvider.NAVERPAY);
 
 		// when & then
-		assertThatThrownBy(() -> attempt.markCancelSucceeded(LocalDateTime.now()))
+		assertThatThrownBy(() -> attempt.verifyApprovedResponse("OTHER-PAY", 1000))
 			.isInstanceOf(PaymentException.class)
 			.satisfies(e -> assertThat(((PaymentException)e).getErrorCode())
-				.isEqualTo(PaymentErrorCode.PAYMENT_ATTEMPT_TYPE_MISMATCH));
+				.isEqualTo(PaymentErrorCode.PAYMENT_MERCHANT_KEY_MISMATCH));
 	}
 
-	@DisplayName("REQUESTED 상태가 아닌 attempt에 markCancelFailed 호출 시 예외가 발생한다")
+	@DisplayName("금액이 다르면 verifyApprovedResponse에서 PAYMENT_AMOUNT_MISMATCH를 던진다")
 	@Test
-	void markCancelFailed_whenStatusNotRequested_throwException() {
-		// given
-		PaymentAttempt attempt = PaymentAttempt.createCancelRequested("PAY-1", "payment-id-1", 1000,
-			PaymentProvider.NAVERPAY);
-		attempt.markCancelSucceeded(LocalDateTime.now());
-
-		// when & then
-		assertThatThrownBy(
-			() -> attempt.markCancelFailed(PaymentAttemptFailCode.PG_REQUEST_REJECTED, "failed", LocalDateTime.now()))
-			.isInstanceOf(PaymentException.class)
-			.satisfies(e -> assertThat(((PaymentException)e).getErrorCode())
-				.isEqualTo(PaymentErrorCode.PAYMENT_ATTEMPT_STATUS_TRANSITION_NOT_ALLOWED));
-	}
-
-	@DisplayName("APPROVE type attempt에 markCancelFailed 호출 시 예외가 발생한다")
-	@Test
-	void markCancelFailed_whenTypeIsApprove_throwException() {
+	void verifyApprovedResponse_whenAmountMismatch_throwPaymentAmountMismatch() {
 		// given
 		PaymentAttempt attempt = PaymentAttempt.createApproveRequested("PAY-1", "payment-id-1", 1000,
 			PaymentProvider.NAVERPAY);
 
 		// when & then
-		assertThatThrownBy(
-			() -> attempt.markCancelFailed(PaymentAttemptFailCode.PG_REQUEST_REJECTED, "failed", LocalDateTime.now()))
+		assertThatThrownBy(() -> attempt.verifyApprovedResponse("PAY-1", 2000))
 			.isInstanceOf(PaymentException.class)
 			.satisfies(e -> assertThat(((PaymentException)e).getErrorCode())
-				.isEqualTo(PaymentErrorCode.PAYMENT_ATTEMPT_TYPE_MISMATCH));
+				.isEqualTo(PaymentErrorCode.PAYMENT_AMOUNT_MISMATCH));
+	}
+
+	@DisplayName("merchantPayKey와 금액이 모두 일치하면 verifyApprovedResponse에서 예외가 발생하지 않는다")
+	@Test
+	void verifyApprovedResponse_whenBothMatch_noException() {
+		// given
+		PaymentAttempt attempt = PaymentAttempt.createApproveRequested("PAY-1", "payment-id-1", 1000,
+			PaymentProvider.NAVERPAY);
+
+		// when & then
+		assertThatCode(() -> attempt.verifyApprovedResponse("PAY-1", 1000)).doesNotThrowAnyException();
 	}
 }

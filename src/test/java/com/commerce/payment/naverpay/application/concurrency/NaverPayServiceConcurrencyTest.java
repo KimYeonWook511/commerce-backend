@@ -257,7 +257,7 @@ class NaverPayServiceConcurrencyTest {
 		PaymentAttempt attempt = PaymentAttempt.createApproveRequested(
 			merchantPayKey, paymentId, 1000, PaymentProvider.NAVERPAY
 		);
-		attempt.markApproveSucceeded(LocalDateTime.now());
+		attempt.succeed(LocalDateTime.now());
 		paymentPersistence.save(attempt);
 
 		ConcurrentLinkedQueue<Throwable> errors = new ConcurrentLinkedQueue<>();

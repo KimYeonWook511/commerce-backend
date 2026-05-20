@@ -82,7 +82,7 @@ public class PaymentAttemptService {
 	) {
 		PaymentAttempt attempt = paymentAttemptRepository.findApproveAttempt(merchantPayKey, provider, paymentId)
 			.orElseThrow(() -> new PaymentException(PaymentErrorCode.PAYMENT_ATTEMPT_NOT_FOUND));
-		attempt.markApproveSucceeded(respondedAt);
+		attempt.succeed(respondedAt);
 	}
 
 	@Transactional
@@ -96,7 +96,7 @@ public class PaymentAttemptService {
 	) {
 		PaymentAttempt attempt = paymentAttemptRepository.findApproveAttempt(merchantPayKey, provider, paymentId)
 			.orElseThrow(() -> new PaymentException(PaymentErrorCode.PAYMENT_ATTEMPT_NOT_FOUND));
-		attempt.markApproveFailed(failCode, failDetail, respondedAt);
+		attempt.fail(failCode, failDetail, respondedAt);
 	}
 
 	/**
@@ -126,7 +126,7 @@ public class PaymentAttemptService {
 				merchantPayKey, paymentId, attempt.getStatus());
 			return;
 		}
-		attempt.markApproveFailed(failCode, failDetail, respondedAt);
+		attempt.fail(failCode, failDetail, respondedAt);
 	}
 
 	@Transactional
@@ -138,7 +138,7 @@ public class PaymentAttemptService {
 	) {
 		PaymentAttempt attempt = paymentAttemptRepository.findCancelAttempt(merchantPayKey, provider, paymentId)
 			.orElseThrow(() -> new PaymentException(PaymentErrorCode.PAYMENT_ATTEMPT_NOT_FOUND));
-		attempt.markCancelSucceeded(respondedAt);
+		attempt.succeed(respondedAt);
 	}
 
 	@Transactional
@@ -152,6 +152,6 @@ public class PaymentAttemptService {
 	) {
 		PaymentAttempt attempt = paymentAttemptRepository.findCancelAttempt(merchantPayKey, provider, paymentId)
 			.orElseThrow(() -> new PaymentException(PaymentErrorCode.PAYMENT_ATTEMPT_NOT_FOUND));
-		attempt.markCancelFailed(failCode, failDetail, respondedAt);
+		attempt.fail(failCode, failDetail, respondedAt);
 	}
 }

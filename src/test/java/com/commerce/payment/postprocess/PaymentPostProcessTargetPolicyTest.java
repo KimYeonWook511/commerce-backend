@@ -36,14 +36,14 @@ class PaymentPostProcessTargetPolicyTest {
 		PaymentAttempt failedCancelAttempt = PaymentAttempt.createCancelRequested(
 			"PAY-1", "pg-1", 1000, PaymentProvider.NAVERPAY
 		);
-		failedCancelAttempt.markCancelFailed(PaymentAttemptFailCode.CANCEL_PROCESS_FAILED, "PRE_CANCEL_NOT_COMPLETE",
+		failedCancelAttempt.fail(PaymentAttemptFailCode.CANCEL_PROCESS_FAILED, "PRE_CANCEL_NOT_COMPLETE",
 			now.minusMinutes(1));
 		setCreatedAt(failedCancelAttempt, now.minusMinutes(4));
 
 		PaymentAttempt amountMismatchAttempt = PaymentAttempt.createApproveRequested(
 			"PAY-1", "pg-1", 1000, PaymentProvider.NAVERPAY
 		);
-		amountMismatchAttempt.markApproveFailed(PaymentAttemptFailCode.AMOUNT_MISMATCH, "AMOUNT_NOT_MATCH",
+		amountMismatchAttempt.fail(PaymentAttemptFailCode.AMOUNT_MISMATCH, "AMOUNT_NOT_MATCH",
 			now.minusMinutes(1));
 		setCreatedAt(amountMismatchAttempt, now.minusMinutes(4));
 
@@ -64,7 +64,7 @@ class PaymentPostProcessTargetPolicyTest {
 		PaymentAttempt approveAttempt = PaymentAttempt.createApproveRequested(
 			"PAY-1", "pg-1", 1000, PaymentProvider.NAVERPAY
 		);
-		approveAttempt.markApproveSucceeded(now.minusMinutes(1));
+		approveAttempt.succeed(now.minusMinutes(1));
 		setCreatedAt(approveAttempt, now.minusMinutes(10));
 
 		assertThat(targetPolicy.resolvePostProcessTarget(approveAttempt, null, now))
@@ -217,7 +217,7 @@ class PaymentPostProcessTargetPolicyTest {
 		PaymentAttempt cancelAttempt = PaymentAttempt.createCancelRequested(
 			"PAY-1", "pg-1", 1000, PaymentProvider.NAVERPAY
 		);
-		cancelAttempt.markCancelSucceeded(now.minusMinutes(1));
+		cancelAttempt.succeed(now.minusMinutes(1));
 		setCreatedAt(cancelAttempt, now.minusMinutes(10));
 
 		assertThat(targetPolicy.resolvePostProcessTarget(null, cancelAttempt, now))
@@ -375,7 +375,7 @@ class PaymentPostProcessTargetPolicyTest {
 		PaymentAttempt attempt = PaymentAttempt.createApproveRequested(
 			"PAY-1", "pg-1", 1000, PaymentProvider.NAVERPAY
 		);
-		attempt.markApproveFailed(failCode, failDetail, now.minusMinutes(1));
+		attempt.fail(failCode, failDetail, now.minusMinutes(1));
 		setCreatedAt(attempt, now.minusMinutes(30));
 		return attempt;
 	}
@@ -385,7 +385,7 @@ class PaymentPostProcessTargetPolicyTest {
 		PaymentAttempt attempt = PaymentAttempt.createCancelRequested(
 			"PAY-1", "pg-1", 1000, PaymentProvider.NAVERPAY
 		);
-		attempt.markCancelFailed(failCode, failDetail, now.minusMinutes(1));
+		attempt.fail(failCode, failDetail, now.minusMinutes(1));
 		setCreatedAt(attempt, now.minusMinutes(10));
 		return attempt;
 	}

@@ -58,7 +58,7 @@ class PaymentAttemptRepositoryJpaAdapterTest {
 		LocalDateTime respondedAt = LocalDateTime.of(2026, 3, 3, 16, 0);
 		PaymentAttempt attempt =
 			PaymentAttempt.createApproveRequested("PAY-1", "payment-id-1", 1000, PaymentProvider.NAVERPAY);
-		attempt.markApproveFailed(PaymentAttemptFailCode.PG_NETWORK_ERROR, "network error", respondedAt);
+		attempt.fail(PaymentAttemptFailCode.PG_NETWORK_ERROR, "network error", respondedAt);
 
 		// when
 		PaymentAttempt saved = paymentAttemptRepository.save(attempt);

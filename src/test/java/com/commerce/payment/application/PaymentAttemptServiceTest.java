@@ -150,7 +150,7 @@ class PaymentAttemptServiceTest {
 		LocalDateTime succeededAt = LocalDateTime.of(2026, 3, 3, 16, 21);
 		PaymentAttempt attempt = PaymentAttempt.createApproveRequested("PAY-1", "payment-id-1", 1000,
 			PaymentProvider.NAVERPAY);
-		attempt.markApproveSucceeded(succeededAt);
+		attempt.succeed(succeededAt);
 		given(paymentAttemptRepository.findApproveAttempt(
 			eq("PAY-1"), eq(PaymentProvider.NAVERPAY), eq("payment-id-1")))
 			.willReturn(Optional.of(attempt));

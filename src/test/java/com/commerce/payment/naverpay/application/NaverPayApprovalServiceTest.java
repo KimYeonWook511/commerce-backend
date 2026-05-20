@@ -69,7 +69,7 @@ class NaverPayApprovalServiceTest {
 		order.assignMerchantPayKey("PAY-1");
 		PaymentAttempt attempt = PaymentAttempt.createApproveRequested("PAY-1", "pg-payment-id", 1000,
 			PaymentProvider.NAVERPAY);
-		attempt.markApproveSucceeded(LocalDateTime.now());
+		attempt.succeed(LocalDateTime.now());
 		Payment completed = Payment.createCompleted(
 			order, PaymentProvider.NAVERPAY, "PAY-1", "pg-payment-id", LocalDateTime.now());
 
@@ -532,7 +532,7 @@ class NaverPayApprovalServiceTest {
 		Order order = createOrder(1000);
 		order.assignMerchantPayKey("PAY-1");
 		PaymentAttempt cancelAttempt = PaymentAttempt.createCancelRequested("PAY-1", "pg-payment-id", 1000, PaymentProvider.NAVERPAY);
-		cancelAttempt.markCancelSucceeded(LocalDateTime.now());
+		cancelAttempt.succeed(LocalDateTime.now());
 
 		given(orderQueryService.getOrderByMerchantPayKeyAndMemberId("PAY-1", memberId)).willReturn(order);
 		given(paymentApprovalService.findPaymentByMerchantPayKey("PAY-1")).willReturn(Optional.empty());
@@ -1050,7 +1050,7 @@ class NaverPayApprovalServiceTest {
 		Order order = createOrder(1000);
 		order.assignMerchantPayKey("PAY-1");
 		PaymentAttempt attempt = PaymentAttempt.createApproveRequested("PAY-1", "pg-payment-id", 1000, PaymentProvider.NAVERPAY);
-		attempt.markApproveFailed(PaymentAttemptFailCode.TIME_EXPIRED, "expired", LocalDateTime.now());
+		attempt.fail(PaymentAttemptFailCode.TIME_EXPIRED, "expired", LocalDateTime.now());
 
 		given(orderQueryService.getOrderByMerchantPayKeyAndMemberId("PAY-1", memberId)).willReturn(order);
 		given(paymentApprovalService.findPaymentByMerchantPayKey("PAY-1")).willReturn(Optional.empty());
@@ -1075,7 +1075,7 @@ class NaverPayApprovalServiceTest {
 		Order order = createOrder(1000);
 		order.assignMerchantPayKey("PAY-1");
 		PaymentAttempt attempt = PaymentAttempt.createApproveRequested("PAY-1", "pg-payment-id", 1000, PaymentProvider.NAVERPAY);
-		attempt.markApproveSucceeded(LocalDateTime.now());
+		attempt.succeed(LocalDateTime.now());
 		Payment completed = Payment.createCompleted(
 			order, PaymentProvider.NAVERPAY, "PAY-1", "pg-payment-id", LocalDateTime.now());
 

@@ -437,7 +437,7 @@ class NaverPayServiceIntegrationTest {
 		PaymentAttempt cancelAttempt = PaymentAttempt.createCancelRequested(
 			"PAY-INT-6-3", "pg-int-6-3", 1000, PaymentProvider.NAVERPAY
 		);
-		cancelAttempt.markCancelSucceeded(LocalDateTime.now());
+		cancelAttempt.succeed(LocalDateTime.now());
 		paymentPersistence.save(cancelAttempt);
 
 		given(naverPayGateway.approve("pg-int-6-3"))
@@ -525,7 +525,7 @@ class NaverPayServiceIntegrationTest {
 		PaymentAttempt attempt = PaymentAttempt.createApproveRequested(
 			"PAY-INT-7-1", "pg-int-7-1", 1000, PaymentProvider.NAVERPAY
 		);
-		attempt.markApproveFailed(PaymentAttemptFailCode.TIME_EXPIRED, "expired", LocalDateTime.now());
+		attempt.fail(PaymentAttemptFailCode.TIME_EXPIRED, "expired", LocalDateTime.now());
 		paymentPersistence.save(attempt);
 
 		// when & then
@@ -809,7 +809,7 @@ class NaverPayServiceIntegrationTest {
 		PaymentAttempt attempt = PaymentAttempt.createApproveRequested(
 			"PAY-INT-12-1", "pg-int-12-1", 1000, PaymentProvider.NAVERPAY
 		);
-		attempt.markApproveSucceeded(LocalDateTime.now());
+		attempt.succeed(LocalDateTime.now());
 		paymentPersistence.save(attempt);
 		given(naverPayGateway.getApprovalHistory("pg-int-12-1"))
 			.willReturn(NaverPayHistoryResult.approved("PAY-INT-12-1", 1000));

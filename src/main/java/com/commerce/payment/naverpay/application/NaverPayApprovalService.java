@@ -118,8 +118,7 @@ public class NaverPayApprovalService {
 		int responseTotalAmount
 	) {
 		try {
-			validateApprovedMerchantPayKeyOrThrow(attempt, responseMerchantPayKey);
-			validateApprovedAmountOrThrow(attempt, responseTotalAmount);
+			attempt.verifyApprovedResponse(responseMerchantPayKey, responseTotalAmount);
 
 			Payment completed = paymentApprovalService.completeApprovedPayment(
 				attempt.getMerchantPayKey(),
@@ -167,30 +166,6 @@ public class NaverPayApprovalService {
 			compensateUnexpected(attempt, ex,
 				PaymentAttemptFailCode.APPROVE_PROCESS_FAILED, "결제 완료 반영 중 예상치 못한 오류");
 			throw ex;
-		}
-	}
-
-	private void validateApprovedMerchantPayKeyOrThrow(PaymentAttempt attempt, String responseMerchantPayKey) {
-		if (!attempt.getMerchantPayKey().equals(responseMerchantPayKey)) {
-			log.warn(
-				"NaverPay merchantPayKey mismatch: requestedMerchantPayKey={}, responseMerchantPayKey={}",
-				attempt.getMerchantPayKey(),
-				responseMerchantPayKey
-			);
-			throw new PaymentException(PaymentErrorCode.PAYMENT_MERCHANT_KEY_MISMATCH);
-		}
-	}
-
-	private void validateApprovedAmountOrThrow(PaymentAttempt attempt, int responseTotalAmount) {
-		if (attempt.getAmount() != responseTotalAmount) {
-			log.warn(
-				"NaverPay approve amount mismatch: merchantPayKey={}, paymentId={}, attemptAmount={}, responseTotalAmount={}",
-				attempt.getMerchantPayKey(),
-				attempt.getPaymentId(),
-				attempt.getAmount(),
-				responseTotalAmount
-			);
-			throw new PaymentException(PaymentErrorCode.PAYMENT_AMOUNT_MISMATCH);
 		}
 	}
 
