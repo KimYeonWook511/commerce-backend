@@ -1,0 +1,10 @@
+{
+  "project": "payment-attempt-service-split",
+  "phase": "0-refactor",
+  "steps": [
+    { "step": 0, "name": "payment-attempt-domain-cleanup", "status": "pending" },
+    { "step": 1, "name": "split-payment-attempt-service", "status": "pending" },
+    { "step": 2, "name": "sync-root-docs-task-a", "status": "pending" },
+    { "step": 3, "name": "write-retrospective-task-a", "status": "pending" }
+  ]
+}
