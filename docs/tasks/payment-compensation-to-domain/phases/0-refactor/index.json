@@ -13,7 +13,10 @@
     {
       "step": 1,
       "name": "move-compensation-dispatcher",
-      "status": "pending"
+      "status": "completed",
+      "started_at": "2026-05-20T18:06:26+0900",
+      "summary": "PaymentApprovalCompensationService를 신설해 보상 dispatcher 4개(compensateMerchantKeyMismatch/AmountMismatch/DuplicatePayment/Unexpected)와 private runPgCancel을 이동한다. NaverPayApprovalService에서 보상 메서드 8개를 삭제하고 pgCancel 패키지-private 메서드를 신설한다. catch 블록은 paymentApprovalCompensationService.compensateXxx 호출로 단순화한다. payment.application 코드가 NaverPayCancelResult를 import하지 않으며, PaymentApprovalCompensationService에 클래스 레벨 @Transactional이 없다. PaymentApprovalCompensationServiceTest 신설 및 NaverPayApprovalServiceTest를 보상 케이스 갱신 및 pgCancel 변환 테스트 추가로 갱신한다. 기존 테스트 전체 통과.",
+      "completed_at": "2026-05-20T18:18:25+0900"
     },
     {
       "step": 2,
