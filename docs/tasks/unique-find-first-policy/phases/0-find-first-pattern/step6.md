@@ -1,4 +1,4 @@
-# Step 6: sync-root-docs
+# Step 7: integration-tests-update
 
 ## 읽어야 할 파일
 
@@ -7,111 +7,69 @@
 - `/docs/tasks/unique-find-first-policy/prd.md`
 - `/docs/tasks/unique-find-first-policy/architecture.md`
 - `/docs/tasks/unique-find-first-policy/adr.md`
-- `/docs/tasks/unique-find-first-policy/api-spec.md`
-- `/docs/tasks/unique-find-first-policy/db-schema.md`
-- `/docs/architecture.md` (라인 140-181 정책 섹션 — 갱신 대상)
-- `/docs/ADR.md` (새 ADR 항목 추가)
-- `/CLAUDE.md` (commerce-backend 루트 — 규칙 문구 갱신)
-- `/docs/tasks/db-constraint-violation-handling/prd.md`
-- `/docs/tasks/db-constraint-violation-handling/architecture.md`
-- `/docs/tasks/db-constraint-violation-handling/adr.md`
-- `/docs/tasks/db-constraint-violation-handling/api-spec.md`
+- step 1~5 에서 변경한 모든 코드와 단위 테스트
+- `/src/test/java/com/commerce/common/jpa/UniqueConstraintViolationIntegrationTest.java` (또는 `DuplicateKeyExceptionMappingTest.java` — 정확한 파일명은 PR #106 에서 추가된 것을 따른다)
+- `/src/test/java/com/commerce/payment/naverpay/application/NaverPayServiceIntegrationTest.java`
+- `/src/main/java/com/commerce/common/jpa/JpaConfig.java`
+- `/docs/testing-conventions.md`
 
-step 5 가 끝나 있어야 한다.
+step 1~5 가 모두 끝나 있어야 한다.
 
 ## 작업
 
-루트 docs 와 이전 태스크 폴더 anchor 를 일괄 갱신한다.
+본 step 은 통합 테스트를 새 정책에 맞춰 갱신한다. Testcontainers 회귀 방어 테스트와 `NaverPayServiceIntegrationTest` 두 가지가 영향을 받는다.
 
-### 1. `docs/architecture.md` 정책 섹션 갱신 (라인 140-181)
+### 1. Testcontainers 회귀 방어 테스트 갱신
 
-기존 섹션을 폐기하고 새 정책으로 교체:
+PR #106 에서 추가한 `UniqueConstraintViolationIntegrationTest` (또는 `DuplicateKeyExceptionMappingTest`) 는 "Application 이 `DuplicateKeyException` 을 받는다" 가정으로 작성되어 있다. 새 정책에서는 Application 이 인프라 예외를 catch 하지 않으므로 시나리오를 갱신한다.
 
-- 기존 "3계층 책임 분리" 표 폐기
-- 기존 "Unique 위반의 두 종류" 표 폐기
-- 기존 "Unique 처리 모드 (5곳 분류)" 표 폐기
-- 기존 "DuplicateKeyException 전용 핸들러는 신설하지 않음" 항목 갱신
+다음 중 한 가지 방향으로 갱신:
 
-새 내용:
+#### 방향 A — 안전망 도달 검증으로 전환
 
-- 본질 흐름: `DB find → 없으면 insert → 충돌 시 500`
-- **정책 적용 조건과 한계** (분리 섹션):
-  - 적용 조건: ① 트랜잭션이 짧다, ② 정상 흐름에서 동시 충돌 확률이 낮다 (사용자 입력 식별자/idempotency key 등)
-  - 비적용 상황: 충돌이 잦은 시나리오는 try-save-catch 패턴이 더 적합. 향후 새 unique 제약 도입 시 이 기준으로 패턴 선택
-- `DataAccessException` 부모 핸들러 도입 사실 + `COMMON-500-2` ErrorCode
-- `JpaConfig` 빈 등록 목적을 "안전망에서 정확한 분류/로깅" 으로 재기술
+- Application 호출(예: `memberRepository.save` 또는 Adapter 직접 호출) 시 unique 위반이 발생하면 `DuplicateKeyException` 이 발생하는지 검증한다 (Testcontainers + MySQL 환경에서 빈 등록이 정상 동작하는지 확인하는 회귀 방어).
+- 추가로 MVC layer 통합 테스트(`@SpringBootTest` 또는 `MockMvc`)로 race window 시나리오를 시뮬레이션해 안전망 핸들러가 500 + `COMMON-500-1` 응답을 반환하는지 검증해도 된다 (가능한 범위 내에서).
 
-### 2. `docs/ADR.md` 새 항목 추가
+#### 방향 B — 핵심 회귀 방어만 유지
 
-다음 형식으로 추가한다:
+- `SQLErrorCodeSQLExceptionTranslator` 빈이 동작해 unique 위반이 `DuplicateKeyException` 으로 정확히 변환되는지만 검증하고, 안전망 도달은 별도 mocking 단위 테스트로 분리한다.
 
-- 제목: "ADR-N: DB unique 위반은 안전망 500 으로 위임하고 정상 흐름은 사전 `find` 로 처리한다"
-- 배경: PR #106 catch 정책의 인프라 예외 의존 부채를 해소하기 위한 정책 재정의
-- 결정: 5곳 모두 find-first 패턴, race 는 안전망 500, `DataAccessException` 부모 핸들러 추가
-- **결정 근거** (핵심): 5곳의 unique 는 사용자 입력/idempotency key 기반으로 충돌 확률 낮음. 트랜잭션 짧음 + 충돌 확률 낮음 조건 만족. 충돌 잦은 시나리오는 try-save-catch 더 적합 (향후 새 unique 제약 도입 시 선택 기준)
-- 결과: PR #106 정책 폐기. 행위 변경은 race window 한정 (5곳 매핑은 PR 본문 참조)
+두 방향 모두 본 step 의 핵심은 **"빈 등록이 동작하고 안전망이 500 으로 응답한다"는 회귀 방어**다. 방향 A 가 더 end-to-end 이지만 setup 비용이 크면 방향 B 로 좁힌다.
 
-상세본은 `docs/tasks/unique-find-first-policy/adr.md` 에서 옵션 A/B/C 비교와 함께 기록되어 있으므로 루트 ADR 은 결정과 근거만 명료하게 적는다.
+### 2. `NaverPayServiceIntegrationTest` 의 spy 스텁 제거
 
-기존 라인 47 의 `DUPLICATE_EMAIL` 단순 언급(Redis 후속 처리 trade-off 맥락) 은 그대로 유지한다.
+라인 82 의 `@MockitoSpyBean PaymentAttemptService paymentAttemptService;` 와 본문 안의 `Mockito.doReturn(...)` 스텁(예: 라인 444-446) 은 PR #106 에서 H2 + JPA 환경의 `DuplicateKeyException` 미발생 문제를 우회하기 위해 추가됐다.
 
-### 3. `commerce-backend/CLAUDE.md` 갱신
+step 3 에서 `PaymentAttemptService` 가 find-first 패턴으로 리팩토링됐으므로 H2 환경에서도 정상 흐름이 통과된다. spy 제거 가능 여부를 검증한다:
 
-`구현 규칙` 섹션의 다음 문구를 갱신한다:
+1. spy 어노테이션을 제거하고 스텁 호출을 제거한 뒤 테스트를 실행한다.
+2. 실패하면 실패 원인을 분석한다. spy 제거가 본질적으로 불가능하다면 (예: H2 의 다른 한계, 다른 테스트 의도) spy 를 그대로 유지하되 이유를 코드 주석으로 명시한다.
+3. spy 제거에 성공하면 관련 import 와 mock setup 도 함께 정리한다.
 
-- 기존: "Infrastructure 예외(`DataIntegrityViolationException` 등)는 Application 계층에서 도메인 예외로 변환하고 Presentation으로 넘기지 않습니다."
-- 새 문구: "정상 흐름은 사전 `find` 로 처리하고, DB 무결성 위반(unique 포함) 은 catch 하지 않고 안전망 500 으로 위임합니다. 충돌이 잦은 시나리오에서만 try-save-catch 패턴을 사용하며, 이때도 인프라 예외 타입에 직접 의존하지 않도록 처리한다."
-- 한 줄로 무리하게 줄이지 말고, 정책 적용 조건이 드러나도록 풀어 쓴다.
+### 3. 통합 테스트 카테고리
 
-### 4. 이전 태스크 폴더(`docs/tasks/db-constraint-violation-handling/`) 폐기 anchor 추가
-
-다음 4 개 문서 **상단**에 anchor 한 줄을 추가한다. 본문은 역사 기록으로 그대로 유지한다.
-
-대상 파일:
-- `docs/tasks/db-constraint-violation-handling/prd.md`
-- `docs/tasks/db-constraint-violation-handling/adr.md`
-- `docs/tasks/db-constraint-violation-handling/api-spec.md`
-- `docs/tasks/db-constraint-violation-handling/architecture.md`
-
-anchor 예시:
-
-```markdown
-> [!NOTE]
-> 본 문서의 정책은 후속 태스크 `docs/tasks/unique-find-first-policy/` 에서 재정의되었다. 현재 정책은 루트 `docs/architecture.md` 의 예외 처리 섹션과 `docs/tasks/unique-find-first-policy/adr.md` 를 참조한다.
-```
-
-anchor 는 문서 제목 바로 아래(첫 헤딩 이후 첫 줄) 에 둔다.
-
-**금지**: `retrospective.md` 와 `phases/**` 는 수정하지 않는다 (immutable 정책).
-
-### 5. PR #106 회고록(`docs/tasks/db-constraint-violation-handling/retrospective.md`) 은 수정 금지
-
-회고 문서 immutable 정책에 따라 손대지 않는다. 본 태스크의 retrospective 는 step 7 에서 별도로 작성한다.
+- Testcontainers 사용 테스트는 `@Tag("docker")` 가 붙어 있어 `./gradlew dockerTest` 로만 실행된다 (`docs/testing-conventions.md`).
+- 통합 테스트 갱신 시 기존 태그 정책을 그대로 따른다.
 
 ## Acceptance Criteria
 
 ```bash
 ./gradlew test
+./gradlew dockerTest
 ```
-
-(본 step 은 docs 변경 위주라 코드 빌드/테스트가 영향받지 않지만, 회귀 방어로 기본 테스트는 통과해야 한다.)
 
 ## 검증 절차
 
-1. 위 Acceptance Criteria 커맨드를 실행한다.
+1. 위 두 Acceptance Criteria 커맨드를 순서대로 실행한다.
 2. 아래를 확인한다.
-   - `docs/architecture.md` 라인 140-181 정책 섹션이 새 흐름과 적용 조건 섹션으로 교체되었는가?
-   - `docs/ADR.md` 에 새 ADR 항목이 추가되었고 결정 근거(충돌 확률 낮음) 가 명시되었는가?
-   - `commerce-backend/CLAUDE.md` 구현 규칙 문구가 갱신되었는가?
-   - 이전 태스크 폴더 4 개 문서에 폐기 anchor 가 한 줄씩 추가되었고 본문은 그대로 유지되었는가?
-   - `retrospective.md` 와 `phases/**` 는 수정되지 않았는가?
+   - `UniqueConstraintViolationIntegrationTest` (또는 동등 테스트) 가 새 정책에 맞게 갱신되어 통과하는가?
+   - `NaverPayServiceIntegrationTest` 가 spy 제거(혹은 유지 이유 명시) 와 함께 통과하는가?
+   - `SQLErrorCodeSQLExceptionTranslator` 빈 등록이 운영 환경에서 안전망 정확도를 유지하는지 회귀 방어 시나리오로 검증되는가?
 3. 결과에 따라 step 상태를 갱신한다.
 
 ## 금지사항
 
-- `docs/PRD.md`, `docs/api-spec.md`, `docs/db-schema.md` 를 수정하지 마라. 이유: 본 태스크는 PRD 수준 기능 범위 변경 / 외부 API 명세 변경 / DB 스키마 변경이 없다.
-- `commerce-workspace/docs/` 의 어떤 문서도 수정하지 마라. 이유: 본 세션은 backend 서브모듈 컨텍스트이며, 워크스페이스 문서는 Frontend 세션의 "계약 싱크" 책임.
-- 이전 태스크 폴더의 `retrospective.md`, `phases/**` 를 수정하지 마라. 이유: 회고/실행 기록 immutable 정책.
-- 이전 태스크 폴더의 본문을 수정하거나 삭제하지 마라. 이유: 역사 기록 보존. 정책 폐기 사실은 anchor 한 줄로만 알리며 본문은 그대로 둔다.
-- ADR 라인 47 의 `DUPLICATE_EMAIL` 단순 언급을 건드리지 마라. 이유: Redis 후속 처리 trade-off 맥락이라 새 정책과 호환된다.
-- 기존 테스트를 깨뜨리지 마라.
+- `JpaConfig.java` 의 `SQLErrorCodeSQLExceptionTranslator` 빈 정의를 변경하거나 제거하지 마라. 이유: 안전망 정확도의 핵심이며 PR #106 결정대로 유지된다.
+- step 2 의 find-first 리팩토링을 본 step 에서 재수정하지 마라. 이유: 본 step 은 통합 테스트 갱신에만 집중한다.
+- H2 환경 한계를 우회하기 위해 새 spy / mock 을 추가하지 마라. 이유: spy 제거가 본 step 의 검증 포인트 중 하나다. spy 가 필요하면 그 이유를 명확히 문서화한다.
+- 기존 단위 테스트(step 1~5 에서 갱신한 것) 를 깨뜨리지 마라.

@@ -3,7 +3,7 @@
   "phase": "0-refactor",
   "steps": [
     {
-      "step": 0,
+      "step": 1,
       "name": "race-priority-by-payment-existence",
       "status": "completed",
       "started_at": "2026-05-19T23:17:01+0900",
@@ -11,7 +11,7 @@
       "completed_at": "2026-05-19T23:22:54+0900"
     },
     {
-      "step": 1,
+      "step": 2,
       "name": "split-compensation-by-failure-meaning",
       "status": "completed",
       "started_at": "2026-05-19T23:24:42+0900",
@@ -19,7 +19,7 @@
       "completed_at": "2026-05-19T23:30:43+0900"
     },
     {
-      "step": 2,
+      "step": 3,
       "name": "stabilize-concurrency-tests",
       "status": "completed",
       "started_at": "2026-05-19T23:32:26+0900",
@@ -27,7 +27,7 @@
       "completed_at": "2026-05-20T00:14:36+0900"
     },
     {
-      "step": 3,
+      "step": 4,
       "name": "sync-root-docs",
       "status": "completed",
       "started_at": "2026-05-20T00:17:58+0900",
@@ -35,7 +35,7 @@
       "completed_at": "2026-05-20T00:19:43+0900"
     },
     {
-      "step": 4,
+      "step": 5,
       "name": "write-retrospective",
       "status": "completed",
       "started_at": "2026-05-20T00:21:06+0900",

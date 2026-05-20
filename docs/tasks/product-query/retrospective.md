@@ -23,7 +23,7 @@
 
 ### 3. step 상태 기록과 실제 Git 상태가 완전히 일치하지 않을 수 있었다
 
-- step0 구현과 테스트는 통과했지만, 재시도와 review/commit 흐름 중 housekeeping 정리가 완전히 끝나기 전에 다음 step이 이어졌다.
+- step1 구현과 테스트는 통과했지만, 재시도와 review/commit 흐름 중 housekeeping 정리가 완전히 끝나기 전에 다음 step이 이어졌다.
 - 그 상태에서 step1 review가 step0 산출물까지 같이 보게 되면서 다시 허용 범위 오류가 발생했다.
 - 즉 phase/step JSON 상태와 실제 워킹트리 상태가 잠시 어긋날 수 있었다.
 

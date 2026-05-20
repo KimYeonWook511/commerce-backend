@@ -3,7 +3,7 @@
   "phase": "1-amount-mismatch-policy",
   "steps": [
     {
-      "step": 0,
+      "step": 1,
       "name": "amount-mismatch-policy",
       "status": "completed",
       "started_at": "2026-05-18T02:19:06+0900",
@@ -11,7 +11,7 @@
       "completed_at": "2026-05-18T02:21:21+0900"
     },
     {
-      "step": 1,
+      "step": 2,
       "name": "concurrency-test",
       "status": "completed",
       "started_at": "2026-05-18T02:23:00+0900",
@@ -19,7 +19,7 @@
       "completed_at": "2026-05-18T02:24:23+0900"
     },
     {
-      "step": 2,
+      "step": 3,
       "name": "sync-root-docs",
       "status": "completed",
       "started_at": "2026-05-18T02:25:07+0900",
@@ -27,7 +27,7 @@
       "completed_at": "2026-05-18T02:25:57+0900"
     },
     {
-      "step": 3,
+      "step": 4,
       "name": "write-retrospective",
       "status": "completed",
       "started_at": "2026-05-18T02:26:48+0900",

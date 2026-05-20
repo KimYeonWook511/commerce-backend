@@ -1,54 +1,78 @@
-# Step 3: write-retrospective-task-a
+# Step 4: sync-root-docs-task-a
 
 ## 읽어야 할 파일
 
-먼저 아래 파일들을 읽어라:
+먼저 아래 파일들을 읽고 설계 의도를 파악하라:
 
 - `docs/tasks/payment-attempt-service-split/prd.md`
-- `docs/tasks/payment-attempt-service-split/architecture.md`
 - `docs/tasks/payment-attempt-service-split/adr.md`
-- `docs/tasks/payment-compensation-policy/retrospective.md` ← 5단 구조 참고
-- `docs/tasks/payment-attempt-state-transition-policy/retrospective.md` ← 5단 구조 참고
+- `docs/ADR.md` — ADR-011(find-first), ADR-012(mark 메서드 선조건 검증) 확인
+- `docs/architecture.md` — line 83-84(도메인별 서비스 테이블), line 107-110(결제 승인 흐름)
+- `docs/exception-strategy.md` — line 25(find-first 적용 대상), line 79(failApproveAttemptIfRequested 언급)
+- `docs/testing-conventions.md` — line 97(`PaymentAttemptService` 언급)
 
 ## 작업
 
-`docs/tasks/payment-attempt-service-split/retrospective.md`를 아래 5단 구조로 작성한다.
+### 1. `docs/ADR.md`
 
-### 1. 작업 요약
-- 변경 범위와 핵심 결과를 한 문단으로 요약
-- 삭제된 파일, 신설된 파일, 갱신된 루트 docs 목록 포함
+**(a) ADR-012 본문 수정**
 
-### 2. 설계 결정
-- ADR-1: Service 분리 + 명사형 컨벤션 채택
-- ADR-2: succeed/fail 통합 + type 가드 제거
-- ADR-3: verifyApprovedResponse 도메인 통합
-- 각 결정의 이유와 결과를 간결하게 기술
+ADR-012는 "PaymentAttempt mark 메서드 선조건 검증" 정책을 정의한다.
+- mark 메서드 4개(`markApproveSucceeded`/`markApproveFailed`/`markCancelSucceeded`/`markCancelFailed`)가 `succeed`/`fail` 2개 + `verifyApprovedResponse`로 통합됐음을 반영
+- type 가드 제거(status 가드 유지) 결정을 반영
+- ADR-012의 핵심 결정("REQUESTED 외 전이 거부 + failCode 보호")은 유지됨을 명시
 
-### 3. 발견한 것
-- 작업 중 새롭게 발견한 점, 예상과 달랐던 점
-- 예: type 가드 제거 시 영향받는 테스트 수, ConcurrencyTest 분할 구조 등
+**(b) ADR-011 후속 노트**
 
-### 4. 미결 과제
-- task B(`payment-compensation-to-domain`)에서 처리할 내용 명시:
-  - 보상 dispatcher(`compensateMerchantKeyMismatch`/`AmountMismatch`/`Duplicate`/`Unexpected`) payment.application으로 이동
-  - `PgCanceller`/`CancelOutcome` 신설
-  - `NaverPayApprovalService` 보상 골격 정리
-- 후속 가능성: PaymentGateway port 완전 inversion, ArchUnit 가시성 강제, PaymentReference Value Object 도입
+ADR-011은 find-first 패턴 적용 대상을 명시한다.
+- 적용 대상 목록의 `PaymentAttemptService` 언급을 `PaymentApprovalAttemptService` + `PaymentCancellationAttemptService`로 갱신
+- 패턴 자체는 변경 없음
 
-### 5. 개선 제안
-- 이번 작업에서 발견한 개선 가능성이 있으면 기술
+### 2. `docs/architecture.md`
+
+**(a) line 83-84 도메인별 주요 서비스 테이블**
+
+payment 도메인의 `PaymentAttemptService` → `PaymentApprovalAttemptService`, `PaymentCancellationAttemptService`로 분리 표기
+
+**(b) line 107-110 결제 승인 데이터 흐름**
+
+`→ PaymentAttemptService (시도 이력 기록)` 표기를 분리된 두 서비스 참조로 갱신
+
+### 3. `docs/exception-strategy.md`
+
+**(a) line 25 find-first 패턴 적용 대상**
+
+`PaymentAttemptService` → `PaymentApprovalAttemptService`, `PaymentCancellationAttemptService` 갱신
+
+**(b) line 79 `failApproveAttemptIfRequested` 호출처 명시**
+
+`PaymentAttemptService.failApproveAttemptIfRequested` → `PaymentApprovalAttemptService.failIfRequested` 갱신
+
+### 4. `docs/testing-conventions.md`
+
+line 97의 `PaymentAttemptService` 언급:
+- "두 메서드 try-save-catch → find-first 리팩토링" 부분을 `PaymentApprovalAttemptService`/`PaymentCancellationAttemptService`의 각 `getOrCreate` 메서드로 갱신
 
 ## Acceptance Criteria
 
-(문서 작성만, 빌드 불필요)
+```bash
+./gradlew test
+```
 
 ## 검증 절차
 
-1. `docs/tasks/payment-attempt-service-split/retrospective.md`가 생성됐는가?
-2. 5단 구조가 모두 포함됐는가?
-3. 미결 과제에 task B가 명시됐는가?
+1. 위 Acceptance Criteria를 실행한다.
+2. 아래를 확인한다:
+   - `docs/ADR.md`에 `PaymentAttemptService` 언급이 없거나 갱신됐는가?
+   - `docs/architecture.md` 서비스 테이블과 결제 승인 흐름이 분리된 두 서비스를 반영하는가?
+   - `docs/exception-strategy.md`의 find-first 적용 대상과 failIfRequested 언급이 갱신됐는가?
+   - `rg "PaymentAttemptService" docs/` 결과에서 갱신되지 않은 언급이 없는가?
+3. 결과에 따라 step 상태를 갱신한다.
 
 ## 금지사항
 
-- 기존 task 회고 문서(`docs/tasks/payment-compensation-policy/retrospective.md` 등)를 수정하지 마라. 이유: 역사 기록
+- `docs/ddd/` 하위 회고 문서를 수정하지 마라. 이유: 역사 기록이라 사후 소급 수정하지 않음
+- `docs/tasks/unique-find-first-policy/`, `docs/tasks/payment-attempt-state-transition-policy/` 문서를 수정하지 마라. 이유: 역사 기록
+- `docs/exception-strategy.md`의 보상 catch 2차 예외 처리 섹션 전반은 task B에서 다루므로 이 step에서 건드리지 마라
+- ADR-014, ADR-015 관련 작업은 task B 범위이므로 이 step에서 추가하지 마라
 - 기존 테스트를 깨뜨리지 마라

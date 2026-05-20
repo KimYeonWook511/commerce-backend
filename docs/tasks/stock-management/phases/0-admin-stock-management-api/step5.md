@@ -1,4 +1,4 @@
-# Step 5: docs-sync
+# Step 6: admin-stock-history-query-api
 
 ## 읽어야 할 파일
 
@@ -10,31 +10,37 @@
 - `docs/features/stock-management/api-spec.md`
 - `docs/features/stock-management/db-schema.md`
 - `docs/features/stock-management/phases/0-admin-stock-management-api/step4.md`
-- `docs/architecture.md`
+- `src/main/java/com/commerce/stock/controller/AdminStockController.java`
+- `src/main/java/com/commerce/stock/service/StockService.java`
+- `src/main/java/com/commerce/stock/repository/StockHistoryRepository.java`
+- `src/test/java/com/commerce/stock/controller/AdminStockControllerTest.java`
+
+기능 문서만으로 부족한 공통 맥락이 있으면 아래 문서를 추가로 읽는다.
+
 - `docs/api-spec.md`
-- `docs/db-schema.md`
-- `docs/ADR.md`
-- `docs/features/TEMP_TODO.md`
+- `docs/architecture.md`
 
 ## 작업
 
-- 구현 결과와 feature 문서를 기준으로 루트 문서를 동기화한다.
-  - `docs/architecture.md`: `stock` 도메인 책임과 관리자 재고 관리 흐름 추가
-  - `docs/api-spec.md`: 관리자 재고 등록, 증가, 감소, 이력 조회 API 추가
-  - `docs/db-schema.md`: `tbl_stock_history`와 인덱스, 주요 관계 추가
-  - `docs/ADR.md`: 필요하면 관리자 재고 관리와 이력 저장 결정 추가
-- `docs/features/TEMP_TODO.md`의 재고 관리 항목은 구현 완료 상태와 충돌하지 않도록 정리한다.
-  - 단, 후속 기능인 pagination, 관리자 UI, 주문 취소 재고 복구 고도화는 완료 처리하지 않는다.
-- feature 문서와 루트 문서의 API 경로, enum 값, 응답 필드명이 서로 일치하는지 확인한다.
+- `AdminStockController`에 `GET /admin/products/{productId}/stock/histories` API를 추가한다.
+  - `@RequireRole(MemberRole.ROLE_ADMIN)`을 적용한다.
+  - `productId`가 null 또는 1 미만이면 기존 `CommonException(CommonErrorCode.INVALID_REQUEST)`를 던진다.
+  - 성공 시 `200 OK`와 `ApiResponse<List<AdminStockHistoryResult>>`를 반환한다.
+- `StockService`의 이력 조회 결과를 controller 응답에 연결한다.
+- 이력 조회는 상품별 최신순 전체 목록을 반환한다.
+- controller 테스트를 추가한다.
+  - 관리자 이력 조회 성공
+  - 관리자 권한이 없으면 실패
+  - `productId`가 양수가 아니면 실패
+- repository 테스트를 추가한다.
+  - 상품별 이력 조회가 다른 상품 이력을 제외하는지
+  - 최신순 정렬을 보장하는지
 
 ## 수정 가능 경로
 
+- `src/main/java/com/commerce/stock/**`
+- `src/test/java/com/commerce/stock/**`
 - `docs/features/stock-management/**`
-- `docs/features/TEMP_TODO.md`
-- `docs/architecture.md`
-- `docs/api-spec.md`
-- `docs/db-schema.md`
-- `docs/ADR.md`
 
 ## Acceptance Criteria
 
@@ -45,19 +51,13 @@
 ## 검증 절차
 
 1. 위 Acceptance Criteria 커맨드를 실행한다.
-2. 아래 탐색으로 문서 간 명칭이 일치하는지 확인한다.
-
-```bash
-rg "stock/histories|StockAdjustmentReason|tbl_stock_history|ORDER_CANCEL_RESTORE" docs src/main/java src/test/java
-```
-
-3. 아래를 확인한다.
-   - 루트 API 스펙과 feature API 스펙의 endpoint가 일치하는가?
-   - 루트 DB 스키마와 feature DB 스키마의 테이블/컬럼명이 일치하는가?
-   - `TEMP_TODO.md`가 실제 구현 범위를 과장해서 완료 처리하지 않았는가?
+2. 아래를 확인한다.
+   - 이력 조회 API가 pagination 파라미터를 요구하지 않는가?
+   - 응답에 `historyId`, `productId`, `stockId`, `quantityChange`, `reason`, `adminMemberId`, `createdAt`이 포함되는가?
+   - 최신순 정렬이 repository 테스트로 검증되는가?
 
 ## 금지사항
 
-- 구현 코드 동작을 이 step에서 바꾸지 마라. 이유: 이 단계는 문서 동기화가 목적이다.
-- `TEMP_TODO.md`에서 후속 기능까지 완료로 표시하지 마라. 이유: 구현 범위와 roadmap 상태가 불일치할 수 있다.
-- Acceptance Criteria를 생략하지 마라. 이유: 문서 변경 후에도 전체 테스트 회귀를 확인해야 한다.
+- 이 단계에서 pagination을 추가하지 마라. 이유: 첫 버전의 조회 범위는 상품별 전체 최신순 조회로 결정했다.
+- request body로 `adminMemberId`를 받지 마라. 이유: 변경 주체는 인증 컨텍스트 기반으로 기록한다.
+- 이력 데이터를 수정하거나 삭제하는 API를 추가하지 마라. 이유: 이력은 감사 데이터로 append-only 성격을 가진다.

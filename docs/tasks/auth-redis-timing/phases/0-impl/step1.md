@@ -1,4 +1,4 @@
-# Step 1: redis-save-exception
+# Step 2: redis-save-exception
 
 ## 읽어야 할 파일
 

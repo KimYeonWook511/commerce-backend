@@ -1,44 +1,84 @@
-# Step 2: sync-root-docs
+# Step 3: concurrency-test
 
 ## 읽어야 할 파일
 
-먼저 아래 파일들을 읽어라:
+먼저 아래 파일들을 읽고 설계 의도를 파악하라:
 
-- `docs/features/payment-attempt-idempotency/adr.md`
-- `docs/ADR.md` (현재 마지막 항목 확인 — ADR-009까지 존재)
+- `docs/features/payment-attempt-idempotency/prd.md`
+- `docs/features/payment-attempt-idempotency/architecture.md`
+
+그 다음 실제 수정 대상 파일을 읽어라:
+
+- `src/main/java/com/commerce/payment/application/PaymentAttemptService.java` (step1에서 수정된 상태)
+- `src/test/java/com/commerce/payment/application/concurrency/PaymentAttemptServiceConcurrencyTest.java`
 
 ## 작업
 
-`docs/ADR.md` 파일 끝에 ADR-010을 추가한다.
+`PaymentAttemptServiceConcurrencyTest`에 동시 다른 amount 시나리오 2개를 추가한다.
 
-```markdown
-### ADR-010: PaymentAttempt 멱등 재요청 amount mismatch는 명시적 예외로 거부
-- **결정**: `(merchantPayKey, provider, paymentId, type)` 멱등 키에 대한 재요청이 기존 attempt의 amount와 다르면 `PAYMENT_ATTEMPT_AMOUNT_MISMATCH`(409 Conflict)를 던진다. 기존 attempt 상태(REQUESTED/FAILED/SUCCEEDED)와 무관하게 적용한다.
-- **배경**: 기존에는 unique 제약 충돌 시 catch 블록에서 기존 attempt를 그대로 반환했다. amount가 다른 경우에도 침묵 처리되어 호출자 측 산출 오류나 PG 응답 검증/보상 취소 흐름에서 어떤 amount를 기준으로 삼을지 모호해진다. 멱등성 계약("같은 요청 → 같은 결과") 위반이 가시화되지 않는 문제다.
-- **이유**: 호출자 측 mismatch(내부 원인)는 PG 응답 mismatch(`PAYMENT_AMOUNT_MISMATCH`, 400, 외부 원인)와 의미·모니터링 기준이 다르다. 별도 코드로 분리하면 알람/대시보드에서 원인 추적이 가능하다. 409 Conflict는 "이미 기록된 상태와 충돌한다"는 의미가 정확하다. amount 변경이 필요하면 새 `merchantPayKey`로 새 요청을 발급하는 게 정상 흐름이다.
-- **트레이드오프**: 호출자가 잘못된 amount로 재시도하면 즉시 4xx로 실패한다. 기존에는 침묵 처리되어 후속 흐름에서 뒤늦게 발견될 수 있었다.
+### 패턴
+
+기존 동시성 테스트는 모든 스레드가 같은 amount로 시도해 1건만 저장됨을 검증한다.
+이번 테스트는 **미리 저장된 attempt(amount=X)에 대해 다른 amount(Y)로 동시 재요청**을 보내 모두 mismatch 예외를 받는지 검증한다.
+
+### 추가 테스트 1: APPROVE amount mismatch
+
+```java
+@DisplayName("기존 승인 attempt와 다른 금액으로 동시 요청하면 모두 금액 불일치 예외가 발생한다")
+@Test
+void getOrCreateApproveAttempt_whenConcurrentRequestWithDifferentAmount_allThrowAmountMismatch() throws Exception {
+    // given: amount=1000으로 approve attempt 선행 생성
+    String merchantPayKey = "PAY-ATTEMPT-MISMATCH-1";
+    String paymentId = "pg-attempt-mismatch-1";
+    paymentAttemptService.getOrCreateApproveAttempt(
+        merchantPayKey, PaymentProvider.NAVERPAY, paymentId, 1000);
+
+    ConcurrentLinkedQueue<Throwable> errors = new ConcurrentLinkedQueue<>();
+
+    // when: 20개 스레드가 amount=2000으로 동시 재요청 (mismatch)
+    runConcurrent(20, () -> paymentAttemptService.getOrCreateApproveAttempt(
+        merchantPayKey, PaymentProvider.NAVERPAY, paymentId, 2000), errors);
+
+    // then: attempt는 1건, 재요청 20개 모두 mismatch 예외
+    assertThat(paymentPersistence.countAttempts(merchantPayKey, paymentId, PaymentAttemptType.APPROVE))
+        .isEqualTo(1L);
+    assertThat(errors).hasSize(20);
+    errors.forEach(e -> {
+        assertThat(e).isInstanceOf(PaymentException.class);
+        assertThat(((PaymentException) e).getErrorCode())
+            .isEqualTo(PaymentErrorCode.PAYMENT_ATTEMPT_AMOUNT_MISMATCH);
+    });
+}
 ```
+
+### 추가 테스트 2: CANCEL amount mismatch
+
+동일 패턴. merchantPayKey, paymentId, 스레드 수 등은 겹치지 않는 별도 키를 사용한다.
 
 ## Acceptance Criteria
 
-변경 후 아래를 확인한다:
 ```bash
-grep "ADR-010" docs/ADR.md
+./gradlew dockerTest --tests "com.commerce.payment.application.concurrency.PaymentAttemptServiceConcurrencyTest"
 ```
+
+이 테스트는 Docker가 필요하다. `@Tag("concurrency")` `@Tag("docker")`가 붙어 있으므로 `dockerTest` 태스크로만 실행된다.
 
 ## 검증 절차
 
-1. `docs/ADR.md`에 ADR-010이 정상 추가되었는지 확인한다.
-2. ADR 형식이 ADR-001~ADR-009와 일관되는지 확인한다 (`**결정**`, `**배경**`, `**이유**`, `**트레이드오프**` 항목).
+1. 위 명령을 실행한다.
+2. 아래를 확인한다:
+   - 기존 2개 동시성 케이스(같은 amount) 회귀 없음
+   - 새로 추가한 2개 케이스(다른 amount) 모두 통과
+   - errors queue 크기가 정확히 20인지 확인
 3. 결과에 따라 step 상태를 갱신한다.
 
 ## 커밋
 
 ```
-docs: PaymentAttempt 멱등 금액 불일치 정책 ADR을 추가한다
+test: PaymentAttempt 멱등 재요청 금액 불일치 동시성 테스트를 추가한다
 ```
 
 ## 금지사항
 
-- 기존 ADR 항목(ADR-001~ADR-009)을 수정하지 마라. 이유: 기존 ADR은 역사 기록이므로 사후 소급 수정하지 않는다.
-- `docs/api-spec.md`를 수정하지 마라. 이유: 결제 에러 코드 전체 정비는 별도 작업(본 PR 범위 밖)이다.
+- 기존 동시성 테스트 케이스를 수정하거나 삭제하지 마라. 이유: 같은 amount 재요청은 기존 동작(정상 반환)이 유지되어야 한다.
+- `@Tag` 어노테이션을 임의로 제거하지 마라. 이유: 동시성 테스트는 Docker 환경에서만 실행하도록 분리되어 있다.

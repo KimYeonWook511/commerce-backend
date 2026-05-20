@@ -3,7 +3,7 @@
   "phase": "0-refactor",
   "steps": [
     {
-      "step": 0,
+      "step": 1,
       "name": "introduce-pg-canceller-port",
       "status": "completed",
       "started_at": "2026-05-20T18:04:21+0900",
@@ -11,7 +11,7 @@
       "completed_at": "2026-05-20T18:05:23+0900"
     },
     {
-      "step": 1,
+      "step": 2,
       "name": "move-compensation-dispatcher",
       "status": "completed",
       "started_at": "2026-05-20T18:06:26+0900",
@@ -19,7 +19,7 @@
       "completed_at": "2026-05-20T18:18:25+0900"
     },
     {
-      "step": 2,
+      "step": 3,
       "name": "sync-root-docs",
       "status": "completed",
       "started_at": "2026-05-20T18:19:53+0900",
@@ -27,7 +27,7 @@
       "completed_at": "2026-05-20T18:21:59+0900"
     },
     {
-      "step": 3,
+      "step": 4,
       "name": "write-retrospective",
       "status": "completed",
       "started_at": "2026-05-20T18:23:07+0900",

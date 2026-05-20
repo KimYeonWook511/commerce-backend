@@ -62,36 +62,36 @@ class StepExecutorTest(unittest.TestCase):
                 "task": "skill-test",
                 "steps": [
                     {
-                        "step": 0,
+                        "step": 1,
                         "name": "setup",
                         "status": "completed",
                         "summary": "프로젝트 초기화 완료",
                         "completed_at": "2026-04-30T15:00:00+0900",
                     },
                     {
-                        "step": 1,
+                        "step": 2,
                         "name": "core",
                         "status": "completed",
                         "summary": "핵심 로직 구현",
                         "completed_at": "2026-04-30T15:10:00+0900",
                     },
-                    {"step": 2, "name": "api", "status": "pending"},
+                    {"step": 3, "name": "api", "status": "pending"},
                 ],
             },
         )
         self.write_workflow_checklist()
-        (self.root / "docs" / "tasks" / "skill-test" / "phases" / "0-mvp" / "step2.md").write_text(
-            "# Step 2: api\n\n"
+        (self.root / "docs" / "tasks" / "skill-test" / "phases" / "0-mvp" / "step3.md").write_text(
+            "# Step 3: api\n\n"
             "`docs/ADR.md`와 `docs/api-spec.md`를 참고해 API를 구현하세요.\n\n"
             "## Acceptance Criteria\n\n```bash\n./gradlew test\n```\n",
             encoding="utf-8",
         )
-        (self.root / "docs" / "tasks" / "skill-test" / "phases" / "0-mvp" / "step0.md").write_text(
-            "# Step 0: setup\n",
+        (self.root / "docs" / "tasks" / "skill-test" / "phases" / "0-mvp" / "step1.md").write_text(
+            "# Step 1: setup\n",
             encoding="utf-8",
         )
-        (self.root / "docs" / "tasks" / "skill-test" / "phases" / "0-mvp" / "step1.md").write_text(
-            "# Step 1: core\n",
+        (self.root / "docs" / "tasks" / "skill-test" / "phases" / "0-mvp" / "step2.md").write_text(
+            "# Step 2: core\n",
             encoding="utf-8",
         )
 
@@ -270,8 +270,8 @@ class StepExecutorTest(unittest.TestCase):
     def test_build_previous_step_context_includes_completed_with_summary(self):
         index = self.read_json(self.root / "docs" / "tasks" / "skill-test" / "phases" / "0-mvp" / "index.json")
         result = self.execute.StepExecutor.build_previous_step_context(index)
-        self.assertIn("Step 0 (setup): 프로젝트 초기화 완료", result)
-        self.assertIn("Step 1 (core): 핵심 로직 구현", result)
+        self.assertIn("Step 1 (setup): 프로젝트 초기화 완료", result)
+        self.assertIn("Step 2 (core): 핵심 로직 구현", result)
 
     def test_build_previous_step_context_excludes_pending(self):
         index = self.read_json(self.root / "docs" / "tasks" / "skill-test" / "phases" / "0-mvp" / "index.json")
@@ -280,7 +280,7 @@ class StepExecutorTest(unittest.TestCase):
 
     def test_build_previous_step_context_empty_when_no_completed(self):
         result = self.execute.StepExecutor.build_previous_step_context(
-            {"steps": [{"step": 0, "name": "a", "status": "pending"}]}
+            {"steps": [{"step": 1, "name": "a", "status": "pending"}]}
         )
         self.assertEqual("", result)
 
@@ -505,7 +505,7 @@ class StepExecutorTest(unittest.TestCase):
         self.assertEqual(1, exc.exception.code)
 
     def test_validate_completed_step_artifacts_exits_when_step_file_missing(self):
-        (self.root / "docs" / "tasks" / "skill-test" / "phases" / "0-mvp" / "step0.md").unlink()
+        (self.root / "docs" / "tasks" / "skill-test" / "phases" / "0-mvp" / "step1.md").unlink()
 
         with self.assertRaises(SystemExit) as exc:
             self.make_executor().validate_completed_step_artifacts()

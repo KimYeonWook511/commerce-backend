@@ -3,7 +3,7 @@
   "phase": "0-admin-stock-management-api",
   "steps": [
     {
-      "step": 0,
+      "step": 1,
       "name": "domain-history-model",
       "status": "completed",
       "started_at": "2026-04-30T21:22:31+0900",
@@ -11,7 +11,7 @@
       "completed_at": "2026-04-30T21:24:27+0900"
     },
     {
-      "step": 1,
+      "step": 2,
       "name": "stock-command-service",
       "status": "completed",
       "started_at": "2026-04-30T21:25:00+0900",
@@ -19,7 +19,7 @@
       "completed_at": "2026-04-30T21:30:05+0900"
     },
     {
-      "step": 2,
+      "step": 3,
       "name": "admin-stock-create-api",
       "status": "completed",
       "started_at": "2026-04-30T21:31:22+0900",
@@ -27,7 +27,7 @@
       "completed_at": "2026-04-30T21:33:59+0900"
     },
     {
-      "step": 3,
+      "step": 4,
       "name": "admin-stock-adjust-api",
       "status": "completed",
       "started_at": "2026-04-30T21:34:46+0900",
@@ -35,7 +35,7 @@
       "completed_at": "2026-04-30T21:37:10+0900"
     },
     {
-      "step": 4,
+      "step": 5,
       "name": "admin-stock-history-query-api",
       "status": "completed",
       "started_at": "2026-04-30T21:37:53+0900",
@@ -43,7 +43,7 @@
       "completed_at": "2026-04-30T21:40:47+0900"
     },
     {
-      "step": 5,
+      "step": 6,
       "name": "docs-sync",
       "status": "completed",
       "started_at": "2026-04-30T21:41:54+0900",

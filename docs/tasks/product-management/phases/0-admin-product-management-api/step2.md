@@ -1,4 +1,4 @@
-# Step 2: sync-root-docs
+# Step 3: admin-product-command-api
 
 ## 읽어야 할 파일
 
@@ -9,33 +9,36 @@
 - `/docs/features/product-management/adr.md`
 - `/docs/features/product-management/api-spec.md`
 - `/docs/features/product-management/db-schema.md`
-- `/docs/features/product-management/phases/0-admin-product-management-api/step0.md`
 - `/docs/features/product-management/phases/0-admin-product-management-api/step1.md`
-- `/docs/PRD.md`
 - `/docs/architecture.md`
 - `/docs/api-spec.md`
-- `/docs/db-schema.md`
 - `/src/main/java/com/commerce/product/**`
+- `/src/main/java/com/commerce/auth/interceptor/RequireRole.java`
+- `/src/main/java/com/commerce/member/domain/MemberRole.java`
+- `/src/test/java/com/commerce/auth/controller/AuthWebSecurityTest.java`
+- `/src/test/java/com/commerce/order/controller/OrderControllerTest.java`
+- `/src/test/java/com/commerce/product/controller/ProductControllerTest.java`
 
 이전 step에서 만들어진 코드와 feature 문서를 꼼꼼히 읽고, 설계 의도를 이해한 뒤 작업하라.
 
 ## 작업
 
-루트 문서를 `product-management` 구현 결과와 동기화하라.
+관리자 상품 command API를 구현하라.
 
-- `docs/api-spec.md`에 관리자 상품 등록, 수정, 삭제 API를 추가하라.
-- `docs/api-spec.md`의 공개 상품 조회 설명에 `ON_SALE`, `SOLD_OUT`만 노출하고 `STOPPED`/삭제 상품은 제외한다는 정책을 반영하라.
-- `docs/db-schema.md`의 `tbl_product` 컬럼 목록에 `description`, `image_url`, `status`, `deleted_at`을 반영하라.
-- `docs/architecture.md`의 `product` 도메인 책임에 관리자 상품 관리와 공개 조회 노출 정책을 반영하라.
-- 필요하면 `docs/PRD.md`의 핵심 기능 설명을 현재 상태와 맞게 최소 수정하라.
+- `POST /admin/products`를 추가해 상품을 등록하라.
+- `PATCH /admin/products/{productId}`를 추가해 상품명, 가격, 설명, 이미지 URL, 판매 상태를 수정하라.
+- `DELETE /admin/products/{productId}`를 추가해 상품을 soft delete 하라.
+- 관리자 API 메서드에는 `@RequireRole(MemberRole.ROLE_ADMIN)`을 적용하라.
+- request DTO에는 Bean Validation을 적용하라.
+- response/result DTO는 엔티티를 직접 노출하지 말고 필요한 필드만 반환하라.
+- service에는 등록, 수정, 삭제 메서드를 추가하고 기존 공개 조회 메서드와 책임을 분리하라.
+- 삭제되었거나 존재하지 않는 상품을 수정/삭제하려 하면 `ProductException(ProductErrorCode.PRODUCT_NOT_FOUND)`를 사용하라.
+- 컨트롤러 테스트와 서비스 테스트를 추가해 등록, 수정, 삭제, 권한 검증, validation 실패를 검증하라.
 
 ## 수정 가능 경로
 
-- `docs/features/product-management/**`
-- `docs/PRD.md`
-- `docs/architecture.md`
-- `docs/api-spec.md`
-- `docs/db-schema.md`
+- `src/main/java/com/commerce/product/**`
+- `src/test/java/com/commerce/product/**`
 
 ## Acceptance Criteria
 
@@ -47,13 +50,14 @@
 
 1. 위 Acceptance Criteria 커맨드를 실행한다.
 2. 아래를 확인한다.
-   - 루트 문서와 feature 문서의 API/DB 설명이 충돌하지 않는가?
-   - 구현된 필드명과 문서 필드명이 일치하는가?
-   - 구현되지 않은 재고 관리 기능을 문서에 완료된 것처럼 쓰지 않았는가?
+   - 관리자 API가 `ROLE_ADMIN` 권한으로 보호되는가?
+   - Controller에 비즈니스 로직이 들어가지 않았는가?
+   - 등록/수정/삭제 응답이 `ApiResponse<T>` 형식을 따르는가?
 3. 결과에 따라 step 상태를 갱신한다.
 
 ## 금지사항
 
-- 재고 수동 조정 또는 재고 이력을 구현 완료로 문서화하지 마라. 이유: 이번 feature 범위 밖이다.
-- 실제 구현과 다른 API 경로를 문서화하지 마라.
+- 파일 업로드를 구현하지 마라. 이유: 이번 feature는 `imageUrl` 문자열 저장만 다룬다.
+- 상품 등록 시 재고 레코드를 생성하지 마라. 이유: 초기 재고 정책은 다음 feature에서 결정한다.
+- hard delete를 호출하지 마라. 이유: 주문 이력 보존 요구와 충돌한다.
 - 기존 테스트를 깨뜨리지 마라

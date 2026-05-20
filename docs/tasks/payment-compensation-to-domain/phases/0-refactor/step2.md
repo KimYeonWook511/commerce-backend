@@ -1,109 +1,218 @@
-# Step 2: sync-root-docs
+# Step 3: move-compensation-dispatcher
 
 ## 읽어야 할 파일
 
-먼저 아래 파일들을 읽고 현재 문서 상태를 파악하라:
+먼저 아래 파일들을 읽고 현재 코드 구조를 파악하라:
 
 - `docs/tasks/payment-compensation-to-domain/prd.md`
+- `docs/tasks/payment-compensation-to-domain/architecture.md`
 - `docs/tasks/payment-compensation-to-domain/adr.md`
-- `docs/ADR.md`
-- `docs/architecture.md`
+- `src/main/java/com/commerce/payment/application/port/PgCanceller.java` (step 1 신설)
+- `src/main/java/com/commerce/payment/application/port/result/CancelOutcome.java` (step 1 신설)
+- `src/main/java/com/commerce/payment/naverpay/application/NaverPayApprovalService.java`
+- `src/main/java/com/commerce/payment/application/PaymentApprovalAttemptService.java`
+- `src/main/java/com/commerce/payment/application/PaymentCancellationAttemptService.java`
+- `src/main/java/com/commerce/payment/application/PaymentApprovalService.java`
+- `src/main/java/com/commerce/payment/naverpay/application/port/result/NaverPayCancelResult.java`
+- `src/test/java/com/commerce/payment/naverpay/application/NaverPayApprovalServiceTest.java`
+- `docs/ADR.md` (ADR-013, ADR-014 확인)
 - `docs/exception-strategy.md`
-- `docs/testing-conventions.md`
 
 ## 작업
 
-이 step은 코드 변경 없이 루트 docs만 동기화한다.
+### 신설: `PaymentApprovalCompensationService`
 
-### `docs/ADR.md` 수정
+경로: `src/main/java/com/commerce/payment/application/PaymentApprovalCompensationService.java`
 
-**ADR-015 신설** (ADR-014 다음에 추가):
+- `package com.commerce.payment.application`
+- `@Slf4j @Service @RequiredArgsConstructor`
+- 클래스 레벨 `@Transactional` 없음 (ADR-T2)
+- 의존성: `PaymentApprovalAttemptService`, `PaymentApprovalService`, `PaymentCancellationAttemptService`
 
-```
-### ADR-015: 보상 정책은 payment.application 책임이고, PG 어댑터는 cancel 콜백만 제공한다
-- **결정**: `NaverPayApprovalService`에 있던 보상 dispatcher 4개와 공통 골격을 `PaymentApprovalCompensationService`(payment.application)로 이동한다. PG cancel 호출은 `PgCanceller` @FunctionalInterface 콜백으로 위임하고, PG 응답은 `CancelOutcome` record로 변환해 payment.application이 `NaverPayCancelResult`를 직접 import하지 않도록 한다.
-- **배경**: 보상 정책(어떤 실패 → cancel 필요/불필요, cancel reason, cancel amount)은 PG-agnostic 결제 도메인 책임이다. PG-specific한 부분은 cancel API 호출과 NaverPayCancelResult 응답 해석뿐이다. NaverPayApprovalService가 보상 정책을 내장하면 레이어 의존이 역전되고 PG 변경 시 정책 코드도 함께 영향받는다.
-- **이유**: `PgCanceller` 좁은 콜백은 PaymentGateway port 완전 inversion(PG 둘 이상 추가 시)보다 지금 필요한 최소 구조만 도입한다. NaverPayApprovalService가 메서드 참조(`this::pgCancel`)로 구현하므로 인터페이스 추가 없이 의존 역전이 성립한다.
-- **트랜잭션 정책**: `PaymentApprovalCompensationService`에 클래스 레벨 `@Transactional` 없음. `isCompensationRequired`의 `REQUIRES_NEW` 격리(ADR-014)를 보존하기 위해 각 단계가 자기 트랜잭션을 가진다.
-- **트레이드오프**: PG가 둘 이상 추가될 때 `PgCanceller` 주입 위치를 재설계해야 한다. 이때 PaymentGateway port 완전 inversion으로 자연 승격 가능하다.
-```
+**public 메서드 4개:**
 
-**ADR-014 후속 노트 추가** (ADR-014 결정 마지막 줄 아래):
+```java
+public void compensateMerchantKeyMismatch(PaymentAttempt approveAttempt) {
+    // PG 결제 자체가 없으므로 cancel 없이 failIfRequested만.
+    paymentApprovalAttemptService.failIfRequested(
+        approveAttempt.getMerchantPayKey(), approveAttempt.getProvider(), approveAttempt.getPaymentId(),
+        PaymentAttemptFailCode.MERCHANT_PAY_KEY_MISMATCH, "가맹점 결제 키 불일치", LocalDateTime.now()
+    );
+}
 
-```
-- **후속 (ADR-015, payment-compensation-to-domain task)**: 보상 owner가 `NaverPayApprovalService.failApproveAndCancelApprovedPayment`에서 payment.application의 `PaymentApprovalCompensationService.runPgCancel`로 이동했다. `isCompensationRequired` 호출자가 바뀌었을 뿐 정책 자체(Payment 존재 체크 → cancel skip)는 동일하게 유지된다.
-```
+public void compensateAmountMismatch(PaymentAttempt approveAttempt, int responseTotalAmount, PgCanceller pgCanceller) {
+    runPgCancel(approveAttempt,
+        PaymentAttemptFailCode.AMOUNT_MISMATCH,
+        String.format("attemptAmount=%d, responseTotalAmount=%d", approveAttempt.getAmount(), responseTotalAmount),
+        responseTotalAmount,
+        "승인 금액 불일치",
+        pgCanceller
+    );
+}
 
-### `docs/architecture.md` 수정
+public void compensateDuplicatePayment(PaymentAttempt approveAttempt, Exception ex, PgCanceller pgCanceller) {
+    runPgCancel(approveAttempt,
+        PaymentAttemptFailCode.DUPLICATE_PAYMENT,
+        Objects.toString(ex.getMessage(), "이미 완료된 결제 반영 시도"),
+        approveAttempt.getAmount(),
+        "이미 다른 결제가 완료된 주문으로 인한 취소",
+        pgCanceller
+    );
+}
 
-**도메인별 주요 서비스 테이블** (line 83-84 인근):
-
-payment 행에 `PaymentApprovalCompensationService` 추가:
-
-```
-| payment | `PaymentReadyService`, `PaymentApprovalService`, `PaymentApprovalAttemptService`, `PaymentCancellationAttemptService`, `PaymentApprovalCompensationService` |
-```
-
-**결제 승인 데이터 흐름** (line 107-110 인근):
-
-```
-# 결제 승인 (네이버페이)
-NaverPayController → NaverPayApprovalService
-  → NaverPayGateway (PG 호출, 응답 코드 매핑)
-  → PaymentApprovalService (결제 완료 반영, 보상 가능 여부 판단)
-  → PaymentApprovalAttemptService (승인 시도 이력 기록)
-  → PaymentCancellationAttemptService (취소 시도 이력 기록, 보상 흐름)
-  → PaymentApprovalCompensationService (보상 dispatcher — catch 분기 시, this::pgCancel 콜백 주입)
-```
-
-### `docs/exception-strategy.md` 수정
-
-**line 78-80 "적용 예" 섹션 갱신**:
-
-`failApproveAndCancelApprovedPayment` → `PaymentApprovalCompensationService.runPgCancel`로 호출처 명칭 갱신:
-
-```
-- `PaymentApprovalAttemptService.failIfRequested`는 보상 흐름에서 "현재 상태가 REQUESTED면 실패 처리, 아니면 skip" 의도를 캡슐화해 호출처(`PaymentApprovalCompensationService.runPgCancel`)가 try-catch 없이 평탄하게 보상을 진행하도록 한다.
+public void compensateUnexpected(PaymentAttempt approveAttempt, Exception ex, PaymentAttemptFailCode failCode, PgCanceller pgCanceller) {
+    runPgCancel(approveAttempt,
+        failCode,
+        Objects.toString(ex.getMessage(), "예상치 못한 오류 발생"),
+        approveAttempt.getAmount(),
+        "결제 완료 반영 실패로 인한 취소",
+        pgCanceller
+    );
+}
 ```
 
-**"보상 catch 2차 예외 처리" 섹션** 끝에 PgCanceller 관련 내용 추가:
+**private 메서드 `runPgCancel`:**
 
+```java
+private void runPgCancel(
+    PaymentAttempt approveAttempt,
+    PaymentAttemptFailCode failCode,
+    String failDetail,
+    int cancelAmount,
+    String cancelReason,
+    PgCanceller pgCanceller
+) {
+    // REQUESTED 상태가 아니면 mark를 skip한다. (race window에서 SUCCEEDED 상태로 도달해도 PG cancel은 그대로 진행)
+    paymentApprovalAttemptService.failIfRequested(
+        approveAttempt.getMerchantPayKey(), approveAttempt.getProvider(), approveAttempt.getPaymentId(),
+        failCode, failDetail, LocalDateTime.now()
+    );
+
+    if (!paymentApprovalService.isCompensationRequired(approveAttempt.getMerchantPayKey())) {
+        log.warn(
+            "Payment already completed, skipping PG cancel: merchantPayKey={}, paymentId={}",
+            approveAttempt.getMerchantPayKey(), approveAttempt.getPaymentId()
+        );
+        return;
+    }
+
+    PaymentAttempt cancelAttempt = paymentCancellationAttemptService.getOrCreate(
+        approveAttempt.getMerchantPayKey(), approveAttempt.getProvider(),
+        approveAttempt.getPaymentId(), cancelAmount
+    );
+
+    if (cancelAttempt.getStatus() != PaymentAttemptStatus.REQUESTED) {
+        return;
+    }
+
+    try {
+        CancelOutcome outcome = pgCanceller.cancel(cancelAttempt, cancelReason);
+        switch (outcome.status()) {
+            case SUCCESS -> paymentCancellationAttemptService.succeed(
+                cancelAttempt.getMerchantPayKey(), cancelAttempt.getProvider(),
+                cancelAttempt.getPaymentId(), LocalDateTime.now()
+            );
+            case PROCESSING -> {} // no-op
+            case FAILED -> paymentCancellationAttemptService.fail(
+                cancelAttempt.getMerchantPayKey(), cancelAttempt.getProvider(),
+                cancelAttempt.getPaymentId(), outcome.failCode(), outcome.failDetail(), LocalDateTime.now()
+            );
+        }
+    } catch (PaymentException ex) {
+        log.warn(
+            "Approved payment cancel failed: merchantPayKey={}, paymentId={}, cancelReason={}, errorCode={}",
+            cancelAttempt.getMerchantPayKey(), cancelAttempt.getPaymentId(),
+            cancelReason, ex.getErrorCode()
+        );
+    }
+}
 ```
-### PG cancel 콜백 (PgCanceller)
 
-`PgCanceller.cancel(cancelAttempt, cancelReason) → CancelOutcome` 시그니처. PG-specific 응답(`NaverPayCancelResult.Status` 등)을 도메인 `CancelOutcome.Status`(SUCCESS/PROCESSING/FAILED)로 변환한 뒤 cancel attempt mark를 결정한다. `ALREADY_CANCELED`는 `SUCCESS`와 동일하게 매핑한다. `payment.application`이 `NaverPayCancelResult`를 직접 import하지 않아 레이어 의존 방향이 보존된다.
+### 수정: `NaverPayApprovalService`
+
+아래를 변경한다:
+
+1. **의존성 추가**: `PaymentApprovalCompensationService paymentApprovalCompensationService` 필드 추가
+
+2. **`pgCancel` private 메서드 신설**:
+```java
+private CancelOutcome pgCancel(PaymentAttempt cancelAttempt, String cancelReason) {
+    NaverPayCancelResult result = naverPayGateway.cancel(
+        cancelAttempt.getPaymentId(), cancelAttempt.getAmount(), cancelReason
+    );
+    return switch (result.getStatus()) {
+        case SUCCESS, ALREADY_CANCELED -> CancelOutcome.success();
+        case PROCESSING -> CancelOutcome.processing();
+        case FAILED -> CancelOutcome.failed(result.getFailCode(), result.getFailDetail());
+    };
+}
 ```
 
-### `docs/testing-conventions.md` 수정
-
-Application Layer 섹션에 `PgCanceller` Mock 패턴 예제 추가:
-
+3. **`completeVerifiedApproval` catch 블록 갱신**:
+```java
+catch (PaymentException ex) {
+    log.error(
+        "NaverPay approve complete failed by payment error: merchantPayKey={}, paymentId={}, responseMerchantPayKey={}, responseTotalAmount={}, errorCode={}",
+        attempt.getMerchantPayKey(), attempt.getPaymentId(),
+        responseMerchantPayKey, responseTotalAmount, ex.getErrorCode(), ex
+    );
+    switch ((PaymentErrorCode)ex.getErrorCode()) {
+        case PAYMENT_MERCHANT_KEY_MISMATCH ->
+            paymentApprovalCompensationService.compensateMerchantKeyMismatch(attempt);
+        case PAYMENT_AMOUNT_MISMATCH ->
+            paymentApprovalCompensationService.compensateAmountMismatch(attempt, responseTotalAmount, this::pgCancel);
+        case PAYMENT_DUPLICATE ->
+            paymentApprovalCompensationService.compensateDuplicatePayment(attempt, ex, this::pgCancel);
+        default ->
+            paymentApprovalCompensationService.compensateUnexpected(attempt, ex, PaymentAttemptFailCode.APPROVE_PROCESS_FAILED, this::pgCancel);
+    }
+    throw ex;
+}
+catch (CustomException ex) {
+    log.error(...);
+    paymentApprovalCompensationService.compensateUnexpected(attempt, ex, PaymentAttemptFailCode.APPROVE_PROCESS_FAILED, this::pgCancel);
+    throw ex;
+}
+catch (Exception ex) {
+    log.error(...);
+    paymentApprovalCompensationService.compensateUnexpected(attempt, ex, PaymentAttemptFailCode.APPROVE_PROCESS_FAILED, this::pgCancel);
+    throw ex;
+}
 ```
-#### PgCanceller functional interface Mock 패턴
 
-@FunctionalInterface를 Mockito로 Mock할 때는 일반 인터페이스와 동일하게 처리한다.
+4. **삭제할 메서드**: `compensateMerchantKeyMismatch`, `compensateAmountMismatch`, `compensateDuplicatePayment`, `compensateUnexpected`, `failApproveAndCancelApprovedPayment`, `processCancelRequest`, `succeedCancel`, `markCancelFailed`, `failApprove`
 
-@Mock PgCanceller pgCanceller;
+5. **삭제할 import**: `NaverPayCancelResult`가 더 이상 필요 없으면 제거 확인 (`pgCancel` 메서드에서 사용하므로 유지)
 
-// stub 예시
-given(pgCanceller.cancel(any(), any())).willReturn(CancelOutcome.success());
-given(pgCanceller.cancel(any(), eq("취소 이유"))).willReturn(CancelOutcome.failed(failCode, "실패 상세"));
+### 신설 테스트: `PaymentApprovalCompensationServiceTest`
 
-// 호출 여부 검증
-then(pgCanceller).should().cancel(eq(cancelAttempt), eq("취소 이유"));
-then(pgCanceller).should(never()).cancel(any(), any());
-```
+경로: `src/test/java/com/commerce/payment/application/PaymentApprovalCompensationServiceTest.java`
 
-### 영향 없음 확인 (수정 불필요)
+검증 매트릭스:
 
-- `docs/PRD.md` — 기능 범위 변동 없음
-- `docs/api-spec.md` — 외부 API 변동 없음
-- `docs/db-schema.md` — DB 스키마 변동 없음
-- `docs/branch-conventions.md`, `docs/commit-conventions.md`, `docs/pr-conventions.md` — 규칙 문서
-- `docs/claude-harness.md`, `docs/hooks/`, `docs/claude/`, `docs/skills/` — 개발 환경 문서
-- `docs/ddd/` 하위 회고 — 역사 기록, 사후 수정 금지
-- `docs/tasks/payment-compensation-policy/` — 역사 기록, 사후 수정 금지
-- `docs/TEMP-TODO.md`/`docs/TODO.md` — 큰 로드맵 문서, 본 task로 close되는 항목 없음
+- `compensateMerchantKeyMismatch`: `failIfRequested` 호출 확인, `pgCanceller.cancel` 호출 안 함 확인
+- `compensateAmountMismatch(isCompensationRequired=true, outcome=SUCCESS)`: cancel 성공 → `succeedCancel` 호출
+- `compensateAmountMismatch(isCompensationRequired=true, outcome=PROCESSING)`: no-op
+- `compensateAmountMismatch(isCompensationRequired=true, outcome=FAILED)`: `failCancel` 호출
+- `compensateAmountMismatch(isCompensationRequired=false)`: `pgCanceller.cancel` 호출 안 함
+- `compensateDuplicatePayment`, `compensateUnexpected`: 동일 매트릭스
+- cancel attempt status != REQUESTED: `pgCanceller.cancel` 호출 안 함
+- `pgCanceller.cancel` 중 `PaymentException` 발생: swallow, 원래 흐름 계속
+
+`PgCanceller`를 `@Mock`으로 주입해 `given(pgCanceller.cancel(any(), any())).willReturn(CancelOutcome.success())` 형태로 stub.
+
+### 수정 테스트: `NaverPayApprovalServiceTest`
+
+- `@Mock PaymentApprovalCompensationService paymentApprovalCompensationService` 추가
+- `@InjectMocks` 대상이 새 필드를 포함하도록 자동 주입
+- 보상 검증 케이스 갱신: `naverPayGateway.cancel` 직접 검증 대신 `paymentApprovalCompensationService.compensateXxx(...)` 호출 검증으로 교체
+- `pgCancel` 변환 독립 케이스 추가:
+  - `NaverPayCancelResult.SUCCESS` → `CancelOutcome.status() == SUCCESS`
+  - `NaverPayCancelResult.ALREADY_CANCELED` → `CancelOutcome.status() == SUCCESS`
+  - `NaverPayCancelResult.PROCESSING` → `CancelOutcome.status() == PROCESSING`
+  - `NaverPayCancelResult.FAILED` → `CancelOutcome.status() == FAILED` + failCode/failDetail 일치
+
+`pgCancel`은 private이므로 `ReflectionTestUtils.invokeMethod` 또는 패키지-private으로 변경해 테스트 접근. 패키지-private으로 바꾸는 방법을 우선 사용한다.
 
 ## Acceptance Criteria
 
@@ -113,16 +222,15 @@ then(pgCanceller).should(never()).cancel(any(), any());
 
 ## 검증 절차
 
-1. 위 커맨드를 실행해 회귀 없음을 확인한다 (문서 전용 step이므로 빌드만 통과하면 된다).
+1. 위 커맨드를 실행해 테스트가 모두 통과하는지 확인한다.
 2. 아래를 확인한다:
-   - ADR-015가 `docs/ADR.md`에 추가됐는가?
-   - ADR-014 후속 노트가 추가됐는가?
-   - `docs/architecture.md`의 서비스 테이블과 데이터 흐름이 갱신됐는가?
-   - `docs/exception-strategy.md`의 `failIfRequested` 호출처 명칭이 갱신됐는가?
-   - `docs/testing-conventions.md`에 PgCanceller Mock 패턴이 추가됐는가?
+   - `NaverPayApprovalService`에서 보상 메서드 8개(`compensate*`, `failApproveAndCancelApprovedPayment`, `processCancelRequest`, `succeedCancel`, `markCancelFailed`, `failApprove`)가 모두 삭제됐는가?
+   - `payment.application` 코드가 `NaverPayCancelResult`를 import하지 않는가?
+   - `PaymentApprovalCompensationService`에 클래스 레벨 `@Transactional`이 없는가?
+3. 결과에 따라 step 상태를 갱신한다.
 
 ## 금지사항
 
-- `docs/ddd/` 하위 회고 문서를 수정하지 마라. 이유: 역사 기록이라 사후 소급 수정하지 않는다.
-- `docs/tasks/payment-compensation-policy/` 하위 문서를 수정하지 마라. 이유: 동일한 이유.
-- `commerce-workspace/docs/` 하위 문서를 수정하지 마라. 이유: backend 세션은 workspace 공유 문서를 수정하지 않는다. Frontend 세션 책임.
+- `PaymentApprovalCompensationService`에 클래스 레벨 `@Transactional`을 붙이지 마라. 이유: `isCompensationRequired`의 `REQUIRES_NEW` 격리가 깨져 race 정책이 무너진다 (ADR-T2).
+- `payment.application` 패키지에서 `NaverPayCancelResult`를 import하지 마라. 이유: 도메인 application이 PG 어댑터 결과 타입에 의존하면 레이어 의존 방향이 역전된다.
+- `runPgCancel`을 public으로 노출하지 마라. 이유: dispatcher 4개를 통해서만 진입해야 한다.
