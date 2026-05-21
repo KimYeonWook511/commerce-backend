@@ -194,7 +194,7 @@ Filter가 요청 진입 시 다음을 MDC에 push한다.
 
 | 출력 채널 | 포맷 | 이유 |
 |----------|------|------|
-| **콘솔 (stdout)** | 텍스트 (`%d %level [%logger] - %msg`) | 사람이 읽기 쉬움. local 개발 + 컨테이너 stdout 캡처 |
+| **콘솔 (stdout)** | 텍스트 (`%d %level [%logger] [%X{traceId}] - %msg`) | 사람이 읽기 쉬움. local 개발 + 컨테이너 stdout 캡처 |
 | **파일** | JSON (one-line per event) | 구조화된 로그. 후속 수집 파이프라인 도입 시 파싱 비용 0 |
 
 환경별 활성(어떤 환경에서 콘솔/파일 중 무엇을 켤지)은 `logback-spring.xml`에서 결정한다. 본 문서는 두 채널의 포맷 정책만 정의한다.
