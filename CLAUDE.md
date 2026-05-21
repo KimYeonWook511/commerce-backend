@@ -49,6 +49,7 @@
 - 기능 범위: `docs/PRD.md`
 - 설계 결정: `docs/ADR.md`
 - 백엔드 구조와 의존성: `docs/architecture.md`
+- 예외 처리 정책: `docs/exception-strategy.md`
 - API 스펙: `docs/api-spec.md`
 - DB 스키마: `docs/db-schema.md`
 - 태스크별 문서 운영 가이드: `docs/tasks/README.md`
@@ -56,6 +57,7 @@
 - 커밋 컨벤션: `docs/commit-conventions.md`
 - PR 컨벤션: `docs/pr-conventions.md`
 - 테스트 컨벤션: `docs/testing-conventions.md`
+- 로깅 컨벤션: `docs/logging-conventions.md`
 - Claude Code 하네스 원칙: `docs/claude-harness.md`
 - Claude Code hook 구조: `docs/claude/hooks/README.md`
 - Claude Code skill 문서: `docs/claude/skills/*`
