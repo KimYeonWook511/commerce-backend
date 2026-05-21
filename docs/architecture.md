@@ -140,6 +140,8 @@ OrderExpirationBatchConfig (Spring Batch)
 
 예외 처리 정책(find-first, 안전망 계층, 보상 catch 2차 예외 처리)은 `docs/exception-strategy.md`를 참고한다.
 
+로깅 컨벤션(레이어별 로그 책임, 레벨 기준, 예외 로깅 표준, 민감 정보 마스킹 등)은 `docs/logging-conventions.md`를 참고한다.
+
 ---
 
 ## 저장소 및 인프라 의존성
