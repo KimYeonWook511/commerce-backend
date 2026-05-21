@@ -49,6 +49,7 @@
 - 기능 범위: `docs/PRD.md`
 - 설계 결정: `docs/ADR.md`
 - 백엔드 구조와 의존성: `docs/architecture.md`
+- 예외 처리 정책: `docs/exception-strategy.md`
 - API 스펙: `docs/api-spec.md`
 - DB 스키마: `docs/db-schema.md`
 - 태스크별 문서 운영 가이드: `docs/tasks/README.md`
