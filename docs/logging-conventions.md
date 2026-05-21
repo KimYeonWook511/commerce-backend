@@ -112,7 +112,7 @@ GDPR(Article 4·5)·개인정보보호법(PIPA)의 data minimization, purpose li
 | 이메일 | PII (직접 식별자) | **원칙: 로그에 안 남김**. userId로 대체 |
 | 비밀번호 | 인증 정보 (PII 이상) | 평문·해시 모두 로그 금지 |
 | JWT / access token | 인증 정보 (PII 이상) | 평문 금지, `Authorization` 헤더는 Filter에서 통째 제거 또는 `Bearer ***`로 대체 |
-| userId (PK) | pseudonymous identifier | **로그의 기본 식별자**. 자유롭게 사용 가능 |
+| userId (PK) | pseudonymous identifier | **로그의 기본 식별자**. 직접 식별자(이메일 등)를 대체하여 활용 |
 
 ### 정책
 
