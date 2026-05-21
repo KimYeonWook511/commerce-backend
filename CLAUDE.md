@@ -56,6 +56,7 @@
 - 커밋 컨벤션: `docs/commit-conventions.md`
 - PR 컨벤션: `docs/pr-conventions.md`
 - 테스트 컨벤션: `docs/testing-conventions.md`
+- 로깅 컨벤션: `docs/logging-conventions.md`
 - Claude Code 하네스 원칙: `docs/claude-harness.md`
 - Claude Code hook 구조: `docs/claude/hooks/README.md`
 - Claude Code skill 문서: `docs/claude/skills/*`
