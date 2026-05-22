@@ -18,11 +18,11 @@
 
     <!-- 콘솔 패턴 (plain): 운영/테스트 환경. ANSI 색상 없음. -->
     <property name="CONSOLE_PATTERN_PLAIN"
-              value="%d{yyyy-MM-dd HH:mm:ss.SSS} %-5level [%thread] [%logger{36}] [traceId=%X{traceId:-} userId=%X{userId:-}] - %replace(%msg){'${MASK_PATTERN}', '$1$2***'}%n"/>
+              value="%d{yyyy-MM-dd HH:mm:ss.SSS} %-5level [%thread] [%logger{36}] [traceId=%X{traceId:-} memberId=%X{memberId:-}] - %replace(%msg){'${MASK_PATTERN}', '$1$2***'}%n"/>
 
     <!-- 콘솔 패턴 (color): 로컬 개발 환경. 색상 토큰 적용. -->
     <property name="CONSOLE_PATTERN_COLOR"
-              value="%cyan(%d{yyyy-MM-dd HH:mm:ss.SSS}) %highlight(%-5level) [%thread] [%magenta(%logger{36})] [%yellow(traceId=%X{traceId:-} userId=%X{userId:-})] - %replace(%msg){'${MASK_PATTERN}', '$1$2***'}%n"/>
+              value="%cyan(%d{yyyy-MM-dd HH:mm:ss.SSS}) %highlight(%-5level) [%thread] [%magenta(%logger{36})] [%yellow(traceId=%X{traceId:-} memberId=%X{memberId:-})] - %replace(%msg){'${MASK_PATTERN}', '$1$2***'}%n"/>
 
     <!-- 콘솔 appender: 색상 (local) -->
     <appender name="CONSOLE_COLOR" class="ch.qos.logback.core.ConsoleAppender">
