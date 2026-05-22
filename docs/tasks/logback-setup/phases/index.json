@@ -1,5 +1,9 @@
 {
   "phases": [
-    { "dir": "0-logback-config", "status": "pending" }
+    {
+      "dir": "0-logback-config",
+      "status": "in_progress",
+      "started_at": "2026-05-22T15:06:35+0900"
+    }
   ]
 }

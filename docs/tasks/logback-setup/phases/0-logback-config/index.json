@@ -2,8 +2,24 @@
   "project": "commerce-backend",
   "phase": "0-logback-config",
   "steps": [
-    { "step": 1, "name": "logback-setup", "status": "pending" },
-    { "step": 2, "name": "sync-root-docs", "status": "pending" },
-    { "step": 3, "name": "write-retrospective", "status": "pending" }
-  ]
+    {
+      "step": 1,
+      "name": "logback-setup",
+      "status": "completed",
+      "started_at": "2026-05-22T15:06:35+0900",
+      "summary": "logstash-logback-encoder:7.4 의존성을 추가하고 build.gradle의 logging 카테고리 주석을 정리한다. logback-spring.xml을 신규 작성해 local/prod/test 프로파일별 appender·logger 레벨·rolling 정책을 일원화하고, 콘솔 %replace와 커스텀 MaskingMessageJsonProvider로 민감 정보(password, accessToken, refreshToken, token)를 자동 마스킹한다. application-{local,prod,test}.yml의 logging 섹션을 제거해 단일 진실의 원천을 logback-spring.xml로 옮기고, .gitignore에 logs/와 *.log.gz를 추가한다. MaskingMessageJsonProvider와 콘솔 %replace 동등성을 검증하는 LoggingMaskingTest를 추가한다.",
+      "completed_at": "2026-05-22T15:21:50+0900"
+    },
+    {
+      "step": 2,
+      "name": "sync-root-docs",
+      "status": "pending"
+    },
+    {
+      "step": 3,
+      "name": "write-retrospective",
+      "status": "pending"
+    }
+  ],
+  "created_at": "2026-05-22T15:06:35+0900"
 }
