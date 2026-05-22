@@ -15,7 +15,7 @@ import net.logstash.logback.composite.loggingevent.MessageJsonProvider;
  */
 public class MaskingMessageJsonProvider extends MessageJsonProvider {
 
-	static final Pattern MASK_PATTERN = Pattern.compile(
+	private static final Pattern MASK_PATTERN = Pattern.compile(
 		"(?i)(password|accessToken|refreshToken|token)([\"'\\s]*[:=][\"'\\s]*)([^\"'\\s,}]+)"
 	);
 
