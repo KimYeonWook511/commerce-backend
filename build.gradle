@@ -38,7 +38,7 @@ dependencies {
     // - SQL 쿼리 파라미터 로그 (외부 라이브러리: https://github.com/gavlyukovskiy/spring-boot-data-source-decorator)
     implementation 'com.github.gavlyukovskiy:p6spy-spring-boot-starter:1.10.0'
     // - JSON 구조화 로그 (logback-spring.xml의 LoggingEventCompositeJsonEncoder가 의존)
-    implementation 'net.logstash.logback:logstash-logback-encoder:7.4'
+    implementation 'net.logstash.logback:logstash-logback-encoder:8.0'
 
     // lombok
     compileOnly 'org.projectlombok:lombok'
