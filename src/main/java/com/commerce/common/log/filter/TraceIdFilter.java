@@ -30,10 +30,9 @@ public class TraceIdFilter extends OncePerRequestFilter {
 			? incoming
 			: UUID.randomUUID().toString();
 
-		response.setHeader(TRACE_ID_HEADER, traceId);
 		MDC.put(TRACE_ID_MDC_KEY, traceId);
-
 		try {
+			response.setHeader(TRACE_ID_HEADER, traceId);
 			filterChain.doFilter(request, response);
 		} finally {
 			// MDC.clear() 금지 — P3/P4에서 push될 다른 키(userId, orderId 등)를 같이 날리는 위험 차단
