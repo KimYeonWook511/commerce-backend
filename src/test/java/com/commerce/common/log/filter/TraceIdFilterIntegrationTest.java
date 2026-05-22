@@ -38,7 +38,7 @@ class TraceIdFilterIntegrationTest {
 	MockMvc mockMvc;
 
 	@RestController
-	public static class TestController {
+	static class TestController {
 		@GetMapping("/__test__/trace")
 		ResponseEntity<Void> probe() {
 			return ResponseEntity.ok().build();
