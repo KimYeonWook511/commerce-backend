@@ -2,8 +2,9 @@
   "phases": [
     {
       "dir": "0-traceid-mdc-filter",
-      "status": "in_progress",
-      "started_at": "2026-05-22T17:18:32+0900"
+      "status": "completed",
+      "started_at": "2026-05-22T17:18:32+0900",
+      "completed_at": "2026-05-22T17:36:44+0900"
     }
   ]
 }
