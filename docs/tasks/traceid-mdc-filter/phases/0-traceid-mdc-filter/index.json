@@ -1,0 +1,9 @@
+{
+  "project": "commerce-backend",
+  "phase": "0-traceid-mdc-filter",
+  "steps": [
+    { "step": 1, "name": "traceid-mdc-filter", "status": "pending" },
+    { "step": 2, "name": "sync-root-docs", "status": "pending" },
+    { "step": 3, "name": "write-retrospective", "status": "pending" }
+  ]
+}
