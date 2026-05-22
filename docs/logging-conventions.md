@@ -45,9 +45,9 @@
 
 | 레이어 | 로그 책임 | 예시 |
 |--------|----------|------|
-| **Filter/Interceptor** | HTTP 메타데이터 일괄(method, path, status, latency, userId, traceId). body는 안 남김(마스킹·메모리 부담) | `REQUEST POST /api/orders userId=42 traceId=abc` / `RESPONSE 201 latency=88ms` |
+| **Filter/Interceptor** | HTTP 메타데이터 일괄(method, path, status, latency, traceId, memberId). body는 안 남김(마스킹·메모리 부담) | `REQUEST POST /api/orders traceId=abc memberId=42` / `RESPONSE 201 latency=88ms` |
 | **Presentation (Controller)** | 직접 로그 남기지 않음 (얇은 위임 레이어) | — |
-| **Application (Service)** | 유스케이스 시작·완료의 도메인 이벤트 INFO. 핵심 파라미터를 의미 있는 필드로 표현 | `log.info("주문 생성 orderId={} userId={} itemCount={}", ...)` |
+| **Application (Service)** | 유스케이스 시작·완료의 도메인 이벤트 INFO. 핵심 파라미터를 의미 있는 필드로 표현 | `log.info("주문 생성 orderId={} memberId={} itemCount={}", ...)` |
 | **Domain** | 로그 없음 (순수 도메인 보호, SLF4J 의존 금지) | — |
 | **Infrastructure** | 외부 호출(HTTP/DB/Kafka/Redis)의 실패·retry. 본문 디버깅은 DEBUG | `log.warn("naverpay http 5xx retry attempt={}", ...)` |
 
@@ -65,10 +65,10 @@
 
 | 케이스 | 레벨 | Stack trace | 남길 필드 |
 |--------|------|-------------|---------|
-| 5xx 시스템 (`DataIntegrityViolationException` 등) | ERROR | ✅ 전체 | message, code, traceId, userId, stack |
+| 5xx 시스템 (`DataIntegrityViolationException` 등) | ERROR | ✅ 전체 | message, code, traceId, memberId, stack |
 | 보상 1차 예외 | ERROR | ✅ 전체 | message, traceId, stack |
 | Composite Exception (치명적 2차) | ERROR | ✅ 전체 + `suppressed[]` | message, suppressed traces |
-| 운영 주목 4xx (WARN 대상) | WARN | ❌ | code, message, traceId, userId, 핵심 컨텍스트 |
+| 운영 주목 4xx (WARN 대상) | WARN | ❌ | code, message, traceId, memberId, 핵심 컨텍스트 |
 | 보상 2차 예외 (덜 중요) | WARN | ❌ | message, traceId |
 | 외부 호출 retry | WARN | ❌ | attempt, target, message |
 | `OptimisticLockingFailureException` | WARN | ❌ | code(`COMMON-409-1`), traceId |
@@ -109,15 +109,15 @@ GDPR(Article 4·5)·개인정보보호법(PIPA)의 data minimization, purpose li
 
 | 필드 | 분류 | 처리 |
 |------|------|------|
-| 이메일 | PII (직접 식별자) | **원칙: 로그에 안 남김**. userId로 대체 |
+| 이메일 | PII (직접 식별자) | **원칙: 로그에 안 남김**. memberId로 대체 |
 | 비밀번호 | 인증 정보 (PII 이상) | 평문·해시 모두 로그 금지 |
 | JWT / access token | 인증 정보 (PII 이상) | 평문 금지, `Authorization` 헤더는 Filter에서 통째 제거 또는 `Bearer ***`로 대체 |
-| userId (PK) | pseudonymous identifier | **로그의 기본 식별자**. 직접 식별자(이메일 등)를 대체하여 활용 |
+| memberId (PK) | pseudonymous identifier | **로그의 기본 식별자**. 직접 식별자(이메일 등)를 대체하여 활용 |
 
 ### 정책
 
-1. **사용자 식별은 userId로 통일**한다. Application·Filter·Infrastructure 모든 로그에서 `userId=42` 형태로 남긴다. 이메일은 원칙적으로 로그에 안 남긴다(data minimization).
-2. **이메일이 어쩔 수 없이 들어가는 케이스**(예: 로그인 시도 실패로 userId가 아직 없을 때)는 부분 마스킹 `a***@b.com`을 적용한다. 가능한 한 피한다.
+1. **사용자 식별은 memberId로 통일**한다. Application·Filter·Infrastructure 모든 로그에서 `memberId=42` 형태로 남긴다. 이메일은 원칙적으로 로그에 안 남긴다(data minimization).
+2. **이메일이 어쩔 수 없이 들어가는 케이스**(예: 로그인 시도 실패로 memberId가 아직 없을 때)는 부분 마스킹 `a***@b.com`을 적용한다. 가능한 한 피한다.
 3. **비밀번호·토큰은 이중 방어**한다.
    - **(규율)** 개발자가 코드에서 password·token 필드를 `log`·MDC·메시지에 절대 넣지 않는다. PR 리뷰에서 차단한다.
    - **(자동)** Logback 인코더에 마스킹 패턴을 등록한다 — `password=*`, `token=*`, `accessToken=*`, `refreshToken=*` 등 실수로 노출된 경우 자동 대체한다.
@@ -135,7 +135,7 @@ GDPR(Article 4·5)·개인정보보호법(PIPA)의 data minimization, purpose li
 @Service
 public class CreateOrderService {
     public Order create(...) {
-        log.info("주문 생성 orderId={} userId={}", orderId, userId);
+        log.info("주문 생성 orderId={} memberId={}", orderId, memberId);
         ...
     }
 }
@@ -144,11 +144,11 @@ public class CreateOrderService {
 ## 7. 메시지 작성 규칙
 
 ### 언어
-로그 메시지 본문은 **한국어**로 작성한다. 도메인 식별자(`orderId`, `userId`, `paymentId` 등)는 영어 그대로 사용한다.
+로그 메시지 본문은 **한국어**로 작성한다. 도메인 식별자(`orderId`, `memberId`, `paymentId` 등)는 영어 그대로 사용한다.
 
 ```java
 // 올바름
-log.info("주문 생성 orderId={} userId={} itemCount={}", orderId, userId, itemCount);
+log.info("주문 생성 orderId={} memberId={} itemCount={}", orderId, memberId, itemCount);
 log.warn("결제 검증 실패 merchantPayKey={} reason={}", merchantPayKey, reason);
 ```
 
@@ -179,10 +179,10 @@ log.info("주문 생성 orderId=" + orderId);
 Filter가 요청 진입 시 다음을 MDC에 push한다.
 
 - `traceId`: 요청 단위 추적 ID (모든 요청)
-- `userId`: 사용자 식별자 (인증된 경우만)
+- `memberId`: 사용자 식별자 (인증된 경우만)
 
 ### 정리
-요청 종료 시 **반드시 `MDC.clear()`를 호출**한다. Filter의 `finally` 블록 책임이다. 안 하면 스레드 풀에서 다음 요청에 누적되어 잘못된 traceId·userId가 남는다.
+요청 종료 시 **반드시 `MDC.clear()`를 호출**한다. Filter의 `finally` 블록 책임이다. 안 하면 스레드 풀에서 다음 요청에 누적되어 잘못된 traceId·memberId가 남는다.
 
 ### 도메인 확장
 `orderId`, `paymentId` 등 도메인 식별자는 유스케이스 진입 시 push하고 종료 시 remove한다. 도메인별로 후속 작업에서 확장된다.
@@ -209,7 +209,7 @@ Filter가 요청 진입 시 다음을 MDC에 push한다.
 | `thread` | 실행 스레드 이름 |
 | `message` | 로그 메시지 (한국어) |
 | `traceId` | 요청 단위 추적 ID (MDC) |
-| `userId` | 사용자 식별자 (MDC, 인증된 요청만) |
+| `memberId` | 사용자 식별자 (MDC, 인증된 요청만) |
 | `exception` | (선택) `{class, message, stackTrace}` — ERROR + stack trace 케이스만 |
 
 도메인별 추가 MDC(`orderId`, `paymentId` 등)는 필요 시 JSON 상위 필드로 자연스럽게 직렬화된다.
