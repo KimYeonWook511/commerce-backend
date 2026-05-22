@@ -45,7 +45,7 @@
 
 | 레이어 | 로그 책임 | 예시 |
 |--------|----------|------|
-| **Filter/Interceptor** | HTTP 메타데이터 일괄(method, path, status, latency, memberId, traceId). body는 안 남김(마스킹·메모리 부담) | `REQUEST POST /api/orders memberId=42 traceId=abc` / `RESPONSE 201 latency=88ms` |
+| **Filter/Interceptor** | HTTP 메타데이터 일괄(method, path, status, latency, traceId, memberId). body는 안 남김(마스킹·메모리 부담) | `REQUEST POST /api/orders traceId=abc memberId=42` / `RESPONSE 201 latency=88ms` |
 | **Presentation (Controller)** | 직접 로그 남기지 않음 (얇은 위임 레이어) | — |
 | **Application (Service)** | 유스케이스 시작·완료의 도메인 이벤트 INFO. 핵심 파라미터를 의미 있는 필드로 표현 | `log.info("주문 생성 orderId={} memberId={} itemCount={}", ...)` |
 | **Domain** | 로그 없음 (순수 도메인 보호, SLF4J 의존 금지) | — |
