@@ -13,7 +13,10 @@
     {
       "step": 2,
       "name": "sync-root-docs",
-      "status": "pending"
+      "status": "completed",
+      "started_at": "2026-05-22T15:24:20+0900",
+      "summary": "docs/architecture.md 로깅 컨벤션 참조 라인 다음에 로깅 인프라 설정의 단일 진실의 원천이 src/main/resources/logback-spring.xml임을 명시하고, application yml의 logging 섹션을 두지 않는다는 정책을 한 줄로 보강한다.",
+      "completed_at": "2026-05-22T15:24:59+0900"
     },
     {
       "step": 3,
