@@ -21,7 +21,10 @@
     {
       "step": 3,
       "name": "write-retrospective",
-      "status": "pending"
+      "status": "completed",
+      "started_at": "2026-05-22T15:25:53+0900",
+      "summary": "docs/tasks/logback-setup/retrospective.md를 신규 작성한다. 배경(이슈 #128, #127 관계와 작업 전 상태), 결정사항 요약(의존성 버전·rolling 수치·환경별 레벨·마스킹 방식 표), 진행 중 트레이드오프 5건(파일 JSON 마스킹 구현 방식, p6spy/hibernate.SQL 중복 처리, prod p6spy 침묵, 로그 경로 고정, 콘솔 색상 비대칭), 단일 진실의 원천 예외 1건(AsyncTest 인라인 properties), 후속 작업 제안(MDC traceId Filter, 비동기 MDC 전파, 마스킹 키워드 확장, 이메일 부분 마스킹, ERROR 무손실, 중앙 로그 수집, 컨테이너 볼륨, 보관 기간)을 기록한다.",
+      "completed_at": "2026-05-22T15:28:13+0900"
     }
   ],
   "created_at": "2026-05-22T15:06:35+0900"
