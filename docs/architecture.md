@@ -136,6 +136,17 @@ OrderExpirationBatchConfig (Spring Batch)
 
 ---
 
+## HTTP 요청 처리 Filter
+
+| Filter | 클래스 | Order |
+|--------|--------|-------|
+| **TraceIdFilter** | `com.commerce.common.log.filter.TraceIdFilter` | `Ordered.HIGHEST_PRECEDENCE + 10` |
+| JwtAuthenticationFilter | `com.commerce.security.filter.JwtAuthenticationFilter` | `Ordered.LOWEST_PRECEDENCE` |
+
+`TraceIdFilter`는 `FilterRegistrationBean`으로 등록된다. 모든 요청(`/*`)에 UUID traceId를 발급해 MDC `traceId` 키에 push하고, 응답 헤더 `X-Trace-Id`에 추가한다. `JwtAuthenticationFilter`보다 먼저 실행되므로 인증 실패 로그에도 traceId가 포함된다.
+
+---
+
 ## 예외 처리 정책
 
 예외 처리 정책(find-first, 안전망 계층, 보상 catch 2차 예외 처리)은 `docs/exception-strategy.md`를 참고한다.

@@ -13,7 +13,10 @@
     {
       "step": 2,
       "name": "sync-root-docs",
-      "status": "pending"
+      "status": "completed",
+      "started_at": "2026-05-22T17:32:23+0900",
+      "summary": "docs/architecture.md에 HTTP 요청 처리 Filter 절을 추가해 TraceIdFilter 클래스 위치, FilterRegistrationBean 등록 방식, order, JwtAuthenticationFilter와의 실행 순서를 기록한다. ./gradlew test 전체 통과.",
+      "completed_at": "2026-05-22T17:33:13+0900"
     },
     {
       "step": 3,
