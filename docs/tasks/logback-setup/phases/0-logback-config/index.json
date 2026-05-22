@@ -1,0 +1,9 @@
+{
+  "project": "commerce-backend",
+  "phase": "0-logback-config",
+  "steps": [
+    { "step": 1, "name": "logback-setup", "status": "pending" },
+    { "step": 2, "name": "sync-root-docs", "status": "pending" },
+    { "step": 3, "name": "write-retrospective", "status": "pending" }
+  ]
+}
