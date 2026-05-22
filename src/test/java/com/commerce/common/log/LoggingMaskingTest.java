@@ -1,4 +1,4 @@
-package com.commerce.global.logging;
+package com.commerce.common.log;
 
 import static org.assertj.core.api.Assertions.assertThat;
 
@@ -102,7 +102,7 @@ class LoggingMaskingTest {
 		appender.setContext(context);
 		appender.start();
 
-		Logger logger = context.getLogger("com.commerce.global.logging.LoggingMaskingTest");
+		Logger logger = context.getLogger("com.commerce.common.log.LoggingMaskingTest");
 		logger.setLevel(Level.INFO);
 		logger.setAdditive(false);
 		logger.addAppender(appender);

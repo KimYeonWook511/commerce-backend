@@ -87,7 +87,7 @@
                         <fieldName>thread</fieldName>
                     </threadName>
                     <!-- 마스킹된 message 필드. 기본 MessageJsonProvider 대신 커스텀 provider 사용. -->
-                    <provider class="com.commerce.global.logging.MaskingMessageJsonProvider">
+                    <provider class="com.commerce.common.log.MaskingMessageJsonProvider">
                         <fieldName>message</fieldName>
                     </provider>
                     <stackTrace>

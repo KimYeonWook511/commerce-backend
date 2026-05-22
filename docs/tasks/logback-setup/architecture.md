@@ -10,8 +10,8 @@
 - **Resources**: 
   - `src/main/resources/logback-spring.xml` (신규)
   - `src/main/resources/application-{local,prod,test}.yml` (logging 섹션 제거)
-- **Global infrastructure code**: `src/main/java/com/commerce/global/logging/MaskingMessageJsonProvider.java` (신규)
-- **Test infrastructure**: `src/test/java/com/commerce/global/logging/LoggingMaskingTest.java` (신규)
+- **Global infrastructure code**: `src/main/java/com/commerce/common/log/MaskingMessageJsonProvider.java` (신규)
+- **Test infrastructure**: `src/test/java/com/commerce/common/log/LoggingMaskingTest.java` (신규)
 - **Repo meta**: `.gitignore` (`logs/` 추가)
 - **Docs**: `docs/architecture.md` (로깅 인프라 한 줄 보강)
 

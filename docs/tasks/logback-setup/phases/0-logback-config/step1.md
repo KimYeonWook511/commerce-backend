@@ -51,7 +51,7 @@ logback-spring.xml 인프라를 한 덩어리로 구축한다. 빌드 의존성,
 
 ### 1-3. `MaskingMessageJsonProvider` 신규 작성
 
-위치: `src/main/java/com/commerce/global/logging/MaskingMessageJsonProvider.java`
+위치: `src/main/java/com/commerce/common/log/MaskingMessageJsonProvider.java`
 
 요구사항:
 - `net.logstash.logback.composite.loggingevent.MessageJsonProvider` 상속
@@ -79,7 +79,7 @@ logback-spring.xml 인프라를 한 덩어리로 구축한다. 빌드 의존성,
   - `logLevel` (fieldName=level)
   - `loggerName` (fieldName=logger, shortenedLoggerNameLength=40)
   - `threadName` (fieldName=thread)
-  - `<provider class="com.commerce.global.logging.MaskingMessageJsonProvider"/>` (기본 `<message>` 대신)
+  - `<provider class="com.commerce.common.log.MaskingMessageJsonProvider"/>` (기본 `<message>` 대신)
   - `stackTrace` (fieldName=exception, `ShortenedThrowableConverter` maxDepth=50, maxLength=8192, rootCauseFirst=true)
   - `mdc/` (전체 MDC 직렬화)
   - `<pattern><pattern>{"app":"commerce-backend"}</pattern></pattern>` (앱 식별 필드)
@@ -110,7 +110,7 @@ logback-spring.xml 인프라를 한 덩어리로 구축한다. 빌드 의존성,
 
 ### 1-6. 단위테스트 신규 작성
 
-위치: `src/test/java/com/commerce/global/logging/LoggingMaskingTest.java`
+위치: `src/test/java/com/commerce/common/log/LoggingMaskingTest.java`
 
 요구사항:
 - `MaskingMessageJsonProvider`를 직접 인스턴스화 → mocked `JsonGenerator` 또는 `StringWriter` 기반 실제 `JsonGenerator`로 직렬화 → ObjectMapper로 파싱해 `message` 필드 마스킹 확인
@@ -128,8 +128,8 @@ logback-spring.xml 인프라를 한 덩어리로 구축한다. 빌드 의존성,
 - `src/main/resources/application-local.yml`
 - `src/main/resources/application-prod.yml`
 - `src/main/resources/application-test.yml`
-- `src/main/java/com/commerce/global/logging/MaskingMessageJsonProvider.java` (신규)
-- `src/test/java/com/commerce/global/logging/LoggingMaskingTest.java` (신규)
+- `src/main/java/com/commerce/common/log/MaskingMessageJsonProvider.java` (신규)
+- `src/test/java/com/commerce/common/log/LoggingMaskingTest.java` (신규)
 
 ## Acceptance Criteria
 

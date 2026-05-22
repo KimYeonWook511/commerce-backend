@@ -8,8 +8,8 @@
 - `/docs/tasks/logback-setup/architecture.md`
 - `/docs/tasks/logback-setup/adr.md`
 - 이전 step에서 신규 작성된 `/src/main/resources/logback-spring.xml`
-- 이전 step에서 신규 작성된 `/src/main/java/com/commerce/global/logging/MaskingMessageJsonProvider.java`
-- 이전 step에서 신규 작성된 `/src/test/java/com/commerce/global/logging/LoggingMaskingTest.java`
+- 이전 step에서 신규 작성된 `/src/main/java/com/commerce/common/log/MaskingMessageJsonProvider.java`
+- 이전 step에서 신규 작성된 `/src/test/java/com/commerce/common/log/LoggingMaskingTest.java`
 - step1, step2의 산출물 전반
 
 ## 작업

@@ -1,4 +1,4 @@
-package com.commerce.global.logging;
+package com.commerce.common.log;
 
 import java.io.IOException;
 import java.util.regex.Pattern;
