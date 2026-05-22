@@ -3,6 +3,7 @@ package com.commerce.global.logging;
 import static org.assertj.core.api.Assertions.assertThat;
 
 import java.io.StringWriter;
+import java.util.regex.Pattern;
 
 import org.junit.jupiter.api.DisplayName;
 import org.junit.jupiter.api.Test;
@@ -61,6 +62,31 @@ class LoggingMaskingTest {
 		String message = serializeMessage(original);
 
 		assertThat(message).isEqualTo(original);
+	}
+
+	@DisplayName("provider 상수와 콘솔 마스킹 정규식이 동일한 매칭 결과를 낸다")
+	@Test
+	void maskPatternsAreEquivalent() {
+		// 두 정규식은 표현이 다르다(Java 상수는 ', }를 그대로, 콘솔 상수는 logback %replace 파서 회피를 위해 ', }로).
+		// 한쪽만 수정되어 의미가 어긋나면 본 테스트가 fail해야 한다.
+		Pattern providerPattern = MaskingMessageJsonProvider.MASK_PATTERN;
+		Pattern consolePattern = Pattern.compile(CONSOLE_MASK_PATTERN);
+
+		String[] samples = {
+			"login attempt password=hunter2 token=abc123",
+			"{\"accessToken\":\"xyz\", \"refreshToken\":\"qqq\"}",
+			"order created orderId=42 userId=7",
+			"password=p1, token=t1, accessToken=a1, refreshToken=r1",
+			"no sensitive data"
+		};
+
+		for (String sample : samples) {
+			String providerMasked = providerPattern.matcher(sample).replaceAll("$1$2***");
+			String consoleMasked = consolePattern.matcher(sample).replaceAll("$1$2***");
+			assertThat(consoleMasked)
+				.as("두 정규식이 동일하게 마스킹해야 한다: %s", sample)
+				.isEqualTo(providerMasked);
+		}
 	}
 
 	@DisplayName("PatternLayoutEncoder의 %replace가 콘솔 출력에 동일한 마스킹을 적용한다")
