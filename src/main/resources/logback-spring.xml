@@ -1,0 +1,161 @@
+<?xml version="1.0" encoding="UTF-8"?>
+<configuration scan="false">
+
+    <!-- 공통 변수 -->
+    <property name="LOG_PATH" value="./logs"/>
+    <property name="LOG_FILE" value="${LOG_PATH}/app.log"/>
+    <property name="LOG_ARCHIVE" value="${LOG_PATH}/archive/app-%d{yyyy-MM-dd}.%i.log.gz"/>
+
+    <!--
+        마스킹 정규식 — 콘솔 %replace 토큰과 MaskingMessageJsonProvider가 동일 정규식을 사용한다.
+        키워드 추가 시 본 property와 MaskingMessageJsonProvider.MASK_PATTERN을 동시에 수정해야 한다.
+        키워드 4개(password, accessToken, refreshToken, token)는 docs/logging-conventions.md §5 정책 범위.
+        '와 }는 logback %replace 파서가 옵션 종료 문자로 해석하므로 유니코드 이스케이프(', })로 적는다.
+        Java 정규식 엔진이 동일 문자로 해석하므로 MaskingMessageJsonProvider.MASK_PATTERN과 의미가 같다.
+    -->
+    <property name="MASK_PATTERN"
+              value="(?i)(password|accessToken|refreshToken|token)([&quot;\u0027\s]*[:=][&quot;\u0027\s]*)([^&quot;\u0027\s,\u007D]+)"/>
+
+    <!-- 콘솔 패턴 (plain): 운영/테스트 환경. ANSI 색상 없음. -->
+    <property name="CONSOLE_PATTERN_PLAIN"
+              value="%d{yyyy-MM-dd HH:mm:ss.SSS} %-5level [%thread] [%logger{36}] [traceId=%X{traceId:-} userId=%X{userId:-}] - %replace(%msg){'${MASK_PATTERN}', '$1$2***'}%n"/>
+
+    <!-- 콘솔 패턴 (color): 로컬 개발 환경. 색상 토큰 적용. -->
+    <property name="CONSOLE_PATTERN_COLOR"
+              value="%cyan(%d{yyyy-MM-dd HH:mm:ss.SSS}) %highlight(%-5level) [%thread] [%magenta(%logger{36})] [%yellow(traceId=%X{traceId:-} userId=%X{userId:-})] - %replace(%msg){'${MASK_PATTERN}', '$1$2***'}%n"/>
+
+    <!-- 콘솔 appender: 색상 (local) -->
+    <appender name="CONSOLE_COLOR" class="ch.qos.logback.core.ConsoleAppender">
+        <withJansi>true</withJansi>
+        <encoder>
+            <pattern>${CONSOLE_PATTERN_COLOR}</pattern>
+        </encoder>
+    </appender>
+
+    <!-- 콘솔 appender: plain (prod, test) -->
+    <appender name="CONSOLE_PLAIN" class="ch.qos.logback.core.ConsoleAppender">
+        <encoder>
+            <pattern>${CONSOLE_PATTERN_PLAIN}</pattern>
+        </encoder>
+    </appender>
+
+    <!-- local/default 프로파일 -->
+    <springProfile name="local,default">
+        <logger name="org.springframework" level="INFO"/>
+        <logger name="org.hibernate" level="INFO"/>
+        <logger name="org.hibernate.SQL" level="OFF"/>
+        <logger name="io.netty" level="INFO"/>
+        <logger name="org.apache.kafka" level="WARN"/>
+
+        <!-- p6spy는 콘솔에 직접 출력하고 ROOT 중복 방지를 위해 additivity=false -->
+        <logger name="p6spy" level="INFO" additivity="false">
+            <appender-ref ref="CONSOLE_COLOR"/>
+        </logger>
+
+        <root level="INFO">
+            <appender-ref ref="CONSOLE_COLOR"/>
+        </root>
+    </springProfile>
+
+    <!-- prod 프로파일 -->
+    <springProfile name="prod">
+        <!-- 파일 JSON appender는 prod에서만 정의해 다른 환경에서 ./logs 디렉토리가 생성되지 않게 한다 -->
+        <appender name="FILE_JSON" class="ch.qos.logback.core.rolling.RollingFileAppender">
+            <file>${LOG_FILE}</file>
+            <rollingPolicy class="ch.qos.logback.core.rolling.SizeAndTimeBasedRollingPolicy">
+                <fileNamePattern>${LOG_ARCHIVE}</fileNamePattern>
+                <maxFileSize>100MB</maxFileSize>
+                <maxHistory>30</maxHistory>
+                <totalSizeCap>3GB</totalSizeCap>
+                <cleanHistoryOnStart>true</cleanHistoryOnStart>
+            </rollingPolicy>
+            <encoder class="net.logstash.logback.encoder.LoggingEventCompositeJsonEncoder">
+                <providers>
+                    <timestamp>
+                        <fieldName>timestamp</fieldName>
+                        <timeZone>UTC</timeZone>
+                        <pattern>yyyy-MM-dd'T'HH:mm:ss.SSS'Z'</pattern>
+                    </timestamp>
+                    <logLevel>
+                        <fieldName>level</fieldName>
+                    </logLevel>
+                    <loggerName>
+                        <fieldName>logger</fieldName>
+                        <shortenedLoggerNameLength>40</shortenedLoggerNameLength>
+                    </loggerName>
+                    <threadName>
+                        <fieldName>thread</fieldName>
+                    </threadName>
+                    <!-- 마스킹된 message 필드. 기본 MessageJsonProvider 대신 커스텀 provider 사용. -->
+                    <provider class="com.commerce.common.log.MaskingMessageJsonProvider">
+                        <fieldName>message</fieldName>
+                    </provider>
+                    <stackTrace>
+                        <fieldName>exception</fieldName>
+                        <throwableConverter class="net.logstash.logback.stacktrace.ShortenedThrowableConverter">
+                            <maxDepthPerThrowable>50</maxDepthPerThrowable>
+                            <maxLength>8192</maxLength>
+                            <rootCauseFirst>true</rootCauseFirst>
+                        </throwableConverter>
+                    </stackTrace>
+                    <mdc/>
+                    <pattern>
+                        <pattern>{"app":"commerce-backend"}</pattern>
+                    </pattern>
+                </providers>
+            </encoder>
+        </appender>
+
+        <appender name="FILE_JSON_ASYNC" class="ch.qos.logback.classic.AsyncAppender">
+            <queueSize>1024</queueSize>
+            <discardingThreshold>0</discardingThreshold>
+            <neverBlock>true</neverBlock>
+            <includeCallerData>false</includeCallerData>
+            <appender-ref ref="FILE_JSON"/>
+        </appender>
+
+        <logger name="org.springframework" level="WARN"/>
+        <logger name="org.hibernate" level="WARN"/>
+        <logger name="org.hibernate.SQL" level="OFF"/>
+        <logger name="io.netty" level="WARN"/>
+        <logger name="org.apache.kafka" level="WARN"/>
+        <logger name="org.apache.tomcat" level="WARN"/>
+        <logger name="reactor.netty" level="WARN"/>
+
+        <!-- prod에서는 p6spy 자체를 OFF로 두어 디스크/노이즈/성능 회피 -->
+        <logger name="p6spy" level="OFF"/>
+
+        <root level="INFO">
+            <appender-ref ref="CONSOLE_PLAIN"/>
+            <appender-ref ref="FILE_JSON_ASYNC"/>
+        </root>
+    </springProfile>
+
+    <!-- test 프로파일 -->
+    <springProfile name="test">
+        <logger name="org.springframework" level="WARN"/>
+        <logger name="org.springframework.batch" level="WARN"/>
+        <logger name="org.springframework.boot" level="WARN"/>
+        <logger name="org.hibernate" level="WARN"/>
+        <logger name="org.hibernate.SQL" level="OFF"/>
+        <logger name="io.netty" level="WARN"/>
+        <logger name="org.apache.kafka" level="WARN"/>
+        <logger name="org.testcontainers" level="WARN"/>
+        <logger name="com.zaxxer.hikari" level="WARN"/>
+        <logger name="org.h2" level="WARN"/>
+
+        <!-- 기존 application-test.yml에서 보존: 배치 리스너/아웃박스는 INFO 유지 -->
+        <logger name="com.commerce.order.batch.listener" level="INFO"/>
+        <logger name="com.commerce.outbox" level="INFO"/>
+
+        <!-- p6spy는 콘솔에 직접 출력하고 ROOT 중복 방지를 위해 additivity=false -->
+        <logger name="p6spy" level="INFO" additivity="false">
+            <appender-ref ref="CONSOLE_PLAIN"/>
+        </logger>
+
+        <root level="WARN">
+            <appender-ref ref="CONSOLE_PLAIN"/>
+        </root>
+    </springProfile>
+
+</configuration>

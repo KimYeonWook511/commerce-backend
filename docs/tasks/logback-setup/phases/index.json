@@ -1,0 +1,10 @@
+{
+  "phases": [
+    {
+      "dir": "0-logback-config",
+      "status": "completed",
+      "started_at": "2026-05-22T15:06:35+0900",
+      "completed_at": "2026-05-22T15:29:17+0900"
+    }
+  ]
+}

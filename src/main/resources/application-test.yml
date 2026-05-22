@@ -26,14 +26,6 @@ spring:
       key-serializer: org.apache.kafka.common.serialization.StringSerializer
       value-serializer: org.apache.kafka.common.serialization.StringSerializer
 
-logging:
-  level:
-    root: WARN
-    org.hibernate.SQL: debug
-    p6spy: info
-    com.commerce.order.batch.listener: info
-    com.commerce.outbox: info
-
 jwt:
   access:
     secret.key: testAccessSecretKey0123456789abcdef!!

@@ -1,0 +1,32 @@
+{
+  "project": "commerce-backend",
+  "phase": "0-logback-config",
+  "steps": [
+    {
+      "step": 1,
+      "name": "logback-setup",
+      "status": "completed",
+      "started_at": "2026-05-22T15:06:35+0900",
+      "summary": "logstash-logback-encoder:7.4 의존성을 추가하고 build.gradle의 logging 카테고리 주석을 정리한다. logback-spring.xml을 신규 작성해 local/prod/test 프로파일별 appender·logger 레벨·rolling 정책을 일원화하고, 콘솔 %replace와 커스텀 MaskingMessageJsonProvider로 민감 정보(password, accessToken, refreshToken, token)를 자동 마스킹한다. application-{local,prod,test}.yml의 logging 섹션을 제거해 단일 진실의 원천을 logback-spring.xml로 옮기고, .gitignore에 logs/와 *.log.gz를 추가한다. MaskingMessageJsonProvider와 콘솔 %replace 동등성을 검증하는 LoggingMaskingTest를 추가한다.",
+      "completed_at": "2026-05-22T15:21:50+0900"
+    },
+    {
+      "step": 2,
+      "name": "sync-root-docs",
+      "status": "completed",
+      "started_at": "2026-05-22T15:24:20+0900",
+      "summary": "docs/architecture.md 로깅 컨벤션 참조 라인 다음에 로깅 인프라 설정의 단일 진실의 원천이 src/main/resources/logback-spring.xml임을 명시하고, application yml의 logging 섹션을 두지 않는다는 정책을 한 줄로 보강한다.",
+      "completed_at": "2026-05-22T15:24:59+0900"
+    },
+    {
+      "step": 3,
+      "name": "write-retrospective",
+      "status": "completed",
+      "started_at": "2026-05-22T15:25:53+0900",
+      "summary": "docs/tasks/logback-setup/retrospective.md를 신규 작성한다. 배경(이슈 #128, #127 관계와 작업 전 상태), 결정사항 요약(의존성 버전·rolling 수치·환경별 레벨·마스킹 방식 표), 진행 중 트레이드오프 5건(파일 JSON 마스킹 구현 방식, p6spy/hibernate.SQL 중복 처리, prod p6spy 침묵, 로그 경로 고정, 콘솔 색상 비대칭), 단일 진실의 원천 예외 1건(AsyncTest 인라인 properties), 후속 작업 제안(MDC traceId Filter, 비동기 MDC 전파, 마스킹 키워드 확장, 이메일 부분 마스킹, ERROR 무손실, 중앙 로그 수집, 컨테이너 볼륨, 보관 기간)을 기록한다.",
+      "completed_at": "2026-05-22T15:28:13+0900"
+    }
+  ],
+  "created_at": "2026-05-22T15:06:35+0900",
+  "completed_at": "2026-05-22T15:29:17+0900"
+}
