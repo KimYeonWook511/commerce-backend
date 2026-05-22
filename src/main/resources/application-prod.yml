@@ -32,10 +32,6 @@ spring:
       key-serializer: org.apache.kafka.common.serialization.StringSerializer
       value-serializer: org.apache.kafka.common.serialization.StringSerializer
 
-logging:
-  level:
-    root: INFO
-
 jwt:
   access:
     secret.key: ${PROD_JWT_ACCESS_SECRET} # HMAC-SHA algorithms MUST have a size >= 256 bits

@@ -31,10 +31,6 @@ spring:
       key-serializer: org.apache.kafka.common.serialization.StringSerializer
       value-serializer: org.apache.kafka.common.serialization.StringSerializer
 
-logging:
-  level:
-    org.hibernate.SQL: debug
-
 jwt:
   access:
     secret.key: ${LOCAL_JWT_ACCESS_SECRET} # HMAC-SHA algorithms MUST have a size >= 256 bits

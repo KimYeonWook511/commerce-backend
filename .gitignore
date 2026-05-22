@@ -42,6 +42,8 @@ Thumbs.db
 
 ### 로그 파일 ###
 *.log
+*.log.gz
+logs/
 
 ### Python 캐시 ###
 __pycache__/
