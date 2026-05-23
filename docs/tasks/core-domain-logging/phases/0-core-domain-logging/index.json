@@ -37,7 +37,10 @@
     {
       "step": 5,
       "name": "product-domain-logging",
-      "status": "pending"
+      "status": "completed",
+      "started_at": "2026-05-23T23:27:00+0900",
+      "summary": "AdminProductService에 @Slf4j 부착 및 createProduct(상품 생성)/updateProduct(상품 수정)/deleteProduct(상품 삭제) 3개 메서드에 INFO 로그 추가. ProductQueryService는 미수정. 기존 테스트 전체 PASS.",
+      "completed_at": "2026-05-23T23:27:53+0900"
     },
     {
       "step": 6,
