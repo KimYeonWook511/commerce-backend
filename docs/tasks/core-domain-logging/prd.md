@@ -60,7 +60,7 @@
 
 ```java
 // Order
-// OrderCreateService — 멱등 흡수 (Redis hit / DB hit 각각 source 구분)
+// OrderCreateService — 멱등 흡수 (Redis hit: source=redis / DB hit: source=db)
 log.info("주문 멱등 응답 orderId={} memberId={} source=redis idempotencyKey={}", orderId, memberId, idempotencyKey);
 log.info("주문 멱등 응답 orderId={} memberId={} source=db idempotencyKey={}", orderId, memberId, idempotencyKey);
 log.info("주문 생성 orderId={} memberId={} itemCount={}", orderId, memberId, itemCount);
@@ -76,11 +76,9 @@ log.info("재고 복구 Outbox 발행 orderId={} itemCount={}", orderId, itemCou
 // Payment
 log.info("결제 준비 완료 merchantPayKey={} orderId={} memberId={} amount={}", merchantPayKey, orderId, memberId, totalPayAmount);
 log.info("결제 승인 완료 merchantPayKey={} provider={} pgPaymentId={} orderId={}", merchantPayKey, provider, pgPaymentId, orderId);
-// 멱등 흡수 — provider, orderId 포함 (리뷰 반영)
 log.info("결제 승인 멱등 흡수 merchantPayKey={} provider={} pgPaymentId={} orderId={}", merchantPayKey, provider, pgPaymentId, orderId);
 
-// Stock — StockInventoryService 로그는 상위 트랜잭션 롤백 시 잔류 문제로 제거 (리뷰 반영)
-// AdminStockService (어드민 직접 조작 — 독립 트랜잭션 진입점)
+// Stock — AdminStockService만 (StockInventoryService는 상위 트랜잭션 합류로 제외)
 log.info("재고 초기 설정 productId={} quantity={} reason={} adminMemberId={}", productId, quantity, reason, adminMemberId);
 log.info("재고 운영 증가 productId={} quantity={} reason={} adminMemberId={} newTotal={}", productId, quantity, reason, adminMemberId, stock.getQuantity());
 log.info("재고 운영 감소 productId={} quantity={} reason={} adminMemberId={} newTotal={}", productId, quantity, reason, adminMemberId, stock.getQuantity());
