@@ -73,3 +73,7 @@ kafka-data-local/
 
 ### Git Worktree ###
 worktrees/
+
+### 부하 테스트 도커 볼륨 ###
+load-test/influxdb-data-local/
+load-test/grafana-data-local/
