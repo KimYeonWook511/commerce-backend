@@ -6,10 +6,11 @@ CREATE PROCEDURE insert_dummy_products()
 BEGIN
   DECLARE i INT DEFAULT 1;
   WHILE i <= 100 DO
-    INSERT INTO tbl_product (name, price)
+    INSERT INTO tbl_product (name, price, status)
     VALUES (
       CONCAT('테스트 상품 ', i),
-      FLOOR(RAND() * 90000) + 10000
+      FLOOR(RAND() * 90000) + 10000,
+      'ON_SALE'
     );
     INSERT INTO tbl_stock (version, product_id, quantity)
     VALUES (0, LAST_INSERT_ID(), 100);
