@@ -24,8 +24,10 @@ public class GlobalExceptionHandler {
 	public ResponseEntity<ApiResponse<Void>> handleCustomException(
 		CustomException ex
 	) {
-		log.error("커스텀 예외 발생: {}", ex.getMessage());
 		ErrorCode errorCode = ex.getErrorCode();
+		if (errorCode.getStatus().is5xxServerError()) {
+			log.error("커스텀 예외 발생", ex);
+		}
 		return ResponseEntity.status(errorCode.getStatus())
 			.body(ApiResponse.error(errorCode));
 	}
@@ -34,7 +36,7 @@ public class GlobalExceptionHandler {
 	public ResponseEntity<ApiResponse<Void>> handleException(
 		Exception ex
 	) {
-		log.error("처리되지 않은 예외 발생: {}", ex.getMessage());
+		log.error("처리되지 않은 예외 발생", ex);
 		return ResponseEntity.status(CommonErrorCode.INTERNAL_ERROR.getStatus())
 			.body(ApiResponse.error(CommonErrorCode.INTERNAL_ERROR));
 	}
@@ -43,7 +45,6 @@ public class GlobalExceptionHandler {
 	public ResponseEntity<ApiResponse<Map<String, String>>> handleMethodArgumentNotValidException(
 		MethodArgumentNotValidException ex
 	) {
-		log.error("요청 값 검증 실패: {}",  ex.getMessage());
 		Map<String, String> errors = new LinkedHashMap<>();
 		ex.getBindingResult().getFieldErrors()
 			.forEach(error -> errors.put(error.getField(), error.getDefaultMessage()));
@@ -55,7 +56,6 @@ public class GlobalExceptionHandler {
 	public ResponseEntity<ApiResponse<Void>> handleHttpMessageNotReadableException(
 		HttpMessageNotReadableException ex
 	) {
-		log.error("요청 본문 파싱 실패: {}", ex.getMessage());
 		return ResponseEntity.status(CommonErrorCode.INVALID_REQUEST.getStatus())
 			.body(ApiResponse.error(CommonErrorCode.INVALID_REQUEST));
 	}
