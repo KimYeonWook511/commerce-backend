@@ -1,0 +1,11 @@
+{
+  "project": "commerce-backend",
+  "phase": "0-boundary-logging-standardization",
+  "steps": [
+    { "step": 1, "name": "access-log-filter", "status": "pending" },
+    { "step": 2, "name": "exception-handler-level-policy", "status": "pending" },
+    { "step": 3, "name": "naverpay-logging-standardization", "status": "pending" },
+    { "step": 4, "name": "sync-root-docs", "status": "pending" },
+    { "step": 5, "name": "write-retrospective", "status": "pending" }
+  ]
+}
