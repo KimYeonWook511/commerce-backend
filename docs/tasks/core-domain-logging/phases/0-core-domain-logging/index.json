@@ -13,7 +13,10 @@
     {
       "step": 2,
       "name": "stock-domain-logging",
-      "status": "pending"
+      "status": "completed",
+      "started_at": "2026-05-23T23:19:47+0900",
+      "summary": "StockInventoryService(차감/복구/일괄 차감), AdminStockService(초기 설정/운영 증가/운영 감소) 2개 파일에 @Slf4j 부착 및 INFO 로그 추가. 기존 테스트 전체 PASS.",
+      "completed_at": "2026-05-23T23:21:20+0900"
     },
     {
       "step": 3,
