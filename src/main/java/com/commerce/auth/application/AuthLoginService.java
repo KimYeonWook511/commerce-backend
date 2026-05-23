@@ -13,7 +13,9 @@ import com.commerce.member.application.MemberQueryService;
 import com.commerce.member.domain.Member;
 
 import lombok.RequiredArgsConstructor;
+import lombok.extern.slf4j.Slf4j;
 
+@Slf4j
 @Service
 @RequiredArgsConstructor
 @Transactional(readOnly = true)
@@ -33,6 +35,7 @@ public class AuthLoginService {
 
 		AuthTokenIssueResult tokenIssueResult = authTokenIssueService.issue(member);
 
+		log.info("로그인 성공 memberId={}", member.getId());
 		return AuthLoginResult.from(
 			member,
 			tokenIssueResult.getAccessToken(),
