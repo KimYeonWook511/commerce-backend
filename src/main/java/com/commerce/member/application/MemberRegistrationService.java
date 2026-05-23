@@ -10,7 +10,9 @@ import com.commerce.member.exception.MemberErrorCode;
 import com.commerce.member.exception.MemberException;
 
 import lombok.RequiredArgsConstructor;
+import lombok.extern.slf4j.Slf4j;
 
+@Slf4j
 @Service
 @RequiredArgsConstructor
 @Transactional(readOnly = true)
@@ -26,6 +28,8 @@ public class MemberRegistrationService {
 
 		Member member = Member.createUser(command.getEmail(), command.getPasswordHash(), command.getUsername());
 
-		return memberRepository.save(member);
+		Member savedMember = memberRepository.save(member);
+		log.info("회원 등록 완료 memberId={}", savedMember.getId());
+		return savedMember;
 	}
 }

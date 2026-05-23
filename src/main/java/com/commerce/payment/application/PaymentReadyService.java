@@ -17,7 +17,9 @@ import com.commerce.payment.provider.PaymentProviderProperties;
 import com.commerce.payment.provider.PaymentProviderPropertiesResolver;
 
 import lombok.RequiredArgsConstructor;
+import lombok.extern.slf4j.Slf4j;
 
+@Slf4j
 @Service
 @RequiredArgsConstructor
 @Transactional(readOnly = true)
@@ -45,6 +47,9 @@ public class PaymentReadyService {
 		List<OrderItem> items = order.getOrderItems();
 		int productCount = items.stream().mapToInt(OrderItem::getQuantity).sum();
 		int totalPayAmount = order.getTotalPrice();
+
+		log.info("결제 준비 완료 merchantPayKey={} orderId={} memberId={} amount={}",
+			order.getMerchantPayKey(), order.getId(), command.getMemberId(), totalPayAmount);
 
 		return PaymentReadyResult.builder()
 			.clientId(properties.getClientId())

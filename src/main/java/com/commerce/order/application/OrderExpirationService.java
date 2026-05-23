@@ -18,7 +18,9 @@ import com.commerce.outbox.application.OutboxService;
 import com.commerce.outbox.stock.application.command.StockRestoreOutboxCreateCommand;
 
 import lombok.RequiredArgsConstructor;
+import lombok.extern.slf4j.Slf4j;
 
+@Slf4j
 @Service
 @RequiredArgsConstructor
 @Transactional(readOnly = true)
@@ -35,6 +37,8 @@ public class OrderExpirationService {
 		order.cancel();
 
 		outboxService.createStockRestoreOutboxEvent(toStockRestoreOutboxCreateCommand(order, requestedAt));
+
+		log.info("주문 만료 orderId={} itemCount={}", order.getId(), order.getOrderItems().size());
 	}
 
 	private StockRestoreOutboxCreateCommand toStockRestoreOutboxCreateCommand(Order order, LocalDateTime requestedAt) {

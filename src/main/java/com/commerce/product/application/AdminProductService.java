@@ -13,7 +13,9 @@ import com.commerce.product.exception.ProductErrorCode;
 import com.commerce.product.exception.ProductException;
 
 import lombok.RequiredArgsConstructor;
+import lombok.extern.slf4j.Slf4j;
 
+@Slf4j
 @Service
 @RequiredArgsConstructor
 @Transactional(readOnly = true)
@@ -31,7 +33,9 @@ public class AdminProductService {
 			.status(command.getStatus())
 			.build();
 
-		return AdminProductResult.from(productRepository.save(product));
+		Product savedProduct = productRepository.save(product);
+		log.info("상품 생성 productId={} name={}", savedProduct.getId(), savedProduct.getName());
+		return AdminProductResult.from(savedProduct);
 	}
 
 	@Transactional
@@ -46,6 +50,7 @@ public class AdminProductService {
 			command.getStatus()
 		);
 
+		log.info("상품 수정 productId={}", product.getId());
 		return AdminProductResult.from(product);
 	}
 
@@ -54,6 +59,7 @@ public class AdminProductService {
 		Product product = findNotDeletedProduct(productId);
 		product.softDelete();
 
+		log.info("상품 삭제 productId={}", product.getId());
 		return AdminProductDeleteResult.of(product.getId());
 	}
 

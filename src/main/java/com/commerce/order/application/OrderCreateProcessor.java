@@ -28,7 +28,9 @@ import com.commerce.product.exception.ProductException;
 import com.commerce.stock.application.StockInventoryService;
 
 import lombok.RequiredArgsConstructor;
+import lombok.extern.slf4j.Slf4j;
 
+@Slf4j
 @Component
 @RequiredArgsConstructor
 public class OrderCreateProcessor {
@@ -81,6 +83,9 @@ public class OrderCreateProcessor {
 		}
 
 		orderRepository.save(order);
+
+		log.info("주문 생성 orderId={} memberId={} itemCount={}",
+			order.getId(), command.getMemberId(), command.getItems().size());
 
 		applicationEventPublisher.publishEvent(
 			new OrderIdempotencyCacheEvent(command.getMemberId(), command.getIdempotencyKey(), order.getId(), ttl)
