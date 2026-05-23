@@ -22,7 +22,9 @@ import com.commerce.stock.exception.StockErrorCode;
 import com.commerce.stock.exception.StockException;
 
 import lombok.RequiredArgsConstructor;
+import lombok.extern.slf4j.Slf4j;
 
+@Slf4j
 @Service
 @Transactional(readOnly = true)
 @RequiredArgsConstructor
@@ -51,6 +53,8 @@ public class AdminStockService {
 			.build();
 		Stock savedStock = stockRepository.save(stock);
 		saveHistory(savedStock, command.getQuantity(), command.getReason(), command.getAdminMemberId());
+		log.info("재고 초기 설정 productId={} quantity={} reason={} adminMemberId={}",
+			command.getProductId(), command.getQuantity(), command.getReason(), command.getAdminMemberId());
 
 		return AdminStockResult.from(savedStock);
 	}
@@ -62,6 +66,8 @@ public class AdminStockService {
 
 		stock.increase(command.getQuantity());
 		saveHistory(stock, command.getQuantity(), command.getReason(), command.getAdminMemberId());
+		log.info("재고 운영 증가 productId={} quantity={} reason={} adminMemberId={} newTotal={}",
+			command.getProductId(), command.getQuantity(), command.getReason(), command.getAdminMemberId(), stock.getQuantity());
 
 		return AdminStockResult.from(stock);
 	}
@@ -73,6 +79,8 @@ public class AdminStockService {
 
 		stock.decrease(command.getQuantity());
 		saveHistory(stock, -command.getQuantity(), command.getReason(), command.getAdminMemberId());
+		log.info("재고 운영 감소 productId={} quantity={} reason={} adminMemberId={} newTotal={}",
+			command.getProductId(), command.getQuantity(), command.getReason(), command.getAdminMemberId(), stock.getQuantity());
 
 		return AdminStockResult.from(stock);
 	}
