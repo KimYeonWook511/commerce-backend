@@ -21,8 +21,8 @@ public class AccessLogFilter extends OncePerRequestFilter {
 		FilterChain filterChain
 	) throws ServletException, IOException {
 
-		log.info("요청 시작 method={} path={}", request.getMethod(), request.getRequestURI());
 		long startNanos = System.nanoTime();
+		log.info("요청 시작 method={} path={}", request.getMethod(), request.getRequestURI());
 
 		int status = 500;
 		try {
