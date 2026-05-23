@@ -26,7 +26,7 @@ public class GlobalExceptionHandler {
 	) {
 		ErrorCode errorCode = ex.getErrorCode();
 		if (errorCode.getStatus().is5xxServerError()) {
-			log.error("커스텀 예외 발생", ex);
+			log.error("커스텀 예외 발생 code={}", errorCode.getCode(), ex);
 		}
 		return ResponseEntity.status(errorCode.getStatus())
 			.body(ApiResponse.error(errorCode));
