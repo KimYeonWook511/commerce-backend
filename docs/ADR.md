@@ -92,3 +92,9 @@
 - **이유**: `PgCanceller` 좁은 콜백은 PaymentGateway port 완전 inversion(PG 둘 이상 추가 시)보다 지금 필요한 최소 구조만 도입한다. NaverPayApprovalService가 메서드 참조(`this::pgCancel`)로 구현하므로 인터페이스 추가 없이 의존 역전이 성립한다.
 - **트랜잭션 정책**: `PaymentApprovalCompensationService`에 클래스 레벨 `@Transactional` 없음. `isCompensationRequired`의 `REQUIRES_NEW` 격리(ADR-014)를 보존하기 위해 각 단계가 자기 트랜잭션을 가진다.
 - **트레이드오프**: PG가 둘 이상 추가될 때 `PgCanceller` 주입 위치를 재설계해야 한다. 이때 PaymentGateway port 완전 inversion으로 자연 승격 가능하다.
+
+### ADR-016: 부하 테스트 도구로 k6 + InfluxDB + Grafana 채택
+- **결정**: 부하 테스트는 k6를 사용하고, 메트릭은 InfluxDB(1.8)에 저장해 Grafana로 시각화한다. 로컬 환경에서만 실행한다.
+- **배경**: 주요 API의 성능을 정량적으로 측정한 데이터가 부재했고, 부하 시나리오의 정량 검증 수단이 필요했다. 운영 환경 모니터링·CI 통합은 별도 트랙으로 분리한다.
+- **이유**: k6는 JavaScript로 시나리오를 표현해 가독성이 높고 `thresholds`로 SLO를 정량 검증할 수 있다. InfluxDB(1.8)는 k6 native output과 호환성이 검증돼 있으며(별도 xk6 빌드 불필요), Grafana 공식 k6 대시보드 템플릿(#2587)을 그대로 활용할 수 있어 시각화 도입 비용이 낮다. 대안 도구(JMeter, Gatling)는 GUI/XML 설정 부담 또는 Scala 학습 비용이 더 크다.
+- **트레이드오프**: 부하 테스트 결과는 로컬 환경 사양에 의존하므로 절대 수치보다는 개선 전후의 상대 비교가 주된 활용 방식이다. CI 자동 실행·운영 환경 측정은 본 결정 범위 밖이며 후속 과제로 둔다.
