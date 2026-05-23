@@ -49,7 +49,7 @@ public class OrderCreateService {
 			return orderIdempotencyStore.getCompletedOrderId(memberId, idempotencyKey)
 				.map(orderId -> orderRepository.findById(orderId)
 					.map(order -> {
-						log.info("주문 멱등 응답 orderId={} memberId={}", order.getId(), memberId);
+						log.info("주문 멱등 응답 orderId={} memberId={} source=redis idempotencyKey={}", order.getId(), memberId, idempotencyKey);
 						return OrderCreateResult.from(order);
 					})
 					.orElseThrow(() -> new OrderException(OrderErrorCode.ORDER_NOT_FOUND)))
@@ -70,7 +70,7 @@ public class OrderCreateService {
 			.map(order -> {
 				// 이후 동일 키 재요청이 Redis에서 바로 처리되도록 complete 상태로 갱신한다.
 				orderIdempotencyStore.complete(memberId, idempotencyKey, order.getId(), ttl);
-				log.info("주문 멱등 응답 orderId={} memberId={}", order.getId(), memberId);
+				log.info("주문 멱등 응답 orderId={} memberId={} source=db idempotencyKey={}", order.getId(), memberId, idempotencyKey);
 				return OrderCreateResult.from(order);
 			});
 		if (existing.isPresent()) {
