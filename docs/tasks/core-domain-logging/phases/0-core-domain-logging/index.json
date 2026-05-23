@@ -21,7 +21,10 @@
     {
       "step": 3,
       "name": "payment-domain-logging",
-      "status": "pending"
+      "status": "completed",
+      "started_at": "2026-05-23T23:22:09+0900",
+      "summary": "PaymentReadyService(결제 준비 완료), PaymentApprovalService(결제 승인 완료/결제 승인 멱등 흡수 분기 분리) 2개 파일에 @Slf4j 부착 및 INFO 로그 추가. 기존 테스트 전체 PASS.",
+      "completed_at": "2026-05-23T23:23:28+0900"
     },
     {
       "step": 4,
