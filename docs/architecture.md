@@ -174,9 +174,12 @@ log.info("결제 승인 완료 merchantPayKey={} provider={} pgPaymentId={} orde
 | Filter | 클래스 | Order |
 |--------|--------|-------|
 | **TraceIdFilter** | `com.commerce.common.log.filter.TraceIdFilter` | `Ordered.HIGHEST_PRECEDENCE + 10` |
+| **AccessLogFilter** | `com.commerce.common.log.filter.AccessLogFilter` | `Ordered.HIGHEST_PRECEDENCE + 20` |
 | JwtAuthenticationFilter | `com.commerce.security.filter.JwtAuthenticationFilter` | `Ordered.LOWEST_PRECEDENCE` |
 
 `TraceIdFilter`는 `FilterRegistrationBean`으로 등록된다. 모든 요청(`/*`)에 UUID traceId를 발급해 MDC `traceId` 키에 push하고, 응답 헤더 `X-Trace-Id`에 추가한다. `JwtAuthenticationFilter`보다 먼저 실행되므로 인증 실패 로그에도 traceId가 포함된다.
+
+`AccessLogFilter`는 `FilterRegistrationBean`(`AccessLogFilterConfig`)으로 등록된다. 모든 요청(`/*`)에 대해 요청 시작/종료 INFO 로그 2건(method, path, status, latency)을 남긴다. traceId/memberId는 직접 부착하지 않고 MDC를 통해 logback 패턴이 자동 부착한다. `JwtAuthenticationFilter` 이전에 실행되므로 미인증 요청에도 액세스 로그가 남으며, memberId는 인증 이후 채워지므로 시작 로그 시점에는 빈 값일 수 있다.
 
 ---
 

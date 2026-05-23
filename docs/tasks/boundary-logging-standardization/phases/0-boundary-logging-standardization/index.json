@@ -29,7 +29,10 @@
     {
       "step": 4,
       "name": "sync-root-docs",
-      "status": "pending"
+      "status": "completed",
+      "started_at": "2026-05-23T23:38:46+0900",
+      "summary": "docs/architecture.md의 'HTTP 요청 처리 Filter' 절 표에 AccessLogFilter 행(클래스 경로 com.commerce.common.log.filter.AccessLogFilter, order=Ordered.HIGHEST_PRECEDENCE+20)을 추가하고, 등록 방식(FilterRegistrationBean / AccessLogFilterConfig), 책임(요청 시작/종료 INFO 2건, traceId/memberId는 MDC 기반 logback 패턴이 자동 부착), 인증 Filter 이전 실행으로 미인증 요청에도 액세스 로그가 남는다는 설명을 추가한다. ./gradlew test가 통과한다.",
+      "completed_at": "2026-05-23T23:40:06+0900"
     },
     {
       "step": 5,
