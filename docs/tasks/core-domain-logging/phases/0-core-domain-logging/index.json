@@ -1,0 +1,13 @@
+{
+  "project": "commerce-backend",
+  "phase": "0-core-domain-logging",
+  "steps": [
+    { "step": 1, "name": "order-domain-logging", "status": "pending" },
+    { "step": 2, "name": "stock-domain-logging", "status": "pending" },
+    { "step": 3, "name": "payment-domain-logging", "status": "pending" },
+    { "step": 4, "name": "auth-member-domain-logging", "status": "pending" },
+    { "step": 5, "name": "product-domain-logging", "status": "pending" },
+    { "step": 6, "name": "sync-root-docs", "status": "pending" },
+    { "step": 7, "name": "write-retrospective", "status": "pending" }
+  ]
+}
