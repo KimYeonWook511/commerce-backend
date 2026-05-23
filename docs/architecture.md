@@ -147,7 +147,7 @@ log.info("결제 승인 완료 merchantPayKey={} provider={} pgPaymentId={} orde
 
 - **Controller**: 로그 없음 (얇은 위임 레이어)
 - **Domain**: 로그 없음 (순수 도메인 보호, SLF4J 의존 금지)
-- **Infrastructure**: 외부 호출 실패·retry만 (WARN/ERROR)
+- **Infrastructure**: 외부 시스템 경계 요청/소비 시작·완료 (INFO), 실패·retry (WARN/ERROR)
 
 로깅 컨벤션 전체(레벨 기준, 레이어별 책임, 예외 로깅 표준, 민감 정보 마스킹, 메시지 패턴 등)의 단일 진실의 원천은 `docs/logging-conventions.md`다.
 
