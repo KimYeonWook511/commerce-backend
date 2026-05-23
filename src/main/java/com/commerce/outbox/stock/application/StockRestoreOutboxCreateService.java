@@ -14,7 +14,9 @@ import com.fasterxml.jackson.core.JsonProcessingException;
 import com.fasterxml.jackson.databind.ObjectMapper;
 
 import lombok.RequiredArgsConstructor;
+import lombok.extern.slf4j.Slf4j;
 
+@Slf4j
 @Service
 @RequiredArgsConstructor
 public class StockRestoreOutboxCreateService {
@@ -36,6 +38,9 @@ public class StockRestoreOutboxCreateService {
 			command.getOrderId()
 		);
 		outboxEventRepository.save(outboxEvent);
+
+		log.info("재고 복구 Outbox 발행 orderId={} itemCount={}",
+			command.getOrderId(), command.getItems().size());
 	}
 
 	private String serializePayload(StockRestoreRequestedPayload payload) {

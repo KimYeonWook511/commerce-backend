@@ -28,7 +28,9 @@ import com.commerce.stock.application.StockInventoryService;
 import com.commerce.stock.application.command.StockDecreaseBatchCommand;
 
 import lombok.RequiredArgsConstructor;
+import lombok.extern.slf4j.Slf4j;
 
+@Slf4j
 @Service
 @RequiredArgsConstructor
 @Transactional(readOnly = true)
@@ -42,32 +44,32 @@ public class OrderConcurrencyService {
 
 	@Transactional
 	public OrderCreateResult createOrderWithoutLock(OrderCreateCommand command) {
-		return createOrderWithStockDecrease(command, stockConcurrencyService::decrease);
+		return createOrderWithStockDecrease(command, stockConcurrencyService::decrease, "without-lock");
 	}
 
 	@Transactional
 	public OrderCreateResult createOrderWithSynchronized(OrderCreateCommand command) {
-		return createOrderWithStockDecrease(command, stockConcurrencyService::decreaseWithSynchronized);
+		return createOrderWithStockDecrease(command, stockConcurrencyService::decreaseWithSynchronized, "synchronized");
 	}
 
 	@Transactional
 	public OrderCreateResult createOrderWithSynchronizedAndTransaction(OrderCreateCommand command) {
-		return createOrderWithStockDecrease(command, stockConcurrencyService::decreaseWithSynchronizedAndTransaction);
+		return createOrderWithStockDecrease(command, stockConcurrencyService::decreaseWithSynchronizedAndTransaction, "synchronized-tx");
 	}
 
 	@Transactional
 	public OrderCreateResult createOrderWithReentrantLockAndTransaction(OrderCreateCommand command) {
-		return createOrderWithStockDecrease(command, stockConcurrencyService::decreaseWithReentrantLockAndTransaction);
+		return createOrderWithStockDecrease(command, stockConcurrencyService::decreaseWithReentrantLockAndTransaction, "reentrant-tx");
 	}
 
 	@Transactional
 	public OrderCreateResult createOrderWithOptimisticLock(OrderCreateCommand command) {
-		return createOrderWithStockDecrease(command, stockConcurrencyService::decreaseWithOptimisticLock);
+		return createOrderWithStockDecrease(command, stockConcurrencyService::decreaseWithOptimisticLock, "optimistic");
 	}
 
 	@Transactional
 	public OrderCreateResult createOrderWithPessimisticLock(OrderCreateCommand command) {
-		return createOrderWithStockDecrease(command, stockInventoryService::decrease);
+		return createOrderWithStockDecrease(command, stockInventoryService::decrease, "pessimistic");
 	}
 
 	@Transactional
@@ -79,7 +81,7 @@ public class OrderConcurrencyService {
 				.sorted((left, right) -> left.getProductId().compareTo(right.getProductId()))
 				.toList())
 			.build();
-		return createOrderWithStockDecrease(sortedCommand, stockInventoryService::decrease);
+		return createOrderWithStockDecrease(sortedCommand, stockInventoryService::decrease, "pessimistic-ordered");
 	}
 
 	@Transactional
@@ -110,12 +112,16 @@ public class OrderConcurrencyService {
 
 		orderRepository.save(order);
 
+		log.info("주문 생성 orderId={} memberId={} itemCount={} strategy=pessimistic-batch",
+			order.getId(), command.getMemberId(), command.getItems().size());
+
 		return OrderCreateResult.from(order);
 	}
 
 	private OrderCreateResult createOrderWithStockDecrease(
 		OrderCreateCommand command,
-		BiConsumer<Long, Integer> stockDecrease
+		BiConsumer<Long, Integer> stockDecrease,
+		String strategy
 	) {
 		Member member = memberRepository.findById(command.getMemberId())
 			.orElseThrow(() -> new MemberException(MemberErrorCode.MEMBER_NOT_FOUND));
@@ -131,6 +137,9 @@ public class OrderConcurrencyService {
 		}
 
 		orderRepository.save(order);
+
+		log.info("주문 생성 orderId={} memberId={} itemCount={} strategy={}",
+			order.getId(), command.getMemberId(), command.getItems().size(), strategy);
 
 		return OrderCreateResult.from(order);
 	}

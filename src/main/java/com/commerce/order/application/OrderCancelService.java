@@ -15,7 +15,9 @@ import com.commerce.order.exception.OrderException;
 import com.commerce.stock.application.StockInventoryService;
 
 import lombok.RequiredArgsConstructor;
+import lombok.extern.slf4j.Slf4j;
 
+@Slf4j
 @Service
 @RequiredArgsConstructor
 @Transactional(readOnly = true)
@@ -38,6 +40,9 @@ public class OrderCancelService {
 		sortedItems.forEach(item ->
 			stockInventoryService.increase(item.getProduct().getId(), item.getQuantity())
 		);
+
+		log.info("주문 취소 orderId={} memberId={} itemCount={}",
+			order.getId(), memberId, sortedItems.size());
 
 		return OrderCancelResult.from(order);
 	}
