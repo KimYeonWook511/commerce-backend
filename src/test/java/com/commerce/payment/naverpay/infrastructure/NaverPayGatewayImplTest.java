@@ -106,11 +106,13 @@ class NaverPayGatewayImplTest {
 		// Then
 		assertThat(result.getStatus()).isEqualTo(NaverPayApproveResult.Status.FAILED);
 		List<ILoggingEvent> logs = listAppender.list;
-		assertThat(logs).hasSize(2);
+		assertThat(logs).hasSize(3);
 		assertThat(logs.get(0).getLevel()).isEqualTo(Level.INFO);
 		assertThat(logs.get(0).getFormattedMessage()).contains("네이버페이 승인 요청").contains("PAY002");
-		assertThat(logs.get(1).getLevel()).isEqualTo(Level.WARN);
-		assertThat(logs.get(1).getFormattedMessage()).contains("네이버페이 승인 실패").contains("PAY002");
+		assertThat(logs.get(1).getLevel()).isEqualTo(Level.INFO);
+		assertThat(logs.get(1).getFormattedMessage()).contains("네이버페이 승인 응답").contains("PAY002");
+		assertThat(logs.get(2).getLevel()).isEqualTo(Level.WARN);
+		assertThat(logs.get(2).getFormattedMessage()).contains("네이버페이 승인 실패").contains("PAY002");
 	}
 
 	@Test

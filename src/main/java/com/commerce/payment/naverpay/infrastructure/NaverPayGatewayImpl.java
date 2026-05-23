@@ -44,8 +44,8 @@ public class NaverPayGatewayImpl implements NaverPayGateway {
 		}
 
 		NaverPayApproveCode code = NaverPayApproveCode.from(response.getCode());
+		log.info("네이버페이 승인 응답 paymentId={} code={}", paymentId, response.getCode());
 		if (code.isSuccess()) {
-			log.info("네이버페이 승인 응답 paymentId={} code={}", paymentId, response.getCode());
 			try {
 				NaverPayApproveBody.Detail detail = response.getBody().getDetail();
 				return NaverPayApproveResult.success(detail.getMerchantPayKey(), detail.getTotalPayAmount());
@@ -127,11 +127,11 @@ public class NaverPayGatewayImpl implements NaverPayGateway {
 		}
 
 		NaverPayCancelCode code = NaverPayCancelCode.from(response.getCode());
+		log.info("네이버페이 취소 응답 paymentId={} code={}", paymentId, response.getCode());
 		if (code.isAlreadyOnGoing()) {
 			return NaverPayCancelResult.processing();
 		}
 		if (code.isSuccess()) {
-			log.info("네이버페이 취소 응답 paymentId={} code={}", paymentId, response.getCode());
 			return NaverPayCancelResult.success();
 		}
 		if (code.isAlreadyCanceled()) {
