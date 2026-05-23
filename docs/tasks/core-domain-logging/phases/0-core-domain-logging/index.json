@@ -29,7 +29,10 @@
     {
       "step": 4,
       "name": "auth-member-domain-logging",
-      "status": "pending"
+      "status": "completed",
+      "started_at": "2026-05-23T23:24:22+0900",
+      "summary": "AuthLoginService(로그인 성공), AuthSignUpService(회원 가입 성공), MemberRegistrationService(회원 등록 완료) 총 3개 파일에 @Slf4j 부착 및 INFO 로그 추가. 민감 정보(이메일/비밀번호/토큰) 미포함 확인. 기존 테스트 전체 PASS.",
+      "completed_at": "2026-05-23T23:25:54+0900"
     },
     {
       "step": 5,
