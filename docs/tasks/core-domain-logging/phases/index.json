@@ -1,5 +1,9 @@
 {
   "phases": [
-    { "dir": "0-core-domain-logging", "status": "pending" }
+    {
+      "dir": "0-core-domain-logging",
+      "status": "in_progress",
+      "started_at": "2026-05-23T23:15:08+0900"
+    }
   ]
 }

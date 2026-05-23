@@ -2,12 +2,44 @@
   "project": "commerce-backend",
   "phase": "0-core-domain-logging",
   "steps": [
-    { "step": 1, "name": "order-domain-logging", "status": "pending" },
-    { "step": 2, "name": "stock-domain-logging", "status": "pending" },
-    { "step": 3, "name": "payment-domain-logging", "status": "pending" },
-    { "step": 4, "name": "auth-member-domain-logging", "status": "pending" },
-    { "step": 5, "name": "product-domain-logging", "status": "pending" },
-    { "step": 6, "name": "sync-root-docs", "status": "pending" },
-    { "step": 7, "name": "write-retrospective", "status": "pending" }
-  ]
+    {
+      "step": 1,
+      "name": "order-domain-logging",
+      "status": "completed",
+      "started_at": "2026-05-23T23:15:08+0900",
+      "summary": "OrderCreateService(멱등 흡수 2분기), OrderCreateProcessor(신규 생성), OrderCancelService, OrderConcurrencyService(strategy 라벨 8개), OrderExpirationService, StockRestoreOutboxCreateService 총 6개 파일에 @Slf4j 부착 및 INFO 로그 추가. 기존 테스트 전체 PASS.",
+      "completed_at": "2026-05-23T23:18:31+0900"
+    },
+    {
+      "step": 2,
+      "name": "stock-domain-logging",
+      "status": "pending"
+    },
+    {
+      "step": 3,
+      "name": "payment-domain-logging",
+      "status": "pending"
+    },
+    {
+      "step": 4,
+      "name": "auth-member-domain-logging",
+      "status": "pending"
+    },
+    {
+      "step": 5,
+      "name": "product-domain-logging",
+      "status": "pending"
+    },
+    {
+      "step": 6,
+      "name": "sync-root-docs",
+      "status": "pending"
+    },
+    {
+      "step": 7,
+      "name": "write-retrospective",
+      "status": "pending"
+    }
+  ],
+  "created_at": "2026-05-23T23:15:08+0900"
 }
