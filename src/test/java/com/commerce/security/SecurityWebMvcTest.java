@@ -23,7 +23,7 @@ import org.springframework.http.ResponseEntity;
 import org.springframework.web.bind.annotation.GetMapping;
 import org.springframework.web.bind.annotation.RestController;
 
-import com.commerce.security.filter.JwtAuthenticationFilter;
+import com.commerce.security.filter.JwtAuthenticationFilterConfig;
 import com.commerce.security.interceptor.AuthorizationInterceptor;
 import com.commerce.auth.application.TokenAuthenticationService;
 import com.commerce.auth.application.result.TokenAuthenticationResult;
@@ -41,7 +41,7 @@ import com.commerce.security.annotation.RequireRole;
 	WebConfig.class,
 	AuthenticatedMemberIdArgumentResolver.class,
 	AuthorizationInterceptor.class,
-	JwtAuthenticationFilter.class,
+	JwtAuthenticationFilterConfig.class,
 	SecurityWebMvcTest.TestController.class
 })
 class SecurityWebMvcTest {
