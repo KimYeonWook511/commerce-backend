@@ -1,5 +1,9 @@
 {
   "phases": [
-    { "dir": "0-memberid-mdc-propagation", "status": "pending" }
+    {
+      "dir": "0-memberid-mdc-propagation",
+      "status": "in_progress",
+      "started_at": "2026-05-24T03:43:30+0900"
+    }
   ]
 }
