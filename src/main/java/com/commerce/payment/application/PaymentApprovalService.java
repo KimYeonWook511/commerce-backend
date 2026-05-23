@@ -61,7 +61,8 @@ public class PaymentApprovalService {
 		paymentApprovalAttemptService.succeed(merchantPayKey, provider, pgPaymentId, approvedAt);
 
 		if (completedPayment != null) {
-			log.info("결제 승인 멱등 흡수 merchantPayKey={} pgPaymentId={}", merchantPayKey, pgPaymentId);
+			log.info("결제 승인 멱등 흡수 merchantPayKey={} provider={} pgPaymentId={} orderId={}",
+				merchantPayKey, provider, pgPaymentId, order.getId());
 			return completedPayment; // 이미 해당 결제로 성공한 payment 반환
 		}
 
