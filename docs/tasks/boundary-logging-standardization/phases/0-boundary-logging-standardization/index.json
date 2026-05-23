@@ -21,7 +21,10 @@
     {
       "step": 3,
       "name": "naverpay-logging-standardization",
-      "status": "pending"
+      "status": "completed",
+      "started_at": "2026-05-23T23:31:22+0900",
+      "summary": "NaverPayGatewayImpl의 영문 메시지 7건을 한국어로 변환하고, approve/getApprovalHistory/cancel 3개 메서드에 표준 라운드트립 패턴(요청 INFO + 응답 INFO 또는 실패 WARN)을 적용한다. cancelReason을 로그에서 제거한다. NaverPayGatewayImplTest를 신규 작성해 5개 케이스(approve 정상/실패코드/호출예외, cancel 정상, history 정상) 모두 검증하며 전체 430개 테스트가 통과한다.",
+      "completed_at": "2026-05-23T23:36:53+0900"
     },
     {
       "step": 4,
