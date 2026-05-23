@@ -112,8 +112,8 @@ public class OrderConcurrencyService {
 
 		orderRepository.save(order);
 
-		log.info("주문 생성 orderId={} memberId={} itemCount={} strategy=pessimistic-batch",
-			order.getId(), command.getMemberId(), command.getItems().size());
+		log.info("주문 생성 orderId={} memberId={} itemCount={} strategy={}",
+			order.getId(), command.getMemberId(), command.getItems().size(), "pessimistic-batch");
 
 		return OrderCreateResult.from(order);
 	}
