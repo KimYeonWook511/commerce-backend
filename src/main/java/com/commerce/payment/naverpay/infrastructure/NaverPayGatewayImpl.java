@@ -36,20 +36,21 @@ public class NaverPayGatewayImpl implements NaverPayGateway {
 	public NaverPayApproveResult approve(String paymentId) {
 		NaverPayResponse<NaverPayApproveBody> response;
 		try {
-			log.info("NaverPay approve request: paymentId={}", paymentId);
+			log.info("네이버페이 승인 요청 paymentId={}", paymentId);
 			response = naverPayClient.approve(paymentId);
 		} catch (NaverPayException ex) {
-			log.warn("NaverPay approve request failed: paymentId={}, message={}", paymentId, ex.getMessage());
+			log.warn("네이버페이 승인 호출 실패 paymentId={} message={}", paymentId, ex.getMessage());
 			return NaverPayApproveResult.failed(toAttemptFailCode(ex), toPaymentErrorCode(ex), ex.getMessage());
 		}
 
 		NaverPayApproveCode code = NaverPayApproveCode.from(response.getCode());
 		if (code.isSuccess()) {
+			log.info("네이버페이 승인 응답 paymentId={} code={}", paymentId, response.getCode());
 			try {
 				NaverPayApproveBody.Detail detail = response.getBody().getDetail();
 				return NaverPayApproveResult.success(detail.getMerchantPayKey(), detail.getTotalPayAmount());
 			} catch (NullPointerException ex) {
-				log.warn("NaverPay approve response parsing failed: paymentId={}", paymentId);
+				log.warn("네이버페이 승인 응답 파싱 실패 paymentId={}", paymentId);
 				return NaverPayApproveResult.failed(
 					PaymentAttemptFailCode.PG_INVALID_RESPONSE,
 					PaymentErrorCode.PAYMENT_PG_INVALID_RESPONSE,
@@ -64,7 +65,7 @@ public class NaverPayGatewayImpl implements NaverPayGateway {
 			return NaverPayApproveResult.alreadyComplete();
 		}
 
-		log.warn("NaverPay approve failed: paymentId={}, code={}, message={}",
+		log.warn("네이버페이 승인 실패 paymentId={} code={} message={}",
 			paymentId, response.getCode(), code.getDescription());
 		return NaverPayApproveResult.failed(toAttemptFailCode(code), toPaymentErrorCode(code), code.getDescription());
 	}
@@ -73,17 +74,19 @@ public class NaverPayGatewayImpl implements NaverPayGateway {
 	public NaverPayHistoryResult getApprovalHistory(String paymentId) {
 		NaverPayResponse<NaverPayHistoryBody> response;
 		try {
-			log.info("NaverPay approval history request: paymentId={}", paymentId);
+			log.info("네이버페이 이력조회 요청 paymentId={}", paymentId);
 			response = naverPayClient.getAllHistory(paymentId);
 		} catch (NaverPayException ex) {
-			log.warn("NaverPay approval history request failed: paymentId={}, message={}", paymentId, ex.getMessage());
+			log.warn("네이버페이 이력조회 호출 실패 paymentId={} message={}", paymentId, ex.getMessage());
 			return NaverPayHistoryResult.failed(toPaymentErrorCode(ex));
 		}
 
 		NaverPayHistoryCode code = NaverPayHistoryCode.from(response.getCode());
 		if (!code.isSuccess()) {
+			log.warn("네이버페이 이력조회 실패 paymentId={} code={}", paymentId, response.getCode());
 			return NaverPayHistoryResult.failed(toPaymentErrorCode(code));
 		}
+		log.info("네이버페이 이력조회 응답 paymentId={} code={}", paymentId, response.getCode());
 
 		NaverPayHistoryBody.History history;
 		try {
@@ -107,8 +110,7 @@ public class NaverPayGatewayImpl implements NaverPayGateway {
 	public NaverPayCancelResult cancel(String paymentId, int cancelAmount, String cancelReason) {
 		NaverPayResponse<?> response;
 		try {
-			log.info("NaverPay payment cancel request: paymentId={}, cancelAmount={}, cancelReason={}",
-				paymentId, cancelAmount, cancelReason);
+			log.info("네이버페이 취소 요청 paymentId={} cancelAmount={}", paymentId, cancelAmount);
 			response = naverPayClient.cancel(
 				NaverPayCancelRequest.builder()
 					.paymentId(paymentId)
@@ -120,7 +122,7 @@ public class NaverPayGatewayImpl implements NaverPayGateway {
 					.build()
 			);
 		} catch (NaverPayException ex) {
-			log.warn("NaverPay payment cancel request failed: paymentId={}, message={}", paymentId, ex.getMessage());
+			log.warn("네이버페이 취소 호출 실패 paymentId={} message={}", paymentId, ex.getMessage());
 			return NaverPayCancelResult.failed(toAttemptFailCode(ex), ex.getMessage());
 		}
 
@@ -129,13 +131,14 @@ public class NaverPayGatewayImpl implements NaverPayGateway {
 			return NaverPayCancelResult.processing();
 		}
 		if (code.isSuccess()) {
+			log.info("네이버페이 취소 응답 paymentId={} code={}", paymentId, response.getCode());
 			return NaverPayCancelResult.success();
 		}
 		if (code.isAlreadyCanceled()) {
 			return NaverPayCancelResult.alreadyCanceled();
 		}
 
-		log.warn("NaverPay cancel failed: paymentId={}, code={}, message={}",
+		log.warn("네이버페이 취소 실패 paymentId={} code={} message={}",
 			paymentId, response.getCode(), code.getDescription());
 		return NaverPayCancelResult.failed(toAttemptFailCode(code), code.getDescription());
 	}
