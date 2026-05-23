@@ -16,9 +16,7 @@ import com.commerce.stock.exception.StockErrorCode;
 import com.commerce.stock.exception.StockException;
 
 import lombok.RequiredArgsConstructor;
-import lombok.extern.slf4j.Slf4j;
 
-@Slf4j
 @Service
 @Transactional(readOnly = true)
 @RequiredArgsConstructor
@@ -33,7 +31,6 @@ public class StockInventoryService {
 			.orElseThrow(() -> new StockException(StockErrorCode.STOCK_NOT_FOUND));
 
 		stock.decrease(quantity);
-		log.info("재고 차감 productId={} quantity={} remaining={}", productId, quantity, stock.getQuantity());
 	}
 
 	@Transactional
@@ -43,7 +40,6 @@ public class StockInventoryService {
 			.orElseThrow(() -> new StockException(StockErrorCode.STOCK_NOT_FOUND));
 
 		stock.increase(quantity);
-		log.info("재고 복구 productId={} quantity={} remaining={}", productId, quantity, stock.getQuantity());
 	}
 
 	@Transactional
@@ -68,7 +64,6 @@ public class StockInventoryService {
 			stock.decrease(quantitiesByProductId.get(productId));
 		}
 
-		log.info("재고 일괄 차감 productCount={}", quantitiesByProductId.size());
 		return StockDecreaseBatchResult.from(quantitiesByProductId);
 	}
 }
