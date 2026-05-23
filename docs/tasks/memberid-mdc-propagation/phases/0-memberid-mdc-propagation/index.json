@@ -29,7 +29,10 @@
     {
       "step": 4,
       "name": "write-retrospective",
-      "status": "pending"
+      "status": "completed",
+      "started_at": "2026-05-24T03:58:32+0900",
+      "summary": "docs/tasks/memberid-mdc-propagation/retrospective.md를 신규 작성한다. 배경(P2 MDC.remove 결정 → push 누락), 결정사항 요약 표(6개 결정), 진행 중 트레이드오프(옵션 A vs B, AccessLog 포함, 상수 owner, 등록 방식, step 분리), 이슈 본문과의 차이, 후속 작업 제안을 포함한다. ./gradlew test 전체 통과.",
+      "completed_at": "2026-05-24T04:00:10+0900"
     }
   ],
   "created_at": "2026-05-24T03:43:30+0900"
