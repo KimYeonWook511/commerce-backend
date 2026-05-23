@@ -1,0 +1,10 @@
+{
+  "project": "commerce-backend",
+  "phase": "0-memberid-mdc-propagation",
+  "steps": [
+    { "step": 1, "name": "register-jwt-auth-filter-explicitly", "status": "pending" },
+    { "step": 2, "name": "propagate-memberid-mdc", "status": "pending" },
+    { "step": 3, "name": "sync-root-docs", "status": "pending" },
+    { "step": 4, "name": "write-retrospective", "status": "pending" }
+  ]
+}
