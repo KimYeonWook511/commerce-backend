@@ -138,7 +138,7 @@ OrderExpirationBatchConfig (Spring Batch)
 
 ## Application 계층 로깅
 
-Application Service는 유스케이스 시작·완료 시점에 도메인 이벤트 INFO 로그를 남긴다. 메시지는 한국어 본문 + 영어 식별자 필드 + SLF4J placeholder `{}` 형식을 따른다.
+Application Service는 유스케이스 완료 시점에 도메인 이벤트 INFO 로그를 남긴다. 메시지는 한국어 본문 + 영어 식별자 필드 + SLF4J placeholder `{}` 형식을 따른다.
 
 ```java
 log.info("주문 생성 orderId={} memberId={} itemCount={}", orderId, memberId, itemCount);
