@@ -24,11 +24,13 @@ public class AccessLogFilter extends OncePerRequestFilter {
 		log.info("요청 시작 method={} path={}", request.getMethod(), request.getRequestURI());
 		long startNanos = System.nanoTime();
 
+		int status = 500;
 		try {
 			filterChain.doFilter(request, response);
+			status = response.getStatus();
 		} finally {
 			long durationMs = (System.nanoTime() - startNanos) / 1_000_000;
-			log.info("요청 종료 status={} latency={}ms", response.getStatus(), durationMs);
+			log.info("요청 종료 status={} latency={}ms", status, durationMs);
 		}
 	}
 }

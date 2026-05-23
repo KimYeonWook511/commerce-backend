@@ -108,7 +108,7 @@ class AccessLogFilterTest {
 		List<ILoggingEvent> logs = listAppender.list;
 		assertThat(logs).hasSize(2);
 		assertThat(logs.get(0).getFormattedMessage()).contains("요청 시작");
-		assertThat(logs.get(1).getFormattedMessage()).contains("요청 종료");
+		assertThat(logs.get(1).getFormattedMessage()).contains("요청 종료").contains("status=500");
 	}
 
 	@DisplayName("요청 종료 로그에 latency 값이 포함된다")
