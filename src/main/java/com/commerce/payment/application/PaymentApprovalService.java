@@ -19,7 +19,9 @@ import com.commerce.payment.exception.PaymentErrorCode;
 import com.commerce.payment.exception.PaymentException;
 
 import lombok.RequiredArgsConstructor;
+import lombok.extern.slf4j.Slf4j;
 
+@Slf4j
 @Service
 @RequiredArgsConstructor
 public class PaymentApprovalService {
@@ -59,6 +61,7 @@ public class PaymentApprovalService {
 		paymentApprovalAttemptService.succeed(merchantPayKey, provider, pgPaymentId, approvedAt);
 
 		if (completedPayment != null) {
+			log.info("결제 승인 멱등 흡수 merchantPayKey={} pgPaymentId={}", merchantPayKey, pgPaymentId);
 			return completedPayment; // 이미 해당 결제로 성공한 payment 반환
 		}
 
@@ -66,9 +69,12 @@ public class PaymentApprovalService {
 		order.completePayment();
 
 		// 결제 최종 정보 저장
-		return paymentRepository.save(
+		Payment savedPayment = paymentRepository.save(
 			Payment.createCompleted(order, provider, merchantPayKey, pgPaymentId, approvedAt)
 		);
+		log.info("결제 승인 완료 merchantPayKey={} provider={} pgPaymentId={} orderId={}",
+			merchantPayKey, provider, pgPaymentId, order.getId());
+		return savedPayment;
 	}
 
 	private Payment validateCompletedPaymentOrThrow(
