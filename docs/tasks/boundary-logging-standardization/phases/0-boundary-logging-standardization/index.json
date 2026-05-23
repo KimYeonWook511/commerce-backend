@@ -13,7 +13,10 @@
     {
       "step": 2,
       "name": "exception-handler-level-policy",
-      "status": "pending"
+      "status": "completed",
+      "started_at": "2026-05-23T23:25:16+0900",
+      "summary": "GlobalExceptionHandler의 handleCustomException을 5xx/4xx status로 분기해 5xx는 log.error+throwable, 4xx는 무로그로 처리한다. handleException의 stack trace 누락 버그를 log.error(msg, ex) 형식으로 수정한다. handleMethodArgumentNotValidException과 handleHttpMessageNotReadableException에서 로그를 제거한다. handleOptimisticLockingFailureException은 WARN no-stack으로 유지한다. GlobalExceptionHandlerTest를 신규 작성해 9개 케이스(4xx 무로그, 5xx ERROR+throwable, Exception ERROR+throwable, 400 무로그 2건, 409 WARN no-throwable, 500 ERROR+throwable 2건, 응답 status 불변)를 모두 검증한다.",
+      "completed_at": "2026-05-23T23:29:47+0900"
     },
     {
       "step": 3,
