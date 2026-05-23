@@ -21,7 +21,10 @@
     {
       "step": 3,
       "name": "sync-root-docs",
-      "status": "pending"
+      "status": "completed",
+      "started_at": "2026-05-24T03:56:47+0900",
+      "summary": "docs/architecture.md의 HTTP 요청 처리 Filter 절을 보강한다. JwtAuthenticationFilter order를 HIGHEST_PRECEDENCE+30으로 정정하고, Filter 등록 정책(모두 FilterRegistrationBean 명시 등록) 설명과 memberId MDC 전파 흐름, MDC 키 정리 규약을 추가한다. ./gradlew test 전체 통과.",
+      "completed_at": "2026-05-24T03:57:57+0900"
     },
     {
       "step": 4,
