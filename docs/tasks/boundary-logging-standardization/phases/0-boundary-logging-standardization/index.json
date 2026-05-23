@@ -1,0 +1,48 @@
+{
+  "project": "commerce-backend",
+  "phase": "0-boundary-logging-standardization",
+  "steps": [
+    {
+      "step": 1,
+      "name": "access-log-filter",
+      "status": "completed",
+      "started_at": "2026-05-23T23:19:14+0900",
+      "summary": "AccessLogFilter(OncePerRequestFilter)와 AccessLogFilterConfig(FilterRegistrationBean, order=HIGHEST_PRECEDENCE+20)를 신규 작성한다. 요청 시작/종료 INFO 로그를 try-finally로 보장하며, 단위 테스트(5건)와 MockMvc 통합 테스트(3건) 모두 통과한다.",
+      "completed_at": "2026-05-23T23:23:47+0900"
+    },
+    {
+      "step": 2,
+      "name": "exception-handler-level-policy",
+      "status": "completed",
+      "started_at": "2026-05-23T23:25:16+0900",
+      "summary": "GlobalExceptionHandler의 handleCustomException을 5xx/4xx status로 분기해 5xx는 log.error+throwable, 4xx는 무로그로 처리한다. handleException의 stack trace 누락 버그를 log.error(msg, ex) 형식으로 수정한다. handleMethodArgumentNotValidException과 handleHttpMessageNotReadableException에서 로그를 제거한다. handleOptimisticLockingFailureException은 WARN no-stack으로 유지한다. GlobalExceptionHandlerTest를 신규 작성해 9개 케이스(4xx 무로그, 5xx ERROR+throwable, Exception ERROR+throwable, 400 무로그 2건, 409 WARN no-throwable, 500 ERROR+throwable 2건, 응답 status 불변)를 모두 검증한다.",
+      "completed_at": "2026-05-23T23:29:47+0900"
+    },
+    {
+      "step": 3,
+      "name": "naverpay-logging-standardization",
+      "status": "completed",
+      "started_at": "2026-05-23T23:31:22+0900",
+      "summary": "NaverPayGatewayImpl의 영문 메시지 7건을 한국어로 변환하고, approve/getApprovalHistory/cancel 3개 메서드에 표준 라운드트립 패턴(요청 INFO + 응답 INFO 또는 실패 WARN)을 적용한다. cancelReason을 로그에서 제거한다. NaverPayGatewayImplTest를 신규 작성해 5개 케이스(approve 정상/실패코드/호출예외, cancel 정상, history 정상) 모두 검증하며 전체 430개 테스트가 통과한다.",
+      "completed_at": "2026-05-23T23:36:53+0900"
+    },
+    {
+      "step": 4,
+      "name": "sync-root-docs",
+      "status": "completed",
+      "started_at": "2026-05-23T23:38:46+0900",
+      "summary": "docs/architecture.md의 'HTTP 요청 처리 Filter' 절 표에 AccessLogFilter 행(클래스 경로 com.commerce.common.log.filter.AccessLogFilter, order=Ordered.HIGHEST_PRECEDENCE+20)을 추가하고, 등록 방식(FilterRegistrationBean / AccessLogFilterConfig), 책임(요청 시작/종료 INFO 2건, traceId/memberId는 MDC 기반 logback 패턴이 자동 부착), 인증 Filter 이전 실행으로 미인증 요청에도 액세스 로그가 남는다는 설명을 추가한다. ./gradlew test가 통과한다.",
+      "completed_at": "2026-05-23T23:40:06+0900"
+    },
+    {
+      "step": 5,
+      "name": "write-retrospective",
+      "status": "completed",
+      "started_at": "2026-05-23T23:41:07+0900",
+      "summary": "docs/tasks/boundary-logging-standardization/retrospective.md를 신규 작성한다. 배경(Controller 무로그, GlobalExceptionHandler 4xx/5xx 무차별 ERROR, NaverPay 영문 메시지), ADR 4건 요약 표, 진행 중 트레이드오프 6건(AccessLogFilter 분리, 4xx 분기 방식, path 제외 YAGNI, NaverPay 호출 실패 레벨, cancelReason 제외, body 로깅 미지원), 후속 작업 제안 6건(4xx WARN 분류, body 로깅 DEBUG, memberId MDC, actuator path 제외, 비동기 traceId 전파, 거래 종료 ERROR), 검증 결과를 모두 기록한다. ./gradlew test가 통과한다.",
+      "completed_at": "2026-05-23T23:43:27+0900"
+    }
+  ],
+  "created_at": "2026-05-23T23:19:14+0900",
+  "completed_at": "2026-05-23T23:44:22+0900"
+}

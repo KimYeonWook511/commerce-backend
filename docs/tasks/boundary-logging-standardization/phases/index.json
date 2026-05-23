@@ -1,0 +1,10 @@
+{
+  "phases": [
+    {
+      "dir": "0-boundary-logging-standardization",
+      "status": "completed",
+      "started_at": "2026-05-23T23:19:14+0900",
+      "completed_at": "2026-05-23T23:44:22+0900"
+    }
+  ]
+}
