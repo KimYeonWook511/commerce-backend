@@ -136,6 +136,39 @@ OrderExpirationBatchConfig (Spring Batch)
 
 ---
 
+## Application 계층 로깅
+
+Application Service는 유스케이스 시작·완료 시점에 도메인 이벤트 INFO 로그를 남긴다. 메시지는 한국어 본문 + 영어 식별자 필드 + SLF4J placeholder `{}` 형식을 따른다.
+
+```java
+log.info("주문 생성 orderId={} memberId={} itemCount={}", orderId, memberId, itemCount);
+log.info("결제 승인 완료 merchantPayKey={} provider={} pgPaymentId={} orderId={}", ...);
+```
+
+- **Controller**: 로그 없음 (얇은 위임 레이어)
+- **Domain**: 로그 없음 (순수 도메인 보호, SLF4J 의존 금지)
+- **Infrastructure**: 외부 호출 실패·retry만 (WARN/ERROR)
+
+로깅 컨벤션 전체(레벨 기준, 레이어별 책임, 예외 로깅 표준, 민감 정보 마스킹, 메시지 패턴 등)의 단일 진실의 원천은 `docs/logging-conventions.md`다.
+
+### 도메인 이벤트 INFO 로그 적용 범위
+
+다음 7개 도메인의 14개 컴포넌트에 유스케이스 완료 시 INFO 로그가 추가되어 있다.
+
+| 도메인 | 컴포넌트 |
+|--------|---------|
+| Order | `OrderCreateService`, `OrderCreateProcessor`, `OrderCancelService`, `OrderConcurrencyService`, `OrderExpirationService` |
+| Outbox | `StockRestoreOutboxCreateService` |
+| Payment | `PaymentApprovalService`, `PaymentReadyService` |
+| Stock | `StockInventoryService`, `AdminStockService` |
+| Auth | `AuthLoginService`, `AuthSignUpService` |
+| Member | `MemberRegistrationService` |
+| Product | `AdminProductService` |
+
+단순 조회·위임 서비스(`OrderQueryService`, `MemberQueryService`, `ProductQueryService`, `TokenAuthenticationService`, `OutboxService`)는 도메인 상태 전환이 없으므로 INFO 로그를 두지 않는다.
+
+---
+
 ## HTTP 요청 처리 Filter
 
 | Filter | 클래스 | Order |

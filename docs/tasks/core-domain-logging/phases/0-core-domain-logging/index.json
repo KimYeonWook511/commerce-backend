@@ -45,7 +45,10 @@
     {
       "step": 6,
       "name": "sync-root-docs",
-      "status": "pending"
+      "status": "completed",
+      "started_at": "2026-05-23T23:29:07+0900",
+      "summary": "docs/architecture.md에 'Application 계층 로깅' 절 추가. Application Service의 유스케이스 완료 INFO 로그 책임, 메시지 패턴, 14개 컴포넌트 도메인 범위, logging-conventions.md를 단일 진실의 원천으로 명시. 기존 문서 구조 유지, P2 Filter 절과 중복 없음. 기존 테스트 전체 PASS.",
+      "completed_at": "2026-05-23T23:30:21+0900"
     },
     {
       "step": 7,
