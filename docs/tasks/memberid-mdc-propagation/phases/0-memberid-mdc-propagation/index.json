@@ -13,7 +13,10 @@
     {
       "step": 2,
       "name": "propagate-memberid-mdc",
-      "status": "pending"
+      "status": "completed",
+      "started_at": "2026-05-24T03:46:11+0900",
+      "summary": "JwtAuthenticationFilter에 MDC.put/remove와 request.setAttribute를 추가하고, AccessLogFilter에 MEMBER_ID_ATTRIBUTE 상수와 finally 내 MDC 잠깐 채우기 로직을 추가한다. JwtAuthenticationFilterTest(8시나리오)와 AccessLogFilterTest(9시나리오) 신규 작성, SecurityWebMvcTest에 MDC 엔드포인트 및 검증 시나리오를 추가한다. ./gradlew test 전체 통과.",
+      "completed_at": "2026-05-24T03:54:22+0900"
     },
     {
       "step": 3,
