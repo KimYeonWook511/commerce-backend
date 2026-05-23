@@ -2,8 +2,9 @@
   "phases": [
     {
       "dir": "0-memberid-mdc-propagation",
-      "status": "in_progress",
-      "started_at": "2026-05-24T03:43:30+0900"
+      "status": "completed",
+      "started_at": "2026-05-24T03:43:30+0900",
+      "completed_at": "2026-05-24T04:01:10+0900"
     }
   ]
 }
