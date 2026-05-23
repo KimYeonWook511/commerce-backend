@@ -3,6 +3,7 @@ package com.commerce.common.log.filter;
 import java.io.IOException;
 import java.util.concurrent.TimeUnit;
 
+import org.slf4j.MDC;
 import org.springframework.web.filter.OncePerRequestFilter;
 
 import jakarta.servlet.FilterChain;
@@ -14,6 +15,8 @@ import lombok.extern.slf4j.Slf4j;
 // path 제외 목록 미적용 (YAGNI). actuator 도입 또는 noisy 발견 시 추가 검토
 @Slf4j
 public class AccessLogFilter extends OncePerRequestFilter {
+
+	public static final String MEMBER_ID_ATTRIBUTE = "AccessLogFilter.memberId";
 
 	@Override
 	protected void doFilterInternal(
@@ -31,7 +34,19 @@ public class AccessLogFilter extends OncePerRequestFilter {
 			status = response.getStatus();
 		} finally {
 			long durationMs = TimeUnit.NANOSECONDS.toMillis(System.nanoTime() - startNanos);
-			log.info("요청 종료 status={} latency={}ms", status, durationMs);
+			Object memberId = request.getAttribute(MEMBER_ID_ATTRIBUTE);
+			boolean pushed = false;
+			if (memberId != null) {
+				MDC.put("memberId", String.valueOf(memberId));
+				pushed = true;
+			}
+			try {
+				log.info("요청 종료 status={} latency={}ms", status, durationMs);
+			} finally {
+				if (pushed) {
+					MDC.remove("memberId");
+				}
+			}
 		}
 	}
 }
