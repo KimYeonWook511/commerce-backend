@@ -12,6 +12,8 @@ import org.junit.jupiter.api.AfterEach;
 import org.junit.jupiter.api.BeforeEach;
 import org.junit.jupiter.api.DisplayName;
 import org.junit.jupiter.api.Test;
+import org.slf4j.MDC;
+import org.slf4j.LoggerFactory;
 import org.springframework.mock.web.MockFilterChain;
 import org.springframework.mock.web.MockHttpServletRequest;
 import org.springframework.mock.web.MockHttpServletResponse;
@@ -22,8 +24,6 @@ import ch.qos.logback.classic.spi.ILoggingEvent;
 import ch.qos.logback.core.read.ListAppender;
 import jakarta.servlet.FilterChain;
 import jakarta.servlet.ServletException;
-
-import org.slf4j.LoggerFactory;
 
 class AccessLogFilterTest {
 
@@ -42,6 +42,7 @@ class AccessLogFilterTest {
 	@AfterEach
 	void tearDown() {
 		accessLogLogger.detachAppender(listAppender);
+		MDC.clear();
 	}
 
 	@DisplayName("정상 200 응답 시 요청 시작 INFO + 요청 종료 INFO 2건이 남는다")
@@ -123,5 +124,62 @@ class AccessLogFilterTest {
 		String endMessage = listAppender.list.get(1).getFormattedMessage();
 		assertThat(endMessage).contains("latency=");
 		assertThat(endMessage).containsPattern("latency=\\d+ms");
+	}
+
+	@DisplayName("MEMBER_ID_ATTRIBUTE가 없는 요청은 요청 종료 로그의 MDC에 memberId가 없다")
+	@Test
+	void noAttribute_endLogHasNoMemberId() throws Exception {
+		MockHttpServletRequest request = new MockHttpServletRequest("GET", "/products");
+		MockHttpServletResponse response = new MockHttpServletResponse();
+		MockFilterChain chain = new MockFilterChain();
+
+		filter.doFilter(request, response, chain);
+
+		ILoggingEvent endLog = listAppender.list.get(1);
+		assertThat(endLog.getMDCPropertyMap().get("memberId")).isNull();
+		assertThat(MDC.get("memberId")).isNull();
+	}
+
+	@DisplayName("MEMBER_ID_ATTRIBUTE가 set된 요청은 요청 종료 로그의 MDC에 memberId가 포함되고 이후 제거된다")
+	@Test
+	void withAttribute_endLogHasMemberIdAndRemovedAfter() throws Exception {
+		MockHttpServletRequest request = new MockHttpServletRequest("GET", "/orders");
+		request.setAttribute(AccessLogFilter.MEMBER_ID_ATTRIBUTE, 42L);
+		MockHttpServletResponse response = new MockHttpServletResponse();
+		MockFilterChain chain = new MockFilterChain();
+
+		filter.doFilter(request, response, chain);
+
+		ILoggingEvent endLog = listAppender.list.get(1);
+		assertThat(endLog.getMDCPropertyMap().get("memberId")).isEqualTo("42");
+		assertThat(MDC.get("memberId")).isNull();
+	}
+
+	@DisplayName("chain 예외 시에도 MEMBER_ID_ATTRIBUTE가 set된 경우 MDC.remove가 보장된다")
+	@Test
+	void chainException_withAttribute_mdcRemovedInFinally() throws Exception {
+		MockHttpServletRequest request = new MockHttpServletRequest("GET", "/orders");
+		request.setAttribute(AccessLogFilter.MEMBER_ID_ATTRIBUTE, 42L);
+		MockHttpServletResponse response = new MockHttpServletResponse();
+
+		FilterChain chain = mock(FilterChain.class);
+		doThrow(new ServletException("체인 예외")).when(chain).doFilter(any(), any());
+
+		assertThatThrownBy(() -> filter.doFilter(request, response, chain))
+			.isInstanceOf(ServletException.class);
+
+		assertThat(MDC.get("memberId")).isNull();
+	}
+
+	@DisplayName("MEMBER_ID_ATTRIBUTE가 없는 요청 종료 후 MDC에 memberId 잔류가 없다")
+	@Test
+	void noAttribute_noMdcResidueAfterRequest() throws Exception {
+		MockHttpServletRequest request = new MockHttpServletRequest("GET", "/products");
+		MockHttpServletResponse response = new MockHttpServletResponse();
+		MockFilterChain chain = new MockFilterChain();
+
+		filter.doFilter(request, response, chain);
+
+		assertThat(MDC.get("memberId")).isNull();
 	}
 }
