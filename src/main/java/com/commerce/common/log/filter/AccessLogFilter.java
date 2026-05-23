@@ -1,6 +1,7 @@
 package com.commerce.common.log.filter;
 
 import java.io.IOException;
+import java.util.concurrent.TimeUnit;
 
 import org.springframework.web.filter.OncePerRequestFilter;
 
@@ -29,7 +30,7 @@ public class AccessLogFilter extends OncePerRequestFilter {
 			filterChain.doFilter(request, response);
 			status = response.getStatus();
 		} finally {
-			long durationMs = (System.nanoTime() - startNanos) / 1_000_000;
+			long durationMs = TimeUnit.NANOSECONDS.toMillis(System.nanoTime() - startNanos);
 			log.info("요청 종료 status={} latency={}ms", status, durationMs);
 		}
 	}
