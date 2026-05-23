@@ -60,7 +60,9 @@
 
 ```java
 // Order
-log.info("주문 멱등 응답 orderId={} memberId={}", orderId, memberId);
+// OrderCreateService — 멱등 흡수 (Redis hit / DB hit 각각 source 구분)
+log.info("주문 멱등 응답 orderId={} memberId={} source=redis idempotencyKey={}", orderId, memberId, idempotencyKey);
+log.info("주문 멱등 응답 orderId={} memberId={} source=db idempotencyKey={}", orderId, memberId, idempotencyKey);
 log.info("주문 생성 orderId={} memberId={} itemCount={}", orderId, memberId, itemCount);
 log.info("주문 취소 orderId={} memberId={} itemCount={}", orderId, memberId, itemCount);
 log.info("주문 생성 orderId={} memberId={} itemCount={} strategy={}", orderId, memberId, itemCount, strategy);
@@ -74,12 +76,11 @@ log.info("재고 복구 Outbox 발행 orderId={} itemCount={}", orderId, itemCou
 // Payment
 log.info("결제 준비 완료 merchantPayKey={} orderId={} memberId={} amount={}", merchantPayKey, orderId, memberId, totalPayAmount);
 log.info("결제 승인 완료 merchantPayKey={} provider={} pgPaymentId={} orderId={}", merchantPayKey, provider, pgPaymentId, orderId);
-log.info("결제 승인 멱등 흡수 merchantPayKey={} pgPaymentId={}", merchantPayKey, pgPaymentId);
+// 멱등 흡수 — provider, orderId 포함 (리뷰 반영)
+log.info("결제 승인 멱등 흡수 merchantPayKey={} provider={} pgPaymentId={} orderId={}", merchantPayKey, provider, pgPaymentId, orderId);
 
-// Stock
-log.info("재고 차감 productId={} quantity={} remaining={}", productId, quantity, stock.getQuantity());
-log.info("재고 복구 productId={} quantity={} remaining={}", productId, quantity, stock.getQuantity());
-log.info("재고 일괄 차감 productCount={}", quantitiesByProductId.size());
+// Stock — StockInventoryService 로그는 상위 트랜잭션 롤백 시 잔류 문제로 제거 (리뷰 반영)
+// AdminStockService (어드민 직접 조작 — 독립 트랜잭션 진입점)
 log.info("재고 초기 설정 productId={} quantity={} reason={} adminMemberId={}", productId, quantity, reason, adminMemberId);
 log.info("재고 운영 증가 productId={} quantity={} reason={} adminMemberId={} newTotal={}", productId, quantity, reason, adminMemberId, stock.getQuantity());
 log.info("재고 운영 감소 productId={} quantity={} reason={} adminMemberId={} newTotal={}", productId, quantity, reason, adminMemberId, stock.getQuantity());
