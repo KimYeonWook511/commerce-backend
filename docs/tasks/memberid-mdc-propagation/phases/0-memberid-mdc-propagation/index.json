@@ -1,0 +1,40 @@
+{
+  "project": "commerce-backend",
+  "phase": "0-memberid-mdc-propagation",
+  "steps": [
+    {
+      "step": 1,
+      "name": "register-jwt-auth-filter-explicitly",
+      "status": "completed",
+      "started_at": "2026-05-24T03:43:30+0900",
+      "summary": "JwtAuthenticationFilter에서 @Component를 제거하고 JwtAuthenticationFilterConfig(FilterRegistrationBean, order=HIGHEST_PRECEDENCE+30)를 신규 작성한다. SecurityWebMvcTest의 @Import를 JwtAuthenticationFilterConfig.class로 변경한다. ./gradlew test 전체 통과.",
+      "completed_at": "2026-05-24T03:45:00+0900"
+    },
+    {
+      "step": 2,
+      "name": "propagate-memberid-mdc",
+      "status": "completed",
+      "started_at": "2026-05-24T03:46:11+0900",
+      "summary": "JwtAuthenticationFilter에 MDC.put/remove와 request.setAttribute를 추가하고, AccessLogFilter에 MEMBER_ID_ATTRIBUTE 상수와 finally 내 MDC 잠깐 채우기 로직을 추가한다. JwtAuthenticationFilterTest(8시나리오)와 AccessLogFilterTest(9시나리오) 신규 작성, SecurityWebMvcTest에 MDC 엔드포인트 및 검증 시나리오를 추가한다. ./gradlew test 전체 통과.",
+      "completed_at": "2026-05-24T03:54:22+0900"
+    },
+    {
+      "step": 3,
+      "name": "sync-root-docs",
+      "status": "completed",
+      "started_at": "2026-05-24T03:56:47+0900",
+      "summary": "docs/architecture.md의 HTTP 요청 처리 Filter 절을 보강한다. JwtAuthenticationFilter order를 HIGHEST_PRECEDENCE+30으로 정정하고, Filter 등록 정책(모두 FilterRegistrationBean 명시 등록) 설명과 memberId MDC 전파 흐름, MDC 키 정리 규약을 추가한다. ./gradlew test 전체 통과.",
+      "completed_at": "2026-05-24T03:57:57+0900"
+    },
+    {
+      "step": 4,
+      "name": "write-retrospective",
+      "status": "completed",
+      "started_at": "2026-05-24T03:58:32+0900",
+      "summary": "docs/tasks/memberid-mdc-propagation/retrospective.md를 신규 작성한다. 배경(P2 MDC.remove 결정 → push 누락), 결정사항 요약 표(6개 결정), 진행 중 트레이드오프(옵션 A vs B, AccessLog 포함, 상수 owner, 등록 방식, step 분리), 이슈 본문과의 차이, 후속 작업 제안을 포함한다. ./gradlew test 전체 통과.",
+      "completed_at": "2026-05-24T04:00:10+0900"
+    }
+  ],
+  "created_at": "2026-05-24T03:43:30+0900",
+  "completed_at": "2026-05-24T04:01:10+0900"
+}

@@ -3,7 +3,7 @@ package com.commerce.security.filter;
 import java.io.IOException;
 import java.util.Set;
 
-import org.springframework.stereotype.Component;
+import org.slf4j.MDC;
 import org.springframework.web.filter.OncePerRequestFilter;
 
 import com.commerce.auth.application.TokenAuthenticationService;
@@ -13,6 +13,7 @@ import com.commerce.auth.exception.AuthException;
 import com.commerce.common.ApiResponse;
 import com.commerce.common.exception.CustomException;
 import com.commerce.common.exception.ErrorCode;
+import com.commerce.common.log.filter.AccessLogFilter;
 import com.commerce.security.context.AuthenticationContext;
 import com.fasterxml.jackson.databind.ObjectMapper;
 
@@ -22,7 +23,6 @@ import jakarta.servlet.http.HttpServletRequest;
 import jakarta.servlet.http.HttpServletResponse;
 import lombok.RequiredArgsConstructor;
 
-@Component
 @RequiredArgsConstructor
 public class JwtAuthenticationFilter extends OncePerRequestFilter {
 
@@ -64,7 +64,10 @@ public class JwtAuthenticationFilter extends OncePerRequestFilter {
 			TokenAuthenticationResult principal = tokenAuthenticationService.authenticateAccessToken(token);
 
 			// memberId, role Context에 저장
-			AuthenticationContext.set(principal.getMemberId(), principal.getRole());
+			Long memberId = principal.getMemberId();
+			AuthenticationContext.set(memberId, principal.getRole());
+			MDC.put(AccessLogFilter.MEMBER_ID_MDC_KEY, String.valueOf(memberId));
+			request.setAttribute(AccessLogFilter.MEMBER_ID_ATTRIBUTE, memberId);
 
 			filterChain.doFilter(request, response);
 
@@ -75,6 +78,7 @@ public class JwtAuthenticationFilter extends OncePerRequestFilter {
 		} finally {
 			// 반드시 정리
 			AuthenticationContext.clear();
+			MDC.remove(AccessLogFilter.MEMBER_ID_MDC_KEY);
 		}
 	}
 

@@ -1,5 +1,6 @@
 package com.commerce.security;
 
+import static org.assertj.core.api.Assertions.assertThat;
 import static org.mockito.BDDMockito.given;
 import static org.mockito.BDDMockito.then;
 import static org.mockito.ArgumentMatchers.any;
@@ -10,8 +11,10 @@ import static org.springframework.test.web.servlet.result.MockMvcResultMatchers.
 import static org.springframework.test.web.servlet.result.MockMvcResultMatchers.status;
 
 import org.hamcrest.Matchers;
+import org.junit.jupiter.api.AfterEach;
 import org.junit.jupiter.api.DisplayName;
 import org.junit.jupiter.api.Test;
+import org.slf4j.MDC;
 import org.springframework.beans.factory.annotation.Autowired;
 import org.springframework.boot.test.autoconfigure.web.servlet.AutoConfigureMockMvc;
 import org.springframework.boot.test.autoconfigure.web.servlet.WebMvcTest;
@@ -23,7 +26,7 @@ import org.springframework.http.ResponseEntity;
 import org.springframework.web.bind.annotation.GetMapping;
 import org.springframework.web.bind.annotation.RestController;
 
-import com.commerce.security.filter.JwtAuthenticationFilter;
+import com.commerce.security.filter.JwtAuthenticationFilterConfig;
 import com.commerce.security.interceptor.AuthorizationInterceptor;
 import com.commerce.auth.application.TokenAuthenticationService;
 import com.commerce.auth.application.result.TokenAuthenticationResult;
@@ -41,7 +44,7 @@ import com.commerce.security.annotation.RequireRole;
 	WebConfig.class,
 	AuthenticatedMemberIdArgumentResolver.class,
 	AuthorizationInterceptor.class,
-	JwtAuthenticationFilter.class,
+	JwtAuthenticationFilterConfig.class,
 	SecurityWebMvcTest.TestController.class
 })
 class SecurityWebMvcTest {
@@ -51,6 +54,11 @@ class SecurityWebMvcTest {
 
 	@MockitoBean
 	private TokenAuthenticationService tokenAuthenticationService;
+
+	@AfterEach
+	void tearDown() {
+		MDC.clear();
+	}
 
 	@DisplayName("토큰이 없으면 인증 오류를 반환한다")
 	@Test
@@ -114,6 +122,23 @@ class SecurityWebMvcTest {
 			.andExpect(status().isOk());
 
 		then(tokenAuthenticationService).should(never()).authenticateAccessToken(any());
+		assertThat(MDC.get("memberId")).isNull();
+	}
+
+	@DisplayName("인증 성공 시 Controller 실행 중 MDC.memberId가 set되고 요청 종료 후 제거된다")
+	@Test
+	void authenticatedRequest_mdcMemberIdSetInControllerAndRemovedAfter() throws Exception {
+		// given
+		given(tokenAuthenticationService.authenticateAccessToken("access-token"))
+			.willReturn(TokenAuthenticationResult.of(42L, "ROLE_USER"));
+
+		// when & then
+		mockMvc.perform(get("/test/mdc-member-id")
+				.header("Authorization", "Bearer access-token"))
+			.andExpect(status().isOk())
+			.andExpect(content().string("42"));
+
+		assertThat(MDC.get("memberId")).isNull();
 	}
 
 	@RestController
@@ -140,6 +165,11 @@ class SecurityWebMvcTest {
 		@GetMapping("/products")
 		public ResponseEntity<Void> products() {
 			return ResponseEntity.ok().build();
+		}
+
+		@GetMapping("/test/mdc-member-id")
+		public ResponseEntity<String> mdcMemberId() {
+			return ResponseEntity.ok(MDC.get("memberId"));
 		}
 	}
 }

@@ -171,15 +171,37 @@ log.info("결제 승인 완료 merchantPayKey={} provider={} pgPaymentId={} orde
 
 ## HTTP 요청 처리 Filter
 
+### Filter 등록 정책
+
+모든 application Filter는 `FilterRegistrationBean`으로 명시 등록되며 `Ordered` 기반 order를 갖는다. `@Component` 자동 등록은 사용하지 않는다 — 미래 Filter 추가 시 `LOWEST_PRECEDENCE` 충돌과 암묵적 등록 순서 의존을 회피하기 위해.
+
 | Filter | 클래스 | Order |
 |--------|--------|-------|
 | **TraceIdFilter** | `com.commerce.common.log.filter.TraceIdFilter` | `Ordered.HIGHEST_PRECEDENCE + 10` |
 | **AccessLogFilter** | `com.commerce.common.log.filter.AccessLogFilter` | `Ordered.HIGHEST_PRECEDENCE + 20` |
-| JwtAuthenticationFilter | `com.commerce.security.filter.JwtAuthenticationFilter` | `Ordered.LOWEST_PRECEDENCE` |
+| **JwtAuthenticationFilter** | `com.commerce.security.filter.JwtAuthenticationFilter` | `Ordered.HIGHEST_PRECEDENCE + 30` |
 
-`TraceIdFilter`는 `FilterRegistrationBean`으로 등록된다. 모든 요청(`/*`)에 UUID traceId를 발급해 MDC `traceId` 키에 push하고, 응답 헤더 `X-Trace-Id`에 추가한다. `JwtAuthenticationFilter`보다 먼저 실행되므로 인증 실패 로그에도 traceId가 포함된다.
+`TraceIdFilter`는 모든 요청(`/*`)에 UUID traceId를 발급해 MDC `traceId` 키에 push하고, 응답 헤더 `X-Trace-Id`에 추가한다. `JwtAuthenticationFilter`보다 먼저 실행되므로 인증 실패 로그에도 traceId가 포함된다.
 
-`AccessLogFilter`는 `FilterRegistrationBean`(`AccessLogFilterConfig`)으로 등록된다. 모든 요청(`/*`)에 대해 요청 시작/종료 INFO 로그 2건(method, path, status, latency)을 남긴다. traceId/memberId는 직접 부착하지 않고 MDC를 통해 logback 패턴이 자동 부착한다. `JwtAuthenticationFilter` 이전에 실행되므로 미인증 요청에도 액세스 로그가 남으며, memberId는 인증 이후 채워지므로 시작 로그 시점에는 빈 값일 수 있다.
+`AccessLogFilter`는 모든 요청(`/*`)에 대해 요청 시작/종료 INFO 로그 2건(method, path, status, latency)을 남긴다. traceId/memberId는 직접 부착하지 않고 MDC를 통해 logback 패턴이 자동 부착한다. `JwtAuthenticationFilter` 이전에 실행되므로 미인증 요청에도 액세스 로그가 남으며, "요청 시작" 로그 시점에는 memberId가 빈 값이다.
+
+`JwtAuthenticationFilter`(`JwtAuthenticationFilterConfig`)는 인증이 필요한 경로의 Bearer 토큰을 검증해 `AuthenticationContext`에 인증 결과를 저장한다.
+
+### memberId MDC 전파
+
+인증된 요청에서 `memberId`가 도메인 로그(Controller/Service/Repository)와 access log "요청 종료"에 모두 포함된다.
+
+- `JwtAuthenticationFilter`가 인증 성공 시 `MDC.put("memberId", ...)` — 이후 Controller/Service/Repository 로그에 자동 포함.
+- 동시에 `request.setAttribute(AccessLogFilter.MEMBER_ID_ATTRIBUTE, memberId)` — `AccessLogFilter` finally에 전달.
+- `AccessLogFilter` finally가 attribute에서 읽어 "요청 종료" 로그 출력 시점에만 MDC를 잠깐 채우고 출력 후 제거.
+
+이 방식을 쓰는 이유: `AccessLogFilter`는 인증 실패(401) 요청의 access log도 남겨야 하므로 `JwtAuthenticationFilter`보다 바깥 Filter여야 한다. `AccessLogFilter` finally 시점엔 `AuthenticationContext.clear()`가 이미 호출된 상태이므로, request attribute로 명시 전달이 필요하다. 상세 흐름은 `docs/tasks/memberid-mdc-propagation/architecture.md` 참조.
+
+비인증 요청·인증 실패 요청에는 모든 로그의 memberId가 빈 값으로 유지된다.
+
+### MDC 키 정리 규약
+
+각 Filter는 자신이 push한 MDC 키만 `MDC.remove(KEY)`로 제거한다. `MDC.clear()` 호출 금지 — 다른 Filter가 push한 키(traceId 등)를 함께 날리는 위험.
 
 ---
 
