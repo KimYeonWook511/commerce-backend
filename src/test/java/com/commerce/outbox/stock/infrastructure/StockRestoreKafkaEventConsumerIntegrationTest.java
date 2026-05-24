@@ -47,6 +47,7 @@ import org.springframework.test.context.DynamicPropertySource;
 import org.springframework.test.context.TestPropertySource;
 import org.springframework.test.context.bean.override.mockito.MockitoBean;
 
+import com.commerce.common.log.kafka.TraceIdKafkaConfig;
 import com.commerce.outbox.domain.OutboxAggregateType;
 import com.commerce.outbox.domain.OutboxEventType;
 import com.commerce.outbox.infrastructure.OutboxRelayMessage;
@@ -101,6 +102,7 @@ class StockRestoreKafkaEventConsumerIntegrationTest {
 		BatchAutoConfiguration.class
 	})
 	@Import({
+		TraceIdKafkaConfig.class,
 		StockRestoreKafkaEventConsumer.class,
 		StockRestoreKafkaConsumerConfig.class
 	})
