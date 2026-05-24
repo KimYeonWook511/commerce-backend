@@ -203,6 +203,34 @@ log.info("결제 승인 완료 merchantPayKey={} provider={} pgPaymentId={} orde
 
 각 Filter는 자신이 push한 MDC 키만 `MDC.remove(KEY)`로 제거한다. `MDC.clear()` 호출 금지 — 다른 Filter가 push한 키(traceId 등)를 함께 날리는 위험.
 
+### 비동기 경계와 traceId 전파
+
+HTTP 요청 단위 traceId는 `TraceIdFilter`가 MDC에 push하지만, 비동기 경계에서는 스레드 로컬인 MDC가 자동 전파되지 않는다.
+
+#### Kafka 경계
+
+```
+HTTP 요청 → TraceIdFilter → MDC.put("traceId", uuid)
+   ↓
+StockRestoreKafkaEventProducer.send()
+   ↓
+TraceIdKafkaProducerInterceptor.onSend()
+  headers.add("X-Trace-Id", MDC.get("traceId") or 신규 UUID)
+   ↓
+[Kafka broker: stock-restore-events topic]
+   ↓
+TraceIdRecordInterceptor.intercept()
+  MDC.put("traceId", headers.get("X-Trace-Id"))
+   ↓
+StockRestoreKafkaEventConsumer.consume()
+  [동일 traceId로 로그 출력]
+   ↓
+TraceIdRecordInterceptor.afterRecord()
+  MDC.remove("traceId")  ← error handler·DLT 발행 완료 후 실행
+```
+
+outbox relay 스케줄러는 HTTP 요청 컨텍스트가 없으므로 publish 시 신규 UUID가 발급된다. 원 HTTP 요청 traceId와의 연결은 OutboxEvent 컬럼 추가 별도 후속 작업이다.
+
 ---
 
 ## 예외 처리 정책

@@ -98,3 +98,9 @@
 - **배경**: 주요 API의 성능을 정량적으로 측정한 데이터가 부재했고, 부하 시나리오의 정량 검증 수단이 필요했다. 운영 환경 모니터링·CI 통합은 별도 트랙으로 분리한다.
 - **이유**: k6는 JavaScript로 시나리오를 표현해 가독성이 높고 `thresholds`로 SLO를 정량 검증할 수 있다. InfluxDB(1.8)는 k6 native output과 호환성이 검증돼 있으며(별도 xk6 빌드 불필요), Grafana 공식 k6 대시보드 템플릿(#2587)을 그대로 활용할 수 있어 시각화 도입 비용이 낮다. 대안 도구(JMeter, Gatling)는 GUI/XML 설정 부담 또는 Scala 학습 비용이 더 크다.
 - **트레이드오프**: 부하 테스트 결과는 로컬 환경 사양에 의존하므로 절대 수치보다는 개선 전후의 상대 비교가 주된 활용 방식이다. CI 자동 실행·운영 환경 측정은 본 결정 범위 밖이며 후속 과제로 둔다.
+
+### ADR-017: Kafka traceId 전파는 ProducerInterceptor + RecordInterceptor 조합으로 구현한다
+- **결정**: Kafka producer가 메시지를 발행할 때 `TraceIdKafkaProducerInterceptor`가 MDC `traceId`를 헤더 `X-Trace-Id`에 부착하고, consumer가 수신할 때 `TraceIdRecordInterceptor`가 헤더에서 traceId를 추출해 MDC에 push한다.
+- **배경**: HTTP 요청 단위 traceId(이슈 #129, traceid-mdc-filter)가 Kafka 경계에서 단절되어 producer-consumer 흐름 추적이 불가능했다. 해결 방법으로 (A) 헤더 직접 부착(producer/consumer 코드 수정), (B) Spring Kafka 표준 확장점(ProducerInterceptor + RecordInterceptor)을 비교했다.
+- **이유**: (B)가 producer/consumer 코드 시그니처를 무손상으로 유지하고, 향후 추가되는 producer/consumer에도 자동 적용된다. `DefaultKafkaProducerFactoryCustomizer` Bean 등록 방식은 `application.yml` 프로퍼티 방식 대비 프로파일별 누락 위험이 없다. `RecordInterceptor.afterRecord()` 콜백은 error handler·DLT 발행까지 완료된 이후 호출되므로 MDC 정리 시점이 보장된다.
+- **트레이드오프**: outbox relay 스케줄러 → consumer 흐름에서 원 HTTP 요청 traceId와 consumer 로그가 연결되지 않는다. 이 연결은 OutboxEvent에 traceId 컬럼 추가가 필요하며 별도 후속 작업으로 분리된다. 상세는 `docs/tasks/kafka-trace-propagation/adr.md` 참조.

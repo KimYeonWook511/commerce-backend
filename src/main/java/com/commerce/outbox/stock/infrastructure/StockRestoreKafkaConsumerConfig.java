@@ -15,6 +15,7 @@ import org.springframework.kafka.listener.DefaultErrorHandler;
 import org.springframework.kafka.support.ExponentialBackOffWithMaxRetries;
 
 import com.commerce.common.kafka.exception.KafkaConsumeNonRetryableException;
+import com.commerce.common.log.kafka.TraceIdRecordInterceptor;
 
 import lombok.extern.slf4j.Slf4j;
 
@@ -77,11 +78,13 @@ public class StockRestoreKafkaConsumerConfig {
 	public ConcurrentKafkaListenerContainerFactory<Object, Object> stockRestoreKafkaListenerContainerFactory(
 		ConcurrentKafkaListenerContainerFactoryConfigurer configurer,
 		ConsumerFactory<Object, Object> consumerFactory,
-		DefaultErrorHandler stockRestoreKafkaErrorHandler
+		DefaultErrorHandler stockRestoreKafkaErrorHandler,
+		TraceIdRecordInterceptor traceIdRecordInterceptor
 	) {
 		ConcurrentKafkaListenerContainerFactory<Object, Object> factory =
 			new ConcurrentKafkaListenerContainerFactory<>();
 		configurer.configure(factory, consumerFactory);
+		factory.setRecordInterceptor(traceIdRecordInterceptor);
 		factory.setCommonErrorHandler(stockRestoreKafkaErrorHandler);
 		// 개별 메시지 단위로 ack 처리하여 실패 영향 범위를 줄인다.
 		factory.getContainerProperties().setAckMode(ContainerProperties.AckMode.RECORD);
