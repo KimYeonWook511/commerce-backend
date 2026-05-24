@@ -1,0 +1,10 @@
+{
+  "project": "kafka-trace-propagation",
+  "phase": "0-impl",
+  "steps": [
+    { "step": 1, "name": "kafka-trace-interceptors", "status": "pending" },
+    { "step": 2, "name": "kafka-trace-integration-test", "status": "pending" },
+    { "step": 3, "name": "sync-root-docs", "status": "pending" },
+    { "step": 4, "name": "write-retrospective", "status": "pending" }
+  ]
+}
