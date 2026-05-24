@@ -17,11 +17,12 @@ public class TraceIdKafkaConfig {
 
 	@Bean
 	public DefaultKafkaProducerFactoryCustomizer traceIdKafkaProducerFactoryCustomizer() {
-		return producerFactory -> producerFactory.updateConfigs(
-			Map.of(
-				ProducerConfig.INTERCEPTOR_CLASSES_CONFIG,
-				TraceIdKafkaProducerInterceptor.class.getName()
-			)
-		);
+		return producerFactory -> {
+			Object existing = producerFactory.getConfigurationProperties()
+				.get(ProducerConfig.INTERCEPTOR_CLASSES_CONFIG);
+			String interceptorName = TraceIdKafkaProducerInterceptor.class.getName();
+			String newValue = (existing == null) ? interceptorName : existing + "," + interceptorName;
+			producerFactory.updateConfigs(Map.of(ProducerConfig.INTERCEPTOR_CLASSES_CONFIG, newValue));
+		};
 	}
 }
