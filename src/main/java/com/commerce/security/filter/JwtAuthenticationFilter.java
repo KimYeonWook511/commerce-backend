@@ -64,9 +64,10 @@ public class JwtAuthenticationFilter extends OncePerRequestFilter {
 			TokenAuthenticationResult principal = tokenAuthenticationService.authenticateAccessToken(token);
 
 			// memberId, role Context에 저장
-			AuthenticationContext.set(principal.getMemberId(), principal.getRole());
-			MDC.put("memberId", String.valueOf(principal.getMemberId()));
-			request.setAttribute(AccessLogFilter.MEMBER_ID_ATTRIBUTE, principal.getMemberId());
+			Long memberId = principal.getMemberId();
+			AuthenticationContext.set(memberId, principal.getRole());
+			MDC.put(AccessLogFilter.MEMBER_ID_MDC_KEY, String.valueOf(memberId));
+			request.setAttribute(AccessLogFilter.MEMBER_ID_ATTRIBUTE, memberId);
 
 			filterChain.doFilter(request, response);
 
@@ -77,7 +78,7 @@ public class JwtAuthenticationFilter extends OncePerRequestFilter {
 		} finally {
 			// 반드시 정리
 			AuthenticationContext.clear();
-			MDC.remove("memberId");
+			MDC.remove(AccessLogFilter.MEMBER_ID_MDC_KEY);
 		}
 	}
 
