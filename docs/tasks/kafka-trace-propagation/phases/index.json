@@ -2,8 +2,9 @@
   "phases": [
     {
       "dir": "0-impl",
-      "status": "in_progress",
-      "started_at": "2026-05-24T23:40:29+0900"
+      "status": "completed",
+      "started_at": "2026-05-24T23:40:29+0900",
+      "completed_at": "2026-05-25T00:03:31+0900"
     }
   ]
 }
