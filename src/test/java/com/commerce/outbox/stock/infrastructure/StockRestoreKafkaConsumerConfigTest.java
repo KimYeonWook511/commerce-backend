@@ -17,6 +17,8 @@ import org.springframework.kafka.listener.ContainerProperties;
 import org.springframework.kafka.listener.DefaultErrorHandler;
 import org.springframework.test.util.ReflectionTestUtils;
 
+import com.commerce.common.log.kafka.TraceIdRecordInterceptor;
+
 @ExtendWith(MockitoExtension.class)
 class StockRestoreKafkaConsumerConfigTest {
 
@@ -45,7 +47,7 @@ class StockRestoreKafkaConsumerConfigTest {
 
 		// when
 		ConcurrentKafkaListenerContainerFactory<Object, Object> factory =
-			config.stockRestoreKafkaListenerContainerFactory(configurer, consumerFactory, errorHandler);
+			config.stockRestoreKafkaListenerContainerFactory(configurer, consumerFactory, errorHandler, new TraceIdRecordInterceptor());
 
 		// then
 		then(configurer).should().configure(factory, consumerFactory);
