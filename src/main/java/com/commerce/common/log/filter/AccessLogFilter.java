@@ -17,6 +17,7 @@ import lombok.extern.slf4j.Slf4j;
 public class AccessLogFilter extends OncePerRequestFilter {
 
 	public static final String MEMBER_ID_ATTRIBUTE = "AccessLogFilter.memberId";
+	public static final String MEMBER_ID_MDC_KEY = "memberId";
 
 	@Override
 	protected void doFilterInternal(
@@ -37,14 +38,14 @@ public class AccessLogFilter extends OncePerRequestFilter {
 			Object memberId = request.getAttribute(MEMBER_ID_ATTRIBUTE);
 			boolean pushed = false;
 			if (memberId != null) {
-				MDC.put("memberId", String.valueOf(memberId));
+				MDC.put(MEMBER_ID_MDC_KEY, String.valueOf(memberId));
 				pushed = true;
 			}
 			try {
 				log.info("요청 종료 status={} latency={}ms", status, durationMs);
 			} finally {
 				if (pushed) {
-					MDC.remove("memberId");
+					MDC.remove(MEMBER_ID_MDC_KEY);
 				}
 			}
 		}
