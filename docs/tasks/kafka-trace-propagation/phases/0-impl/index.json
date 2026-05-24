@@ -13,7 +13,10 @@
     {
       "step": 2,
       "name": "kafka-trace-integration-test",
-      "status": "pending"
+      "status": "completed",
+      "started_at": "2026-05-24T23:43:54+0900",
+      "summary": "TraceIdKafkaPropagationIntegrationTest를 신규 생성한다. 시나리오 A(MDC traceId → consumer 동일값), B(MDC 없을 때 신규 UUID 발급, 헤더 일치), C(success() 후 MDC 정리 검증), D(KafkaConsumeNonRetryableException 시 failure() 후 MDC 정리 검증) 4개 시나리오 모두 통과. StockRestoreKafkaEventConsumerIntegrationTest의 누락된 TraceIdKafkaConfig import를 복원해 기존 테스트 회귀를 수정한다.",
+      "completed_at": "2026-05-24T23:55:23+0900"
     },
     {
       "step": 3,
