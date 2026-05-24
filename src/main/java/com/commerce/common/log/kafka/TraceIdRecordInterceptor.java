@@ -47,7 +47,7 @@ public class TraceIdRecordInterceptor implements RecordInterceptor<Object, Objec
 
 	private String resolveTraceId(ConsumerRecord<Object, Object> record) {
 		Header header = record.headers().lastHeader(TRACE_ID_HEADER);
-		if (header != null) {
+		if (header != null && header.value() != null) {
 			String value = new String(header.value(), StandardCharsets.UTF_8);
 			if (VALID_TRACE_ID.matcher(value).matches()) {
 				return value;
