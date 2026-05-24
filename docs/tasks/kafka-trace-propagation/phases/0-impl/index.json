@@ -21,7 +21,10 @@
     {
       "step": 3,
       "name": "sync-root-docs",
-      "status": "pending"
+      "status": "completed",
+      "started_at": "2026-05-24T23:57:35+0900",
+      "summary": "docs/ADR.md에 ADR-017(Kafka traceId 전파 설계 결정) 항목을 추가하고, docs/logging-conventions.md §8 비동기·이벤트 경계 절을 Kafka 구현 완료 내용으로 갱신하고, docs/architecture.md HTTP 요청 처리 Filter 절에 비동기 경계와 traceId 전파 서브섹션을 신규 추가한다. 기존 테스트 통과.",
+      "completed_at": "2026-05-24T23:59:36+0900"
     },
     {
       "step": 4,

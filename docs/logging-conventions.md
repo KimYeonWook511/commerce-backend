@@ -188,7 +188,19 @@ Filter가 요청 진입 시 다음을 MDC에 push한다.
 `orderId`, `paymentId` 등 도메인 식별자는 유스케이스 진입 시 push하고 종료 시 remove한다. 도메인별로 후속 작업에서 확장된다.
 
 ### 비동기·이벤트 경계의 traceId 전파
-`@Async`, Kafka consumer, `@TransactionalEventListener(AFTER_COMMIT)` 등에서는 호출 스레드의 MDC가 자동 전파되지 않는다. 구체적인 전파 방식(`TaskDecorator`, header propagation 등)은 별도 후속 작업에서 다룬다.
+
+#### Kafka 경계 (구현 완료)
+
+Kafka producer/consumer 경계는 `ProducerInterceptor` + `RecordInterceptor` 조합으로 traceId를 전파한다.
+
+- **producer**: `TraceIdKafkaProducerInterceptor.onSend()`가 MDC `traceId`를 헤더 `X-Trace-Id`에 부착. MDC에 유효한 traceId가 없으면 신규 UUID 발급.
+- **consumer**: `TraceIdRecordInterceptor.intercept()`가 헤더 `X-Trace-Id`를 읽어 MDC에 push. 헤더가 없거나 유효하지 않으면 신규 UUID 발급. `success`/`failure` 콜백에서 `MDC.remove("traceId")`로 정리.
+- **등록**: `TraceIdKafkaConfig` — `DefaultKafkaProducerFactoryCustomizer` Bean(producer factory) + `TraceIdRecordInterceptor` Bean(consumer factory 주입)
+- **DLT**: `DeadLetterPublishingRecoverer`가 동일 KafkaTemplate을 사용하므로 DLT 발행 시에도 traceId 헤더 자동 전파.
+
+#### @Async, @TransactionalEventListener 경계 (미구현)
+
+`@Async` 및 `@TransactionalEventListener(AFTER_COMMIT)`의 비동기 전환 시 MDC 전파는 별도 후속 작업에서 다룬다(`TaskDecorator`, `ApplicationEventMulticaster` wrapping 등).
 
 ## 9. 포맷 정책
 
