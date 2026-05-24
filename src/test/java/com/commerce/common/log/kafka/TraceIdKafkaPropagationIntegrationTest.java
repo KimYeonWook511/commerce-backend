@@ -1,13 +1,11 @@
 package com.commerce.common.log.kafka;
 
 import static org.assertj.core.api.Assertions.assertThat;
-import static org.awaitility.Awaitility.await;
 import static org.mockito.ArgumentMatchers.any;
+import static org.mockito.Mockito.doAnswer;
 import static org.mockito.Mockito.reset;
-import static org.mockito.Mockito.verify;
 
 import java.nio.charset.StandardCharsets;
-import java.time.Duration;
 import java.util.UUID;
 import java.util.concurrent.CountDownLatch;
 import java.util.concurrent.TimeUnit;
@@ -181,23 +179,41 @@ class TraceIdKafkaPropagationIntegrationTest {
 		assertThat(testConsumer.capturedHeader.get()).isEqualTo(consumedTraceId);
 	}
 
-	@DisplayName("consume 완료 후 success() 콜백에서 MDC traceId가 제거된다")
+	@DisplayName("consume 완료 후 afterRecord() 콜백에서 MDC traceId가 제거된다 (success 경로)")
 	@Test
 	void success_afterConsume_traceIdRemovedFromMdc() throws Exception {
+		// afterRecord() 실행 시점에 consumer 스레드에서 MDC 값을 직접 캡처한다
+		CountDownLatch cleanupLatch = new CountDownLatch(1);
+		AtomicReference<String> mdcAfterCleanup = new AtomicReference<>("NOT_CAPTURED");
+		doAnswer(invocation -> {
+			invocation.callRealMethod();
+			mdcAfterCleanup.set(MDC.get("traceId"));
+			cleanupLatch.countDown();
+			return null;
+		}).when(traceIdRecordInterceptor).afterRecord(any(), any());
+
 		// when
 		kafkaTemplate.send(TOPIC, "msg-c").get(5, TimeUnit.SECONDS);
 		assertThat(testConsumer.latch.await(5, TimeUnit.SECONDS)).isTrue();
 
-		// then - success() 호출 후 MDC traceId 정리 검증
-		await().atMost(Duration.ofSeconds(5)).untilAsserted(() ->
-			verify(traceIdRecordInterceptor).success(any(), any())
-		);
-		assertThat(MDC.get("traceId")).isNull();
+		// then - consumer 스레드에서 afterRecord() 이후 MDC가 비어있어야 한다
+		assertThat(cleanupLatch.await(5, TimeUnit.SECONDS)).isTrue();
+		assertThat(mdcAfterCleanup.get()).isNull();
 	}
 
-	@DisplayName("KafkaConsumeNonRetryableException 발생 시 failure() 콜백에서 MDC traceId가 제거된다")
+	@DisplayName("KafkaConsumeNonRetryableException 발생 시 afterRecord() 콜백에서 MDC traceId가 제거된다 (failure 경로)")
 	@Test
 	void failure_whenNonRetryableException_traceIdRemovedFromMdc() throws Exception {
+		// afterRecord() 실행 시점에 consumer 스레드에서 MDC 값을 직접 캡처한다
+		CountDownLatch cleanupLatch = new CountDownLatch(1);
+		AtomicReference<String> mdcAfterCleanup = new AtomicReference<>("NOT_CAPTURED");
+		doAnswer(invocation -> {
+			invocation.callRealMethod();
+			mdcAfterCleanup.set(MDC.get("traceId"));
+			cleanupLatch.countDown();
+			return null;
+		}).when(traceIdRecordInterceptor).afterRecord(any(), any());
+
 		// given
 		testConsumer.shouldThrow = true;
 
@@ -205,12 +221,10 @@ class TraceIdKafkaPropagationIntegrationTest {
 		kafkaTemplate.send(TOPIC, "msg-d").get(5, TimeUnit.SECONDS);
 		assertThat(testConsumer.latch.await(5, TimeUnit.SECONDS)).isTrue();
 
-		// then - failure() 호출 후 MDC traceId 정리 검증
+		// then - consume 시점엔 MDC가 있어야 하고, afterRecord() 이후 비어있어야 한다
 		assertThat(testConsumer.capturedMdc.get()).isNotNull();
-		await().atMost(Duration.ofSeconds(10)).untilAsserted(() ->
-			verify(traceIdRecordInterceptor).failure(any(), any(), any())
-		);
-		assertThat(MDC.get("traceId")).isNull();
+		assertThat(cleanupLatch.await(10, TimeUnit.SECONDS)).isTrue();
+		assertThat(mdcAfterCleanup.get()).isNull();
 	}
 
 	private void waitForListenerAssignment() {
