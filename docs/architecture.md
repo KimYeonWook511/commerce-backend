@@ -225,8 +225,8 @@ TraceIdRecordInterceptor.intercept()
 StockRestoreKafkaEventConsumer.consume()
   [동일 traceId로 로그 출력]
    ↓
-TraceIdRecordInterceptor.success()/failure()
-  MDC.remove("traceId")
+TraceIdRecordInterceptor.afterRecord()
+  MDC.remove("traceId")  ← error handler·DLT 발행 완료 후 실행
 ```
 
 outbox relay 스케줄러는 HTTP 요청 컨텍스트가 없으므로 publish 시 신규 UUID가 발급된다. 원 HTTP 요청 traceId와의 연결은 OutboxEvent 컬럼 추가 별도 후속 작업이다.

@@ -23,7 +23,7 @@ Kafka producer/consumer 경계에서 traceId 연속성을 확보하는 방법으
 
 - **producer/consumer 코드 시그니처 무손상**: `StockRestoreKafkaEventProducer`, `StockRestoreKafkaEventConsumer` 수정 없음. 향후 producer/consumer가 추가돼도 자동 적용.
 - **단일 소스 보장**: `DefaultKafkaProducerFactoryCustomizer` Bean은 Spring Boot autoconfigure의 단일 ProducerFactory에만 적용된다. `application.yml` 프로퍼티 방식은 프로파일별 누락 위험이 있다.
-- **RecordInterceptor success/failure 콜백**: Spring Kafka 2.7+ 계약상 하나만 호출되므로 MDC 정리를 안전하게 보장한다.
+- **RecordInterceptor afterRecord() 콜백**: error handler·DLT 발행까지 완료된 이후 호출되므로 MDC 정리 시점을 안전하게 보장한다.
 
 ## 결과
 

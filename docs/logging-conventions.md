@@ -194,7 +194,7 @@ Filter가 요청 진입 시 다음을 MDC에 push한다.
 Kafka producer/consumer 경계는 `ProducerInterceptor` + `RecordInterceptor` 조합으로 traceId를 전파한다.
 
 - **producer**: `TraceIdKafkaProducerInterceptor.onSend()`가 MDC `traceId`를 헤더 `X-Trace-Id`에 부착. MDC에 유효한 traceId가 없으면 신규 UUID 발급.
-- **consumer**: `TraceIdRecordInterceptor.intercept()`가 헤더 `X-Trace-Id`를 읽어 MDC에 push. 헤더가 없거나 유효하지 않으면 신규 UUID 발급. `success`/`failure` 콜백에서 `MDC.remove("traceId")`로 정리.
+- **consumer**: `TraceIdRecordInterceptor.intercept()`가 헤더 `X-Trace-Id`를 읽어 MDC에 push. 헤더가 없거나 유효하지 않으면 신규 UUID 발급. `afterRecord()` 콜백에서 `MDC.remove("traceId")`로 정리 (error handler·DLT 발행 완료 이후 실행 보장).
 - **등록**: `TraceIdKafkaConfig` — `DefaultKafkaProducerFactoryCustomizer` Bean(producer factory) + `TraceIdRecordInterceptor` Bean(consumer factory 주입)
 - **DLT**: `DeadLetterPublishingRecoverer`가 동일 KafkaTemplate을 사용하므로 DLT 발행 시에도 traceId 헤더 자동 전파.
 
