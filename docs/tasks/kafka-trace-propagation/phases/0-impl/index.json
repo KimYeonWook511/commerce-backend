@@ -2,9 +2,29 @@
   "project": "kafka-trace-propagation",
   "phase": "0-impl",
   "steps": [
-    { "step": 1, "name": "kafka-trace-interceptors", "status": "pending" },
-    { "step": 2, "name": "kafka-trace-integration-test", "status": "pending" },
-    { "step": 3, "name": "sync-root-docs", "status": "pending" },
-    { "step": 4, "name": "write-retrospective", "status": "pending" }
-  ]
+    {
+      "step": 1,
+      "name": "kafka-trace-interceptors",
+      "status": "completed",
+      "started_at": "2026-05-24T23:40:29+0900",
+      "summary": "TraceIdKafkaProducerInterceptor, TraceIdRecordInterceptor, TraceIdKafkaConfig를 신규 생성하고 StockRestoreKafkaConsumerConfig에 TraceIdRecordInterceptor를 주입한다. 기존 테스트 수정 후 ./gradlew test 통과.",
+      "completed_at": "2026-05-24T23:42:26+0900"
+    },
+    {
+      "step": 2,
+      "name": "kafka-trace-integration-test",
+      "status": "pending"
+    },
+    {
+      "step": 3,
+      "name": "sync-root-docs",
+      "status": "pending"
+    },
+    {
+      "step": 4,
+      "name": "write-retrospective",
+      "status": "pending"
+    }
+  ],
+  "created_at": "2026-05-24T23:40:29+0900"
 }

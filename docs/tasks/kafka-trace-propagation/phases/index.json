@@ -1,5 +1,9 @@
 {
   "phases": [
-    { "dir": "0-impl", "status": "pending" }
+    {
+      "dir": "0-impl",
+      "status": "in_progress",
+      "started_at": "2026-05-24T23:40:29+0900"
+    }
   ]
 }
