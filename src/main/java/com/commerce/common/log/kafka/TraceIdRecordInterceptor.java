@@ -28,7 +28,6 @@ public class TraceIdRecordInterceptor implements RecordInterceptor<Object, Objec
 
 	@Override
 	public void success(ConsumerRecord<Object, Object> record, Consumer<Object, Object> consumer) {
-		MDC.remove(TRACE_ID_MDC_KEY);
 	}
 
 	@Override
@@ -37,6 +36,12 @@ public class TraceIdRecordInterceptor implements RecordInterceptor<Object, Objec
 		Exception exception,
 		Consumer<Object, Object> consumer
 	) {
+		// MDC 정리는 error handler 이후 호출되는 afterRecord()에서 수행한다.
+		// 여기서 제거하면 DefaultErrorHandler와 DeadLetterPublishingRecoverer 실행 시 traceId가 누락된다.
+	}
+
+	@Override
+	public void afterRecord(ConsumerRecord<Object, Object> record, Consumer<Object, Object> consumer) {
 		MDC.remove(TRACE_ID_MDC_KEY);
 	}
 
