@@ -136,8 +136,8 @@ class AccessLogFilterTest {
 		filter.doFilter(request, response, chain);
 
 		ILoggingEvent endLog = listAppender.list.get(1);
-		assertThat(endLog.getMDCPropertyMap().get("memberId")).isNull();
-		assertThat(MDC.get("memberId")).isNull();
+		assertThat(endLog.getMDCPropertyMap().get(AccessLogFilter.MEMBER_ID_MDC_KEY)).isNull();
+		assertThat(MDC.get(AccessLogFilter.MEMBER_ID_MDC_KEY)).isNull();
 	}
 
 	@DisplayName("MEMBER_ID_ATTRIBUTE가 set된 요청은 요청 종료 로그의 MDC에 memberId가 포함되고 이후 제거된다")
@@ -151,8 +151,8 @@ class AccessLogFilterTest {
 		filter.doFilter(request, response, chain);
 
 		ILoggingEvent endLog = listAppender.list.get(1);
-		assertThat(endLog.getMDCPropertyMap().get("memberId")).isEqualTo("42");
-		assertThat(MDC.get("memberId")).isNull();
+		assertThat(endLog.getMDCPropertyMap().get(AccessLogFilter.MEMBER_ID_MDC_KEY)).isEqualTo("42");
+		assertThat(MDC.get(AccessLogFilter.MEMBER_ID_MDC_KEY)).isNull();
 	}
 
 	@DisplayName("chain 예외 시에도 MEMBER_ID_ATTRIBUTE가 set된 경우 MDC.remove가 보장된다")
@@ -168,7 +168,7 @@ class AccessLogFilterTest {
 		assertThatThrownBy(() -> filter.doFilter(request, response, chain))
 			.isInstanceOf(ServletException.class);
 
-		assertThat(MDC.get("memberId")).isNull();
+		assertThat(MDC.get(AccessLogFilter.MEMBER_ID_MDC_KEY)).isNull();
 	}
 
 	@DisplayName("MEMBER_ID_ATTRIBUTE가 없는 요청 종료 후 MDC에 memberId 잔류가 없다")
@@ -180,6 +180,6 @@ class AccessLogFilterTest {
 
 		filter.doFilter(request, response, chain);
 
-		assertThat(MDC.get("memberId")).isNull();
+		assertThat(MDC.get(AccessLogFilter.MEMBER_ID_MDC_KEY)).isNull();
 	}
 }
