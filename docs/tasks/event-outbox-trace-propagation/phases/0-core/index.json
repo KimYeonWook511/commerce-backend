@@ -2,9 +2,39 @@
   "project": "event-outbox-trace-propagation",
   "phase": "0-core",
   "steps": [
-    { "step": 1, "name": "transactional-event-trace", "status": "pending" },
-    { "step": 2, "name": "outbox-trace-propagation", "status": "pending" },
-    { "step": 3, "name": "sync-root-docs", "status": "pending" },
-    { "step": 4, "name": "write-retrospective", "status": "pending" }
-  ]
+    {
+      "step": 1,
+      "name": "transactional-event-trace",
+      "status": "completed",
+      "started_at": "2026-05-27T00:20:47+0900",
+      "summary": "OrderIdempotencyCacheEvent에 traceId 필드를 추가하고, OrderCreateProcessor가 LogContext.getTraceId()를 이벤트에 동봉한다. RedisOrderIdempotencyStore.handle()이 유효한 traceId만 MDC에 push하고 finally에서 LogContext.removeTraceId()로 정리한다. OrderCreateProcessorTest에 traceId 동봉/미동봉 케이스를 추가하고, RedisOrderIdempotencyStoreTest를 신설해 MDC push·remove 동작을 검증한다.",
+      "completed_at": "2026-05-27T00:23:42+0900"
+    },
+    {
+      "step": 2,
+      "name": "outbox-trace-propagation",
+      "status": "completed",
+      "started_at": "2026-05-27T00:25:13+0900",
+      "summary": "OutboxEvent에 traceId 필드(VARCHAR(64), nullable)와 OutboxPublishTarget.getTraceId()를 추가하고, JpaOutboxEventRepository의 pending/retryable Projection 쿼리에 e.traceId as traceId를 포함시킨다. StockRestoreOutboxCreateService는 LogContext.isValidTraceId()로 검증한 MDC traceId를 outbox에 저장하고, StockRestoreOutboxRelayService.publishTarget()은 유효한 traceId만 MDC에 push한 뒤 finally에서 정리한다. JpaOutboxEventRepositoryTest의 createPending 호출에 null traceId 인자를 추가하고, StockRestoreOutboxCreateServiceTest/RelayServiceTest에 traceId 저장·MDC 복원/정리·null·invalid 케이스를 단위 테스트로 추가한다.",
+      "completed_at": "2026-05-27T00:29:52+0900"
+    },
+    {
+      "step": 3,
+      "name": "sync-root-docs",
+      "status": "completed",
+      "started_at": "2026-05-27T00:31:50+0900",
+      "summary": "docs/logging-conventions.md §8을 갱신해 @TransactionalEventListener와 Outbox 경계의 구현 완료를 반영하고 적용/미적용 경계 구분과 신규 경계 가이드를 정리한다. docs/ADR.md에 ADR-019를 추가해 본 태스크의 핵심 결정(이벤트 동봉/DB 컬럼 저장/스케줄러 미발급/null 호환)을 요약한다. docs/db-schema.md의 tbl_outbox_event에 trace_id VARCHAR(64) NULL 컬럼을 반영한다. docs/architecture.md 비동기 경계 절에 TransactionalEventListener와 Outbox 흐름 다이어그램을 추가한다.",
+      "completed_at": "2026-05-27T00:34:31+0900"
+    },
+    {
+      "step": 4,
+      "name": "write-retrospective",
+      "status": "completed",
+      "started_at": "2026-05-27T00:36:09+0900",
+      "summary": "docs/tasks/event-outbox-trace-propagation/retrospective.md를 신규 작성한다. 배경과 목표 절에서 이슈 #146의 원의도와 진행 시점 코드 상태(Kafka는 #149 선행 완료, @Async 미사용)를 정리하고 본 태스크가 @TransactionalEventListener와 Outbox 경계만 다루는 이유를 명시한다. 본 태스크의 4개 ADR 결정(이벤트 동봉/DB 컬럼 저장/스케줄러 미발급/null 호환)을 표로 압축 요약하고, step별 신규/수정 파일을 구현 범위로 정리한다. 한계와 후속 과제로 @Async·Spring Batch·incoming 신뢰 경계(#139)·스케줄러 운영 통계 로그·Multicaster wrapping 보류 사유를 가능성 표현으로 기록한다. 배운 점에서 이슈 시점 vs 진행 시점 코드 상태 차이, 스케줄러 traceId 발급의 함정, Outbox ADR 필요성, MDC null 방어 일관성, finally 정리 정책을 정리한다. ./gradlew test 통과로 기존 테스트 회귀 없음을 확인했다.",
+      "completed_at": "2026-05-27T00:38:07+0900"
+    }
+  ],
+  "created_at": "2026-05-27T00:20:47+0900",
+  "completed_at": "2026-05-27T00:39:15+0900"
 }
