@@ -6,10 +6,9 @@ import java.util.UUID;
 import org.apache.kafka.clients.consumer.Consumer;
 import org.apache.kafka.clients.consumer.ConsumerRecord;
 import org.apache.kafka.common.header.Header;
-import org.slf4j.MDC;
 import org.springframework.kafka.listener.RecordInterceptor;
 
-import com.commerce.common.log.MdcKeys;
+import com.commerce.common.log.LogContext;
 
 public class TraceIdRecordInterceptor implements RecordInterceptor<Object, Object> {
 
@@ -19,7 +18,7 @@ public class TraceIdRecordInterceptor implements RecordInterceptor<Object, Objec
 		Consumer<Object, Object> consumer
 	) {
 		String traceId = resolveTraceId(record);
-		MDC.put(MdcKeys.TRACE_ID, traceId);
+		LogContext.putTraceId(traceId);
 		return record;
 	}
 
@@ -39,14 +38,14 @@ public class TraceIdRecordInterceptor implements RecordInterceptor<Object, Objec
 
 	@Override
 	public void afterRecord(ConsumerRecord<Object, Object> record, Consumer<Object, Object> consumer) {
-		MDC.remove(MdcKeys.TRACE_ID);
+		LogContext.removeTraceId();
 	}
 
 	private String resolveTraceId(ConsumerRecord<Object, Object> record) {
-		Header header = record.headers().lastHeader(MdcKeys.TRACE_ID_HEADER);
+		Header header = record.headers().lastHeader(LogContext.TRACE_ID_HEADER);
 		if (header != null && header.value() != null) {
 			String value = new String(header.value(), StandardCharsets.UTF_8);
-			if (MdcKeys.VALID_TRACE_ID.matcher(value).matches()) {
+			if (LogContext.isValidTraceId(value)) {
 				return value;
 			}
 		}

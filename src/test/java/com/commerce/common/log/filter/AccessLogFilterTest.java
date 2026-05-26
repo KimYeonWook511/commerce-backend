@@ -22,7 +22,7 @@ import ch.qos.logback.classic.Level;
 import ch.qos.logback.classic.Logger;
 import ch.qos.logback.classic.spi.ILoggingEvent;
 import ch.qos.logback.core.read.ListAppender;
-import com.commerce.common.log.MdcKeys;
+import com.commerce.common.log.LogContext;
 import jakarta.servlet.FilterChain;
 import jakarta.servlet.ServletException;
 
@@ -137,8 +137,8 @@ class AccessLogFilterTest {
 		filter.doFilter(request, response, chain);
 
 		ILoggingEvent endLog = listAppender.list.get(1);
-		assertThat(endLog.getMDCPropertyMap().get(MdcKeys.MEMBER_ID)).isNull();
-		assertThat(MDC.get(MdcKeys.MEMBER_ID)).isNull();
+		assertThat(endLog.getMDCPropertyMap().get("memberId")).isNull();
+		assertThat(LogContext.getMemberId()).isNull();
 	}
 
 	@DisplayName("MEMBER_ID_ATTRIBUTE가 set된 요청은 요청 종료 로그의 MDC에 memberId가 포함되고 이후 제거된다")
@@ -152,8 +152,8 @@ class AccessLogFilterTest {
 		filter.doFilter(request, response, chain);
 
 		ILoggingEvent endLog = listAppender.list.get(1);
-		assertThat(endLog.getMDCPropertyMap().get(MdcKeys.MEMBER_ID)).isEqualTo("42");
-		assertThat(MDC.get(MdcKeys.MEMBER_ID)).isNull();
+		assertThat(endLog.getMDCPropertyMap().get("memberId")).isEqualTo("42");
+		assertThat(LogContext.getMemberId()).isNull();
 	}
 
 	@DisplayName("chain 예외 시에도 MEMBER_ID_ATTRIBUTE가 set된 경우 MDC.remove가 보장된다")
@@ -169,7 +169,7 @@ class AccessLogFilterTest {
 		assertThatThrownBy(() -> filter.doFilter(request, response, chain))
 			.isInstanceOf(ServletException.class);
 
-		assertThat(MDC.get(MdcKeys.MEMBER_ID)).isNull();
+		assertThat(LogContext.getMemberId()).isNull();
 	}
 
 	@DisplayName("MEMBER_ID_ATTRIBUTE가 없는 요청 종료 후 MDC에 memberId 잔류가 없다")
@@ -181,6 +181,6 @@ class AccessLogFilterTest {
 
 		filter.doFilter(request, response, chain);
 
-		assertThat(MDC.get(MdcKeys.MEMBER_ID)).isNull();
+		assertThat(LogContext.getMemberId()).isNull();
 	}
 }
