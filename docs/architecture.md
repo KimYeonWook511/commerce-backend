@@ -205,7 +205,7 @@ log.info("결제 승인 완료 merchantPayKey={} provider={} pgPaymentId={} orde
 
 ### 비동기 경계와 traceId 전파
 
-HTTP 요청 단위 traceId는 `TraceIdFilter`가 MDC에 push하지만, 비동기 경계에서는 스레드 로컬인 MDC가 자동 전파되지 않는다.
+HTTP 요청 단위 traceId는 `TraceIdFilter`가 MDC에 push하지만, 비동기 경계에서는 스레드 로컬인 MDC가 자동 전파되지 않는다. 각 경계마다 명시적 전파 메커니즘이 적용된다(ADR-017, ADR-019).
 
 #### Kafka 경계
 
@@ -229,7 +229,45 @@ TraceIdRecordInterceptor.afterRecord()
   MDC.remove("traceId")  ← error handler·DLT 발행 완료 후 실행
 ```
 
-outbox relay 스케줄러는 HTTP 요청 컨텍스트가 없으므로 publish 시 신규 UUID가 발급된다. 원 HTTP 요청 traceId와의 연결은 OutboxEvent 컬럼 추가 별도 후속 작업이다.
+#### `@TransactionalEventListener(AFTER_COMMIT)` 경계
+
+이벤트 객체에 traceId 필드를 동봉해 listener가 MDC에 복원한다.
+
+```
+HTTP 요청 → TraceIdFilter → MDC.put("traceId", uuid)
+   ↓
+OrderCreateProcessor.execute()
+  publishEvent(OrderIdempotencyCacheEvent(..., traceId=LogContext.getTraceId()))
+   ↓
+[Transaction COMMIT 후 AFTER_COMMIT 단계]
+   ↓
+RedisOrderIdempotencyStore.handle(event)
+  LogContext.putTraceId(event.getTraceId())  ← 유효성 검증 후 push
+  try { complete(...) } finally { LogContext.removeTraceId() }
+```
+
+#### Outbox 경계
+
+원본 HTTP 요청의 traceId를 `tbl_outbox_event.trace_id` 컬럼에 저장한 뒤 relay 시 MDC로 복원해 Kafka 헤더로 자동 전파한다.
+
+```
+HTTP 요청 → TraceIdFilter → MDC.put("traceId", uuid)
+   ↓
+StockRestoreOutboxCreateService.createOutboxEvent(...)
+  OutboxEvent.createPending(..., traceId=LogContext.getTraceId())
+  → DB에 trace_id 저장 (유효하지 않으면 NULL)
+   ↓
+[스케줄러 실행 시점]
+   ↓
+StockRestoreOutboxRelayService.publishTarget(target, now)
+  LogContext.putTraceId(target.getTraceId())  ← NULL이면 MDC 조작 없음
+  try {
+    eventPublisher.publish(target)  ← Kafka producer interceptor가 헤더 부착
+    markSent(target)
+  } finally { LogContext.removeTraceId() }
+```
+
+Outbox 스케줄러 자체 로그는 traceId가 없다(독립 거래 배치 처리이므로 운영 통계 로그 성격). Spring Batch와 `@Async`는 정책상 적용 대상에서 제외된다. 상세 정책은 `docs/logging-conventions.md` §8 참조.
 
 ---
 

@@ -191,7 +191,9 @@ MDC 키는 `com.commerce.common.log.LogContext`에서 단일 관리한다.
 
 ### 비동기·이벤트 경계의 traceId 전파
 
-#### Kafka 경계 (구현 완료)
+#### 적용 경계 (구현 완료)
+
+##### Kafka 경계
 
 Kafka producer/consumer 경계는 `ProducerInterceptor` + `RecordInterceptor` 조합으로 traceId를 전파한다.
 
@@ -200,9 +202,43 @@ Kafka producer/consumer 경계는 `ProducerInterceptor` + `RecordInterceptor` �
 - **등록**: `TraceIdKafkaConfig` — `DefaultKafkaProducerFactoryCustomizer` Bean(producer factory) + `TraceIdRecordInterceptor` Bean(consumer factory 주입)
 - **DLT**: `DeadLetterPublishingRecoverer`가 동일 KafkaTemplate을 사용하므로 DLT 발행 시에도 traceId 헤더 자동 전파.
 
-#### @Async, @TransactionalEventListener 경계 (미구현)
+##### `@TransactionalEventListener(AFTER_COMMIT)` 경계
 
-`@Async` 및 `@TransactionalEventListener(AFTER_COMMIT)`의 비동기 전환 시 MDC 전파는 별도 후속 작업에서 다룬다(`TaskDecorator`, `ApplicationEventMulticaster` wrapping 등).
+Spring Event 경계는 이벤트 객체에 traceId를 동봉하는 방식으로 전파한다.
+
+- 이벤트 객체에 `traceId` 필드를 추가한다 (예: `OrderIdempotencyCacheEvent`).
+- publisher가 발행 시점의 `LogContext.getTraceId()`를 읽어 이벤트에 전달한다.
+- listener 진입 시 이벤트의 traceId 유효성을 검증하고 MDC에 push한다 (`LogContext.putTraceId`). `finally`에서 `LogContext.removeTraceId()`로 정리한다.
+- `@Async`와 달리 같은 스레드에서 호출되지만 트랜잭션 경계(commit phase)를 넘으므로 명시적 전파를 채택했다. 사용처가 한 곳뿐이라 `ApplicationEventMulticaster` wrapping은 과한 추상화로 판단했다 (ADR-019 참조).
+
+##### Outbox 경계
+
+Outbox relay 스케줄러는 HTTP 요청 컨텍스트가 없으므로, 원본 HTTP 요청의 traceId를 DB 컬럼에 저장해 두고 relay 시점에 복원한다.
+
+- `tbl_outbox_event.trace_id` 컬럼에 outbox 생성 시점의 MDC traceId를 저장한다. `LogContext.isValidTraceId()`로 검증하고, 유효하지 않으면 `NULL`로 저장한다.
+- `StockRestoreOutboxRelayService.publishTarget()`이 outbox의 traceId를 MDC에 복원한 뒤 Kafka publish를 호출한다. `TraceIdKafkaProducerInterceptor`가 MDC에서 읽어 헤더 `X-Trace-Id`에 자동 부착한다.
+- `finally`에서 `LogContext.removeTraceId()`로 정리한다.
+- 저장된 traceId가 `NULL`이면 MDC 조작 없이 진행한다. 이 경우 `TraceIdKafkaProducerInterceptor`가 신규 UUID를 발급하는 fallback 동작이 적용된다 (기존 데이터 호환).
+
+#### 미적용 경계 (정책상 제외)
+
+다음 경계에는 traceId를 의도적으로 적용하지 않는다. 누락이 아니라 의식적인 정책 결정이다.
+
+- **Outbox 스케줄러 자체 로그** (`StockRestoreOutboxScheduler`)
+  - 적용 안 함. 이유: 한 번의 스케줄러 실행에서 여러 독립 outbox 이벤트를 배치 처리하므로, 실행 단위 traceId를 부여하면 독립 거래들이 같은 traceId를 공유하게 되어 의미가 희석된다.
+  - 운영 통계 로그(`selected=5 published=3` 등) 성격이며, 개별 이벤트 처리는 outbox에 저장된 traceId로 추적된다.
+- **Spring Batch** (`OrderExpirationJob` 등)
+  - 적용 안 함. 이유: chunk별 traceId의 의미가 모호하다(chunk 단위? item 단위? job 실행 단위?). 운영상 필요 판단 시 별도 작업으로 분리한다.
+- **`@Async`**
+  - 현재 프로덕션 코드에서 미사용. 도입 시점에 `TaskDecorator` 방식으로 별도 작업한다.
+
+#### 신규 비동기 경계 추가 시 가이드
+
+새 비동기/이벤트 경계를 도입할 때 다음 기준으로 traceId 적용 여부를 판단한다.
+
+- **요청 단위로 거래 흐름을 추적해야 하는가?** → 적용한다.
+- **여러 독립 거래를 묶는 배치성 작업인가?** → 미적용 (운영 통계 로그 성격).
+- **호출 스레드의 MDC가 자동 전파되는가?** → 자동 전파되면 별도 작업 불필요.
 
 ## 9. 포맷 정책
 
