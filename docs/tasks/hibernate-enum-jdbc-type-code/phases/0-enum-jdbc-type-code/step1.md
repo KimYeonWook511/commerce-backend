@@ -23,7 +23,7 @@
 
 ## 작업
 
-9개 entity의 14개 `@Enumerated(EnumType.STRING)` 필드에 `@JdbcTypeCode(SqlTypes.VARCHAR)`를 부착하고, 기존 `@Column`의 `length` 속성을 제거한다.
+8개 entity의 14개 `@Enumerated(EnumType.STRING)` 필드에 `@JdbcTypeCode(SqlTypes.VARCHAR)`를 부착하고, 기존 `@Column`의 `length` 속성을 제거한다.
 
 ### 적용 패턴
 
