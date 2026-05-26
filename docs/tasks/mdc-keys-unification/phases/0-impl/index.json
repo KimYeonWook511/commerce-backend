@@ -1,0 +1,9 @@
+{
+  "project": "mdc-keys-unification",
+  "phase": "0-impl",
+  "steps": [
+    { "step": 1, "name": "extract-mdc-keys", "status": "pending" },
+    { "step": 2, "name": "sync-root-docs", "status": "pending" },
+    { "step": 3, "name": "write-retrospective", "status": "pending" }
+  ]
+}
