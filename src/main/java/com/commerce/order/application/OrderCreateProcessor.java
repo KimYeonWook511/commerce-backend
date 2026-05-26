@@ -11,6 +11,7 @@ import org.springframework.context.ApplicationEventPublisher;
 import org.springframework.stereotype.Component;
 import org.springframework.transaction.annotation.Transactional;
 
+import com.commerce.common.log.LogContext;
 import com.commerce.member.domain.Member;
 import com.commerce.member.domain.repository.MemberRepository;
 import com.commerce.member.exception.MemberErrorCode;
@@ -88,7 +89,8 @@ public class OrderCreateProcessor {
 			order.getId(), command.getMemberId(), command.getItems().size());
 
 		applicationEventPublisher.publishEvent(
-			new OrderIdempotencyCacheEvent(command.getMemberId(), command.getIdempotencyKey(), order.getId(), ttl)
+			new OrderIdempotencyCacheEvent(command.getMemberId(), command.getIdempotencyKey(), order.getId(), ttl,
+				LogContext.getTraceId())
 		);
 
 		return OrderCreateResult.from(order);

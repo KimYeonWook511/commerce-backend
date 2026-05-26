@@ -9,6 +9,7 @@ import org.springframework.stereotype.Component;
 import org.springframework.transaction.event.TransactionPhase;
 import org.springframework.transaction.event.TransactionalEventListener;
 
+import com.commerce.common.log.LogContext;
 import com.commerce.order.application.event.OrderIdempotencyCacheEvent;
 import com.commerce.order.application.port.OrderIdempotencyStore;
 
@@ -69,11 +70,26 @@ public class RedisOrderIdempotencyStore implements OrderIdempotencyStore {
 	// RDB 커밋 이후에만 Redis에 캐싱한다. Redis 장애 시 RDB 롤백을 방지하기 위함이다 (ADR-005).
 	@TransactionalEventListener(phase = TransactionPhase.AFTER_COMMIT)
 	public void handle(OrderIdempotencyCacheEvent event) {
+		boolean traceIdPushed = pushTraceIdIfValid(event.getTraceId());
 		try {
-			complete(event.getMemberId(), event.getIdempotencyKey(), event.getOrderId(), event.getTtl());
-		} catch (DataAccessException e) {
-			log.warn("Redis AFTER_COMMIT 캐싱 실패 (무시): {}", e.getMessage());
+			try {
+				complete(event.getMemberId(), event.getIdempotencyKey(), event.getOrderId(), event.getTtl());
+			} catch (DataAccessException e) {
+				log.warn("Redis AFTER_COMMIT 캐싱 실패 (무시): {}", e.getMessage());
+			}
+		} finally {
+			if (traceIdPushed) {
+				LogContext.removeTraceId();
+			}
 		}
+	}
+
+	private boolean pushTraceIdIfValid(String traceId) {
+		if (LogContext.isValidTraceId(traceId)) {
+			LogContext.putTraceId(traceId);
+			return true;
+		}
+		return false;
 	}
 
 	private String buildKey(Long memberId, String idempotencyKey) {
