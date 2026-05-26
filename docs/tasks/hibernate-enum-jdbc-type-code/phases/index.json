@@ -1,5 +1,10 @@
 {
   "phases": [
-    { "dir": "0-enum-jdbc-type-code", "status": "pending" }
+    {
+      "dir": "0-enum-jdbc-type-code",
+      "status": "completed",
+      "started_at": "2026-05-26T19:03:13+0900",
+      "completed_at": "2026-05-26T19:15:30+0900"
+    }
   ]
 }

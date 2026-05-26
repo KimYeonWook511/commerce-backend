@@ -2,8 +2,31 @@
   "project": "commerce-backend",
   "phase": "0-enum-jdbc-type-code",
   "steps": [
-    { "step": 1, "name": "apply-jdbc-type-code", "status": "pending" },
-    { "step": 2, "name": "sync-root-docs", "status": "pending" },
-    { "step": 3, "name": "write-retrospective", "status": "pending" }
-  ]
+    {
+      "step": 1,
+      "name": "apply-jdbc-type-code",
+      "status": "completed",
+      "started_at": "2026-05-26T19:03:13+0900",
+      "summary": "9개 entity 14개 @Enumerated(EnumType.STRING) 필드에 @JdbcTypeCode(SqlTypes.VARCHAR)를 부착하고 outbox 계열 4개 필드의 length 속성을 제거한다.",
+      "completed_at": "2026-05-26T19:06:28+0900"
+    },
+    {
+      "step": 2,
+      "name": "sync-root-docs",
+      "status": "completed",
+      "started_at": "2026-05-26T19:07:41+0900",
+      "summary": "docs/ADR.md에 ADR-018(Hibernate 6.x ENUM 매핑을 @JdbcTypeCode(SqlTypes.VARCHAR)로 회피) 항목을 추가한다.",
+      "completed_at": "2026-05-26T19:08:42+0900"
+    },
+    {
+      "step": 3,
+      "name": "write-retrospective",
+      "status": "completed",
+      "started_at": "2026-05-26T19:09:28+0900",
+      "summary": "docs/tasks/hibernate-enum-jdbc-type-code/retrospective.md를 작성하고 section 1의 entity 수를 실제 변경된 8개(Member/Order/OutboxEvent/ProcessedEvent/Payment/PaymentAttempt/Product/StockHistory)로 정정한다.",
+      "completed_at": "2026-05-26T19:14:16+0900"
+    }
+  ],
+  "created_at": "2026-05-26T19:03:13+0900",
+  "completed_at": "2026-05-26T19:15:30+0900"
 }
