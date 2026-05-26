@@ -22,6 +22,7 @@ import org.springframework.test.web.servlet.MvcResult;
 import org.springframework.web.bind.annotation.GetMapping;
 import org.springframework.web.bind.annotation.RestController;
 
+import com.commerce.common.log.LogContext;
 import com.commerce.security.filter.JwtAuthenticationFilter;
 
 @WebMvcTest(
@@ -50,7 +51,7 @@ class TraceIdFilterIntegrationTest {
 	void request_responseContainsTraceIdHeader() throws Exception {
 		mockMvc.perform(get("/__test__/trace"))
 			.andExpect(status().isOk())
-			.andExpect(header().exists(TraceIdFilter.TRACE_ID_HEADER));
+			.andExpect(header().exists(LogContext.TRACE_ID_HEADER));
 	}
 
 	@DisplayName("두 번 호출하면 서로 다른 traceId가 발급된다")
@@ -59,8 +60,8 @@ class TraceIdFilterIntegrationTest {
 		MvcResult result1 = mockMvc.perform(get("/__test__/trace")).andReturn();
 		MvcResult result2 = mockMvc.perform(get("/__test__/trace")).andReturn();
 
-		String traceId1 = result1.getResponse().getHeader(TraceIdFilter.TRACE_ID_HEADER);
-		String traceId2 = result2.getResponse().getHeader(TraceIdFilter.TRACE_ID_HEADER);
+		String traceId1 = result1.getResponse().getHeader(LogContext.TRACE_ID_HEADER);
+		String traceId2 = result2.getResponse().getHeader(LogContext.TRACE_ID_HEADER);
 
 		assertThat(traceId1).isNotNull();
 		assertThat(traceId2).isNotNull();
@@ -71,19 +72,19 @@ class TraceIdFilterIntegrationTest {
 	@Test
 	void validIncomingHeader_sameValueInResponse() throws Exception {
 		mockMvc.perform(get("/__test__/trace")
-				.header(TraceIdFilter.TRACE_ID_HEADER, "existing-trace-123"))
+				.header(LogContext.TRACE_ID_HEADER, "existing-trace-123"))
 			.andExpect(status().isOk())
-			.andExpect(header().string(TraceIdFilter.TRACE_ID_HEADER, "existing-trace-123"));
+			.andExpect(header().string(LogContext.TRACE_ID_HEADER, "existing-trace-123"));
 	}
 
 	@DisplayName("부적합한 X-Trace-Id 요청 헤더는 차단하고 새 UUID를 발급한다")
 	@Test
 	void invalidIncomingHeader_newUuidInResponse() throws Exception {
 		MvcResult result = mockMvc.perform(get("/__test__/trace")
-				.header(TraceIdFilter.TRACE_ID_HEADER, "<script>alert(1)</script>"))
+				.header(LogContext.TRACE_ID_HEADER, "<script>alert(1)</script>"))
 			.andReturn();
 
-		String traceId = result.getResponse().getHeader(TraceIdFilter.TRACE_ID_HEADER);
+		String traceId = result.getResponse().getHeader(LogContext.TRACE_ID_HEADER);
 		assertThat(traceId).isNotNull();
 		assertThat(traceId).doesNotContain("<script>");
 		assertThat(traceId).matches("[0-9a-f]{8}-[0-9a-f]{4}-[0-9a-f]{4}-[0-9a-f]{4}-[0-9a-f]{12}");

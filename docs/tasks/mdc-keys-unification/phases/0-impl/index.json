@@ -1,0 +1,32 @@
+{
+  "project": "mdc-keys-unification",
+  "phase": "0-impl",
+  "steps": [
+    {
+      "step": 1,
+      "name": "extract-mdc-keys",
+      "status": "completed",
+      "started_at": "2026-05-26T20:52:36+0900",
+      "completed_at": "2026-05-26T20:58:20+0900",
+      "summary": "MdcKeys.java를 com.commerce.common.log 패키지에 신규 생성하고(TRACE_ID, MEMBER_ID, TRACE_ID_HEADER, VALID_TRACE_ID 상수 4개), main 5개 파일에서 중복 상수를 제거해 MdcKeys.* 참조로 교체하며, test 6개 파일의 정적 참조·리터럴도 MdcKeys.* 참조로 교체한다. 기존 주석·MEMBER_ID_ATTRIBUTE·@DisplayName 텍스트는 보존한다. ./gradlew test BUILD SUCCESSFUL."
+    },
+    {
+      "step": 2,
+      "name": "sync-root-docs",
+      "status": "completed",
+      "started_at": "2026-05-26T20:59:39+0900",
+      "completed_at": "2026-05-26T21:00:13+0900",
+      "summary": "docs/logging-conventions.md §8 '설정' 서브섹션 MDC 키 목록 다음에 'MDC 키는 com.commerce.common.log.MdcKeys에서 단일 관리한다.' 한 줄을 추가한다. ./gradlew test BUILD SUCCESSFUL."
+    },
+    {
+      "step": 3,
+      "name": "write-retrospective",
+      "status": "completed",
+      "started_at": "2026-05-26T21:00:54+0900",
+      "completed_at": "2026-05-26T21:02:24+0900",
+      "summary": "docs/tasks/mdc-keys-unification/retrospective.md를 5단 구조(배경과 목표, 설계 결정 요약, 구현 범위, 한계와 후속 과제, 배운 점)로 신규 생성한다. 과거 태스크 회고록 미수정, 코드 변경 없음. ./gradlew test BUILD SUCCESSFUL."
+    }
+  ],
+  "created_at": "2026-05-26T20:52:36+0900",
+  "completed_at": "2026-05-26T21:02:58+0900"
+}

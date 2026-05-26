@@ -2,19 +2,15 @@ package com.commerce.common.log.kafka;
 
 import java.nio.charset.StandardCharsets;
 import java.util.UUID;
-import java.util.regex.Pattern;
 
 import org.apache.kafka.clients.consumer.Consumer;
 import org.apache.kafka.clients.consumer.ConsumerRecord;
 import org.apache.kafka.common.header.Header;
-import org.slf4j.MDC;
 import org.springframework.kafka.listener.RecordInterceptor;
 
-public class TraceIdRecordInterceptor implements RecordInterceptor<Object, Object> {
+import com.commerce.common.log.LogContext;
 
-	private static final String TRACE_ID_HEADER = "X-Trace-Id";
-	private static final String TRACE_ID_MDC_KEY = "traceId";
-	private static final Pattern VALID_TRACE_ID = Pattern.compile("^[A-Za-z0-9_-]{1,64}$");
+public class TraceIdRecordInterceptor implements RecordInterceptor<Object, Object> {
 
 	@Override
 	public ConsumerRecord<Object, Object> intercept(
@@ -22,7 +18,7 @@ public class TraceIdRecordInterceptor implements RecordInterceptor<Object, Objec
 		Consumer<Object, Object> consumer
 	) {
 		String traceId = resolveTraceId(record);
-		MDC.put(TRACE_ID_MDC_KEY, traceId);
+		LogContext.putTraceId(traceId);
 		return record;
 	}
 
@@ -42,14 +38,14 @@ public class TraceIdRecordInterceptor implements RecordInterceptor<Object, Objec
 
 	@Override
 	public void afterRecord(ConsumerRecord<Object, Object> record, Consumer<Object, Object> consumer) {
-		MDC.remove(TRACE_ID_MDC_KEY);
+		LogContext.removeTraceId();
 	}
 
 	private String resolveTraceId(ConsumerRecord<Object, Object> record) {
-		Header header = record.headers().lastHeader(TRACE_ID_HEADER);
+		Header header = record.headers().lastHeader(LogContext.TRACE_ID_HEADER);
 		if (header != null && header.value() != null) {
 			String value = new String(header.value(), StandardCharsets.UTF_8);
-			if (VALID_TRACE_ID.matcher(value).matches()) {
+			if (LogContext.isValidTraceId(value)) {
 				return value;
 			}
 		}

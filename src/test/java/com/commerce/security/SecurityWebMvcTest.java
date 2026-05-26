@@ -32,6 +32,7 @@ import com.commerce.auth.application.TokenAuthenticationService;
 import com.commerce.auth.application.result.TokenAuthenticationResult;
 import com.commerce.security.resolver.AuthenticatedMemberIdArgumentResolver;
 import com.commerce.common.config.WebConfig;
+import com.commerce.common.log.LogContext;
 import com.commerce.member.domain.MemberRole;
 import com.commerce.security.annotation.AuthenticatedMemberId;
 import com.commerce.security.annotation.RequireRole;
@@ -122,7 +123,7 @@ class SecurityWebMvcTest {
 			.andExpect(status().isOk());
 
 		then(tokenAuthenticationService).should(never()).authenticateAccessToken(any());
-		assertThat(MDC.get("memberId")).isNull();
+		assertThat(LogContext.getMemberId()).isNull();
 	}
 
 	@DisplayName("인증 성공 시 Controller 실행 중 MDC.memberId가 set되고 요청 종료 후 제거된다")
@@ -138,7 +139,7 @@ class SecurityWebMvcTest {
 			.andExpect(status().isOk())
 			.andExpect(content().string("42"));
 
-		assertThat(MDC.get("memberId")).isNull();
+		assertThat(LogContext.getMemberId()).isNull();
 	}
 
 	@RestController
@@ -169,7 +170,7 @@ class SecurityWebMvcTest {
 
 		@GetMapping("/test/mdc-member-id")
 		public ResponseEntity<String> mdcMemberId() {
-			return ResponseEntity.ok(MDC.get("memberId"));
+			return ResponseEntity.ok(LogContext.getMemberId());
 		}
 	}
 }

@@ -18,7 +18,7 @@ import org.junit.jupiter.api.BeforeEach;
 import org.junit.jupiter.api.DisplayName;
 import org.junit.jupiter.api.Tag;
 import org.junit.jupiter.api.Test;
-import org.slf4j.MDC;
+import com.commerce.common.log.LogContext;
 import org.springframework.beans.factory.annotation.Autowired;
 import org.springframework.boot.autoconfigure.EnableAutoConfiguration;
 import org.springframework.boot.autoconfigure.batch.BatchAutoConfiguration;
@@ -114,8 +114,8 @@ class TraceIdKafkaPropagationIntegrationTest {
 			containerFactory = "stockRestoreKafkaListenerContainerFactory"
 		)
 		void consume(ConsumerRecord<String, String> record) {
-			capturedMdc.set(MDC.get("traceId"));
-			Header header = record.headers().lastHeader("X-Trace-Id");
+			capturedMdc.set(LogContext.getTraceId());
+			Header header = record.headers().lastHeader(LogContext.TRACE_ID_HEADER);
 			if (header != null) {
 				capturedHeader.set(new String(header.value(), StandardCharsets.UTF_8));
 			}
@@ -142,21 +142,21 @@ class TraceIdKafkaPropagationIntegrationTest {
 	@BeforeEach
 	void setUp() {
 		testConsumer.reset();
-		MDC.remove("traceId");
+		LogContext.removeTraceId();
 		reset(traceIdRecordInterceptor);
 		waitForListenerAssignment();
 	}
 
 	@AfterEach
 	void tearDown() {
-		MDC.remove("traceId");
+		LogContext.removeTraceId();
 	}
 
 	@DisplayName("MDC에 traceId가 있으면 consumer MDC에 동일한 traceId가 설정된다")
 	@Test
 	void intercept_whenMdcHasTraceId_consumerSeesTheSameTraceId() throws Exception {
 		// given
-		MDC.put("traceId", "fixed-abc-123");
+		LogContext.putTraceId("fixed-abc-123");
 
 		// when
 		kafkaTemplate.send(TOPIC, "msg-a").get(5, TimeUnit.SECONDS);
@@ -187,7 +187,7 @@ class TraceIdKafkaPropagationIntegrationTest {
 		AtomicReference<String> mdcAfterCleanup = new AtomicReference<>("NOT_CAPTURED");
 		doAnswer(invocation -> {
 			invocation.callRealMethod();
-			mdcAfterCleanup.set(MDC.get("traceId"));
+			mdcAfterCleanup.set(LogContext.getTraceId());
 			cleanupLatch.countDown();
 			return null;
 		}).when(traceIdRecordInterceptor).afterRecord(any(), any());
@@ -209,7 +209,7 @@ class TraceIdKafkaPropagationIntegrationTest {
 		AtomicReference<String> mdcAfterCleanup = new AtomicReference<>("NOT_CAPTURED");
 		doAnswer(invocation -> {
 			invocation.callRealMethod();
-			mdcAfterCleanup.set(MDC.get("traceId"));
+			mdcAfterCleanup.set(LogContext.getTraceId());
 			cleanupLatch.countDown();
 			return null;
 		}).when(traceIdRecordInterceptor).afterRecord(any(), any());

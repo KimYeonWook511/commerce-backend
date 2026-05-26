@@ -18,6 +18,7 @@ import org.springframework.mock.web.MockFilterChain;
 import org.springframework.mock.web.MockHttpServletRequest;
 import org.springframework.mock.web.MockHttpServletResponse;
 
+import com.commerce.common.log.LogContext;
 import jakarta.servlet.FilterChain;
 import jakarta.servlet.ServletException;
 
@@ -39,7 +40,7 @@ class TraceIdFilterTest {
 
 		filter.doFilter(request, response, chain);
 
-		String traceId = response.getHeader(TraceIdFilter.TRACE_ID_HEADER);
+		String traceId = response.getHeader(LogContext.TRACE_ID_HEADER);
 		assertThat(traceId).isNotNull();
 		assertThat(traceId).matches("[0-9a-f]{8}-[0-9a-f]{4}-[0-9a-f]{4}-[0-9a-f]{4}-[0-9a-f]{12}");
 	}
@@ -48,13 +49,13 @@ class TraceIdFilterTest {
 	@Test
 	void validIncomingHeader_reusesValue() throws Exception {
 		MockHttpServletRequest request = new MockHttpServletRequest();
-		request.addHeader(TraceIdFilter.TRACE_ID_HEADER, "existing-trace-123");
+		request.addHeader(LogContext.TRACE_ID_HEADER, "existing-trace-123");
 		MockHttpServletResponse response = new MockHttpServletResponse();
 		MockFilterChain chain = new MockFilterChain();
 
 		filter.doFilter(request, response, chain);
 
-		assertThat(response.getHeader(TraceIdFilter.TRACE_ID_HEADER)).isEqualTo("existing-trace-123");
+		assertThat(response.getHeader(LogContext.TRACE_ID_HEADER)).isEqualTo("existing-trace-123");
 	}
 
 	@DisplayName("65자 초과 incoming 헤더는 유효하지 않으므로 새 UUID를 발급한다")
@@ -62,13 +63,13 @@ class TraceIdFilterTest {
 	void tooLongIncomingHeader_generatesNewUuid() throws Exception {
 		String longId = "a".repeat(65);
 		MockHttpServletRequest request = new MockHttpServletRequest();
-		request.addHeader(TraceIdFilter.TRACE_ID_HEADER, longId);
+		request.addHeader(LogContext.TRACE_ID_HEADER, longId);
 		MockHttpServletResponse response = new MockHttpServletResponse();
 		MockFilterChain chain = new MockFilterChain();
 
 		filter.doFilter(request, response, chain);
 
-		String traceId = response.getHeader(TraceIdFilter.TRACE_ID_HEADER);
+		String traceId = response.getHeader(LogContext.TRACE_ID_HEADER);
 		assertThat(traceId).isNotEqualTo(longId);
 		assertThat(traceId).matches("[0-9a-f]{8}-[0-9a-f]{4}-[0-9a-f]{4}-[0-9a-f]{4}-[0-9a-f]{12}");
 	}
@@ -78,13 +79,13 @@ class TraceIdFilterTest {
 	void specialCharIncomingHeader_generatesNewUuid() throws Exception {
 		String xssId = "<script>alert(1)</script>";
 		MockHttpServletRequest request = new MockHttpServletRequest();
-		request.addHeader(TraceIdFilter.TRACE_ID_HEADER, xssId);
+		request.addHeader(LogContext.TRACE_ID_HEADER, xssId);
 		MockHttpServletResponse response = new MockHttpServletResponse();
 		MockFilterChain chain = new MockFilterChain();
 
 		filter.doFilter(request, response, chain);
 
-		String traceId = response.getHeader(TraceIdFilter.TRACE_ID_HEADER);
+		String traceId = response.getHeader(LogContext.TRACE_ID_HEADER);
 		assertThat(traceId).isNotEqualTo(xssId);
 		assertThat(traceId).matches("[0-9a-f]{8}-[0-9a-f]{4}-[0-9a-f]{4}-[0-9a-f]{4}-[0-9a-f]{12}");
 	}
@@ -98,13 +99,13 @@ class TraceIdFilterTest {
 		AtomicReference<String> mdcDuringChain = new AtomicReference<>();
 		FilterChain chain = mock(FilterChain.class);
 		doAnswer(invocation -> {
-			mdcDuringChain.set(MDC.get(TraceIdFilter.TRACE_ID_MDC_KEY));
+			mdcDuringChain.set(LogContext.getTraceId());
 			return null;
 		}).when(chain).doFilter(any(), any());
 
 		filter.doFilter(request, response, chain);
 
-		String responseTraceId = response.getHeader(TraceIdFilter.TRACE_ID_HEADER);
+		String responseTraceId = response.getHeader(LogContext.TRACE_ID_HEADER);
 		assertThat(mdcDuringChain.get()).isNotNull();
 		assertThat(mdcDuringChain.get()).isEqualTo(responseTraceId);
 	}
@@ -118,7 +119,7 @@ class TraceIdFilterTest {
 
 		filter.doFilter(request, response, chain);
 
-		assertThat(MDC.get(TraceIdFilter.TRACE_ID_MDC_KEY)).isNull();
+		assertThat(LogContext.getTraceId()).isNull();
 	}
 
 	@DisplayName("chain.doFilter에서 예외가 발생해도 MDC에서 traceId가 제거된다")
@@ -133,6 +134,6 @@ class TraceIdFilterTest {
 		assertThatThrownBy(() -> filter.doFilter(request, response, chain))
 			.isInstanceOf(ServletException.class);
 
-		assertThat(MDC.get(TraceIdFilter.TRACE_ID_MDC_KEY)).isNull();
+		assertThat(LogContext.getTraceId()).isNull();
 	}
 }
