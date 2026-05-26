@@ -25,6 +25,15 @@
 - 구조가 단순해서 리뷰 부담이 작음
 - 이벤트가 5개 이상 늘어나면 B 방식으로 통합 리팩토링 검토
 
+### 동기 실행 시 MDC 보존 정책
+
+`@TransactionalEventListener(AFTER_COMMIT)`은 **기본 동기 실행**이라 같은 HTTP 요청 스레드에서 listener가 호출된다. 이때 호출 스레드의 MDC에는 `TraceIdFilter`가 이미 traceId를 push해둔 상태다.
+
+- listener는 **MDC에 유효한 traceId가 이미 있으면 그대로 보존**한다. 이벤트의 traceId로 덮어쓰지 않는다.
+- MDC가 비어있을 때만 이벤트의 traceId를 push한다. push한 경우에만 `finally`에서 정리한다.
+- 이 정책이 없으면 listener `finally`의 `removeTraceId()`가 호출 스레드의 원본 traceId까지 같이 제거하여, listener 이후 응답/access log에서 traceId가 유실되는 회귀가 발생한다.
+- 결과적으로 이벤트의 traceId는 **향후 비동기 전환(`@Async` 또는 multicaster TaskExecutor) 시점의 fallback**으로만 활용된다.
+
 ## 결정 2: Outbox는 DB 컬럼에 traceId 저장 방식 채택
 
 ### 배경
@@ -52,6 +61,24 @@ Outbox relay는 스케줄러 기반(@Scheduled)이라 별도 스레드에서 실
 - `OutboxEvent` 도메인, `OutboxPublishTarget` Projection 시그니처 변경
 - 기존 outbox 데이터는 trace_id가 null이지만 relay 로직이 null을 허용하므로 무중단 적용 가능
 - 운영 배포 시점에 컬럼이 자동 추가됨 (ddl-auto=update)
+
+### relay 시 MDC 보존 정책
+
+`StockRestoreOutboxRelayService.publishTarget()`도 결정 1과 동일한 패턴을 따른다.
+
+- 스케줄러 호출 경로에서는 MDC가 항상 비어 있으므로 outbox에 저장된 traceId가 사용된다.
+- 향후 HTTP 흐름에서 relay가 직접 호출되는 경우(예: 관리자 API)에는 호출 스레드 MDC의 traceId가 보존된다.
+- 결정 1의 정책과 일관성을 유지하기 위함이며, 현 시점에서는 방어적 코드 성격이다.
+
+### ddl-auto=update 한계
+
+`tbl_outbox_event.trace_id` 추가는 단순 NULL 컬럼 추가이므로 `ddl-auto: update`가 안전하게 처리하는 케이스다. 다만 Hibernate `ddl-auto: update`는 일반적으로 다음을 보장하지 않는다는 한계가 있다 (ADR-018과 동일):
+
+- 컬럼 타입 변경 (예: VARCHAR 길이 확장)
+- nullable / NOT NULL 제약 변경
+- 컬럼 삭제
+
+향후 `trace_id` 컬럼의 타입·제약을 변경할 일이 생기면 운영 DB는 자동 적용되지 않으므로 별도 ALTER가 필요하다. 운영 마이그레이션 일원화는 Flyway 도입 시점까지 한계로 둔다.
 
 ## 결정 3: Outbox 스케줄러 자체에서는 traceId를 발급하지 않는다
 

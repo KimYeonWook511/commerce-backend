@@ -208,7 +208,8 @@ Spring Event 경계는 이벤트 객체에 traceId를 동봉하는 방식으로 
 
 - 이벤트 객체에 `traceId` 필드를 추가한다 (예: `OrderIdempotencyCacheEvent`).
 - publisher가 발행 시점의 `LogContext.getTraceId()`를 읽어 이벤트에 전달한다.
-- listener 진입 시 이벤트의 traceId 유효성을 검증하고 MDC에 push한다 (`LogContext.putTraceId`). `finally`에서 `LogContext.removeTraceId()`로 정리한다.
+- listener 진입 시 **MDC에 이미 유효한 traceId가 있으면 그대로 보존**한다. MDC가 비어있을 때만 이벤트의 traceId를 push하고, push한 경우에만 `finally`에서 `LogContext.removeTraceId()`로 정리한다.
+- 이 정책의 이유: `@TransactionalEventListener(AFTER_COMMIT)`은 **기본 동기 실행**이라 같은 HTTP 요청 스레드의 MDC에 traceId가 이미 있다. listener가 MDC에 손을 대고 `finally`에서 제거하면 그 후속 응답/access log에서 traceId가 유실되는 회귀가 발생한다. 따라서 동기 경로에서는 보존만 하고, 비동기 전환(`@Async` 또는 multicaster TaskExecutor 도입) 시에는 이벤트의 traceId가 fallback으로 사용된다.
 - `@Async`와 달리 같은 스레드에서 호출되지만 트랜잭션 경계(commit phase)를 넘으므로 명시적 전파를 채택했다. 사용처가 한 곳뿐이라 `ApplicationEventMulticaster` wrapping은 과한 추상화로 판단했다 (ADR-019 참조).
 
 ##### Outbox 경계
@@ -216,8 +217,9 @@ Spring Event 경계는 이벤트 객체에 traceId를 동봉하는 방식으로 
 Outbox relay 스케줄러는 HTTP 요청 컨텍스트가 없으므로, 원본 HTTP 요청의 traceId를 DB 컬럼에 저장해 두고 relay 시점에 복원한다.
 
 - `tbl_outbox_event.trace_id` 컬럼에 outbox 생성 시점의 MDC traceId를 저장한다. `LogContext.isValidTraceId()`로 검증하고, 유효하지 않으면 `NULL`로 저장한다.
-- `StockRestoreOutboxRelayService.publishTarget()`이 outbox의 traceId를 MDC에 복원한 뒤 Kafka publish를 호출한다. `TraceIdKafkaProducerInterceptor`가 MDC에서 읽어 헤더 `X-Trace-Id`에 자동 부착한다.
-- `finally`에서 `LogContext.removeTraceId()`로 정리한다.
+- `StockRestoreOutboxRelayService.publishTarget()`이 **MDC에 이미 유효한 traceId가 있으면 그대로 보존**한다. MDC가 비어있을 때만 outbox의 traceId를 MDC에 복원한 뒤 Kafka publish를 호출한다. `TraceIdKafkaProducerInterceptor`가 MDC에서 읽어 헤더 `X-Trace-Id`에 자동 부착한다.
+- 우리가 push한 경우에만 `finally`에서 `LogContext.removeTraceId()`로 정리한다.
+- 스케줄러 호출 경로에서는 MDC가 항상 비어 있으므로 outbox의 traceId가 사용된다. HTTP 흐름에서 relay가 직접 호출되는 경우(향후 시나리오)에는 호출 스레드 MDC가 보존된다.
 - 저장된 traceId가 `NULL`이면 MDC 조작 없이 진행한다. 이 경우 `TraceIdKafkaProducerInterceptor`가 신규 UUID를 발급하는 fallback 동작이 적용된다 (기존 데이터 호환).
 
 #### 미적용 경계 (정책상 제외)
