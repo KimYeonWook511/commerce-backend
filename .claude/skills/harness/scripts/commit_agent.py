@@ -32,6 +32,8 @@ def build_prompt(step_name: str, summary: str) -> str:
         "- phase index 파일(`docs/tasks/<task-name>/phases/index.json`, "
         "`docs/tasks/<task-name>/phases/<phase-name>/index.json`)은 staging하지 마라. "
         "두 파일은 phase 종료 시 finalize 단계에서 chore 커밋으로 한 번에 처리된다.\n"
+        "- commit body는 작성하지 마라. subject 한 줄만 작성한다. "
+        "변경 의도는 PR 본문에서 단일 관리되므로 자동화 commit에서 body를 추측해 적지 않는다.\n"
     )
 
 
