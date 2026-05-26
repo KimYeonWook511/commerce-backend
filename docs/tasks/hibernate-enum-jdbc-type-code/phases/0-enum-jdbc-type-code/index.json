@@ -1,0 +1,9 @@
+{
+  "project": "commerce-backend",
+  "phase": "0-enum-jdbc-type-code",
+  "steps": [
+    { "step": 1, "name": "apply-jdbc-type-code", "status": "pending" },
+    { "step": 2, "name": "sync-root-docs", "status": "pending" },
+    { "step": 3, "name": "write-retrospective", "status": "pending" }
+  ]
+}
