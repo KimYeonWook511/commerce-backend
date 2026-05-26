@@ -6,6 +6,7 @@ import java.util.concurrent.TimeUnit;
 import org.slf4j.MDC;
 import org.springframework.web.filter.OncePerRequestFilter;
 
+import com.commerce.common.log.MdcKeys;
 import jakarta.servlet.FilterChain;
 import jakarta.servlet.ServletException;
 import jakarta.servlet.http.HttpServletRequest;
@@ -17,7 +18,6 @@ import lombok.extern.slf4j.Slf4j;
 public class AccessLogFilter extends OncePerRequestFilter {
 
 	public static final String MEMBER_ID_ATTRIBUTE = "AccessLogFilter.memberId";
-	public static final String MEMBER_ID_MDC_KEY = "memberId";
 
 	@Override
 	protected void doFilterInternal(
@@ -38,14 +38,14 @@ public class AccessLogFilter extends OncePerRequestFilter {
 			Object memberId = request.getAttribute(MEMBER_ID_ATTRIBUTE);
 			boolean pushed = false;
 			if (memberId != null) {
-				MDC.put(MEMBER_ID_MDC_KEY, String.valueOf(memberId));
+				MDC.put(MdcKeys.MEMBER_ID, String.valueOf(memberId));
 				pushed = true;
 			}
 			try {
 				log.info("요청 종료 status={} latency={}ms", status, durationMs);
 			} finally {
 				if (pushed) {
-					MDC.remove(MEMBER_ID_MDC_KEY);
+					MDC.remove(MdcKeys.MEMBER_ID);
 				}
 			}
 		}

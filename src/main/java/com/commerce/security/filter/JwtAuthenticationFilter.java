@@ -13,6 +13,7 @@ import com.commerce.auth.exception.AuthException;
 import com.commerce.common.ApiResponse;
 import com.commerce.common.exception.CustomException;
 import com.commerce.common.exception.ErrorCode;
+import com.commerce.common.log.MdcKeys;
 import com.commerce.common.log.filter.AccessLogFilter;
 import com.commerce.security.context.AuthenticationContext;
 import com.fasterxml.jackson.databind.ObjectMapper;
@@ -66,7 +67,7 @@ public class JwtAuthenticationFilter extends OncePerRequestFilter {
 			// memberId, role Context에 저장
 			Long memberId = principal.getMemberId();
 			AuthenticationContext.set(memberId, principal.getRole());
-			MDC.put(AccessLogFilter.MEMBER_ID_MDC_KEY, String.valueOf(memberId));
+			MDC.put(MdcKeys.MEMBER_ID, String.valueOf(memberId));
 			request.setAttribute(AccessLogFilter.MEMBER_ID_ATTRIBUTE, memberId);
 
 			filterChain.doFilter(request, response);
@@ -78,7 +79,7 @@ public class JwtAuthenticationFilter extends OncePerRequestFilter {
 		} finally {
 			// 반드시 정리
 			AuthenticationContext.clear();
-			MDC.remove(AccessLogFilter.MEMBER_ID_MDC_KEY);
+			MDC.remove(MdcKeys.MEMBER_ID);
 		}
 	}
 
