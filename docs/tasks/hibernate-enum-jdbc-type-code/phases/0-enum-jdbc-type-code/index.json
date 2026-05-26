@@ -7,7 +7,7 @@
       "name": "apply-jdbc-type-code",
       "status": "completed",
       "started_at": "2026-05-26T19:03:13+0900",
-      "summary": "9개 entity 14개 @Enumerated(EnumType.STRING) 필드에 @JdbcTypeCode(SqlTypes.VARCHAR)를 부착하고 outbox 계열 4개 필드의 length 속성을 제거한다.",
+      "summary": "8개 entity 14개 @Enumerated(EnumType.STRING) 필드에 @JdbcTypeCode(SqlTypes.VARCHAR)를 부착하고 outbox 계열 4개 필드의 length 속성을 제거한다.",
       "completed_at": "2026-05-26T19:06:28+0900"
     },
     {
