@@ -181,6 +181,8 @@ Filter가 요청 진입 시 다음을 MDC에 push한다.
 - `traceId`: 요청 단위 추적 ID (모든 요청)
 - `memberId`: 사용자 식별자 (인증된 경우만)
 
+MDC 키는 `com.commerce.common.log.MdcKeys`에서 단일 관리한다.
+
 ### 정리
 요청 종료 시 **반드시 `MDC.clear()`를 호출**한다. Filter의 `finally` 블록 책임이다. 안 하면 스레드 풀에서 다음 요청에 누적되어 잘못된 traceId·memberId가 남는다.
 
