@@ -1,0 +1,10 @@
+{
+  "project": "event-outbox-trace-propagation",
+  "phase": "0-core",
+  "steps": [
+    { "step": 1, "name": "transactional-event-trace", "status": "pending" },
+    { "step": 2, "name": "outbox-trace-propagation", "status": "pending" },
+    { "step": 3, "name": "sync-root-docs", "status": "pending" },
+    { "step": 4, "name": "write-retrospective", "status": "pending" }
+  ]
+}
