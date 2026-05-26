@@ -29,11 +29,6 @@
     },
     {
       "order": 6,
-      "title": "Execution Authorization",
-      "status": "pending"
-    },
-    {
-      "order": 7,
       "title": "Execution",
       "status": "pending"
     }

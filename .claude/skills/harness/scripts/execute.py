@@ -79,11 +79,8 @@ class StepExecutor:
         (3, "Step Design"),
         (4, "Worktree 생성 및 이동"),
         (5, "File Drafting"),
-        (6, "Execution Authorization"),
-        (7, "Execution"),
+        (6, "Execution"),
     ]
-    EXECUTE_PREFIX_RULE = ["python3", ".claude/skills/harness/scripts/execute.py"]
-    APPROVAL_PROMPT_MODES = {"per_run", "saved_prefix_rule"}
 
     def __init__(self, phase_path: str, *, auto_push: bool = False):
         self.root = str(ROOT)
@@ -225,12 +222,10 @@ class StepExecutor:
                 continue
 
             status = item.get("status")
-            if expected_order <= 6 and status != "completed":
+            if expected_order <= 5 and status != "completed":
                 incomplete_items.append(expected_title)
-            if expected_order == 7 and status not in {"pending", "in_progress"}:
+            if expected_order == 6 and status not in {"pending", "in_progress"}:
                 invalid_items.append(f"{expected_order}. {expected_title} status must be pending or in_progress")
-            if expected_order == 6 and status == "completed":
-                invalid_items.extend(self.validate_execution_authorization_item(item))
 
         if invalid_items:
             print("\n  ERROR: workflow-checklist.json has invalid workflow items.")
@@ -250,31 +245,6 @@ class StepExecutor:
                 print(f"  - {title}: not completed")
             print("  Complete document review and Execution Authorization before running execute.py.")
             raise SystemExit(1)
-
-    def validate_execution_authorization_item(self, item: dict) -> list[str]:
-        """Execution Authorization 완료 항목의 상세 승인 기록을 검증한다."""
-        errors: list[str] = []
-        authorization = item.get("authorization")
-        if not isinstance(authorization, dict):
-            return ["6. Execution Authorization authorization is required"]
-
-        if authorization.get("escalation_approved") is not True:
-            errors.append("6. Execution Authorization escalation_approved must be true")
-
-        mode = authorization.get("approval_prompt_mode")
-        if mode not in self.APPROVAL_PROMPT_MODES:
-            errors.append("6. Execution Authorization approval_prompt_mode must be per_run or saved_prefix_rule")
-        elif mode == "saved_prefix_rule" and authorization.get("prefix_rule") != self.EXECUTE_PREFIX_RULE:
-            errors.append("6. Execution Authorization prefix_rule must match execute.py command")
-        elif mode == "per_run" and authorization.get("prefix_rule") not in (None, []):
-            errors.append("6. Execution Authorization prefix_rule must be null or empty for per_run")
-
-        if authorization.get("approved_by") != "user":
-            errors.append("6. Execution Authorization approved_by must be user")
-        if not authorization.get("approved_at"):
-            errors.append("6. Execution Authorization approved_at is required")
-
-        return errors
 
     def update_workflow_item(self, title: str, status: str):
         """workflow checklist의 단일 항목 상태를 갱신한다."""
@@ -654,7 +624,6 @@ class StepExecutor:
                     raise SystemExit(1)
 
                 current["completed_at"] = timestamp
-                self.write_json(self.index_file, index)
                 try:
                     commit_agent.run(self.root, self.phase_dir, current)
                 except Exception as e:
@@ -664,6 +633,7 @@ class StepExecutor:
                     print(f"    Error: {e}")
                     self.update_task_index("error")
                     raise SystemExit(1)
+                self.write_json(self.index_file, index)
                 print(f"  ✓ Step {step_num}: {step_name} [{elapsed}s]")
                 return True
 

@@ -33,7 +33,7 @@
 4. 바로 구현하지 않고 탐색과 계획 수립으로 시작한다.
 5. 사용자가 다시 요청하지 않아도 `docs/tasks/skill-test/` 아래 기본 문서 5개와 phase 이름, step 분해 초안을 먼저 제안한다.
 6. `docs/tasks/skill-test/phases/index.json`, `docs/tasks/skill-test/phases/0-bootstrap/index.json`, `workflow-checklist.json`, `stepN.md` 구조를 기준으로 초안을 보여준다.
-7. 상태 표를 함께 보여주고, 파일 초안 작성 단계에서는 `Explore`, `Discuss`, `Step Design`, `File Drafting`까지만 완료로 표시한다.
+7. 상태 표를 함께 보여주고, 파일 초안 작성 단계에서는 `Explore`, `Discuss`, `Step Design`, `Worktree 생성 및 이동`, `File Drafting`까지만 완료로 표시한다.
 
 ### 4. 실패 기준
 
@@ -133,13 +133,9 @@ python3 .claude/skills/harness/scripts/execute.py docs/tasks/skill-test/phases/0
 ```
 
 3. `--push`가 마지막에 원격 브랜치를 푸시하는 옵션이라는 점을 분리해서 설명한다.
-4. 실행 전 `workflow-checklist.json`의 `Execution Authorization`이 완료되어야 한다고 안내한다.
-5. 사용자에게 받아야 하는 두 입력을 분리해서 설명한다.
-   - 권한 상승 실행 허락
-   - 승인 프롬프트 처리 방식: 매번 승인 또는 `prefix_rule=["python3", ".claude/skills/harness/scripts/execute.py"]` 저장
-6. 사용자 의사 확인 후 agent가 checklist에 `authorization` 객체를 기록해야 한다고 설명한다.
-7. checklist 기록 후 Codex permission UI에서 `execute.py` 명령 자체의 권한 상승 요청을 보낸다고 설명한다.
-8. 실행 흐름이 `pending` step 순차 실행, 상태 전이, `summary` 누적 방식이라는 점을 요약한다.
+4. 실행 전 사용자에게 진행 의사를 확인해야 한다고 안내한다 (Plan Mode + `ExitPlanMode` 승인).
+5. 승인이 확정되면 File Drafting 결과물(task 문서 + phase 초안)을 `docs:` 커밋으로 등록한 뒤에만 `execute.py`를 실행한다고 설명한다.
+6. 실행 흐름이 `pending` step 순차 실행, 상태 전이, `summary` 누적 방식이라는 점을 요약한다.
 
 ### 4. 실패 기준
 
@@ -147,10 +143,8 @@ python3 .claude/skills/harness/scripts/execute.py docs/tasks/skill-test/phases/0
 
 - 실행기 경로를 잘못 안내한다.
 - `--push` 의미를 잘못 설명한다.
-- 권한 상승 실행 안내를 빠뜨린다.
-- 권한 상승 실행 허락과 승인 프롬프트 처리 방식을 하나로 뭉뚱그려 묻는다.
-- `authorization` 기록 없이 permission UI 승인이나 `execute.py` 실행으로 바로 넘어간다.
-- checklist 기록과 Codex permission UI 승인을 같은 것으로 설명한다.
+- 사용자 진행 확인 없이 `execute.py` 실행으로 바로 넘어간다.
+- File Drafting 결과물의 `docs:` 커밋 단계를 빠뜨린다.
 - review나 decision log 흐름과 섞어서 설명한다.
 
 ## 테스트 5. 범위 밖 요청 분리
@@ -188,8 +182,8 @@ python3 .claude/skills/harness/scripts/execute.py docs/tasks/skill-test/phases/0
 - 사용자가 다시 `step 나눠줘`, `phase 만들어줘`라고 말하지 않아도 된다.
 - 문서 탐색 규칙이 `CLAUDE.md` -> task 문서 우선 -> 필요 시 루트 문서 추가 순서로 일관된다.
 - 태스크 문서 5개와 태스크 내부 `phases` 산출물 구조가 자기완결적으로 나온다.
-- `workflow-checklist.json`과 상태 표가 1~7번 workflow를 일관되게 보여준다.
+- `workflow-checklist.json`과 상태 표가 1~6번 workflow를 일관되게 보여준다.
 - File Drafting 후에는 멈추고 사용자 검토를 기다린다.
-- 실행 전에는 사용자 의사 확인 -> checklist authorization 기록 -> Codex permission UI 권한 상승 요청 -> `execute.py` 실행 순서를 따른다.
+- 실행 전에는 사용자 진행 확인 + Plan Mode + `ExitPlanMode` 승인 -> File Drafting 결과물 `docs:` 커밋 -> `execute.py` 실행 순서를 따른다.
 - 실행기와의 연결 경로가 정확하다.
 - 리뷰, `decision-log`, 훅과의 경계를 혼동하지 않는다.

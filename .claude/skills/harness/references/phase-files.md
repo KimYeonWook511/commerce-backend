@@ -95,8 +95,7 @@ step 실행 상태 파일이다.
     { "order": 3, "title": "Step Design", "status": "completed" },
     { "order": 4, "title": "Worktree 생성 및 이동", "status": "completed" },
     { "order": 5, "title": "File Drafting", "status": "completed" },
-    { "order": 6, "title": "Execution Authorization", "status": "pending" },
-    { "order": 7, "title": "Execution", "status": "pending" }
+    { "order": 6, "title": "Execution", "status": "pending" }
   ]
 }
 ```
@@ -104,28 +103,9 @@ step 실행 상태 파일이다.
 필드 규칙:
 
 - `workflow`: 항상 `dev-start`
-- `status`: `drafting` | `authorized` | `in_progress` | `completed`
-- `items`: `SKILL.md`의 1~7번 Workflow 순서와 제목을 그대로 사용한다.
-- `Execution Authorization`이 `completed`이면 `authorization` 객체를 포함한다.
-
-`authorization` 예시:
-
-```json
-{
-  "order": 6,
-  "title": "Execution Authorization",
-  "status": "completed",
-  "authorization": {
-    "escalation_approved": true,
-    "approval_prompt_mode": "per_run",
-    "prefix_rule": null,
-    "approved_by": "user",
-    "approved_at": "2026-04-30T15:30:00+0900"
-  }
-}
-```
-
-`approval_prompt_mode`는 `per_run` 또는 `saved_prefix_rule`을 사용한다. `saved_prefix_rule`이면 `prefix_rule`은 `["python3", ".claude/skills/harness/scripts/execute.py"]`다.
+- `status`: `drafting` | `in_progress` | `completed`
+- `items`: `SKILL.md`의 1~6번 Workflow 순서와 제목을 그대로 사용한다.
+- `Execution`은 `execute.py`가 시작할 때 `in_progress`로, phase 종료 시 `completed`로 갱신된다. 별도 `authorization` 객체는 사용하지 않는다.
 
 ## `docs/tasks/<task-name>/phases/<phase-name>/step{N}.md`
 

@@ -22,9 +22,9 @@ description: 개발 시작 전 문서 탐색, 논의, step 설계, phases 초안
 - 사용자가 명시적으로 `execute.py`를 쓰지 말라고 하지 않은 이상, agent가 직접 구현을 시작하면 안 된다.
 - `Implement the plan`은 자동으로 직접 구현을 뜻하지 않는다. `phases` 준비 여부와 실행 승인 여부를 먼저 확인해야 한다.
 - Workflow는 phase별 `workflow-checklist.json`으로 추적하며, 다음 단계로 넘어가기 전 이전 단계가 모두 `completed`여야 한다.
-- `harness` 진행 상태를 사용자에게 보고할 때는 1~7번 Workflow 상태 표를 함께 보여준다.
+- `harness` 진행 상태를 사용자에게 보고할 때는 1~6번 Workflow 상태 표를 함께 보여준다.
 - `File Drafting` 완료 후에는 반드시 멈추고 작성된 문서 경로를 사용자에게 보고한 뒤 검토 응답을 기다린다. 바로 `execute.py` 실행 요청으로 넘어가지 않는다.
-- `Execution Authorization`은 문서 검토 완료, Plan Mode 승인이 모두 확정되어야 `completed`가 된다.
+- `execute.py` 실행 전 반드시 사용자에게 진행 의사를 확인하고, Plan Mode + `ExitPlanMode` 승인이 떨어진 뒤에만 실행한다. 자동 코드 검증은 없으므로 이 룰은 agent가 직접 지킨다.
 
 ## Workflow 상태 표
 
@@ -37,8 +37,7 @@ description: 개발 시작 전 문서 탐색, 논의, step 설계, phases 초안
 | 3 | Step Design |  |
 | 4 | Worktree 생성 및 이동 |  |
 | 5 | File Drafting |  |
-| 6 | Execution Authorization |  |
-| 7 | Execution |  |
+| 6 | Execution |  |
 
 상태 표는 `workflow-checklist.json`이 있으면 그 값을 기준으로 표시한다. checklist 생성 전에는 현재 대화에서 실제 완료한 단계만 `✅`로 표시한다.
 
@@ -147,44 +146,37 @@ worktree 안에서 아래 파일 초안을 작성한다.
 File Drafting 완료 후 필수 중단:
 - 작성 또는 수정한 task 문서, phase index, step 문서, `workflow-checklist.json` 경로를 사용자에게 보고한다.
 - checklist의 `File Drafting`까지만 `completed`로 둔다.
-- `Execution Authorization`은 사용자가 문서 검토 완료와 실행 승인을 명시하기 전까지 `pending`으로 둔다.
-- 이 시점의 checklist는 `Explore`, `Discuss`, `Step Design`, `Worktree 생성 및 이동`, `File Drafting`만 `completed`여야 하고, `Execution Authorization`, `Execution`은 `pending`이어야 한다.
+- `Execution`은 `execute.py`가 시작할 때 `in_progress`로 갱신하므로, File Drafting 완료 시점에는 `pending`으로 둔다.
+- 이 시점의 checklist는 `Explore`, `Discuss`, `Step Design`, `Worktree 생성 및 이동`, `File Drafting`만 `completed`여야 하고, `Execution`은 `pending`이어야 한다.
 - 사용자의 단순한 "진행해", "계속해", "Implement the plan"은 문서 검토 완료 또는 실행 승인으로 해석하지 않는다.
 
-### 6. Execution Authorization
+### 6. Execution
 
-`execute.py`를 실행하기 전에 Plan Mode로 사용자 승인을 받는다.
+`execute.py` 실행 전 아래 순서를 반드시 거친다. 자동 검증 게이트는 없으므로 이 룰은 agent가 직접 지킨다.
+
+1. Plan Mode로 구현 계획을 사용자에게 제시한다.
+2. `ExitPlanMode`로 사용자 승인을 받는다.
+3. 승인이 확정되면 File Drafting에서 작성한 task 문서를 한 커밋으로 묶어 `docs:` 타입으로 커밋한다. (대상 파일은 아래 목록 참고)
+4. 커밋이 끝난 뒤에만 `execute.py` 실행으로 넘어간다.
 
 - `execute.py`는 worktree 안에서 실행하며, commit agent를 통해 커밋을 수행한다.
 - 이 단계에 들어가기 전 checklist의 `Explore`, `Discuss`, `Step Design`, `Worktree 생성 및 이동`, `File Drafting`은 모두 `completed`여야 한다.
-- 아래 순서로만 진행한다.
-  1. Plan Mode로 구현 계획을 사용자에게 제시한다.
-  2. `ExitPlanMode`로 사용자 승인을 받는다.
-  3. 승인이 확정되면 `workflow-checklist.json`의 `Execution Authorization`을 `completed`로,
-     top-level `status`를 `authorized`로 갱신하고 `authorization` 객체에 `approved_at`을 기록한다.
-  4. File Drafting에서 작성한 task 문서를 한 커밋으로 묶어 `docs:` 타입으로 커밋한다. (대상 파일은 아래 목록 참고)
-  5. 커밋이 끝난 뒤에만 `execute.py` 실행으로 넘어간다.
 - 사용자가 승인하지 않으면 구현으로 진행하지 않는다.
-- checklist 갱신 시 `Execution Authorization`은 `completed`, top-level `status`는 `authorized`로 기록한다.
-- `Execution Authorization.authorization`에는 `escalation_approved`, `approval_prompt_mode`, `prefix_rule`, `approved_by`, `approved_at`을 기록한다.
-- `approved_at` 기록 전 아래 명령으로 실제 시각을 확인한다:
-  ```bash
-  date '+%Y-%m-%dT%H:%M:%S+0900'
-  ```
-- task 문서 초안 커밋 대상:
-  - `docs/tasks/<task-name>/prd.md`
-  - `docs/tasks/<task-name>/architecture.md`
-  - `docs/tasks/<task-name>/adr.md`
-  - `docs/tasks/<task-name>/api-spec.md`
-  - `docs/tasks/<task-name>/db-schema.md`
-  - `docs/tasks/<task-name>/phases/index.json`
-  - `docs/tasks/<task-name>/phases/<phase-name>/index.json`
-  - `docs/tasks/<task-name>/phases/<phase-name>/step{N}.md`
-- `workflow-checklist.json`은 `.gitignore`로 제외되어 자동으로 커밋에서 빠진다. 별도 처리 불필요.
-- 커밋 메시지 타입은 `docs:`를 사용하고 `docs/commit-conventions.md`를 따른다.
-- 이 초안 커밋이 누락되면 첫 step의 commit agent가 task 문서를 step 변경분과 어색하게 섞거나 누락할 위험이 있다. `execute.py` 실행 전에 반드시 있어야 한다.
 
-### 7. Execution
+task 문서 초안 커밋 대상:
+
+- `docs/tasks/<task-name>/prd.md`
+- `docs/tasks/<task-name>/architecture.md`
+- `docs/tasks/<task-name>/adr.md`
+- `docs/tasks/<task-name>/api-spec.md`
+- `docs/tasks/<task-name>/db-schema.md`
+- `docs/tasks/<task-name>/phases/index.json`
+- `docs/tasks/<task-name>/phases/<phase-name>/index.json`
+- `docs/tasks/<task-name>/phases/<phase-name>/step{N}.md`
+
+`workflow-checklist.json`은 `.gitignore`로 제외되어 자동으로 커밋에서 빠진다. 별도 처리 불필요.
+커밋 메시지 타입은 `docs:`를 사용하고 `docs/commit-conventions.md`를 따른다.
+이 초안 커밋이 누락되면 첫 step의 commit agent가 task 문서를 step 변경분과 어색하게 섞거나 누락할 위험이 있다. `execute.py` 실행 전에 반드시 있어야 한다.
 
 `phases` 파일이 준비되면 작업 브랜치 worktree 안에서 실행기를 실행한다.
 
@@ -195,12 +187,12 @@ python3 .claude/skills/harness/scripts/execute.py docs/tasks/<task-name>/phases/
 ```
 
 실행 규칙:
-- 구현 요청을 받으면 먼저 `phases` 문서, `workflow-checklist.json`, `Execution Authorization` 완료 여부와 `authorization` 기록을 확인한다.
+- 구현 요청을 받으면 먼저 `phases` 문서와 `workflow-checklist.json`이 준비됐는지, 사용자 진행 확인을 받았는지 확인한다.
 - 준비 또는 승인이 부족하면 구현하지 않고 누락된 단계로 돌아간다.
 - 사용자가 명시적으로 수동 구현을 지시한 경우에만 `execute.py`를 우회할 수 있으며, 이때도 해당 예외를 먼저 사용자 업데이트에 분명히 남긴다.
 
 실행기 운영 규칙:
-- 실행기는 `workflow-checklist.json` 승인 상태를 검증한 뒤 가장 앞의 `pending` step부터 순차 실행한다.
+- 실행기는 `workflow-checklist.json`의 1~5번이 모두 `completed`인 상태에서 가장 앞의 `pending` step부터 순차 실행한다.
 - 성공한 step은 `completed`로 기록하고 다음 `pending` step으로 자동 진행한다.
 - 실행기는 developer worker, Acceptance Criteria 재검증, reviewer worker를 통해 step 완료 여부를 검증한다. 상세 산출물과 파일 포맷은 `references/phase-files.md`를 따른다.
 - 실행 상태 갱신은 자동화 범위다. phase index는 phase 종료 시 커밋하고, 실행 output, Acceptance Criteria output, review output, workflow checklist는 로컬 산출물로만 둔다.
@@ -210,6 +202,8 @@ python3 .claude/skills/harness/scripts/execute.py docs/tasks/<task-name>/phases/
 - agent는 사용자 승인 없이 실패 회피 목적으로 step 요구사항, Acceptance Criteria, task 문서, root docs를 수정해 재시도하지 않는다.
 - 실패 원인이 문서 누락, Acceptance Criteria 오류처럼 명확해 보여도 자동 수정하지 않는다. 먼저 원인과 수정 계획을 사용자에게 제시한다.
 - 재실행은 사용자가 문서/상태 수정과 `execute.py` 재실행을 명시적으로 승인한 뒤에만 한다.
+
+step별 commit agent는 코드와 task 문서 변경만 커밋한다. phase index 디스크 갱신은 commit agent 호출 직후에 일어나므로, phase index 변경분은 step별 commit에 섞이지 않고 finalize 단계에서 일괄 처리된다.
 
 phase 종료 시점에 `execute.py finalize()`는 두 종류 커밋을 만든다:
 

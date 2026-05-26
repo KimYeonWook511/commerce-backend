@@ -114,33 +114,21 @@ class StepExecutorTest(unittest.TestCase):
             {"order": 3, "title": "Step Design", "status": "completed"},
             {"order": 4, "title": "Worktree 생성 및 이동", "status": "completed"},
             {"order": 5, "title": "File Drafting", "status": "completed"},
-            {
-                "order": 6,
-                "title": "Execution Authorization",
-                "status": "completed",
-                "authorization": {
-                    "escalation_approved": True,
-                    "approval_prompt_mode": "per_run",
-                    "prefix_rule": None,
-                    "approved_by": "user",
-                    "approved_at": "2026-04-30T15:30:00+0900",
-                },
-            },
-            {"order": 7, "title": "Execution", "status": "pending"},
+            {"order": 6, "title": "Execution", "status": "pending"},
         ]
         for order, override in (overrides or {}).items():
             items[order - 1].update(override)
 
         self.write_json(
             self.root / "docs" / "tasks" / "skill-test" / "phases" / "0-mvp" / "workflow-checklist.json",
-            {"workflow": "dev-start", "status": "authorized", "items": items},
+            {"workflow": "dev-start", "status": "drafting", "items": items},
         )
 
     def write_step_output(self, *, exit_code: int = 0, stdout: str = "./gradlew test", stderr: str = "", last_message: str = "테스트로 ./gradlew test를 실행했다."):
         self.write_json(
-            self.root / "docs" / "tasks" / "skill-test" / "phases" / "0-mvp" / "step2-output.json",
+            self.root / "docs" / "tasks" / "skill-test" / "phases" / "0-mvp" / "step3-output.json",
             {
-                "step": 2,
+                "step": 3,
                 "name": "api",
                 "exitCode": exit_code,
                 "stdout": stdout,
@@ -151,16 +139,16 @@ class StepExecutorTest(unittest.TestCase):
 
     def write_ac_output(self, *, passed: bool = True, exit_code: int = 0):
         self.write_json(
-            self.root / "docs" / "tasks" / "skill-test" / "phases" / "0-mvp" / "step2-ac-output.json",
+            self.root / "docs" / "tasks" / "skill-test" / "phases" / "0-mvp" / "step3-ac-output.json",
             {
-                "step": 2,
+                "step": 3,
                 "commands": ["./gradlew test"],
                 "results": [{"command": "./gradlew test", "exitCode": exit_code, "stdout": "ok", "stderr": ""}],
                 "passed": passed,
             },
         )
 
-    def write_review_output(self, step_num: int = 2):
+    def write_review_output(self, step_num: int = 3):
         self.write_json(
             self.root / "docs" / "tasks" / "skill-test" / "phases" / "0-mvp" / f"step{step_num}-review-output.json",
             {
@@ -233,7 +221,7 @@ class StepExecutorTest(unittest.TestCase):
 
     def test_load_step_context_loads_agents_and_selected_docs(self):
         executor = self.make_executor()
-        step_text = (self.root / "docs" / "tasks" / "skill-test" / "phases" / "0-mvp" / "step2.md").read_text(encoding="utf-8")
+        step_text = (self.root / "docs" / "tasks" / "skill-test" / "phases" / "0-mvp" / "step3.md").read_text(encoding="utf-8")
 
         result = executor.load_step_context(step_text)
 
@@ -248,13 +236,13 @@ class StepExecutorTest(unittest.TestCase):
 
     def test_load_step_context_uses_divider(self):
         executor = self.make_executor()
-        step_text = (self.root / "docs" / "tasks" / "skill-test" / "phases" / "0-mvp" / "step2.md").read_text(encoding="utf-8")
+        step_text = (self.root / "docs" / "tasks" / "skill-test" / "phases" / "0-mvp" / "step3.md").read_text(encoding="utf-8")
         result = executor.load_step_context(step_text)
         self.assertIn("---", result)
 
     def test_load_step_context_skips_unreferenced_agents_docs(self):
         executor = self.make_executor()
-        result = executor.load_step_context("# Step 2\n\n코드를 정리하세요.")
+        result = executor.load_step_context("# Step 3\n\n코드를 정리하세요.")
         self.assertIn("태스크 문서 (docs/tasks/skill-test/architecture.md)", result)
         self.assertNotIn("관련 문서 (docs/ADR.md)", result)
         self.assertNotIn("관련 문서 (docs/api-spec.md)", result)
@@ -263,7 +251,7 @@ class StepExecutorTest(unittest.TestCase):
     def test_load_step_context_tolerates_missing_task_docs(self):
         executor = self.make_executor()
         (self.root / "docs" / "tasks" / "skill-test" / "db-schema.md").unlink()
-        result = executor.load_step_context("# Step 2\n\n코드를 정리하세요.")
+        result = executor.load_step_context("# Step 3\n\n코드를 정리하세요.")
         self.assertIn("태스크 문서 (docs/tasks/skill-test/prd.md)", result)
         self.assertNotIn("태스크 문서 (docs/tasks/skill-test/db-schema.md)", result)
 
@@ -324,7 +312,7 @@ class StepExecutorTest(unittest.TestCase):
         self.assertEqual(1, exc.exception.code)
 
     def test_validate_workflow_checklist_exits_when_required_step_pending(self):
-        self.write_workflow_checklist(overrides={6: {"status": "pending"}})
+        self.write_workflow_checklist(overrides={5: {"status": "pending"}})
 
         with self.assertRaises(SystemExit) as exc:
             self.make_executor().validate_workflow_checklist()
@@ -340,86 +328,12 @@ class StepExecutorTest(unittest.TestCase):
         self.assertEqual(1, exc.exception.code)
 
     def test_validate_workflow_checklist_exits_when_execution_already_completed(self):
-        self.write_workflow_checklist(overrides={7: {"status": "completed"}})
+        self.write_workflow_checklist(overrides={6: {"status": "completed"}})
 
         with self.assertRaises(SystemExit) as exc:
             self.make_executor().validate_workflow_checklist()
 
         self.assertEqual(1, exc.exception.code)
-
-    def test_validate_workflow_checklist_exits_when_authorization_missing(self):
-        self.write_workflow_checklist(overrides={6: {"authorization": None}})
-
-        with self.assertRaises(SystemExit) as exc:
-            self.make_executor().validate_workflow_checklist()
-
-        self.assertEqual(1, exc.exception.code)
-
-    def test_validate_workflow_checklist_exits_when_escalation_not_approved(self):
-        self.write_workflow_checklist(
-            overrides={6: {"authorization": {"escalation_approved": False, "approval_prompt_mode": "per_run"}}}
-        )
-
-        with self.assertRaises(SystemExit) as exc:
-            self.make_executor().validate_workflow_checklist()
-
-        self.assertEqual(1, exc.exception.code)
-
-    def test_validate_workflow_checklist_exits_when_approval_prompt_mode_invalid(self):
-        self.write_workflow_checklist(
-            overrides={
-                6: {
-                    "authorization": {
-                        "escalation_approved": True,
-                        "approval_prompt_mode": "always",
-                        "approved_by": "user",
-                        "approved_at": "2026-04-30T15:30:00+0900",
-                    }
-                }
-            }
-        )
-
-        with self.assertRaises(SystemExit) as exc:
-            self.make_executor().validate_workflow_checklist()
-
-        self.assertEqual(1, exc.exception.code)
-
-    def test_validate_workflow_checklist_exits_when_saved_prefix_rule_missing(self):
-        self.write_workflow_checklist(
-            overrides={
-                6: {
-                    "authorization": {
-                        "escalation_approved": True,
-                        "approval_prompt_mode": "saved_prefix_rule",
-                        "prefix_rule": None,
-                        "approved_by": "user",
-                        "approved_at": "2026-04-30T15:30:00+0900",
-                    }
-                }
-            }
-        )
-
-        with self.assertRaises(SystemExit) as exc:
-            self.make_executor().validate_workflow_checklist()
-
-        self.assertEqual(1, exc.exception.code)
-
-    def test_validate_workflow_checklist_passes_when_saved_prefix_rule_matches(self):
-        self.write_workflow_checklist(
-            overrides={
-                6: {
-                    "authorization": {
-                        "escalation_approved": True,
-                        "approval_prompt_mode": "saved_prefix_rule",
-                        "prefix_rule": ["python3", ".claude/skills/harness/scripts/execute.py"],
-                        "approved_by": "user",
-                        "approved_at": "2026-04-30T15:30:00+0900",
-                    }
-                }
-            }
-        )
-
-        self.make_executor().validate_workflow_checklist()
 
     def test_validate_workflow_checklist_passes_when_authorized(self):
         self.make_executor().validate_workflow_checklist()
@@ -432,7 +346,7 @@ class StepExecutorTest(unittest.TestCase):
         checklist = self.read_json(
             self.root / "docs" / "tasks" / "skill-test" / "phases" / "0-mvp" / "workflow-checklist.json"
         )
-        execution = checklist["items"][6]
+        execution = checklist["items"][5]
         self.assertEqual("in_progress", checklist["status"])
         self.assertEqual("in_progress", execution["status"])
         self.assertIn("started_at", execution)
@@ -445,14 +359,14 @@ class StepExecutorTest(unittest.TestCase):
         checklist = self.read_json(
             self.root / "docs" / "tasks" / "skill-test" / "phases" / "0-mvp" / "workflow-checklist.json"
         )
-        execution = checklist["items"][6]
+        execution = checklist["items"][5]
         self.assertEqual("completed", checklist["status"])
         self.assertEqual("completed", execution["status"])
         self.assertIn("completed_at", execution)
 
     def test_check_blockers_error_exits(self):
         index = self.read_json(self.root / "docs" / "tasks" / "skill-test" / "phases" / "0-mvp" / "index.json")
-        index["steps"][2] = {"step": 2, "name": "api", "status": "error", "error_message": "fail"}
+        index["steps"][2] = {"step": 3, "name": "api", "status": "error", "error_message": "fail"}
         self.write_json(self.root / "docs" / "tasks" / "skill-test" / "phases" / "0-mvp" / "index.json", index)
         output = io.StringIO()
         with self.assertRaises(SystemExit) as exc:
@@ -463,7 +377,7 @@ class StepExecutorTest(unittest.TestCase):
 
     def test_check_blockers_blocked_exits(self):
         index = self.read_json(self.root / "docs" / "tasks" / "skill-test" / "phases" / "0-mvp" / "index.json")
-        index["steps"][2] = {"step": 2, "name": "api", "status": "blocked", "blocked_reason": "API key"}
+        index["steps"][2] = {"step": 3, "name": "api", "status": "blocked", "blocked_reason": "API key"}
         self.write_json(self.root / "docs" / "tasks" / "skill-test" / "phases" / "0-mvp" / "index.json", index)
         output = io.StringIO()
         with self.assertRaises(SystemExit) as exc:
@@ -516,17 +430,17 @@ class StepExecutorTest(unittest.TestCase):
         executor = self.make_executor()
         index_before = self.read_json(self.root / "docs" / "tasks" / "skill-test" / "phases" / "0-mvp" / "index.json")
         self.assertNotIn("started_at", index_before["steps"][2])
-        executor.mark_step_started(2)
+        executor.mark_step_started(3)
         first = self.read_json(self.root / "docs" / "tasks" / "skill-test" / "phases" / "0-mvp" / "index.json")["steps"][2]["started_at"]
-        executor.mark_step_started(2)
+        executor.mark_step_started(3)
         second = self.read_json(self.root / "docs" / "tasks" / "skill-test" / "phases" / "0-mvp" / "index.json")["steps"][2]["started_at"]
         self.assertEqual(first, second)
 
     def test_ensure_step_file_exists_exits_when_missing(self):
         executor = self.make_executor()
-        (self.root / "docs" / "tasks" / "skill-test" / "phases" / "0-mvp" / "step2.md").unlink()
+        (self.root / "docs" / "tasks" / "skill-test" / "phases" / "0-mvp" / "step3.md").unlink()
         with self.assertRaises(SystemExit) as exc:
-            executor.ensure_step_file_exists(2)
+            executor.ensure_step_file_exists(3)
         self.assertEqual(1, exc.exception.code)
 
     def test_validate_worktree_context_passes_when_in_worktree_on_work_branch(self):
@@ -560,10 +474,10 @@ class StepExecutorTest(unittest.TestCase):
         executor = self.make_executor()
         mock_result = MagicMock(returncode=0, stdout="{}", stderr="")
         with patch.object(self.execute.developer_worker.subprocess, "run", return_value=mock_result):
-            executor.run_developer_worker({"step": 2, "name": "api"}, "CONTEXT", "GUARD")
+            executor.run_developer_worker({"step": 3, "name": "api"}, "CONTEXT", "GUARD")
 
-        output = self.read_json(self.root / "docs" / "tasks" / "skill-test" / "phases" / "0-mvp" / "step2-output.json")
-        self.assertEqual(2, output["step"])
+        output = self.read_json(self.root / "docs" / "tasks" / "skill-test" / "phases" / "0-mvp" / "step3-output.json")
+        self.assertEqual(3, output["step"])
         self.assertEqual("api", output["name"])
 
     def test_progress_indicator_sets_elapsed(self):
@@ -583,6 +497,8 @@ class StepExecutorTest(unittest.TestCase):
             self.write_step_output()
             index = self.read_json(self.root / "docs" / "tasks" / "skill-test" / "phases" / "0-mvp" / "index.json")
             current = next(item for item in index["steps"] if item["step"] == step["step"])
+            # 새 step 시작을 흉내내기 위해 fixture에 남아 있을 수 있는 이전 completed_at은 제거한다.
+            current.pop("completed_at", None)
             current["status"] = "completed"
             current["summary"] = "스킬 테스트 API를 추가한다"
             self.write_json(self.root / "docs" / "tasks" / "skill-test" / "phases" / "0-mvp" / "index.json", index)
@@ -594,13 +510,26 @@ class StepExecutorTest(unittest.TestCase):
         executor.run_acceptance_checks = MagicMock(return_value={"passed": True})
         self.write_ac_output()
 
+        commit_time_disk_state = {}
+
+        def capture_disk_state(_root, _phase_dir, _step):
+            disk_index = self.read_json(self.root / "docs" / "tasks" / "skill-test" / "phases" / "0-mvp" / "index.json")
+            step_on_disk = next(item for item in disk_index["steps"] if item["step"] == 3)
+            commit_time_disk_state["completed_at_present"] = "completed_at" in step_on_disk
+
         with patch.object(self.execute.git_ops, "list_worktree_paths", return_value=["src/main/java/com/commerce/skilltest/ApiService.java"]):
-            with patch.object(self.execute.commit_agent, "run") as mock_commit_agent:
-                result = executor.execute_single_step({"step": 2, "name": "api"})
+            with patch.object(self.execute.commit_agent, "run", side_effect=capture_disk_state) as mock_commit_agent:
+                result = executor.execute_single_step({"step": 3, "name": "api"})
 
         self.assertTrue(result)
         mock_commit_agent.assert_called_once_with(executor.root, executor.phase_dir, ANY)
         executor.review_step_result.assert_called_once()
+        # #110: commit_agent 호출 시점에는 phase index 디스크에 completed_at이 아직 없어야 한다.
+        self.assertFalse(commit_time_disk_state["completed_at_present"])
+        # commit_agent 호출 이후 write_json이 일어나 디스크에 completed_at이 기록되어야 한다.
+        final_index = self.read_json(self.root / "docs" / "tasks" / "skill-test" / "phases" / "0-mvp" / "index.json")
+        final_step = next(item for item in final_index["steps"] if item["step"] == 3)
+        self.assertIn("completed_at", final_step)
 
     def test_execute_single_step_blocked_updates_top_index(self):
         executor = self.make_executor()
@@ -624,7 +553,7 @@ class StepExecutorTest(unittest.TestCase):
         self.write_ac_output()
 
         with self.assertRaises(SystemExit) as exc:
-            executor.execute_single_step({"step": 2, "name": "api"})
+            executor.execute_single_step({"step": 3, "name": "api"})
 
         self.assertEqual(2, exc.exception.code)
         task = self.read_json(self.root / "docs" / "tasks" / "skill-test" / "phases" / "index.json")
@@ -652,7 +581,7 @@ class StepExecutorTest(unittest.TestCase):
         executor.run_acceptance_checks = MagicMock(return_value={"passed": False})
 
         with self.assertRaises(SystemExit) as exc:
-            executor.execute_single_step({"step": 2, "name": "api"})
+            executor.execute_single_step({"step": 3, "name": "api"})
 
         self.assertEqual(1, exc.exception.code)
         index = self.read_json(self.root / "docs" / "tasks" / "skill-test" / "phases" / "0-mvp" / "index.json")
@@ -751,7 +680,7 @@ class StepExecutorTest(unittest.TestCase):
         executor.run_acceptance_checks = MagicMock(return_value={"passed": True})
 
         with self.assertRaises(SystemExit) as exc:
-            executor.execute_single_step({"step": 2, "name": "api"})
+            executor.execute_single_step({"step": 3, "name": "api"})
 
         self.assertEqual(1, exc.exception.code)
         index = self.read_json(self.root / "docs" / "tasks" / "skill-test" / "phases" / "0-mvp" / "index.json")
@@ -767,7 +696,7 @@ class StepExecutorTest(unittest.TestCase):
             yield types.SimpleNamespace(elapsed=0.0)
 
         def fake_invoke(step: dict, _context: str, _guardrails: str):
-            output_path = self.root / "docs" / "tasks" / "skill-test" / "phases" / "0-mvp" / "step2-output.json"
+            output_path = self.root / "docs" / "tasks" / "skill-test" / "phases" / "0-mvp" / "step3-output.json"
             output_path.unlink(missing_ok=True)
             index = self.read_json(self.root / "docs" / "tasks" / "skill-test" / "phases" / "0-mvp" / "index.json")
             current = next(item for item in index["steps"] if item["step"] == step["step"])
@@ -779,12 +708,12 @@ class StepExecutorTest(unittest.TestCase):
         executor.run_developer_worker = fake_invoke
 
         with self.assertRaises(SystemExit) as exc:
-            executor.execute_single_step({"step": 2, "name": "api"})
+            executor.execute_single_step({"step": 3, "name": "api"})
 
         self.assertEqual(1, exc.exception.code)
         index = self.read_json(self.root / "docs" / "tasks" / "skill-test" / "phases" / "0-mvp" / "index.json")
         self.assertEqual("error", index["steps"][2]["status"])
-        self.assertIn("step2-output.json", index["steps"][2]["error_message"])
+        self.assertIn("step3-output.json", index["steps"][2]["error_message"])
 
     def test_execute_single_step_retries_when_review_worker_rejects(self):
         executor = self.make_executor()
@@ -810,7 +739,7 @@ class StepExecutorTest(unittest.TestCase):
         with patch.object(self.execute.git_ops, "list_worktree_paths", return_value=["src/main/java/com/commerce/skilltest/ApiService.java"]):
             self.write_ac_output()
             with self.assertRaises(SystemExit) as exc:
-                executor.execute_single_step({"step": 2, "name": "api"})
+                executor.execute_single_step({"step": 3, "name": "api"})
 
         self.assertEqual(1, exc.exception.code)
         index = self.read_json(self.root / "docs" / "tasks" / "skill-test" / "phases" / "0-mvp" / "index.json")
@@ -842,7 +771,7 @@ class StepExecutorTest(unittest.TestCase):
         executor.run_acceptance_checks = fake_run_acceptance
 
         with self.assertRaises(SystemExit) as exc:
-            executor.execute_single_step({"step": 2, "name": "api"})
+            executor.execute_single_step({"step": 3, "name": "api"})
 
         self.assertEqual(1, exc.exception.code)
         index = self.read_json(self.root / "docs" / "tasks" / "skill-test" / "phases" / "0-mvp" / "index.json")
