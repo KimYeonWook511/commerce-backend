@@ -116,7 +116,7 @@ public class StockRestoreOutboxRelayService {
 	}
 
 	private PublishResult publishTarget(OutboxPublishTarget target, LocalDateTime now) {
-		boolean traceIdPushed = pushTraceIdIfValid(target.getTraceId());
+		boolean traceIdPushed = pushTraceIdIfMissing(target.getTraceId());
 		try {
 			try {
 				eventPublisher.publish(target);
@@ -135,9 +135,14 @@ public class StockRestoreOutboxRelayService {
 		}
 	}
 
-	private boolean pushTraceIdIfValid(String traceId) {
-		if (LogContext.isValidTraceId(traceId)) {
-			LogContext.putTraceId(traceId);
+	// 스케줄러 호출 시점에는 MDC가 비어 있어 target의 traceId를 push한다.
+	// 향후 HTTP 흐름에서 직접 호출되어 MDC에 traceId가 이미 있는 경우에는 그대로 보존한다.
+	private boolean pushTraceIdIfMissing(String targetTraceId) {
+		if (LogContext.isValidTraceId(LogContext.getTraceId())) {
+			return false;
+		}
+		if (LogContext.isValidTraceId(targetTraceId)) {
+			LogContext.putTraceId(targetTraceId);
 			return true;
 		}
 		return false;

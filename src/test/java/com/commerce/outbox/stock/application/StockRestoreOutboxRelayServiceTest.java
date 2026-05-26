@@ -313,9 +313,9 @@ class StockRestoreOutboxRelayServiceTest {
 		);
 	}
 
-	@DisplayName("target traceId가 유효하면 publish 호출 시점에 MDC에 복원하고 종료 시 정리한다")
+	@DisplayName("MDC가 비어있고 target traceId가 유효하면 publish 호출 시점에 MDC에 복원하고 종료 시 정리한다 (스케줄러 경로)")
 	@Test
-	void publishPendingEvents_whenTargetHasValidTraceId_restoreMdcAndClear() {
+	void publishPendingEvents_whenMdcEmptyAndTargetHasValidTraceId_restoreMdcAndClear() {
 		// given
 		LocalDateTime now = LocalDateTime.of(2000, 1, 1, 0, 0, 0);
 		OutboxPublishTarget target = mockTarget(30L, "evt-30");
@@ -343,9 +343,41 @@ class StockRestoreOutboxRelayServiceTest {
 		assertThat(LogContext.getTraceId()).isNull();
 	}
 
-	@DisplayName("target traceId가 null이면 MDC를 건드리지 않는다")
+	@DisplayName("MDC에 이미 traceId가 있으면 target traceId가 유효해도 기존 값을 보존한다 (HTTP 흐름에서 직접 호출 시나리오)")
 	@Test
-	void publishPendingEvents_whenTargetTraceIdNull_doesNotTouchMdc() {
+	void publishPendingEvents_whenMdcAlreadyHasTraceId_preservesExistingMdc() {
+		// given
+		String existingTraceId = "pre-existing-trace";
+		String targetTraceId = "target-trace-different";
+		LogContext.putTraceId(existingTraceId);
+		LocalDateTime now = LocalDateTime.of(2000, 1, 1, 0, 0, 0);
+		OutboxPublishTarget target = mockTarget(34L, "evt-34");
+		given(target.getTraceId()).willReturn(targetTraceId);
+
+		given(outboxEventRepository.findPendingPublishTargets(
+			eq(OutboxEventType.STOCK_RESTORE_REQUESTED),
+			eq(100)
+		)).willReturn(List.of(target));
+		given(outboxEventRepository.markPublishingFromPending(34L, OutboxEventType.STOCK_RESTORE_REQUESTED)).willReturn(1);
+		given(outboxEventRepository.markSent(34L, OutboxEventType.STOCK_RESTORE_REQUESTED)).willReturn(1);
+
+		AtomicReference<String> capturedTraceId = new AtomicReference<>();
+		doAnswer(invocation -> {
+			capturedTraceId.set(LogContext.getTraceId());
+			return null;
+		}).when(eventPublisher).publish(any());
+
+		// when
+		stockRestoreOutboxRelayService.publishPendingEvents(now);
+
+		// then
+		assertThat(capturedTraceId.get()).isEqualTo(existingTraceId);
+		assertThat(LogContext.getTraceId()).isEqualTo(existingTraceId);
+	}
+
+	@DisplayName("MDC에 이미 traceId가 있으면 target traceId가 null이어도 기존 값을 보존한다")
+	@Test
+	void publishPendingEvents_whenMdcAlreadyHasTraceIdAndTargetTraceIdNull_preservesExistingMdc() {
 		// given
 		LogContext.putTraceId("pre-existing-trace");
 		LocalDateTime now = LocalDateTime.of(2000, 1, 1, 0, 0, 0);
@@ -373,9 +405,9 @@ class StockRestoreOutboxRelayServiceTest {
 		assertThat(LogContext.getTraceId()).isEqualTo("pre-existing-trace");
 	}
 
-	@DisplayName("target traceId 형식이 유효하지 않으면 MDC를 건드리지 않는다")
+	@DisplayName("MDC가 비어있고 target traceId 형식이 유효하지 않으면 MDC를 건드리지 않는다")
 	@Test
-	void publishPendingEvents_whenTargetTraceIdInvalid_doesNotTouchMdc() {
+	void publishPendingEvents_whenMdcEmptyAndTargetTraceIdInvalid_doesNotTouchMdc() {
 		// given
 		LocalDateTime now = LocalDateTime.of(2000, 1, 1, 0, 0, 0);
 		OutboxPublishTarget target = mockTarget(32L, "evt-32");

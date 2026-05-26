@@ -43,9 +43,9 @@ class RedisOrderIdempotencyStoreTest {
 		LogContext.removeTraceId();
 	}
 
-	@DisplayName("유효한 traceId가 동봉된 이벤트는 listener 진입 시 MDC에 복원하고 종료 시 정리한다")
+	@DisplayName("MDC가 비어있고 이벤트에 valid traceId가 있으면 listener 진입 시 MDC에 복원하고 종료 시 정리한다 (비동기 fallback)")
 	@Test
-	void handle_whenValidTraceId_pushAndRemoveMdc() {
+	void handle_whenMdcEmptyAndValidTraceId_pushAndRemoveMdc() {
 		// given
 		String traceId = "trace-abc-111";
 		OrderIdempotencyCacheEvent event = new OrderIdempotencyCacheEvent(
@@ -66,9 +66,34 @@ class RedisOrderIdempotencyStoreTest {
 		assertThat(LogContext.getTraceId()).isNull();
 	}
 
-	@DisplayName("traceId가 null인 이벤트는 MDC를 건드리지 않는다")
+	@DisplayName("MDC에 이미 traceId가 있으면 이벤트 traceId를 무시하고 기존 값을 보존한다 (동기 실행 경로)")
 	@Test
-	void handle_whenNullTraceId_doesNotTouchMdc() {
+	void handle_whenMdcAlreadyHasTraceId_preservesExistingMdc() {
+		// given
+		String existingTraceId = "pre-existing-trace";
+		String eventTraceId = "event-trace-different";
+		LogContext.putTraceId(existingTraceId);
+		OrderIdempotencyCacheEvent event = new OrderIdempotencyCacheEvent(
+			1L, "idem-key", 100L, Duration.ofSeconds(600), eventTraceId);
+
+		AtomicReference<String> capturedTraceId = new AtomicReference<>();
+		given(redisTemplate.opsForValue()).willReturn(valueOperations);
+		doAnswer(invocation -> {
+			capturedTraceId.set(LogContext.getTraceId());
+			return null;
+		}).when(valueOperations).set(anyString(), anyString(), any(Duration.class));
+
+		// when
+		store.handle(event);
+
+		// then
+		assertThat(capturedTraceId.get()).isEqualTo(existingTraceId);
+		assertThat(LogContext.getTraceId()).isEqualTo(existingTraceId);
+	}
+
+	@DisplayName("MDC에 이미 traceId가 있으면 이벤트 traceId가 null이어도 기존 값을 보존한다")
+	@Test
+	void handle_whenMdcAlreadyHasTraceIdAndEventTraceIdNull_preservesExistingMdc() {
 		// given
 		LogContext.putTraceId("pre-existing-trace");
 		OrderIdempotencyCacheEvent event = new OrderIdempotencyCacheEvent(
@@ -89,9 +114,31 @@ class RedisOrderIdempotencyStoreTest {
 		assertThat(LogContext.getTraceId()).isEqualTo("pre-existing-trace");
 	}
 
-	@DisplayName("traceId 형식이 유효하지 않으면 MDC를 건드리지 않는다")
+	@DisplayName("MDC가 비어있고 이벤트 traceId도 null이면 MDC를 건드리지 않는다")
 	@Test
-	void handle_whenInvalidTraceId_doesNotTouchMdc() {
+	void handle_whenMdcEmptyAndEventTraceIdNull_doesNotTouchMdc() {
+		// given
+		OrderIdempotencyCacheEvent event = new OrderIdempotencyCacheEvent(
+			1L, "idem-key", 100L, Duration.ofSeconds(600), null);
+
+		AtomicReference<String> capturedTraceId = new AtomicReference<>();
+		given(redisTemplate.opsForValue()).willReturn(valueOperations);
+		doAnswer(invocation -> {
+			capturedTraceId.set(LogContext.getTraceId());
+			return null;
+		}).when(valueOperations).set(anyString(), anyString(), any(Duration.class));
+
+		// when
+		store.handle(event);
+
+		// then
+		assertThat(capturedTraceId.get()).isNull();
+		assertThat(LogContext.getTraceId()).isNull();
+	}
+
+	@DisplayName("MDC가 비어있고 이벤트 traceId 형식이 유효하지 않으면 MDC를 건드리지 않는다")
+	@Test
+	void handle_whenMdcEmptyAndInvalidTraceId_doesNotTouchMdc() {
 		// given
 		String invalidTraceId = "invalid trace id with spaces!";
 		OrderIdempotencyCacheEvent event = new OrderIdempotencyCacheEvent(

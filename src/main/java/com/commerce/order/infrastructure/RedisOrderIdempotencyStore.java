@@ -70,7 +70,7 @@ public class RedisOrderIdempotencyStore implements OrderIdempotencyStore {
 	// RDB 커밋 이후에만 Redis에 캐싱한다. Redis 장애 시 RDB 롤백을 방지하기 위함이다 (ADR-005).
 	@TransactionalEventListener(phase = TransactionPhase.AFTER_COMMIT)
 	public void handle(OrderIdempotencyCacheEvent event) {
-		boolean traceIdPushed = pushTraceIdIfValid(event.getTraceId());
+		boolean traceIdPushed = pushTraceIdIfMissing(event.getTraceId());
 		try {
 			try {
 				complete(event.getMemberId(), event.getIdempotencyKey(), event.getOrderId(), event.getTtl());
@@ -84,9 +84,14 @@ public class RedisOrderIdempotencyStore implements OrderIdempotencyStore {
 		}
 	}
 
-	private boolean pushTraceIdIfValid(String traceId) {
-		if (LogContext.isValidTraceId(traceId)) {
-			LogContext.putTraceId(traceId);
+	// AFTER_COMMIT은 기본 동기 실행 — 호출 스레드 MDC에 traceId가 이미 있으면 그대로 보존한다.
+	// 이벤트의 traceId는 향후 @Async / multicaster TaskExecutor 비동기 전환 시 fallback으로 사용된다.
+	private boolean pushTraceIdIfMissing(String eventTraceId) {
+		if (LogContext.isValidTraceId(LogContext.getTraceId())) {
+			return false;
+		}
+		if (LogContext.isValidTraceId(eventTraceId)) {
+			LogContext.putTraceId(eventTraceId);
 			return true;
 		}
 		return false;
