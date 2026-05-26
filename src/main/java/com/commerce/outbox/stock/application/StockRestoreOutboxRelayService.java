@@ -8,6 +8,7 @@ import org.springframework.stereotype.Service;
 import org.springframework.transaction.annotation.Propagation;
 import org.springframework.transaction.annotation.Transactional;
 
+import com.commerce.common.log.LogContext;
 import com.commerce.outbox.domain.OutboxEventType;
 import com.commerce.outbox.domain.OutboxPublishTarget;
 import com.commerce.outbox.domain.repository.OutboxEventRepository;
@@ -115,16 +116,31 @@ public class StockRestoreOutboxRelayService {
 	}
 
 	private PublishResult publishTarget(OutboxPublishTarget target, LocalDateTime now) {
+		boolean traceIdPushed = pushTraceIdIfValid(target.getTraceId());
 		try {
-			eventPublisher.publish(target);
-			if (!markSent(target)) {
-				return PublishResult.SKIPPED;
+			try {
+				eventPublisher.publish(target);
+				if (!markSent(target)) {
+					return PublishResult.SKIPPED;
+				}
+				return PublishResult.PUBLISHED;
+			} catch (RuntimeException ex) {
+				handlePublishFailure(target, now, ex);
+				return PublishResult.FAILED;
 			}
-			return PublishResult.PUBLISHED;
-		} catch (RuntimeException ex) {
-			handlePublishFailure(target, now, ex);
-			return PublishResult.FAILED;
+		} finally {
+			if (traceIdPushed) {
+				LogContext.removeTraceId();
+			}
 		}
+	}
+
+	private boolean pushTraceIdIfValid(String traceId) {
+		if (LogContext.isValidTraceId(traceId)) {
+			LogContext.putTraceId(traceId);
+			return true;
+		}
+		return false;
 	}
 
 	private void handlePublishFailure(OutboxPublishTarget target, LocalDateTime now, RuntimeException ex) {
