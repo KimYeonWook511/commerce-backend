@@ -42,7 +42,7 @@
 
 - 구현 전에 Plan Mode로 계획을 작성하고 `ExitPlanMode`로 사용자 승인을 받은 뒤 실행합니다.
 - 사용자가 승인하기 전에는 파일을 생성하거나 수정하지 않습니다.
-- `/harness` skill을 사용할 때는 `workflow-checklist.json`의 `Execution Authorization`이 완료된 뒤에만 `execute.py`를 실행합니다.
+- `/harness` skill을 사용할 때는 사용자에게 진행 확인을 받은 뒤에만 `execute.py`를 실행합니다.
 
 ## 참고 문서
 

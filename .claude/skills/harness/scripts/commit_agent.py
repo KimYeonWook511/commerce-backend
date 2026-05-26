@@ -29,6 +29,9 @@ def build_prompt(step_name: str, summary: str) -> str:
         "금지사항:\n"
         "- git push, git pull, 브랜치 생성/변경/삭제는 절대 하지 마라.\n"
         "- commit 외 다른 git 작업은 수행하지 마라.\n"
+        "- phase index 파일(`docs/tasks/<task-name>/phases/index.json`, "
+        "`docs/tasks/<task-name>/phases/<phase-name>/index.json`)은 staging하지 마라. "
+        "두 파일은 phase 종료 시 finalize 단계에서 chore 커밋으로 한 번에 처리된다.\n"
     )
 
 
