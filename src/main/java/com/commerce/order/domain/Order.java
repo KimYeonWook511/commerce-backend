@@ -28,6 +28,8 @@ import lombok.AccessLevel;
 import lombok.Builder;
 import lombok.Getter;
 import lombok.NoArgsConstructor;
+import org.hibernate.annotations.JdbcTypeCode;
+import org.hibernate.type.SqlTypes;
 
 @Entity
 @Table(name = "tbl_order", uniqueConstraints = {
@@ -52,6 +54,7 @@ public class Order extends BaseTimeEntity {
 	private int totalPrice;
 
 	@Enumerated(EnumType.STRING)
+	@JdbcTypeCode(SqlTypes.VARCHAR)
 	@Column(nullable = false)
 	private OrderStatus status;
 

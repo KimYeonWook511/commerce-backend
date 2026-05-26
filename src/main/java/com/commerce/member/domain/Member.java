@@ -14,6 +14,8 @@ import lombok.AccessLevel;
 import lombok.Builder;
 import lombok.Getter;
 import lombok.NoArgsConstructor;
+import org.hibernate.annotations.JdbcTypeCode;
+import org.hibernate.type.SqlTypes;
 
 @Entity
 @Table(name = "tbl_member")
@@ -35,6 +37,7 @@ public class Member extends BaseTimeEntity {
 	private String username;
 
 	@Enumerated(EnumType.STRING)
+	@JdbcTypeCode(SqlTypes.VARCHAR)
 	@Column(nullable = false)
 	private MemberRole role;
 

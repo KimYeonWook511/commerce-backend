@@ -19,6 +19,8 @@ import lombok.AccessLevel;
 import lombok.Builder;
 import lombok.Getter;
 import lombok.NoArgsConstructor;
+import org.hibernate.annotations.JdbcTypeCode;
+import org.hibernate.type.SqlTypes;
 
 @Entity
 @Table(
@@ -48,18 +50,22 @@ public class PaymentAttempt extends BaseTimeEntity {
 	private int amount;
 
 	@Enumerated(EnumType.STRING)
+	@JdbcTypeCode(SqlTypes.VARCHAR)
 	@Column(nullable = false)
 	private PaymentProvider provider;
 
 	@Enumerated(EnumType.STRING)
+	@JdbcTypeCode(SqlTypes.VARCHAR)
 	@Column(nullable = false)
 	private PaymentAttemptType type;
 
 	@Enumerated(EnumType.STRING)
+	@JdbcTypeCode(SqlTypes.VARCHAR)
 	@Column(nullable = false)
 	private PaymentAttemptStatus status;
 
 	@Enumerated(EnumType.STRING)
+	@JdbcTypeCode(SqlTypes.VARCHAR)
 	private PaymentAttemptFailCode failCode;
 
 	private String failDetail;

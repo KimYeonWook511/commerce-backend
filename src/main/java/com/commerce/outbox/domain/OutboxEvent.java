@@ -18,6 +18,8 @@ import lombok.AccessLevel;
 import lombok.Builder;
 import lombok.Getter;
 import lombok.NoArgsConstructor;
+import org.hibernate.annotations.JdbcTypeCode;
+import org.hibernate.type.SqlTypes;
 
 @Entity
 @Table(
@@ -38,7 +40,8 @@ public class OutboxEvent extends BaseTimeEntity {
 	private String eventId;
 
 	@Enumerated(EnumType.STRING)
-	@Column(nullable = false, length = 50)
+	@JdbcTypeCode(SqlTypes.VARCHAR)
+	@Column(nullable = false)
 	private OutboxEventType eventType;
 
 	@Lob
@@ -46,7 +49,8 @@ public class OutboxEvent extends BaseTimeEntity {
 	private String payload;
 
 	@Enumerated(EnumType.STRING)
-	@Column(nullable = false, length = 20)
+	@JdbcTypeCode(SqlTypes.VARCHAR)
+	@Column(nullable = false)
 	private OutboxEventStatus status;
 
 	@Column(nullable = false)
@@ -61,7 +65,8 @@ public class OutboxEvent extends BaseTimeEntity {
 	private String lastError;
 
 	@Enumerated(EnumType.STRING)
-	@Column(nullable = false, length = 30)
+	@JdbcTypeCode(SqlTypes.VARCHAR)
+	@Column(nullable = false)
 	private OutboxAggregateType aggregateType;
 
 	@Column(nullable = false)
