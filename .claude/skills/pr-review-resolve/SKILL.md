@@ -155,7 +155,7 @@ PR #<번호> "<제목>" review 코멘트 N개를 발견했습니다.
 
 1. 코드 변경 적용 (Edit / Write 사용)
 2. 테스트 실행으로 회귀 없음 확인 (`./gradlew test` 등)
-3. 해당 review 항목 단독 커밋 — **반드시 `docs/commit-conventions.md` 형식을 준수한다.** 타입(`feat`, `fix`, `refactor`, `test`, `docs`, `chore`)과 subject 문체(`~한다`)를 확인하고, 커밋 메시지에 어떤 review에 대한 대응인지 드러나도록 작성한다.
+3. 해당 review 항목 단독 커밋 — **반드시 `docs/commit-conventions.md` 형식을 준수한다.** 타입(`feat`, `fix`, `refactor`, `test`, `docs`, `chore`)과 subject 문체(`~한다`)를 확인하고, 어떤 review에 대한 대응인지 subject 한 줄에 압축해 표현한다. body는 작성하지 않는다(자동화 commit 예외 룰).
 
 **modify 인 경우**:
 

@@ -74,7 +74,7 @@ Execution Authorization 승인 후 `execute.py`가 아래 순서로 step을 처�
 
 - **Developer Worker**: `execute.py`가 tmux pane을 생성하고 `claude -p`로 worker를 실행한다. Acceptance Criteria를 직접 실행해 검증한다.
 - **Reviewer Worker**: developer 결과를 read-only 관점으로 검토한다. `pass`, `retryable_error`, `blocked` 중 하나를 반환한다.
-- **Commit Agent**: reviewer pass 시 `git status`/`git diff`를 확인하고 commit-conventions.md를 읽어 커밋 단위와 메시지를 판단해 커밋한다. 코드 변경과 task 문서 변경의 목적이 다르면 분리 commit(코드 → docs:)으로 나눈다. 예외(write-retrospective 등)는 한 commit으로 묶는다.
+- **Commit Agent**: reviewer pass 시 `git status`/`git diff`를 확인하고 commit-conventions.md를 읽어 커밋 단위와 메시지를 판단해 커밋한다. 코드 변경과 task 문서 변경의 목적이 다르면 분리 commit(코드 → docs:)으로 나눈다. 예외(write-retrospective 등)는 한 commit으로 묶는다. body는 작성하지 않고 subject만 사용한다(`commit-conventions.md`의 자동화 commit 예외 룰).
 - **Finalize**: phase 종료 시 `execute.py finalize()`가 step commit agent가 흡수하지 못한 task 문서 잔여 변경분을 `docs:` 커밋으로, phase index 두 개를 `chore:` 커밋으로 마무리한다.
 
 ## 현재 Repo의 역할별 구성
