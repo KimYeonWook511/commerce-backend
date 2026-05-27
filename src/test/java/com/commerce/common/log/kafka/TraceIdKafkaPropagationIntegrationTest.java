@@ -237,11 +237,11 @@ class TraceIdKafkaPropagationIntegrationTest {
 	// consumer poll loop가 도는 동안 spy의 stub을 새로 등록하면 UnfinishedStubbingException race가 발생한다.
 	// 컨테이너를 동기적으로 stop → stub 등록 → start → 파티션 재할당 대기 순으로 race window를 닫는다.
 	private void stubAfterRecord(Answer<?> answer) {
-		for (MessageListenerContainer container : kafkaListenerEndpointRegistry.getAllListenerContainers()) {
+		for (MessageListenerContainer container : kafkaListenerEndpointRegistry.getListenerContainers()) {
 			container.stop();
 		}
 		doAnswer(answer).when(traceIdRecordInterceptor).afterRecord(any(), any());
-		for (MessageListenerContainer container : kafkaListenerEndpointRegistry.getAllListenerContainers()) {
+		for (MessageListenerContainer container : kafkaListenerEndpointRegistry.getListenerContainers()) {
 			container.start();
 		}
 		waitForListenerAssignment();
