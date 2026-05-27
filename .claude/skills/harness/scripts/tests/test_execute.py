@@ -512,7 +512,7 @@ class StepExecutorTest(unittest.TestCase):
 
         commit_time_disk_state = {}
 
-        def capture_disk_state(_root, _phase_dir, _step):
+        def capture_disk_state(_root, _phase_dir, _step, **_kwargs):
             disk_index = self.read_json(self.root / "docs" / "tasks" / "skill-test" / "phases" / "0-mvp" / "index.json")
             step_on_disk = next(item for item in disk_index["steps"] if item["step"] == 3)
             commit_time_disk_state["completed_at_present"] = "completed_at" in step_on_disk
@@ -522,7 +522,7 @@ class StepExecutorTest(unittest.TestCase):
                 result = executor.execute_single_step({"step": 3, "name": "api"})
 
         self.assertTrue(result)
-        mock_commit_agent.assert_called_once_with(executor.root, executor.phase_dir, ANY)
+        mock_commit_agent.assert_called_once_with(executor.root, executor.phase_dir, ANY, model=executor.commit_model)
         executor.review_step_result.assert_called_once()
         # #110: commit_agent 호출 시점에는 phase index 디스크에 completed_at이 아직 없어야 한다.
         self.assertFalse(commit_time_disk_state["completed_at_present"])

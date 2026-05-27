@@ -74,12 +74,25 @@ step 실행 상태 파일이다.
 - `completed_at`
 - `failed_at`
 - `blocked_at`
+- `execution`: phase 최초 실행 시 `execute.py`가 1회 기록한다. 재실행 시 기존 값을 보존한다. 하위 필드는 `developer_model`, `reviewer_model`, `commit_model` (각각 `--developer-model` / `--reviewer-model` / `--commit-model` CLI 인자값)
 
 상태별 추가 필드 의미:
 
 - `summary`: 완료한 변경의 한 줄 요약
 - `error_message`: 실패 원인
 - `blocked_reason`: 사용자 개입 또는 외부 제약으로 인해 막힌 사유
+
+`execution` 필드 예:
+
+```json
+{
+  "execution": {
+    "developer_model": "sonnet",
+    "reviewer_model": "opus",
+    "commit_model": "haiku"
+  }
+}
+```
 
 ## `docs/tasks/<task-name>/phases/<phase-name>/workflow-checklist.json`
 
@@ -208,7 +221,13 @@ step 실행 상태 파일이다.
 # worktrees/<type>-<task-name>/ 안에서
 python3 .claude/skills/harness/scripts/execute.py docs/tasks/<task-name>/phases/<phase-name>
 python3 .claude/skills/harness/scripts/execute.py docs/tasks/<task-name>/phases/<phase-name> --push
+
+# worker별 모델을 지정해서 실행
+python3 .claude/skills/harness/scripts/execute.py docs/tasks/<task-name>/phases/<phase-name> \
+  --developer-model sonnet --reviewer-model opus --commit-model haiku
 ```
+
+`--developer-model` / `--reviewer-model` / `--commit-model` 옵션은 alias(`haiku`, `sonnet`, `opus`)나 full name(`claude-opus-4-7` 등)을 모두 허용한다. 옵션을 생략하면 기본값(developer=`sonnet`, reviewer=`opus`, commit=`haiku`)이 사용된다.
 
 실행 개요:
 

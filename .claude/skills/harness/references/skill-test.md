@@ -128,14 +128,17 @@
 2. 아래 실행 명령을 정확히 안내한다.
 
 ```bash
-python3 .claude/skills/harness/scripts/execute.py docs/tasks/skill-test/phases/0-bootstrap
-python3 .claude/skills/harness/scripts/execute.py docs/tasks/skill-test/phases/0-bootstrap --push
+python3 .claude/skills/harness/scripts/execute.py docs/tasks/skill-test/phases/0-bootstrap \
+  --developer-model sonnet --reviewer-model opus --commit-model haiku
+python3 .claude/skills/harness/scripts/execute.py docs/tasks/skill-test/phases/0-bootstrap \
+  --developer-model sonnet --reviewer-model opus --commit-model haiku --push
 ```
 
 3. `--push`가 마지막에 원격 브랜치를 푸시하는 옵션이라는 점을 분리해서 설명한다.
-4. 실행 전 사용자에게 진행 의사를 확인해야 한다고 안내한다 (Plan Mode + `ExitPlanMode` 승인).
-5. 승인이 확정되면 File Drafting 결과물(task 문서 + phase 초안)을 `docs:` 커밋으로 등록한 뒤에만 `execute.py`를 실행한다고 설명한다.
-6. 실행 흐름이 `pending` step 순차 실행, 상태 전이, `summary` 누적 방식이라는 점을 요약한다.
+4. `--developer-model` · `--reviewer-model` · `--commit-model`이 worker별 실행 모델 옵션이며, SKILL.md 단계 6의 `AskUserQuestion`으로 수집된 값임을 안내한다. 옵션을 생략하면 기본값(sonnet/opus/haiku)이 적용된다.
+5. 실행 전 사용자에게 진행 의사를 확인해야 한다고 안내한다 (Plan Mode + `ExitPlanMode` 승인).
+6. 승인이 확정되면 File Drafting 결과물(task 문서 + phase 초안)을 `docs:` 커밋으로 등록한 뒤에만 `execute.py`를 실행한다고 설명한다.
+7. 실행 흐름이 `pending` step 순차 실행, 상태 전이, `summary` 누적 방식이라는 점을 요약한다.
 
 ### 4. 실패 기준
 

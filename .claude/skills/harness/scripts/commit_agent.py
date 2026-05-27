@@ -48,7 +48,7 @@ def ensure_tmux_session(session: str):
         subprocess.run(["tmux", "new-session", "-d", "-s", session], capture_output=True)
 
 
-def run(root: str, phase_dir: Path, step: dict) -> None:
+def run(root: str, phase_dir: Path, step: dict, model: str = "haiku") -> None:
     """commit agent를 tmux pane에서 실행한다."""
     step_num = step["step"]
     step_name = step.get("name", f"step{step_num}")
@@ -68,7 +68,7 @@ def run(root: str, phase_dir: Path, step: dict) -> None:
     done_signal = f"{pane_name}-done-{uuid.uuid4().hex[:8]}"
 
     cmd = (
-        f"cd {root} && claude -p --dangerously-skip-permissions"
+        f"cd {root} && claude -p --dangerously-skip-permissions --model {model}"
         f" --allowedTools 'Bash(git *) Read'"
         f" < {prompt_path}"
         f" > {output_path}"

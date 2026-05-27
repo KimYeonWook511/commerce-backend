@@ -24,13 +24,13 @@ def ensure_tmux_session(session: str):
         )
 
 
-def run_claude_in_pane(root: str, session: str, pane_name: str, prompt_path: Path, output_path: Path, exit_code_path: Path | None = None, cwd: str | None = None) -> int:
+def run_claude_in_pane(root: str, session: str, pane_name: str, prompt_path: Path, output_path: Path, exit_code_path: Path | None = None, cwd: str | None = None, model: str = "sonnet") -> int:
     """tmux pane을 생성하고 claude -p를 실행한다. 완료까지 대기한다."""
     done_signal = f"{pane_name}-done-{uuid.uuid4().hex[:8]}"
     cd_prefix = f"cd {cwd} && " if cwd else ""
     exit_capture = f"; echo $? > {exit_code_path}" if exit_code_path else ""
     cmd = (
-        f"{cd_prefix}claude -p --dangerously-skip-permissions"
+        f"{cd_prefix}claude -p --dangerously-skip-permissions --model {model}"
         f" < {prompt_path}"
         f" > {output_path}"
         f" 2>&1"
@@ -55,7 +55,7 @@ def run_claude_in_pane(root: str, session: str, pane_name: str, prompt_path: Pat
     return 0
 
 
-def run(root: str, phase_dir: Path, write_json, step: dict, context_text: str, guardrails_text: str) -> dict:
+def run(root: str, phase_dir: Path, write_json, step: dict, context_text: str, guardrails_text: str, model: str = "sonnet") -> dict:
     """developer worker를 tmux pane에서 실행하고 step output 파일을 기록한다."""
     step_num = step["step"]
     step_name = step["name"]
@@ -79,7 +79,7 @@ def run(root: str, phase_dir: Path, write_json, step: dict, context_text: str, g
     exit_code_path = phase_dir / f"step{step_num}-exit-code.txt"
 
     try:
-        run_claude_in_pane(root, session, pane_name, prompt_path, output_path, exit_code_path, cwd=root)
+        run_claude_in_pane(root, session, pane_name, prompt_path, output_path, exit_code_path, cwd=root, model=model)
         last_message = output_path.read_text(encoding="utf-8") if output_path.exists() else ""
         exit_code = int(exit_code_path.read_text(encoding="utf-8").strip()) if exit_code_path.exists() else 0
     finally:
