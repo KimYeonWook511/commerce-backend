@@ -140,13 +140,13 @@ class CartConcurrencyTest {
 
 		// then
 		CartItem updated = cartPersistence.findAllByMemberIdOrderByCreatedAtDesc(memberId).get(0);
-		// 적어도 하나의 PATCH는 commit되어야 한다. 모든 thread가 retry MAX(3) 안에 흡수되면 errors는 비어있다.
-		// 일부가 MAX 초과한 경우 OptimisticLockingFailureException으로 안전하게 노출된다.
+		// retry 흡수에 실패한 thread는 OptimisticLockingFailureException으로 명시 노출되어야 한다 (silent loss 부재)
 		for (Throwable error : errors) {
 			assertThat(error).isInstanceOf(ObjectOptimisticLockingFailureException.class);
 		}
-		// 모든 thread가 실패한 극단 케이스에서는 초기값 5가 유지된다 (retry MAX 초과 시 안전한 throw가 보장됨)
-		assertThat(updated.getQuantity()).isIn(5, 7, 8, 9);
+		// 적어도 한 thread는 성공해 last-write 값으로 변경되어야 한다
+		assertThat(errors).hasSizeLessThan(targetQuantities.length);
+		assertThat(updated.getQuantity()).isIn(7, 8, 9);
 	}
 
 	private void runConcurrent(int threadCount, IntConsumer task, ConcurrentLinkedQueue<Throwable> errors)
