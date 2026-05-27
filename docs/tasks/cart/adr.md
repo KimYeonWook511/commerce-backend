@@ -63,7 +63,7 @@
 - **배경**: 초기 구현은 미존재해도 200 + `ApiResponse.of(null)`을 반환하는 멱등 정책이었다. 그러나 `RemoveCartItemService`가 0 row 영향이어도 `log.info("장바구니 항목 삭제 ...")`를 silent로 찍어 운영 로그가 부정확해지는 문제가 있었다. 또한 `PATCH`(`UpdateCartItemQuantityService`)는 미존재 시 `CART_ITEM_NOT_FOUND` throw로 정책 비대칭이 있었다.
 - **결정 내용**: `RemoveCartItemService`도 `findByMemberIdAndProductId`로 사전 조회한 뒤 미존재면 `CartException(CART_ITEM_NOT_FOUND)`을 throw한다. PATCH와 동일 정책이며 응답은 4xx.
 - **근거**: (a) PATCH와의 정책 일관성, (b) silent log 회귀 자동 해결(throw → log 안 찍힘), (c) cart DELETE는 사용자 명시 액션이라 멱등 시나리오(동일 DELETE 재요청)가 거의 발생하지 않아 멱등 가치보다 명확한 피드백 가치가 더 크다. REST DELETE 정통의 멱등 성질을 약하게 깨지만 도메인 무결성·운영 가시성 우선 정책이다.
-- **race 처리**: `findByMemberIdAndProductId`로 managed entity를 로드한 뒤 `cartItemRepository.delete(cartItem)`을 호출한다. entity 통한 delete는 `@Version` 체크가 적용되므로, 동시 DELETE race(다른 트랜잭션이 먼저 같은 항목을 삭제하는 경우)에서는 두 번째 트랜잭션이 `ObjectOptimisticLockingFailureException`을 던지며 `GlobalExceptionHandler.handleOptimisticLockingFailureException`가 이를 적절한 응답으로 매핑한다. bulk `@Modifying` DELETE 쿼리는 persistence context와 `@Version` 체크를 bypass하므로 채택하지 않는다. 따라서 race 시점의 silent log 회귀도 차단된다.
+- **race 처리**: `findByMemberIdAndProductId`로 managed entity를 로드한 뒤 `cartItemRepository.delete(cartItem)`을 호출한다. entity 통한 delete는 `@Version` 체크가 적용되므로, 동시 DELETE race(다른 트랜잭션이 먼저 같은 항목을 삭제하거나 add update로 version을 올린 경우)에서는 두 번째 트랜잭션이 `ObjectOptimisticLockingFailureException`을 던지며 `GlobalExceptionHandler.handleOptimisticLockingFailureException`가 409 `COMMON-409-1`로 응답한다. bulk `@Modifying` DELETE 쿼리는 persistence context와 `@Version` 체크를 bypass하므로 채택하지 않는다. 따라서 race 시점의 silent log 회귀도 차단된다. `RemoveCartItemService`는 결정 8과 달리 retry loop가 없으므로 409가 클라이언트에 그대로 노출되며, retry 책임은 클라이언트(재요청 시 통상 404 또는 정상 성공으로 정리됨)에 위임한다.
 
 ### 6-5. 장바구니 추가 시 Product 존재·구매 가능 상태를 검증한다
 
