@@ -35,12 +35,34 @@
 - **근거**: cart 존재 검증을 강제하면 "지금 구매(Buy Now)", 주문 재시도 등 정상 흐름을 의도치 않게 차단한다. cart는 사용자 편의의 임시 보관소이지 주문 권한의 원천이 아니다. cart에 없는 productId가 주문에 포함되어도 `deleteByMemberIdAndProductIdIn`은 0 row 삭제로 자연 처리된다.
 - **결과**: 주문-cart 결합도가 최소화된다. 모든 정상 주문 경로(cart 경유/Buy Now/재시도)에서 동일한 흐름이 적용된다.
 
-## 결정 6: 구매 불가 상품(STOPPED / soft-deleted)은 응답에 `unavailable=true`로 표시하고 cart row는 보존한다
+## 결정 6: cart 응답·엔드포인트 동작 정책
+
+본 결정은 cart 응답과 엔드포인트 동작에 관한 정책을 묶어 정리한다. 6-1은 phase 초기 결정, 6-2~6-4는 PR #166 코드 리뷰 대응 과정에서 명시화·강화되었다.
+
+### 6-1. 구매 불가 상품(STOPPED / soft-deleted)은 응답에 `unavailable=true`로 표시하고 cart row는 보존한다
 
 - **배경**: cart에 담아둔 상품이 판매 중지되거나 soft delete된 경우 (a) cart에서 자동 제거, (b) 응답에서 제외만, (c) `unavailable` 마킹하여 노출 세 가지를 비교했다.
 - **결정 내용**: cart 응답의 각 항목에 `unavailable` boolean을 둔다(`status == STOPPED || deletedAt != null`). `totalAmount`는 `unavailable=false` 항목만 합산한다. cart row는 자동 삭제하지 않는다. 사유 코드는 노출하지 않고 boolean 플래그만 제공한다.
 - **근거**: 한국 이커머스(올리브영 등)의 일반 UX와 부합한다. 사용자가 "내가 담은 상품이 사라진" 혼란을 겪지 않고 직접 삭제할 수 있다. 조회 endpoint에서 자동 삭제(side effect)는 CQS 위반이라 채택하지 않는다. 사유 코드는 내부 product 상태가 외부로 새는 표면을 줄이기 위해 boolean만 노출한다.
 - **결과**: cart 데이터는 보존되고 UI는 boolean 플래그로 분기한다. 사용자가 명시적으로 삭제 호출 시에만 row가 사라진다.
+
+### 6-2. Product 자체가 누락된 항목은 응답에서 제외하고 WARN 로그를 남긴다
+
+- **배경**: 6-1의 `unavailable` 마킹은 정상 운영 상태(`STOPPED`/soft-deleted)에 대한 처리다. `productRepository.findAllById`에서 Product가 아예 조회되지 않는 경우는 데이터 정합성이 깨진 결함 상황으로 별개의 처리가 필요하다. PR #166 코드 리뷰에서 두 케이스의 처리 차이가 의도된 것인지 질문이 있었다.
+- **결정 내용**: cart 조회 시 productId로 Product를 조회하지 못한 항목은 응답 `items`에서 제외하고 WARN 로그를 남긴다. 6-1의 마킹 노출과 달리 사용자에게 노출되지 않는다.
+- **근거**: STOPPED/soft-deleted는 정상 운영 상태라 사용자가 인지·삭제할 수 있어야 하지만, Product 자체 누락은 발생하면 안 되는 결함이므로 운영 알람이 우선이고 사용자 노출은 부적절하다. 명시 문서화로 두 케이스 처리 차이의 의도를 분명히 한다.
+
+### 6-3. cart 조회는 `createdAt DESC`로 정렬한다
+
+- **배경**: 초기 구현은 `findAllByMemberId`만 호출하여 정렬을 명시하지 않았다. DB 구현에 따라 응답 순서가 달라질 수 있고 Frontend 명세에 영향을 준다는 지적이 PR #166 리뷰에서 있었다.
+- **결정 내용**: `cartItemRepository.findAllByMemberIdOrderByCreatedAtDesc(memberId)`로 정렬을 명시한다. "최근 담은 항목이 위에" 보이는 일반 이커머스 UX와 부합한다.
+- **근거**: `BaseTimeEntity.createdAt`이 항목별로 보관되어 추가 인덱스 없이 정렬 가능하다. cart는 보통 항목 수가 적어 정렬 비용도 무시 가능.
+
+### 6-4. `DELETE /cart/items/{productId}` 미존재 시 `CART_ITEM_NOT_FOUND` 4xx로 응답한다
+
+- **배경**: 초기 구현은 미존재해도 200 + `ApiResponse.of(null)`을 반환하는 멱등 정책이었다. 그러나 `RemoveCartItemService`가 0 row 영향이어도 `log.info("장바구니 항목 삭제 ...")`를 silent로 찍어 운영 로그가 부정확해지는 문제가 있었다. 또한 `PATCH`(`UpdateCartItemQuantityService`)는 미존재 시 `CART_ITEM_NOT_FOUND` throw로 정책 비대칭이 있었다.
+- **결정 내용**: `RemoveCartItemService`도 `findByMemberIdAndProductId`로 사전 조회한 뒤 미존재면 `CartException(CART_ITEM_NOT_FOUND)`을 throw한다. PATCH와 동일 정책이며 응답은 4xx.
+- **근거**: (a) PATCH와의 정책 일관성, (b) silent log 회귀 자동 해결(throw → log 안 찍힘), (c) cart DELETE는 사용자 명시 액션이라 멱등 시나리오(동일 DELETE 재요청)가 거의 발생하지 않아 멱등 가치보다 명확한 피드백 가치가 더 크다. REST DELETE 정통의 멱등 성질을 약하게 깨지만 도메인 무결성·운영 가시성 우선 정책이다.
 
 ## 결정 7: 항목당 고정 수량 상한(MIN=1, MAX=99)을 도메인에서 강제한다
 
@@ -48,3 +70,51 @@
 - **결정 내용**: `CartItem.MIN_QUANTITY=1`, `CartItem.MAX_QUANTITY=99`. 도메인 메서드(`create`, `changeQuantity`, `increaseQuantity`)가 직접 검증하며 위반 시 `CartException`(`CART_ITEM_QUANTITY_EXCEEDED` 또는 `INVALID_CART_ITEM_QUANTITY`)을 4xx로 응답한다. DTO에는 `@Min(1) @Max(99)`로 Bean Validation도 부착하여 controller 진입 전에 거부한다.
 - **근거**: cart는 재고를 차감하지 않으므로 재고 기반 검증은 cart 단계의 책임이 아니다. 재고 검증은 주문 시점에 수행된다. cart 단계의 상한은 abuse 방지와 UI 친화성의 가벼운 가드 역할만 한다.
 - **결과**: 도메인 invariant가 자기 자신을 보호하고, Bean Validation이 1차 게이트로 작동한다. 재고 동시성은 본 phase 범위 밖이며 주문 단계 정책으로 유지된다.
+
+## 결정 8: cart 항목 추가·수정 흐름은 낙관적 락 + retry + Processor 분리로 동시성을 처리한다
+
+- **배경**: PR #166의 코드 리뷰(codex, Claude Code 양쪽)에서 `AddCartItemService`와 `UpdateCartItemQuantityService`의 동시성 결함이 지적되었다.
+  - **update race**: 동일 회원·동일 productId의 기존 row에 동시 add 요청이 두 개 들어오면 두 트랜잭션이 같은 quantity를 fetch한 뒤 각자 `increaseQuantity`를 적용한다. dirty checking으로 UPDATE되면 마지막 commit만 반영되어 합산 quantity가 유실되고, 더 위험하게는 98 + 1 + 1 race에서 99 상한이 silent로 우회된다.
+  - **insert race**: cart에 없는 productId에 동시 add 요청이 두 개 들어오면 둘 다 `Optional.empty()` 분기에서 `save`를 시도하고, 한쪽이 `uk_cart_item_member_product` UNIQUE 위반으로 500을 받는다.
+  - 같은 양상의 race가 `UpdateCartItemQuantityService.update`(`changeQuantity`)에도 발생한다.
+
+- **검토한 옵션**
+
+  - **(A) 비관적 락 `@Lock(PESSIMISTIC_WRITE)`**: ADR-003(재고)과 일관된 패턴. cart 조회 시 row X-lock을 획득해 update를 직렬화. 평상시 매 요청 row lock overhead가 누적되는데, cart는 `(memberId, productId)` 단위라 contention이 거의 0이라 항상 락을 거는 비용이 합당하지 않다. update race만 해결하고 insert race는 ADR-011 안전망 500으로 별도 위임.
+
+  - **(B) 낙관적 락 `@Version` + retry (채택)**: entity에 `@Version Long version` 추가. UPDATE 시 version 충돌이 `ObjectOptimisticLockingFailureException`으로 전파된다. 평상시 lock overhead가 없고, 충돌 시에만 retry. cart contention이 거의 0이라 retry 비용도 사실상 0. Order/Stock 도메인이 이미 같은 패턴(`StockConcurrencyService.decreaseWithOptimisticLock`)을 사용해 코드베이스 일관성이 있다. 도메인 메서드(`increaseQuantity`, `changeQuantity`, `validateQuantity`)를 그대로 사용해 invariant가 도메인에 단일 표현된다.
+
+  - **(C) atomic UPDATE 쿼리 (`UPDATE ... SET quantity = quantity + :delta WHERE ... AND quantity + :delta <= 99`)**: 단일 SQL로 race-safe + retry 불필요. 가장 가볍다. 그러나 invariant(`<= 99`)가 SQL에 박혀 도메인 `validateQuantity`와 이중 표현된다. `@Modifying`이 JPA dirty checking을 우회해 `BaseTimeEntity.updated_at` 자동 갱신이 깨지고, affected rows = 0 분기에서 후속 SELECT가 필요해 흐름 복잡도가 늘어난다. `clearAutomatically=true`로 persistence context stale 회피도 필요하다.
+
+  - **(D) insert-first → UNIQUE catch → addQuantity fallback**: 새 사용자(cart에 없는 경우)는 find 호출을 절약할 수 있다. 그러나 UNIQUE 위반 식별이 `org.hibernate.exception.ConstraintViolationException.getConstraintName()` 검사 등 Hibernate-specific에 의존해 fragile하다. Spring `@Transactional` 안에서 unchecked 예외가 던져지면 트랜잭션이 rollback-only로 마킹돼 같은 트랜잭션에서 두 번째 작업이 불가능하다. `Propagation.REQUIRES_NEW` 또는 빈 분리가 필요해 결국 (B)와 비슷한 구조가 된다. 두 번째 분기(`addQuantity`)도 여전히 update race-prone이라 (B)의 보호가 추가로 필요. 옵션 (B) 대비 장점이 없고 추가 함정만 있다.
+
+- **결정**: (B) 낙관적 락 `@Version` + retry + Processor 분리를 채택한다.
+
+  - `CartItem`에 `@Version Long version` 필드 추가.
+  - `AddCartItemService`는 어노테이션 없는 outer 역할로 retry loop만 담당(`MAX_RETRY = 3`). 실제 트랜잭션은 신설 `AddCartItemProcessor`의 method-level `@Transactional`이 책임진다 (ADR-021).
+  - `UpdateCartItemQuantityService`도 동일하게 `UpdateCartItemQuantityProcessor`와 짝을 이룬다.
+  - Processor 안에서 `repository.save(entity)`를 명시 호출해 영속화 의도를 코드 표면에 드러낸다 (ADR-022).
+  - retry catch 대상은 `ObjectOptimisticLockingFailureException`만이다. `DataIntegrityViolationException`(insert race)은 ADR-011 안전망 500 정책을 유지한다.
+
+- **근거**
+
+  - **평상시 비용 0**: cart는 `(memberId, productId)` 단위라 contention이 거의 0이므로 낙관적 락의 "충돌이 드물다" 전제가 정확히 들어맞는다. 평상시 흐름에서 락 획득/해제 비용이 0이다. ADR-003(재고 PESSIMISTIC)의 트레이드오프 — "높은 경쟁 상황에서 락 대기와 DB 부담" — 가 cart에는 적용 안 되고 단점만 떠안는 셈이다.
+  - **invariant 단일 표현**: CLAUDE.md "비즈니스 로직은 Domain/application 계층" 원칙에 부합. atomic UPDATE(C)는 SQL과 도메인이 같은 invariant를 이중 표현해야 했다.
+  - **코드베이스 일관성**: Order, Stock 도메인이 이미 `@Version`을 사용하고 retry loop 패턴(`StockConcurrencyService.decreaseWithOptimisticLock`)도 존재한다.
+  - **명시적 영속화 호출**: ADR-022에 따라 `repository.save(entity)`를 명시 호출하므로 retry 흐름에서도 응용 코드의 영속화 의도가 코드 표면에 보존된다. dirty checking 묵시 의존을 끊는다.
+  - **insert race를 안전망에 위임하는 이유**: cart insert race는 같은 사용자가 같은 productId를 처음 담는 순간에 ms 단위로 두 번 요청을 보내야 발생하는 극히 드문 시나리오다. 한 번 row가 생기면 이후 add는 update race 경로(B로 흡수)로 분기한다. `DataIntegrityViolationException`을 retry catch에 포함하면 UNIQUE 외 다른 무결성 위반(향후 컬럼/제약 추가 시)이 retry로 silent하게 묻힐 위험이 있어 ADR-011 정책을 그대로 유지한다.
+
+- **트레이드오프**
+
+  - `tbl_cart_item`에 `version BIGINT NOT NULL DEFAULT 0` 컬럼이 추가된다. 무중단 적용 가능하나 entity가 약간 무거워진다.
+  - retry 중 DB 호출이 누적될 수 있다. 다만 cart contention이 극히 낮아 실측 충돌은 거의 발생하지 않을 것으로 예상되며, 평균 attempt 수는 1로 수렴한다.
+  - insert race는 안전망 500으로 위임하므로 매우 드문 시점에 사용자가 한 번 더 add를 시도해야 할 수 있다. cart 특성상 두 번째 클릭은 이미 row가 생성된 상태라 update race(B로 흡수) 경로로 정상 동작한다.
+  - cart UX상 insert race 멱등 흡수가 더 자연스럽다는 의견이 향후 강화되면, 본 결정 8을 재방문하여 (C) atomic UPDATE 또는 `ConstraintViolationException.getConstraintName()` 기반 정확한 UNIQUE 식별 + retry 방식으로 전환할 수 있다.
+
+- **결과**
+
+  - 동시 add: update race는 retry로 흡수, 합산 quantity와 99 상한 invariant가 모두 보장된다.
+  - 동시 PATCH: race 발생 시 retry로 last-write-wins이 자연스럽게 달성된다(PATCH 의미가 절대값 변경).
+  - DELETE는 `deleteByMemberIdAndProductId` atomic statement라 본 결정 영향 없음.
+  - 본 결정은 cart phase에 한정되며, 다른 도메인의 ManyToOne→ID 마이그레이션 트랙(ADR-020 후속)에서 동일 패턴이 재사용될 수 있다.
+  - retry 단위 테스트와 `concurrency` 태그 통합 테스트로 race 흡수와 한도 초과 시 throw를 검증한다.
