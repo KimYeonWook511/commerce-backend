@@ -135,7 +135,7 @@
   - path `productId`: 별도 Bean Validation 게이트 없음 (코드베이스 path id 일관 정책). 0/음수도 같은 미존재 분기로 흡수되어 `CART_ITEM_NOT_FOUND` 4xx로 응답.
 - **동작**
   - `findByMemberIdAndProductId` → 없으면 `CART_ITEM_NOT_FOUND` 4xx (결정 6-4, PATCH와 동일 정책)
-  - 있으면 `deleteByMemberIdAndProductId(memberId, productId)` 호출
+  - 있으면 `cartItemRepository.delete(cartItem)` 호출. entity 통한 delete로 `@Version` 체크가 적용되어 동시 DELETE race도 `ObjectOptimisticLockingFailureException`으로 surface된다.
 
 ## 비고
 

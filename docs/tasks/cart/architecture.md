@@ -12,8 +12,8 @@
   - `domain/CartItem.java`, `domain/repository/CartItemRepository.java`
   - `exception/CartException.java`, `exception/CartErrorCode.java`
   - `infrastructure/JpaCartItemRepository.java`, `CartItemRepositoryAdapter.java`, `CartItemRemoverAdapter.java`
-  - `application/{AddCartItemService, GetMyCartService, UpdateCartItemQuantityService, RemoveCartItemService}.java`
-  - `application/result/{CartView, CartItemView}.java`
+  - `application/{AddCartItemService, AddCartItemProcessor, GetMyCartService, UpdateCartItemQuantityService, UpdateCartItemQuantityProcessor, RemoveCartItemService}.java`
+  - `application/result/{CartResult, CartItemResult, CartItemSummaryResult}.java`
   - `presentation/CartController.java`, `presentation/request/{CartItemAddRequest, CartItemUpdateRequest}.java`
 - `order` 도메인 변경
   - `application/port/CartItemRemover.java` 신설
@@ -26,7 +26,7 @@
 
 - **Aggregate**: CartItem-only 단일 entity aggregate. root = `CartItem` 자기 자신.
   - cart 자체에 부착되는 메타데이터(쿠폰 슬롯/메모/상태 등)가 없으므로 Cart aggregate를 별도로 두지 않는다.
-  - "사용자의 cart" = `cartItemRepository.findAllByMemberId(memberId)` 결과 list로 표현한다.
+  - "사용자의 cart" = `cartItemRepository.findAllByMemberIdOrderByCreatedAtDesc(memberId)` 결과 list로 표현한다 (정렬은 결정 6-3).
 - **참조 방식**: 다른 aggregate는 `Long` ID로만 식별한다(`memberId`, `productId`). FK ManyToOne 사용하지 않는다. 본 결정은 ADR-020에 정리한다.
 - **수량 invariant**: `MIN_QUANTITY=1`, `MAX_QUANTITY=99`. `CartItem` 도메인 메서드가 직접 검증한다.
 - **UPSERT 흐름**: ADR-011 find-first 패턴 적용. `findByMemberIdAndProductId` → 있으면 `increaseQuantity` → 없으면 `CartItem.create` + `save`. `(member_id, product_id)` UNIQUE race 충돌은 안전망 500으로 위임한다(Application/Adapter에서 `DuplicateKeyException` catch 금지).
@@ -38,20 +38,20 @@
 ## 데이터 흐름
 
 - 장바구니 담기
-  - `CartController` → `AddCartItemService` → `CartItemRepository`(find → save)
+  - `CartController` → `AddCartItemService`(retry outer) → `AddCartItemProcessor`(`@Transactional`) → `ProductRepository.findById` 검증 + `CartItemRepository`(find → `increaseQuantity` 또는 `CartItem.create` → save). 결정 8(낙관적 락 + retry + Processor 분리), 결정 6-5(상품 존재·상태 검증).
 - 내 장바구니 조회
-  - `CartController` → `GetMyCartService` → `CartItemRepository.findAllByMemberId` + `ProductRepository.findAllById` → `CartView` 조립
+  - `CartController` → `GetMyCartService` → `CartItemRepository.findAllByMemberIdOrderByCreatedAtDesc` + `ProductRepository.findAllById` → `CartResult` 조립
 - 수량 변경
-  - `CartController` → `UpdateCartItemQuantityService` → `CartItemRepository`
+  - `CartController` → `UpdateCartItemQuantityService`(retry outer) → `UpdateCartItemQuantityProcessor`(`@Transactional`) → `CartItemRepository`(find → `changeQuantity` → save). 결정 8 동일 패턴.
 - 항목 삭제
-  - `CartController` → `RemoveCartItemService` → `CartItemRepository.deleteByMemberIdAndProductId`
+  - `CartController` → `RemoveCartItemService` → `CartItemRepository`(find → `delete(entity)`). 결정 6-4(미존재 4xx, entity 통한 delete로 `@Version` race 처리).
 - 주문 생성 시 cart 제거
   - `OrderCreateProcessor` → `CartItemRemover.removeByMemberAndProducts(memberId, productIds)`
   - → `CartItemRemoverAdapter` → `CartItemRepository.deleteByMemberIdAndProductIdIn`
 
 ## 예외 및 실패 처리
 
-- 수량 invariant 위반(`<MIN`, `>MAX`)은 `CartException(CART_ITEM_QUANTITY_EXCEEDED)` 또는 `CART_ITEM_INVALID_QUANTITY`로 4xx 응답.
+- 수량 invariant 위반(`<MIN`, `>MAX`)은 `CartException(INVALID_CART_ITEM_QUANTITY)` 또는 `CART_ITEM_QUANTITY_EXCEEDED`로 4xx 응답.
 - DTO Bean Validation 실패는 기존 공통 검증 오류 응답을 따른다.
 - `CartItemRepository` UNIQUE race 충돌은 ADR-011 안전망(500)으로 위임한다.
 - cart 제거 실패는 주문 트랜잭션 전체 롤백으로 이어진다(DELETE는 가벼워 실패 확률 낮음).

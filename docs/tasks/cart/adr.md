@@ -3,7 +3,7 @@
 ## 결정 1: CartItem-only 단일 entity aggregate를 사용한다
 
 - **배경**: cart를 도메인으로 모델링할 때 (a) Cart(root) - CartItem(N) 구조 또는 (b) CartItem 단일 entity aggregate 두 가지 선택지가 있었다. PRD 범위에서 cart 자체에 부착되는 메타데이터(쿠폰 슬롯/메모/cart 상태/만료 등)는 없으며, 사용자당 cart는 1개로 결정되었다.
-- **결정 내용**: Cart aggregate root를 두지 않고 `CartItem(memberId, productId, quantity)`만 둔다. root = `CartItem` 자신. "사용자의 cart"는 `findAllByMemberId(memberId)` 결과 리스트로 표현한다.
+- **결정 내용**: Cart aggregate root를 두지 않고 `CartItem(memberId, productId, quantity)`만 둔다. root = `CartItem` 자신. "사용자의 cart"는 `memberId` 필터링 조회 결과 리스트로 표현한다.
 - **근거**: CLAUDE.md "불필요한 추상화와 과한 설계를 피한다" 원칙과 부합한다. Cart entity를 만들어도 `(id, memberId, createdAt, updatedAt)`만 가진 빈 컨테이너가 된다. 우리 코드베이스의 `StockHistory`, `RefreshToken` 같은 단일 entity aggregate와 동일한 패턴이다. 미래에 cart 레벨 메타데이터(셀러별 분리, 위시리스트, 쿠폰 슬롯 등)가 도입되면 Cart aggregate를 추가하고 CartItem에 `cartId` FK를 붙이는 마이그레이션으로 자연 확장할 수 있다.
 - **결과**: 단일 테이블 `tbl_cart_item`만 신설된다. "여러 인스턴스 다루기" 책임(주문 후 일괄 제거 등)은 Repository와 application service에 위치한다.
 
@@ -131,6 +131,6 @@
 
   - 동시 add: update race는 retry로 흡수, 합산 quantity와 99 상한 invariant가 모두 보장된다.
   - 동시 PATCH: race 발생 시 retry로 last-write-wins이 자연스럽게 달성된다(PATCH 의미가 절대값 변경).
-  - DELETE는 `deleteByMemberIdAndProductId` atomic statement라 본 결정 영향 없음.
+  - DELETE는 결정 6-4의 entity 통한 `delete(cartItem)` + `@Version` 체크로 race가 처리되므로 본 결정 8(낙관적 락 + retry + Processor 분리)과 별개로 동작한다.
   - 본 결정은 cart phase에 한정되며, 다른 도메인의 ManyToOne→ID 마이그레이션 트랙(ADR-020 후속)에서 동일 패턴이 재사용될 수 있다.
   - retry 단위 테스트와 `concurrency` 태그 통합 테스트로 race 흡수와 한도 초과 시 throw를 검증한다.
