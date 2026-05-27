@@ -97,6 +97,25 @@ COLUMNS:
 INDEX:
 - 없음
 
+### `tbl_cart_item`
+
+COLUMNS:
+- `id (PK)`
+- `member_id`
+- `product_id`
+- `quantity`
+- `created_at`
+- `updated_at`
+
+INDEX:
+- `uk_cart_item_member_product (member_id, product_id) UNIQUE`
+
+비고:
+- `member_id`, `product_id`는 FK 제약을 두지 않는다. cart 도메인은 다른 aggregate를 `Long` ID로만 참조한다(ADR-020).
+- `(member_id, product_id)` UNIQUE 복합 인덱스가 같은 회원의 같은 상품 중복 row를 차단하고, `findAllByMemberId`·`findByMemberIdAndProductId`·`deleteByMemberIdAndProductIdIn` 조회 인덱스도 함께 제공한다. 별도의 단독 `member_id` 인덱스는 두지 않는다(복합 인덱스 prefix가 동일 커버).
+- UPSERT 흐름은 find-first 패턴(ADR-011)으로 처리하고 race window unique 충돌은 안전망 500으로 위임한다.
+- `quantity`는 도메인 invariant(`MIN=1, MAX=99`)와 DTO Bean Validation(`@Min(1) @Max(99)`)이 이중 가드한다.
+
 ### `tbl_payment`
 
 COLUMNS:

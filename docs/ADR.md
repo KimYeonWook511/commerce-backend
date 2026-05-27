@@ -119,3 +119,11 @@
 - **이유**: Spring Event는 현재 사용처가 `OrderIdempotencyCacheEvent` 한 곳뿐이라 Multicaster wrapping은 한 군데에서만 쓰일 추상화로 과하다. Outbox는 (A) 스케줄러 단위 발급 시 한 실행에서 여러 독립 거래가 같은 traceId를 공유해 의미가 희석되고, (C) 현행 유지 시 Kafka 레벨에서 새 UUID가 발급되어 원 HTTP 요청과 단절된다. (B) DB 컬럼 저장만이 원본 HTTP 요청의 traceId를 consumer까지 전파한다.
 - **트레이드오프**: Outbox 스케줄러 자체 로그는 traceId가 없다(운영 통계 로그 성격이므로 허용). 기존 outbox 데이터 및 MDC에 유효한 traceId가 없는 케이스는 outbox.trace_id를 NULL로 저장하고 relay 시 MDC 조작 없이 진행한다(Kafka 인터셉터가 신규 UUID fallback). Spring Event 객체마다 traceId 필드를 추가하는 반복 작업이 향후 필요할 수 있으며, 이벤트가 5개 이상 늘어나는 시점에 Multicaster wrapping으로 재검토한다. DB 스키마 변경(`tbl_outbox_event.trace_id VARCHAR(64) NULL`)이 필요하나 nullable이고 기존 인덱스에 영향이 없어 무중단 적용 가능하다.
 - **참고**: 상세는 `docs/tasks/event-outbox-trace-propagation/adr.md` 참조.
+
+### ADR-020: 신규 도메인의 cross-aggregate 참조는 ID로 한다
+- **결정**: 본 phase의 `cart` 도메인을 기점으로, 이후 신설되는 모든 도메인은 다른 aggregate를 `Long` ID로만 참조한다. `@ManyToOne`, `@JoinColumn`, cross-aggregate `@OneToOne` 사용을 금지한다. `cart`의 `CartItem`은 `memberId`, `productId`를 원시 `Long`으로 저장하며 다른 aggregate를 객체로 참조하지 않는다.
+- **배경**: 기존 도메인은 `Order.member`, `OrderItem.product`, `Stock.product` 등 `@ManyToOne` 객체 참조를 광범위하게 사용한다. 그러나 application 계층은 대부분 `memberId`, `productId` 등 ID 기반으로 흐름을 다루고 있어 도메인 모델과 application 인터페이스 사이에 이중 표현이 발생한다. 이로 인해 N+1 회피와 fetch join 부담, 도메인 결합도 증가, 단위 테스트에서의 객체 그래프 구성 부담, DDD "다른 aggregate는 ID로만 참조" 원칙 위반 등 누적 부채가 있었다. 신설 도메인부터라도 기본값을 ID 참조로 두자는 결정이다.
+- **결정 근거**: DDD 정통(Eric Evans, "Reference Other Aggregates Only By Identity") 원칙에 부합한다. (a) 다른 aggregate와의 결합도가 감소해 도메인 변경 영향 반경이 좁아진다. (b) JPA lifecycle 함정(detached entity, cascade, lazy proxy)을 피할 수 있다. (c) 단위 테스트가 원시 ID로 단순화되어 객체 그래프 setup 부담이 사라진다. (d) 향후 마이크로서비스 분리 시 aggregate 경계가 서비스 경계와 자연스럽게 정렬된다. cart 조회 시 `productRepository.findAllById(productIds)`로 명시적으로 Product를 한 번 더 조회해 응답을 조립하는 비용은 PK 기반 인덱스 조회라 무시 가능하다.
+- **트레이드오프**: DB 참조 무결성을 FK 제약이 보장하지 않는다. 대신 application 흐름·UNIQUE 제약·삭제 순서 정책이 정합성을 책임진다. 기존 Order/Stock/StockHistory 등의 `@ManyToOne` 참조는 호환성 부담이 크고 본 phase 범위가 아니므로 마이그레이션하지 않고 별도 트랙으로 분리한다.
+- **적용 범위**: 본 ADR 이후 신설되는 모든 cross-aggregate 참조에 적용한다. 같은 aggregate 내 root-child 관계(예: `Order ↔ OrderItem` 같이 동일 aggregate 안의 collection)는 본 정책 대상이 아니며 기존대로 객체 참조를 허용한다. 기존 cross-aggregate 객체 참조의 ID 참조로의 마이그레이션은 별도 작업으로 다룬다.
+- **참고**: 상세는 `docs/tasks/cart/adr.md` 결정 2 참조.

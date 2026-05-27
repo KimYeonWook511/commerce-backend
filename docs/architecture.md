@@ -11,6 +11,7 @@ src/main/java/com/commerce/
 ├── product/           # 상품 공개 조회, 관리자 상품 관리
 ├── stock/             # 재고 차감·복구·관리자 조정, 변경 이력
 ├── order/             # 주문 생성·취소·만료 배치
+├── cart/              # 장바구니 항목 추가·변경·삭제·조회, 주문 시 항목 제거 연동
 ├── payment/           # 결제 준비·승인·시도 이력
 │   └── naverpay/      # 네이버페이 PG 연동 (Gateway, Client, Controller)
 └── outbox/            # Outbox 이벤트 저장·발행
@@ -80,6 +81,7 @@ Port 인터페이스 설계 원칙:
 | product | `ProductQueryService`, `AdminProductService` |
 | stock | `StockInventoryService`, `AdminStockService`, `StockConcurrencyService` |
 | order | `OrderCreateService`, `OrderCancelService`, `OrderQueryService`, `OrderExpirationService`, `OrderConcurrencyService` |
+| cart | `AddCartItemService`, `GetMyCartService`, `UpdateCartItemQuantityService`, `RemoveCartItemService` |
 | payment | `PaymentReadyService`, `PaymentApprovalService`, `PaymentApprovalAttemptService`, `PaymentCancellationAttemptService`, `PaymentApprovalCompensationService` |
 | naverpay | `NaverPayApprovalService` |
 | outbox/stock | `StockRestoreOutboxCreateService`, `StockRestoreOutboxRelayService`, `StockRestoreOutboxConsumeService` |
@@ -98,10 +100,17 @@ AdminProductController → AdminProductService → ProductRepository
 # 관리자 재고 관리
 AdminStockController → AdminStockService → StockRepository, StockHistoryRepository
 
+# 장바구니 담기 / 조회 / 수량 변경 / 항목 삭제
+CartController → AddCartItemService → CartItemRepository (find → save / increaseQuantity)
+CartController → GetMyCartService → CartItemRepository, ProductRepository (최신 가격 조립, unavailable 마킹)
+CartController → UpdateCartItemQuantityService → CartItemRepository (find → changeQuantity)
+CartController → RemoveCartItemService → CartItemRepository (deleteByMemberIdAndProductId)
+
 # 주문 생성
 OrderController → OrderCreateService
   → StockInventoryService (재고 차감)
   → PaymentReadyService (결제 준비)
+  → CartItemRemover (cart.infrastructure.CartItemRemoverAdapter, 주문된 productId만 cart에서 제거)
 
 # 결제 승인 (네이버페이)
 NaverPayController → NaverPayApprovalService
@@ -130,7 +139,8 @@ OrderExpirationBatchConfig (Spring Batch)
 - `security`는 HTTP 요청 인증/인가 adapter다. `JwtAuthenticationFilter`가 `TokenAuthenticationService`를 호출해 인증 결과를 `AuthenticationContext`에 저장하고, `AuthorizationInterceptor`와 `AuthenticatedMemberIdArgumentResolver`가 이를 사용한다.
 - `product` 도메인은 공개 상품 조회와 관리자 상품 등록·수정·soft delete를 제공한다. 상품 목록은 `ON_SALE` 또는 `SOLD_OUT` 상태, `deletedAt IS NULL`, `createdAt DESC` 기준으로 반환한다. 상품 상세는 상품 정보와 현재 재고 수량을 조합한다.
 - `stock` 도메인은 상품별 현재 재고, 주문 경로의 재고 차감·복구, 관리자 초기 재고 생성, 관리자 수동 조정, 재고 변경 이력을 담당한다. `Product : Stock = 1:1` 관계를 유지한다.
-- `order` 도메인은 주문 생성·취소·만료를 담당한다. 주문 생성은 멱등 키로 중복 요청을 방어한다. 만료 처리는 Spring Batch로 스케줄링한다.
+- `order` 도메인은 주문 생성·취소·만료를 담당한다. 주문 생성은 멱등 키로 중복 요청을 방어한다. 만료 처리는 Spring Batch로 스케줄링한다. 주문 생성 트랜잭션 내에서 `CartItemRemover` port를 통해 주문된 항목만 cart에서 제거한다.
+- `cart` 도메인은 회원의 장바구니 항목 추가(UPSERT)·조회(최신 가격 재조립, 구매 불가 마킹)·수량 변경·삭제를 담당한다. 다른 aggregate(Member, Product)는 `Long` ID로만 참조한다(ADR-020). 주문-cart 연동은 `order.application.port.CartItemRemover` 인터페이스를 `cart.infrastructure.CartItemRemoverAdapter`가 구현하는 방식으로 의존 방향을 보존한다.
 - `payment` core는 결제 준비·완료 반영·시도 이력 관리를 담당한다. `naverpay`는 provider 서브패키지로, PG 호출과 내부 결제 상태 반영을 분리한다.
 - `outbox` 도메인은 재고 복구 이벤트를 Outbox 패턴으로 처리한다. 이벤트 생성, Kafka 릴레이, 소비 책임을 별도 서비스로 분리한다.
 
@@ -153,11 +163,12 @@ log.info("결제 승인 완료 merchantPayKey={} provider={} pgPaymentId={} orde
 
 ### 도메인 이벤트 INFO 로그 적용 범위
 
-다음 7개 도메인의 14개 컴포넌트에 유스케이스 완료 시 INFO 로그가 추가되어 있다.
+다음 8개 도메인의 17개 컴포넌트에 유스케이스 완료 시 INFO 로그가 추가되어 있다.
 
 | 도메인 | 컴포넌트 |
 |--------|---------|
 | Order | `OrderCreateService`, `OrderCreateProcessor`, `OrderCancelService`, `OrderConcurrencyService`, `OrderExpirationService` |
+| Cart | `AddCartItemService`, `UpdateCartItemQuantityService`, `RemoveCartItemService` |
 | Outbox | `StockRestoreOutboxCreateService` |
 | Payment | `PaymentApprovalService`, `PaymentReadyService` |
 | Stock | `StockInventoryService`, `AdminStockService` |
@@ -165,7 +176,7 @@ log.info("결제 승인 완료 merchantPayKey={} provider={} pgPaymentId={} orde
 | Member | `MemberRegistrationService` |
 | Product | `AdminProductService` |
 
-단순 조회·위임 서비스(`OrderQueryService`, `MemberQueryService`, `ProductQueryService`, `TokenAuthenticationService`, `OutboxService`)는 도메인 상태 전환이 없으므로 INFO 로그를 두지 않는다.
+단순 조회·위임 서비스(`OrderQueryService`, `GetMyCartService`, `MemberQueryService`, `ProductQueryService`, `TokenAuthenticationService`, `OutboxService`)는 도메인 상태 전환이 없으므로 INFO 로그를 두지 않는다.
 
 ---
 

@@ -514,6 +514,147 @@
 - 권한 없음: `AUTH-403`
 - 검증 실패: `COMMON-400`
 
+## 장바구니
+
+### `POST /cart/items`
+
+설명:
+- 회원의 장바구니에 상품을 담는 API입니다. 로그인 인증이 필요합니다.
+- 같은 회원이 이미 같은 상품을 담아둔 경우 수량이 합산됩니다(UPSERT).
+- 합산 결과가 99를 초과하면 4xx로 거부됩니다.
+
+요청:
+- Body
+
+```json
+{
+  "productId": 123,
+  "quantity": 2
+}
+```
+
+- `productId`: 양수, 필수
+- `quantity`: 1 이상 99 이하, 필수
+
+응답:
+- HTTP Status: `201 Created`
+
+```json
+{
+  "code": "SUCCESS",
+  "message": "OK",
+  "data": {
+    "productId": 123,
+    "quantity": 5
+  }
+}
+```
+
+### `GET /cart`
+
+설명:
+- 로그인한 회원의 장바구니를 조회합니다.
+- 각 항목의 가격은 저장된 값이 아니라 최신 `Product` 가격으로 재조회되어 응답됩니다.
+- 판매 중지(`STOPPED`)되거나 soft delete된 상품은 `unavailable=true`로 표시되며 `totalAmount` 합산에서 제외됩니다.
+
+요청:
+- 요청 바디 없음
+- 요청 파라미터 없음
+
+응답:
+
+```json
+{
+  "code": "SUCCESS",
+  "message": "OK",
+  "data": {
+    "items": [
+      {
+        "productId": 123,
+        "name": "상품명",
+        "price": 10000,
+        "imageUrl": "https://...",
+        "quantity": 2,
+        "lineAmount": 20000,
+        "unavailable": false
+      },
+      {
+        "productId": 456,
+        "name": "단종된 상품",
+        "price": 5000,
+        "imageUrl": null,
+        "quantity": 1,
+        "lineAmount": 5000,
+        "unavailable": true
+      }
+    ],
+    "totalAmount": 20000
+  }
+}
+```
+
+### `PATCH /cart/items/{productId}`
+
+설명:
+- 회원 장바구니 항목의 수량을 절대값으로 변경합니다. 로그인 인증이 필요합니다.
+- 존재하지 않는 항목에 대한 요청은 `CART-404`로 거부됩니다.
+
+요청:
+- Path
+  - `productId`: 양수, 필수
+- Body
+
+```json
+{
+  "quantity": 5
+}
+```
+
+- `quantity`: 1 이상 99 이하, 필수
+
+응답:
+
+```json
+{
+  "code": "SUCCESS",
+  "message": "OK",
+  "data": {
+    "productId": 123,
+    "quantity": 5
+  }
+}
+```
+
+### `DELETE /cart/items/{productId}`
+
+설명:
+- 회원 장바구니에서 단일 항목을 삭제합니다. 로그인 인증이 필요합니다.
+- 존재하지 않는 항목에 대한 요청도 멱등하게 성공 응답을 반환합니다.
+
+요청:
+- Path
+  - `productId`: 양수, 필수
+- 요청 바디 없음
+
+응답:
+
+```json
+{
+  "code": "SUCCESS",
+  "message": "OK",
+  "data": null
+}
+```
+
+장바구니 API 실패 응답:
+- 존재하지 않는 항목 수량 변경: `CART-404`
+- 수량 invariant 위반(합산 > 99 등): `CART-400-2`
+- 잘못된 수량 입력: `CART-400-1`
+- 비인증/잘못된 토큰: `AUTH-401`
+- 검증 실패: `COMMON-400`
+
+주문 생성 흐름의 cart 자동 제거는 별도 API가 아니며, `POST /orders` 성공 시 주문된 productId만 cart에서 자동 제거됩니다.
+
 ## 주문
 
 ### `POST /orders`
