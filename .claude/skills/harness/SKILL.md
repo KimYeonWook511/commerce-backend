@@ -157,7 +157,8 @@ File Drafting 완료 후 필수 중단:
 1. Plan Mode로 구현 계획을 사용자에게 제시한다.
 2. `ExitPlanMode`로 사용자 승인을 받는다.
 3. 승인이 확정되면 File Drafting에서 작성한 task 문서를 한 커밋으로 묶어 `docs:` 타입으로 커밋한다. (대상 파일은 아래 목록 참고)
-4. 커밋이 끝난 뒤에만 `execute.py` 실행으로 넘어간다.
+4. `AskUserQuestion`으로 worker별 실행 모델을 수집한다. (아래 "실행 옵션 수집" 절 참고)
+5. 수집한 선택값을 `--developer-model`, `--reviewer-model`, `--commit-model` 인자로 변환해 `execute.py`를 실행한다.
 
 - `execute.py`는 worktree 안에서 실행하며, commit agent를 통해 커밋을 수행한다.
 - 이 단계에 들어가기 전 checklist의 `Explore`, `Discuss`, `Step Design`, `Worktree 생성 및 이동`, `File Drafting`은 모두 `completed`여야 한다.
@@ -178,12 +179,34 @@ task 문서 초안 커밋 대상:
 커밋 메시지 타입은 `docs:`를 사용하고 `docs/commit-conventions.md`를 따른다.
 이 초안 커밋이 누락되면 첫 step의 commit agent가 task 문서를 step 변경분과 어색하게 섞거나 누락할 위험이 있다. `execute.py` 실행 전에 반드시 있어야 한다.
 
+#### 실행 옵션 수집
+
+`execute.py` 실행 직전, `AskUserQuestion`으로 worker별 모델을 한 번에 수집한다. 한 호출에 세 질문을 묶어 전달해 한 화면에 동시에 표시한다.
+
+| 질문 (header) | 옵션 (label) | 기본 권장 |
+| --- | --- | --- |
+| Developer | `sonnet (Recommended)` / `opus` / `haiku` | sonnet |
+| Reviewer | `opus (Recommended)` / `sonnet` / `haiku` | opus |
+| Commit | `haiku (Recommended)` / `sonnet` / `opus` | haiku |
+
+옵션값 변환 규칙:
+
+- label에서 첫 공백 또는 ` (` 이전 토큰을 추출해 `--model` 값으로 사용한다. 예: `"sonnet (Recommended)"` → `sonnet`.
+- 사용자가 "Other"를 선택하고 자유 입력하면 입력 문자열을 그대로 `--model` 값으로 전달한다. Claude CLI `--model`은 alias(`opus`/`sonnet`/`haiku`)와 full name(`claude-opus-4-7` 등)을 모두 받으므로 alias 외 값도 통과시킨다.
+- 옵션을 묻지 않고 기본값으로 진행하라는 명시 지시가 있으면 `--developer-model sonnet --reviewer-model opus --commit-model haiku`를 사용한다.
+
+수집된 값은 phase index의 `execution` 필드에 1회 기록되어 추적 가능해진다. 재실행 시에는 기존 값이 보존된다. 자세한 스키마는 `references/phase-files.md`를 참고한다.
+
 `phases` 파일이 준비되면 작업 브랜치 worktree 안에서 실행기를 실행한다.
 
 ```bash
 # worktrees/<type>-<task-name>/ 안에서
-python3 .claude/skills/harness/scripts/execute.py docs/tasks/<task-name>/phases/<phase-name>
-python3 .claude/skills/harness/scripts/execute.py docs/tasks/<task-name>/phases/<phase-name> --push
+python3 .claude/skills/harness/scripts/execute.py docs/tasks/<task-name>/phases/<phase-name> \
+  --developer-model sonnet --reviewer-model opus --commit-model haiku
+
+# 모든 step 완료 후 원격 push까지 한 번에
+python3 .claude/skills/harness/scripts/execute.py docs/tasks/<task-name>/phases/<phase-name> \
+  --developer-model sonnet --reviewer-model opus --commit-model haiku --push
 ```
 
 실행 규칙:
