@@ -77,14 +77,14 @@ def ensure_tmux_session(session: str):
         )
 
 
-def run_claude_in_pane(root: str, session: str, pane_name: str, prompt_path: Path, output_file: Path, cwd: str | None = None) -> int:
+def run_claude_in_pane(root: str, session: str, pane_name: str, prompt_path: Path, output_file: Path, cwd: str | None = None, model: str = "opus") -> int:
     """tmux pane을 생성하고 claude -p (read-only 모드)를 실행한다."""
     done_signal = f"{pane_name}-done-{uuid.uuid4().hex[:8]}"
     # reviewer는 파일 수정 없이 read-only 검토만 수행한다
     # --allowedTools Read,Grep,Glob 으로 write 도구를 제한한다
     cd_prefix = f"cd {cwd} && " if cwd else ""
     cmd = (
-        f"{cd_prefix}claude -p --dangerously-skip-permissions"
+        f"{cd_prefix}claude -p --dangerously-skip-permissions --model {model}"
         f" --allowedTools 'Read,Grep,Glob,Bash'"
         f" < {prompt_path}"
         f" > {output_file}"
@@ -118,6 +118,7 @@ def run(
     output: dict,
     ac_output: dict | None,
     guardrails_text: str,
+    model: str = "opus",
 ) -> ReviewResult:
     """reviewer worker를 tmux pane에서 실행하고 review output 파일을 기록한다."""
     prompt = build_prompt(guardrails_text, step, step_text, changed_paths, output, ac_output)
@@ -133,7 +134,7 @@ def run(
     raw_output_path = phase_dir / f"step{step['step']}-review-raw.txt"
 
     try:
-        run_claude_in_pane(root, session, pane_name, prompt_path, raw_output_path, cwd=root)
+        run_claude_in_pane(root, session, pane_name, prompt_path, raw_output_path, cwd=root, model=model)
         last_message = raw_output_path.read_text(encoding="utf-8") if raw_output_path.exists() else ""
     finally:
         prompt_path.unlink(missing_ok=True)
