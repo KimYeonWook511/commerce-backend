@@ -36,6 +36,9 @@
   - `productId`: `@NotNull @Positive`
   - `quantity`: `@NotNull @Min(1) @Max(99)`
 - **동작**
+  - Product 존재·구매 가능 상태 검증 (결정 6-5)
+    - `productRepository.findById(productId)` 비어있음 또는 `deletedAt != null` → `CART_ITEM_PRODUCT_NOT_FOUND` 404
+    - `status == STOPPED` → `CART_ITEM_PRODUCT_UNAVAILABLE` 409
   - `findByMemberIdAndProductId`로 기존 항목 조회
   - 있으면 `increaseQuantity(요청 quantity)` → 합산 > 99 시 `CART_ITEM_QUANTITY_EXCEEDED` 4xx
   - 없으면 `CartItem.create(...)` + `save`

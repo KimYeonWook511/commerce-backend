@@ -37,7 +37,7 @@
 
 ## 결정 6: cart 응답·엔드포인트 동작 정책
 
-본 결정은 cart 응답과 엔드포인트 동작에 관한 정책을 묶어 정리한다. 6-1은 phase 초기 결정, 6-2~6-4는 PR #166 코드 리뷰 대응 과정에서 명시화·강화되었다.
+본 결정은 cart 응답과 엔드포인트 동작에 관한 정책을 묶어 정리한다. 6-1은 phase 초기 결정, 6-2~6-5는 PR #166 코드 리뷰 대응 과정에서 명시화·강화되었다.
 
 ### 6-1. 구매 불가 상품(STOPPED / soft-deleted)은 응답에 `unavailable=true`로 표시하고 cart row는 보존한다
 
@@ -63,6 +63,21 @@
 - **배경**: 초기 구현은 미존재해도 200 + `ApiResponse.of(null)`을 반환하는 멱등 정책이었다. 그러나 `RemoveCartItemService`가 0 row 영향이어도 `log.info("장바구니 항목 삭제 ...")`를 silent로 찍어 운영 로그가 부정확해지는 문제가 있었다. 또한 `PATCH`(`UpdateCartItemQuantityService`)는 미존재 시 `CART_ITEM_NOT_FOUND` throw로 정책 비대칭이 있었다.
 - **결정 내용**: `RemoveCartItemService`도 `findByMemberIdAndProductId`로 사전 조회한 뒤 미존재면 `CartException(CART_ITEM_NOT_FOUND)`을 throw한다. PATCH와 동일 정책이며 응답은 4xx.
 - **근거**: (a) PATCH와의 정책 일관성, (b) silent log 회귀 자동 해결(throw → log 안 찍힘), (c) cart DELETE는 사용자 명시 액션이라 멱등 시나리오(동일 DELETE 재요청)가 거의 발생하지 않아 멱등 가치보다 명확한 피드백 가치가 더 크다. REST DELETE 정통의 멱등 성질을 약하게 깨지만 도메인 무결성·운영 가시성 우선 정책이다.
+
+### 6-5. 장바구니 추가 시 Product 존재·구매 가능 상태를 검증한다
+
+- **배경**: PR #166 코드 리뷰(codex P2)에서 `POST /cart/items`가 `productId`의 `@Positive` 조건만 확인하고 실제 상품 존재 여부를 확인하지 않아, 임의의 미존재 `productId`로도 201을 받고 cart row가 생성되는 결함이 지적되었다. cart는 ADR-020에 따라 FK를 두지 않으므로 데이터 정합성은 application 검증으로 보장해야 한다.
+- **결정 내용**: `AddCartItemProcessor`가 cart row를 생성·합산하기 전에 `productRepository.findById`로 Product를 조회하고 (a) 미존재 또는 `deletedAt != null` → `CART_ITEM_PRODUCT_NOT_FOUND`(404), (b) `status == STOPPED` → `CART_ITEM_PRODUCT_UNAVAILABLE`(409)로 거부한다.
+- **근거**:
+  - **데이터 정합성**: ADR-020 ID 참조에서는 DB FK가 없어 application이 검증의 유일한 게이트다.
+  - **6-1과의 분리**: 6-1의 `unavailable=true`는 "담은 후 상태가 바뀐 항목"을 보존·표시하는 정책이다. "처음부터 못 사는 상품을 새로 담는 동작"은 별개 문제로 add 시점에 차단하는 것이 자연스럽다.
+  - **도메인 일관성**: `OrderCreateProcessor` 흐름도 주문 생성 시점에 Product 존재·상태를 검증하므로 cart도 동일 정책을 적용한다.
+  - **비용**: PK 단건 조회 1회로 인덱스 hit, JPA 1차 캐시 이내라 무겁지 않다.
+  - **코드 분리**: `NOT_FOUND`/`UNAVAILABLE`을 분리해 운영 관점에서 결함(미존재·삭제됨)과 일시 차단(STOPPED)을 구분 추적할 수 있게 한다.
+- **결과**:
+  - 미존재 `productId`로 cart row를 생성할 수 없다. orphan row와 GET 시점 WARN 누적이 차단된다.
+  - retry 흐름에서 매 attempt마다 `productRepository.findById`가 호출되나 cart contention이 거의 0이라 사실상 1회 호출과 같다.
+  - `AddCartItemProcessor`만 Product를 의존한다. PATCH는 기존 cart row의 수량 변경이라 별도 product 검증을 두지 않는다(이미 6-1의 `unavailable` 응답으로 운영 가시성이 확보됨).
 
 ## 결정 7: 항목당 고정 수량 상한(MIN=1, MAX=99)을 도메인에서 강제한다
 

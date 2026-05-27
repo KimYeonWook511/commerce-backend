@@ -23,12 +23,18 @@ import com.commerce.cart.domain.repository.CartItemRepository;
 import com.commerce.cart.exception.CartErrorCode;
 import com.commerce.cart.exception.CartException;
 import com.commerce.cart.presentation.request.CartItemAddRequest;
+import com.commerce.product.domain.Product;
+import com.commerce.product.domain.ProductStatus;
+import com.commerce.product.domain.repository.ProductRepository;
 
 @ExtendWith(MockitoExtension.class)
 class AddCartItemProcessorTest {
 
 	@Mock
 	private CartItemRepository cartItemRepository;
+
+	@Mock
+	private ProductRepository productRepository;
 
 	@InjectMocks
 	private AddCartItemProcessor processor;
@@ -39,6 +45,7 @@ class AddCartItemProcessorTest {
 		Long memberId = 1L;
 		Long productId = 100L;
 		CartItemAddRequest request = createRequest(productId, 3);
+		stubProduct(productId, ProductStatus.ON_SALE);
 
 		given(cartItemRepository.findByMemberIdAndProductId(memberId, productId))
 			.willReturn(Optional.empty());
@@ -59,6 +66,7 @@ class AddCartItemProcessorTest {
 		Long productId = 100L;
 		CartItem existing = CartItem.create(memberId, productId, 5);
 		CartItemAddRequest request = createRequest(productId, 4);
+		stubProduct(productId, ProductStatus.ON_SALE);
 
 		given(cartItemRepository.findByMemberIdAndProductId(memberId, productId))
 			.willReturn(Optional.of(existing));
@@ -79,6 +87,7 @@ class AddCartItemProcessorTest {
 		Long productId = 100L;
 		CartItem existing = CartItem.create(memberId, productId, 95);
 		CartItemAddRequest request = createRequest(productId, 10);
+		stubProduct(productId, ProductStatus.ON_SALE);
 
 		given(cartItemRepository.findByMemberIdAndProductId(memberId, productId))
 			.willReturn(Optional.of(existing));
@@ -91,6 +100,79 @@ class AddCartItemProcessorTest {
 			});
 		assertThat(existing.getQuantity()).isEqualTo(95);
 		then(cartItemRepository).should(never()).save(any(CartItem.class));
+	}
+
+	@DisplayName("Product가 존재하지 않으면 CART_ITEM_PRODUCT_NOT_FOUND를 던지고 cart row를 만들지 않는다 (결정 6-5)")
+	@Test
+	void execute_whenProductMissing_throwNotFound() {
+		Long memberId = 1L;
+		Long productId = 999L;
+		CartItemAddRequest request = createRequest(productId, 3);
+
+		given(productRepository.findById(productId)).willReturn(Optional.empty());
+
+		assertThatThrownBy(() -> processor.execute(memberId, request))
+			.isInstanceOf(CartException.class)
+			.satisfies(exception -> {
+				CartException cartException = (CartException)exception;
+				assertThat(cartException.getErrorCode()).isEqualTo(CartErrorCode.CART_ITEM_PRODUCT_NOT_FOUND);
+			});
+		then(cartItemRepository).should(never()).findByMemberIdAndProductId(memberId, productId);
+		then(cartItemRepository).should(never()).save(any(CartItem.class));
+	}
+
+	@DisplayName("Product가 soft-deleted면 CART_ITEM_PRODUCT_NOT_FOUND를 던진다 (결정 6-5)")
+	@Test
+	void execute_whenProductSoftDeleted_throwNotFound() {
+		Long memberId = 1L;
+		Long productId = 100L;
+		CartItemAddRequest request = createRequest(productId, 3);
+		Product product = createProduct(ProductStatus.ON_SALE);
+		product.softDelete();
+
+		given(productRepository.findById(productId)).willReturn(Optional.of(product));
+
+		assertThatThrownBy(() -> processor.execute(memberId, request))
+			.isInstanceOf(CartException.class)
+			.satisfies(exception -> {
+				CartException cartException = (CartException)exception;
+				assertThat(cartException.getErrorCode()).isEqualTo(CartErrorCode.CART_ITEM_PRODUCT_NOT_FOUND);
+			});
+		then(cartItemRepository).should(never()).findByMemberIdAndProductId(memberId, productId);
+		then(cartItemRepository).should(never()).save(any(CartItem.class));
+	}
+
+	@DisplayName("Product가 STOPPED면 CART_ITEM_PRODUCT_UNAVAILABLE를 던진다 (결정 6-5)")
+	@Test
+	void execute_whenProductStopped_throwUnavailable() {
+		Long memberId = 1L;
+		Long productId = 100L;
+		CartItemAddRequest request = createRequest(productId, 3);
+
+		given(productRepository.findById(productId))
+			.willReturn(Optional.of(createProduct(ProductStatus.STOPPED)));
+
+		assertThatThrownBy(() -> processor.execute(memberId, request))
+			.isInstanceOf(CartException.class)
+			.satisfies(exception -> {
+				CartException cartException = (CartException)exception;
+				assertThat(cartException.getErrorCode()).isEqualTo(CartErrorCode.CART_ITEM_PRODUCT_UNAVAILABLE);
+			});
+		then(cartItemRepository).should(never()).findByMemberIdAndProductId(memberId, productId);
+		then(cartItemRepository).should(never()).save(any(CartItem.class));
+	}
+
+	private void stubProduct(Long productId, ProductStatus status) {
+		given(productRepository.findById(productId))
+			.willReturn(Optional.of(createProduct(status)));
+	}
+
+	private Product createProduct(ProductStatus status) {
+		return Product.builder()
+			.name("test-product")
+			.price(1000)
+			.status(status)
+			.build();
 	}
 
 	private CartItemAddRequest createRequest(Long productId, int quantity) {

@@ -3,6 +3,7 @@ package com.commerce.cart.presentation;
 import static org.mockito.ArgumentMatchers.any;
 import static org.mockito.ArgumentMatchers.anyLong;
 import static org.mockito.ArgumentMatchers.eq;
+import static org.mockito.ArgumentMatchers.argThat;
 import static org.mockito.BDDMockito.given;
 import static org.mockito.BDDMockito.then;
 import static org.mockito.BDDMockito.willDoNothing;
@@ -136,6 +137,38 @@ class CartControllerTest {
 					{"quantity": 2}
 					"""))
 			.andExpect(status().isBadRequest());
+	}
+
+	@DisplayName("상품이 존재하지 않으면 CART_ITEM_PRODUCT_NOT_FOUND 4xx를 반환한다 (결정 6-5)")
+	@Test
+	void addCartItem_whenProductNotFound_returnNotFound() throws Exception {
+		stubForToken();
+		willThrow(new CartException(CartErrorCode.CART_ITEM_PRODUCT_NOT_FOUND))
+			.given(addCartItemService).add(anyLong(), argThat(request -> request != null && request.getProductId() == 999L));
+
+		mockMvc.perform(post("/cart/items")
+				.header("Authorization", "Bearer access-token")
+				.contentType(MediaType.APPLICATION_JSON)
+				.content("""
+					{"productId": 999, "quantity": 2}
+					"""))
+			.andExpect(status().isNotFound());
+	}
+
+	@DisplayName("상품이 STOPPED면 CART_ITEM_PRODUCT_UNAVAILABLE 409를 반환한다 (결정 6-5)")
+	@Test
+	void addCartItem_whenProductUnavailable_returnConflict() throws Exception {
+		stubForToken();
+		willThrow(new CartException(CartErrorCode.CART_ITEM_PRODUCT_UNAVAILABLE))
+			.given(addCartItemService).add(anyLong(), argThat(request -> request != null && request.getProductId() == 888L));
+
+		mockMvc.perform(post("/cart/items")
+				.header("Authorization", "Bearer access-token")
+				.contentType(MediaType.APPLICATION_JSON)
+				.content("""
+					{"productId": 888, "quantity": 2}
+					"""))
+			.andExpect(status().isConflict());
 	}
 
 	@DisplayName("내 장바구니 조회는 200을 반환한다")

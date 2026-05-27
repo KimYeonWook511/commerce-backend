@@ -6,7 +6,12 @@ import org.springframework.transaction.annotation.Transactional;
 import com.commerce.cart.application.result.CartItemSummaryResult;
 import com.commerce.cart.domain.CartItem;
 import com.commerce.cart.domain.repository.CartItemRepository;
+import com.commerce.cart.exception.CartErrorCode;
+import com.commerce.cart.exception.CartException;
 import com.commerce.cart.presentation.request.CartItemAddRequest;
+import com.commerce.product.domain.Product;
+import com.commerce.product.domain.ProductStatus;
+import com.commerce.product.domain.repository.ProductRepository;
 
 import lombok.RequiredArgsConstructor;
 import lombok.extern.slf4j.Slf4j;
@@ -18,6 +23,9 @@ import lombok.extern.slf4j.Slf4j;
  * 새 트랜잭션·새 persistence context로 진입한다 (self-invocation 함정 회피).
  * 트랜잭션 정책은 ADR-021(method-level @Transactional)을 따르며,
  * 영속화 호출은 ADR-022(repository.save 명시)를 따른다.
+ *
+ * <p>cart row를 생성하거나 수량을 합산하기 전에 cart phase ADR 결정 6-5에 따라
+ * Product 존재와 구매 가능 상태를 검증한다. 미존재·soft-deleted는 NOT_FOUND, STOPPED는 UNAVAILABLE로 거부한다.
  */
 @Slf4j
 @Component
@@ -25,11 +33,14 @@ import lombok.extern.slf4j.Slf4j;
 public class AddCartItemProcessor {
 
 	private final CartItemRepository cartItemRepository;
+	private final ProductRepository productRepository;
 
 	@Transactional
 	public CartItemSummaryResult execute(Long memberId, CartItemAddRequest request) {
 		Long productId = request.getProductId();
 		int quantity = request.getQuantity();
+
+		validatePurchasable(productId);
 
 		CartItem cartItem = cartItemRepository.findByMemberIdAndProductId(memberId, productId)
 			.map(existing -> {
@@ -42,5 +53,16 @@ public class AddCartItemProcessor {
 			memberId, productId, cartItem.getQuantity());
 
 		return CartItemSummaryResult.from(cartItem);
+	}
+
+	private void validatePurchasable(Long productId) {
+		Product product = productRepository.findById(productId)
+			.orElseThrow(() -> new CartException(CartErrorCode.CART_ITEM_PRODUCT_NOT_FOUND));
+		if (product.getDeletedAt() != null) {
+			throw new CartException(CartErrorCode.CART_ITEM_PRODUCT_NOT_FOUND);
+		}
+		if (product.getStatus() == ProductStatus.STOPPED) {
+			throw new CartException(CartErrorCode.CART_ITEM_PRODUCT_UNAVAILABLE);
+		}
 	}
 }
