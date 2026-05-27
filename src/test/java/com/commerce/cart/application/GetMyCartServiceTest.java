@@ -39,7 +39,7 @@ class GetMyCartServiceTest {
 	void get_whenCartEmpty_returnEmptyView() {
 		// given
 		Long memberId = 1L;
-		given(cartItemRepository.findAllByMemberId(memberId)).willReturn(List.of());
+		given(cartItemRepository.findAllByMemberIdOrderByCreatedAtDesc(memberId)).willReturn(List.of());
 
 		// when
 		CartResult result = getMyCartService.get(memberId);
@@ -59,7 +59,7 @@ class GetMyCartServiceTest {
 		Product product1 = createProduct(10L, "product-1", 1000, "https://img/1.png", ProductStatus.ON_SALE, null);
 		Product product2 = createProduct(20L, "product-2", 500, "https://img/2.png", ProductStatus.SOLD_OUT, null);
 
-		given(cartItemRepository.findAllByMemberId(memberId)).willReturn(List.of(item1, item2));
+		given(cartItemRepository.findAllByMemberIdOrderByCreatedAtDesc(memberId)).willReturn(List.of(item1, item2));
 		given(productRepository.findAllById(List.of(10L, 20L))).willReturn(List.of(product1, product2));
 
 		// when
@@ -100,7 +100,7 @@ class GetMyCartServiceTest {
 		Product deletedProduct = createProduct(30L, "product-3", 700, null, ProductStatus.ON_SALE,
 			LocalDateTime.of(2026, 5, 1, 0, 0));
 
-		given(cartItemRepository.findAllByMemberId(memberId))
+		given(cartItemRepository.findAllByMemberIdOrderByCreatedAtDesc(memberId))
 			.willReturn(List.of(normalItem, stoppedItem, deletedItem));
 		given(productRepository.findAllById(List.of(10L, 20L, 30L)))
 			.willReturn(List.of(normalProduct, stoppedProduct, deletedProduct));
@@ -130,7 +130,7 @@ class GetMyCartServiceTest {
 
 		Product normalProduct = createProduct(10L, "product-1", 1000, null, ProductStatus.ON_SALE, null);
 
-		given(cartItemRepository.findAllByMemberId(memberId))
+		given(cartItemRepository.findAllByMemberIdOrderByCreatedAtDesc(memberId))
 			.willReturn(List.of(normalItem, orphanItem));
 		given(productRepository.findAllById(List.of(10L, 99L)))
 			.willReturn(List.of(normalProduct));

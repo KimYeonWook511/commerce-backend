@@ -110,7 +110,7 @@ class OrderCreateCartIntegrationTest {
 
 		// then
 		assertThat(result.getOrderId()).isNotNull();
-		List<CartItem> remaining = cartPersistence.findAllByMemberId(member.getId());
+		List<CartItem> remaining = cartPersistence.findAllByMemberIdOrderByCreatedAtDesc(member.getId());
 		assertThat(remaining).hasSize(1);
 		assertThat(remaining.get(0).getProductId()).isEqualTo(productC.getId());
 		assertThat(remaining.get(0).getQuantity()).isEqualTo(3);
@@ -141,7 +141,7 @@ class OrderCreateCartIntegrationTest {
 
 		// then
 		assertThat(result.getOrderId()).isNotNull();
-		List<CartItem> remaining = cartPersistence.findAllByMemberId(member.getId());
+		List<CartItem> remaining = cartPersistence.findAllByMemberIdOrderByCreatedAtDesc(member.getId());
 		assertThat(remaining).hasSize(1);
 		assertThat(remaining.get(0).getProductId()).isEqualTo(cartProduct.getId());
 		assertThat(remaining.get(0).getQuantity()).isEqualTo(2);
@@ -169,7 +169,7 @@ class OrderCreateCartIntegrationTest {
 		assertThatThrownBy(() -> orderCreateService.createOrder(command))
 			.isInstanceOf(StockException.class);
 
-		List<CartItem> remaining = cartPersistence.findAllByMemberId(member.getId());
+		List<CartItem> remaining = cartPersistence.findAllByMemberIdOrderByCreatedAtDesc(member.getId());
 		assertThat(remaining).hasSize(1);
 		assertThat(remaining.get(0).getProductId()).isEqualTo(product.getId());
 		assertThat(remaining.get(0).getQuantity()).isEqualTo(5);

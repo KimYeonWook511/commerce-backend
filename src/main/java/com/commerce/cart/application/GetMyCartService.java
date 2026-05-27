@@ -30,7 +30,7 @@ public class GetMyCartService {
 
 	@Transactional(readOnly = true)
 	public CartResult get(Long memberId) {
-		List<CartItem> cartItems = cartItemRepository.findAllByMemberId(memberId);
+		List<CartItem> cartItems = cartItemRepository.findAllByMemberIdOrderByCreatedAtDesc(memberId);
 		if (cartItems.isEmpty()) {
 			return CartResult.builder()
 				.items(List.of())

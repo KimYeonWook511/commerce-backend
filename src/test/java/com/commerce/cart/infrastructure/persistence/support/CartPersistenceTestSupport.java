@@ -40,8 +40,8 @@ public class CartPersistenceTestSupport implements PersistenceTestSupport {
 		return cartItemRepository.findById(id);
 	}
 
-	public List<CartItem> findAllByMemberId(Long memberId) {
-		return cartItemRepository.findAllByMemberId(memberId);
+	public List<CartItem> findAllByMemberIdOrderByCreatedAtDesc(Long memberId) {
+		return cartItemRepository.findAllByMemberIdOrderByCreatedAtDesc(memberId);
 	}
 
 	public long count() {

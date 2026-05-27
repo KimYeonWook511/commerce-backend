@@ -27,8 +27,8 @@ public class CartItemRepositoryAdapter implements CartItemRepository {
 	}
 
 	@Override
-	public List<CartItem> findAllByMemberId(Long memberId) {
-		return jpaCartItemRepository.findAllByMemberId(memberId);
+	public List<CartItem> findAllByMemberIdOrderByCreatedAtDesc(Long memberId) {
+		return jpaCartItemRepository.findAllByMemberIdOrderByCreatedAtDesc(memberId);
 	}
 
 	@Override

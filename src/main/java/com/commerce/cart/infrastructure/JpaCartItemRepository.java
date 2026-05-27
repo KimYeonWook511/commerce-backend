@@ -14,7 +14,7 @@ public interface JpaCartItemRepository extends JpaRepository<CartItem, Long> {
 
 	Optional<CartItem> findByMemberIdAndProductId(Long memberId, Long productId);
 
-	List<CartItem> findAllByMemberId(Long memberId);
+	List<CartItem> findAllByMemberIdOrderByCreatedAtDesc(Long memberId);
 
 	@Modifying
 	@Query("""

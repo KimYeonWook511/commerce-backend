@@ -64,7 +64,7 @@ class CartItemRepositoryAdapterTest {
 		entityManager.clear();
 
 		// when
-		List<CartItem> results = cartItemRepository.findAllByMemberId(MEMBER_ID);
+		List<CartItem> results = cartItemRepository.findAllByMemberIdOrderByCreatedAtDesc(MEMBER_ID);
 
 		// then
 		assertThat(results).hasSize(2);
@@ -131,7 +131,7 @@ class CartItemRepositoryAdapterTest {
 		entityManager.clear();
 
 		// then
-		List<CartItem> remaining = cartItemRepository.findAllByMemberId(MEMBER_ID);
+		List<CartItem> remaining = cartItemRepository.findAllByMemberIdOrderByCreatedAtDesc(MEMBER_ID);
 		assertThat(remaining)
 			.extracting(CartItem::getProductId)
 			.containsExactly(300L);

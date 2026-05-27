@@ -11,7 +11,7 @@ public interface CartItemRepository {
 
 	Optional<CartItem> findByMemberIdAndProductId(Long memberId, Long productId);
 
-	List<CartItem> findAllByMemberId(Long memberId);
+	List<CartItem> findAllByMemberIdOrderByCreatedAtDesc(Long memberId);
 
 	void deleteByMemberIdAndProductId(Long memberId, Long productId);
 
