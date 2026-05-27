@@ -1,0 +1,138 @@
+# 태스크 API 스펙
+
+## 개요
+
+- 본 태스크에서 회원용 cart API 4종을 추가한다. 모든 경로는 `/cart` 하위에 위치하며 로그인 인증을 요구한다.
+- `JwtAuthenticationFilter.WHITELIST`(`JwtAuthenticationFilter.java:30`)에 `/cart` 경로를 등록하지 않으므로 자동으로 인증 필요 경로로 분류된다.
+- 응답 포맷은 기존 공통 응답 `ApiResponse<T>`를 따른다.
+
+## 엔드포인트
+
+### 1) `POST /cart/items` — 장바구니 담기 (UPSERT)
+
+- **인증**: 필요
+- **상태 코드**: `201 Created`
+- **요청 body**
+
+```json
+{
+  "productId": 123,
+  "quantity": 2
+}
+```
+
+- **응답 body**
+
+```json
+{
+  "data": {
+    "productId": 123,
+    "quantity": 5
+  }
+}
+```
+
+- **검증 규칙**
+  - `productId`: `@NotNull @Positive`
+  - `quantity`: `@NotNull @Min(1) @Max(99)`
+- **동작**
+  - `findByMemberIdAndProductId`로 기존 항목 조회
+  - 있으면 `increaseQuantity(요청 quantity)` → 합산 > 99 시 `CART_ITEM_QUANTITY_EXCEEDED` 4xx
+  - 없으면 `CartItem.create(...)` + `save`
+  - UNIQUE race window 충돌은 안전망 500 위임 (ADR-011)
+
+### 2) `GET /cart` — 내 장바구니 조회
+
+- **인증**: 필요
+- **상태 코드**: `200 OK`
+- **요청**: 없음
+- **응답 body**
+
+```json
+{
+  "data": {
+    "items": [
+      {
+        "productId": 123,
+        "name": "상품명",
+        "price": 10000,
+        "imageUrl": "https://...",
+        "quantity": 2,
+        "lineAmount": 20000,
+        "unavailable": false
+      },
+      {
+        "productId": 456,
+        "name": "단종된 상품",
+        "price": 5000,
+        "imageUrl": null,
+        "quantity": 1,
+        "lineAmount": 5000,
+        "unavailable": true
+      }
+    ],
+    "totalAmount": 20000
+  }
+}
+```
+
+- **동작**
+  - `cartItemRepository.findAllByMemberId(memberId)` + `productRepository.findAllById(productIds)`로 응답 조립
+  - `unavailable = product.status == STOPPED || product.deletedAt != null`
+  - `lineAmount = product.price * quantity`
+  - `totalAmount` = `unavailable=false` 항목의 `lineAmount` 합
+
+### 3) `PATCH /cart/items/{productId}` — 수량 변경 (절대값)
+
+- **인증**: 필요
+- **상태 코드**: `200 OK`
+- **경로 변수**: `productId` (Long)
+- **요청 body**
+
+```json
+{
+  "quantity": 5
+}
+```
+
+- **응답 body**
+
+```json
+{
+  "data": {
+    "productId": 123,
+    "quantity": 5
+  }
+}
+```
+
+- **검증 규칙**
+  - `quantity`: `@NotNull @Min(1) @Max(99)`
+- **동작**
+  - `findByMemberIdAndProductId` → 없으면 `CART_ITEM_NOT_FOUND` 4xx
+  - 있으면 `changeQuantity(요청 quantity)`
+
+### 4) `DELETE /cart/items/{productId}` — 항목 삭제
+
+- **인증**: 필요
+- **상태 코드**: `200 OK`
+- **경로 변수**: `productId` (Long)
+- **요청 body**: 없음
+- **응답 body**
+
+```json
+{
+  "data": null
+}
+```
+
+- **동작**
+  - `deleteByMemberIdAndProductId(memberId, productId)`
+  - 존재하지 않아도 멱등하게 성공 응답
+
+## 비고
+
+- 모든 API는 `JwtAuthenticationFilter`가 인증 토큰을 검증하고, `@AuthenticatedMemberId`로 `memberId`를 주입한다.
+- 비인증/잘못된 토큰은 기존 정책에 따라 401 응답.
+- `POST /cart/items` UNIQUE race 충돌은 `GlobalExceptionHandler`의 `DataAccessException` 안전망(500)으로 위임된다(ADR-011).
+- 주문 생성 흐름의 cart 자동 제거는 별도 API가 아니며, `POST /orders` 성공 시 자동으로 일어난다.

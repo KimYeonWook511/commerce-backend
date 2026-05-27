@@ -1,0 +1,12 @@
+{
+  "project": "commerce-backend",
+  "phase": "0-cart",
+  "steps": [
+    { "step": 1, "name": "cart-item-domain-and-repository", "status": "pending" },
+    { "step": 2, "name": "cart-add-and-list-api", "status": "pending" },
+    { "step": 3, "name": "cart-update-and-delete-api", "status": "pending" },
+    { "step": 4, "name": "order-cart-clear-integration", "status": "pending" },
+    { "step": 5, "name": "sync-root-docs", "status": "pending" },
+    { "step": 6, "name": "write-retrospective", "status": "pending" }
+  ]
+}
