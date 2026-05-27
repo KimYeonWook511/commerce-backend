@@ -23,12 +23,12 @@ import lombok.extern.slf4j.Slf4j;
 @Slf4j
 @Service
 @RequiredArgsConstructor
-@Transactional(readOnly = true)
 public class GetMyCartService {
 
 	private final CartItemRepository cartItemRepository;
 	private final ProductRepository productRepository;
 
+	@Transactional(readOnly = true)
 	public CartView get(Long memberId) {
 		List<CartItem> cartItems = cartItemRepository.findAllByMemberId(memberId);
 		if (cartItems.isEmpty()) {
