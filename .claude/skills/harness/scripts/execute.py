@@ -82,10 +82,21 @@ class StepExecutor:
         (6, "Execution"),
     ]
 
-    def __init__(self, phase_path: str, *, auto_push: bool = False):
+    def __init__(
+        self,
+        phase_path: str,
+        *,
+        auto_push: bool = False,
+        developer_model: str = "sonnet",
+        reviewer_model: str = "opus",
+        commit_model: str = "haiku",
+    ):
         self.root = str(ROOT)
         self.root_path = ROOT
         self.auto_push = auto_push
+        self.developer_model = developer_model
+        self.reviewer_model = reviewer_model
+        self.commit_model = commit_model
         self.phase_dir = self.resolve_phase_dir(phase_path)
         self.phase_relpath = self.phase_dir.relative_to(ROOT).as_posix()
         self.phase_dir_name = self.phase_dir.name
@@ -413,6 +424,7 @@ class StepExecutor:
             output=output,
             ac_output=ac_output,
             guardrails_text=self.build_reviewer_guardrails(),
+            model=self.reviewer_model,
         )
 
     def run_acceptance_checks(self, current: dict, step_text: str) -> dict | None:
@@ -447,7 +459,7 @@ class StepExecutor:
 
     def run_developer_worker(self, step: dict, context_text: str, guardrails_text: str) -> dict:
         """developer worker를 실행한다."""
-        return developer_worker.run(self.root, self.phase_dir, self.write_json, step, context_text, guardrails_text)
+        return developer_worker.run(self.root, self.phase_dir, self.write_json, step, context_text, guardrails_text, model=self.developer_model)
 
     # --- header & validation ---
 
@@ -506,10 +518,21 @@ class StepExecutor:
             raise SystemExit(1)
 
     def ensure_created_at(self):
-        """phase index 최초 실행 시점을 한 번만 기록한다."""
+        """phase index 최초 실행 시점과 실행 옵션을 한 번만 기록한다."""
         index = self.read_json(self.index_file)
+        dirty = False
         if "created_at" not in index:
             index["created_at"] = self.stamp()
+            dirty = True
+        # execution 필드는 최초 1회만 기록한다. 재실행 시 기존 값을 보존해 첫 실행의 의도를 유지한다.
+        if "execution" not in index:
+            index["execution"] = {
+                "developer_model": self.developer_model,
+                "reviewer_model": self.reviewer_model,
+                "commit_model": self.commit_model,
+            }
+            dirty = True
+        if dirty:
             self.write_json(self.index_file, index)
 
     def mark_step_started(self, step_num: int):
@@ -625,7 +648,7 @@ class StepExecutor:
 
                 current["completed_at"] = timestamp
                 try:
-                    commit_agent.run(self.root, self.phase_dir, current)
+                    commit_agent.run(self.root, self.phase_dir, current, model=self.commit_model)
                 except Exception as e:
                     self.mark_step_error(current, str(e), timestamp)
                     self.write_json(self.index_file, index)
@@ -736,9 +759,18 @@ def main():
     parser = argparse.ArgumentParser(description="Harness Step Executor")
     parser.add_argument("phase_dir", help="Phase path (e.g. docs/tasks/<task-name>/phases/<phase-name>)")
     parser.add_argument("--push", action="store_true", help="Push branch after completion")
+    parser.add_argument("--developer-model", default="sonnet", help="Developer worker 모델 alias 또는 full name (기본: sonnet)")
+    parser.add_argument("--reviewer-model", default="opus", help="Reviewer worker 모델 alias 또는 full name (기본: opus)")
+    parser.add_argument("--commit-model", default="haiku", help="Commit agent 모델 alias 또는 full name (기본: haiku)")
     args = parser.parse_args()
 
-    StepExecutor(args.phase_dir, auto_push=args.push).run()
+    StepExecutor(
+        args.phase_dir,
+        auto_push=args.push,
+        developer_model=args.developer_model,
+        reviewer_model=args.reviewer_model,
+        commit_model=args.commit_model,
+    ).run()
 
 
 if __name__ == "__main__":
