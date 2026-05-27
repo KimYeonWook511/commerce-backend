@@ -17,7 +17,7 @@ public class CartItemRemoverAdapter implements CartItemRemover {
 
 	@Override
 	public void removeByMemberAndProducts(Long memberId, List<Long> productIds) {
-		if (productIds == null || productIds.isEmpty()) {
+		if (productIds.isEmpty()) {
 			return;
 		}
 		cartItemRepository.deleteByMemberIdAndProductIdIn(memberId, productIds);
