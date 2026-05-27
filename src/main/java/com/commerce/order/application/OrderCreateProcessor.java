@@ -19,6 +19,7 @@ import com.commerce.member.exception.MemberException;
 import com.commerce.order.application.command.OrderCreateCommand;
 import com.commerce.order.application.command.OrderCreateItem;
 import com.commerce.order.application.event.OrderIdempotencyCacheEvent;
+import com.commerce.order.application.port.CartItemRemover;
 import com.commerce.order.application.result.OrderCreateResult;
 import com.commerce.order.domain.Order;
 import com.commerce.order.domain.repository.OrderRepository;
@@ -41,6 +42,7 @@ public class OrderCreateProcessor {
 	private final OrderRepository orderRepository;
 	private final StockInventoryService stockInventoryService;
 	private final ApplicationEventPublisher applicationEventPublisher;
+	private final CartItemRemover cartItemRemover;
 
 	@Transactional
 	public OrderCreateResult execute(OrderCreateCommand command, Duration ttl) {
@@ -84,6 +86,8 @@ public class OrderCreateProcessor {
 		}
 
 		orderRepository.save(order);
+
+		cartItemRemover.removeByMemberAndProducts(command.getMemberId(), productIds);
 
 		log.info("주문 생성 orderId={} memberId={} itemCount={}",
 			order.getId(), command.getMemberId(), command.getItems().size());
