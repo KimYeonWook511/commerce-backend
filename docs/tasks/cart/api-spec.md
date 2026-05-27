@@ -77,8 +77,9 @@
 ```
 
 - **동작**
-  - `cartItemRepository.findAllByMemberId(memberId)` + `productRepository.findAllById(productIds)`로 응답 조립
-  - `unavailable = product.status == STOPPED || product.deletedAt != null`
+  - `cartItemRepository.findAllByMemberIdOrderByCreatedAtDesc(memberId)` + `productRepository.findAllById(productIds)`로 응답 조립 (정렬: 결정 6-3)
+  - `unavailable = product.status == STOPPED || product.deletedAt != null` (결정 6-1)
+  - Product 자체가 누락된 항목은 응답에서 제외하고 WARN 로그(결정 6-2)
   - `lineAmount = product.price * quantity`
   - `totalAmount` = `unavailable=false` 항목의 `lineAmount` 합
 
@@ -127,12 +128,12 @@
 ```
 
 - **동작**
-  - `deleteByMemberIdAndProductId(memberId, productId)`
-  - 존재하지 않아도 멱등하게 성공 응답
+  - `findByMemberIdAndProductId` → 없으면 `CART_ITEM_NOT_FOUND` 4xx (결정 6-4, PATCH와 동일 정책)
+  - 있으면 `deleteByMemberIdAndProductId(memberId, productId)` 호출
 
 ## 비고
 
 - 모든 API는 `JwtAuthenticationFilter`가 인증 토큰을 검증하고, `@AuthenticatedMemberId`로 `memberId`를 주입한다.
 - 비인증/잘못된 토큰은 기존 정책에 따라 401 응답.
-- `POST /cart/items` UNIQUE race 충돌은 `GlobalExceptionHandler`의 `DataAccessException` 안전망(500)으로 위임된다(ADR-011).
+- `POST /cart/items`와 `PATCH /cart/items/{productId}`의 update race는 결정 8(낙관적 락 `@Version` + retry + Processor 분리)로 흡수된다. 새 항목 동시 insert race window의 UNIQUE 충돌은 `GlobalExceptionHandler`의 `DataAccessException` 안전망(500)으로 위임된다(ADR-011, 결정 8 트레이드오프).
 - 주문 생성 흐름의 cart 자동 제거는 별도 API가 아니며, `POST /orders` 성공 시 자동으로 일어난다.

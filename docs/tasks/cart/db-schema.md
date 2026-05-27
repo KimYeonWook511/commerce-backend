@@ -17,6 +17,7 @@
 | `member_id` | BIGINT | NOT NULL | 회원 ID (FK 없음, ID 참조) |
 | `product_id` | BIGINT | NOT NULL | 상품 ID (FK 없음, ID 참조) |
 | `quantity` | INT | NOT NULL | 1~99 (도메인 invariant + DTO Bean Validation) |
+| `version` | BIGINT | NOT NULL DEFAULT 0 | JPA `@Version` 낙관적 락 (결정 8) |
 | `created_at` | DATETIME | NOT NULL | `BaseTimeEntity` |
 | `updated_at` | DATETIME | NOT NULL | `BaseTimeEntity` |
 
@@ -28,13 +29,15 @@
 
 | 인덱스 | 컬럼 | 종류 | 목적 |
 |---|---|---|---|
-| `uk_cart_item_member_product` | `(member_id, product_id)` | UNIQUE | 같은 회원이 같은 상품을 두 번 담지 못하게 보장. UPSERT 의미를 DB 레벨에서 강제. `findAllByMemberId`, `findByMemberIdAndProductId`, `deleteByMemberIdAndProductIdIn` 조회 인덱스도 함께 제공. |
+| `uk_cart_item_member_product` | `(member_id, product_id)` | UNIQUE | 같은 회원이 같은 상품을 두 번 담지 못하게 보장. UPSERT 의미를 DB 레벨에서 강제. `findAllByMemberIdOrderByCreatedAtDesc`, `findByMemberIdAndProductId`, `deleteByMemberIdAndProductIdIn` 조회 인덱스도 함께 제공. |
 
 별도의 단독 `member_id` 인덱스는 추가하지 않는다. UNIQUE 복합 인덱스가 prefix(`member_id`) 조회를 동일하게 커버한다.
 
 ## 데이터 무결성
 
-- `(member_id, product_id)` UNIQUE 제약으로 같은 회원의 같은 상품 중복 row를 차단한다. UPSERT 흐름은 ADR-011 find-first 패턴으로 처리하며, race window 충돌은 안전망 500으로 위임한다.
+- `(member_id, product_id)` UNIQUE 제약으로 같은 회원의 같은 상품 중복 row를 차단한다.
+- `version` 컬럼은 결정 8(낙관적 락 + retry + Processor 분리)을 따른다. JPA `@Version`이 UPDATE 시점에 version 비교로 update race를 감지하고, 응용 Service의 retry loop(`MAX_RETRY = 3`)가 `ObjectOptimisticLockingFailureException`을 흡수한다.
+- 신규 항목 동시 insert race window의 UNIQUE 충돌은 ADR-011 find-first 패턴 + 안전망 500으로 위임한다. retry catch에는 포함하지 않는다.
 - `member_id`, `product_id`는 FK 제약을 두지 않는다(ID 참조 정책, ADR-020).
 - Application 레이어가 다음을 책임진다.
   - 회원/상품 삭제 시 cart row 정리 정책(현재 phase에서 회원/상품 hard delete는 다루지 않음)
