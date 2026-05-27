@@ -1,5 +1,7 @@
 package com.commerce.cart.domain;
 
+import java.util.Objects;
+
 import com.commerce.cart.exception.CartErrorCode;
 import com.commerce.cart.exception.CartException;
 import com.commerce.common.jpa.BaseTimeEntity;
@@ -52,6 +54,8 @@ public class CartItem extends BaseTimeEntity {
 	}
 
 	public static CartItem create(Long memberId, Long productId, int quantity) {
+		Objects.requireNonNull(memberId, "memberId must not be null");
+		Objects.requireNonNull(productId, "productId must not be null");
 		validateQuantity(quantity);
 		return CartItem.builder()
 			.memberId(memberId)

@@ -46,6 +46,24 @@ class CartItemTest {
 		assertThat(cartItem.getQuantity()).isEqualTo(CartItem.MAX_QUANTITY);
 	}
 
+	@DisplayName("memberId가 null이면 NullPointerException을 던진다")
+	@Test
+	void create_whenMemberIdNull_throwsNullPointerException() {
+		// when & then
+		assertThatThrownBy(() -> CartItem.create(null, PRODUCT_ID, 1))
+			.isInstanceOf(NullPointerException.class)
+			.hasMessageContaining("memberId");
+	}
+
+	@DisplayName("productId가 null이면 NullPointerException을 던진다")
+	@Test
+	void create_whenProductIdNull_throwsNullPointerException() {
+		// when & then
+		assertThatThrownBy(() -> CartItem.create(MEMBER_ID, null, 1))
+			.isInstanceOf(NullPointerException.class)
+			.hasMessageContaining("productId");
+	}
+
 	@DisplayName("수량이 1 미만이면 INVALID_CART_ITEM_QUANTITY 예외를 던진다")
 	@Test
 	void create_whenQuantityBelowMin_throwsInvalidQuantity() {
