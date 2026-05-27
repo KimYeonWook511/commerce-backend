@@ -1,5 +1,38 @@
 # Architecture Decision Records
 
+## Task ADR 색인
+
+각 task 폴더의 `docs/tasks/<task>/adr.md`는 그 task의 도메인-specific 결정을 누적 관리한다. 본 색인은 task가 늘어남에 따른 검색 비용을 줄이기 위한 메타 인덱스다. 코드베이스 전반에 영향을 주는 cross-cutting 결정은 본 ADR.md 본문에, 특정 도메인 한정 결정은 task adr에 둔다. 분류가 모호한 결정은 본 ADR.md로 승격하고 task adr에 cross-reference를 남긴다.
+
+| Task | adr 파일 | 주요 결정 키워드 |
+|---|---|---|
+| auth-redis-timing | [`docs/tasks/auth-redis-timing/adr.md`](tasks/auth-redis-timing/adr.md) | `Propagation.NOT_SUPPORTED`로 DB commit 후 Redis 저장 보장 (ADR-008 연계) |
+| boundary-logging-standardization | [`docs/tasks/boundary-logging-standardization/adr.md`](tasks/boundary-logging-standardization/adr.md) | 외부 시스템 경계 INFO/WARN/ERROR 로깅 표준 |
+| cart | [`docs/tasks/cart/adr.md`](tasks/cart/adr.md) | CartItem-only 단일 entity aggregate, ID 참조(ADR-020), 가격 조회 시 재조회, 동시성 처리(@Version + retry + Processor 분리), 응답·엔드포인트 정책(unavailable·정렬·Remove 4xx) |
+| core-domain-logging | [`docs/tasks/core-domain-logging/adr.md`](tasks/core-domain-logging/adr.md) | 도메인 이벤트 INFO 로그 적용 범위 |
+| db-constraint-violation-handling | [`docs/tasks/db-constraint-violation-handling/adr.md`](tasks/db-constraint-violation-handling/adr.md) | `DuplicateKeyException` 좁은 catch (폐기, ADR-011로 대체) |
+| event-outbox-trace-propagation | [`docs/tasks/event-outbox-trace-propagation/adr.md`](tasks/event-outbox-trace-propagation/adr.md) | 이벤트 객체 traceId 동봉, Outbox `trace_id` 컬럼 (ADR-019 연계) |
+| hibernate-enum-jdbc-type-code | [`docs/tasks/hibernate-enum-jdbc-type-code/adr.md`](tasks/hibernate-enum-jdbc-type-code/adr.md) | `@JdbcTypeCode(SqlTypes.VARCHAR)` 적용 (ADR-018 연계) |
+| kafka-trace-propagation | [`docs/tasks/kafka-trace-propagation/adr.md`](tasks/kafka-trace-propagation/adr.md) | ProducerInterceptor + RecordInterceptor (ADR-017 연계) |
+| logback-setup | [`docs/tasks/logback-setup/adr.md`](tasks/logback-setup/adr.md) | 환경별 appender·encoder·rolling·마스킹 |
+| mdc-keys-unification | [`docs/tasks/mdc-keys-unification/adr.md`](tasks/mdc-keys-unification/adr.md) | MDC 키 상수 통합 |
+| memberid-mdc-propagation | [`docs/tasks/memberid-mdc-propagation/adr.md`](tasks/memberid-mdc-propagation/adr.md) | request attribute로 memberId MDC 전파 |
+| order-idempotency | [`docs/tasks/order-idempotency/adr.md`](tasks/order-idempotency/adr.md) | Redis 1차 + RDB unique 이중 보장 (ADR-002 연계) |
+| payment-attempt-idempotency | [`docs/tasks/payment-attempt-idempotency/adr.md`](tasks/payment-attempt-idempotency/adr.md) | PaymentAttempt unique 멱등 (ADR-010 연계) |
+| payment-attempt-service-split | [`docs/tasks/payment-attempt-service-split/adr.md`](tasks/payment-attempt-service-split/adr.md) | approve/cancel attempt 서비스 분리 |
+| payment-attempt-state-transition-policy | [`docs/tasks/payment-attempt-state-transition-policy/adr.md`](tasks/payment-attempt-state-transition-policy/adr.md) | PaymentAttempt 상태 전이 도메인 검증 (ADR-012 연계) |
+| payment-compensation-policy | [`docs/tasks/payment-compensation-policy/adr.md`](tasks/payment-compensation-policy/adr.md) | 보상 catch 2차 예외 처리 (ADR-013 연계) |
+| payment-compensation-to-domain | [`docs/tasks/payment-compensation-to-domain/adr.md`](tasks/payment-compensation-to-domain/adr.md) | 보상 정책 payment.application 이동, `PgCanceller` 콜백 (ADR-015 연계) |
+| product-management | [`docs/tasks/product-management/adr.md`](tasks/product-management/adr.md) | 관리자 command 분리, soft delete, 상태별 공개 조회 |
+| product-query | [`docs/tasks/product-query/adr.md`](tasks/product-query/adr.md) | 공개 상품 조회 노출 조건 |
+| stock-management | [`docs/tasks/stock-management/adr.md`](tasks/stock-management/adr.md) | 관리자 재고 변경 이력 (ADR-004 연계) |
+| traceid-mdc-filter | [`docs/tasks/traceid-mdc-filter/adr.md`](tasks/traceid-mdc-filter/adr.md) | `TraceIdFilter` MDC 전파 |
+| unique-find-first-policy | [`docs/tasks/unique-find-first-policy/adr.md`](tasks/unique-find-first-policy/adr.md) | find-first 패턴 (ADR-011 연계) |
+
+향후 task 추가 시 본 표에 한 줄을 갱신한다. task adr 위치는 모두 `docs/tasks/<task>/adr.md`로 고정한다.
+
+---
+
 ### ADR-001: JWT + Redis 기반 인증 유지
 - **결정**: Access Token은 JWT로 처리하고 Refresh Token은 Redis에 저장한다.
 - **이유**: 토큰 재발급 시 서버 검증과 강제 무효화가 가능하다.
