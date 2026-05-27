@@ -18,6 +18,7 @@ import org.junit.jupiter.api.BeforeEach;
 import org.junit.jupiter.api.DisplayName;
 import org.junit.jupiter.api.Tag;
 import org.junit.jupiter.api.Test;
+import org.mockito.stubbing.Answer;
 import com.commerce.common.log.LogContext;
 import org.springframework.beans.factory.annotation.Autowired;
 import org.springframework.boot.autoconfigure.EnableAutoConfiguration;
@@ -185,12 +186,12 @@ class TraceIdKafkaPropagationIntegrationTest {
 		// afterRecord() 실행 시점에 consumer 스레드에서 MDC 값을 직접 캡처한다
 		CountDownLatch cleanupLatch = new CountDownLatch(1);
 		AtomicReference<String> mdcAfterCleanup = new AtomicReference<>("NOT_CAPTURED");
-		doAnswer(invocation -> {
+		stubAfterRecord(invocation -> {
 			invocation.callRealMethod();
 			mdcAfterCleanup.set(LogContext.getTraceId());
 			cleanupLatch.countDown();
 			return null;
-		}).when(traceIdRecordInterceptor).afterRecord(any(), any());
+		});
 
 		// when
 		kafkaTemplate.send(TOPIC, "msg-c").get(5, TimeUnit.SECONDS);
@@ -207,12 +208,12 @@ class TraceIdKafkaPropagationIntegrationTest {
 		// afterRecord() 실행 시점에 consumer 스레드에서 MDC 값을 직접 캡처한다
 		CountDownLatch cleanupLatch = new CountDownLatch(1);
 		AtomicReference<String> mdcAfterCleanup = new AtomicReference<>("NOT_CAPTURED");
-		doAnswer(invocation -> {
+		stubAfterRecord(invocation -> {
 			invocation.callRealMethod();
 			mdcAfterCleanup.set(LogContext.getTraceId());
 			cleanupLatch.countDown();
 			return null;
-		}).when(traceIdRecordInterceptor).afterRecord(any(), any());
+		});
 
 		// given
 		testConsumer.shouldThrow = true;
@@ -231,5 +232,18 @@ class TraceIdKafkaPropagationIntegrationTest {
 		for (MessageListenerContainer container : kafkaListenerEndpointRegistry.getListenerContainers()) {
 			ContainerTestUtils.waitForAssignment(container, 1);
 		}
+	}
+
+	// consumer poll loop가 도는 동안 spy의 stub을 새로 등록하면 UnfinishedStubbingException race가 발생한다.
+	// 컨테이너를 동기적으로 stop → stub 등록 → start → 파티션 재할당 대기 순으로 race window를 닫는다.
+	private void stubAfterRecord(Answer<?> answer) {
+		for (MessageListenerContainer container : kafkaListenerEndpointRegistry.getAllListenerContainers()) {
+			container.stop();
+		}
+		doAnswer(answer).when(traceIdRecordInterceptor).afterRecord(any(), any());
+		for (MessageListenerContainer container : kafkaListenerEndpointRegistry.getAllListenerContainers()) {
+			container.start();
+		}
+		waitForListenerAssignment();
 	}
 }
