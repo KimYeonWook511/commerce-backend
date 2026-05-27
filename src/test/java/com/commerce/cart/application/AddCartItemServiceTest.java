@@ -2,12 +2,9 @@ package com.commerce.cart.application;
 
 import static org.assertj.core.api.Assertions.assertThat;
 import static org.assertj.core.api.Assertions.assertThatThrownBy;
-import static org.mockito.ArgumentMatchers.any;
 import static org.mockito.BDDMockito.given;
 import static org.mockito.BDDMockito.then;
-import static org.mockito.Mockito.never;
-
-import java.util.Optional;
+import static org.mockito.Mockito.times;
 
 import org.junit.jupiter.api.DisplayName;
 import org.junit.jupiter.api.Test;
@@ -15,89 +12,72 @@ import org.junit.jupiter.api.extension.ExtendWith;
 import org.mockito.InjectMocks;
 import org.mockito.Mock;
 import org.mockito.junit.jupiter.MockitoExtension;
+import org.springframework.orm.ObjectOptimisticLockingFailureException;
 import org.springframework.test.util.ReflectionTestUtils;
 
 import com.commerce.cart.application.result.CartItemSummaryResult;
-import com.commerce.cart.domain.CartItem;
-import com.commerce.cart.domain.repository.CartItemRepository;
-import com.commerce.cart.exception.CartErrorCode;
-import com.commerce.cart.exception.CartException;
 import com.commerce.cart.presentation.request.CartItemAddRequest;
 
+/**
+ * cart phase ADR 결정 8의 retry 정책에 대한 단위 테스트.
+ *
+ * <p>AddCartItemService는 outer Service로 retry loop만 담당한다.
+ * 실제 비즈니스 로직 검증은 {@link AddCartItemProcessorTest}에서 수행한다.
+ */
 @ExtendWith(MockitoExtension.class)
 class AddCartItemServiceTest {
 
 	@Mock
-	private CartItemRepository cartItemRepository;
+	private AddCartItemProcessor processor;
 
 	@InjectMocks
 	private AddCartItemService addCartItemService;
 
-	@DisplayName("기존 항목이 없으면 새로 저장한다")
+	@DisplayName("정상 호출은 Processor 1회 호출로 결과를 반환한다")
 	@Test
-	void add_whenNotExists_saveNewCartItem() {
-		// given
+	void add_normal_callsProcessorOnce() {
 		Long memberId = 1L;
-		Long productId = 100L;
-		CartItemAddRequest request = createRequest(productId, 3);
+		CartItemAddRequest request = createRequest(100L, 3);
+		CartItemSummaryResult expected = CartItemSummaryResult.builder()
+			.productId(100L).quantity(3).build();
+		given(processor.execute(memberId, request)).willReturn(expected);
 
-		given(cartItemRepository.findByMemberIdAndProductId(memberId, productId))
-			.willReturn(Optional.empty());
-		given(cartItemRepository.save(any(CartItem.class)))
-			.willAnswer(invocation -> invocation.getArgument(0));
-
-		// when
 		CartItemSummaryResult result = addCartItemService.add(memberId, request);
 
-		// then
-		assertThat(result.getProductId()).isEqualTo(productId);
-		assertThat(result.getQuantity()).isEqualTo(3);
-		then(cartItemRepository).should().save(any(CartItem.class));
+		assertThat(result).isSameAs(expected);
+		then(processor).should(times(1)).execute(memberId, request);
 	}
 
-	@DisplayName("기존 항목이 있으면 수량을 합산한다")
+	@DisplayName("ObjectOptimisticLockingFailureException은 retry로 흡수된다")
 	@Test
-	void add_whenExists_increaseQuantity() {
-		// given
+	void add_optimisticLockingFailure_retriesAndSucceeds() {
 		Long memberId = 1L;
-		Long productId = 100L;
-		CartItem existing = CartItem.create(memberId, productId, 5);
-		CartItemAddRequest request = createRequest(productId, 4);
+		CartItemAddRequest request = createRequest(100L, 3);
+		CartItemSummaryResult expected = CartItemSummaryResult.builder()
+			.productId(100L).quantity(3).build();
 
-		given(cartItemRepository.findByMemberIdAndProductId(memberId, productId))
-			.willReturn(Optional.of(existing));
+		given(processor.execute(memberId, request))
+			.willThrow(new ObjectOptimisticLockingFailureException("cart", null))
+			.willReturn(expected);
 
-		// when
 		CartItemSummaryResult result = addCartItemService.add(memberId, request);
 
-		// then
-		assertThat(result.getProductId()).isEqualTo(productId);
-		assertThat(result.getQuantity()).isEqualTo(9);
-		assertThat(existing.getQuantity()).isEqualTo(9);
-		then(cartItemRepository).should(never()).save(any(CartItem.class));
+		assertThat(result).isSameAs(expected);
+		then(processor).should(times(2)).execute(memberId, request);
 	}
 
-	@DisplayName("합산 결과가 최대 수량을 초과하면 예외를 던진다")
+	@DisplayName("MAX_RETRY를 초과해도 충돌하면 예외를 그대로 던진다")
 	@Test
-	void add_whenSumExceedsMaxQuantity_throwException() {
-		// given
+	void add_optimisticLockingFailure_exceedsMaxRetry_throws() {
 		Long memberId = 1L;
-		Long productId = 100L;
-		CartItem existing = CartItem.create(memberId, productId, 95);
-		CartItemAddRequest request = createRequest(productId, 10);
+		CartItemAddRequest request = createRequest(100L, 3);
 
-		given(cartItemRepository.findByMemberIdAndProductId(memberId, productId))
-			.willReturn(Optional.of(existing));
+		given(processor.execute(memberId, request))
+			.willThrow(new ObjectOptimisticLockingFailureException("cart", null));
 
-		// when & then
 		assertThatThrownBy(() -> addCartItemService.add(memberId, request))
-			.isInstanceOf(CartException.class)
-			.satisfies(exception -> {
-				CartException cartException = (CartException)exception;
-				assertThat(cartException.getErrorCode()).isEqualTo(CartErrorCode.CART_ITEM_QUANTITY_EXCEEDED);
-			});
-		assertThat(existing.getQuantity()).isEqualTo(95);
-		then(cartItemRepository).should(never()).save(any(CartItem.class));
+			.isInstanceOf(ObjectOptimisticLockingFailureException.class);
+		then(processor).should(times(3)).execute(memberId, request);
 	}
 
 	private CartItemAddRequest createRequest(Long productId, int quantity) {

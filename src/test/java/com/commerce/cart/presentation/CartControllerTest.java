@@ -6,6 +6,7 @@ import static org.mockito.ArgumentMatchers.eq;
 import static org.mockito.BDDMockito.given;
 import static org.mockito.BDDMockito.then;
 import static org.mockito.BDDMockito.willDoNothing;
+import static org.mockito.BDDMockito.willThrow;
 import static org.springframework.test.web.servlet.request.MockMvcRequestBuilders.delete;
 import static org.springframework.test.web.servlet.request.MockMvcRequestBuilders.get;
 import static org.springframework.test.web.servlet.request.MockMvcRequestBuilders.patch;
@@ -33,6 +34,8 @@ import com.commerce.cart.application.GetMyCartService;
 import com.commerce.cart.application.RemoveCartItemService;
 import com.commerce.cart.application.UpdateCartItemQuantityService;
 import com.commerce.cart.application.result.CartItemSummaryResult;
+import com.commerce.cart.exception.CartErrorCode;
+import com.commerce.cart.exception.CartException;
 import com.commerce.cart.application.result.CartItemResult;
 import com.commerce.cart.application.result.CartResult;
 import com.commerce.cart.presentation.request.CartItemAddRequest;
@@ -231,16 +234,16 @@ class CartControllerTest {
 		then(removeCartItemService).should().remove(anyLong(), eq(123L));
 	}
 
-	@DisplayName("존재하지 않는 항목 삭제 요청도 200을 반환한다")
+	@DisplayName("존재하지 않는 항목 삭제 요청은 CART_ITEM_NOT_FOUND 4xx를 반환한다 (결정 6-4)")
 	@Test
-	void removeCartItem_whenNotExists_returnOk() throws Exception {
+	void removeCartItem_whenNotExists_returnNotFound() throws Exception {
 		stubForToken();
-		willDoNothing().given(removeCartItemService).remove(anyLong(), eq(999L));
+		willThrow(new CartException(CartErrorCode.CART_ITEM_NOT_FOUND))
+			.given(removeCartItemService).remove(anyLong(), eq(999L));
 
 		mockMvc.perform(delete("/cart/items/{productId}", 999L)
 				.header("Authorization", "Bearer access-token"))
-			.andExpect(status().isOk())
-			.andExpect(jsonPath("$.code").value("SUCCESS"));
+			.andExpect(status().isNotFound());
 
 		then(removeCartItemService).should().remove(anyLong(), eq(999L));
 	}

@@ -53,9 +53,9 @@ class CartItemRepositoryAdapterTest {
 		assertThat(found.get().getQuantity()).isEqualTo(3);
 	}
 
-	@DisplayName("findAllByMemberId는 다른 회원의 cart 항목을 제외한다")
+	@DisplayName("findAllByMemberIdOrderByCreatedAtDesc는 다른 회원의 cart 항목을 제외한다")
 	@Test
-	void findAllByMemberId_whenOtherMemberHasItems_excludesOtherMembers() {
+	void findAllByMemberIdOrderByCreatedAtDesc_whenOtherMemberHasItems_excludesOtherMembers() {
 		// given
 		CartItem mine = cartItemRepository.save(CartItem.create(MEMBER_ID, PRODUCT_ID, 1));
 		cartItemRepository.save(CartItem.create(MEMBER_ID, OTHER_PRODUCT_ID, 2));
@@ -77,6 +77,26 @@ class CartItemRepositoryAdapterTest {
 		assertThat(results)
 			.extracting(CartItem::getId)
 			.contains(mine.getId());
+	}
+
+	@DisplayName("findAllByMemberIdOrderByCreatedAtDesc는 createdAt 내림차순으로 반환한다 (결정 6-3)")
+	@Test
+	void findAllByMemberIdOrderByCreatedAtDesc_sortsByCreatedAtDesc() throws InterruptedException {
+		// given — 시간 차를 두어 createdAt이 다르게 기록되도록 한다
+		CartItem first = cartItemRepository.save(CartItem.create(MEMBER_ID, PRODUCT_ID, 1));
+		entityManager.flush();
+		Thread.sleep(10);
+		CartItem second = cartItemRepository.save(CartItem.create(MEMBER_ID, OTHER_PRODUCT_ID, 2));
+		entityManager.flush();
+		entityManager.clear();
+
+		// when
+		List<CartItem> results = cartItemRepository.findAllByMemberIdOrderByCreatedAtDesc(MEMBER_ID);
+
+		// then
+		assertThat(results).hasSize(2);
+		assertThat(results.get(0).getId()).isEqualTo(second.getId());
+		assertThat(results.get(1).getId()).isEqualTo(first.getId());
 	}
 
 	@DisplayName("같은 (memberId, productId)로 두 번 저장하면 UNIQUE 위반으로 예외가 발생한다")
