@@ -2,7 +2,10 @@ package com.commerce.cart.presentation;
 
 import org.springframework.http.HttpStatus;
 import org.springframework.http.ResponseEntity;
+import org.springframework.web.bind.annotation.DeleteMapping;
 import org.springframework.web.bind.annotation.GetMapping;
+import org.springframework.web.bind.annotation.PatchMapping;
+import org.springframework.web.bind.annotation.PathVariable;
 import org.springframework.web.bind.annotation.PostMapping;
 import org.springframework.web.bind.annotation.RequestBody;
 import org.springframework.web.bind.annotation.RequestMapping;
@@ -10,9 +13,12 @@ import org.springframework.web.bind.annotation.RestController;
 
 import com.commerce.cart.application.AddCartItemService;
 import com.commerce.cart.application.GetMyCartService;
+import com.commerce.cart.application.RemoveCartItemService;
+import com.commerce.cart.application.UpdateCartItemQuantityService;
 import com.commerce.cart.application.result.CartItemAddedView;
 import com.commerce.cart.application.result.CartView;
 import com.commerce.cart.presentation.request.CartItemAddRequest;
+import com.commerce.cart.presentation.request.CartItemUpdateRequest;
 import com.commerce.common.ApiResponse;
 import com.commerce.security.annotation.AuthenticatedMemberId;
 
@@ -26,6 +32,8 @@ public class CartController {
 
 	private final AddCartItemService addCartItemService;
 	private final GetMyCartService getMyCartService;
+	private final UpdateCartItemQuantityService updateCartItemQuantityService;
+	private final RemoveCartItemService removeCartItemService;
 
 	@PostMapping("/items")
 	public ResponseEntity<ApiResponse<CartItemAddedView>> addCartItem(
@@ -42,5 +50,24 @@ public class CartController {
 	) {
 		CartView result = getMyCartService.get(memberId);
 		return ResponseEntity.status(HttpStatus.OK).body(ApiResponse.of(result));
+	}
+
+	@PatchMapping("/items/{productId}")
+	public ResponseEntity<ApiResponse<CartItemAddedView>> updateCartItemQuantity(
+		@AuthenticatedMemberId Long memberId,
+		@PathVariable Long productId,
+		@Valid @RequestBody CartItemUpdateRequest request
+	) {
+		CartItemAddedView result = updateCartItemQuantityService.update(memberId, productId, request);
+		return ResponseEntity.status(HttpStatus.OK).body(ApiResponse.of(result));
+	}
+
+	@DeleteMapping("/items/{productId}")
+	public ResponseEntity<ApiResponse<Void>> removeCartItem(
+		@AuthenticatedMemberId Long memberId,
+		@PathVariable Long productId
+	) {
+		removeCartItemService.remove(memberId, productId);
+		return ResponseEntity.status(HttpStatus.OK).body(ApiResponse.of(null));
 	}
 }

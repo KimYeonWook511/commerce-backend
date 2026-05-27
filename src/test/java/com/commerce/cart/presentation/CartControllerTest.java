@@ -2,8 +2,13 @@ package com.commerce.cart.presentation;
 
 import static org.mockito.ArgumentMatchers.any;
 import static org.mockito.ArgumentMatchers.anyLong;
+import static org.mockito.ArgumentMatchers.eq;
 import static org.mockito.BDDMockito.given;
+import static org.mockito.BDDMockito.then;
+import static org.mockito.BDDMockito.willDoNothing;
+import static org.springframework.test.web.servlet.request.MockMvcRequestBuilders.delete;
 import static org.springframework.test.web.servlet.request.MockMvcRequestBuilders.get;
+import static org.springframework.test.web.servlet.request.MockMvcRequestBuilders.patch;
 import static org.springframework.test.web.servlet.request.MockMvcRequestBuilders.post;
 import static org.springframework.test.web.servlet.result.MockMvcResultMatchers.jsonPath;
 import static org.springframework.test.web.servlet.result.MockMvcResultMatchers.status;
@@ -25,10 +30,13 @@ import com.commerce.auth.application.TokenAuthenticationService;
 import com.commerce.auth.application.result.TokenAuthenticationResult;
 import com.commerce.cart.application.AddCartItemService;
 import com.commerce.cart.application.GetMyCartService;
+import com.commerce.cart.application.RemoveCartItemService;
+import com.commerce.cart.application.UpdateCartItemQuantityService;
 import com.commerce.cart.application.result.CartItemAddedView;
 import com.commerce.cart.application.result.CartItemView;
 import com.commerce.cart.application.result.CartView;
 import com.commerce.cart.presentation.request.CartItemAddRequest;
+import com.commerce.cart.presentation.request.CartItemUpdateRequest;
 import com.commerce.common.config.WebConfig;
 import com.commerce.security.filter.JwtAuthenticationFilter;
 import com.commerce.security.interceptor.AuthorizationInterceptor;
@@ -53,6 +61,12 @@ class CartControllerTest {
 
 	@MockitoBean
 	private GetMyCartService getMyCartService;
+
+	@MockitoBean
+	private UpdateCartItemQuantityService updateCartItemQuantityService;
+
+	@MockitoBean
+	private RemoveCartItemService removeCartItemService;
 
 	@MockitoBean
 	private TokenAuthenticationService tokenAuthenticationService;
@@ -151,6 +165,84 @@ class CartControllerTest {
 			.andExpect(jsonPath("$.data.items[0].lineAmount").value(2000))
 			.andExpect(jsonPath("$.data.items[0].unavailable").value(false))
 			.andExpect(jsonPath("$.data.totalAmount").value(2000));
+	}
+
+	@DisplayName("유효한 수량 변경 요청이면 200을 반환한다")
+	@Test
+	void updateCartItem_whenValidRequest_returnOk() throws Exception {
+		stubForToken();
+		given(updateCartItemQuantityService.update(anyLong(), eq(123L), any(CartItemUpdateRequest.class)))
+			.willReturn(CartItemAddedView.builder()
+				.productId(123L)
+				.quantity(5)
+				.build());
+
+		mockMvc.perform(patch("/cart/items/{productId}", 123L)
+				.header("Authorization", "Bearer access-token")
+				.contentType(MediaType.APPLICATION_JSON)
+				.content("""
+					{"quantity": 5}
+					"""))
+			.andExpect(status().isOk())
+			.andExpect(jsonPath("$.code").value("SUCCESS"))
+			.andExpect(jsonPath("$.data.productId").value(123))
+			.andExpect(jsonPath("$.data.quantity").value(5));
+	}
+
+	@DisplayName("수량 변경 quantity가 0이면 400을 반환한다")
+	@Test
+	void updateCartItem_whenQuantityZero_returnBadRequest() throws Exception {
+		stubForToken();
+
+		mockMvc.perform(patch("/cart/items/{productId}", 123L)
+				.header("Authorization", "Bearer access-token")
+				.contentType(MediaType.APPLICATION_JSON)
+				.content("""
+					{"quantity": 0}
+					"""))
+			.andExpect(status().isBadRequest());
+	}
+
+	@DisplayName("수량 변경 quantity가 100이면 400을 반환한다")
+	@Test
+	void updateCartItem_whenQuantityOverMax_returnBadRequest() throws Exception {
+		stubForToken();
+
+		mockMvc.perform(patch("/cart/items/{productId}", 123L)
+				.header("Authorization", "Bearer access-token")
+				.contentType(MediaType.APPLICATION_JSON)
+				.content("""
+					{"quantity": 100}
+					"""))
+			.andExpect(status().isBadRequest());
+	}
+
+	@DisplayName("장바구니 항목 삭제는 200을 반환한다")
+	@Test
+	void removeCartItem_whenAuthenticated_returnOk() throws Exception {
+		stubForToken();
+		willDoNothing().given(removeCartItemService).remove(anyLong(), eq(123L));
+
+		mockMvc.perform(delete("/cart/items/{productId}", 123L)
+				.header("Authorization", "Bearer access-token"))
+			.andExpect(status().isOk())
+			.andExpect(jsonPath("$.code").value("SUCCESS"));
+
+		then(removeCartItemService).should().remove(anyLong(), eq(123L));
+	}
+
+	@DisplayName("존재하지 않는 항목 삭제 요청도 200을 반환한다")
+	@Test
+	void removeCartItem_whenNotExists_returnOk() throws Exception {
+		stubForToken();
+		willDoNothing().given(removeCartItemService).remove(anyLong(), eq(999L));
+
+		mockMvc.perform(delete("/cart/items/{productId}", 999L)
+				.header("Authorization", "Bearer access-token"))
+			.andExpect(status().isOk())
+			.andExpect(jsonPath("$.code").value("SUCCESS"));
+
+		then(removeCartItemService).should().remove(anyLong(), eq(999L));
 	}
 
 	private void stubForToken() {
