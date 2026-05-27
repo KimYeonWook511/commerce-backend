@@ -37,6 +37,7 @@
 - `git commit` 실행 전: `docs/commit-conventions.md`를 읽고 타입, subject 문체(`~한다`), 형식을 확인한다.
 - `gh pr create` 실행 전: `docs/pr-conventions.md`를 읽고 타입, 형식, draft 여부를 확인한다.
 - `gh pr merge` 실행 전: `docs/pr-conventions.md`의 머지 규칙을 읽고 extended description 정리 방식과 후속 작업 체크 상태를 확인한다.
+- `gh issue create` 실행 전: `.github/ISSUE_TEMPLATE.md`를 읽고 섹션 구조를 확인한다.
 - 브랜치 생성(`git worktree add`) 전: `docs/branch-conventions.md`를 읽고 형식을 확인한다.
 
 ## Plan Mode
