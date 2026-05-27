@@ -12,11 +12,7 @@ import lombok.RequiredArgsConstructor;
 import lombok.extern.slf4j.Slf4j;
 
 /**
- * cart 항목 삭제 흐름.
- *
- * <p>cart phase ADR 결정 6-4에 따라 미존재 항목은 {@code CART_ITEM_NOT_FOUND} 4xx로 응답한다.
- * find로 조회한 managed entity를 그대로 {@code delete(entity)}로 넘겨 persistence context와 동기되며,
- * {@code @Version} 체크가 적용되어 동시 DELETE race도 {@link org.springframework.orm.ObjectOptimisticLockingFailureException}으로 surface된다.
+ * cart 항목 삭제 Service. 정책: cart adr 결정 6-4.
  */
 @Slf4j
 @Service

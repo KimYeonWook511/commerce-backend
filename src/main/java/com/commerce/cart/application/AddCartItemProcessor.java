@@ -17,15 +17,7 @@ import lombok.RequiredArgsConstructor;
 import lombok.extern.slf4j.Slf4j;
 
 /**
- * cart 항목 추가 트랜잭션 경계.
- *
- * <p>{@link AddCartItemService}의 retry loop가 매 attempt마다 빈 경계를 넘어 호출하므로
- * 새 트랜잭션·새 persistence context로 진입한다 (self-invocation 함정 회피).
- * 트랜잭션 정책은 ADR-021(method-level @Transactional)을 따르며,
- * 영속화 호출은 ADR-022(repository.save 명시)를 따른다.
- *
- * <p>cart row를 생성하거나 수량을 합산하기 전에 cart phase ADR 결정 6-5에 따라
- * Product 존재와 구매 가능 상태를 검증한다. 미존재·soft-deleted는 NOT_FOUND, STOPPED는 UNAVAILABLE로 거부한다.
+ * cart 항목 추가 트랜잭션 경계. 정책: ADR-021, ADR-022, cart adr 결정 6-5/8.
  */
 @Slf4j
 @Component
