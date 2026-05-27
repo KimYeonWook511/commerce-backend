@@ -14,8 +14,8 @@ import org.mockito.Mock;
 import org.mockito.junit.jupiter.MockitoExtension;
 import org.springframework.test.util.ReflectionTestUtils;
 
-import com.commerce.cart.application.result.CartItemView;
-import com.commerce.cart.application.result.CartView;
+import com.commerce.cart.application.result.CartItemResult;
+import com.commerce.cart.application.result.CartResult;
 import com.commerce.cart.domain.CartItem;
 import com.commerce.cart.domain.repository.CartItemRepository;
 import com.commerce.product.domain.Product;
@@ -42,7 +42,7 @@ class GetMyCartServiceTest {
 		given(cartItemRepository.findAllByMemberId(memberId)).willReturn(List.of());
 
 		// when
-		CartView result = getMyCartService.get(memberId);
+		CartResult result = getMyCartService.get(memberId);
 
 		// then
 		assertThat(result.getItems()).isEmpty();
@@ -63,11 +63,11 @@ class GetMyCartServiceTest {
 		given(productRepository.findAllById(List.of(10L, 20L))).willReturn(List.of(product1, product2));
 
 		// when
-		CartView result = getMyCartService.get(memberId);
+		CartResult result = getMyCartService.get(memberId);
 
 		// then
 		assertThat(result.getItems()).hasSize(2);
-		CartItemView view1 = result.getItems().get(0);
+		CartItemResult view1 = result.getItems().get(0);
 		assertThat(view1.getProductId()).isEqualTo(10L);
 		assertThat(view1.getName()).isEqualTo("product-1");
 		assertThat(view1.getPrice()).isEqualTo(1000);
@@ -76,7 +76,7 @@ class GetMyCartServiceTest {
 		assertThat(view1.getLineAmount()).isEqualTo(2000);
 		assertThat(view1.isUnavailable()).isFalse();
 
-		CartItemView view2 = result.getItems().get(1);
+		CartItemResult view2 = result.getItems().get(1);
 		assertThat(view2.getProductId()).isEqualTo(20L);
 		assertThat(view2.getPrice()).isEqualTo(500);
 		assertThat(view2.getQuantity()).isEqualTo(3);
@@ -106,7 +106,7 @@ class GetMyCartServiceTest {
 			.willReturn(List.of(normalProduct, stoppedProduct, deletedProduct));
 
 		// when
-		CartView result = getMyCartService.get(memberId);
+		CartResult result = getMyCartService.get(memberId);
 
 		// then
 		assertThat(result.getItems()).hasSize(3);
@@ -136,7 +136,7 @@ class GetMyCartServiceTest {
 			.willReturn(List.of(normalProduct));
 
 		// when
-		CartView result = getMyCartService.get(memberId);
+		CartResult result = getMyCartService.get(memberId);
 
 		// then
 		assertThat(result.getItems()).hasSize(1);

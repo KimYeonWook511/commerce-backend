@@ -15,8 +15,8 @@ import com.commerce.cart.application.AddCartItemService;
 import com.commerce.cart.application.GetMyCartService;
 import com.commerce.cart.application.RemoveCartItemService;
 import com.commerce.cart.application.UpdateCartItemQuantityService;
-import com.commerce.cart.application.result.CartItemAddedView;
-import com.commerce.cart.application.result.CartView;
+import com.commerce.cart.application.result.CartItemSummaryResult;
+import com.commerce.cart.application.result.CartResult;
 import com.commerce.cart.presentation.request.CartItemAddRequest;
 import com.commerce.cart.presentation.request.CartItemUpdateRequest;
 import com.commerce.common.ApiResponse;
@@ -36,29 +36,29 @@ public class CartController {
 	private final RemoveCartItemService removeCartItemService;
 
 	@PostMapping("/items")
-	public ResponseEntity<ApiResponse<CartItemAddedView>> addCartItem(
+	public ResponseEntity<ApiResponse<CartItemSummaryResult>> addCartItem(
 		@AuthenticatedMemberId Long memberId,
 		@Valid @RequestBody CartItemAddRequest request
 	) {
-		CartItemAddedView result = addCartItemService.add(memberId, request);
+		CartItemSummaryResult result = addCartItemService.add(memberId, request);
 		return ResponseEntity.status(HttpStatus.CREATED).body(ApiResponse.of(result));
 	}
 
 	@GetMapping
-	public ResponseEntity<ApiResponse<CartView>> getMyCart(
+	public ResponseEntity<ApiResponse<CartResult>> getMyCart(
 		@AuthenticatedMemberId Long memberId
 	) {
-		CartView result = getMyCartService.get(memberId);
+		CartResult result = getMyCartService.get(memberId);
 		return ResponseEntity.status(HttpStatus.OK).body(ApiResponse.of(result));
 	}
 
 	@PatchMapping("/items/{productId}")
-	public ResponseEntity<ApiResponse<CartItemAddedView>> updateCartItemQuantity(
+	public ResponseEntity<ApiResponse<CartItemSummaryResult>> updateCartItemQuantity(
 		@AuthenticatedMemberId Long memberId,
 		@PathVariable Long productId,
 		@Valid @RequestBody CartItemUpdateRequest request
 	) {
-		CartItemAddedView result = updateCartItemQuantityService.update(memberId, productId, request);
+		CartItemSummaryResult result = updateCartItemQuantityService.update(memberId, productId, request);
 		return ResponseEntity.status(HttpStatus.OK).body(ApiResponse.of(result));
 	}
 

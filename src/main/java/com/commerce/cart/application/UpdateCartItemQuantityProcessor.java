@@ -3,7 +3,7 @@ package com.commerce.cart.application;
 import org.springframework.stereotype.Component;
 import org.springframework.transaction.annotation.Transactional;
 
-import com.commerce.cart.application.result.CartItemAddedView;
+import com.commerce.cart.application.result.CartItemSummaryResult;
 import com.commerce.cart.domain.CartItem;
 import com.commerce.cart.domain.repository.CartItemRepository;
 import com.commerce.cart.exception.CartErrorCode;
@@ -28,7 +28,7 @@ public class UpdateCartItemQuantityProcessor {
 	private final CartItemRepository cartItemRepository;
 
 	@Transactional
-	public CartItemAddedView execute(Long memberId, Long productId, CartItemUpdateRequest request) {
+	public CartItemSummaryResult execute(Long memberId, Long productId, CartItemUpdateRequest request) {
 		int quantity = request.getQuantity();
 
 		CartItem cartItem = cartItemRepository.findByMemberIdAndProductId(memberId, productId)
@@ -39,6 +39,6 @@ public class UpdateCartItemQuantityProcessor {
 		log.info("장바구니 수량 변경 memberId={} productId={} quantity={}",
 			memberId, productId, cartItem.getQuantity());
 
-		return CartItemAddedView.from(cartItem);
+		return CartItemSummaryResult.from(cartItem);
 	}
 }

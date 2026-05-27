@@ -3,7 +3,7 @@ package com.commerce.cart.application;
 import org.springframework.orm.ObjectOptimisticLockingFailureException;
 import org.springframework.stereotype.Service;
 
-import com.commerce.cart.application.result.CartItemAddedView;
+import com.commerce.cart.application.result.CartItemSummaryResult;
 import com.commerce.cart.presentation.request.CartItemUpdateRequest;
 
 import lombok.RequiredArgsConstructor;
@@ -25,7 +25,7 @@ public class UpdateCartItemQuantityService {
 
 	private final UpdateCartItemQuantityProcessor processor;
 
-	public CartItemAddedView update(Long memberId, Long productId, CartItemUpdateRequest request) {
+	public CartItemSummaryResult update(Long memberId, Long productId, CartItemUpdateRequest request) {
 		for (int attempt = 1; attempt <= MAX_RETRY; attempt++) {
 			try {
 				return processor.execute(memberId, productId, request);

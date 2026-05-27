@@ -17,7 +17,7 @@ import org.mockito.Mock;
 import org.mockito.junit.jupiter.MockitoExtension;
 import org.springframework.test.util.ReflectionTestUtils;
 
-import com.commerce.cart.application.result.CartItemAddedView;
+import com.commerce.cart.application.result.CartItemSummaryResult;
 import com.commerce.cart.domain.CartItem;
 import com.commerce.cart.domain.repository.CartItemRepository;
 import com.commerce.cart.exception.CartErrorCode;
@@ -47,7 +47,7 @@ class AddCartItemServiceTest {
 			.willAnswer(invocation -> invocation.getArgument(0));
 
 		// when
-		CartItemAddedView result = addCartItemService.add(memberId, request);
+		CartItemSummaryResult result = addCartItemService.add(memberId, request);
 
 		// then
 		assertThat(result.getProductId()).isEqualTo(productId);
@@ -68,7 +68,7 @@ class AddCartItemServiceTest {
 			.willReturn(Optional.of(existing));
 
 		// when
-		CartItemAddedView result = addCartItemService.add(memberId, request);
+		CartItemSummaryResult result = addCartItemService.add(memberId, request);
 
 		// then
 		assertThat(result.getProductId()).isEqualTo(productId);

@@ -32,9 +32,9 @@ import com.commerce.cart.application.AddCartItemService;
 import com.commerce.cart.application.GetMyCartService;
 import com.commerce.cart.application.RemoveCartItemService;
 import com.commerce.cart.application.UpdateCartItemQuantityService;
-import com.commerce.cart.application.result.CartItemAddedView;
-import com.commerce.cart.application.result.CartItemView;
-import com.commerce.cart.application.result.CartView;
+import com.commerce.cart.application.result.CartItemSummaryResult;
+import com.commerce.cart.application.result.CartItemResult;
+import com.commerce.cart.application.result.CartResult;
 import com.commerce.cart.presentation.request.CartItemAddRequest;
 import com.commerce.cart.presentation.request.CartItemUpdateRequest;
 import com.commerce.common.config.WebConfig;
@@ -76,7 +76,7 @@ class CartControllerTest {
 	void addCartItem_whenValidRequest_returnCreated() throws Exception {
 		stubForToken();
 		given(addCartItemService.add(anyLong(), any(CartItemAddRequest.class)))
-			.willReturn(CartItemAddedView.builder()
+			.willReturn(CartItemSummaryResult.builder()
 				.productId(123L)
 				.quantity(5)
 				.build());
@@ -139,7 +139,7 @@ class CartControllerTest {
 	@Test
 	void getMyCart_whenAuthenticated_returnOk() throws Exception {
 		stubForToken();
-		CartItemView itemView = CartItemView.builder()
+		CartItemResult itemView = CartItemResult.builder()
 			.productId(10L)
 			.name("product-1")
 			.price(1000)
@@ -149,7 +149,7 @@ class CartControllerTest {
 			.unavailable(false)
 			.build();
 		given(getMyCartService.get(anyLong()))
-			.willReturn(CartView.builder()
+			.willReturn(CartResult.builder()
 				.items(List.of(itemView))
 				.totalAmount(2000)
 				.build());
@@ -172,7 +172,7 @@ class CartControllerTest {
 	void updateCartItem_whenValidRequest_returnOk() throws Exception {
 		stubForToken();
 		given(updateCartItemQuantityService.update(anyLong(), eq(123L), any(CartItemUpdateRequest.class)))
-			.willReturn(CartItemAddedView.builder()
+			.willReturn(CartItemSummaryResult.builder()
 				.productId(123L)
 				.quantity(5)
 				.build());

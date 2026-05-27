@@ -4,7 +4,7 @@ import lombok.Builder;
 import lombok.Getter;
 
 @Getter
-public class CartItemView {
+public class CartItemResult {
 
 	private final Long productId;
 	private final String name;
@@ -15,7 +15,7 @@ public class CartItemView {
 	private final boolean unavailable;
 
 	@Builder
-	private CartItemView(Long productId, String name, int price, String imageUrl, int quantity, int lineAmount,
+	private CartItemResult(Long productId, String name, int price, String imageUrl, int quantity, int lineAmount,
 		boolean unavailable) {
 		this.productId = productId;
 		this.name = name;

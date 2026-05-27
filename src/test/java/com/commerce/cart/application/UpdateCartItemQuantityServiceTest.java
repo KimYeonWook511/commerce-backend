@@ -14,7 +14,7 @@ import org.mockito.Mock;
 import org.mockito.junit.jupiter.MockitoExtension;
 import org.springframework.test.util.ReflectionTestUtils;
 
-import com.commerce.cart.application.result.CartItemAddedView;
+import com.commerce.cart.application.result.CartItemSummaryResult;
 import com.commerce.cart.domain.CartItem;
 import com.commerce.cart.domain.repository.CartItemRepository;
 import com.commerce.cart.exception.CartErrorCode;
@@ -43,7 +43,7 @@ class UpdateCartItemQuantityServiceTest {
 			.willReturn(Optional.of(existing));
 
 		// when
-		CartItemAddedView result = updateCartItemQuantityService.update(memberId, productId, request);
+		CartItemSummaryResult result = updateCartItemQuantityService.update(memberId, productId, request);
 
 		// then
 		assertThat(result.getProductId()).isEqualTo(productId);

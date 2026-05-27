@@ -6,13 +6,13 @@ import lombok.Builder;
 import lombok.Getter;
 
 @Getter
-public class CartView {
+public class CartResult {
 
-	private final List<CartItemView> items;
+	private final List<CartItemResult> items;
 	private final int totalAmount;
 
 	@Builder
-	private CartView(List<CartItemView> items, int totalAmount) {
+	private CartResult(List<CartItemResult> items, int totalAmount) {
 		this.items = items;
 		this.totalAmount = totalAmount;
 	}

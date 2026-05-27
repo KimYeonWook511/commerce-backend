@@ -6,19 +6,19 @@ import lombok.Builder;
 import lombok.Getter;
 
 @Getter
-public class CartItemAddedView {
+public class CartItemSummaryResult {
 
 	private final Long productId;
 	private final int quantity;
 
 	@Builder
-	private CartItemAddedView(Long productId, int quantity) {
+	private CartItemSummaryResult(Long productId, int quantity) {
 		this.productId = productId;
 		this.quantity = quantity;
 	}
 
-	public static CartItemAddedView from(CartItem cartItem) {
-		return CartItemAddedView.builder()
+	public static CartItemSummaryResult from(CartItem cartItem) {
+		return CartItemSummaryResult.builder()
 			.productId(cartItem.getProductId())
 			.quantity(cartItem.getQuantity())
 			.build();
