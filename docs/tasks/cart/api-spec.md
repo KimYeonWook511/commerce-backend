@@ -112,6 +112,7 @@
 
 - **검증 규칙**
   - `quantity`: `@NotNull @Min(1) @Max(99)`
+  - path `productId`: 별도 Bean Validation 게이트 없음 (코드베이스 path id 일관 정책). 0/음수도 같은 미존재 분기로 흡수되어 `CART_ITEM_NOT_FOUND` 4xx로 응답.
 - **동작**
   - `findByMemberIdAndProductId` → 없으면 `CART_ITEM_NOT_FOUND` 4xx
   - 있으면 `changeQuantity(요청 quantity)`
@@ -130,6 +131,8 @@
 }
 ```
 
+- **검증 규칙**
+  - path `productId`: 별도 Bean Validation 게이트 없음 (코드베이스 path id 일관 정책). 0/음수도 같은 미존재 분기로 흡수되어 `CART_ITEM_NOT_FOUND` 4xx로 응답.
 - **동작**
   - `findByMemberIdAndProductId` → 없으면 `CART_ITEM_NOT_FOUND` 4xx (결정 6-4, PATCH와 동일 정책)
   - 있으면 `deleteByMemberIdAndProductId(memberId, productId)` 호출
