@@ -26,15 +26,13 @@ public class UpdateCartItemQuantityService {
 	private final UpdateCartItemQuantityProcessor processor;
 
 	public CartItemSummaryResult update(Long memberId, Long productId, CartItemUpdateRequest request) {
-		for (int attempt = 1; attempt <= MAX_RETRY; attempt++) {
+		for (int attempt = 1; attempt < MAX_RETRY; attempt++) {
 			try {
 				return processor.execute(memberId, productId, request);
-			} catch (ObjectOptimisticLockingFailureException ex) {
-				if (attempt == MAX_RETRY) {
-					throw ex;
-				}
+			} catch (ObjectOptimisticLockingFailureException ignored) {
+				// retry
 			}
 		}
-		throw new IllegalStateException("unreachable");
+		return processor.execute(memberId, productId, request);
 	}
 }
