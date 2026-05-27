@@ -134,3 +134,10 @@
   - DELETE는 결정 6-4의 entity 통한 `delete(cartItem)` + `@Version` 체크로 race가 처리되므로 본 결정 8(낙관적 락 + retry + Processor 분리)과 별개로 동작한다.
   - 본 결정은 cart phase에 한정되며, 다른 도메인의 ManyToOne→ID 마이그레이션 트랙(ADR-020 후속)에서 동일 패턴이 재사용될 수 있다.
   - retry 단위 테스트와 `concurrency` 태그 통합 테스트로 race 흡수와 한도 초과 시 throw를 검증한다.
+
+## 결정 9: 회원당 cart row 개수 상한은 두지 않는다
+
+- **배경**: 항목당 수량은 결정 7로 MIN=1, MAX=99 상한이 강제되지만, 회원당 cart row 개수(서로 다른 productId 수)는 도메인·application·DTO·DB 어디에도 상한이 없다. 악성 사용자가 자동화로 수천 개 productId를 add 호출하면 DB row 누적 + `GetMyCartService.get`의 `productRepository.findAllById(IN ...)` 부담이 발생할 수 있다.
+- **결정 내용**: 본 phase에서는 회원당 cart row 개수 상한을 두지 않는다.
+- **근거**: (a) 정상 사용자의 cart 항목 수는 보통 수십 단위로 작아 일반 흐름에서 부담이 없다. (b) row 상한을 도입하면 도메인·application·DTO 어디에 둘지, 초과 시 어떤 행위를 거부할지(가장 오래된 항목 자동 제거? 4xx 거부?), invariant 표현을 어떻게 할지 등 추가 결정이 누적되어 본 phase scope를 넘는다. (c) abuse 시나리오는 application 레이어보다 인증·rate limiting 등 상위 게이트에서 다루는 게 책임 분리에 부합한다.
+- **결과**: cart row 수 상한은 별도 트랙으로 둔다. 운영에서 abuse 패턴이 관측되거나 IN 절 binding 한도가 임박하면 본 결정을 재방문하여 (a) 회원당 row 상한 도입, (b) GET /cart에 페이지네이션 도입, (c) 인증·rate limiting 게이트 강화 중 하나를 선택한다.
