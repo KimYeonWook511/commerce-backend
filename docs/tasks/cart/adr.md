@@ -63,6 +63,7 @@
 - **배경**: 초기 구현은 미존재해도 200 + `ApiResponse.of(null)`을 반환하는 멱등 정책이었다. 그러나 `RemoveCartItemService`가 0 row 영향이어도 `log.info("장바구니 항목 삭제 ...")`를 silent로 찍어 운영 로그가 부정확해지는 문제가 있었다. 또한 `PATCH`(`UpdateCartItemQuantityService`)는 미존재 시 `CART_ITEM_NOT_FOUND` throw로 정책 비대칭이 있었다.
 - **결정 내용**: `RemoveCartItemService`도 `findByMemberIdAndProductId`로 사전 조회한 뒤 미존재면 `CartException(CART_ITEM_NOT_FOUND)`을 throw한다. PATCH와 동일 정책이며 응답은 4xx.
 - **근거**: (a) PATCH와의 정책 일관성, (b) silent log 회귀 자동 해결(throw → log 안 찍힘), (c) cart DELETE는 사용자 명시 액션이라 멱등 시나리오(동일 DELETE 재요청)가 거의 발생하지 않아 멱등 가치보다 명확한 피드백 가치가 더 크다. REST DELETE 정통의 멱등 성질을 약하게 깨지만 도메인 무결성·운영 가시성 우선 정책이다.
+- **범위 제한**: 본 결정의 "silent log 회귀 자동 해결"은 **단일 사용자의 미존재 DELETE**에 한정된다. `findByMemberIdAndProductId` 통과 후 `deleteByMemberIdAndProductId` 호출 사이에 다른 트랜잭션이 같은 항목을 먼저 삭제하는 **동시 DELETE race window**에서는 여전히 0 row 삭제 + silent INFO 로그가 발생할 수 있다. cart DELETE의 race 시나리오(같은 항목을 두 사용자 세션이 ms 단위로 동시 삭제)가 극히 드물어 acceptable로 둔다. 추후 빈도가 높아지면 `deleteByMemberIdAndProductId`가 affected rows를 반환하도록 바꾸고 호출자가 0이면 silent log를 스킵하는 보강을 검토한다.
 
 ### 6-5. 장바구니 추가 시 Product 존재·구매 가능 상태를 검증한다
 
