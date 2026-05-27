@@ -3,6 +3,7 @@ package com.commerce.cart.infrastructure;
 import static org.assertj.core.api.Assertions.assertThat;
 import static org.assertj.core.api.Assertions.assertThatThrownBy;
 
+import java.time.LocalDateTime;
 import java.util.List;
 import java.util.Optional;
 
@@ -13,6 +14,7 @@ import org.springframework.boot.test.autoconfigure.orm.jpa.DataJpaTest;
 import org.springframework.context.annotation.Import;
 import org.springframework.dao.DataIntegrityViolationException;
 import org.springframework.test.context.ActiveProfiles;
+import org.springframework.test.util.ReflectionTestUtils;
 
 import com.commerce.cart.domain.CartItem;
 import com.commerce.cart.domain.repository.CartItemRepository;
@@ -81,12 +83,14 @@ class CartItemRepositoryAdapterTest {
 
 	@DisplayName("findAllByMemberIdOrderByCreatedAtDesc는 createdAt 내림차순으로 반환한다 (결정 6-3)")
 	@Test
-	void findAllByMemberIdOrderByCreatedAtDesc_sortsByCreatedAtDesc() throws InterruptedException {
-		// given — 시간 차를 두어 createdAt이 다르게 기록되도록 한다
+	void findAllByMemberIdOrderByCreatedAtDesc_sortsByCreatedAtDesc() {
+		// given — createdAt을 명시 주입하여 DB DATETIME 해상도/CI clock skew에 의존하지 않는 결정론적 검증
 		CartItem first = cartItemRepository.save(CartItem.create(MEMBER_ID, PRODUCT_ID, 1));
-		entityManager.flush();
-		Thread.sleep(10);
 		CartItem second = cartItemRepository.save(CartItem.create(MEMBER_ID, OTHER_PRODUCT_ID, 2));
+		entityManager.flush();
+		LocalDateTime now = LocalDateTime.now();
+		ReflectionTestUtils.setField(first, "createdAt", now.minusSeconds(60));
+		ReflectionTestUtils.setField(second, "createdAt", now);
 		entityManager.flush();
 		entityManager.clear();
 
