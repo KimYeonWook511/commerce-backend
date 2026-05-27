@@ -1,0 +1,81 @@
+package com.commerce.cart.application;
+
+import java.util.ArrayList;
+import java.util.List;
+import java.util.Map;
+import java.util.function.Function;
+import java.util.stream.Collectors;
+
+import org.springframework.stereotype.Service;
+import org.springframework.transaction.annotation.Transactional;
+
+import com.commerce.cart.application.result.CartItemView;
+import com.commerce.cart.application.result.CartView;
+import com.commerce.cart.domain.CartItem;
+import com.commerce.cart.domain.repository.CartItemRepository;
+import com.commerce.product.domain.Product;
+import com.commerce.product.domain.ProductStatus;
+import com.commerce.product.domain.repository.ProductRepository;
+
+import lombok.RequiredArgsConstructor;
+import lombok.extern.slf4j.Slf4j;
+
+@Slf4j
+@Service
+@RequiredArgsConstructor
+@Transactional(readOnly = true)
+public class GetMyCartService {
+
+	private final CartItemRepository cartItemRepository;
+	private final ProductRepository productRepository;
+
+	public CartView get(Long memberId) {
+		List<CartItem> cartItems = cartItemRepository.findAllByMemberId(memberId);
+		if (cartItems.isEmpty()) {
+			return CartView.builder()
+				.items(List.of())
+				.totalAmount(0)
+				.build();
+		}
+
+		List<Long> productIds = cartItems.stream()
+			.map(CartItem::getProductId)
+			.toList();
+		Map<Long, Product> productsById = productRepository.findAllById(productIds).stream()
+			.collect(Collectors.toMap(Product::getId, Function.identity()));
+
+		List<CartItemView> items = new ArrayList<>();
+		for (CartItem cartItem : cartItems) {
+			Product product = productsById.get(cartItem.getProductId());
+			if (product == null) {
+				log.warn("장바구니 상품 누락 memberId={} productId={}", memberId, cartItem.getProductId());
+				continue;
+			}
+			items.add(toCartItemView(cartItem, product));
+		}
+
+		int totalAmount = items.stream()
+			.filter(item -> !item.isUnavailable())
+			.mapToInt(CartItemView::getLineAmount)
+			.sum();
+
+		return CartView.builder()
+			.items(items)
+			.totalAmount(totalAmount)
+			.build();
+	}
+
+	private CartItemView toCartItemView(CartItem cartItem, Product product) {
+		boolean unavailable = product.getStatus() == ProductStatus.STOPPED || product.getDeletedAt() != null;
+		int lineAmount = product.getPrice() * cartItem.getQuantity();
+		return CartItemView.builder()
+			.productId(product.getId())
+			.name(product.getName())
+			.price(product.getPrice())
+			.imageUrl(product.getImageUrl())
+			.quantity(cartItem.getQuantity())
+			.lineAmount(lineAmount)
+			.unavailable(unavailable)
+			.build();
+	}
+}

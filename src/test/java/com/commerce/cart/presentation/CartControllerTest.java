@@ -1,0 +1,160 @@
+package com.commerce.cart.presentation;
+
+import static org.mockito.ArgumentMatchers.any;
+import static org.mockito.ArgumentMatchers.anyLong;
+import static org.mockito.BDDMockito.given;
+import static org.springframework.test.web.servlet.request.MockMvcRequestBuilders.get;
+import static org.springframework.test.web.servlet.request.MockMvcRequestBuilders.post;
+import static org.springframework.test.web.servlet.result.MockMvcResultMatchers.jsonPath;
+import static org.springframework.test.web.servlet.result.MockMvcResultMatchers.status;
+
+import java.util.List;
+
+import org.junit.jupiter.api.DisplayName;
+import org.junit.jupiter.api.Test;
+import org.springframework.beans.factory.annotation.Autowired;
+import org.springframework.boot.test.autoconfigure.web.servlet.AutoConfigureMockMvc;
+import org.springframework.boot.test.autoconfigure.web.servlet.WebMvcTest;
+import org.springframework.context.annotation.Import;
+import org.springframework.http.MediaType;
+import org.springframework.test.context.ActiveProfiles;
+import org.springframework.test.context.bean.override.mockito.MockitoBean;
+import org.springframework.test.web.servlet.MockMvc;
+
+import com.commerce.auth.application.TokenAuthenticationService;
+import com.commerce.auth.application.result.TokenAuthenticationResult;
+import com.commerce.cart.application.AddCartItemService;
+import com.commerce.cart.application.GetMyCartService;
+import com.commerce.cart.application.result.CartItemAddedView;
+import com.commerce.cart.application.result.CartItemView;
+import com.commerce.cart.application.result.CartView;
+import com.commerce.cart.presentation.request.CartItemAddRequest;
+import com.commerce.common.config.WebConfig;
+import com.commerce.security.filter.JwtAuthenticationFilter;
+import com.commerce.security.interceptor.AuthorizationInterceptor;
+import com.commerce.security.resolver.AuthenticatedMemberIdArgumentResolver;
+
+@WebMvcTest(CartController.class)
+@AutoConfigureMockMvc(addFilters = true)
+@ActiveProfiles("test")
+@Import({
+	WebConfig.class,
+	AuthenticatedMemberIdArgumentResolver.class,
+	AuthorizationInterceptor.class,
+	JwtAuthenticationFilter.class
+})
+class CartControllerTest {
+
+	@Autowired
+	private MockMvc mockMvc;
+
+	@MockitoBean
+	private AddCartItemService addCartItemService;
+
+	@MockitoBean
+	private GetMyCartService getMyCartService;
+
+	@MockitoBean
+	private TokenAuthenticationService tokenAuthenticationService;
+
+	@DisplayName("유효한 장바구니 담기 요청이면 201을 반환한다")
+	@Test
+	void addCartItem_whenValidRequest_returnCreated() throws Exception {
+		stubForToken();
+		given(addCartItemService.add(anyLong(), any(CartItemAddRequest.class)))
+			.willReturn(CartItemAddedView.builder()
+				.productId(123L)
+				.quantity(5)
+				.build());
+
+		mockMvc.perform(post("/cart/items")
+				.header("Authorization", "Bearer access-token")
+				.contentType(MediaType.APPLICATION_JSON)
+				.content("""
+					{"productId": 123, "quantity": 2}
+					"""))
+			.andExpect(status().isCreated())
+			.andExpect(jsonPath("$.code").value("SUCCESS"))
+			.andExpect(jsonPath("$.data.productId").value(123))
+			.andExpect(jsonPath("$.data.quantity").value(5));
+	}
+
+	@DisplayName("quantity가 0이면 400을 반환한다")
+	@Test
+	void addCartItem_whenQuantityZero_returnBadRequest() throws Exception {
+		stubForToken();
+
+		mockMvc.perform(post("/cart/items")
+				.header("Authorization", "Bearer access-token")
+				.contentType(MediaType.APPLICATION_JSON)
+				.content("""
+					{"productId": 1, "quantity": 0}
+					"""))
+			.andExpect(status().isBadRequest());
+	}
+
+	@DisplayName("productId가 음수이면 400을 반환한다")
+	@Test
+	void addCartItem_whenProductIdNegative_returnBadRequest() throws Exception {
+		stubForToken();
+
+		mockMvc.perform(post("/cart/items")
+				.header("Authorization", "Bearer access-token")
+				.contentType(MediaType.APPLICATION_JSON)
+				.content("""
+					{"productId": -1, "quantity": 2}
+					"""))
+			.andExpect(status().isBadRequest());
+	}
+
+	@DisplayName("productId가 null이면 400을 반환한다")
+	@Test
+	void addCartItem_whenProductIdNull_returnBadRequest() throws Exception {
+		stubForToken();
+
+		mockMvc.perform(post("/cart/items")
+				.header("Authorization", "Bearer access-token")
+				.contentType(MediaType.APPLICATION_JSON)
+				.content("""
+					{"quantity": 2}
+					"""))
+			.andExpect(status().isBadRequest());
+	}
+
+	@DisplayName("내 장바구니 조회는 200을 반환한다")
+	@Test
+	void getMyCart_whenAuthenticated_returnOk() throws Exception {
+		stubForToken();
+		CartItemView itemView = CartItemView.builder()
+			.productId(10L)
+			.name("product-1")
+			.price(1000)
+			.imageUrl("https://img/1.png")
+			.quantity(2)
+			.lineAmount(2000)
+			.unavailable(false)
+			.build();
+		given(getMyCartService.get(anyLong()))
+			.willReturn(CartView.builder()
+				.items(List.of(itemView))
+				.totalAmount(2000)
+				.build());
+
+		mockMvc.perform(get("/cart")
+				.header("Authorization", "Bearer access-token"))
+			.andExpect(status().isOk())
+			.andExpect(jsonPath("$.code").value("SUCCESS"))
+			.andExpect(jsonPath("$.data.items[0].productId").value(10))
+			.andExpect(jsonPath("$.data.items[0].name").value("product-1"))
+			.andExpect(jsonPath("$.data.items[0].price").value(1000))
+			.andExpect(jsonPath("$.data.items[0].quantity").value(2))
+			.andExpect(jsonPath("$.data.items[0].lineAmount").value(2000))
+			.andExpect(jsonPath("$.data.items[0].unavailable").value(false))
+			.andExpect(jsonPath("$.data.totalAmount").value(2000));
+	}
+
+	private void stubForToken() {
+		given(tokenAuthenticationService.authenticateAccessToken("access-token"))
+			.willReturn(TokenAuthenticationResult.of(1L, "ROLE_USER"));
+	}
+}
