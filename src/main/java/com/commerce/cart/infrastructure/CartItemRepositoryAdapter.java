@@ -32,8 +32,8 @@ public class CartItemRepositoryAdapter implements CartItemRepository {
 	}
 
 	@Override
-	public void deleteByMemberIdAndProductId(Long memberId, Long productId) {
-		jpaCartItemRepository.deleteByMemberIdAndProductId(memberId, productId);
+	public void delete(CartItem cartItem) {
+		jpaCartItemRepository.delete(cartItem);
 	}
 
 	@Override

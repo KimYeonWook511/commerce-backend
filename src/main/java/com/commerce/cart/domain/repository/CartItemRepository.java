@@ -13,7 +13,7 @@ public interface CartItemRepository {
 
 	List<CartItem> findAllByMemberIdOrderByCreatedAtDesc(Long memberId);
 
-	void deleteByMemberIdAndProductId(Long memberId, Long productId);
+	void delete(CartItem cartItem);
 
 	void deleteByMemberIdAndProductIdIn(Long memberId, List<Long> productIds);
 }

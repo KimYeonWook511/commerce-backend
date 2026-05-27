@@ -117,18 +117,17 @@ class CartItemRepositoryAdapterTest {
 		}).isInstanceOf(DataIntegrityViolationException.class);
 	}
 
-	@DisplayName("deleteByMemberIdAndProductId는 같은 회원의 해당 상품 항목만 삭제한다")
+	@DisplayName("delete(entity)는 해당 entity만 삭제하고 다른 회원/상품 항목은 보존한다")
 	@Test
-	void deleteByMemberIdAndProductId_whenItemExists_removesSingleItem() {
+	void delete_whenEntityProvided_removesSingleItem() {
 		// given
-		cartItemRepository.save(CartItem.create(MEMBER_ID, PRODUCT_ID, 1));
+		CartItem mine = cartItemRepository.save(CartItem.create(MEMBER_ID, PRODUCT_ID, 1));
 		cartItemRepository.save(CartItem.create(MEMBER_ID, OTHER_PRODUCT_ID, 2));
 		cartItemRepository.save(CartItem.create(OTHER_MEMBER_ID, PRODUCT_ID, 3));
 		entityManager.flush();
-		entityManager.clear();
 
 		// when
-		cartItemRepository.deleteByMemberIdAndProductId(MEMBER_ID, PRODUCT_ID);
+		cartItemRepository.delete(mine);
 		entityManager.flush();
 		entityManager.clear();
 
