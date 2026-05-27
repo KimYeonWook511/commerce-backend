@@ -180,6 +180,27 @@ log.info("결제 승인 완료 merchantPayKey={} provider={} pgPaymentId={} orde
 
 ---
 
+## 응용 계층 트랜잭션·영속화 컨벤션
+
+응용 Service의 트랜잭션 경계와 영속화 호출 방식은 다음 컨벤션을 따른다. 각 결정의 배경·트레이드오프 전체는 본 디렉토리의 ADR을 참조한다.
+
+### 트랜잭션 경계는 method-level `@Transactional`로만 표현한다 (ADR-021)
+
+- 응용 Service(`com.commerce.<domain>.application.*Service`)에 class-level `@Transactional` 부착을 금지한다.
+- 조회 전용 Service도 메서드마다 `@Transactional(readOnly = true)`를 명시한다. 누락 시 "트랜잭션 없음"으로 즉시 드러나도록 한다.
+- retry/멱등 등 트랜잭션 외부에서 처리해야 할 흐름은 outer Service에 어노테이션 없이 두고, 실제 트랜잭션은 별도 Processor 빈의 method-level `@Transactional`이 책임진다(`OrderCreateProcessor`, cart phase의 `AddCartItemProcessor`/`UpdateCartItemQuantityProcessor`). retry attempt마다 빈 경계를 넘어가며 새 트랜잭션·새 persistence context가 시작돼 self-invocation 함정이 회피된다.
+- 본 컨벤션은 ADR-021 시점부터 신설되는 응용 Service에 적용한다. 기존 도메인의 class-level `@Transactional` 사용 사례는 별도 마이그레이션 트랙으로 다룬다.
+
+### 영속화는 `repository.save(entity)`를 명시 호출한다 (ADR-022)
+
+- 응용 Service가 도메인 객체의 상태를 변경한 뒤 영속화가 필요하면 `repository.save(entity)`를 명시적으로 호출한다.
+- managed entity의 `save()`는 JPA 내부에서 no-op이지만, 응용 코드 표면에 "이 시점에 저장 의도"를 드러내는 것이 본 컨벤션의 목적이다. dirty checking에 묵시적으로 기대지 않는다.
+- 응용 코드의 사고 모델을 ORM-agnostic으로 유지하고, "domain은 상태 변경, application은 영속화 조율"의 DDD layer 책임 분리를 코드 표면에 드러낸다.
+- transient entity와 managed entity 분기 모두 `save()`로 통일하면 분기 간 시각적 비대칭이 사라진다.
+- 본 컨벤션은 ADR-022 시점부터 신설되는 응용 Service에 적용한다. 기존 도메인의 dirty checking 의존 코드 마이그레이션은 별도 트랙으로 다룬다.
+
+---
+
 ## HTTP 요청 처리 Filter
 
 ### Filter 등록 정책
