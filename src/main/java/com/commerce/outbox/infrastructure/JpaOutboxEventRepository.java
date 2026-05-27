@@ -25,7 +25,8 @@ public interface JpaOutboxEventRepository extends JpaRepository<OutboxEvent, Lon
 			e.aggregateId as aggregateId,
 			e.payload as payload,
 			e.attemptCount as attemptCount,
-			e.createdAt as createdAt
+			e.createdAt as createdAt,
+			e.traceId as traceId
 		from OutboxEvent e
 		where e.eventType = :eventType
 		and e.status = com.commerce.outbox.domain.OutboxEventStatus.PENDING
@@ -45,7 +46,8 @@ public interface JpaOutboxEventRepository extends JpaRepository<OutboxEvent, Lon
 			e.aggregateId as aggregateId,
 			e.payload as payload,
 			e.attemptCount as attemptCount,
-			e.createdAt as createdAt
+			e.createdAt as createdAt,
+			e.traceId as traceId
 		from OutboxEvent e
 		where e.eventType = :eventType
 		and e.status = com.commerce.outbox.domain.OutboxEventStatus.FAILED

@@ -19,4 +19,6 @@ public interface OutboxPublishTarget {
 	int getAttemptCount();
 
 	LocalDateTime getCreatedAt();
+
+	String getTraceId();
 }

@@ -13,4 +13,5 @@ public class OrderIdempotencyCacheEvent {
 	private final String idempotencyKey;
 	private final Long orderId;
 	private final Duration ttl;
+	private final String traceId;
 }

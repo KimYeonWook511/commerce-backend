@@ -3,6 +3,7 @@ package com.commerce.outbox.stock.application;
 import org.springframework.stereotype.Service;
 import org.springframework.transaction.annotation.Transactional;
 
+import com.commerce.common.log.LogContext;
 import com.commerce.common.util.UlidGenerator;
 import com.commerce.outbox.domain.OutboxAggregateType;
 import com.commerce.outbox.domain.OutboxEvent;
@@ -35,7 +36,8 @@ public class StockRestoreOutboxCreateService {
 			payload,
 			command.getRequestedAt(),
 			OutboxAggregateType.ORDER,
-			command.getOrderId()
+			command.getOrderId(),
+			resolveTraceIdForStorage()
 		);
 		outboxEventRepository.save(outboxEvent);
 
@@ -49,5 +51,10 @@ public class StockRestoreOutboxCreateService {
 		} catch (JsonProcessingException ex) {
 			throw new IllegalStateException("Failed to serialize outbox payload", ex);
 		}
+	}
+
+	private String resolveTraceIdForStorage() {
+		String traceId = LogContext.getTraceId();
+		return LogContext.isValidTraceId(traceId) ? traceId : null;
 	}
 }

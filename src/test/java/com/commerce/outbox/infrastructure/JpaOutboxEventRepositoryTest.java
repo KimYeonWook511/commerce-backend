@@ -296,7 +296,8 @@ class JpaOutboxEventRepositoryTest {
 			"{\"orderId\":1}",
 			nextRetryAt,
 			OutboxAggregateType.ORDER,
-			100L
+			100L,
+			null
 		);
 		ReflectionTestUtils.setField(event, "status", status);
 		return jpaOutboxEventRepository.save(event);

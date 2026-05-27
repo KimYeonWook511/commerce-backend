@@ -145,10 +145,14 @@ COLUMNS:
 - `last_error`
 - `aggregate_type`
 - `aggregate_id`
+- `trace_id (VARCHAR(64) NULL)`
 
 INDEX:
 - `event_id (UNIQUE)`
 - `idx_outbox_event_type_status_next_retry_id (event_type, status, next_retry_at, id)`
+
+비고:
+- `trace_id`는 outbox 생성 시점의 MDC traceId. relay 시 MDC로 복원되어 `TraceIdKafkaProducerInterceptor`가 Kafka 헤더 `X-Trace-Id`로 자동 전파한다. 형식은 `LogContext.isValidTraceId()`의 `^[A-Za-z0-9_-]{1,64}$`와 일치하며, 유효한 traceId가 없으면 `NULL`로 저장한다.
 
 ### `tbl_processed_event`
 

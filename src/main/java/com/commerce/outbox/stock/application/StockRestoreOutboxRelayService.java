@@ -8,6 +8,7 @@ import org.springframework.stereotype.Service;
 import org.springframework.transaction.annotation.Propagation;
 import org.springframework.transaction.annotation.Transactional;
 
+import com.commerce.common.log.LogContext;
 import com.commerce.outbox.domain.OutboxEventType;
 import com.commerce.outbox.domain.OutboxPublishTarget;
 import com.commerce.outbox.domain.repository.OutboxEventRepository;
@@ -115,16 +116,36 @@ public class StockRestoreOutboxRelayService {
 	}
 
 	private PublishResult publishTarget(OutboxPublishTarget target, LocalDateTime now) {
+		boolean traceIdPushed = pushTraceIdIfMissing(target.getTraceId());
 		try {
-			eventPublisher.publish(target);
-			if (!markSent(target)) {
-				return PublishResult.SKIPPED;
+			try {
+				eventPublisher.publish(target);
+				if (!markSent(target)) {
+					return PublishResult.SKIPPED;
+				}
+				return PublishResult.PUBLISHED;
+			} catch (RuntimeException ex) {
+				handlePublishFailure(target, now, ex);
+				return PublishResult.FAILED;
 			}
-			return PublishResult.PUBLISHED;
-		} catch (RuntimeException ex) {
-			handlePublishFailure(target, now, ex);
-			return PublishResult.FAILED;
+		} finally {
+			if (traceIdPushed) {
+				LogContext.removeTraceId();
+			}
 		}
+	}
+
+	// 스케줄러 호출 시점에는 MDC가 비어 있어 target의 traceId를 push한다.
+	// 향후 HTTP 흐름에서 직접 호출되어 MDC에 traceId가 이미 있는 경우에는 그대로 보존한다.
+	private boolean pushTraceIdIfMissing(String targetTraceId) {
+		if (LogContext.isValidTraceId(LogContext.getTraceId())) {
+			return false;
+		}
+		if (LogContext.isValidTraceId(targetTraceId)) {
+			LogContext.putTraceId(targetTraceId);
+			return true;
+		}
+		return false;
 	}
 
 	private void handlePublishFailure(OutboxPublishTarget target, LocalDateTime now, RuntimeException ex) {

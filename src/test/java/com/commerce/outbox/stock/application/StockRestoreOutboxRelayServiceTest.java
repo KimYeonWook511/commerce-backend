@@ -6,6 +6,7 @@ import static org.mockito.ArgumentMatchers.anyString;
 import static org.mockito.ArgumentMatchers.eq;
 import static org.mockito.BDDMockito.given;
 import static org.mockito.BDDMockito.then;
+import static org.mockito.Mockito.doAnswer;
 import static org.mockito.Mockito.doNothing;
 import static org.mockito.Mockito.doThrow;
 import static org.mockito.Mockito.lenient;
@@ -14,7 +15,9 @@ import static org.mockito.Mockito.times;
 
 import java.time.LocalDateTime;
 import java.util.List;
+import java.util.concurrent.atomic.AtomicReference;
 
+import org.junit.jupiter.api.AfterEach;
 import org.junit.jupiter.api.BeforeEach;
 import org.junit.jupiter.api.DisplayName;
 import org.junit.jupiter.api.Test;
@@ -25,6 +28,7 @@ import org.mockito.Mock;
 import org.mockito.junit.jupiter.MockitoExtension;
 import org.springframework.test.util.ReflectionTestUtils;
 
+import com.commerce.common.log.LogContext;
 import com.commerce.outbox.domain.OutboxAggregateType;
 import com.commerce.outbox.domain.OutboxEventType;
 import com.commerce.outbox.domain.OutboxPublishTarget;
@@ -50,6 +54,11 @@ class StockRestoreOutboxRelayServiceTest {
 		ReflectionTestUtils.setField(stockRestoreOutboxRelayService, "retryBaseSeconds", 30L);
 		ReflectionTestUtils.setField(stockRestoreOutboxRelayService, "retryMaxSeconds", 3600L);
 		ReflectionTestUtils.setField(stockRestoreOutboxRelayService, "stalePublishingSeconds", 300L);
+	}
+
+	@AfterEach
+	void cleanUpMdc() {
+		LogContext.removeTraceId();
 	}
 
 	@DisplayName("PENDING 발행 시 '성공/실패/선점실패(skip)' 케이스를 집계한다")
@@ -302,6 +311,156 @@ class StockRestoreOutboxRelayServiceTest {
 			any(),
 			anyString()
 		);
+	}
+
+	@DisplayName("MDC가 비어있고 target traceId가 유효하면 publish 호출 시점에 MDC에 복원하고 종료 시 정리한다 (스케줄러 경로)")
+	@Test
+	void publishPendingEvents_whenMdcEmptyAndTargetHasValidTraceId_restoreMdcAndClear() {
+		// given
+		LocalDateTime now = LocalDateTime.of(2000, 1, 1, 0, 0, 0);
+		OutboxPublishTarget target = mockTarget(30L, "evt-30");
+		String traceId = "trace-xyz-999";
+		given(target.getTraceId()).willReturn(traceId);
+
+		given(outboxEventRepository.findPendingPublishTargets(
+			eq(OutboxEventType.STOCK_RESTORE_REQUESTED),
+			eq(100)
+		)).willReturn(List.of(target));
+		given(outboxEventRepository.markPublishingFromPending(30L, OutboxEventType.STOCK_RESTORE_REQUESTED)).willReturn(1);
+		given(outboxEventRepository.markSent(30L, OutboxEventType.STOCK_RESTORE_REQUESTED)).willReturn(1);
+
+		AtomicReference<String> capturedTraceId = new AtomicReference<>();
+		doAnswer(invocation -> {
+			capturedTraceId.set(LogContext.getTraceId());
+			return null;
+		}).when(eventPublisher).publish(any());
+
+		// when
+		stockRestoreOutboxRelayService.publishPendingEvents(now);
+
+		// then
+		assertThat(capturedTraceId.get()).isEqualTo(traceId);
+		assertThat(LogContext.getTraceId()).isNull();
+	}
+
+	@DisplayName("MDC에 이미 traceId가 있으면 target traceId가 유효해도 기존 값을 보존한다 (HTTP 흐름에서 직접 호출 시나리오)")
+	@Test
+	void publishPendingEvents_whenMdcAlreadyHasTraceId_preservesExistingMdc() {
+		// given
+		String existingTraceId = "pre-existing-trace";
+		String targetTraceId = "target-trace-different";
+		LogContext.putTraceId(existingTraceId);
+		LocalDateTime now = LocalDateTime.of(2000, 1, 1, 0, 0, 0);
+		OutboxPublishTarget target = mockTarget(34L, "evt-34");
+		given(target.getTraceId()).willReturn(targetTraceId);
+
+		given(outboxEventRepository.findPendingPublishTargets(
+			eq(OutboxEventType.STOCK_RESTORE_REQUESTED),
+			eq(100)
+		)).willReturn(List.of(target));
+		given(outboxEventRepository.markPublishingFromPending(34L, OutboxEventType.STOCK_RESTORE_REQUESTED)).willReturn(1);
+		given(outboxEventRepository.markSent(34L, OutboxEventType.STOCK_RESTORE_REQUESTED)).willReturn(1);
+
+		AtomicReference<String> capturedTraceId = new AtomicReference<>();
+		doAnswer(invocation -> {
+			capturedTraceId.set(LogContext.getTraceId());
+			return null;
+		}).when(eventPublisher).publish(any());
+
+		// when
+		stockRestoreOutboxRelayService.publishPendingEvents(now);
+
+		// then
+		assertThat(capturedTraceId.get()).isEqualTo(existingTraceId);
+		assertThat(LogContext.getTraceId()).isEqualTo(existingTraceId);
+	}
+
+	@DisplayName("MDC에 이미 traceId가 있으면 target traceId가 null이어도 기존 값을 보존한다")
+	@Test
+	void publishPendingEvents_whenMdcAlreadyHasTraceIdAndTargetTraceIdNull_preservesExistingMdc() {
+		// given
+		LogContext.putTraceId("pre-existing-trace");
+		LocalDateTime now = LocalDateTime.of(2000, 1, 1, 0, 0, 0);
+		OutboxPublishTarget target = mockTarget(31L, "evt-31");
+		given(target.getTraceId()).willReturn(null);
+
+		given(outboxEventRepository.findPendingPublishTargets(
+			eq(OutboxEventType.STOCK_RESTORE_REQUESTED),
+			eq(100)
+		)).willReturn(List.of(target));
+		given(outboxEventRepository.markPublishingFromPending(31L, OutboxEventType.STOCK_RESTORE_REQUESTED)).willReturn(1);
+		given(outboxEventRepository.markSent(31L, OutboxEventType.STOCK_RESTORE_REQUESTED)).willReturn(1);
+
+		AtomicReference<String> capturedTraceId = new AtomicReference<>();
+		doAnswer(invocation -> {
+			capturedTraceId.set(LogContext.getTraceId());
+			return null;
+		}).when(eventPublisher).publish(any());
+
+		// when
+		stockRestoreOutboxRelayService.publishPendingEvents(now);
+
+		// then
+		assertThat(capturedTraceId.get()).isEqualTo("pre-existing-trace");
+		assertThat(LogContext.getTraceId()).isEqualTo("pre-existing-trace");
+	}
+
+	@DisplayName("MDC가 비어있고 target traceId 형식이 유효하지 않으면 MDC를 건드리지 않는다")
+	@Test
+	void publishPendingEvents_whenMdcEmptyAndTargetTraceIdInvalid_doesNotTouchMdc() {
+		// given
+		LocalDateTime now = LocalDateTime.of(2000, 1, 1, 0, 0, 0);
+		OutboxPublishTarget target = mockTarget(32L, "evt-32");
+		given(target.getTraceId()).willReturn("invalid trace id with spaces!");
+
+		given(outboxEventRepository.findPendingPublishTargets(
+			eq(OutboxEventType.STOCK_RESTORE_REQUESTED),
+			eq(100)
+		)).willReturn(List.of(target));
+		given(outboxEventRepository.markPublishingFromPending(32L, OutboxEventType.STOCK_RESTORE_REQUESTED)).willReturn(1);
+		given(outboxEventRepository.markSent(32L, OutboxEventType.STOCK_RESTORE_REQUESTED)).willReturn(1);
+
+		AtomicReference<String> capturedTraceId = new AtomicReference<>();
+		doAnswer(invocation -> {
+			capturedTraceId.set(LogContext.getTraceId());
+			return null;
+		}).when(eventPublisher).publish(any());
+
+		// when
+		stockRestoreOutboxRelayService.publishPendingEvents(now);
+
+		// then
+		assertThat(capturedTraceId.get()).isNull();
+		assertThat(LogContext.getTraceId()).isNull();
+	}
+
+	@DisplayName("publish 실패 시에도 finally에서 MDC traceId를 정리한다")
+	@Test
+	void publishPendingEvents_whenPublishFails_clearsMdc() {
+		// given
+		LocalDateTime now = LocalDateTime.of(2000, 1, 1, 0, 0, 0);
+		OutboxPublishTarget target = mockTarget(33L, "evt-33");
+		given(target.getAttemptCount()).willReturn(0);
+		given(target.getTraceId()).willReturn("trace-fail-001");
+
+		given(outboxEventRepository.findPendingPublishTargets(
+			eq(OutboxEventType.STOCK_RESTORE_REQUESTED),
+			eq(100)
+		)).willReturn(List.of(target));
+		given(outboxEventRepository.markPublishingFromPending(33L, OutboxEventType.STOCK_RESTORE_REQUESTED)).willReturn(1);
+		given(outboxEventRepository.markFailed(
+			eq(33L),
+			eq(OutboxEventType.STOCK_RESTORE_REQUESTED),
+			anyString(),
+			eq(now.plusSeconds(30))
+		)).willReturn(1);
+		doThrow(new IllegalStateException("publish failed")).when(eventPublisher).publish(any());
+
+		// when
+		stockRestoreOutboxRelayService.publishPendingEvents(now);
+
+		// then
+		assertThat(LogContext.getTraceId()).isNull();
 	}
 
 	private OutboxPublishTarget mockTarget(Long id, String eventId) {

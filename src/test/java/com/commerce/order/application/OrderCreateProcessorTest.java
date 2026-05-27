@@ -12,15 +12,18 @@ import java.time.Duration;
 import java.util.List;
 import java.util.Optional;
 
+import org.junit.jupiter.api.AfterEach;
 import org.junit.jupiter.api.DisplayName;
 import org.junit.jupiter.api.Test;
 import org.junit.jupiter.api.extension.ExtendWith;
+import org.mockito.ArgumentCaptor;
 import org.mockito.InjectMocks;
 import org.mockito.Mock;
 import org.mockito.junit.jupiter.MockitoExtension;
 import org.springframework.context.ApplicationEventPublisher;
 import org.springframework.test.util.ReflectionTestUtils;
 
+import com.commerce.common.log.LogContext;
 import com.commerce.member.domain.Member;
 import com.commerce.member.domain.repository.MemberRepository;
 import com.commerce.member.exception.MemberErrorCode;
@@ -60,6 +63,11 @@ class OrderCreateProcessorTest {
 
 	@InjectMocks
 	private OrderCreateProcessor orderCreateProcessor;
+
+	@AfterEach
+	void cleanUpMdc() {
+		LogContext.removeTraceId();
+	}
 
 	@DisplayName("유효한 요청이면 주문을 생성하고 캐싱 이벤트를 발행한다")
 	@Test
@@ -120,6 +128,61 @@ class OrderCreateProcessorTest {
 			.isInstanceOf(ProductException.class)
 			.satisfies(ex -> assertThat(((ProductException)ex).getErrorCode())
 				.isEqualTo(ProductErrorCode.PRODUCT_NOT_FOUND));
+	}
+
+	@DisplayName("현재 MDC traceId를 발행 이벤트에 동봉한다")
+	@Test
+	void execute_whenTraceIdInMdc_includeTraceIdInEvent() {
+		// given
+		String traceId = "trace-xyz-999";
+		LogContext.putTraceId(traceId);
+
+		Member member = createMember(1L);
+		Product product = createProduct(10L, "product-1", 1000);
+		OrderCreateCommand command = createCommand(1L, "idem-key",
+			List.of(OrderCreateItem.builder().productId(10L).quantity(2).build()));
+
+		given(memberRepository.findById(1L)).willReturn(Optional.of(member));
+		given(productRepository.findAllById(List.of(10L))).willReturn(List.of(product));
+		given(orderRepository.save(any(Order.class))).willAnswer(inv -> {
+			Order order = inv.getArgument(0);
+			ReflectionTestUtils.setField(order, "id", 100L);
+			return order;
+		});
+
+		// when
+		orderCreateProcessor.execute(command, Duration.ofSeconds(600));
+
+		// then
+		ArgumentCaptor<OrderIdempotencyCacheEvent> captor = ArgumentCaptor.forClass(OrderIdempotencyCacheEvent.class);
+		then(applicationEventPublisher).should().publishEvent(captor.capture());
+		assertThat(captor.getValue().getTraceId()).isEqualTo(traceId);
+	}
+
+	@DisplayName("MDC에 traceId가 없으면 이벤트의 traceId는 null이다")
+	@Test
+	void execute_whenNoTraceIdInMdc_eventTraceIdIsNull() {
+		// given
+		Member member = createMember(1L);
+		Product product = createProduct(10L, "product-1", 1000);
+		OrderCreateCommand command = createCommand(1L, "idem-key",
+			List.of(OrderCreateItem.builder().productId(10L).quantity(2).build()));
+
+		given(memberRepository.findById(1L)).willReturn(Optional.of(member));
+		given(productRepository.findAllById(List.of(10L))).willReturn(List.of(product));
+		given(orderRepository.save(any(Order.class))).willAnswer(inv -> {
+			Order order = inv.getArgument(0);
+			ReflectionTestUtils.setField(order, "id", 100L);
+			return order;
+		});
+
+		// when
+		orderCreateProcessor.execute(command, Duration.ofSeconds(600));
+
+		// then
+		ArgumentCaptor<OrderIdempotencyCacheEvent> captor = ArgumentCaptor.forClass(OrderIdempotencyCacheEvent.class);
+		then(applicationEventPublisher).should().publishEvent(captor.capture());
+		assertThat(captor.getValue().getTraceId()).isNull();
 	}
 
 	@DisplayName("재고 차감에 실패하면 예외를 전파한다")

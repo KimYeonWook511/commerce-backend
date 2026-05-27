@@ -72,6 +72,9 @@ public class OutboxEvent extends BaseTimeEntity {
 	@Column(nullable = false)
 	private Long aggregateId;
 
+	@Column(length = 64)
+	private String traceId;
+
 	@Builder
 	private OutboxEvent(
 		String eventId,
@@ -83,7 +86,8 @@ public class OutboxEvent extends BaseTimeEntity {
 		LocalDateTime publishedAt,
 		String lastError,
 		OutboxAggregateType aggregateType,
-		Long aggregateId
+		Long aggregateId,
+		String traceId
 	) {
 		this.eventId = eventId;
 		this.eventType = eventType;
@@ -95,6 +99,7 @@ public class OutboxEvent extends BaseTimeEntity {
 		this.lastError = lastError;
 		this.aggregateType = aggregateType;
 		this.aggregateId = aggregateId;
+		this.traceId = traceId;
 	}
 
 	public static OutboxEvent createPending(
@@ -103,7 +108,8 @@ public class OutboxEvent extends BaseTimeEntity {
 		String payload,
 		LocalDateTime nextRetryAt,
 		OutboxAggregateType aggregateType,
-		Long aggregateId
+		Long aggregateId,
+		String traceId
 	) {
 		return OutboxEvent.builder()
 			.eventId(eventId)
@@ -114,6 +120,7 @@ public class OutboxEvent extends BaseTimeEntity {
 			.nextRetryAt(nextRetryAt)
 			.aggregateType(aggregateType)
 			.aggregateId(aggregateId)
+			.traceId(traceId)
 			.build();
 	}
 
