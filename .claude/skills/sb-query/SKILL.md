@@ -62,8 +62,7 @@ skill args 가 있으면 그대로 사용. 없거나 모호하면 사용자에�
 
 - wiki 페이지 자체는 "내 이해" 만 인용
 - 정본은 `{ repo: commerce-backend, path: docs/<...>.md }` 형식으로 명시
-- 정본 본문이 필요하면 read-only 로 직접 읽기 가능: `~/Desktop/commerce-workspace/commerce-backend/docs/<...>.md`
-- worktree 안에서 실행 중이라면 worktree 경로 사용
+- 정본 본문이 필요하면 read-only 로 직접 읽기 가능 — 현재 cwd 기준 `docs/<...>.md` 상대 경로 (worktree 포함)
 
 ### 5. 답변 작성
 
