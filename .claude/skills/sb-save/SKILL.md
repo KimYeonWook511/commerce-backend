@@ -72,7 +72,7 @@ commerce-backend 세션의 핵심(작업·결정·트레이드오프·막힌 점
 파일 작성 직전 대상 경로 존재 여부 확인:
 
 ```bash
-ls ~/second-brain/raw/project/commerce/YYYY-MM-DD-<session-slug>.md
+test -f ~/second-brain/raw/project/commerce/YYYY-MM-DD-<session-slug>.md
 ```
 
 이미 있으면 사용자에게 3택:
