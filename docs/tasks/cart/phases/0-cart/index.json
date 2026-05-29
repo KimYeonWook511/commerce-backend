@@ -1,0 +1,56 @@
+{
+  "project": "commerce-backend",
+  "phase": "0-cart",
+  "steps": [
+    {
+      "step": 1,
+      "name": "cart-item-domain-and-repository",
+      "status": "completed",
+      "started_at": "2026-05-27T17:34:51+0900",
+      "summary": "com.commerce.cart 도메인을 신설한다. CartItem entity(member_id/product_id/quantity, MIN=1/MAX=99 invariant, UNIQUE (member_id, product_id))와 CartException/CartErrorCode(INVALID_CART_ITEM_QUANTITY/CART_ITEM_QUANTITY_EXCEEDED/CART_ITEM_NOT_FOUND)를 추가한다. CartItemRepository port와 JpaCartItemRepository, CartItemRepositoryAdapter를 분리해 ID 참조 정책(ADR-020)을 따른다. CleanupOrder에 CART(25)를 추가하고 CartPersistenceTestSupport를 신설한다. CartItemTest 12개와 CartItemRepositoryAdapterTest 5개(@DataJpaTest 슬라이스)로 검증한다.",
+      "completed_at": "2026-05-27T17:41:05+0900"
+    },
+    {
+      "step": 2,
+      "name": "cart-add-and-list-api",
+      "status": "completed",
+      "started_at": "2026-05-27T17:43:37+0900",
+      "summary": "POST /cart/items와 GET /cart API를 추가한다. CartItemAddRequest(@NotNull @Positive productId, @NotNull @Min(1) @Max(99) quantity) DTO와 CartItemAddedView/CartItemView/CartView result를 신설한다. AddCartItemService는 ADR-011 find-first 패턴으로 UPSERT를 처리하고(없으면 save, 있으면 increaseQuantity, DuplicateKey catch 없이 안전망 500 위임) 한국어 INFO 로그를 남긴다. GetMyCartService는 @Transactional(readOnly=true)로 cart를 조회한 뒤 productRepository.findAllById로 최신 가격을 조립하고 STOPPED·soft-deleted를 unavailable=true로 마킹하며 totalAmount에서 제외한다. Product 누락 항목은 WARN 로그 후 제외한다. CartController는 @AuthenticatedMemberId로 memberId를 받아 @Valid @RequestBody로 검증을 일원화한다. AddCartItemServiceTest 3개, GetMyCartServiceTest 4개, CartControllerTest 5개(@WebMvcTest 슬라이스)로 검증한다.",
+      "completed_at": "2026-05-27T17:50:40+0900"
+    },
+    {
+      "step": 3,
+      "name": "cart-update-and-delete-api",
+      "status": "completed",
+      "started_at": "2026-05-27T17:52:38+0900",
+      "summary": "PATCH /cart/items/{productId}와 DELETE /cart/items/{productId} API를 추가한다. CartItemUpdateRequest(@NotNull @Min(1) @Max(99) quantity) DTO를 신설한다. UpdateCartItemQuantityService는 find-then-changeQuantity 흐름으로 절대값 변경을 처리하며 미존재 시 CART_ITEM_NOT_FOUND를 던지고 한국어 INFO 로그를 남긴다. RemoveCartItemService는 deleteByMemberIdAndProductId로 멱등 삭제를 수행하고 한국어 INFO 로그를 남긴다. CartController에 두 endpoint를 추가하고 @AuthenticatedMemberId와 @Valid @RequestBody로 검증을 일원화한다. UpdateCartItemQuantityServiceTest 3개, RemoveCartItemServiceTest 2개, CartControllerTest 확장 5개(PATCH 정상/quantity=0/quantity=100, DELETE 정상/미존재)로 검증한다.",
+      "completed_at": "2026-05-27T18:02:02+0900"
+    },
+    {
+      "step": 4,
+      "name": "order-cart-clear-integration",
+      "status": "completed",
+      "started_at": "2026-05-27T18:03:20+0900",
+      "summary": "order 도메인이 cart 도메인을 직접 의존하지 않도록 order.application.port.CartItemRemover 인터페이스를 신설하고, cart.infrastructure.CartItemRemoverAdapter가 CartItemRepository.deleteByMemberIdAndProductIdIn으로 구현한다(빈 목록은 즉시 return). OrderCreateProcessor가 주문 저장 직후 동일 트랜잭션 내에서 cartItemRemover.removeByMemberAndProducts(memberId, productIds)를 호출해 ADR-005가 아닌 ADR 결정 4(동일 트랜잭션)를 따른다. OrderCreateService 멱등 응답 경로는 OrderCreateProcessor.execute를 호출하지 않으므로 cart 제거가 첫 요청에서만 일어난다. OrderCreateProcessorTest에 CartItemRemover mock을 주입해 verify를 추가하고, OrderCreateCartIntegrationTest 3개(주문 성공 시 주문 항목만 제거·미주문 유지, Buy Now 시나리오, 재고 부족 시 cart 롤백)로 통합 검증한다.",
+      "completed_at": "2026-05-27T18:11:06+0900"
+    },
+    {
+      "step": 5,
+      "name": "sync-root-docs",
+      "status": "completed",
+      "started_at": "2026-05-27T18:13:07+0900",
+      "summary": "루트 docs를 cart phase 산출물에 맞춰 동기화한다. docs/PRD.md MVP 제외 사항에서 장바구니를 제거하고 핵심 기능에 추가한다. docs/architecture.md 패키지 트리에 cart/를 추가하고, 도메인별 주요 서비스 표에 cart 4개 서비스를 등록하며, 데이터 흐름에 cart CRUD 4개와 주문 생성의 CartItemRemover 호출을 추가한다. 도메인 책임 섹션에 cart를 명시하고 도메인 이벤트 INFO 로그 적용 범위를 8개 도메인 17개 컴포넌트(Cart 3개 추가)로 갱신한다. docs/api-spec.md에 POST /cart/items, GET /cart, PATCH /cart/items/{productId}, DELETE /cart/items/{productId} 4개 API 스펙을 추가한다. docs/db-schema.md에 tbl_cart_item 테이블과 uk_cart_item_member_product UNIQUE 제약, FK 미사용 정책(ADR-020)을 명시한다. docs/ADR.md에 ADR-020 '신규 도메인의 cross-aggregate 참조는 ID로 한다'를 ADR-019 다음에 누적 추가한다. 워크스페이스 docs(api-contract.md, progress.md)와 exception-strategy.md, logging-conventions.md, testing-conventions.md는 변경하지 않는다. ./gradlew test --tests 'com.commerce.cart.*' 통과로 회귀 안전을 확인한다.",
+      "completed_at": "2026-05-27T18:17:18+0900"
+    },
+    {
+      "step": 6,
+      "name": "write-retrospective",
+      "status": "completed",
+      "started_at": "2026-05-27T18:18:57+0900",
+      "summary": "cart phase 회고록 docs/tasks/cart/retrospective.md를 작성한다. 태스크 개요(cart 도메인 신설, API 4종, 주문-cart 연동, ADR-020 명문화)와 5개 step 요약(도메인/repository, 담기/조회, 수정/삭제, 주문 연동, docs 동기화), 7개 결정의 회고(CartItem-only aggregate 선택 배경, ADR-020 도입 의의와 후속 마이그레이션 트랙, 동일 트랜잭션 트레이드오프, Buy Now 호환을 위한 cart 존재 검증 제외), 잘된 점/어려웠던 점/후속 과제(P1 기존 도메인 ManyToOne 마이그레이션, P2 보관 기한·전체 비우기·가격 변동 알림, P3 Flyway·게스트 cart), 측정 결과(테스트 42개, 신규 main 파일 15개, 신규 테이블 1개), 얻은 교훈을 기록한다.",
+      "completed_at": "2026-05-27T18:22:07+0900"
+    }
+  ],
+  "created_at": "2026-05-27T17:34:51+0900",
+  "completed_at": "2026-05-27T18:23:14+0900"
+}

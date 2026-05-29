@@ -196,6 +196,20 @@ tasks.register('dockerTest', Test) {
     }
 }
 
+tasks.register('concurrencyTest', Test) {
+    group = 'verification'
+    description = 'Runs concurrency-tagged tests in isolation from the default test task.'
+    testClassesDirs = sourceSets.test.output.classesDirs
+    classpath = sourceSets.test.runtimeClasspath
+    shouldRunAfter tasks.named('test')
+
+    systemProperty 'spring.profiles.active', 'test'
+
+    useJUnitPlatform {
+        includeTags "concurrency"
+    }
+}
+
 tasks.register('naverPaySandboxTest', Test) {
     group = 'verification'
     description = 'Runs NaverPay sandbox integration tests with values from .env.sandbox.'

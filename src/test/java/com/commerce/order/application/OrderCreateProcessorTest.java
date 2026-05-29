@@ -31,6 +31,7 @@ import com.commerce.member.exception.MemberException;
 import com.commerce.order.application.command.OrderCreateCommand;
 import com.commerce.order.application.command.OrderCreateItem;
 import com.commerce.order.application.event.OrderIdempotencyCacheEvent;
+import com.commerce.order.application.port.CartItemRemover;
 import com.commerce.order.application.result.OrderCreateResult;
 import com.commerce.order.domain.Order;
 import com.commerce.order.domain.repository.OrderRepository;
@@ -60,6 +61,9 @@ class OrderCreateProcessorTest {
 
 	@Mock
 	private ApplicationEventPublisher applicationEventPublisher;
+
+	@Mock
+	private CartItemRemover cartItemRemover;
 
 	@InjectMocks
 	private OrderCreateProcessor orderCreateProcessor;
@@ -92,6 +96,7 @@ class OrderCreateProcessorTest {
 		// then
 		assertThat(result.getOrderId()).isEqualTo(100L);
 		then(stockInventoryService).should().decrease(10L, 2);
+		then(cartItemRemover).should().removeByMemberAndProducts(1L, List.of(10L));
 		then(applicationEventPublisher).should().publishEvent(any(OrderIdempotencyCacheEvent.class));
 	}
 

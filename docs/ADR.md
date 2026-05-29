@@ -1,5 +1,38 @@
 # Architecture Decision Records
 
+## Task ADR 색인
+
+각 task 폴더의 `docs/tasks/<task>/adr.md`는 그 task의 도메인-specific 결정을 누적 관리한다. 본 색인은 task가 늘어남에 따른 검색 비용을 줄이기 위한 메타 인덱스다. 코드베이스 전반에 영향을 주는 cross-cutting 결정은 본 ADR.md 본문에, 특정 도메인 한정 결정은 task adr에 둔다. 분류가 모호한 결정은 본 ADR.md로 승격하고 task adr에 cross-reference를 남긴다.
+
+| Task | adr 파일 | 주요 결정 키워드 |
+|---|---|---|
+| auth-redis-timing | [`docs/tasks/auth-redis-timing/adr.md`](tasks/auth-redis-timing/adr.md) | `Propagation.NOT_SUPPORTED`로 DB commit 후 Redis 저장 보장 (ADR-008 연계) |
+| boundary-logging-standardization | [`docs/tasks/boundary-logging-standardization/adr.md`](tasks/boundary-logging-standardization/adr.md) | 외부 시스템 경계 INFO/WARN/ERROR 로깅 표준 |
+| cart | [`docs/tasks/cart/adr.md`](tasks/cart/adr.md) | CartItem-only 단일 entity aggregate, ID 참조(ADR-020), 가격 조회 시 재조회, 동시성 처리(@Version + retry + Processor 분리), 응답·엔드포인트 정책(unavailable·정렬·Remove 4xx) |
+| core-domain-logging | [`docs/tasks/core-domain-logging/adr.md`](tasks/core-domain-logging/adr.md) | 도메인 이벤트 INFO 로그 적용 범위 |
+| db-constraint-violation-handling | [`docs/tasks/db-constraint-violation-handling/adr.md`](tasks/db-constraint-violation-handling/adr.md) | `DuplicateKeyException` 좁은 catch (폐기, ADR-011로 대체) |
+| event-outbox-trace-propagation | [`docs/tasks/event-outbox-trace-propagation/adr.md`](tasks/event-outbox-trace-propagation/adr.md) | 이벤트 객체 traceId 동봉, Outbox `trace_id` 컬럼 (ADR-019 연계) |
+| hibernate-enum-jdbc-type-code | [`docs/tasks/hibernate-enum-jdbc-type-code/adr.md`](tasks/hibernate-enum-jdbc-type-code/adr.md) | `@JdbcTypeCode(SqlTypes.VARCHAR)` 적용 (ADR-018 연계) |
+| kafka-trace-propagation | [`docs/tasks/kafka-trace-propagation/adr.md`](tasks/kafka-trace-propagation/adr.md) | ProducerInterceptor + RecordInterceptor (ADR-017 연계) |
+| logback-setup | [`docs/tasks/logback-setup/adr.md`](tasks/logback-setup/adr.md) | 환경별 appender·encoder·rolling·마스킹 |
+| mdc-keys-unification | [`docs/tasks/mdc-keys-unification/adr.md`](tasks/mdc-keys-unification/adr.md) | MDC 키 상수 통합 |
+| memberid-mdc-propagation | [`docs/tasks/memberid-mdc-propagation/adr.md`](tasks/memberid-mdc-propagation/adr.md) | request attribute로 memberId MDC 전파 |
+| order-idempotency | [`docs/tasks/order-idempotency/adr.md`](tasks/order-idempotency/adr.md) | Redis 1차 + RDB unique 이중 보장 (ADR-002 연계) |
+| payment-attempt-idempotency | [`docs/tasks/payment-attempt-idempotency/adr.md`](tasks/payment-attempt-idempotency/adr.md) | PaymentAttempt unique 멱등 (ADR-010 연계) |
+| payment-attempt-service-split | [`docs/tasks/payment-attempt-service-split/adr.md`](tasks/payment-attempt-service-split/adr.md) | approve/cancel attempt 서비스 분리 |
+| payment-attempt-state-transition-policy | [`docs/tasks/payment-attempt-state-transition-policy/adr.md`](tasks/payment-attempt-state-transition-policy/adr.md) | PaymentAttempt 상태 전이 도메인 검증 (ADR-012 연계) |
+| payment-compensation-policy | [`docs/tasks/payment-compensation-policy/adr.md`](tasks/payment-compensation-policy/adr.md) | 보상 catch 2차 예외 처리 (ADR-013 연계) |
+| payment-compensation-to-domain | [`docs/tasks/payment-compensation-to-domain/adr.md`](tasks/payment-compensation-to-domain/adr.md) | 보상 정책 payment.application 이동, `PgCanceller` 콜백 (ADR-015 연계) |
+| product-management | [`docs/tasks/product-management/adr.md`](tasks/product-management/adr.md) | 관리자 command 분리, soft delete, 상태별 공개 조회 |
+| product-query | [`docs/tasks/product-query/adr.md`](tasks/product-query/adr.md) | 공개 상품 조회 노출 조건 |
+| stock-management | [`docs/tasks/stock-management/adr.md`](tasks/stock-management/adr.md) | 관리자 재고 변경 이력 (ADR-004 연계) |
+| traceid-mdc-filter | [`docs/tasks/traceid-mdc-filter/adr.md`](tasks/traceid-mdc-filter/adr.md) | `TraceIdFilter` MDC 전파 |
+| unique-find-first-policy | [`docs/tasks/unique-find-first-policy/adr.md`](tasks/unique-find-first-policy/adr.md) | find-first 패턴 (ADR-011 연계) |
+
+향후 task 추가 시 본 표에 한 줄을 갱신한다. task adr 위치는 모두 `docs/tasks/<task>/adr.md`로 고정한다.
+
+---
+
 ### ADR-001: JWT + Redis 기반 인증 유지
 - **결정**: Access Token은 JWT로 처리하고 Refresh Token은 Redis에 저장한다.
 - **이유**: 토큰 재발급 시 서버 검증과 강제 무효화가 가능하다.
@@ -119,3 +152,27 @@
 - **이유**: Spring Event는 현재 사용처가 `OrderIdempotencyCacheEvent` 한 곳뿐이라 Multicaster wrapping은 한 군데에서만 쓰일 추상화로 과하다. Outbox는 (A) 스케줄러 단위 발급 시 한 실행에서 여러 독립 거래가 같은 traceId를 공유해 의미가 희석되고, (C) 현행 유지 시 Kafka 레벨에서 새 UUID가 발급되어 원 HTTP 요청과 단절된다. (B) DB 컬럼 저장만이 원본 HTTP 요청의 traceId를 consumer까지 전파한다.
 - **트레이드오프**: Outbox 스케줄러 자체 로그는 traceId가 없다(운영 통계 로그 성격이므로 허용). 기존 outbox 데이터 및 MDC에 유효한 traceId가 없는 케이스는 outbox.trace_id를 NULL로 저장하고 relay 시 MDC 조작 없이 진행한다(Kafka 인터셉터가 신규 UUID fallback). Spring Event 객체마다 traceId 필드를 추가하는 반복 작업이 향후 필요할 수 있으며, 이벤트가 5개 이상 늘어나는 시점에 Multicaster wrapping으로 재검토한다. DB 스키마 변경(`tbl_outbox_event.trace_id VARCHAR(64) NULL`)이 필요하나 nullable이고 기존 인덱스에 영향이 없어 무중단 적용 가능하다.
 - **참고**: 상세는 `docs/tasks/event-outbox-trace-propagation/adr.md` 참조.
+
+### ADR-020: 신규 도메인의 cross-aggregate 참조는 ID로 한다
+- **결정**: 본 phase의 `cart` 도메인을 기점으로, 이후 신설되는 모든 도메인은 다른 aggregate를 `Long` ID로만 참조한다. `@ManyToOne`, `@JoinColumn`, cross-aggregate `@OneToOne` 사용을 금지한다. `cart`의 `CartItem`은 `memberId`, `productId`를 원시 `Long`으로 저장하며 다른 aggregate를 객체로 참조하지 않는다.
+- **배경**: 기존 도메인은 `Order.member`, `OrderItem.product`, `Stock.product` 등 `@ManyToOne` 객체 참조를 광범위하게 사용한다. 그러나 application 계층은 대부분 `memberId`, `productId` 등 ID 기반으로 흐름을 다루고 있어 도메인 모델과 application 인터페이스 사이에 이중 표현이 발생한다. 이로 인해 N+1 회피와 fetch join 부담, 도메인 결합도 증가, 단위 테스트에서의 객체 그래프 구성 부담, DDD "다른 aggregate는 ID로만 참조" 원칙 위반 등 누적 부채가 있었다. 신설 도메인부터라도 기본값을 ID 참조로 두자는 결정이다.
+- **결정 근거**: DDD 정통(Eric Evans, "Reference Other Aggregates Only By Identity") 원칙에 부합한다. (a) 다른 aggregate와의 결합도가 감소해 도메인 변경 영향 반경이 좁아진다. (b) JPA lifecycle 함정(detached entity, cascade, lazy proxy)을 피할 수 있다. (c) 단위 테스트가 원시 ID로 단순화되어 객체 그래프 setup 부담이 사라진다. (d) 향후 마이크로서비스 분리 시 aggregate 경계가 서비스 경계와 자연스럽게 정렬된다. cart 조회 시 `productRepository.findAllById(productIds)`로 명시적으로 Product를 한 번 더 조회해 응답을 조립하는 비용은 PK 기반 인덱스 조회라 무시 가능하다.
+- **트레이드오프**: DB 참조 무결성을 FK 제약이 보장하지 않는다. 대신 application 흐름·UNIQUE 제약·삭제 순서 정책이 정합성을 책임진다. 기존 Order/Stock/StockHistory 등의 `@ManyToOne` 참조는 호환성 부담이 크고 본 phase 범위가 아니므로 마이그레이션하지 않고 별도 트랙으로 분리한다.
+- **적용 범위**: 본 ADR 이후 신설되는 모든 cross-aggregate 참조에 적용한다. 같은 aggregate 내 root-child 관계(예: `Order ↔ OrderItem` 같이 동일 aggregate 안의 collection)는 본 정책 대상이 아니며 기존대로 객체 참조를 허용한다. 기존 cross-aggregate 객체 참조의 ID 참조로의 마이그레이션은 별도 작업으로 다룬다.
+- **참고**: 상세는 `docs/tasks/cart/adr.md` 결정 2 참조.
+
+### ADR-021: 응용 Service의 `@Transactional`은 method-level에만 부착한다
+- **결정**: 응용 Service(`com.commerce.<domain>.application.*Service`)에 class-level `@Transactional` 부착을 금지한다. 모든 트랜잭션 경계는 method-level `@Transactional`로만 표현한다. retry loop를 포함하는 outer Service는 어노테이션 없이 두고, 트랜잭션 경계는 별도 Processor 빈의 method-level `@Transactional`이 책임진다(`OrderCreateProcessor` 패턴, 본 cart phase의 `AddCartItemProcessor`/`UpdateCartItemQuantityProcessor` 등).
+- **배경**: 기존 코드베이스는 class-level `@Transactional(readOnly = true)` 기본 + method-level `@Transactional` 쓰기 메서드 override 패턴이 광범위하다(`OrderCreateService`, `OrderCancelService`, `AuthLoginService` 등). 본 패턴은 (a) 메서드의 트랜잭션 정책이 한눈에 안 들어와 class 선언으로 시선이 이동해야 하고, (b) 새 메서드를 추가하면서 method-level 어노테이션을 누락하면 의도와 다른 정책(`readOnly`)이 silent로 적용되며, (c) 코드 리뷰 시 누락 여부가 표면에 드러나지 않는다.
+- **결정 근거**: method-level만 사용하면 (a) 모든 메서드의 트랜잭션 정책이 코드 표면에 명시되고, (b) 누락은 곧 "트랜잭션 없음"으로 즉시 드러나며, (c) 메서드별 정책 차이가 한눈에 비교 가능하다. class-level "기본값 + override" 구조가 주는 코드 줄 수 절약 가치보다 명시성·실수 방지 가치가 더 크다는 판단이다.
+- **트레이드오프**: 메서드 수만큼 어노테이션이 반복된다. 다만 어노테이션이 곧 정책 명세 역할을 하므로 가독성 손실이라기보다 의도 표현이다. 조회 전용 Service에서도 `@Transactional(readOnly = true)`를 메서드마다 부착해야 한다.
+- **적용 범위**: 본 ADR 이후 신설되는 응용 Service에 적용한다. 본 cart phase의 4개 Service(`AddCartItemService`, `GetMyCartService`, `UpdateCartItemQuantityService`, `RemoveCartItemService`)에 적용된다. 기존 도메인(Order/Stock/Auth 등)의 class-level `@Transactional` 마이그레이션은 본 ADR의 후속 트랙으로 분리한다.
+- **Processor 패턴과의 관계**: retry/멱등 등 트랜잭션 외부에서 처리해야 할 흐름을 가진 Service는 어노테이션 없이 outer 역할만 담당하고, 실제 트랜잭션은 별도 Processor 빈에 method-level `@Transactional`로 둔다. retry attempt마다 빈 경계를 넘어가며 새 트랜잭션·새 persistence context가 시작되고, self-invocation 함정이 회피된다.
+
+### ADR-022: 응용 계층은 영속화 호출을 명시적으로 표현한다
+- **결정**: 응용 Service가 도메인 객체의 상태를 변경한 뒤 영속화가 필요한 경우, JPA dirty checking에 묵시적으로 기대지 않고 `repository.save(entity)`를 명시적으로 호출한다. managed entity의 `save()`는 JPA 내부에서 no-op이지만, 응용 코드 표면에 "이 시점에 저장 의도"를 드러내는 것이 본 ADR의 목적이다.
+- **배경**: dirty checking은 JPA의 "트랜잭션 종료 시 자동 flush" 동작에 묵시적으로 의존한다. 응용 코드는 "수정만 호출"하지만, 코드 작성자는 머릿속에 "트랜잭션이 끝나면 자동 저장됨"이라는 ORM-specific 동작 모델을 전제로 깔고 작성해야 한다. 이로 인해 (a) 응용 계층의 사고 모델이 JPA에 묶이고, (b) DDD의 "domain은 상태 변경, application은 영속화 조율" 책임 분리가 코드 표면에 드러나지 않는다.
+- **결정 근거**: `repository.save(entity)` 명시 호출은 (a) 응용 코드가 어떤 ORM/persistence 메커니즘이든 동일한 사고 모델을 유지하게 하고, (b) 영속화가 application의 명시적 책임이라는 DDD layer 분리를 코드 표면에 드러내며, (c) 코드 리뷰 시 "여기서 저장한다"라는 의도가 즉시 보인다. CLAUDE.md "비즈니스 로직은 Domain/application 계층" 원칙이 영속화 책임에도 적용된 형태다. import 수준의 의존도는 dirty checking과 같지만(둘 다 `Repository` port에만 의존), 인지적·표현적 의존도가 ORM-agnostic으로 떨어진다.
+- **트레이드오프**: managed entity에 대한 `save()` 호출이 형식상 no-op이지만 코드 라인이 추가된다. 다만 이 라인은 곧 의도 명세이며, 향후 ORM 변경·JDBC 직접 사용 같은 시나리오에서도 코드 변경 부담을 낮춘다. 또한 같은 분기 안에서 신규 entity(transient)와 기존 entity(managed)를 모두 `save()`로 통일하면 분기 시각적 비대칭이 사라진다.
+- **적용 범위**: 본 ADR 이후 신설되는 응용 Service에 적용한다. 본 cart phase의 `AddCartItemProcessor`, `UpdateCartItemQuantityProcessor`에 적용된다. 기존 도메인의 dirty checking 의존 코드 마이그레이션은 별도 트랙으로 분리한다.
+- **새 entity insert와의 차이**: transient entity(`id == null`)의 `save()`는 JPA persist 경로라 호출이 없으면 INSERT가 일어나지 않는다. 본 ADR은 그 외 update 경로에도 동일하게 명시 호출하라는 정책이다. detached entity의 `save()`(merge)는 모든 필드를 덮어써 동시 갱신을 깨뜨리는 위험 경로이지만, 본 phase의 흐름에는 detached entity가 등장하지 않는다.

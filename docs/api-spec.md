@@ -514,6 +514,156 @@
 - 권한 없음: `AUTH-403`
 - 검증 실패: `COMMON-400`
 
+## 장바구니
+
+### `POST /cart/items`
+
+설명:
+- 회원의 장바구니에 상품을 담는 API입니다. 로그인 인증이 필요합니다.
+- 같은 회원이 이미 같은 상품을 담아둔 경우 수량이 합산됩니다(UPSERT).
+- 합산 결과가 99를 초과하면 4xx로 거부됩니다.
+- cart row를 생성·합산하기 전에 Product 존재와 구매 가능 상태를 검증합니다. 미존재 또는 soft-deleted는 `CART-404-2`로, 판매 중지(`STOPPED`)는 `CART-409`로 거부됩니다(결정 6-5).
+
+요청:
+- Body
+
+```json
+{
+  "productId": 123,
+  "quantity": 2
+}
+```
+
+- `productId`: 양수, 필수
+- `quantity`: 1 이상 99 이하, 필수
+
+응답:
+- HTTP Status: `201 Created`
+
+```json
+{
+  "code": "SUCCESS",
+  "message": "OK",
+  "data": {
+    "productId": 123,
+    "quantity": 5
+  }
+}
+```
+
+### `GET /cart`
+
+설명:
+- 로그인한 회원의 장바구니를 조회합니다.
+- 응답 `items`는 `createdAt DESC` 순서(최근 담은 항목이 위)로 정렬됩니다.
+- 각 항목의 가격은 저장된 값이 아니라 최신 `Product` 가격으로 재조회되어 응답됩니다.
+- 판매 중지(`STOPPED`)되거나 soft delete된 상품은 `unavailable=true`로 표시되며 `totalAmount` 합산에서 제외됩니다(cart row는 보존, 사용자가 직접 삭제할 수 있도록 유지).
+- Product 자체가 누락된 항목(데이터 정합성이 깨진 결함 상황)은 응답에서 제외하고 WARN 로그를 남깁니다. `unavailable` 마킹과는 다른 처리이며 사용자에게 노출되지 않습니다.
+
+요청:
+- 요청 바디 없음
+- 요청 파라미터 없음
+
+응답:
+
+```json
+{
+  "code": "SUCCESS",
+  "message": "OK",
+  "data": {
+    "items": [
+      {
+        "productId": 123,
+        "name": "상품명",
+        "price": 10000,
+        "imageUrl": "https://...",
+        "quantity": 2,
+        "lineAmount": 20000,
+        "unavailable": false
+      },
+      {
+        "productId": 456,
+        "name": "단종된 상품",
+        "price": 5000,
+        "imageUrl": null,
+        "quantity": 1,
+        "lineAmount": 5000,
+        "unavailable": true
+      }
+    ],
+    "totalAmount": 20000
+  }
+}
+```
+
+### `PATCH /cart/items/{productId}`
+
+설명:
+- 회원 장바구니 항목의 수량을 절대값으로 변경합니다. 로그인 인증이 필요합니다.
+- 존재하지 않는 항목에 대한 요청은 `CART-404-1`로 거부됩니다. 잘못된 path 입력(0, 음수 등)도 별도 검증 없이 같은 미존재 정책으로 흡수되어 `CART-404-1`로 응답합니다.
+
+요청:
+- Path
+  - `productId`: `Long`, 필수 (별도 양수 검증 없음. 코드베이스의 path id는 미존재 항목으로 4xx 응답되는 일관 정책을 따릅니다.)
+- Body
+
+```json
+{
+  "quantity": 5
+}
+```
+
+- `quantity`: 1 이상 99 이하, 필수
+
+응답:
+
+```json
+{
+  "code": "SUCCESS",
+  "message": "OK",
+  "data": {
+    "productId": 123,
+    "quantity": 5
+  }
+}
+```
+
+### `DELETE /cart/items/{productId}`
+
+설명:
+- 회원 장바구니에서 단일 항목을 삭제합니다. 로그인 인증이 필요합니다.
+- 존재하지 않는 항목에 대한 요청은 `CART-404-1`로 거부됩니다. PATCH와 동일 정책이며, REST DELETE의 멱등 성질을 약하게 깨지만 운영 가시성(silent log miss 방지)과 정책 일관성을 우선합니다.
+- 잘못된 path 입력(0, 음수 등)도 별도 검증 없이 같은 미존재 정책으로 흡수되어 `CART-404-1`로 응답합니다.
+
+요청:
+- Path
+  - `productId`: `Long`, 필수 (별도 양수 검증 없음. 코드베이스의 path id는 미존재 항목으로 4xx 응답되는 일관 정책을 따릅니다.)
+- 요청 바디 없음
+
+응답:
+
+```json
+{
+  "code": "SUCCESS",
+  "message": "OK",
+  "data": null
+}
+```
+
+장바구니 API 실패 응답:
+- 존재하지 않는 항목 수량 변경/삭제 (잘못된 path 입력 포함): `CART-404-1`
+- 추가 시 상품 미존재(또는 soft-deleted): `CART-404-2`
+- 추가 시 상품 판매 중지(STOPPED): `CART-409`
+- 수량 invariant 위반(합산 > 99 등): `CART-400-2`
+- 잘못된 수량 입력: `CART-400-1`
+- 비인증/잘못된 토큰: `AUTH-401`
+- 검증 실패: `COMMON-400`
+- 동시 추가/수정 race window UNIQUE 충돌: `COMMON-500` 안전망(ADR-011)
+
+동시성 처리는 ADR-021(`@Transactional` method-level) + 본 cart phase ADR 결정 8(낙관적 락 `@Version` + retry + Processor 분리)을 따릅니다. update race는 retry로 흡수되어 정상 응답을 받지만, 새 항목 동시 insert race(같은 사용자가 같은 productId를 cart에 없는 상태에서 ms 단위로 두 번 요청)는 `COMMON-500` 안전망으로 위임됩니다.
+
+주문 생성 흐름의 cart 자동 제거는 별도 API가 아니며, `POST /orders` 성공 시 주문된 productId만 cart에서 자동 제거됩니다.
+
 ## 주문
 
 ### `POST /orders`

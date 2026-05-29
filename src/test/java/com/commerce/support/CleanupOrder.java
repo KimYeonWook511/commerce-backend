@@ -3,6 +3,7 @@ package com.commerce.support;
 public enum CleanupOrder {
 	PAYMENT(10),
 	OUTBOX(20),
+	CART(25),
 	ORDER(30),
 	STOCK(40),
 	PRODUCT(50),

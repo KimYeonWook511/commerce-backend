@@ -97,6 +97,27 @@ COLUMNS:
 INDEX:
 - 없음
 
+### `tbl_cart_item`
+
+COLUMNS:
+- `id (PK)`
+- `member_id`
+- `product_id`
+- `quantity`
+- `version` (BIGINT NOT NULL DEFAULT 0, `@Version` 낙관적 락)
+- `created_at`
+- `updated_at`
+
+INDEX:
+- `uk_cart_item_member_product (member_id, product_id) UNIQUE`
+
+비고:
+- `member_id`, `product_id`는 FK 제약을 두지 않는다. cart 도메인은 다른 aggregate를 `Long` ID로만 참조한다(ADR-020).
+- `(member_id, product_id)` UNIQUE 복합 인덱스가 같은 회원의 같은 상품 중복 row를 차단하고, `findAllByMemberIdOrderByCreatedAtDesc`·`findByMemberIdAndProductId`·`deleteByMemberIdAndProductIdIn` 조회 인덱스도 함께 제공한다. 별도의 단독 `member_id` 인덱스는 두지 않는다(복합 인덱스 prefix가 동일 커버).
+- `version` 컬럼은 cart phase ADR 결정 8(낙관적 락 + retry + Processor 분리)을 따른다. JPA `@Version`이 UPDATE 시점에 version 비교로 update race를 감지하고, 응용 Service의 retry loop가 `ObjectOptimisticLockingFailureException`을 흡수한다.
+- 신규 항목 동시 insert race window의 UNIQUE 충돌은 ADR-011 find-first 패턴 + 안전망 500으로 위임한다. retry catch에는 포함하지 않는다.
+- `quantity`는 도메인 invariant(`MIN=1, MAX=99`)와 DTO Bean Validation(`@Min(1) @Max(99)`)이 이중 가드한다.
+
 ### `tbl_payment`
 
 COLUMNS:
