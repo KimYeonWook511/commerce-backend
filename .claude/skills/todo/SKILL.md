@@ -129,7 +129,7 @@ description: Use when the user wants a prioritized list of pending work pulled f
 ## 주의사항
 
 - **read-only.** TODO.md, issue, 어떤 파일도 수정하지 않는다. 산출물은 응답뿐.
-- **gh CLI 인증 전제.** `gh auth status` 실패 시 issue 소스를 건너뛰고 그 사실을 출력에 명시.
+- **gh CLI 인증 전제.** `gh` 명령어가 없거나 `gh auth status` 실패 시 issue 소스를 건너뛰고 그 사실을 출력에 명시.
 - **TODO.md 가 없으면** 해당 소스 건너뛰고 명시.
 - **묶음 = 1 PR.** Epic 같은 큰 관심사 묶음을 만들지 않는다. 묶을 만한 조합이 없으면 "묶을 만한 조합 없음" 으로 솔직히 표시.
 - **우선순위는 시급도가 아니라 중요도.** 단순 deadline 이 아닌 시스템 전체·중장기 방향에서의 주요도를 판단한다.
