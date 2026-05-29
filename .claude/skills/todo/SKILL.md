@@ -1,6 +1,6 @@
 ---
 name: todo
-description: Use when the user wants a prioritized list of pending work pulled from multiple sources (TODO.md, GitHub issues, ad-hoc thoughts) — triggered by "해야할 일 알려줘", "할 일 정리해줘", "todo", "/todo", "지금 뭐부터 하면 좋아?", or similar. Reads commerce-backend/TODO.md and `gh issue list`, combines with any ad-hoc items the user includes in the message body, then lists items with weight + priority, proposes PR-level groupings, and recommends an execution order with reasons. The user decides what to actually work on — this skill just structures the input for that decision.
+description: Use when the user wants a prioritized list of pending work pulled from multiple sources (TODO.md, GitHub issues, ad-hoc thoughts) — triggered by "해야할 일 알려줘", "할 일 정리해줘", "todo", "/todo", "지금 뭐부터 하면 좋아?", or similar. Reads TODO.md and `gh issue list`, combines with any ad-hoc items the user includes in the message body, then lists items with weight + priority, proposes PR-level groupings, and recommends an execution order with reasons. The user decides what to actually work on — this skill just structures the input for that decision.
 ---
 
 # todo
