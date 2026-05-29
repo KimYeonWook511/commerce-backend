@@ -24,7 +24,7 @@ description: Use when the user wants a prioritized list of pending work pulled f
 ### 1. 데이터 수집
 
 ```text
-1. Read commerce-backend/TODO.md
+1. Read TODO.md
 2. Bash: gh issue list --state open --limit 50
 3. 사용자 메시지 본문에서 ad-hoc 항목 식별
 ```
