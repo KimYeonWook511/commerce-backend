@@ -13,7 +13,7 @@ description: Use when the user wants a prioritized list of pending work pulled f
 
 호출 시 다음 셋을 모아서 다룬다.
 
-1. `commerce-backend/TODO.md` — Phase 기반 로드맵. 로컬에만 있는 파일 (`.git/info/exclude` 로 추적 제외)
+1. `TODO.md` — Phase 기반 로드맵. 로컬에만 있는 파일 (`.git/info/exclude` 로 추적 제외)
 2. `gh issue list --state open --limit 50` — GitHub open issues
 3. **사용자가 호출 메시지 본문에 자유롭게 적은 ad-hoc 항목** — "이런 것도 추가하고 싶어" / "방금 생각났는데 X도 해야 함" 같은 텍스트. 형식 자유
 
