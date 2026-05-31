@@ -27,10 +27,10 @@ ADR-018(Hibernate 6.x ENUM 매핑)은 "컬럼 길이는 명시하지 않고 Hibe
 
 ## 결정 내용
 
-- **옵션 A 채택**: `PaymentAttempt`의 4개 컬럼에 `@Column(length=...)`를 명시한다.
+- **옵션 A 채택**: `PaymentAttempt`의 4개 컬럼에 `@Column(length=...)`를 명시한다. 표기 순서는 unique key columnNames 순서(`merchant_pay_key`, `provider`, `payment_id`, `type`)를 사용한다.
   - `merchantPayKey`: 64
-  - `paymentId`: 64
   - `provider` (enum): 32
+  - `paymentId`: 64
   - `type` (enum): 32
   - 합계 768 bytes (utf8mb4 기준) → InnoDB 한도 안에 충분히 들어옴.
 - **`halt_on_error`는 local에만 적용**. test는 Testcontainer fresh MySQL 부팅 시 ALTER FK DROP 무해 실패와 충돌해 제외한다 (자세한 근거는 아래 "halt_on_error 범위 결정 이유"). prod는 운영 미가동 상태이며, 추후 Flyway 도입과 함께 `ddl-auto: validate`로 전환할 예정이라 `halt_on_error`의 의미가 자연스럽게 사라진다.
@@ -44,7 +44,9 @@ ADR-018(Hibernate 6.x ENUM 매핑)은 "컬럼 길이는 명시하지 않고 Hibe
 - 옵션 B는 ADR-018이 정한 "enum length 미명시"의 합리적 근거(코드 상수만 저장, 외부 입력 길이 제한 의미 없음, enum 추가 시 동기화 부담)를 모든 곳에서 부정해야 한다. 본 사고의 원인은 **multi-column unique index의 바이트 합**이지 일반 컬럼 길이가 아니므로, 범위를 좁히는 게 정합적이다.
 - 옵션 C는 JPA 표준에 없는 hack이고 명시성이 떨어진다.
 
-### length 값 (64/64/32/32) 선택 이유
+### length 값 (unique key columnNames 순서로 64/32/64/32) 선택 이유
+
+`uk_payment_attempt_merchant_pay_key_provider_payment_id_type` 의 columnNames 순서(`merchant_pay_key`, `provider`, `payment_id`, `type`)에 맞춰 적는다. entity 선언 순서(`merchantPayKey`, `paymentId`, `provider`, `type`)와는 다르므로 검수 시 혼동에 유의한다.
 
 - `merchantPayKey`: 우리 코드가 생성하는 ID 형식(짧은 prefix + UUID/ULID)을 64자로 충분히 담을 수 있다.
 - `paymentId`: 네이버페이가 발급하는 ID는 보통 20~30자. 64자면 2배 여유.

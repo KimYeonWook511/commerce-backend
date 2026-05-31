@@ -41,7 +41,7 @@
 
 ## 요구사항
 
-- `PaymentAttempt` 4개 컬럼 length 명시: `merchantPayKey=64`, `paymentId=64`, `provider=32`, `type=32`. 합 768 bytes (utf8mb4 기준) < 3072 한도.
+- `PaymentAttempt` 4개 컬럼 length 명시 (unique key columnNames 순서로 표기): `merchantPayKey=64`, `provider=32`, `paymentId=64`, `type=32`. 합 768 bytes (utf8mb4 기준) < 3072 한도.
 - `application-local.yml`에 `spring.jpa.properties.hibernate.hbm2ddl.halt_on_error: true`. test와 prod yml에는 추가하지 않는다.
 - `build.gradle`의 `dockerTest`에 `excludeTags "concurrency"` 추가.
 - 테스트 단언:

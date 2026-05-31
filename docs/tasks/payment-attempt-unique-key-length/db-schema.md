@@ -12,9 +12,11 @@
 
 ### `tbl_payment_attempt`
 
+unique key `uk_payment_attempt_merchant_pay_key_provider_payment_id_type` columnNames 순서로 적는다.
+
 - `merchant_pay_key`: 기본값 → `VARCHAR(64)`
-- `payment_id`: 기본값 → `VARCHAR(64)`
 - `provider`: 기본값 → `VARCHAR(32)`
+- `payment_id`: 기본값 → `VARCHAR(64)`
 - `type`: 기본값 → `VARCHAR(32)`
 
 변경 이유: 위 4개 컬럼은 multi-column unique constraint `uk_payment_attempt_merchant_pay_key_provider_payment_id_type`를 구성한다. 기본값(`VARCHAR(255)` × 4 × utf8mb4 4byte = 4080 bytes)이 InnoDB unique key 한도 3072 bytes를 초과해 schema 생성이 실패하고 있었다.
