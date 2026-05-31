@@ -1,0 +1,9 @@
+{
+  "project": "order-idempotency-cache-simplification",
+  "phase": "0-cache-simplification",
+  "steps": [
+    { "step": 1, "name": "simplify-idempotency-cache", "status": "pending" },
+    { "step": 2, "name": "sync-docs", "status": "pending" },
+    { "step": 3, "name": "write-retrospective", "status": "pending" }
+  ]
+}
