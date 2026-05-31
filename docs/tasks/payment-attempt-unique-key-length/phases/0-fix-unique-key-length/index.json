@@ -1,0 +1,11 @@
+{
+  "project": "commerce-backend",
+  "phase": "0-fix-unique-key-length",
+  "steps": [
+    { "step": 1, "name": "restore-payment-attempt-unique-constraint", "status": "pending" },
+    { "step": 2, "name": "tighten-schema-validation-and-test-tag-isolation", "status": "pending" },
+    { "step": 3, "name": "strengthen-concurrency-test-invariants", "status": "pending" },
+    { "step": 4, "name": "sync-root-docs", "status": "pending" },
+    { "step": 5, "name": "write-retrospective", "status": "pending" }
+  ]
+}
