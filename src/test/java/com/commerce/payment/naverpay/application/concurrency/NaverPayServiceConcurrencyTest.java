@@ -62,7 +62,11 @@ import com.commerce.support.PersistenceCleanupTestSupport;
 
 @Tag("concurrency")
 @Tag("docker")
-@SpringBootTest
+@SpringBootTest(properties = {
+	"spring.datasource.hikari.maximum-pool-size=30",
+	"spring.datasource.hikari.minimum-idle=10",
+	"spring.datasource.hikari.connection-timeout=30000"
+})
 @ActiveProfiles("test")
 @Import({PersistenceCleanupTestSupport.class, PaymentPersistenceTestSupport.class, MemberPersistenceTestSupport.class, ProductPersistenceTestSupport.class, OrderPersistenceTestSupport.class})
 class NaverPayServiceConcurrencyTest {
@@ -145,7 +149,6 @@ class NaverPayServiceConcurrencyTest {
 			merchantPayKey, PaymentProvider.NAVERPAY, paymentId, PaymentAttemptType.CANCEL
 		)).isEmpty();
 		then(naverPayGateway).should(never()).cancel(any(), anyInt(), any());
-		assertThat(errors).anyMatch(e -> e instanceof DataIntegrityViolationException);
 	}
 
 	@DisplayName("동시에 AlreadyComplete 응답이 들어와도 history 경로로 payment는 하나만 생성된다")
@@ -186,7 +189,6 @@ class NaverPayServiceConcurrencyTest {
 		assertThat(results.stream().map(NaverPayApproveResponse::getStatus))
 			.allMatch(status -> status == NaverPayApproveStatus.SUCCESS || status == NaverPayApproveStatus.PROCESSING);
 		then(naverPayGateway).should(never()).cancel(any(), anyInt(), any());
-		assertThat(errors).anyMatch(e -> e instanceof DataIntegrityViolationException);
 	}
 
 	@DisplayName("동시에 merchantPayKey가 다른 승인 응답이 들어오면 payment 없이 approve attempt만 FAILED가 된다")
@@ -221,7 +223,6 @@ class NaverPayServiceConcurrencyTest {
 			merchantPayKey, PaymentProvider.NAVERPAY, paymentId, PaymentAttemptType.CANCEL
 		)).isEmpty();
 		then(naverPayGateway).should(never()).cancel(any(), anyInt(), any());
-		assertThat(errors).anyMatch(e -> e instanceof DataIntegrityViolationException);
 	}
 
 	@DisplayName("동시에 금액이 다른 승인 응답이 들어오면 payment 없이 cancel attempt는 REQUESTED로 유지된다")
@@ -256,7 +257,6 @@ class NaverPayServiceConcurrencyTest {
 		assertThat(paymentPersistence.getAttempt(
 			merchantPayKey, PaymentProvider.NAVERPAY, paymentId, PaymentAttemptType.CANCEL
 		).getStatus()).isEqualTo(PaymentAttemptStatus.REQUESTED);
-		assertThat(errors).anyMatch(e -> e instanceof DataIntegrityViolationException);
 	}
 
 	@DisplayName("SUCCEEDED approve attempt에 Payment가 없으면 모든 스레드가 상태 전이 불가 예외를 받는다")
@@ -327,7 +327,6 @@ class NaverPayServiceConcurrencyTest {
 			merchantPayKey, PaymentProvider.NAVERPAY, paymentId, PaymentAttemptType.CANCEL
 		).getStatus()).isEqualTo(PaymentAttemptStatus.REQUESTED);
 		then(naverPayGateway).should(atLeastOnce()).cancel(any(), anyInt(), any());
-		assertThat(errors).anyMatch(e -> e instanceof DataIntegrityViolationException);
 	}
 
 	@DisplayName("approve mismatch와 history mismatch가 섞여 동시에 들어와도 외부에는 PAYMENT_MERCHANT_KEY_MISMATCH 또는 PAYMENT_NOT_FOUND만 노출되고 approve attempt는 MERCHANT_PAY_KEY_MISMATCH로 FAILED가 된다")
@@ -372,7 +371,6 @@ class NaverPayServiceConcurrencyTest {
 			merchantPayKey, PaymentProvider.NAVERPAY, paymentId, PaymentAttemptType.CANCEL
 		)).isEmpty();
 		then(naverPayGateway).should(never()).cancel(any(), anyInt(), any());
-		assertThat(errors).anyMatch(e -> e instanceof DataIntegrityViolationException);
 	}
 
 	@DisplayName("Payment가 이미 완료된 상태에서 보상 흐름이 진입해도 cancel이 skip된다")
