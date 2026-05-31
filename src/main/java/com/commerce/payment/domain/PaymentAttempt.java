@@ -40,10 +40,10 @@ public class PaymentAttempt extends BaseTimeEntity {
 	@GeneratedValue(strategy = GenerationType.IDENTITY)
 	private Long id;
 
-	@Column(nullable = false)
+	@Column(nullable = false, length = 64)
 	private String merchantPayKey;
 
-	@Column(nullable = false)
+	@Column(nullable = false, length = 64)
 	private String paymentId;
 
 	@Column(nullable = false)
@@ -51,12 +51,12 @@ public class PaymentAttempt extends BaseTimeEntity {
 
 	@Enumerated(EnumType.STRING)
 	@JdbcTypeCode(SqlTypes.VARCHAR)
-	@Column(nullable = false)
+	@Column(nullable = false, length = 32)
 	private PaymentProvider provider;
 
 	@Enumerated(EnumType.STRING)
 	@JdbcTypeCode(SqlTypes.VARCHAR)
-	@Column(nullable = false)
+	@Column(nullable = false, length = 32)
 	private PaymentAttemptType type;
 
 	@Enumerated(EnumType.STRING)

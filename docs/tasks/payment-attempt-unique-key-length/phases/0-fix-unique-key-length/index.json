@@ -1,0 +1,53 @@
+{
+  "project": "commerce-backend",
+  "phase": "0-fix-unique-key-length",
+  "steps": [
+    {
+      "step": 1,
+      "name": "restore-payment-attempt-unique-constraint",
+      "status": "completed",
+      "started_at": "2026-05-31T23:05:28+0900",
+      "summary": "PaymentAttempt 4개 컬럼(merchantPayKey=64, paymentId=64, provider=32, type=32)에 @Column(length=...) 추가. unique constraint가 DB에 정상 적용되어 NaverPayServiceConcurrencyTest 8개 케이스 모두 통과.",
+      "completed_at": "2026-05-31T23:06:40+0900"
+    },
+    {
+      "step": 2,
+      "name": "tighten-schema-validation-and-test-tag-isolation",
+      "status": "completed",
+      "started_at": "2026-05-31T23:30:32+0900",
+      "summary": "application-local.yml에 hbm2ddl.halt_on_error: true 추가(test/prod 제외). build.gradle dockerTest에 excludeTags \"concurrency\" 추가. test/dockerTest/concurrencyTest 세 태스크 모두 통과하며 NaverPayServiceConcurrencyTest가 dockerTest에서 제외됨.",
+      "completed_at": "2026-05-31T23:34:30+0900"
+    },
+    {
+      "step": 3,
+      "name": "strengthen-concurrency-test-invariants",
+      "status": "completed",
+      "started_at": "2026-05-31T23:35:36+0900",
+      "summary": "NaverPayServiceConcurrencyTest 8개 케이스에 단언 이중화. 분류 1(race 거의 항상 발생) 케이스 1·2·3·4·6·7에 countAttempts==1 데이터 invariant + errors.anyMatch(DataIntegrityViolationException) 행동 invariant 추가. 분류 2(attempt 미리 생성) 케이스 5·8에 countAttempts==1 데이터 invariant만 추가. 케이스 4에 countCancelAttempts==1도 추가. 회귀 검증: merchantPayKey length=255로 되돌리면 8개 중 2개 실패 확인 후 즉시 원상 복구.",
+      "completed_at": "2026-05-31T23:42:47+0900"
+    },
+    {
+      "step": 4,
+      "name": "sync-root-docs",
+      "status": "completed",
+      "started_at": "2026-05-31T23:43:44+0900",
+      "summary": "docs/ADR.md에 ADR-023(multi-column unique constraint 대상 컬럼 length 명시 + halt_on_error local 적용) 추가. docs/db-schema.md tbl_payment_attempt 섹션에 4개 컬럼 length 비고 보강. docs/testing-conventions.md에 halt_on_error 적용 환경(local)·제외 환경(test/prod)·효과·fragility 명시.",
+      "completed_at": "2026-05-31T23:45:34+0900"
+    },
+    {
+      "step": 5,
+      "name": "write-retrospective",
+      "status": "completed",
+      "started_at": "2026-05-31T23:46:37+0900",
+      "summary": "docs/tasks/payment-attempt-unique-key-length/retrospective.md 작성. 발견 경위·진단 흐름·근본 원인·해결·학습·향후 트랙 섹션 포함. ./gradlew test 통과.",
+      "completed_at": "2026-05-31T23:47:27+0900"
+    }
+  ],
+  "created_at": "2026-05-31T23:05:28+0900",
+  "execution": {
+    "developer_model": "sonnet",
+    "reviewer_model": "opus",
+    "commit_model": "haiku"
+  },
+  "completed_at": "2026-05-31T23:48:32+0900"
+}

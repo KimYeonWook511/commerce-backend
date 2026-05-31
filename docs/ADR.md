@@ -176,3 +176,10 @@
 - **트레이드오프**: managed entity에 대한 `save()` 호출이 형식상 no-op이지만 코드 라인이 추가된다. 다만 이 라인은 곧 의도 명세이며, 향후 ORM 변경·JDBC 직접 사용 같은 시나리오에서도 코드 변경 부담을 낮춘다. 또한 같은 분기 안에서 신규 entity(transient)와 기존 entity(managed)를 모두 `save()`로 통일하면 분기 시각적 비대칭이 사라진다.
 - **적용 범위**: 본 ADR 이후 신설되는 응용 Service에 적용한다. 본 cart phase의 `AddCartItemProcessor`, `UpdateCartItemQuantityProcessor`에 적용된다. 기존 도메인의 dirty checking 의존 코드 마이그레이션은 별도 트랙으로 분리한다.
 - **새 entity insert와의 차이**: transient entity(`id == null`)의 `save()`는 JPA persist 경로라 호출이 없으면 INSERT가 일어나지 않는다. 본 ADR은 그 외 update 경로에도 동일하게 명시 호출하라는 정책이다. detached entity의 `save()`(merge)는 모든 필드를 덮어써 동시 갱신을 깨뜨리는 위험 경로이지만, 본 phase의 흐름에는 detached entity가 등장하지 않는다.
+
+### ADR-023: multi-column unique constraint 대상 컬럼은 `@Column(length=...)`을 명시한다
+- **결정**: multi-column `@UniqueConstraint`에 포함되는 String/Enum 컬럼은 `@Column(length=...)`을 명시한다. 합계 바이트가 InnoDB unique key 한도(3072 bytes)를 넘지 않도록 산정한다. 본 결정은 ADR-018("enum length 미명시")의 좁은 예외다. 함께 `hibernate.hbm2ddl.halt_on_error: true`를 `application-local.yml`에만 적용해 schema 회귀를 부팅 시점에 노출시킨다 (test/prod는 적용 제외).
+- **배경**: `tbl_payment_attempt`의 4개 컬럼이 `VARCHAR(255)` 기본값으로 생성되어 utf8mb4 환경에서 4080 bytes를 차지, MySQL이 unique key 생성을 거부. Hibernate 기본 핸들러가 silent로 넘어가 schema에 unique가 없는 채 운영됨.
+- **이유**: 옵션 A(대상 컬럼만 length 명시)가 ADR-018의 합리성을 일반 영역에서 유지하면서 본 사고만 좁게 해결한다. 옵션 B(전 컬럼 length 명시)는 ADR-018을 폐기해야 한다. `halt_on_error`를 test에 적용하지 않은 이유는 Testcontainer fresh MySQL 부팅 시 `ALTER TABLE ... DROP FOREIGN KEY ...`가 `IF EXISTS` 없이 실행되어 무해 실패가 발생하기 때문이며, test 환경의 회귀 감지는 `NaverPayServiceConcurrencyTest`의 `countAttempts == 1` 데이터 invariant로 대체한다.
+- **트레이드오프**: ADR-018과 본 ADR의 좁은 예외가 공존한다. 신규 multi-column unique 도입 시 length를 계산해 명시해야 하는 인지 부담이 있다. `halt_on_error`는 local의 `ddl-auto: update` 전제에 묶이며, local ddl-auto 변경 시 함께 재검토해야 한다 (fragile dependency). 동시성 테스트의 race 발생 자체 가시화 단언(`anyMatch DataIntegrityViolationException`)은 환경 의존성으로 CI flake 위험이 있어 제거하고, `countAttempts == 1` + `assertRaceOrPaymentError` helper 조합으로 안전망을 검증한다. 동시성 테스트는 20 thread + 보상 흐름 수용을 위해 클래스 단위 HikariCP 설정(`maximum-pool-size=30`)을 명시한다.
+- **참고**: 상세는 `docs/tasks/payment-attempt-unique-key-length/adr.md` 참조.

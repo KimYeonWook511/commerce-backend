@@ -1,0 +1,10 @@
+{
+  "phases": [
+    {
+      "dir": "0-fix-unique-key-length",
+      "status": "completed",
+      "started_at": "2026-05-31T23:05:28+0900",
+      "completed_at": "2026-05-31T23:48:32+0900"
+    }
+  ]
+}
