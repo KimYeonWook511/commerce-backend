@@ -1,26 +1,25 @@
 package com.commerce.order.infrastructure;
 
 import static org.assertj.core.api.Assertions.assertThat;
+import static org.assertj.core.api.Assertions.assertThatCode;
 import static org.mockito.ArgumentMatchers.any;
 import static org.mockito.ArgumentMatchers.anyString;
+import static org.mockito.ArgumentMatchers.eq;
 import static org.mockito.BDDMockito.given;
-import static org.mockito.Mockito.doAnswer;
+import static org.mockito.BDDMockito.then;
+import static org.mockito.BDDMockito.willThrow;
 
 import java.time.Duration;
-import java.util.concurrent.atomic.AtomicReference;
 
-import org.junit.jupiter.api.AfterEach;
 import org.junit.jupiter.api.BeforeEach;
 import org.junit.jupiter.api.DisplayName;
 import org.junit.jupiter.api.Test;
 import org.junit.jupiter.api.extension.ExtendWith;
 import org.mockito.Mock;
 import org.mockito.junit.jupiter.MockitoExtension;
+import org.springframework.dao.QueryTimeoutException;
 import org.springframework.data.redis.core.StringRedisTemplate;
 import org.springframework.data.redis.core.ValueOperations;
-
-import com.commerce.common.log.LogContext;
-import com.commerce.order.application.event.OrderIdempotencyCacheEvent;
 
 @ExtendWith(MockitoExtension.class)
 class RedisOrderIdempotencyStoreTest {
@@ -38,124 +37,66 @@ class RedisOrderIdempotencyStoreTest {
 		store = new RedisOrderIdempotencyStore(redisTemplate);
 	}
 
-	@AfterEach
-	void cleanUpMdc() {
-		LogContext.removeTraceId();
-	}
-
-	@DisplayName("MDC가 비어있고 이벤트에 valid traceId가 있으면 listener 진입 시 MDC에 복원하고 종료 시 정리한다 (비동기 fallback)")
+	@DisplayName("키가 없으면 reserve는 true를 반환한다")
 	@Test
-	void handle_whenMdcEmptyAndValidTraceId_pushAndRemoveMdc() {
+	void reserve_whenKeyAbsent_returnTrue() {
 		// given
-		String traceId = "trace-abc-111";
-		OrderIdempotencyCacheEvent event = new OrderIdempotencyCacheEvent(
-			1L, "idem-key", 100L, Duration.ofSeconds(600), traceId);
-
-		AtomicReference<String> capturedTraceId = new AtomicReference<>();
 		given(redisTemplate.opsForValue()).willReturn(valueOperations);
-		doAnswer(invocation -> {
-			capturedTraceId.set(LogContext.getTraceId());
-			return null;
-		}).when(valueOperations).set(anyString(), anyString(), any(Duration.class));
+		given(valueOperations.setIfAbsent(anyString(), eq("1"), any(Duration.class))).willReturn(true);
 
 		// when
-		store.handle(event);
+		boolean result = store.reserve(1L, "idem-key", Duration.ofSeconds(60));
 
 		// then
-		assertThat(capturedTraceId.get()).isEqualTo(traceId);
-		assertThat(LogContext.getTraceId()).isNull();
+		assertThat(result).isTrue();
 	}
 
-	@DisplayName("MDC에 이미 traceId가 있으면 이벤트 traceId를 무시하고 기존 값을 보존한다 (동기 실행 경로)")
+	@DisplayName("키가 이미 존재하면 reserve는 false를 반환한다")
 	@Test
-	void handle_whenMdcAlreadyHasTraceId_preservesExistingMdc() {
+	void reserve_whenKeyExists_returnFalse() {
 		// given
-		String existingTraceId = "pre-existing-trace";
-		String eventTraceId = "event-trace-different";
-		LogContext.putTraceId(existingTraceId);
-		OrderIdempotencyCacheEvent event = new OrderIdempotencyCacheEvent(
-			1L, "idem-key", 100L, Duration.ofSeconds(600), eventTraceId);
-
-		AtomicReference<String> capturedTraceId = new AtomicReference<>();
 		given(redisTemplate.opsForValue()).willReturn(valueOperations);
-		doAnswer(invocation -> {
-			capturedTraceId.set(LogContext.getTraceId());
-			return null;
-		}).when(valueOperations).set(anyString(), anyString(), any(Duration.class));
+		given(valueOperations.setIfAbsent(anyString(), eq("1"), any(Duration.class))).willReturn(false);
 
 		// when
-		store.handle(event);
+		boolean result = store.reserve(1L, "idem-key", Duration.ofSeconds(60));
 
 		// then
-		assertThat(capturedTraceId.get()).isEqualTo(existingTraceId);
-		assertThat(LogContext.getTraceId()).isEqualTo(existingTraceId);
+		assertThat(result).isFalse();
 	}
 
-	@DisplayName("MDC에 이미 traceId가 있으면 이벤트 traceId가 null이어도 기존 값을 보존한다")
+	@DisplayName("reserve 시 DataAccessException이 발생하면 false를 반환한다")
 	@Test
-	void handle_whenMdcAlreadyHasTraceIdAndEventTraceIdNull_preservesExistingMdc() {
+	void reserve_whenDataAccessException_returnFalse() {
 		// given
-		LogContext.putTraceId("pre-existing-trace");
-		OrderIdempotencyCacheEvent event = new OrderIdempotencyCacheEvent(
-			1L, "idem-key", 100L, Duration.ofSeconds(600), null);
-
-		AtomicReference<String> capturedTraceId = new AtomicReference<>();
 		given(redisTemplate.opsForValue()).willReturn(valueOperations);
-		doAnswer(invocation -> {
-			capturedTraceId.set(LogContext.getTraceId());
-			return null;
-		}).when(valueOperations).set(anyString(), anyString(), any(Duration.class));
+		given(valueOperations.setIfAbsent(anyString(), anyString(), any(Duration.class)))
+			.willThrow(new QueryTimeoutException("timeout"));
 
 		// when
-		store.handle(event);
+		boolean result = store.reserve(1L, "idem-key", Duration.ofSeconds(60));
 
 		// then
-		assertThat(capturedTraceId.get()).isEqualTo("pre-existing-trace");
-		assertThat(LogContext.getTraceId()).isEqualTo("pre-existing-trace");
+		assertThat(result).isFalse();
 	}
 
-	@DisplayName("MDC가 비어있고 이벤트 traceId도 null이면 MDC를 건드리지 않는다")
+	@DisplayName("clear 호출 시 Redis key를 삭제한다")
 	@Test
-	void handle_whenMdcEmptyAndEventTraceIdNull_doesNotTouchMdc() {
-		// given
-		OrderIdempotencyCacheEvent event = new OrderIdempotencyCacheEvent(
-			1L, "idem-key", 100L, Duration.ofSeconds(600), null);
-
-		AtomicReference<String> capturedTraceId = new AtomicReference<>();
-		given(redisTemplate.opsForValue()).willReturn(valueOperations);
-		doAnswer(invocation -> {
-			capturedTraceId.set(LogContext.getTraceId());
-			return null;
-		}).when(valueOperations).set(anyString(), anyString(), any(Duration.class));
-
+	void clear_whenCalled_deleteKey() {
 		// when
-		store.handle(event);
+		store.clear(1L, "idem-key");
 
 		// then
-		assertThat(capturedTraceId.get()).isNull();
-		assertThat(LogContext.getTraceId()).isNull();
+		then(redisTemplate).should().delete("order:idempotency:1:idem-key");
 	}
 
-	@DisplayName("MDC가 비어있고 이벤트 traceId 형식이 유효하지 않으면 MDC를 건드리지 않는다")
+	@DisplayName("clear 시 DataAccessException이 발생해도 예외를 전파하지 않는다")
 	@Test
-	void handle_whenMdcEmptyAndInvalidTraceId_doesNotTouchMdc() {
+	void clear_whenDataAccessException_doesNotThrow() {
 		// given
-		String invalidTraceId = "invalid trace id with spaces!";
-		OrderIdempotencyCacheEvent event = new OrderIdempotencyCacheEvent(
-			1L, "idem-key", 100L, Duration.ofSeconds(600), invalidTraceId);
+		willThrow(new QueryTimeoutException("timeout")).given(redisTemplate).delete(anyString());
 
-		AtomicReference<String> capturedTraceId = new AtomicReference<>();
-		given(redisTemplate.opsForValue()).willReturn(valueOperations);
-		doAnswer(invocation -> {
-			capturedTraceId.set(LogContext.getTraceId());
-			return null;
-		}).when(valueOperations).set(anyString(), anyString(), any(Duration.class));
-
-		// when
-		store.handle(event);
-
-		// then
-		assertThat(capturedTraceId.get()).isNull();
-		assertThat(LogContext.getTraceId()).isNull();
+		// when & then
+		assertThatCode(() -> store.clear(1L, "idem-key")).doesNotThrowAnyException();
 	}
 }

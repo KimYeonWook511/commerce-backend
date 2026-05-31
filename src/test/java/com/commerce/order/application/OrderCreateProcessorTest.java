@@ -8,29 +8,23 @@ import static org.mockito.BDDMockito.given;
 import static org.mockito.BDDMockito.then;
 import static org.mockito.BDDMockito.willThrow;
 
-import java.time.Duration;
 import java.util.List;
 import java.util.Optional;
 
-import org.junit.jupiter.api.AfterEach;
 import org.junit.jupiter.api.DisplayName;
 import org.junit.jupiter.api.Test;
 import org.junit.jupiter.api.extension.ExtendWith;
-import org.mockito.ArgumentCaptor;
 import org.mockito.InjectMocks;
 import org.mockito.Mock;
 import org.mockito.junit.jupiter.MockitoExtension;
-import org.springframework.context.ApplicationEventPublisher;
 import org.springframework.test.util.ReflectionTestUtils;
 
-import com.commerce.common.log.LogContext;
 import com.commerce.member.domain.Member;
 import com.commerce.member.domain.repository.MemberRepository;
 import com.commerce.member.exception.MemberErrorCode;
 import com.commerce.member.exception.MemberException;
 import com.commerce.order.application.command.OrderCreateCommand;
 import com.commerce.order.application.command.OrderCreateItem;
-import com.commerce.order.application.event.OrderIdempotencyCacheEvent;
 import com.commerce.order.application.port.CartItemRemover;
 import com.commerce.order.application.result.OrderCreateResult;
 import com.commerce.order.domain.Order;
@@ -60,22 +54,14 @@ class OrderCreateProcessorTest {
 	private StockInventoryService stockInventoryService;
 
 	@Mock
-	private ApplicationEventPublisher applicationEventPublisher;
-
-	@Mock
 	private CartItemRemover cartItemRemover;
 
 	@InjectMocks
 	private OrderCreateProcessor orderCreateProcessor;
 
-	@AfterEach
-	void cleanUpMdc() {
-		LogContext.removeTraceId();
-	}
-
-	@DisplayName("유효한 요청이면 주문을 생성하고 캐싱 이벤트를 발행한다")
+	@DisplayName("유효한 요청이면 주문을 생성한다")
 	@Test
-	void execute_whenValidRequest_createOrderAndPublishEvent() {
+	void execute_whenValidRequest_createOrder() {
 		// given
 		Member member = createMember(1L);
 		Product product = createProduct(10L, "product-1", 1000);
@@ -91,13 +77,12 @@ class OrderCreateProcessorTest {
 		});
 
 		// when
-		OrderCreateResult result = orderCreateProcessor.execute(command, Duration.ofSeconds(600));
+		OrderCreateResult result = orderCreateProcessor.execute(command);
 
 		// then
 		assertThat(result.getOrderId()).isEqualTo(100L);
 		then(stockInventoryService).should().decrease(10L, 2);
 		then(cartItemRemover).should().removeByMemberAndProducts(1L, List.of(10L));
-		then(applicationEventPublisher).should().publishEvent(any(OrderIdempotencyCacheEvent.class));
 	}
 
 	@DisplayName("회원이 존재하지 않으면 예외를 던진다")
@@ -109,7 +94,7 @@ class OrderCreateProcessorTest {
 		given(memberRepository.findById(1L)).willReturn(Optional.empty());
 
 		// when & then
-		assertThatThrownBy(() -> orderCreateProcessor.execute(command, Duration.ofSeconds(600)))
+		assertThatThrownBy(() -> orderCreateProcessor.execute(command))
 			.isInstanceOf(MemberException.class)
 			.satisfies(ex -> assertThat(((MemberException)ex).getErrorCode())
 				.isEqualTo(MemberErrorCode.MEMBER_NOT_FOUND));
@@ -129,65 +114,10 @@ class OrderCreateProcessorTest {
 			.willReturn(List.of(createProduct(10L, "product-1", 1000)));
 
 		// when & then
-		assertThatThrownBy(() -> orderCreateProcessor.execute(command, Duration.ofSeconds(600)))
+		assertThatThrownBy(() -> orderCreateProcessor.execute(command))
 			.isInstanceOf(ProductException.class)
 			.satisfies(ex -> assertThat(((ProductException)ex).getErrorCode())
 				.isEqualTo(ProductErrorCode.PRODUCT_NOT_FOUND));
-	}
-
-	@DisplayName("현재 MDC traceId를 발행 이벤트에 동봉한다")
-	@Test
-	void execute_whenTraceIdInMdc_includeTraceIdInEvent() {
-		// given
-		String traceId = "trace-xyz-999";
-		LogContext.putTraceId(traceId);
-
-		Member member = createMember(1L);
-		Product product = createProduct(10L, "product-1", 1000);
-		OrderCreateCommand command = createCommand(1L, "idem-key",
-			List.of(OrderCreateItem.builder().productId(10L).quantity(2).build()));
-
-		given(memberRepository.findById(1L)).willReturn(Optional.of(member));
-		given(productRepository.findAllById(List.of(10L))).willReturn(List.of(product));
-		given(orderRepository.save(any(Order.class))).willAnswer(inv -> {
-			Order order = inv.getArgument(0);
-			ReflectionTestUtils.setField(order, "id", 100L);
-			return order;
-		});
-
-		// when
-		orderCreateProcessor.execute(command, Duration.ofSeconds(600));
-
-		// then
-		ArgumentCaptor<OrderIdempotencyCacheEvent> captor = ArgumentCaptor.forClass(OrderIdempotencyCacheEvent.class);
-		then(applicationEventPublisher).should().publishEvent(captor.capture());
-		assertThat(captor.getValue().getTraceId()).isEqualTo(traceId);
-	}
-
-	@DisplayName("MDC에 traceId가 없으면 이벤트의 traceId는 null이다")
-	@Test
-	void execute_whenNoTraceIdInMdc_eventTraceIdIsNull() {
-		// given
-		Member member = createMember(1L);
-		Product product = createProduct(10L, "product-1", 1000);
-		OrderCreateCommand command = createCommand(1L, "idem-key",
-			List.of(OrderCreateItem.builder().productId(10L).quantity(2).build()));
-
-		given(memberRepository.findById(1L)).willReturn(Optional.of(member));
-		given(productRepository.findAllById(List.of(10L))).willReturn(List.of(product));
-		given(orderRepository.save(any(Order.class))).willAnswer(inv -> {
-			Order order = inv.getArgument(0);
-			ReflectionTestUtils.setField(order, "id", 100L);
-			return order;
-		});
-
-		// when
-		orderCreateProcessor.execute(command, Duration.ofSeconds(600));
-
-		// then
-		ArgumentCaptor<OrderIdempotencyCacheEvent> captor = ArgumentCaptor.forClass(OrderIdempotencyCacheEvent.class);
-		then(applicationEventPublisher).should().publishEvent(captor.capture());
-		assertThat(captor.getValue().getTraceId()).isNull();
 	}
 
 	@DisplayName("재고 차감에 실패하면 예외를 전파한다")
@@ -205,7 +135,7 @@ class OrderCreateProcessorTest {
 			.given(stockInventoryService).decrease(10L, 2);
 
 		// when & then
-		assertThatThrownBy(() -> orderCreateProcessor.execute(command, Duration.ofSeconds(600)))
+		assertThatThrownBy(() -> orderCreateProcessor.execute(command))
 			.isInstanceOf(StockException.class)
 			.satisfies(ex -> assertThat(((StockException)ex).getErrorCode())
 				.isEqualTo(StockErrorCode.STOCK_NOT_FOUND));

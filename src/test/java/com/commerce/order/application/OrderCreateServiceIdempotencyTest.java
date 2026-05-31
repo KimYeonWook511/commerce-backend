@@ -1,7 +1,9 @@
 package com.commerce.order.application;
 
 import static org.assertj.core.api.Assertions.assertThat;
+import static org.assertj.core.api.Assertions.assertThatThrownBy;
 
+import java.time.Duration;
 import java.util.List;
 import java.util.concurrent.CyclicBarrier;
 import java.util.concurrent.ExecutionException;
@@ -16,7 +18,6 @@ import org.junit.jupiter.api.Test;
 import org.springframework.beans.factory.annotation.Autowired;
 import org.springframework.boot.test.context.SpringBootTest;
 import org.springframework.context.annotation.Import;
-import org.springframework.dao.DataIntegrityViolationException;
 import org.springframework.test.context.ActiveProfiles;
 import org.springframework.test.context.DynamicPropertyRegistry;
 import org.springframework.test.context.DynamicPropertySource;
@@ -27,6 +28,8 @@ import com.commerce.order.application.command.OrderCreateCommand;
 import com.commerce.order.application.command.OrderCreateItem;
 import com.commerce.order.application.port.OrderIdempotencyStore;
 import com.commerce.order.application.result.OrderCreateResult;
+import com.commerce.order.exception.OrderErrorCode;
+import com.commerce.order.exception.OrderException;
 import com.commerce.order.infrastructure.persistence.support.OrderPersistenceTestSupport;
 import com.commerce.product.domain.Product;
 import com.commerce.product.domain.ProductStatus;
@@ -122,7 +125,7 @@ class OrderCreateServiceIdempotencyTest {
 		// Redis TTL 만료 시뮬레이션: Redis 상태를 직접 제거한다
 		orderIdempotencyStore.clear(member.getId(), "ttl-expired-key");
 
-		// TTL 만료 후 동일 키로 재요청 → unique 위반 → 기존 주문 반환
+		// TTL 만료 후 동일 키로 재요청 → DB 사전 find 로 기존 주문 발견 → 기존 주문 반환
 		OrderCreateResult second = orderCreateService.createOrder(command);
 
 		// then
@@ -132,9 +135,35 @@ class OrderCreateServiceIdempotencyTest {
 			.isEqualTo(8);
 	}
 
-	@DisplayName("동시에 같은 멱등키로 요청하면 한 요청만 주문을 생성하고 다른 요청은 같은 주문을 반환하거나 race window 로 실패한다")
+	@DisplayName("처리 중인 멱등키로 재요청하면 ORDER_IDEMPOTENCY_IN_PROGRESS 예외를 던진다")
 	@Test
-	void createOrder_whenConcurrentSameIdempotencyKey_returnSameOrderOrRaceFailure() throws Exception {
+	void createOrder_whenKeyAlreadyReserved_throwInProgress() {
+		// given
+		Member member = memberPersistence.save(createMember("order-in-progress"));
+		String idempotencyKey = "in-progress-key";
+
+		// 같은 키를 미리 reserve 해 처리 중 상태를 시뮬레이션한다
+		orderIdempotencyStore.reserve(member.getId(), idempotencyKey, Duration.ofSeconds(60));
+
+		OrderCreateCommand command = OrderCreateCommand.builder()
+			.memberId(member.getId())
+			.idempotencyKey(idempotencyKey)
+			.items(List.of(OrderCreateItem.builder().productId(1L).quantity(1).build()))
+			.build();
+
+		// when & then
+		assertThatThrownBy(() -> orderCreateService.createOrder(command))
+			.isInstanceOf(OrderException.class)
+			.satisfies(ex -> assertThat(((OrderException)ex).getErrorCode())
+				.isEqualTo(OrderErrorCode.ORDER_IDEMPOTENCY_IN_PROGRESS));
+
+		// cleanup
+		orderIdempotencyStore.clear(member.getId(), idempotencyKey);
+	}
+
+	@DisplayName("동시에 같은 멱등키로 요청하면 한 요청만 주문을 생성하고 다른 요청은 409를 반환한다")
+	@Test
+	void createOrder_whenConcurrentSameIdempotencyKey_oneSucceedsAndOtherReturns409() throws Exception {
 		// given
 		Member member = memberPersistence.save(createMember("order-concurrent"));
 		Product product = productPersistence.save(createProduct("product-concurrent", 1000));
@@ -187,9 +216,11 @@ class OrderCreateServiceIdempotencyTest {
 		assertThat(orderPersistence.count()).isEqualTo(1);
 		assertThat(stockPersistence.findByProductId(product.getId()).orElseThrow().getQuantity())
 			.isEqualTo(8);
-		// race window 가 발생했다면 find-first 정책상 unique 위반이 안전망 500 으로 도달한다.
+		// 동시 처리 충돌 시 ORDER_IDEMPOTENCY_IN_PROGRESS 예외가 발생한다.
 		if (raceError != null) {
-			assertThat(raceError).isInstanceOf(DataIntegrityViolationException.class);
+			assertThat(raceError).isInstanceOf(OrderException.class);
+			assertThat(((OrderException)raceError).getErrorCode())
+				.isEqualTo(OrderErrorCode.ORDER_IDEMPOTENCY_IN_PROGRESS);
 		}
 	}
 
