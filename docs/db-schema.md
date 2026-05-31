@@ -152,6 +152,9 @@ COLUMNS:
 INDEX:
 - `uk_payment_attempt_merchant_pay_key_provider_payment_id_type (merchant_pay_key, provider, payment_id, type) UNIQUE`
 
+비고:
+- unique key 대상 4개 컬럼(`merchant_pay_key`, `provider`, `payment_id`, `type`)은 `@Column(length=...)`을 명시한다 (각각 64/32/64/32). utf8mb4 + InnoDB unique key 한도 3072 bytes 안에 들어오도록 산정. 상세는 ADR-023 및 `docs/tasks/payment-attempt-unique-key-length/adr.md` 참조.
+
 ### `tbl_outbox_event`
 
 COLUMNS:
