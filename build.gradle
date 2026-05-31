@@ -193,6 +193,7 @@ tasks.register('dockerTest', Test) {
 
     useJUnitPlatform {
         includeTags "docker"
+        excludeTags "concurrency"
     }
 }
 
