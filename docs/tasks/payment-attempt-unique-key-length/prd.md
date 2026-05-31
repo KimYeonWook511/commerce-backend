@@ -14,7 +14,7 @@
 ## 목표
 
 - `tbl_payment_attempt`의 unique constraint가 DB에 정상 적용되어 ADR-011 (find-first 패턴)의 안전망이 의도대로 작동하는 상태로 복원한다.
-- 같은 류의 schema 생성 silent 실패가 재발하지 않도록 `halt_on_error` 안전망을 둔다 (test, local).
+- 같은 류의 schema 생성 silent 실패가 재발하지 않도록 `halt_on_error` 안전망을 둔다 (local). test 환경은 Testcontainer fresh MySQL의 ALTER FK DROP 무해 실패와 충돌하므로 제외하고, step 3의 단언 이중화로 회귀 감지를 대체한다.
 - `NaverPayServiceConcurrencyTest`가 unique 누락을 직접 잡는 단언 구조를 갖춘다.
 
 ## 범위
@@ -22,7 +22,7 @@
 ### 포함 범위
 
 - `PaymentAttempt` entity의 4개 컬럼(`merchantPayKey`, `paymentId`, `provider`, `type`)에 `@Column(length=...)` 명시.
-- `application-test.yml`, `application-local.yml`에 `hibernate.hbm2ddl.halt_on_error: true` 추가.
+- `application-local.yml`에 `hibernate.hbm2ddl.halt_on_error: true` 추가 (test와 prod는 제외).
 - `build.gradle` `dockerTest` task에 `excludeTags "concurrency"` 한 줄 추가.
 - `NaverPayServiceConcurrencyTest`의 단언 이중화 (데이터 invariant + 행동 invariant).
 - 루트 `docs/ADR.md`, `docs/db-schema.md`, `docs/testing-conventions.md` 동기화.
@@ -42,7 +42,7 @@
 ## 요구사항
 
 - `PaymentAttempt` 4개 컬럼 length 명시: `merchantPayKey=64`, `paymentId=64`, `provider=32`, `type=32`. 합 768 bytes (utf8mb4 기준) < 3072 한도.
-- `application-test.yml`, `application-local.yml`에 `spring.jpa.properties.hibernate.hbm2ddl.halt_on_error: true`.
+- `application-local.yml`에 `spring.jpa.properties.hibernate.hbm2ddl.halt_on_error: true`. test와 prod yml에는 추가하지 않는다.
 - `build.gradle`의 `dockerTest`에 `excludeTags "concurrency"` 추가.
 - 테스트 단언:
   - 데이터 invariant: `countAttempts(merchantPayKey, paymentId, type) == 1` (race 종료 후).
@@ -51,6 +51,7 @@
 
 ## 제약사항
 
-- prod 환경에 `halt_on_error`는 적용하지 않는다 (운영 미가동 + 추후 Flyway 도입 시 ddl-auto: validate로 가면서 자연스럽게 의미 소실).
+- `halt_on_error`는 local에만 적용한다. test는 Testcontainer fresh MySQL이 부팅 시 `ALTER TABLE ... DROP FOREIGN KEY ...`를 IF EXISTS 없이 실행해 무해 실패가 발생, halt_on_error와 충돌하므로 제외한다. prod는 운영 미가동 + 추후 Flyway 도입 시 ddl-auto: validate로 가면서 자연스럽게 의미 소실되므로 제외한다.
+- local의 `halt_on_error` 적용은 `ddl-auto: update`라는 전제에 의존한다 (drop을 수행하지 않음). 미래에 local ddl-auto가 `create-drop`/`create`로 변경되면 같은 ALTER FK DROP 충돌이 재발하므로 `halt_on_error` 적용 여부를 함께 재검토해야 한다.
 - ADR-018 (Hibernate ENUM `@JdbcTypeCode(SqlTypes.VARCHAR)`)은 "컬럼 길이는 명시하지 않는다"라고 결정되어 있다. 본 task의 ADR은 그 정책의 **좁은 예외**(multi-column unique constraint 대상 컬럼은 명시)임을 명시.
 - 로컬 MySQL 볼륨(`./mysql-data-local`)은 wipe 후 ddl-auto로 재생성한다 (사용자 환경에서 직접 처리).
