@@ -14,7 +14,7 @@
 ## 목표
 
 - `tbl_payment_attempt`의 unique constraint가 DB에 정상 적용되어 ADR-011 (find-first 패턴)의 안전망이 의도대로 작동하는 상태로 복원한다.
-- 같은 류의 schema 생성 silent 실패가 재발하지 않도록 `halt_on_error` 안전망을 둔다 (local). test 환경은 Testcontainer fresh MySQL의 ALTER FK DROP 무해 실패와 충돌하므로 제외하고, step 3의 단언 이중화로 회귀 감지를 대체한다.
+- 같은 류의 schema 생성 silent 실패가 재발하지 않도록 `halt_on_error` 안전망을 둔다 (local). test 환경은 Testcontainer fresh MySQL의 ALTER FK DROP 무해 실패와 충돌하므로 제외하고, `NaverPayServiceConcurrencyTest`의 `countAttempts == 1` 데이터 invariant로 회귀 감지를 대체한다.
 - `NaverPayServiceConcurrencyTest`가 unique 누락을 직접 잡는 단언 구조를 갖춘다.
 
 ## 범위
@@ -24,7 +24,7 @@
 - `PaymentAttempt` entity의 4개 컬럼(`merchantPayKey`, `paymentId`, `provider`, `type`)에 `@Column(length=...)` 명시.
 - `application-local.yml`에 `hibernate.hbm2ddl.halt_on_error: true` 추가 (test와 prod는 제외).
 - `build.gradle` `dockerTest` task에 `excludeTags "concurrency"` 한 줄 추가.
-- `NaverPayServiceConcurrencyTest`의 단언 이중화 (데이터 invariant + 행동 invariant).
+- `NaverPayServiceConcurrencyTest`에 `countAttempts == 1` 데이터 invariant 추가 + 클래스 단위 HikariCP 설정 명시.
 - 루트 `docs/ADR.md`, `docs/db-schema.md`, `docs/testing-conventions.md` 동기화.
 
 ### 제외 범위
@@ -46,7 +46,8 @@
 - `build.gradle`의 `dockerTest`에 `excludeTags "concurrency"` 추가.
 - 테스트 단언:
   - 데이터 invariant: `countAttempts(merchantPayKey, paymentId, type) == 1` (race 종료 후).
-  - 행동 invariant: race가 실제로 발생한 케이스에서는 errors 컬렉션에 `DataIntegrityViolationException`이 적어도 한 건 포함.
+  - errors 안의 예외 분류는 기존 `assertRaceOrPaymentError` helper(`DataIntegrityViolationException` 또는 케이스별 도메인 `PaymentException` 허용)가 검증. race 발생 자체의 가시화 단언(`anyMatch DataIntegrityViolationException`)은 환경 의존적 CI flake 위험으로 제거.
+- `NaverPayServiceConcurrencyTest`에 클래스 단위 HikariCP 설정 명시(`maximum-pool-size=30`, `minimum-idle=10`, `connection-timeout=30000`). 다른 concurrency 테스트(`OrderConcurrencyServiceTest` 등) 컨벤션과 동일 방식.
 - 루트 `docs/ADR.md`에 새 ADR 항목 추가.
 
 ## 제약사항

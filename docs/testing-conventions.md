@@ -233,7 +233,7 @@ orderPersistence.count()
 - **효과**: `ddl-auto`의 schema 생성/alter 실패가 silent로 넘어가지 않고 부팅 단계에서 즉시 실패하여 회귀를 노출한다.
 - **적용 환경**: `local`
 - **적용 제외 환경**:
-  - `test` — Testcontainer fresh MySQL 부팅 시 `ALTER TABLE ... DROP FOREIGN KEY ...`가 `IF EXISTS` 없이 실행되어 무해 실패가 발생하고 `halt_on_error`와 충돌하므로 제외. test 환경의 schema 회귀 감지는 `NaverPayServiceConcurrencyTest`의 단언 이중화(`countAttempts == 1` 데이터 invariant)로 대체한다.
+  - `test` — Testcontainer fresh MySQL 부팅 시 `ALTER TABLE ... DROP FOREIGN KEY ...`가 `IF EXISTS` 없이 실행되어 무해 실패가 발생하고 `halt_on_error`와 충돌하므로 제외. test 환경의 schema 회귀 감지는 `NaverPayServiceConcurrencyTest`의 `countAttempts == 1` 데이터 invariant로 대체한다.
   - `prod` — 운영 미가동 + 추후 Flyway 도입과 함께 `ddl-auto: validate`로 전환되면 의미가 사라진다.
 - **Fragility**: local의 `halt_on_error` 적용은 `ddl-auto: update` 전제에 의존한다. local ddl-auto가 `create-drop`/`create`로 변경되면 같은 ALTER FK DROP 충돌이 재발하므로 `halt_on_error` 적용 여부를 함께 재검토해야 한다.
 

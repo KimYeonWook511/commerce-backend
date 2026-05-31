@@ -59,7 +59,7 @@ ADR-018(Hibernate 6.x ENUM 매핑)은 "컬럼 길이는 명시하지 않고 Hibe
 
 - **test (적용 제외)**: Testcontainer로 신선한 MySQL을 띄우는 dockerTest 부팅 단계에서 Hibernate가 `ddl-auto: create-drop`의 schema drop 단계로 `ALTER TABLE ... DROP FOREIGN KEY ...`를 실행한다. MySQL은 이 구문에 `IF EXISTS`를 지원하지 않아 빈 컨테이너에서 `Table doesn't exist`로 실패한다. `halt_on_error: true`가 이 진짜 무해한 drop 실패까지 잡아 Spring 컨텍스트 로드를 실패시킨다.
   - 초기 분석은 "`drop table if exists`로 도는 게 로그에서 확인되어 무해한 drop 실패는 거의 없다"였으나, 이는 *일반 테이블 drop*에 한정된 사실이고 외래키 drop은 IF EXISTS가 없다는 점을 누락했다. 본 분석을 정정한다.
-  - test 환경의 schema 회귀 감지는 step 3의 단언 이중화(`countAttempts == 1` 데이터 invariant)가 같은 역할을 한다. 이번 사고와 동일한 unique 누락 회귀는 step 3 단언으로 곧장 잡힌다.
+  - test 환경의 schema 회귀 감지는 `NaverPayServiceConcurrencyTest`의 `countAttempts == 1` 데이터 invariant가 같은 역할을 한다. 이번 사고와 동일한 unique 누락 회귀는 이 단언으로 곧장 잡힌다.
 - **local (적용)**: ddl-auto: update. 부팅 시 drop을 수행하지 않으므로 위 충돌이 발생하지 않는다. 우리 환경은 전체 schema를 Hibernate가 만들고 외부 수동 schema가 없어 무해한 alter 실패 케이스도 거의 없다. 개발자가 부팅 시점에 문제를 즉시 인지할 수 있다.
   - **Fragility**: local의 ddl-auto가 미래에 `create-drop`/`create`로 변경되면 같은 ALTER FK DROP 충돌이 재발한다. ddl-auto 변경 시 `halt_on_error` 적용 여부를 함께 재검토해야 한다. 현 시점에는 local과 prod 모두 update를 사용하는 의도(prod 동작 검증)가 명확하므로 fragility 위험은 낮다.
 - **prod (적용 제외)**: 운영 미가동이며 추후 Flyway 도입 시 ddl-auto: validate로 가면서 `halt_on_error`의 적용 영역이 자연스럽게 사라진다.
@@ -74,8 +74,8 @@ ADR-018(Hibernate 6.x ENUM 매핑)은 "컬럼 길이는 명시하지 않고 Hibe
 ### 기대 효과
 
 - `tbl_payment_attempt`의 unique constraint이 schema에 정상 적용되어 ADR-011의 race window 안전망이 의도대로 작동한다.
-- `halt_on_error`로 같은 류 schema 회귀가 부팅 단계에서 곧장 노출된다 (local). test 환경에서는 step 3의 단언 이중화가 같은 역할을 한다.
-- `NaverPayServiceConcurrencyTest`의 단언 이중화로 향후 unique 누락 회귀를 테스트 단에서 직접 잡는다.
+- `halt_on_error`로 같은 류 schema 회귀가 부팅 단계에서 곧장 노출된다 (local). test 환경에서는 `NaverPayServiceConcurrencyTest`의 `countAttempts == 1` 데이터 invariant가 같은 역할을 한다.
+- `NaverPayServiceConcurrencyTest`의 `countAttempts == 1` 데이터 invariant로 향후 unique 누락 회귀를 테스트 단에서 직접 잡는다.
 
 ### Trade-off
 

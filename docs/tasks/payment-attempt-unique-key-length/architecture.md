@@ -10,7 +10,7 @@
 - **Domain**: `com.commerce.payment.domain.PaymentAttempt` — 4개 컬럼에 `@Column(length=...)` 명시.
 - **Application 설정**: `src/main/resources/application-test.yml`, `application-local.yml` — `hibernate.hbm2ddl.halt_on_error: true` 추가.
 - **Build script**: `build.gradle` — `dockerTest` task에 `excludeTags "concurrency"` 추가.
-- **Test 코드**: `src/test/java/com/commerce/payment/naverpay/application/concurrency/NaverPayServiceConcurrencyTest.java` — 단언 이중화.
+- **Test 코드**: `src/test/java/com/commerce/payment/naverpay/application/concurrency/NaverPayServiceConcurrencyTest.java` — `countAttempts == 1` 데이터 invariant 추가 + 클래스 단위 HikariCP 설정(`maximum-pool-size=30`, `minimum-idle=10`, `connection-timeout=30000`) 명시.
 - **Test support 재사용**: `PaymentPersistenceTestSupport.countAttempts(...)`, `countCancelAttempts(...)` (이미 존재).
 - **Root docs**: `docs/ADR.md`, `docs/db-schema.md`, `docs/testing-conventions.md` 일부 보강.
 
