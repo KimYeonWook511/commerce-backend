@@ -44,6 +44,22 @@ dockerTest의 경우, 첫 컨텍스트 로드 시 Flyway V1 적용 로그(`Succe
 - 운영 DB의 기존 ENUM 컬럼(ENUM → VARCHAR 미 ALTER 가능성, ADR-018 한계)은 운영 가동 전 V2 등 별도 마이그레이션으로 정리가 필요하다.
 - `halt_on_error`(ADR-023, `application-local.yml`)는 본 PR review 단계에서 재검토하여 제거했다. `validate` 전환으로 Hibernate가 DDL을 실행하지 않게 되어 `halt_on_error`의 발동 조건 자체가 사라졌다. 스키마 변경 실패 차단 책임은 Flyway가 가져간다. ADR-023에 후속 메모를 추가했다.
 
+## Review 단계에서 정리한 silent drift 사례들
+
+본 PR review 단계에서 Gemini Code Assist의 `tbl_outbox_event.payload tinytext` 지적을 계기로 V1__init.sql과 엔티티 사이의 다른 silent mismatch들도 함께 점검했다. 모두 ADR-018(ENUM 매핑)·ADR-023(unique 길이)과 같은 결의 사례 — *코드는 정상으로 보이지만 실제 DB schema가 silent하게 어긋난 상태* — 라 본 PR에서 일괄 정리했다.
+
+- **`tbl_outbox_event.payload`**: 엔티티 `@Lob` + length 미지정 → Hibernate가 dialect 추론으로 `tinytext`(255 bytes)로 매핑했다. 이벤트 JSON 페이로드에 부족할 수 있다. `@Lob`을 제거하고 `@JdbcTypeCode(SqlTypes.LONGVARCHAR)`로 표준 type code를 명시했다. MySQL Dialect는 LONGVARCHAR를 `text`(64KB)로 매핑하여 outbox payload(1~5KB)에 충분한 여유를 확보한다. ADR-018의 dialect 추론 의존 종식 원칙과 일관된다.
+- **`@Version` 컬럼(Order/Stock/CartItem)**: 엔티티가 `Long version;`만 명시하여 Hibernate 매핑이 `bigint`(nullable)로 떨어졌다. step 2 worker가 V1에는 도메인 의도(`NOT NULL DEFAULT 0`)를 직접 박았지만 엔티티엔 그 의도가 표현되지 않은 상태였다. `@Column(nullable = false)`를 추가해 코드 layer에도 의도를 명시했다. `DEFAULT 0`은 DB의 책임 영역(raw INSERT/외부 도구 우회 안전망)이라 엔티티는 신경 쓰지 않는다. JPA 정상 흐름에서는 Hibernate가 `@Version`을 자동으로 0L로 set하므로 NULL이 DB로 갈 일도 없다.
+- **`BaseTimeEntity`의 `created_at`/`updated_at`**: 엔티티가 nullable 의도가 아니었음에도 `@Column(nullable = false)`를 명시하지 않아 V1에서 `DEFAULT NULL`로 떨어진 상태였다. BaseTimeEntity에 `@Column(nullable = false)`를 추가하고 V1의 audit 컬럼들도 `NOT NULL`로 정리했다.
+- **단일 unique 제약의 이름**: 엔티티가 `@Column(unique = true)` 또는 `@JoinColumn(unique = true)`만 사용하면 Hibernate가 자동 hash 이름(예: `UK31to4n8j2vslkf7jvfo408sta`)을 생성한다. `docs/db-schema.md`의 컨벤션(`uk_<target>_<columns>`)을 따르지 않는 상태였다. 5개 엔티티(Member/Order/Stock/Payment/OutboxEvent)에서 `@Table(uniqueConstraints = ...)`로 컨벤션 이름을 명시하고 V1의 unique 이름도 일치시켰다. 향후 dump 다시 떠도 회귀하지 않는다.
+- **FK 제약의 이름**: 엔티티가 `@JoinColumn(name = ...)`만 사용하면 Hibernate가 FK 이름도 자동 hash(예: `FKo8mybc2mw82rhti4t1n9i1d0e`)로 생성한다. unique와 같은 결의 컨벤션 위반이라 5개 엔티티(Order/OrderItem/Payment/Stock/StockHistory)에 `@JoinColumn(... foreignKey = @ForeignKey(name = "fk_..."))`을 명시하고 V1의 FK 6개도 `fk_<source_table>_<source_columns>` 컨벤션 이름으로 일치시켰다. `docs/db-schema.md`의 네이밍 규칙에 FK 컨벤션을 새로 추가했다. CartItem(`member_id`, `product_id`)과 StockHistory(`admin_member_id`)처럼 의도적으로 FK 없는 곳은 ADR-020 cross-aggregate ID 참조 패턴 그대로 유지했다.
+- **V1의 CHECK 제약**: Hibernate가 `@Enumerated(STRING)` 컬럼에 자동 생성한 `CHECK (column in (...))` 제약이 V1에 굳혀져 있었다. Hibernate validate는 CHECK 내용을 검증하지 않으므로 Java enum에 새 값을 추가하면 validate는 통과하지만 INSERT 시 런타임 실패하는 silent mismatch가 잠재했다. ADR-024가 명시한 "validate가 모든 drift를 잡지 못한다"의 또 다른 사례. V1에서 CHECK 제약을 모두 제거하고 enum 유효성은 애플리케이션 layer가 보장하도록 위임했다. 향후 ddl-auto: create 기반 dump 시 Hibernate가 CHECK를 또 자동 생성하므로 의식적으로 제거가 필요하다. 향후 task에서 Hibernate 설정 또는 엔티티 어노테이션 차원에서 CHECK 자동 생성을 끄는 방법을 검토할 가치가 있다.
+- **V1의 COLLATE / 컬럼 명시**: V1이 모든 varchar 컬럼에 `COLLATE utf8mb4_unicode_ci`를 박고 있었다. 테이블 default와 동일한 collation을 컬럼별로 또 명시하는 mysqldump의 raw 결과를 worker가 그대로 둔 것. 컬럼별 COLLATE를 모두 제거해 테이블 default 상속에 맡겼다. 테이블 default도 MySQL 5.7 기반 `utf8mb4_unicode_ci`에서 MySQL 8.0 기본인 `utf8mb4_0900_ai_ci`(UCA 9.0 기반)로 갱신했다.
+
+## 본 PR의 메타 관찰 — fragile dependency 메모는 plan trigger로
+
+`halt_on_error` 누락이 본 PR에서 초기 plan 단계에 잡히지 않은 원인을 돌아보면, ADR-023이 "halt_on_error는 ddl-auto: update 전제에 묶이며, local ddl-auto 변경 시 함께 재검토해야 한다 (fragile dependency)"라고 명시했음에도 plan 작성 시 그 메모를 의존 그래프 trigger로 활용하지 못했기 때문이다. 향후 큰 설정 전환 task에서는 ADR에 "fragile dependency", "depends on X", "couples with Y" 같은 메모가 있는 항목들을 plan 단계에서 의식적으로 훑는 것을 컨벤션화할 가치가 있다.
+
 ## 다음에 비슷한 결정을 할 때 참고할 것
 
 이 결정은 시점 의존적이다. 운영 DB 미가동이라는 조건이 "V1 단일 베이스라인"을 가능하게 했다. 운영 가동 후에는 baseline-on-migrate, 운영 dump, checksum 검증 등 절차가 복잡해진다. 도입 결정이 지연될수록 절차 비용이 기하급수적으로 늘어나므로 "Flyway는 나중에 도입하면 된다"는 판단은 가동 여부를 함께 고려해야 한다.
