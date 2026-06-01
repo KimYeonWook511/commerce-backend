@@ -37,7 +37,7 @@
 
 ### 배경
 
-`runPgCancel` 내부 단계 중 `isCompensationRequired`가 `@Transactional(REQUIRES_NEW)`로 격리된다. 클래스 레벨 `@Transactional`이 붙으면 이 메서드가 외부 트랜잭션을 이어받아 격리가 깨진다.
+`runPgCancel` 의 단계들(`failIfRequested`, `isCompensationRequired`, `getOrCreate`, `succeed`/`fail`)은 각자 자기 `@Transactional` 어노테이션을 가져 독립 commit 된다.
 
 ### 결정 내용
 
@@ -45,9 +45,12 @@
 
 ### 근거
 
-`isCompensationRequired`의 `REQUIRES_NEW`는 ADR-014에서 race-safe하게 보상 필요 여부를 판단하기 위한 핵심 격리다. 외부 트랜잭션 1차 캐시에 오염되지 않아야 한다. 클래스 레벨 tx가 없어야 이 격리가 보장된다.
+보상 흐름은 PG 응답과의 정합성을 단계별로 맞추는 작업이다. 단일 트랜잭션으로 묶이면 한 단계 실패가 이전 단계의 진행까지 롤백시켜 부분 진행 보존이 불가능해진다. 단계별 독립 commit 이 유지되어야 일부 실패에도 진행한 부분(예: `failIfRequested` 로 상태 전이된 approve attempt, `getOrCreate` 로 생성된 cancel attempt)이 보존된다.
+
+또한 `isCompensationRequired` 는 외부 트랜잭션 없이 호출되는 위치이므로 자체 `@Transactional(readOnly = true)` 만으로 항상 커밋된 DB 상태를 기준으로 race-safe 판단이 가능하다 (ADR-014).
 
 ### 결과
 
-- `runPgCancel`을 직접 `@Transactional` 없이 호출. 각 단계(failIfRequested, isCompensationRequired, getOrCreate, succeed/fail)가 각자의 @Transactional로 자기 트랜잭션을 연다.
-- race-safe성 보존 (ADR-014 정책 그대로 유지).
+- `runPgCancel`을 `@Transactional` 없이 호출. 각 단계가 자기 트랜잭션으로 동작.
+- 부분 진행 보존 정책 유지.
+- race-safe 보상 판단 (ADR-014) 유지.

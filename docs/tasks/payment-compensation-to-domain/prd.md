@@ -52,7 +52,7 @@
 
 ## 제약사항
 
-- `PaymentApprovalCompensationService`에 클래스 레벨 `@Transactional`을 붙이지 않는다. `isCompensationRequired`의 `REQUIRES_NEW` 격리가 깨져 race 정책이 무너진다
+- `PaymentApprovalCompensationService`에 클래스 레벨 `@Transactional`을 붙이지 않는다. 각 단계가 독립 commit 되어야 일부 실패 시 진행한 부분이 보존된다 (ADR-T2)
 - `payment.application` 코드가 `NaverPayCancelResult`를 import하지 않아야 한다
 - 각 단계(failIfRequested, isCompensationRequired, getOrCreate, succeed/fail)는 각자의 트랜잭션 경계를 그대로 유지한다
 - task A가 develop에 merge된 상태에서 진행한다 (선행 조건 충족 ✅)

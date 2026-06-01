@@ -76,7 +76,7 @@ PaymentCancellationAttemptService               ← 클래스 레벨 @Transactio
 
 PaymentApprovalService                          ← 클래스 레벨 @Transactional 제거 (이 task에서 정리)
   @Transactional(readOnly = true)                       findPaymentByMerchantPayKey
-  @Transactional(readOnly = true, REQUIRES_NEW)         isCompensationRequired
+  @Transactional(readOnly = true)                       isCompensationRequired
   @Transactional                                        completeApprovedPayment
 ```
 
