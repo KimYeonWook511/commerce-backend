@@ -6,6 +6,8 @@ import static org.mockito.ArgumentMatchers.any;
 import static org.mockito.ArgumentMatchers.anyLong;
 import static org.mockito.ArgumentMatchers.anyString;
 import static org.mockito.BDDMockito.willThrow;
+import static org.mockito.Mockito.never;
+import static org.mockito.Mockito.verify;
 
 import java.time.Duration;
 import java.util.List;
@@ -258,6 +260,8 @@ class OrderCreateServiceIdempotencyTest {
 		assertThat(orderPersistence.count()).isEqualTo(1);
 		assertThat(stockPersistence.findByProductId(product.getId()).orElseThrow().getQuantity())
 			.isEqualTo(8);
+		// fallback 경로는 marker 미생성이므로 clear 호출되지 않아야 한다.
+		verify(orderIdempotencyStore, never()).clear(anyLong(), anyString());
 	}
 
 	private Member createMember(String emailPrefix) {
