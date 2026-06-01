@@ -81,7 +81,7 @@ class OrderConcurrencyServiceDeadlockTest {
 		);
 	}
 
-	@DisplayName("동시 요청에서 반대 순서로 락을 잡으면 락 대기/타임아웃이 발생할 수 있다")
+	@DisplayName("반대 순서로 락을 잡는 동시 요청에서 양쪽 다 성공하지 못하고 적어도 한 주문은 실패한다")
 	@Test
 	void createOrderWithPessimisticLock_whenOppositeOrder_mayFailWithLockTimeout() throws Exception {
 		// given
