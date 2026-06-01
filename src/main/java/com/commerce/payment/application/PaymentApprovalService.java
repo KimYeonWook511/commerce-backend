@@ -34,7 +34,7 @@ public class PaymentApprovalService {
 		return paymentRepository.findByMerchantPayKey(merchantPayKey);
 	}
 
-	// 보상 트랜잭션 시작 전 커밋된 DB 상태를 기준으로 보상 필요 여부를 판단한다.
+	// PG 보상 취소 처리 시작 전 커밋된 DB 상태를 기준으로 보상 필요 여부를 판단한다.
 	@Transactional(readOnly = true)
 	public boolean isCompensationRequired(String merchantPayKey) {
 		return findPaymentByMerchantPayKey(merchantPayKey).isEmpty();
