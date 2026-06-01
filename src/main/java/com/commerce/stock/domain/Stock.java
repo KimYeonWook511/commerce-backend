@@ -14,6 +14,7 @@ import jakarta.persistence.Id;
 import jakarta.persistence.JoinColumn;
 import jakarta.persistence.OneToOne;
 import jakarta.persistence.Table;
+import jakarta.persistence.UniqueConstraint;
 import jakarta.persistence.Version;
 import lombok.AccessLevel;
 import lombok.Builder;
@@ -21,7 +22,9 @@ import lombok.Getter;
 import lombok.NoArgsConstructor;
 
 @Entity
-@Table(name = "tbl_stock")
+@Table(name = "tbl_stock", uniqueConstraints = {
+	@UniqueConstraint(name = "uk_stock_product_id", columnNames = {"product_id"})
+})
 @NoArgsConstructor(access = AccessLevel.PROTECTED)
 @Getter
 public class Stock extends BaseTimeEntity {
@@ -31,10 +34,11 @@ public class Stock extends BaseTimeEntity {
 	private Long id;
 
 	@Version
+	@Column(nullable = false)
 	private Long version;
 
 	@OneToOne(fetch = FetchType.LAZY)
-	@JoinColumn(name = "product_id", nullable = false, unique = true)
+	@JoinColumn(name = "product_id", nullable = false)
 	private Product product;
 
 	@Column(nullable = false)

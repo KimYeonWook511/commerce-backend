@@ -33,7 +33,8 @@ import org.hibernate.type.SqlTypes;
 
 @Entity
 @Table(name = "tbl_order", uniqueConstraints = {
-	@UniqueConstraint(name = "uk_order_member_idempotency", columnNames = {"member_id", "idempotency_key"})
+	@UniqueConstraint(name = "uk_order_member_idempotency", columnNames = {"member_id", "idempotency_key"}),
+	@UniqueConstraint(name = "uk_order_merchant_pay_key", columnNames = {"merchant_pay_key"})
 })
 @NoArgsConstructor(access = AccessLevel.PROTECTED)
 @Getter
@@ -44,6 +45,7 @@ public class Order extends BaseTimeEntity {
     private Long id;
 
 	@Version
+	@Column(nullable = false)
 	private Long version;
 
 	@ManyToOne(fetch = FetchType.LAZY)
@@ -58,7 +60,7 @@ public class Order extends BaseTimeEntity {
 	@Column(nullable = false)
 	private OrderStatus status;
 
-	@Column(unique = true)
+	@Column
 	private String merchantPayKey;
 
 	@Column

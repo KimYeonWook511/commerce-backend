@@ -13,6 +13,7 @@ import jakarta.persistence.GenerationType;
 import jakarta.persistence.Id;
 import jakarta.persistence.Index;
 import jakarta.persistence.Table;
+import jakarta.persistence.UniqueConstraint;
 import lombok.AccessLevel;
 import lombok.Builder;
 import lombok.Getter;
@@ -23,6 +24,9 @@ import org.hibernate.type.SqlTypes;
 @Entity
 @Table(
 	name = "tbl_outbox_event",
+	uniqueConstraints = {
+		@UniqueConstraint(name = "uk_outbox_event_event_id", columnNames = {"event_id"})
+	},
 	indexes = {
 		@Index(name = "idx_outbox_event_type_status_next_retry_id", columnList = "eventType,status,nextRetryAt,id")
 	}
@@ -35,7 +39,7 @@ public class OutboxEvent extends BaseTimeEntity {
 	@GeneratedValue(strategy = GenerationType.IDENTITY)
 	private Long id;
 
-	@Column(nullable = false, unique = true, length = 26)
+	@Column(nullable = false, length = 26)
 	private String eventId;
 
 	@Enumerated(EnumType.STRING)
