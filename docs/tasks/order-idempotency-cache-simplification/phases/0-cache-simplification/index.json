@@ -2,8 +2,36 @@
   "project": "order-idempotency-cache-simplification",
   "phase": "0-cache-simplification",
   "steps": [
-    { "step": 1, "name": "simplify-idempotency-cache", "status": "pending" },
-    { "step": 2, "name": "sync-docs", "status": "pending" },
-    { "step": 3, "name": "write-retrospective", "status": "pending" }
-  ]
+    {
+      "step": 1,
+      "name": "simplify-idempotency-cache",
+      "status": "completed",
+      "started_at": "2026-06-01T01:32:05+0900",
+      "summary": "OrderIdempotencyStore를 reserve/clear 2개 메서드로 단순화하고, OrderIdempotencyStatus enum과 OrderIdempotencyCacheEvent 클래스를 삭제한다. RedisOrderIdempotencyStore에서 listener·complete·getCompletedOrderId를 제거하고, OrderCreateService를 try-finally 패턴으로 재구성해 같은 키 동시 요청 시 409 ORDER_IDEMPOTENCY_IN_PROGRESS를 반환한다. PROCESSING TTL을 60초로 설정하고, 동시성 통합 테스트(OrderCreateConcurrencyIntegrationTest)를 신규 추가한다. ./gradlew test 및 ./gradlew dockerTest 모두 통과.",
+      "completed_at": "2026-06-01T01:34:45+0900"
+    },
+    {
+      "step": 2,
+      "name": "sync-docs",
+      "status": "completed",
+      "started_at": "2026-06-01T11:43:41+0900",
+      "summary": "루트 docs(ADR.md, api-spec.md, architecture.md, logging-conventions.md, testing-conventions.md)를 step 1 코드 변경에 맞춰 동기화한다. ADR-002에 in-flight 차단 전용 갱신 결정을 추가하고, api-spec.md에 409 ORDER_IDEMPOTENCY_IN_PROGRESS 응답을 명시한다. AFTER_COMMIT listener 사례 제거를 architecture.md·logging-conventions.md에 반영하고, 기존 task adr(order-idempotency, event-outbox-trace-propagation, unique-find-first-policy) 상단에 cross-reference 한 줄을 추가한다.",
+      "completed_at": "2026-06-01T11:45:44+0900"
+    },
+    {
+      "step": 3,
+      "name": "write-retrospective",
+      "status": "completed",
+      "started_at": "2026-06-01T11:47:09+0900",
+      "summary": "docs/tasks/order-idempotency-cache-simplification/retrospective.md를 작성한다. 배경(#171/#172), 결정 과정(sealed interface 거부→enum 제거, COMPLETED/FAILED 캐싱 제거, clear 위치 검토, publisher 패턴 검토 후 listener 제거, 사전 find 위치), 핵심 트레이드오프 표, 받아들인 한계, 변경 범위, 부수 이슈 close(#171/#172/#173), 미래 결정 시점, 배운 점 섹션을 포함한다.",
+      "completed_at": "2026-06-01T11:49:29+0900"
+    }
+  ],
+  "created_at": "2026-05-31T14:20:55+0900",
+  "execution": {
+    "developer_model": "sonnet",
+    "reviewer_model": "opus",
+    "commit_model": "haiku"
+  },
+  "completed_at": "2026-06-01T11:50:39+0900"
 }

@@ -1,5 +1,10 @@
 {
   "phases": [
-    { "dir": "0-cache-simplification", "status": "pending" }
+    {
+      "dir": "0-cache-simplification",
+      "status": "completed",
+      "started_at": "2026-05-31T14:20:55+0900",
+      "completed_at": "2026-06-01T11:50:39+0900"
+    }
   ]
 }
