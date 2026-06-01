@@ -15,6 +15,7 @@ DB 스키마 변경은 Flyway 마이그레이션 스크립트로 관리한다 (A
 - 테이블명: `tbl_<domain>`
 - 일반 인덱스: `idx_<target>_<columns>`
 - 유니크 키/유니크 인덱스: `uk_<target>_<columns>`
+- 외래 키: `fk_<source_table>_<source_columns>`
 
 예시:
 - `tbl_member`
