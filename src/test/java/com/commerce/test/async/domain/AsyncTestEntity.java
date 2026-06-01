@@ -9,6 +9,8 @@ import jakarta.persistence.GenerationType;
 import jakarta.persistence.Id;
 import jakarta.persistence.Table;
 import lombok.Getter;
+import org.hibernate.annotations.JdbcTypeCode;
+import org.hibernate.type.SqlTypes;
 
 @Entity
 @Table(name = "async_test")
@@ -23,7 +25,8 @@ public class AsyncTestEntity {
 	private String name;
 
 	@Enumerated(EnumType.STRING)
-	@Column(nullable = false, length = 30)
+	@JdbcTypeCode(SqlTypes.VARCHAR)
+	@Column(nullable = false)
 	private AsyncTestStatus status;
 
 	@Column(nullable = false, length = 100)

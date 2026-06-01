@@ -15,6 +15,7 @@ import jakarta.persistence.Entity;
 import jakarta.persistence.EnumType;
 import jakarta.persistence.Enumerated;
 import jakarta.persistence.FetchType;
+import jakarta.persistence.ForeignKey;
 import jakarta.persistence.GeneratedValue;
 import jakarta.persistence.GenerationType;
 import jakarta.persistence.Id;
@@ -33,7 +34,8 @@ import org.hibernate.type.SqlTypes;
 
 @Entity
 @Table(name = "tbl_order", uniqueConstraints = {
-	@UniqueConstraint(name = "uk_order_member_idempotency", columnNames = {"member_id", "idempotency_key"})
+	@UniqueConstraint(name = "uk_order_member_idempotency", columnNames = {"member_id", "idempotency_key"}),
+	@UniqueConstraint(name = "uk_order_merchant_pay_key", columnNames = {"merchant_pay_key"})
 })
 @NoArgsConstructor(access = AccessLevel.PROTECTED)
 @Getter
@@ -44,10 +46,11 @@ public class Order extends BaseTimeEntity {
     private Long id;
 
 	@Version
+	@Column(nullable = false)
 	private Long version;
 
 	@ManyToOne(fetch = FetchType.LAZY)
-	@JoinColumn(name = "member_id", nullable = false)
+	@JoinColumn(name = "member_id", nullable = false, foreignKey = @ForeignKey(name = "fk_order_member_id"))
 	private Member member;
 
 	@Column(nullable = false)
@@ -58,7 +61,7 @@ public class Order extends BaseTimeEntity {
 	@Column(nullable = false)
 	private OrderStatus status;
 
-	@Column(unique = true)
+	@Column
 	private String merchantPayKey;
 
 	@Column

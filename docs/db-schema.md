@@ -1,10 +1,21 @@
 # DB 스키마
 
+## 마이그레이션
+
+DB 스키마 변경은 Flyway 마이그레이션 스크립트로 관리한다 (ADR-024).
+
+- 위치: `src/main/resources/db/migration/`
+- 네이밍: `V{번호}__{snake_case_설명}.sql`
+- 본 문서는 테이블/컬럼/제약의 의도를 설명하는 reference이고, 실제 DDL은 `V*__*.sql`이 단일 출처다.
+- 엔티티(@Entity) 변경 PR은 같은 PR에서 대응되는 V 스크립트를 함께 작성한다. ddl-auto: validate라 누락 시 부팅 실패.
+- 적용된 V 스크립트는 수정하지 말고 새 V로 보정한다 (Flyway checksum).
+
 ## 네이밍 규칙
 
 - 테이블명: `tbl_<domain>`
 - 일반 인덱스: `idx_<target>_<columns>`
 - 유니크 키/유니크 인덱스: `uk_<target>_<columns>`
+- 외래 키: `fk_<source_table>_<source_columns>`
 
 예시:
 - `tbl_member`

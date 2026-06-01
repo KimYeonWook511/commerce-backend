@@ -35,6 +35,7 @@ public class CartItem extends BaseTimeEntity {
 	private Long id;
 
 	@Version
+	@Column(nullable = false)
 	private Long version;
 
 	@Column(name = "member_id", nullable = false)

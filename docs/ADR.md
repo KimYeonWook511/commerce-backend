@@ -159,6 +159,7 @@
 - **트레이드오프**: JPA 표준에서 벗어나 Hibernate-specific annotation을 도입한다. 다만 entity 코드는 이미 Hibernate에 결합되어 추가 부담은 미미하다. 컬럼 길이 통제권은 약해지나 enum 특성상 통제 가치가 낮다.
 - **한계**: Hibernate `ddl-auto: update`는 컬럼 타입 변경(ENUM → VARCHAR)을 보장하지 않는다. 본 코드 변경만으로는 운영 DB의 기존 ENUM 컬럼이 그대로 남을 가능성이 있다. 운영 DB ALTER는 Flyway 도입 시 일괄 마이그레이션 스크립트로 정리한다. ENUM 컬럼 생성 시점부터 본 fix 전까지 "첫 번째 enum 값이 조용히 삽입된" 의심 row 점검은 별도 후속 트랙이다.
 - **참고**: Hibernate 6.5 Migration Guide, Hibernate Discourse "String Enum mapping for MySQL only". 상세는 `docs/tasks/hibernate-enum-jdbc-type-code/adr.md` 참조.
+- **후속 (ADR-024, 2026-06-02)**: Flyway 도입으로 `ddl-auto`가 `validate`로 전환되어 *기존 row에 첫 번째 enum 값이 묻히는* 사고 경로(MySQL ddl-auto: update가 NOT NULL ENUM 컬럼 추가 시 발생)는 닫혔다. 그러나 본 결정은 (a) test 프로파일(H2 pure mode + ddl-auto: create-drop)과 prod/local(MySQL + Flyway varchar) 사이의 *INSERT 시 NOT NULL silent fill 행위 parity* 보장, (b) Hibernate dialect 변경 안전망의 두 역할로 코드 규칙으로 유지한다. dockerTest로 Hibernate SchemaValidator가 enum vs varchar의 sql type 차이를 strict 비교하지 않음(silent zone)을 확인했다 — 본 매핑이 빠지면 validate도 못 잡는 silent drift가 잠재한다. 테스트 지원 entity(`AsyncTestEntity` 등)도 동일 규칙을 따른다.
 
 ### ADR-019: 비동기/이벤트 경계 traceId 전파는 명시적 동봉 방식으로 구현한다
 - **결정**: Spring Event 경계는 이벤트 객체에 traceId 필드를 동봉하고, Outbox 경계는 `tbl_outbox_event.trace_id` 컬럼에 저장한 뒤 relay 시 MDC로 복원한다. 두 경계 모두 publisher 시점의 MDC traceId를 명시적으로 전달한다. Outbox 스케줄러 자체에서는 traceId를 발급하지 않고, MDC에 유효한 traceId가 없거나 outbox.trace_id가 NULL이면 MDC 조작 없이 진행한다(Kafka 인터셉터가 신규 UUID fallback).
@@ -197,3 +198,73 @@
 - **이유**: 옵션 A(대상 컬럼만 length 명시)가 ADR-018의 합리성을 일반 영역에서 유지하면서 본 사고만 좁게 해결한다. 옵션 B(전 컬럼 length 명시)는 ADR-018을 폐기해야 한다. `halt_on_error`를 test에 적용하지 않은 이유는 Testcontainer fresh MySQL 부팅 시 `ALTER TABLE ... DROP FOREIGN KEY ...`가 `IF EXISTS` 없이 실행되어 무해 실패가 발생하기 때문이며, test 환경의 회귀 감지는 `NaverPayServiceConcurrencyTest`의 `countAttempts == 1` 데이터 invariant로 대체한다.
 - **트레이드오프**: ADR-018과 본 ADR의 좁은 예외가 공존한다. 신규 multi-column unique 도입 시 length를 계산해 명시해야 하는 인지 부담이 있다. `halt_on_error`는 local의 `ddl-auto: update` 전제에 묶이며, local ddl-auto 변경 시 함께 재검토해야 한다 (fragile dependency). 동시성 테스트의 race 발생 자체 가시화 단언(`anyMatch DataIntegrityViolationException`)은 환경 의존성으로 CI flake 위험이 있어 제거하고, `countAttempts == 1` + `assertRaceOrPaymentError` helper 조합으로 안전망을 검증한다. 동시성 테스트는 20 thread + 보상 흐름 수용을 위해 클래스 단위 HikariCP 설정(`maximum-pool-size=30`)을 명시한다.
 - **참고**: 상세는 `docs/tasks/payment-attempt-unique-key-length/adr.md` 참조.
+- **후속 (ADR-024, 2026-06-01)**: Flyway 도입으로 `ddl-auto`가 `validate`로 전환되어 Hibernate가 DDL을 실행하지 않게 되었다. `halt_on_error`의 발동 조건(Hibernate DDL 실행 실패)이 사라져 `application-local.yml`에서 제거한다. 스키마 변경 실패 차단 책임은 Flyway가 가져간다 (마이그레이션 SQL 실패 시 Flyway 자체가 부팅 차단).
+
+### ADR-024: DB 스키마 마이그레이션 도구로 Flyway 도입 (ddl-auto: validate 전환)
+
+#### 결정
+- 의존성으로 `flyway-core` + `flyway-mysql` 추가 (Spring Boot 3.5 BOM 관리)
+- 운영/로컬/dockerTest는 `spring.jpa.hibernate.ddl-auto: validate` + Flyway 활성
+- test(H2)는 H2 + create-drop 유지, Flyway 비활성
+- 기존 스키마는 현 엔티티 기준 `src/main/resources/db/migration/V1__init.sql`로 단일 베이스라인, baseline-on-migrate 비활성
+- Spring Batch 메타테이블은 Flyway 관리 대상에서 제외하고 기존 `initialize-schema: always` 유지
+- 운영 안전망으로 `spring.flyway.clean-disabled: true` 명시
+
+#### 배경
+
+**그동안 도입을 미뤄온 입장.** DB는 단일 MySQL 하나뿐이고 다중 DB 운영 계획도 없다. 이 상황에서 Flyway는 "지금 당장 필요하지 않은 운영 복잡성"이라고 판단해 왔다. JPA `ddl-auto: update`로 충분하다는 입장을 유지했고, `application-prod.yml`의 주석 "추후 DB 마이그레이션 학습 후 validate로 변경할 것"은 이 입장의 흔적이다. 도입의 일반적 정당성(스키마 변경 이력, 환경 간 일관성, 위험한 변경 통제)은 이미 알고 있지만, 비용 대비 우선순위가 낮다고 봐 왔다.
+
+**입장을 뒤집은 두 사고.**
+
+**사고 1 — Hibernate 6 dialect 변경에 의한 ENUM silent drift (이슈 #142, ADR-018, 2026-05-26).** Hibernate 6.x부터 `@Enumerated(STRING)`이 MySQL native `ENUM` 타입으로 매핑되도록 동작이 바뀌었다. MySQL ENUM은 NOT NULL 제약을 첫 번째 값 자동 삽입으로 회피한다. `ddl-auto: update`로 NOT NULL ENUM 컬럼이 추가될 때 기존 row가 의도하지 않은 첫 번째 값(예: `OutboxEventStatus.PENDING`)으로 묻혔다. ADR-018 회고 인용: "Hibernate dialect 변경은 '조용한' 결함을 만든다. ENUM 매핑은 NOT NULL 위반을 첫 번째 값 자동 삽입으로 회피하므로, 코드 레벨에서는 정상으로 보이지만 데이터 레벨에서는 의도하지 않은 값이 묻힌다." 코드 변경(`@JdbcTypeCode(SqlTypes.VARCHAR)` 적용)으로 신규 컬럼은 막을 수 있지만, **기존 운영 DB의 ENUM 컬럼이 VARCHAR로 자동 ALTER된다는 보장이 없다.** ADR-018 회고: "본 코드 변경만으로 운영 DB의 기존 ENUM 컬럼이 자동 ALTER되지 않을 가능성이 있다. Hibernate `ddl-auto: update`는 새 컬럼 추가는 자동 수행하지만, 기존 컬럼의 타입 변경(ENUM → VARCHAR)은 보장하지 않기 때문이다."
+
+**사고 2 — multi-column unique constraint silent 미적용 (이슈 #176, PR #179, ADR-023, 2026-05-31).** `NaverPayServiceConcurrencyTest` 8개 중 7개가 `IncorrectResultSizeDataAccessException: 2 results were returned`로 실패. 초기 가설은 race window였으나 단일 테스트 실행 + Hibernate DDL 로그 dump 결과 `Specified key was too long; max key length is 3072 bytes` WARN이 발견. 근본 원인은 `tbl_payment_attempt`의 4-column unique key `uk_payment_attempt_merchant_pay_key_provider_payment_id_type`의 컬럼들이 `@Column(length=...)` 미지정 → 모두 VARCHAR(255) → utf8mb4 환경에서 4080 bytes로 InnoDB 한도 3072 bytes 초과. MySQL이 unique key 생성을 거부했지만 **Hibernate 기본 핸들러는 WARN으로만 로그하고 부팅을 계속해서**, 스키마에 unique가 빠진 채 운영돼 왔다. 동시성 테스트의 우연한 타이밍에서만 발견. payment-attempt-unique-key-length 회고 인용: "`@Column(length=...)`을 명시하지 않으면 multi-column unique constraint에서 silent하게 schema 생성이 실패할 수 있다. ddl-auto의 schema 에러는 기본적으로 silent 처리된다. `halt_on_error`가 없으면 운영 schema 정합성이 깨진 채 계속 작동할 수 있다."
+
+**두 사고의 공통 패턴.** 둘 다 *코드는 정상으로 보이지만 실제 DB schema가 silent하게 어긋난 상태*가 문제의 본질이다. `ddl-auto: update`는 (a) 컬럼 타입 변경 같은 일부 변경을 누락하고, (b) schema 변경 실패를 WARN으로만 처리한다. 단일 DB 운영이라는 단순함은 도입 미루기의 근거였지만, **단일 DB라도 schema drift는 발생한다**는 것을 두 사고가 같은 패턴으로 보여줬다. drift 원인이 외부 시스템 분기가 아니라 Hibernate dialect 변경 / silent fail이라는 코드 내부 요인이라는 점이 결정적이다.
+
+**시점 선택.** 운영 DB 미가동이라는 시간적 우위가 있다. V1 단일 스크립트로 출발하면 baseline-on-migrate, 운영 dump → baseline 작성 → checksum 검증 같은 복잡한 도입 절차가 모두 불필요하다.
+
+#### 이유 (대안 비교)
+- **대안 A: `ddl-auto: update` 유지** — 두 사고에서 드러난 silent drift 문제를 그대로 안고 가는 선택. 운영 가동 후 같은 패턴이 또 발생할 가능성이 코드 변화량에 비례한다.
+- **대안 B: `ddl-auto: validate`만 적용하고 마이그레이션은 손으로 SQL 관리** — validate는 컬럼/타입 검사를 한다. 사고 1(ENUM 타입 변경 누락)은 부팅 실패로 잡힌다. 그러나 적용 순서/이력 관리가 코드 외부로 새고, 환경 간 일관성은 사람 기억에 의존한다. 사고 2 유형(unique 누락)은 validate가 unique constraint를 검사하지 않으므로 여전히 못 잡는다 — 코드 규칙(ADR-023)에 의존해야 한다.
+- **대안 C: Liquibase** — XML/YAML/JSON DSL 추상화. MySQL/JPA 단일 스택의 본 프로젝트에서 추상화 가치 제한적이고, SQL을 그대로 다루는 게 디버깅/리뷰에 유리.
+- **선택: Flyway** — SQL을 그대로 버전 관리, Spring Boot Auto-configuration 내장. ddl-auto의 silent drift 패턴을 (a) validate로 컬럼/타입 누락 가시화, (b) 명시적 스크립트로 변경 의도 코드화, (c) `flyway_schema_history`로 환경 간 일관성 추적, 세 축으로 해소한다.
+
+#### 운영/테스트 적용 방식
+- 로컬/운영: `validate`로 전환하여 엔티티-스키마 불일치를 부팅 실패로 즉시 가시화.
+- test(H2): 그대로. 단위/슬라이스 테스트의 부팅 속도 자산이고 Flyway 스크립트는 MySQL 문법이라 H2에 직접 적용 불가.
+- dockerTest(Testcontainers MySQL): Flyway 활성. 컨테이너 싱글톤 재사용 + 컨텍스트 캐싱 + `deleteAllInBatch()` 격리 모델이 자연스럽게 맞물린다. `application-test.yml`의 `flyway.enabled: false`는 `TestcontainersSupport`의 dynamic property로 `true` override해 무효화.
+- Spring Batch 메타테이블: Flyway 관리 제외. Batch 자체 `initialize-schema` 유지. Spring Batch 버전업 시 마이그레이션 책임이 프로젝트로 옮겨오는 비용 회피.
+
+#### 트레이드오프
+- **운영 복잡성 증가 — 인정한 비용**: 도입 미뤄온 가장 큰 이유였던 "운영 복잡성"이 실제로 늘어난다. 엔티티 변경 시 마이그레이션 스크립트를 같은 PR에서 함께 작성해야 하고, 로컬에서 엔티티만 수정하고 부팅하면 실패한다. 두 사고에서 드러난 silent drift 비용보다 이 복잡성 비용이 작다고 판단해 수용한다.
+- **validate가 모든 drift를 잡지는 못한다**: validate는 컬럼/타입 누락은 잡지만 unique constraint 누락, 인덱스 누락은 검사하지 않는다. 사고 2 유형은 Flyway 도입 후에도 ADR-023 같은 코드 규칙으로 1차 방어한다. Flyway는 "변경 이력이 명시적이라 리뷰에서 잡힐 가능성을 높인다"는 간접 효과로만 기여.
+- **validate가 sql type 차이도 strict 비교하지 않는다 — silent zone**: 본 PR review 단계에서 Codex의 `AsyncTestEntity` 지적을 계기로 dockerTest를 직접 돌려 확인했다. Hibernate SchemaValidator는 enum 매핑(native ENUM) vs 스키마(varchar) 같은 sql type 차이를 strict 비교하지 않는다. 즉 ADR-018의 dialect-driven silent drift는 validate 도입 후에도 *부팅 실패로 가시화되지 않는다*. `@JdbcTypeCode(SqlTypes.VARCHAR)` 명시(ADR-018)는 Flyway 도입 후에도 (a) test(H2) ↔ prod(MySQL) INSERT 행위 parity 보장, (b) dialect 변경 안전망으로 코드 규칙으로 유지된다. ADR-018 후속 메모 참조.
+- **Flyway 10 추적 부담**: Flyway 10에서 DB별 모듈 분리(`flyway-mysql`), 일부 deprecated API, license 정책 변경. 메이저 업그레이드 시 release note 확인 책임이 추가된다.
+- **test 프로파일 회귀 미검증**: H2 + Flyway 비활성이라 마이그레이션 스크립트 자체의 회귀는 dockerTest에서만 검증된다. CI의 `ciTest`가 dockerTest를 포함하는지 확인 필요. 미포함 시 별도 후속.
+
+#### 연계 ADR / 이슈
+- ADR-018 (Hibernate 6.x ENUM 매핑 `@JdbcTypeCode(SqlTypes.VARCHAR)`) — 사고 1 직접 연계
+- ADR-023 (multi-column unique constraint 컬럼 길이 명시) — 사고 2 직접 연계, Flyway 도입 후에도 유효한 코드 규칙
+- 이슈 #142, #176, PR #179 — 두 사고의 원자료
+
+### ADR-025: enum 컬럼의 DB CHECK 제약을 두지 않는다
+- **결정**: `@Enumerated(STRING) + @JdbcTypeCode(SqlTypes.VARCHAR)`로 매핑되는 enum 컬럼에 대해 Hibernate가 자동 생성하는 `CHECK (column in (...))` 제약을 V1__init.sql과 이후 마이그레이션에서 모두 제거한다. enum 값의 유효성 보장은 애플리케이션 layer(Java enum 타입 시스템 + `@Enumerated(STRING)` Hibernate 매핑)에 위임한다.
+- **배경**: ADR-024(Flyway 도입) PR review 단계에서 외부 조언으로 enum CHECK 제약의 silent mismatch 함정이 제기되었다. 시나리오는 다음과 같다 — Java enum에 새 값을 추가하면 `ddl-auto: validate`는 "varchar 맞네" 하고 통과시킨다. 그러나 그 새 값으로 INSERT하는 순간 DB의 CHECK 제약에 걸려 런타임에 실패한다. 컴파일·기동 다 통과한 변경이 실제 저장에서 터지는, 정확히 ADR-018·ADR-023과 같은 결의 silent drift 패턴이다.
+- **이유**:
+  - **이중 안전망의 실용 가치 작음**: 본 프로젝트는 단일 백엔드, JPA 단일 INSERT 경로, 외부 시스템의 직접 INSERT 경로 없음. `@Enumerated(STRING)`이 application layer에서 invalid enum을 차단하므로 DB CHECK는 실질적으로 발동될 일이 없는 layer.
+  - **enum 진화 마찰**: 결제 fail_code(16개), 주문 status(5개), 이벤트 type 등 enum은 도메인이 자라면 종종 추가된다. CHECK를 유지하면 enum 추가마다 마이그레이션 스크립트가 필요하다.
+  - **silent mismatch 위험**: validate가 통과시킨 변경이 운영에서 INSERT 실패로 발견되는 디버깅 비용이 크다. 보통 운영 알람 → 롤백 흐름.
+  - **Hibernate가 자동 생성한다는 점**: 두는 결정도 안 두는 결정도 의식적이어야 하는데 자동이라 의식 안 됨. 본 결정은 그 자동 동작을 명시적으로 우회하는 의미.
+  - **대안 비교**:
+    - 옵션 A (CHECK 유지): 이중 안전망. enum 추가마다 V 스크립트 부담 + silent mismatch 위험 그대로.
+    - 옵션 B (V1에서만 제거, 향후 자동 생성 그대로): 다음 dump 시 회귀. 운영 부담.
+    - **옵션 C (본 결정 — 의식적 제거 + 향후 자동 생성 차단 검토)**: 마찰 최소화 + silent drift 차단.
+- **운영 적용**:
+  - 본 PR(ADR-024)에서 V1__init.sql의 모든 `*_chk_N CHECK (... in (...))` 제약을 제거했다.
+  - 향후 ddl-auto: create 기반 dump 시 Hibernate가 CHECK를 또 자동 생성한다. 의식적으로 제거가 필요하다.
+  - Hibernate 차원의 CHECK 자동 생성 차단 방법(설정 또는 엔티티 어노테이션 차원)은 후속 task에서 검토한다.
+- **트레이드오프**:
+  - **외부 시스템이 같은 DB에 INSERT하는 시나리오가 추가되면 본 결정을 재검토해야 한다**. 마이크로서비스 분리, BI/ETL 도구 직접 접근, 운영자 raw SQL 수정 같은 경로가 일상화되면 application layer만으로는 안전망이 부족할 수 있다.
+  - 본 결정이 적용되는 영역은 enum CHECK 한정이다. `NOT NULL`, `UNIQUE`, `FOREIGN KEY` 같은 다른 제약은 본 결정 대상이 아니며 각자의 도메인 의도에 따라 유지한다.
+- **연계**: ADR-018(ENUM → VARCHAR 매핑), ADR-024(Flyway 도입의 silent drift 트레이드오프 섹션)와 같은 결의 결정.
