@@ -42,7 +42,7 @@ dockerTest의 경우, 첫 컨텍스트 로드 시 Flyway V1 적용 로그(`Succe
 - `docs/db-schema.md`와 `V*__*.sql`의 역할 분담 상세 가이드. 현재 db-schema.md는 의도 설명 reference이고 DDL은 V 스크립트가 단일 출처라는 원칙을 더 명확히 정리. 별도 docs PR.
 - CI(`ciTest`)가 dockerTest를 포함하는지 점검. 미포함 시 마이그레이션 스크립트 회귀가 dockerTest에서만 잡히는 구조의 자동 검증이 미흡하다.
 - 운영 DB의 기존 ENUM 컬럼(ENUM → VARCHAR 미 ALTER 가능성, ADR-018 한계)은 운영 가동 전 V2 등 별도 마이그레이션으로 정리가 필요하다.
-- `halt_on_error`(ADR-023, `application-local.yml`)가 local `ddl-auto: validate` 전환 후에도 여전히 유의미한지 재검토. `validate`는 Hibernate가 DDL을 생성하지 않으므로 `halt_on_error`의 역할이 달라진다.
+- `halt_on_error`(ADR-023, `application-local.yml`)는 본 PR review 단계에서 재검토하여 제거했다. `validate` 전환으로 Hibernate가 DDL을 실행하지 않게 되어 `halt_on_error`의 발동 조건 자체가 사라졌다. 스키마 변경 실패 차단 책임은 Flyway가 가져간다. ADR-023에 후속 메모를 추가했다.
 
 ## 다음에 비슷한 결정을 할 때 참고할 것
 
