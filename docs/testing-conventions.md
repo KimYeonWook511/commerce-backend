@@ -309,3 +309,53 @@ OrderRepositoryMyBatisAdapterTest  (O)
 - 하나의 테스트에서 하나의 행위만 검증한다.
 - `assertThat` 체이닝으로 가독성 확보 (AssertJ 사용)
 - 예외 검증은 `assertThatThrownBy` 사용
+
+---
+
+## 동시성 테스트 작성 규칙
+
+**핵심 원칙: 타이밍을 운에 맡기지 않는다.**
+
+방법은 두 갈래다.
+
+- **결과를 인터리빙과 무관하게 만든다** (패턴 1, "제거")
+- **인터리빙을 결정론적으로 확정한다** (패턴 2, "통제")
+
+자연 race 의존(`Thread.sleep` 으로 타이밍 맞추기, latch 로 속도 맞추기, "그냥 동시에 돌렸을 때 어쩌다 일어난 일을 단언") 은 안티패턴이다.
+
+### 허용 패턴
+
+**1. 불변식 단언 패턴 (기본)** — 광범위 race 검증
+
+- **검증하려는 race 가 일어나는 컴포넌트는 진짜를 쓴다.** DB, 락, 트랜잭션 경계, application service 의 분기 — 그 race 가 거기서 발생한다면 stub 하지 않는다. stub 하는 순간 race 의 무대가 사라져 검증이 무의미해진다.
+- **그 race 와 무관한 외부 의존만 mock 한다.** 보통 외부 서드파티(PG gateway 등). idempotency store 같은 인프라도 race 검증 대상이 아니면 mock 가능. 판단 기준은 "이 컴포넌트가 race 의 무대인가?" 이지 컴포넌트 종류가 아니다.
+- **mock 이 race 를 *관찰* 하면 OK, race 의 결과를 *대신 결정* 하면 금지.** `willAnswer` 안에서 `AtomicInteger` 로 호출 횟수를 세는 건 외부 호출의 *관찰* 이라 OK. `doReturn(false).when(service).hasStock()` 은 race 무대의 결과를 가짜로 정하는 거라 금지. 같은 `willAnswer` 라도 관찰이냐 결정이냐로 갈린다.
+- **mock 응답은 thread-safe 하게 작성한다.** 외부 상태(`AtomicInteger` 등)를 참조하면 동시 호출 안전성을 직접 챙긴다.
+- N thread 동시 진입, 모든 종료 후 **인터리빙 무관 불변식** 만 단언한다.
+- 예: "재고는 음수 안 됨", "성공은 정확히 1건", "결제 완료 시 PG cancel 0회".
+- `CountDownLatch` 는 "타이밍 맞추기" 가 아니라 "모든 thread 동시 시작 / 종료 대기" 동기화 장치로만 쓴다.
+
+**2. 결정론적 제어 패턴 (예외적)** — 특정 race 시나리오를 회귀로 박제
+
+- 알려진 race 버그를 잠그는 용도에만 사용한다.
+- **응답을 강제하지 않는다.** 응답은 진짜 컴포넌트가 결정하고, 외부 통제로는 **순서/타이밍만** 확정한다.
+- 도구:
+  - `@MockitoSpyBean` + `willAnswer` 에서 `callRealMethod()` 를 호출하면서 latch 로 timing 만 통제
+  - 트랜잭션 수동 begin/commit 으로 commit 순서 확정
+- **결과 단언의 한계**: 데드락 / 락 타임아웃처럼 DB 스케줄러에 결과가 달린 경우, 어느 thread 가 winner 가 될지 결정론적으로 단언할 수 없다. 이때는 **window 자체는 결정론적으로 강제** 하되 **결과는 invariant 로 단언** 한다. "양쪽 다 성공할 수는 없다", "재고 총합은 보존된다" 같은 식. `assertThatThrownBy` 로 특정 예외를 결정론적으로 단언하면 flaky 가 된다.
+- 좋은 예: `OrderConcurrencyServiceDeadlockTest.createOrderWithPessimisticLock_whenOppositeOrder_mayFailWithLockTimeout` (DisplayName: "반대 순서로 락을 잡는 동시 요청에서 양쪽 다 성공하지 못하고 적어도 한 주문은 실패한다") — latch 로 "양쪽 thread 가 각자 첫 락을 잡을 때까지 대기" 라는 window 를 결정론적으로 강제하고, 결과는 `errors.isNotEmpty()` / `orderCount < 2L` 같은 invariant 로 단언한다.
+
+### 금지
+
+- **race 무대 컴포넌트의 분기 결과를 stub 으로 강제하기.** `doReturn(false).when(applicationService).someBranch()`, `doThrow(...).when(applicationService).businessMethod()` 같은 형태. 진짜 race 의 무대를 가린 상태에서 다중 thread 만 돌리는 건 동시성 검증이 아니다.
+- **`Thread.sleep` 으로 타이밍 맞추기.** 보조 thread 의 polling 이 필요하면 `Awaitility` 같은 조건 대기 도구를 우선 고려한다.
+- **latch 로 thread 간 *속도* 맞추기.** latch 는 *순서 / 동시 시작 / 종료 대기* 동기화 용도다.
+- **인터리빙 의존적 단언.** "Thread A 가 먼저 와서 X" 같은 단언은 flaky 의 근본 원인이다. 데드락 / DB 스케줄러 의존 결과도 마찬가지.
+
+### 테스트로 해결할 일이 아닌 경우
+
+타이밍에 따라 결과가 달라진다는 건 그 로직이 race 에 노출돼 있다는 신호다. 답은 "모든 타이밍을 테스트하자" 가 아니라 **"타이밍과 무관하게 만들자"** 다. 락 / 유니크 제약 / 원자적 UPDATE(`SET qty = qty - 1 WHERE qty >= 1`) / 트랜잭션 경계 재설계로 위험한 인터리빙을 **불가능하게 설계** 한다. 테스트는 그 설계가 작동하는지 불변식으로 확인하는 역할이다.
+
+### stress / soak 테스트
+
+JUnit / Spring 영역이 아니다. 부하 / 성능 측정은 k6, Gatling 같은 전용 도구로 별도 트랙에서 다룬다. 이 컨벤션은 결정론적 동시성 검증만 다룬다.
