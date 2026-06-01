@@ -159,6 +159,7 @@
 - **트레이드오프**: JPA 표준에서 벗어나 Hibernate-specific annotation을 도입한다. 다만 entity 코드는 이미 Hibernate에 결합되어 추가 부담은 미미하다. 컬럼 길이 통제권은 약해지나 enum 특성상 통제 가치가 낮다.
 - **한계**: Hibernate `ddl-auto: update`는 컬럼 타입 변경(ENUM → VARCHAR)을 보장하지 않는다. 본 코드 변경만으로는 운영 DB의 기존 ENUM 컬럼이 그대로 남을 가능성이 있다. 운영 DB ALTER는 Flyway 도입 시 일괄 마이그레이션 스크립트로 정리한다. ENUM 컬럼 생성 시점부터 본 fix 전까지 "첫 번째 enum 값이 조용히 삽입된" 의심 row 점검은 별도 후속 트랙이다.
 - **참고**: Hibernate 6.5 Migration Guide, Hibernate Discourse "String Enum mapping for MySQL only". 상세는 `docs/tasks/hibernate-enum-jdbc-type-code/adr.md` 참조.
+- **후속 (ADR-024, 2026-06-02)**: Flyway 도입으로 `ddl-auto`가 `validate`로 전환되어 *기존 row에 첫 번째 enum 값이 묻히는* 사고 경로(MySQL ddl-auto: update가 NOT NULL ENUM 컬럼 추가 시 발생)는 닫혔다. 그러나 본 결정은 (a) test 프로파일(H2 pure mode + ddl-auto: create-drop)과 prod/local(MySQL + Flyway varchar) 사이의 *INSERT 시 NOT NULL silent fill 행위 parity* 보장, (b) Hibernate dialect 변경 안전망의 두 역할로 코드 규칙으로 유지한다. dockerTest로 Hibernate SchemaValidator가 enum vs varchar의 sql type 차이를 strict 비교하지 않음(silent zone)을 확인했다 — 본 매핑이 빠지면 validate도 못 잡는 silent drift가 잠재한다. 테스트 지원 entity(`AsyncTestEntity` 등)도 동일 규칙을 따른다.
 
 ### ADR-019: 비동기/이벤트 경계 traceId 전파는 명시적 동봉 방식으로 구현한다
 - **결정**: Spring Event 경계는 이벤트 객체에 traceId 필드를 동봉하고, Outbox 경계는 `tbl_outbox_event.trace_id` 컬럼에 저장한 뒤 relay 시 MDC로 복원한다. 두 경계 모두 publisher 시점의 MDC traceId를 명시적으로 전달한다. Outbox 스케줄러 자체에서는 traceId를 발급하지 않고, MDC에 유효한 traceId가 없거나 outbox.trace_id가 NULL이면 MDC 조작 없이 진행한다(Kafka 인터셉터가 신규 UUID fallback).
@@ -238,6 +239,7 @@
 #### 트레이드오프
 - **운영 복잡성 증가 — 인정한 비용**: 도입 미뤄온 가장 큰 이유였던 "운영 복잡성"이 실제로 늘어난다. 엔티티 변경 시 마이그레이션 스크립트를 같은 PR에서 함께 작성해야 하고, 로컬에서 엔티티만 수정하고 부팅하면 실패한다. 두 사고에서 드러난 silent drift 비용보다 이 복잡성 비용이 작다고 판단해 수용한다.
 - **validate가 모든 drift를 잡지는 못한다**: validate는 컬럼/타입 누락은 잡지만 unique constraint 누락, 인덱스 누락은 검사하지 않는다. 사고 2 유형은 Flyway 도입 후에도 ADR-023 같은 코드 규칙으로 1차 방어한다. Flyway는 "변경 이력이 명시적이라 리뷰에서 잡힐 가능성을 높인다"는 간접 효과로만 기여.
+- **validate가 sql type 차이도 strict 비교하지 않는다 — silent zone**: 본 PR review 단계에서 Codex의 `AsyncTestEntity` 지적을 계기로 dockerTest를 직접 돌려 확인했다. Hibernate SchemaValidator는 enum 매핑(native ENUM) vs 스키마(varchar) 같은 sql type 차이를 strict 비교하지 않는다. 즉 ADR-018의 dialect-driven silent drift는 validate 도입 후에도 *부팅 실패로 가시화되지 않는다*. `@JdbcTypeCode(SqlTypes.VARCHAR)` 명시(ADR-018)는 Flyway 도입 후에도 (a) test(H2) ↔ prod(MySQL) INSERT 행위 parity 보장, (b) dialect 변경 안전망으로 코드 규칙으로 유지된다. ADR-018 후속 메모 참조.
 - **Flyway 10 추적 부담**: Flyway 10에서 DB별 모듈 분리(`flyway-mysql`), 일부 deprecated API, license 정책 변경. 메이저 업그레이드 시 release note 확인 책임이 추가된다.
 - **test 프로파일 회귀 미검증**: H2 + Flyway 비활성이라 마이그레이션 스크립트 자체의 회귀는 dockerTest에서만 검증된다. CI의 `ciTest`가 dockerTest를 포함하는지 확인 필요. 미포함 시 별도 후속.
 
