@@ -4,7 +4,6 @@ import java.time.LocalDateTime;
 import java.util.Optional;
 
 import org.springframework.stereotype.Service;
-import org.springframework.transaction.annotation.Propagation;
 import org.springframework.transaction.annotation.Transactional;
 
 import com.commerce.order.domain.repository.OrderRepository;
@@ -35,8 +34,8 @@ public class PaymentApprovalService {
 		return paymentRepository.findByMerchantPayKey(merchantPayKey);
 	}
 
-	// 항상 커밋된 DB 상태를 읽어 race-safe하게 보상 필요 여부를 판단한다. 외부 트랜잭션 1차 캐시에 오염되지 않도록 REQUIRES_NEW로 격리한다.
-	@Transactional(readOnly = true, propagation = Propagation.REQUIRES_NEW)
+	// 보상 트랜잭션 시작 전 커밋된 DB 상태를 기준으로 보상 필요 여부를 판단한다.
+	@Transactional(readOnly = true)
 	public boolean isCompensationRequired(String merchantPayKey) {
 		return findPaymentByMerchantPayKey(merchantPayKey).isEmpty();
 	}
