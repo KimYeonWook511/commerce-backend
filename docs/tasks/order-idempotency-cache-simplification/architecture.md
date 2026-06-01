@@ -48,28 +48,40 @@ public interface OrderIdempotencyStore {
 public OrderCreateResult createOrder(OrderCreateCommand command) {
     // validation ...
 
-    boolean reserved = orderIdempotencyStore.reserve(memberId, idempotencyKey, ttl);
+    boolean reserved;
+    try {
+        reserved = orderIdempotencyStore.reserve(memberId, idempotencyKey, ttl);
+    } catch (OrderIdempotencyStoreUnavailableException e) {
+        // Redis 장애로 in-flight 차단 못 한 경우 DB unique 안전망 경로로 fallback
+        return findOrExecute(command, memberId, idempotencyKey);
+    }
+
     if (!reserved) {
         throw new OrderException(OrderErrorCode.ORDER_IDEMPOTENCY_IN_PROGRESS);
     }
 
     try {
-        Optional<Order> existing = orderRepository.findByMemberIdAndIdempotencyKey(memberId, idempotencyKey);
-        if (existing.isPresent()) {
-            return OrderCreateResult.from(existing.get());
-        }
-        return orderCreateProcessor.execute(command);
+        return findOrExecute(command, memberId, idempotencyKey);
     } finally {
         orderIdempotencyStore.clear(memberId, idempotencyKey);
     }
+}
+
+private OrderCreateResult findOrExecute(OrderCreateCommand command, Long memberId, String idempotencyKey) {
+    Optional<Order> existing = orderRepository.findByMemberIdAndIdempotencyKey(memberId, idempotencyKey);
+    if (existing.isPresent()) {
+        return OrderCreateResult.from(existing.get());
+    }
+    return orderCreateProcessor.execute(command);
 }
 ```
 
 핵심 포인트:
 
 - **사전 find 가 reserve 뒤에 위치** — 캐시 hit (reserve false) 시 DB 까지 안 가도 됨 (캐시의 DB 도달 전 차단 가치 유지).
-- **finally clear** — 정상/실패 무관 마커 정리. `OrderCreateService` 가 `NOT_SUPPORTED` 이므로 finally 가 *commit 이후* 호출됨 (ADR-005 정합).
-- **race window 한정 일관성** — INSERT race 가 발생해도 reserve 가 이미 차단했으므로 도달하지 않음. 도달하는 경우는 Redis 일시 장애로 reserve fallback false 가 된 *드문* 경우뿐.
+- **finally clear** — 정상 경로의 marker 정리. `OrderCreateService` 가 `NOT_SUPPORTED` 이므로 finally 가 *commit 이후* 호출됨 (ADR-005 정합).
+- **Redis 장애 fallback** — adapter 가 `OrderIdempotencyStoreUnavailableException` 으로 변환, application 이 catch 해 DB unique 안전망 경로로 진행. marker 가 생성되지 않은 경로이므로 clear 호출하지 않는다. boolean `reserved` 시맨틱은 *진짜 예약 여부* 만 표현.
+- **race window 한정 일관성** — INSERT race 가 발생해도 reserve 가 이미 차단했으므로 도달하지 않음. 도달하는 경우는 Redis 일시 장애로 fallback 경로에 진입한 *드문* 경우뿐.
 
 ### listener / event 제거 근거
 
@@ -122,12 +134,14 @@ Req B 가 backoff 후 retry → reserve → true → 사전 find → A 의 주�
 ### Redis 일시 장애
 
 ```
-Req A: reserve → DataAccessException → catch → false 반환 (fallback)
-       → 409 응답 (잘못된 응답이지만 일시적)
-       → 클라이언트 retry
+Req A: reserve → DataAccessException (Redis down)
+       → adapter 에서 OrderIdempotencyStoreUnavailableException 으로 변환
+       → application catch → findOrExecute fallback 경로
+       → DB find empty → processor.execute → 200 정상 응답
+       (Redis 장애 중에도 단독 요청은 정상 응답)
 ```
 
-Redis 복구 후 정상 흐름 복귀. 멱등성 자체는 DB unique 제약이 최종 보장.
+Redis 복구 후 정상 흐름 복귀. 멱등성 자체는 DB unique 제약이 최종 보장. 같은 키 동시 요청이 fallback 경로 양쪽에 동시 진입할 경우 race window 가 열리지만, ADR-011 의 안전망 500 으로 흡수 (빈도 매우 낮음 전제 유지).
 
 ### 비정상 잔존 (서버 crash)
 
@@ -142,11 +156,11 @@ Req B (TTL 만료 후): reserve → true → 사전 find empty → processor 재
 
 | 케이스 | 처리 |
 | --- | --- |
-| `reserve` 가 false 반환 (동시 요청 또는 Redis fallback) | `OrderException(ORDER_IDEMPOTENCY_IN_PROGRESS)` → 409 |
-| `reserve` 의 Redis 호출 실패 (`DataAccessException`) | Infrastructure 에서 catch, false 반환 후 위와 동일 409 |
+| `reserve` 가 false 반환 (동시 요청) | `OrderException(ORDER_IDEMPOTENCY_IN_PROGRESS)` → 409 |
+| `reserve` 의 Redis 호출 실패 (`DataAccessException`) | Infrastructure adapter 에서 `OrderIdempotencyStoreUnavailableException` 변환 (log.error). `OrderCreateService` catch → fallback 경로 (`findOrExecute`) 진입 (log.warn). marker 미생성이라 clear 호출 안 함 |
 | `clear` 의 Redis 호출 실패 | Infrastructure 에서 catch, warn 로그만 (마커 잔존 → TTL 만료로 자가 회복) |
 | 사전 find empty + `processor.execute()` 비즈니스 예외 | finally clear 후 예외 그대로 throw → GlobalExceptionHandler 가 도메인 코드 처리 |
-| `processor.execute()` race 후 unique 위반 (Redis fallback 으로 reserve 가 false 못 막은 경우) | finally clear 후 안전망 500 (ADR-011 정합, race 빈도 매우 낮음) |
+| `processor.execute()` race 후 unique 위반 (Redis 장애 fallback 경로에 동시 진입) | 안전망 500 (ADR-011 정합, race 빈도 매우 낮음) |
 
 ## 테스트 포인트
 
@@ -154,7 +168,8 @@ Req B (TTL 만료 후): reserve → true → 사전 find empty → processor 재
 - `reserve` true → 사전 find 발견 → DB 결과 반환 후 marker 삭제 확인
 - `reserve` false → 409 `ORDER_IDEMPOTENCY_IN_PROGRESS` 응답, `processor.execute` 미호출
 - `processor.execute` throws → finally clear 호출, 예외 rethrow
-- Redis `DataAccessException` 시 `reserve` false 반환, `clear` warn 만 찍고 throw 없음
+- adapter 에서 Redis `DataAccessException` 시 `OrderIdempotencyStoreUnavailableException` throw. application catch 시 fallback 경로 진입해 주문 정상 생성 + marker 미생성 → clear 미호출
+- `clear` 의 Redis `DataAccessException` 은 warn 만 찍고 throw 없음
 - 동시성 통합 테스트: 같은 idempotencyKey 로 동시 두 요청 → 한쪽 200, 다른 한쪽 409
 - `OrderIdempotencyStatus` / `OrderIdempotencyCacheEvent` / `getCompletedOrderId` 잔존 참조 없음 (grep 검증)
 - listener (`handle`) 가 제거되어 `AFTER_COMMIT` 트리거 없음 (코드 부재 확인)

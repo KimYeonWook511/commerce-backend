@@ -23,6 +23,7 @@
 3. **같은 키 동시 요청 응답을 409 `ORDER_IDEMPOTENCY_IN_PROGRESS` 로 명시화.** 안전망 500 위임은 *Redis fallback 후 도달하는 race* 한 곳에만 남는다 (ADR-011 정합 유지).
 4. **`listener` / `event` 구조 제거.** `OrderCreateService` 가 `try-finally` 로 `clear()` 를 직접 호출.
 5. **PROCESSING TTL 60초** (기존 600초). lock wait timeout + α.
+6. **Redis 장애 시 도메인 예외 매핑 + application fallback.** infra adapter 가 `DataAccessException` 을 catch 해 `OrderIdempotencyStoreUnavailableException` 으로 변환, `OrderCreateService` 가 catch 해 DB unique 안전망 경로(`findOrExecute`)로 진행. `reserve` 의 boolean 반환 시맨틱은 *진짜 예약 여부* 만 표현. fallback 경로는 marker 미생성이므로 `clear` 호출하지 않는다.
 
 ### 근거
 
@@ -31,6 +32,7 @@
 - **`OrderCreateService` 가 `NOT_SUPPORTED` 이므로 finally clear 가 자동으로 commit 이후 호출된다.** ADR-005 의 *Redis 호출은 RDB commit 이후* 원칙이 listener 없이도 자연스럽게 보장된다.
 - **사전 find 를 reserve 뒤에 둠으로써 캐시의 *DB 도달 전 차단* 가치를 보존한다.** reserve false (= 동시 요청 차단) 인 경우 DB find 자체가 발생하지 않는다.
 - **race window 응답 일관성.** 사용자 입장에서 *동시 요청 = 409* 의 의도된 응답을 받게 된다. ADR-011 의 안전망 500 위임은 사라지지 않고 (Redis fallback 후의 진짜 race), 빈도가 매우 낮은 케이스로 한정된다.
+- **Redis 장애 시 boolean 시맨틱 정직성.** *예약됨* 과 *저장소 사용 불가* 를 boolean false 한 신호로 합치면 application 이 *정상 차단* 과 *시스템 사정* 을 구별 못 한다. 도메인 예외로 분리하면 application 이 명시적으로 분기 가능. port 시그니처에 Spring `DataAccessException` 이 노출되지 않아 port 추상화도 보존된다.
 
 ### 결과
 
@@ -46,7 +48,7 @@
 
 - 같은 `idempotencyKey` 재시도 시점에 DB 상태가 바뀌면 다른 응답이 나올 수 있음 (예: 첫 시도 `ProductNotFound`, 재시도 시점 상품 등록됨 → 200). *완벽한 응답 일관성* 측면에서는 약하지만, *DB 상태 기준 멱등성* 으로 본다면 정상.
 - Redis timeout (수 ms ~ 수 초) 시 응답 latency 에 그대로 영향. 비동기 listener 도입 시 분리 가능하지만 이번 작업 범위 밖. timeout 빈도가 실제 문제로 드러나면 재검토.
-- `RedisOrderIdempotencyStore` 의 `reserve` 가 Redis fallback (DataAccessException → false 반환) 으로 동시 요청 차단을 못 한 경우, 후속 race 는 여전히 안전망 500 도달 가능 (ADR-011 정합). 빈도 매우 낮다는 전제 유지.
+- Redis 장애로 fallback 경로 (도메인 예외 catch 후 DB 직접 진행) 에 동시 요청이 양쪽 동시 진입한 경우, 후속 race 는 여전히 안전망 500 도달 가능 (ADR-011 정합). 빈도 매우 낮다는 전제 유지.
 
 ## ADR-2: PROCESSING TTL 을 60초로 설정한다
 

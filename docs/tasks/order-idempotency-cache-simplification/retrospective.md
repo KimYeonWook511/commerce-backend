@@ -52,6 +52,20 @@ finally 무조건 clear 가 가장 단순하고 일관성이 있다. 비정상 �
 
 사전 DB find 를 reserve 앞에 두면 캐시가 *DB 도달 전 차단* 역할을 할 수 없게 된다. 동시 요청이 모두 DB find 를 통과한 뒤 race window 에 진입할 수 있다. reserve 뒤에 find 를 둠으로써 reserve false (= 다른 요청 처리 중) 인 경우 DB find 자체가 발생하지 않는다. 캐시의 DB 도달 전 차단 가치가 보존된다.
 
+### Redis 장애 응답 정책 (코드 리뷰 피드백 반영)
+
+코드 리뷰(Gemini high, Codex P2)에서 *`reserve()` 의 `DataAccessException` catch 시 `false` 반환은 시스템 마비를 일으킨다* 는 결함을 지적받았다. `OrderCreateService` 는 `reserve` false 를 *in-flight 충돌* 로 해석해 409 를 던지는데, *Redis 장애* 도 같은 false 신호로 합쳐져 단독 주문조차 409 로 차단되었다.
+
+처리 방향으로 세 가지를 비교했다.
+
+1. **`return false` → `return true` 한 줄 패치** — boolean 시맨틱이 *예약 성공* 이라고 거짓말. `reserve` 가 "in-flight 차단을 적용해야 하는가" 라는 *암묵적 의미* 로 바뀌어 후속 독자에게 혼란.
+2. **application 에서 직접 `DataAccessException` catch** — Auth 도메인 (`AuthTokenIssueService`) 의 기존 컨벤션과 일치. 다만 application 이 Spring DAO 예외에 직접 의존 → port 추상화 의미 약해짐.
+3. **도메인 예외 매핑 (채택)** — infra adapter 가 `DataAccessException` catch → `OrderIdempotencyStoreUnavailableException` 으로 변환. application 이 catch → fallback 분기. boolean 시맨틱은 *진짜 예약 여부* 만 표현. port 시그니처에 Spring 예외 노출 없음.
+
+3안 채택. 이유는 본 PR 의 본질이 *캐시 책임 명확화* 이므로 port 추상화 강화 방향이 PR 정신과 일치한다는 점. Auth 의 1안 패턴 통일은 별도 issue 로 후속 검토.
+
+예외 클래스 위치는 *기존 컨벤션* (모든 도메인이 `<domain>/exception/`) 에 맞춰 `com.commerce.order.exception.OrderIdempotencyStoreUnavailableException`. 부모는 `RuntimeException` 직접 상속 — `CustomException` 상속 시 `GlobalExceptionHandler.handleCustomException` 가 자동 응답 매핑되어 application catch 의도가 우회됨.
+
 ---
 
 ## 3. 핵심 트레이드오프
@@ -64,6 +78,7 @@ finally 무조건 clear 가 가장 단순하고 일관성이 있다. 비정상 �
 | Redis 마커 표현 | 단순 marker `"1"` | enum (PROCESSING/COMPLETED/FAILED) | 상태가 한 종류뿐 |
 | PROCESSING TTL | 60초 | 600초 (기존) | 비정상 잔존 자가 회복 시간 단축 |
 | 사전 find 위치 | reserve 뒤 | reserve 앞 | 캐시의 DB 도달 전 차단 가치 보존 |
+| Redis 장애 처리 | infra 매핑 + application fallback | boolean false 반환 / boolean true 반환 / application 직접 catch | boolean 시맨틱 정직성, port 추상화 강화 |
 
 ---
 
@@ -71,7 +86,7 @@ finally 무조건 clear 가 가장 단순하고 일관성이 있다. 비정상 �
 
 - 같은 `idempotencyKey` 재시도 시점에 DB 상태가 바뀌면 다른 응답이 나올 수 있다. 예: 첫 시도 `PRODUCT_NOT_FOUND`, 재시도 시점 상품 등록됨 → 200. 멱등성을 *DB 상태 기준* 으로 본다면 정상이지만 *완벽한 응답 일관성* 측면에서는 약하다.
 - Redis timeout 시 응답 latency 에 그대로 영향이 간다. 비동기 listener 도입으로 분리 가능하나 이번 작업 범위 밖.
-- Redis fallback (`DataAccessException` → `reserve` false 반환) 시 후속 race 는 여전히 안전망 500 에 도달할 수 있다 (ADR-011 정합 유지). 빈도가 매우 낮다는 전제 위에 정책이 성립한다.
+- Redis 장애 fallback 경로 (`DataAccessException` → `OrderIdempotencyStoreUnavailableException` 변환, application catch 후 DB 직접 진행) 에 동시 요청이 양쪽 진입한 경우 후속 race 는 여전히 안전망 500 에 도달할 수 있다 (ADR-011 정합 유지). 빈도가 매우 낮다는 전제 위에 정책이 성립한다.
 
 ---
 
@@ -86,6 +101,7 @@ finally 무조건 clear 가 가장 단순하고 일관성이 있다. 비정상 �
 | `OrderCreateProcessor` | event publish 제거, ttl 인자 제거 |
 | `OrderCreateService` | `attemptCreateOrder` 흡수, try-finally 단일 패턴, 409 throw 추가 |
 | `OrderErrorCode` | `ORDER_IDEMPOTENCY_IN_PROGRESS` (HTTP 409) 추가 |
+| `OrderIdempotencyStoreUnavailableException` | Redis 장애 도메인 예외 신규 (RuntimeException 직접 상속) |
 | `application*.yml` | PROCESSING TTL 600 → 60 |
 | 테스트 | `OrderCreateServiceIdempotencyTest` 시나리오 재구성, `RedisOrderIdempotencyStoreTest` 축소, `OrderCreateConcurrencyIntegrationTest` 신규 |
 | 루트 docs | ADR (4개) / api-spec / architecture / logging-conventions / testing-conventions 동기화 |
@@ -117,3 +133,4 @@ finally 무조건 clear 가 가장 단순하고 일관성이 있다. 비정상 �
 - `@TransactionalEventListener(AFTER_COMMIT)` 은 *동기 실행* 임을 정확히 이해하지 않으면 *"event 분리로 비동기 격리가 됐다"* 는 착각이 생긴다. publisher 패턴의 가치는 *비동기 분리* 또는 *다중 후처리* 에 있지, 단순히 코드 분리에 있지 않다.
 - publisher 패턴은 *진짜 비동기 분리* 또는 *다중 후처리* 가 필요할 때만 가치가 있다. *단일 책임 후처리* 에는 finally 직접 호출이 더 단순하고 명확하다.
 - 영향 범위 grep 을 미리 해두면 step 분해가 명확해진다. step 2 에서 16곳 문서 수정이 필요했던 것처럼, 코드 1곳 변경의 실제 파급이 사전에 파악돼야 작업 규모 예측이 가능하다.
+- *boolean 반환 시맨틱* 은 *정상 차단* 과 *시스템 사정* 을 동시에 표현하면 거짓말이 된다. 의미가 두 가지 필요하면 *예외로 분리* 하는 게 정직. infra 에서 도메인 예외로 매핑하면 port 시그니처에 기술 예외가 노출되지 않아 추상화도 함께 보존된다. 코드 리뷰 피드백을 단순 한 줄 패치로 받으면 시맨틱 부채가 누적된다는 사례.

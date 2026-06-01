@@ -293,7 +293,7 @@ Outbox 스케줄러 자체 로그는 traceId가 없다(독립 거래 배치 처�
 ## 저장소 및 인프라 의존성
 
 - 영속 데이터는 MySQL에 저장한다.
-- 토큰은 Redis에 저장한다. 주문 멱등성은 Redis 에 in-flight 마커만 저장 (TTL 60초). 멱등성 진실은 `tbl_order.(member_id, idempotency_key)` unique 제약.
+- 토큰은 Redis에 저장한다. 주문 멱등성은 Redis 에 in-flight 마커만 저장 (TTL 60초). 멱등성 진실은 `tbl_order.(member_id, idempotency_key)` unique 제약. Redis 장애 시 infra adapter 가 `OrderIdempotencyStoreUnavailableException` 으로 변환, application 이 catch 해 DB unique 안전망 경로로 fallback 진행 (단독 요청 정상 응답 가능).
 - 재고 복구 이벤트는 Outbox 모듈을 중심으로 Kafka로 전달한다.
 - 외부 결제는 네이버페이 PG 연동 모듈(`payment/naverpay`)을 통해 처리한다.
 

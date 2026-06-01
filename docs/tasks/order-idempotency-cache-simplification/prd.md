@@ -63,7 +63,7 @@
 - 같은 `(member_id, idempotency_key)` 로 두 요청이 동시에 들어오면 정확히 한쪽만 처리가 진행되어야 한다.
 - 처리 중인 키에 대한 후속 요청은 409 응답과 `ORDER_IDEMPOTENCY_IN_PROGRESS` 에러 코드를 받아야 한다.
 - 정상 종료(성공/비즈니스 실패 무관) 후 마커가 즉시 정리되어 같은 키 retry 가 즉시 결과를 받을 수 있어야 한다.
-- Redis 일시 장애 시 `reserve()` 가 false 를 반환하여 동시 요청 보호가 약화될 수 있음을 받아들인다. 다만 응답 자체는 이어져야 한다 (현재 `DataAccessException` catch 패턴 유지).
+- Redis 일시 장애 시에도 단독 요청은 정상 응답이 이어져야 한다. infra adapter 가 `DataAccessException` 을 `OrderIdempotencyStoreUnavailableException` 으로 변환하고 application 이 catch 해 DB unique 안전망 경로로 fallback 진행한다. 같은 키 동시 요청이 fallback 경로에 동시 진입한 race window 는 ADR-011 안전망 500 으로 흡수.
 - `OrderIdempotencyStatus` enum / `OrderIdempotencyCacheEvent` 클래스 / `RedisOrderIdempotencyStore.handle` 모두 제거 후 `src/main/` 에 잔존 참조가 없어야 한다.
 
 ## 제약사항
