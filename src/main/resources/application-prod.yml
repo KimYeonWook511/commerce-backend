@@ -11,9 +11,14 @@ spring:
       host: ${PROD_REDIS_HOST}
       port: ${PROD_REDIS_PORT}
       password: ${PROD_REDIS_PASSWORD:}
+  flyway:
+    enabled: true
+    locations: classpath:db/migration
+    validate-on-migrate: true
+    clean-disabled: true
   jpa:
     hibernate:
-      ddl-auto: update # 추후 DB 마이그레이션 학습 후 validate로 변경할 것 (운영 서버는 명시적 DB 마이그레이션 하기)
+      ddl-auto: validate
     properties:
       hibernate:
         show_sql: false
