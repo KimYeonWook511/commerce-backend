@@ -191,12 +191,7 @@ grep -n "order-idempotency-cache-simplification" docs/tasks/unique-find-first-po
 
 각 grep 명령이 결과를 반환한다.
 
-```bash
-# 회고 문서 미수정 확인
-git diff --name-only | grep "retrospective.md"
-```
-
-결과가 비어 있어야 한다 (회고 문서 수정 없음).
+회고 문서 미수정 검증은 *검증 절차* 의 `git status` 확인 + 금지사항 룰로 수행 (negative assertion 은 AC 자동 판정에 적합하지 않아 제외).
 
 ## 검증 절차
 

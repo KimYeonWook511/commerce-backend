@@ -34,7 +34,7 @@ src/test/java/
             │   │   └── OrderPersistenceTestSupport.java  ← 도메인별 삭제 + 테스트 데이터 헬퍼
             │   └── OrderRepositoryJpaAdapterTest.java    ← 슬라이스 테스트 or 통합 테스트
             └── cache/
-                └── RedisIdempotencyStoreTest.java        ← 통합 테스트
+                └── RedisOrderIdempotencyStoreTest.java   ← 통합 테스트
 ```
 
 ---
@@ -71,7 +71,7 @@ src/test/java/
 ```
 통합 테스트 검증 대상
 ├── 트랜잭션 롤백 시 DB가 실제로 롤백되는가
-├── AFTER_COMMIT 이후 Redis에 실제로 저장되는가
+├── AFTER_COMMIT 이후 Redis에 실제로 저장되는가 (향후 @TransactionalEventListener 도입 시 적용)
 └── 예외 발생 시 트랜잭션이 의도대로 처리되는가
 ```
 
@@ -166,7 +166,7 @@ static void registerProperties(DynamicPropertyRegistry registry) {
 
 ### 2. 테스트 격리 — `PersistenceCleanupTestSupport`
 
-통합 테스트에서 `@Transactional`을 사용하면 커밋이 발생하지 않아 `AFTER_COMMIT` 동작 검증이 불가능하다. 따라서 각 테스트가 `tearDown`에서 직접 데이터를 삭제한다.
+통합 테스트에서 `@Transactional`을 사용하면 커밋이 발생하지 않아 `AFTER_COMMIT` 동작 검증이 불가능하다. 따라서 각 테스트가 `tearDown`에서 직접 데이터를 삭제한다. (`@TransactionalEventListener` 도입 시에도 동일 원칙 적용)
 
 ```
 테스트 클래스의 tearDown()

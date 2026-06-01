@@ -204,13 +204,12 @@ Kafka producer/consumer 경계는 `ProducerInterceptor` + `RecordInterceptor` �
 
 ##### `@TransactionalEventListener(AFTER_COMMIT)` 경계
 
-Spring Event 경계는 이벤트 객체에 traceId를 동봉하는 방식으로 전파한다.
+현재 프로젝트 내 `@TransactionalEventListener` 사용처 0건 (`OrderIdempotencyCacheEvent` 사례는 `order-idempotency-cache-simplification` 에서 제거됨).
 
-- 이벤트 객체에 `traceId` 필드를 추가한다 (예: `OrderIdempotencyCacheEvent`).
-- publisher가 발행 시점의 `LogContext.getTraceId()`를 읽어 이벤트에 전달한다.
-- listener 진입 시 **MDC에 이미 유효한 traceId가 있으면 그대로 보존**한다. MDC가 비어있을 때만 이벤트의 traceId를 push하고, push한 경우에만 `finally`에서 `LogContext.removeTraceId()`로 정리한다.
-- 이 정책의 이유: `@TransactionalEventListener(AFTER_COMMIT)`은 **기본 동기 실행**이라 같은 HTTP 요청 스레드의 MDC에 traceId가 이미 있다. listener가 MDC에 손을 대고 `finally`에서 제거하면 그 후속 응답/access log에서 traceId가 유실되는 회귀가 발생한다. 따라서 동기 경로에서는 보존만 하고, 비동기 전환(`@Async` 또는 multicaster TaskExecutor 도입) 시에는 이벤트의 traceId가 fallback으로 사용된다.
-- `@Async`와 달리 같은 스레드에서 호출되지만 트랜잭션 경계(commit phase)를 넘으므로 명시적 전파를 채택했다. 사용처가 한 곳뿐이라 `ApplicationEventMulticaster` wrapping은 과한 추상화로 판단했다 (ADR-019 참조).
+향후 listener 도입 시:
+- 동기 listener (기본): 같은 HTTP 요청 스레드의 MDC에 traceId가 이미 있으므로 별도 처리 불필요. listener가 MDC를 건드리면 후속 응답 access log에서 traceId 유실 위험이 있으므로 주의.
+- 비동기 listener (`@Async`, multicaster TaskExecutor): 이벤트 객체에 traceId 필드를 동봉하고 listener 진입 시 MDC에 push. MDC가 비어있을 때만 push하고, push한 경우에만 `finally`에서 제거 (Outbox 패턴 참조).
+- 향후 이벤트가 5개 이상 늘어나는 시점에 `ApplicationEventMulticaster` wrapping 방식으로 재검토한다 (ADR-019 참조).
 
 ##### Outbox 경계
 

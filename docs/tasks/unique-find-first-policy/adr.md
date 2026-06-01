@@ -1,5 +1,7 @@
 # 태스크 ADR
 
+> **OrderCreate 흐름은 `order-idempotency-cache-simplification` 으로 부분 갱신됨.** race window 응답이 500 → 409 `ORDER_IDEMPOTENCY_IN_PROGRESS` 로 변경. find-first 패턴 자체는 유지.
+
 ## 결정 제목
 
 - ADR-N: DB unique 위반은 안전망 500 으로 위임하고 정상 흐름은 사전 `find` 로 처리한다 (find-first 패턴 통일)

@@ -1,5 +1,7 @@
 # 기능 ADR
 
+> **본 결정은 `order-idempotency-cache-simplification` 으로 대체됨.** 새 결정은 [해당 task adr](../order-idempotency-cache-simplification/adr.md) 참조.
+
 ## ADR-001: 멱등성 보장을 Redis 단독에서 Redis + RDB 이중 구조로 전환한다
 
 ### 배경

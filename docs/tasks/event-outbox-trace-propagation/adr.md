@@ -1,5 +1,7 @@
 # 태스크 ADR
 
+> **`OrderIdempotencyCacheEvent` 사례는 `order-idempotency-cache-simplification` 에서 제거됨.** Outbox traceId 전파 결정은 그대로 유효.
+
 ## 결정 1: Spring Event 경계는 이벤트 객체에 traceId 동봉 방식 채택
 
 ### 배경
