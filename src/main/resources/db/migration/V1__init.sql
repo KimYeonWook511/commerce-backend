@@ -141,7 +141,7 @@ CREATE TABLE `tbl_outbox_event` (
   `event_type` varchar(255) COLLATE utf8mb4_unicode_ci NOT NULL,
   `aggregate_type` varchar(255) COLLATE utf8mb4_unicode_ci NOT NULL,
   `aggregate_id` bigint NOT NULL,
-  `payload` tinytext COLLATE utf8mb4_unicode_ci NOT NULL,
+  `payload` text COLLATE utf8mb4_unicode_ci NOT NULL,
   `status` varchar(255) COLLATE utf8mb4_unicode_ci NOT NULL,
   `attempt_count` int NOT NULL,
   `last_error` varchar(1000) COLLATE utf8mb4_unicode_ci DEFAULT NULL,

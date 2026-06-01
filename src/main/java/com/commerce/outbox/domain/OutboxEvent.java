@@ -12,7 +12,6 @@ import jakarta.persistence.GeneratedValue;
 import jakarta.persistence.GenerationType;
 import jakarta.persistence.Id;
 import jakarta.persistence.Index;
-import jakarta.persistence.Lob;
 import jakarta.persistence.Table;
 import lombok.AccessLevel;
 import lombok.Builder;
@@ -44,7 +43,7 @@ public class OutboxEvent extends BaseTimeEntity {
 	@Column(nullable = false)
 	private OutboxEventType eventType;
 
-	@Lob
+	@JdbcTypeCode(SqlTypes.LONGVARCHAR)
 	@Column(nullable = false)
 	private String payload;
 
