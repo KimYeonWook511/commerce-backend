@@ -68,7 +68,7 @@ NaverPayApprovalService.completeVerifiedApproval (catch)
   → paymentApprovalCompensationService.compensateAmountMismatch(attempt, responseTotalAmount, this::pgCancel)
     → runPgCancel(attempt, AMOUNT_MISMATCH, failDetail, cancelAmount, cancelReason, pgCanceller)
       1. paymentApprovalAttemptService.failIfRequested(...)       [@Transactional REQUIRED]
-      2. paymentApprovalService.isCompensationRequired(...)       [@Transactional REQUIRES_NEW]
+      2. paymentApprovalService.isCompensationRequired(...)       [@Transactional readOnly]
          └─ false → log.warn + return
       3. paymentCancellationAttemptService.getOrCreate(...)       [@Transactional NOT_SUPPORTED]
       4. cancelAttempt.getStatus() != REQUESTED → return
