@@ -27,7 +27,7 @@
 
 **포함 범위**
 - Flyway 의존성 도입 (`flyway-core` + `flyway-mysql`)
-- 현 엔티티 12개 기준 `V1__init.sql` 생성
+- 현 도메인 엔티티 11개 기준 `V1__init.sql` 생성
 - local/prod/dockerTest 환경의 `ddl-auto: validate` 전환 및 Flyway 활성화
 - `test` 프로파일은 H2 + Flyway 비활성 유지
 - `TestcontainersSupport`의 dockerTest용 override 변경
@@ -51,7 +51,7 @@
 ## 요구사항
 
 - `flyway-core`, `flyway-mysql`이 Spring Boot 3.5.9 BOM에서 한 버전으로 해석되어야 한다.
-- `V1__init.sql`은 현 엔티티 12개의 스키마를 모두 포함해야 한다.
+- `V1__init.sql`은 현 도메인 엔티티 11개의 스키마를 모두 포함해야 한다.
 - ENUM 필드는 모두 VARCHAR로 매핑되어야 한다 (ADR-018 준수).
 - `tbl_payment_attempt`의 `uk_payment_attempt_merchant_pay_key_provider_payment_id_type` unique constraint는 컬럼 길이가 명시되어 InnoDB 한도 내여야 한다 (ADR-023 준수).
 - Spring Batch 메타테이블은 V1__init.sql에 포함되지 않아야 한다.
