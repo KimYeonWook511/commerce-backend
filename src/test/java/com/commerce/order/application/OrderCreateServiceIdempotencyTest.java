@@ -2,6 +2,10 @@ package com.commerce.order.application;
 
 import static org.assertj.core.api.Assertions.assertThat;
 import static org.assertj.core.api.Assertions.assertThatThrownBy;
+import static org.mockito.ArgumentMatchers.any;
+import static org.mockito.ArgumentMatchers.anyLong;
+import static org.mockito.ArgumentMatchers.anyString;
+import static org.mockito.BDDMockito.willThrow;
 
 import java.time.Duration;
 import java.util.List;
@@ -18,9 +22,11 @@ import org.junit.jupiter.api.Test;
 import org.springframework.beans.factory.annotation.Autowired;
 import org.springframework.boot.test.context.SpringBootTest;
 import org.springframework.context.annotation.Import;
+import org.springframework.dao.QueryTimeoutException;
 import org.springframework.test.context.ActiveProfiles;
 import org.springframework.test.context.DynamicPropertyRegistry;
 import org.springframework.test.context.DynamicPropertySource;
+import org.springframework.test.context.bean.override.mockito.MockitoSpyBean;
 
 import com.commerce.member.domain.Member;
 import com.commerce.member.infrastructure.persistence.support.MemberPersistenceTestSupport;
@@ -30,6 +36,7 @@ import com.commerce.order.application.port.OrderIdempotencyStore;
 import com.commerce.order.application.result.OrderCreateResult;
 import com.commerce.order.exception.OrderErrorCode;
 import com.commerce.order.exception.OrderException;
+import com.commerce.order.exception.OrderIdempotencyStoreUnavailableException;
 import com.commerce.order.infrastructure.persistence.support.OrderPersistenceTestSupport;
 import com.commerce.product.domain.Product;
 import com.commerce.product.domain.ProductStatus;
@@ -48,7 +55,7 @@ class OrderCreateServiceIdempotencyTest {
 	@Autowired
 	private OrderCreateService orderCreateService;
 
-	@Autowired
+	@MockitoSpyBean
 	private OrderIdempotencyStore orderIdempotencyStore;
 
 	@Autowired
@@ -222,6 +229,35 @@ class OrderCreateServiceIdempotencyTest {
 			assertThat(((OrderException)raceError).getErrorCode())
 				.isEqualTo(OrderErrorCode.ORDER_IDEMPOTENCY_IN_PROGRESS);
 		}
+	}
+
+	@DisplayName("Redis reserve 가 OrderIdempotencyStoreUnavailableException 을 던지면 DB fallback 경로로 주문이 정상 생성된다")
+	@Test
+	void createOrder_whenStoreUnavailable_fallbackToDbAndSucceed() {
+		// given
+		Member member = memberPersistence.save(createMember("order-store-unavailable"));
+		Product product = productPersistence.save(createProduct("product-fallback", 1000));
+		stockPersistence.save(createStock(product, 10));
+
+		OrderCreateCommand command = OrderCreateCommand.builder()
+			.memberId(member.getId())
+			.idempotencyKey("fallback-key")
+			.items(List.of(OrderCreateItem.builder().productId(product.getId()).quantity(2).build()))
+			.build();
+
+		// Redis 장애 시뮬레이션: reserve 호출 시 도메인 예외를 던지도록 stub 한다.
+		willThrow(new OrderIdempotencyStoreUnavailableException(new QueryTimeoutException("redis down")))
+			.given(orderIdempotencyStore).reserve(anyLong(), anyString(), any(Duration.class));
+
+		// when
+		OrderCreateResult result = orderCreateService.createOrder(command);
+
+		// then
+		// fallback 경로로 DB unique 안전망을 거쳐 주문이 정상 생성되고 재고도 차감된다.
+		assertThat(result.getOrderId()).isNotNull();
+		assertThat(orderPersistence.count()).isEqualTo(1);
+		assertThat(stockPersistence.findByProductId(product.getId()).orElseThrow().getQuantity())
+			.isEqualTo(8);
 	}
 
 	private Member createMember(String emailPrefix) {

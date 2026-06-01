@@ -7,6 +7,7 @@ import org.springframework.data.redis.core.StringRedisTemplate;
 import org.springframework.stereotype.Component;
 
 import com.commerce.order.application.port.OrderIdempotencyStore;
+import com.commerce.order.exception.OrderIdempotencyStoreUnavailableException;
 
 import lombok.RequiredArgsConstructor;
 import lombok.extern.slf4j.Slf4j;
@@ -28,8 +29,8 @@ public class RedisOrderIdempotencyStore implements OrderIdempotencyStore {
 				redisTemplate.opsForValue().setIfAbsent(buildKey(memberId, idempotencyKey), PROCESSING_MARKER, ttl)
 			);
 		} catch (DataAccessException e) {
-			log.warn("Redis reserve 실패, DB fallback으로 전환: {}", e.getMessage());
-			return false;
+			log.error("Redis reserve 실패: memberId={}, key={}", memberId, idempotencyKey, e);
+			throw new OrderIdempotencyStoreUnavailableException(e);
 		}
 	}
 

@@ -2,6 +2,7 @@ package com.commerce.order.infrastructure;
 
 import static org.assertj.core.api.Assertions.assertThat;
 import static org.assertj.core.api.Assertions.assertThatCode;
+import static org.assertj.core.api.Assertions.assertThatThrownBy;
 import static org.mockito.ArgumentMatchers.any;
 import static org.mockito.ArgumentMatchers.anyString;
 import static org.mockito.ArgumentMatchers.eq;
@@ -20,6 +21,8 @@ import org.mockito.junit.jupiter.MockitoExtension;
 import org.springframework.dao.QueryTimeoutException;
 import org.springframework.data.redis.core.StringRedisTemplate;
 import org.springframework.data.redis.core.ValueOperations;
+
+import com.commerce.order.exception.OrderIdempotencyStoreUnavailableException;
 
 @ExtendWith(MockitoExtension.class)
 class RedisOrderIdempotencyStoreTest {
@@ -65,19 +68,18 @@ class RedisOrderIdempotencyStoreTest {
 		assertThat(result).isFalse();
 	}
 
-	@DisplayName("reserve 시 DataAccessException이 발생하면 false를 반환한다")
+	@DisplayName("reserve 시 DataAccessException이 발생하면 OrderIdempotencyStoreUnavailableException을 던진다")
 	@Test
-	void reserve_whenDataAccessException_returnFalse() {
+	void reserve_whenDataAccessException_throwsStoreUnavailable() {
 		// given
 		given(redisTemplate.opsForValue()).willReturn(valueOperations);
 		given(valueOperations.setIfAbsent(anyString(), anyString(), any(Duration.class)))
 			.willThrow(new QueryTimeoutException("timeout"));
 
-		// when
-		boolean result = store.reserve(1L, "idem-key", Duration.ofSeconds(60));
-
-		// then
-		assertThat(result).isFalse();
+		// when & then
+		assertThatThrownBy(() -> store.reserve(1L, "idem-key", Duration.ofSeconds(60)))
+			.isInstanceOf(OrderIdempotencyStoreUnavailableException.class)
+			.hasCauseInstanceOf(QueryTimeoutException.class);
 	}
 
 	@DisplayName("clear 호출 시 Redis key를 삭제한다")
