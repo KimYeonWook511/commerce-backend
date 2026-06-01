@@ -60,66 +60,59 @@
 
 ## Acceptance Criteria
 
+AC executor는 한 줄 명령만 안정적으로 실행한다. 복잡한 부팅 시나리오는 "검증 절차" 섹션에서 사람이 수동으로 수행한다. AC에는 텍스트 변경 검증 + 자동 테스트만 둔다.
+
 ```bash
-# (a) yml 변경 grep 검증
 grep -q 'ddl-auto: validate' src/main/resources/application-local.yml
 grep -q 'ddl-auto: validate' src/main/resources/application-prod.yml
 grep -q 'create-drop' src/main/resources/application-test.yml
 ! grep -q '추후 DB 마이그레이션 학습' src/main/resources/application-prod.yml
-
-# (b) flyway 섹션
 grep -qE '^[[:space:]]+flyway:' src/main/resources/application-local.yml
 grep -qE '^[[:space:]]+flyway:' src/main/resources/application-prod.yml
 grep -q 'clean-disabled: true' src/main/resources/application-local.yml
 grep -q 'clean-disabled: true' src/main/resources/application-prod.yml
 grep -q 'enabled: false' src/main/resources/application-test.yml
-
-# (c) TestcontainersSupport
 grep -q 'spring.flyway.enabled' src/test/java/com/commerce/support/TestcontainersSupport.java
 grep -q '"validate"' src/test/java/com/commerce/support/TestcontainersSupport.java
 ! grep -q '"create-drop"' src/test/java/com/commerce/support/TestcontainersSupport.java
-
-# (d) 빈 MySQL에 부팅하면 Flyway가 V1 적용 후 정상 부팅
-rm -rf mysql-data-local
-docker compose -f docker-compose.local.yml up -d mysql
-for i in {1..30}; do
-  if docker exec commerce-mysql-local mysqladmin ping -h localhost -uroot -proot0511 --silent 2>/dev/null; then
-    break
-  fi
-  sleep 2
-done
-./gradlew bootRun --args='--spring.profiles.active=local' > /tmp/step3-bootrun-fresh.log 2>&1 &
-BOOTRUN_PID=$!
-timeout 180 bash -c 'until grep -q "Started CommerceApplication" /tmp/step3-bootrun-fresh.log 2>/dev/null; do sleep 2; done'
-kill $BOOTRUN_PID 2>/dev/null || true
-wait $BOOTRUN_PID 2>/dev/null || true
-grep -qE 'Migrating schema .* to version "1' /tmp/step3-bootrun-fresh.log
-grep -q 'Started CommerceApplication' /tmp/step3-bootrun-fresh.log
-
-# (e) 재부팅 시 "up to date"
-./gradlew bootRun --args='--spring.profiles.active=local' > /tmp/step3-bootrun-reboot.log 2>&1 &
-BOOTRUN_PID=$!
-timeout 180 bash -c 'until grep -q "Started CommerceApplication" /tmp/step3-bootrun-reboot.log 2>/dev/null; do sleep 2; done'
-kill $BOOTRUN_PID 2>/dev/null || true
-wait $BOOTRUN_PID 2>/dev/null || true
-grep -qE 'Schema .* (is up to date|already initialized)' /tmp/step3-bootrun-reboot.log
-
-# (f) 단위/슬라이스 테스트 (H2, Flyway 비활성)
 ./gradlew test
-
-# (g) Testcontainers MySQL + Flyway
 ./gradlew dockerTest
 ```
 
-위 모든 명령이 exit 0이어야 한다.
+위 모든 명령이 exit 0이어야 한다. `./gradlew dockerTest`가 통과한다는 것은 Testcontainers MySQL에 Flyway가 V1을 적용해 schema를 만들고 ddl-auto: validate가 통과했다는 것이므로, 부팅 + Flyway 동작은 dockerTest로 자동 검증된다.
 
 ## 검증 절차
 
-1. yml 3개와 TestcontainersSupport 변경 후 (a)~(c)로 텍스트 변경 확인.
-2. (d) 빈 DB 부팅 — Flyway가 V1을 적용했다는 로그(`Migrating schema ... to version "1"` 또는 `Successfully applied 1 migration to schema`)를 명시적으로 확인.
-3. (e) 재부팅 — 동일 명령이 "up to date" 또는 "already initialized" 로그를 찍고 부팅 성공.
-4. (f) `./gradlew test` 통과 — H2 인메모리 + Flyway 비활성이 정상 동작하는지.
-5. (g) `./gradlew dockerTest` 통과 — Testcontainers MySQL + Flyway 활성이 정상 동작하는지. dockerTest 로그 파일(`build/reports/tests/dockerTest/`)을 보고 Flyway 적용 로그 확인.
+### 자동 검증 (AC)
+위 grep 명령과 `./gradlew test`, `./gradlew dockerTest`로 자동 검증한다.
+
+### 수동 검증 (사용자가 PR 이전에 실행 권장)
+
+다음은 worker가 자동 실행하지 않는다. AC executor가 multi-line 셸 블록을 지원하지 않고, bootRun 백그라운드 + 로그 polling 패턴이 한 줄로 표현하기 어렵기 때문이다. PR review 또는 머지 전 사용자가 직접 수행한다.
+
+1. **빈 DB 부팅 검증**
+   ```bash
+   rm -rf mysql-data-local
+   docker compose -f docker-compose.local.yml up -d mysql
+   # MySQL ready 대기 후
+   ./gradlew bootRun --args='--spring.profiles.active=local'
+   ```
+   기대 로그:
+   - `Migrating schema ... to version "1 - init"` 또는 `Successfully applied 1 migration to schema "commerce_db"`
+   - `Started CommerceApplication`
+   - `flyway_schema_history` 테이블 생성
+
+2. **재부팅 — "up to date" 확인**
+   ```bash
+   # 위 부팅을 Ctrl+C로 종료한 뒤
+   ./gradlew bootRun --args='--spring.profiles.active=local'
+   ```
+   기대 로그: `Schema "commerce_db" is up to date. No migration necessary.` 또는 동등 메시지.
+
+3. **의도적 불일치 시나리오 (선택)**
+   - 엔티티에 임시 필드 추가 → bootRun → `SchemaManagementException` 류로 실패하는지 → 변경 되돌림.
+
+4. `./gradlew dockerTest` 로그 확인 (`build/reports/tests/dockerTest/`에서 첫 컨텍스트 Flyway 적용 로그 + 이후 컨텍스트 "up to date" 로그).
 
 ## 금지사항
 

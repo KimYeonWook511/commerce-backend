@@ -96,10 +96,8 @@ grep -q 'utf8mb4' src/main/resources/db/migration/V1__init.sql
 grep -q 'ENGINE=InnoDB' src/main/resources/db/migration/V1__init.sql
 ! grep -qE 'BATCH_(JOB|STEP)_' src/main/resources/db/migration/V1__init.sql
 
-# (c) 도메인 테이블 12개 모두 존재 (CartItem까지 11개 + tbl_member 포함 12개. 정확한 목록은 db-schema.md 참조)
-for t in tbl_member tbl_product tbl_stock tbl_stock_history tbl_cart_item tbl_order tbl_order_item tbl_payment tbl_payment_attempt tbl_outbox_event tbl_processed_event; do
-  grep -qE "CREATE TABLE \`?${t}\`?" src/main/resources/db/migration/V1__init.sql || { echo "missing: $t"; exit 1; }
-done
+# (c) 도메인 테이블 11개 모두 존재 (한 줄 명령 — AC executor는 multi-line shell 블록을 지원하지 않음)
+for t in tbl_member tbl_product tbl_stock tbl_stock_history tbl_cart_item tbl_order tbl_order_item tbl_payment tbl_payment_attempt tbl_outbox_event tbl_processed_event; do grep -qE "CREATE TABLE \`?${t}\`?" src/main/resources/db/migration/V1__init.sql || { echo "missing: $t"; exit 1; }; done
 
 # (d) payment-attempt unique constraint 존재 (ADR-023)
 grep -q 'uk_payment_attempt_merchant_pay_key_provider_payment_id_type' src/main/resources/db/migration/V1__init.sql
