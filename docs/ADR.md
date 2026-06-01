@@ -17,7 +17,8 @@
 | logback-setup | [`docs/tasks/logback-setup/adr.md`](tasks/logback-setup/adr.md) | 환경별 appender·encoder·rolling·마스킹 |
 | mdc-keys-unification | [`docs/tasks/mdc-keys-unification/adr.md`](tasks/mdc-keys-unification/adr.md) | MDC 키 상수 통합 |
 | memberid-mdc-propagation | [`docs/tasks/memberid-mdc-propagation/adr.md`](tasks/memberid-mdc-propagation/adr.md) | request attribute로 memberId MDC 전파 |
-| order-idempotency | [`docs/tasks/order-idempotency/adr.md`](tasks/order-idempotency/adr.md) | Redis 1차 + RDB unique 이중 보장 (ADR-002 연계) |
+| order-idempotency | [`docs/tasks/order-idempotency/adr.md`](tasks/order-idempotency/adr.md) | Redis 1차 + RDB unique 이중 보장 (ADR-002 연계) — *`order-idempotency-cache-simplification` 으로 대체됨* |
+| order-idempotency-cache-simplification | [`docs/tasks/order-idempotency-cache-simplification/adr.md`](tasks/order-idempotency-cache-simplification/adr.md) | Redis 는 in-flight 차단 전용, 동시 요청 409 IN_PROGRESS (ADR-002 갱신) |
 | payment-attempt-idempotency | [`docs/tasks/payment-attempt-idempotency/adr.md`](tasks/payment-attempt-idempotency/adr.md) | PaymentAttempt unique 멱등 (ADR-010 연계) |
 | payment-attempt-service-split | [`docs/tasks/payment-attempt-service-split/adr.md`](tasks/payment-attempt-service-split/adr.md) | approve/cancel attempt 서비스 분리 |
 | payment-attempt-state-transition-policy | [`docs/tasks/payment-attempt-state-transition-policy/adr.md`](tasks/payment-attempt-state-transition-policy/adr.md) | PaymentAttempt 상태 전이 도메인 검증 (ADR-012 연계) |
@@ -39,11 +40,23 @@
 - **트레이드오프**: 완전한 stateless 인증보다 저장소 관리 비용이 늘어난다.
 
 ### ADR-002: 주문 생성에 멱등 키 적용 (Redis 1차 방어선 + RDB unique 제약 최종 보장)
-- **결정**: 주문 생성 요청은 멱등 키를 요구하며, Redis(1차)와 RDB unique 제약(최종)으로 이중 보장한다. `idempotencyKey`는 클라이언트가 생성한 UUID이며 HTTP Header(`Idempotency-Key`)로 전달한다.
-- **멱등성 처리 흐름**: Redis `reserve()` 성공 시 주문 생성 → AFTER_COMMIT 이벤트로 Redis 캐싱 (ADR-005 구현). Redis MISS(TTL 만료 or Redis 장애) 시 바로 INSERT 시도 → `(member_id, idempotency_key)` unique 위반 시 기존 주문을 조회하여 `complete()`로 Redis 갱신 후 반환. 기존 주문을 찾지 못하면 멱등키 외 다른 제약 위반이므로 `log.error` 기록 후 `ORDER_NOT_FOUND` 반환.
-- **Redis 장애 처리**: `reserve()`, `getCompletedOrderId()`, `complete()`, `clear()`, `handle()` 실패 시 모두 Infrastructure 계층에서 예외를 catch. `reserve()`→`false`, `getCompletedOrderId()`→`empty()` fallback으로 주문 생성 경로 진입. 나머지는 warn 로그 후 무시하여 주문 반환에 영향 없음.
-- **이유**: Redis TTL 만료 후 중복 주문 생성 방지 및 Redis 장애 시에도 주문 가능성 보장.
-- **트레이드오프**: TTL 만료 후 재요청 시 재고 차감 → unique 위반 → 롤백이 드물게 발생할 수 있다. 정확성에는 문제 없다.
+
+> **본 결정은 `order-idempotency-cache-simplification` 으로 갱신됨.** 기존 결정 (Redis 1차 + RDB 최종 이중 보장, AFTER_COMMIT 결과 캐싱) 은 사용처 0건으로 폐기됨. 신규 결정은 아래 참조.
+
+- **결정 (구)**: 주문 생성 요청은 멱등 키를 요구하며, Redis(1차)와 RDB unique 제약(최종)으로 이중 보장한다. `idempotencyKey`는 클라이언트가 생성한 UUID이며 HTTP Header(`Idempotency-Key`)로 전달한다.
+- **멱등성 처리 흐름 (구)**: Redis `reserve()` 성공 시 주문 생성 → AFTER_COMMIT 이벤트로 Redis 캐싱 (ADR-005 구현). Redis MISS(TTL 만료 or Redis 장애) 시 바로 INSERT 시도 → `(member_id, idempotency_key)` unique 위반 시 기존 주문을 조회하여 `complete()`로 Redis 갱신 후 반환. 기존 주문을 찾지 못하면 멱등키 외 다른 제약 위반이므로 `log.error` 기록 후 `ORDER_NOT_FOUND` 반환.
+- **Redis 장애 처리 (구)**: `reserve()`, `getCompletedOrderId()`, `complete()`, `clear()`, `handle()` 실패 시 모두 Infrastructure 계층에서 예외를 catch. `reserve()`→`false`, `getCompletedOrderId()`→`empty()` fallback으로 주문 생성 경로 진입. 나머지는 warn 로그 후 무시하여 주문 반환에 영향 없음.
+- **이유 (구)**: Redis TTL 만료 후 중복 주문 생성 방지 및 Redis 장애 시에도 주문 가능성 보장.
+- **트레이드오프 (구)**: TTL 만료 후 재요청 시 재고 차감 → unique 위반 → 롤백이 드물게 발생할 수 있다. 정확성에는 문제 없다.
+
+#### ADR-002 갱신 (`order-idempotency-cache-simplification`): Redis in-flight 차단 + DB unique 제약 최종 보장
+
+- **결정**: 주문 생성 요청은 멱등 키를 요구하며, Redis 는 in-flight 차단 전용, RDB unique 제약이 멱등성 진실의 단일 원천이다. `idempotencyKey` 는 클라이언트가 생성한 UUID 이며 HTTP Header (`Idempotency-Key`) 로 전달한다.
+- **흐름**: Redis `reserve()` 성공 시 주문 생성 → finally `clear()` 로 마커 즉시 정리. Redis `reserve()` 실패 (다른 요청 처리 중) 시 409 `ORDER_IDEMPOTENCY_IN_PROGRESS` 응답. 클라이언트는 backoff 재시도.
+- **Redis 장애 처리**: `reserve()` 의 `DataAccessException` 은 Infrastructure adapter 에서 `OrderIdempotencyStoreUnavailableException` 으로 변환 (log.error). `OrderCreateService` 가 catch 해 DB unique 제약 안전망 경로(`findOrExecute`)로 fallback 진행 (log.warn, 정상 응답 가능). marker 미생성 경로이므로 `clear()` 호출하지 않는다. `clear()` 의 `DataAccessException` 은 Infrastructure 에서 warn 만 (마커 잔존은 60초 TTL 만료로 자가 회복).
+- **PROCESSING TTL**: 60초. MySQL `innodb_lock_wait_timeout` (50초) + α.
+- **이유**: 결과 캐싱 (COMPLETED / FAILED) 은 DB unique index find 대비 latency 차이 ms 미만이고, 캐시-DB 정합성 위험만 추가. 캐시 책임을 *in-flight 차단* 한 가지로 좁히면 인터페이스가 2개 메서드로 단순해진다.
+- **트레이드오프**: 같은 키 재시도 시점에 DB 상태가 바뀌면 다른 응답이 나올 수 있음 (멱등성은 DB 상태 기준). Redis timeout 시 응답 latency 영향 (비동기 listener 도입은 별도 작업).
 
 ### ADR-003: 재고 차감 기본 전략으로 비관적 락 사용
 - **결정**: 주문 경로의 재고 차감은 비관적 락 기반 흐름을 기본으로 사용한다.
@@ -61,6 +74,7 @@
 - **트레이드오프**: RDB 커밋 완료 ~ Redis 캐싱 완료 사이의 짧은 gap에서 동일 키 요청이 오면 캐시 MISS로 처리되어 중복 실행 가능성이 있다.
 - **기능별 판단 기준**: 기본값은 AFTER_COMMIT 분리다. Redis 장애 시 RDB도 롤백해야 하는 정합성 최우선 상황에서는 동일 트랜잭션을 택하고, 해당 기능 ADR에 이유를 명시한다.
 - **주의사항**: AFTER_COMMIT 시점은 트랜잭션이 이미 종료된 이후다. 핸들러 안에서 추가 DB 작업이 필요하다면 `Propagation.REQUIRES_NEW`로 새 트랜잭션을 열어야 한다. Redis만 다루는 경우라면 불필요하다.
+- **주문 멱등성 캐시는 본 정책 적용 대상에서 제외** (`order-idempotency-cache-simplification` 결정). `OrderCreateService` 가 `NOT_SUPPORTED` 라 `try-finally` 직접 호출이 자동으로 commit 이후 실행됨. listener 우회 불필요.
 
 ### ADR-006: application 계층 클래스명은 Service suffix를 사용한다
 - **결정**: 유스케이스 단일 책임 구조를 유지하되, 클래스 suffix는 `UseCase` 대신 `Service`로 명명한다.
@@ -95,7 +109,7 @@
 - **결정**: Application 계층 6곳(`MemberRegistrationService`, `PaymentApprovalService`, `PaymentApprovalAttemptService`, `PaymentCancellationAttemptService`, `OrderCreateService`, `StockRestoreOutboxConsumeService`) 모두 `DB find → 없으면 insert → 충돌 시 500` 본질 흐름으로 통일한다. Application 과 Adapter 어디서도 `DuplicateKeyException` 을 catch 하지 않는다. `GlobalExceptionHandler` 에 `DataAccessException` 부모 핸들러(`COMMON-500-2`) 를 추가해 DAO 카테고리 fallback 을 stack trace 와 함께 500 으로 처리한다. ADR-002 의 `(member_id, idempotency_key)` unique 위반 fallback 재조회 로직은 본 정책으로 대체되어, 정당한 멱등 재요청은 Redis reserve 성공 후 DB find 사전 체크로 흡수하고 race window 충돌은 안전망 500 으로 위임한다.
 - **배경**: PR #106 (`docs/tasks/db-constraint-violation-handling/`) 에서 5곳을 `DuplicateKeyException` 좁은 catch 로 정리했으나 회고에서 "Application 이 인프라 예외 타입에 직접 의존한다" 는 부채가 분리되었다 (Issue #105). 후속 처리 옵션으로 (A) catch 를 Adapter 로 이동, (B) 5곳 모두 find-first 통일, (C) `Exception.class` fallback stack trace 보강만 검토했다. 옵션 A 는 5곳 처리 동작(멱등 흡수 / 도메인 예외 변환 / silent skip) 이 모두 달라 공통 변환 레이어가 의미 없고 도메인 매핑 지식이 Adapter 로 새는 문제가 있었다.
 - **결정 근거**: 5곳의 unique 키는 모두 사용자 입력 식별자(email, merchantPayKey) 또는 idempotency key 기반이라 정상 흐름에서 동시 충돌 확률이 매우 낮다. 트랜잭션도 짧아 race window 가 좁다. find-first 패턴은 "트랜잭션 짧음 + 충돌 확률 낮음" 두 조건이 만족될 때 race window 비용이 안전망 500 처리로 충분히 흡수된다. 본 5곳은 이 조건을 만족한다. 충돌이 잦을 것으로 예상되는 시나리오(예: 캐시 미스 후 동시 다발 insert, 대규모 일괄 처리 race) 에는 본 정책을 적용하지 않고 try-save-catch 패턴이 더 적합하며, 향후 새 unique 제약 도입 시 위 두 조건으로 패턴을 선택한다. `DataAccessException` 부모 핸들러 추가는 운영 모니터링에서 DAO 카테고리 예외를 일반 `Exception` fallback 과 구분 가능하게 한다.
-- **결과**: PR #106 정책(`DuplicateKeyException` 좁은 catch + 5곳 도메인 매핑) 은 폐기된다. 행위 변경은 race window 한정이다 — Member 가입 race 와 PaymentApproval race 는 4xx → 500, PaymentAttempt 2곳 race 는 200(멱등 흡수) → 500, StockRestoreOutbox race 는 200(silent skip) → 500, OrderCreate 는 DB find 사전 체크 추가로 행위 변경 없음. 정상 멱등/중복 흐름은 모두 사전 `find` 분기로 보존된다. Application 이 `org.springframework.dao.*` 패키지에 의존하지 않게 되어 계층 의존 방향 부채가 함께 해소된다. 상세 옵션 비교와 5곳 매핑은 `docs/tasks/unique-find-first-policy/adr.md` 와 `docs/architecture.md` 의 예외 처리 섹션을 참조한다.
+- **결과**: PR #106 정책(`DuplicateKeyException` 좁은 catch + 5곳 도메인 매핑) 은 폐기된다. 행위 변경은 race window 한정이다 — Member 가입 race 와 PaymentApproval race 는 4xx → 500, PaymentAttempt 2곳 race 는 200(멱등 흡수) → 500, StockRestoreOutbox race 는 200(silent skip) → 500, OrderCreate 는 `order-idempotency-cache-simplification` 에서 race window 응답이 500 → 409 `IN_PROGRESS` 로 변경됨 (Redis fallback 후 도달하는 진짜 race 는 여전히 안전망 500). 정상 멱등/중복 흐름은 모두 사전 `find` 분기로 보존된다. Application 이 `org.springframework.dao.*` 패키지에 의존하지 않게 되어 계층 의존 방향 부채가 함께 해소된다. 상세 옵션 비교와 5곳 매핑은 `docs/tasks/unique-find-first-policy/adr.md` 와 `docs/architecture.md` 의 예외 처리 섹션을 참조한다.
 - **트레이드오프**: race 발생률이 매우 낮다는 전제 위에 정책이 성립한다. 만약 향후 어느 곳에서 race 가 잦아지면 본 ADR 의 "적용 조건" 이 깨지고 try-save-catch 로의 전환을 재검토해야 한다. `Exception.class` fallback 의 stack trace 로깅 누락은 본 ADR 에서 다루지 않는다 (DAO 카테고리는 부모 핸들러로 해결됐지만 NPE 등 일반 예외는 여전히 message-only 로깅, 별도 개선 과제).
 
 ### ADR-012: PaymentAttempt succeed/fail 메서드는 상태 전이를 도메인에서 검증한다
@@ -149,7 +163,7 @@
 ### ADR-019: 비동기/이벤트 경계 traceId 전파는 명시적 동봉 방식으로 구현한다
 - **결정**: Spring Event 경계는 이벤트 객체에 traceId 필드를 동봉하고, Outbox 경계는 `tbl_outbox_event.trace_id` 컬럼에 저장한 뒤 relay 시 MDC로 복원한다. 두 경계 모두 publisher 시점의 MDC traceId를 명시적으로 전달한다. Outbox 스케줄러 자체에서는 traceId를 발급하지 않고, MDC에 유효한 traceId가 없거나 outbox.trace_id가 NULL이면 MDC 조작 없이 진행한다(Kafka 인터셉터가 신규 UUID fallback).
 - **배경**: ADR-017(Kafka traceId 전파)로 Kafka 경계는 해결됐으나, `@TransactionalEventListener(AFTER_COMMIT)`과 Outbox relay 경계에서는 여전히 traceId가 단절되어 결제 승인 → outbox 발행 → kafka consume → 재고 복구 흐름과 주문 생성 → Redis 멱등성 캐시 흐름을 단일 traceId로 추적할 수 없었다. Spring Event는 (A) 이벤트 객체에 traceId 동봉, (B) `ApplicationEventMulticaster` wrapping을 비교했다. Outbox는 (A) 스케줄러 진입 시 신규 UUID 발급, (B) DB 컬럼에 원본 traceId 저장, (C) 현행 유지(Kafka 레벨 fallback만)를 비교했다.
-- **이유**: Spring Event는 현재 사용처가 `OrderIdempotencyCacheEvent` 한 곳뿐이라 Multicaster wrapping은 한 군데에서만 쓰일 추상화로 과하다. Outbox는 (A) 스케줄러 단위 발급 시 한 실행에서 여러 독립 거래가 같은 traceId를 공유해 의미가 희석되고, (C) 현행 유지 시 Kafka 레벨에서 새 UUID가 발급되어 원 HTTP 요청과 단절된다. (B) DB 컬럼 저장만이 원본 HTTP 요청의 traceId를 consumer까지 전파한다.
+- **이유**: Spring Event는 당시 사용처가 `OrderIdempotencyCacheEvent` 한 곳뿐이라 Multicaster wrapping은 한 군데에서만 쓰일 추상화로 과했다. `OrderIdempotencyCacheEvent` 사례는 `order-idempotency-cache-simplification` 에서 제거됨 (listener / event 자체 삭제). 현재 Spring Event `@TransactionalEventListener` 사용처 0건. Outbox `trace_id` 컬럼 결정은 그대로 유효. Outbox는 (A) 스케줄러 단위 발급 시 한 실행에서 여러 독립 거래가 같은 traceId를 공유해 의미가 희석되고, (C) 현행 유지 시 Kafka 레벨에서 새 UUID가 발급되어 원 HTTP 요청과 단절된다. (B) DB 컬럼 저장만이 원본 HTTP 요청의 traceId를 consumer까지 전파한다.
 - **트레이드오프**: Outbox 스케줄러 자체 로그는 traceId가 없다(운영 통계 로그 성격이므로 허용). 기존 outbox 데이터 및 MDC에 유효한 traceId가 없는 케이스는 outbox.trace_id를 NULL로 저장하고 relay 시 MDC 조작 없이 진행한다(Kafka 인터셉터가 신규 UUID fallback). Spring Event 객체마다 traceId 필드를 추가하는 반복 작업이 향후 필요할 수 있으며, 이벤트가 5개 이상 늘어나는 시점에 Multicaster wrapping으로 재검토한다. DB 스키마 변경(`tbl_outbox_event.trace_id VARCHAR(64) NULL`)이 필요하나 nullable이고 기존 인덱스에 영향이 없어 무중단 적용 가능하다.
 - **참고**: 상세는 `docs/tasks/event-outbox-trace-propagation/adr.md` 참조.
 

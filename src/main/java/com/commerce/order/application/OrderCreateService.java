@@ -14,9 +14,11 @@ import com.commerce.common.exception.CommonException;
 import com.commerce.order.application.command.OrderCreateCommand;
 import com.commerce.order.application.result.OrderCreateResult;
 import com.commerce.order.application.port.OrderIdempotencyStore;
+import com.commerce.order.domain.Order;
 import com.commerce.order.domain.repository.OrderRepository;
 import com.commerce.order.exception.OrderErrorCode;
 import com.commerce.order.exception.OrderException;
+import com.commerce.order.exception.OrderIdempotencyStoreUnavailableException;
 
 import lombok.RequiredArgsConstructor;
 import lombok.extern.slf4j.Slf4j;
@@ -31,7 +33,7 @@ public class OrderCreateService {
 	private final OrderIdempotencyStore orderIdempotencyStore;
 	private final OrderCreateProcessor orderCreateProcessor;
 
-	@Value("${order.idempotency.ttl-seconds:600}")
+	@Value("${order.idempotency.ttl-seconds:60}")
 	private long idempotencyTtlSeconds;
 
 	@Transactional(propagation = Propagation.NOT_SUPPORTED)
@@ -43,45 +45,38 @@ public class OrderCreateService {
 		Long memberId = command.getMemberId();
 		String idempotencyKey = command.getIdempotencyKey();
 		Duration ttl = Duration.ofSeconds(idempotencyTtlSeconds);
-		boolean reserved = orderIdempotencyStore.reserve(memberId, idempotencyKey, ttl);
 
-		if (!reserved) {
-			return orderIdempotencyStore.getCompletedOrderId(memberId, idempotencyKey)
-				.map(orderId -> orderRepository.findById(orderId)
-					.map(order -> {
-						log.info("주문 멱등 응답 orderId={} memberId={} source=redis idempotencyKey={}", order.getId(), memberId, idempotencyKey);
-						return OrderCreateResult.from(order);
-					})
-					.orElseThrow(() -> new OrderException(OrderErrorCode.ORDER_NOT_FOUND)))
-				.orElseGet(() -> attemptCreateOrder(command, memberId, idempotencyKey, ttl));
+		boolean reserved;
+		try {
+			reserved = orderIdempotencyStore.reserve(memberId, idempotencyKey, ttl);
+		} catch (OrderIdempotencyStoreUnavailableException e) {
+			// Redis 장애로 in-flight 차단을 못 한 경우, DB unique 제약 안전망 경로로 fallback.
+			// marker 가 생성되지 않았으므로 clear 호출하지 않는다.
+			log.warn("멱등성 캐시 장애, DB unique 제약으로 fallback: memberId={}, key={}", memberId, idempotencyKey);
+			return findOrExecute(command, memberId, idempotencyKey);
 		}
 
-		return attemptCreateOrder(command, memberId, idempotencyKey, ttl);
-	}
-
-	private OrderCreateResult attemptCreateOrder(
-		OrderCreateCommand command, Long memberId, String idempotencyKey, Duration ttl
-	) {
-		// Redis 만료 후 정당한 재요청을 멱등 흡수하기 위한 DB 사전 체크.
-		// race 충돌(Redis 통과 + DB find empty + insert 시 unique 위반) 과
-		// ULID 충돌은 RuntimeException catch 가 Redis 정리 후 rethrow → 안전망 500.
-		Optional<OrderCreateResult> existing = orderRepository
-			.findByMemberIdAndIdempotencyKey(memberId, idempotencyKey)
-			.map(order -> {
-				// 이후 동일 키 재요청이 Redis에서 바로 처리되도록 complete 상태로 갱신한다.
-				orderIdempotencyStore.complete(memberId, idempotencyKey, order.getId(), ttl);
-				log.info("주문 멱등 응답 orderId={} memberId={} source=db idempotencyKey={}", order.getId(), memberId, idempotencyKey);
-				return OrderCreateResult.from(order);
-			});
-		if (existing.isPresent()) {
-			return existing.get();
+		if (!reserved) {
+			throw new OrderException(OrderErrorCode.ORDER_IDEMPOTENCY_IN_PROGRESS);
 		}
 
 		try {
-			return orderCreateProcessor.execute(command, ttl);
-		} catch (RuntimeException ex) {
+			return findOrExecute(command, memberId, idempotencyKey);
+		} finally {
+			// NOT_SUPPORTED 이므로 finally 가 commit 이후에 호출됨 (ADR-005 정합).
 			orderIdempotencyStore.clear(memberId, idempotencyKey);
-			throw ex;
 		}
+	}
+
+	private OrderCreateResult findOrExecute(OrderCreateCommand command, Long memberId, String idempotencyKey) {
+		// Redis 만료 후 정당한 재요청을 멱등 흡수하기 위한 DB 사전 체크.
+		// reserve 성공(in-flight 차단) 이후 find 를 수행하므로 캐시의 DB 도달 전 차단 가치를 보존한다.
+		Optional<Order> existing = orderRepository.findByMemberIdAndIdempotencyKey(memberId, idempotencyKey);
+		if (existing.isPresent()) {
+			log.info("주문 멱등 응답 orderId={} memberId={} source=db idempotencyKey={}",
+				existing.get().getId(), memberId, idempotencyKey);
+			return OrderCreateResult.from(existing.get());
+		}
+		return orderCreateProcessor.execute(command);
 	}
 }

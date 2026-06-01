@@ -7,7 +7,6 @@ import static org.mockito.ArgumentMatchers.anyString;
 import static org.mockito.BDDMockito.given;
 
 import java.util.List;
-import java.util.Optional;
 import java.util.UUID;
 import java.util.concurrent.ConcurrentLinkedDeque;
 import java.util.concurrent.ConcurrentLinkedQueue;
@@ -102,8 +101,6 @@ class OrderConcurrencyServiceTest {
 	void setUpIdempotencyStore() {
 		given(orderIdempotencyStore.reserve(anyLong(), anyString(), any()))
 			.willReturn(true);
-		given(orderIdempotencyStore.getCompletedOrderId(anyLong(), anyString()))
-			.willReturn(Optional.empty());
 	}
 
 	@DisplayName("동시 요청 상황에서 락 없이 재고를 차감하면 일부 주문이 실패할 수 있다")

@@ -45,6 +45,31 @@ DataAccessException (부모 핸들러, COMMON-500-2)
 
 `JpaConfig` 의 `SQLErrorCodeSQLExceptionTranslator` 빈은 안전망 핸들러가 unique 위반을 `DuplicateKeyException` 으로 정확히 분류해 로깅하도록 한다. 코드가 직접 catch 하지는 않지만, 운영 환경(JPA + MySQL) 에서 unique 위반과 그 외 무결성 위반을 로그 레벨로 구분하기 위해 빈 등록은 유지된다.
 
+## Redis 캐시 장애 처리
+
+DB 무결성 위반과 달리, 외부 캐시(Redis) 장애는 *대체 경로(DB unique 제약)* 가 있는 경우 도메인 예외 매핑 + application fallback 으로 처리한다. 응답 가용성을 보존하면서 port 추상화도 유지한다.
+
+### 본질 흐름
+
+```
+Infra adapter: DataAccessException catch → *StoreUnavailableException 도메인 예외 변환 (log.error)
+Application: 도메인 예외 catch → fallback 경로 진입 (log.warn)
+```
+
+- Infra 는 *기술적 사실* (어떤 예외인지) 만 알면 되고, *어떻게 대응할지* 는 application 의 정책.
+- port 시그니처에 Spring `DataAccessException` 이 노출되지 않아 port 추상화가 보존된다.
+- 도메인 예외는 `RuntimeException` 직접 상속 (`CustomException` 상속 시 `GlobalExceptionHandler.handleCustomException` 가 자동 응답 매핑되어 application catch 의도가 우회됨).
+- 적용처: `OrderIdempotencyStore` ↔ `OrderCreateService` (`order-idempotency-cache-simplification`).
+
+### 비교: fallback 불가한 경우
+
+`AuthTokenIssueService`, `AuthTokenReissueService` 는 refresh token 저장/조회 실패 시 대체 경로가 없어 application 에서 직접 `DataAccessException` catch + `AuthException(INTERNAL_ERROR)` 변환. fallback 가능 여부가 패턴 선택의 분기점이며, 후속 패턴 통일은 별도 issue 로 검토한다.
+
+### 로깅 규약
+
+- infra adapter (저장소 실패 자체): ERROR + stack — 운영자가 외부 시스템 장애를 즉시 인지.
+- application (fallback 분기 결정): WARN + 메타데이터 — 정상 흐름의 fallback 진입 사실 기록.
+
 ## 보상 catch 2차 예외 처리
 
 보상 트랜잭션·알림 발송처럼 catch 블록 안에서 2차 작업을 시도해야 할 때의 정책이다. 2차 시도가 또 예외를 던지면 1차 예외(근본 원인)가 가려지거나 보상 흐름 자체가 중단될 수 있다. 본 섹션은 그 경우의 일관된 처리 방식을 정의한다.

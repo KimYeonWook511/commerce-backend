@@ -248,20 +248,12 @@ TraceIdRecordInterceptor.afterRecord()
 
 #### `@TransactionalEventListener(AFTER_COMMIT)` 경계
 
-이벤트 객체에 traceId 필드를 동봉해 listener가 MDC에 복원한다.
+> **주의**: `OrderIdempotencyCacheEvent` 사례는 `order-idempotency-cache-simplification` 에서 제거됨. 현재 프로젝트 내 `@TransactionalEventListener` 사용처 0건. 향후 도입 시 본 절을 갱신.
 
-```
-HTTP 요청 → TraceIdFilter → MDC.put("traceId", uuid)
-   ↓
-OrderCreateProcessor.execute()
-  publishEvent(OrderIdempotencyCacheEvent(..., traceId=LogContext.getTraceId()))
-   ↓
-[Transaction COMMIT 후 AFTER_COMMIT 단계]
-   ↓
-RedisOrderIdempotencyStore.handle(event)
-  LogContext.putTraceId(event.getTraceId())  ← 유효성 검증 후 push
-  try { complete(...) } finally { LogContext.removeTraceId() }
-```
+이벤트 객체에 traceId 필드를 동봉해 listener가 MDC에 복원하는 방식을 사용한다. 향후 `@TransactionalEventListener` 도입 시 아래 원칙을 따른다:
+- 이벤트 객체에 `traceId` 필드를 추가해 publisher 시점의 `LogContext.getTraceId()`를 전달한다.
+- listener 진입 시 MDC에 이미 유효한 traceId가 있으면 보존하고, 비어있을 때만 이벤트의 traceId를 push한다 (동기 실행 경로 MDC 유실 방지).
+- push한 경우에만 `finally`에서 `LogContext.removeTraceId()`로 정리한다.
 
 #### Outbox 경계
 
@@ -301,7 +293,7 @@ Outbox 스케줄러 자체 로그는 traceId가 없다(독립 거래 배치 처�
 ## 저장소 및 인프라 의존성
 
 - 영속 데이터는 MySQL에 저장한다.
-- 토큰과 주문 멱등 키는 Redis에 저장한다.
+- 토큰은 Redis에 저장한다. 주문 멱등성은 Redis 에 in-flight 마커만 저장 (TTL 60초). 멱등성 진실은 `tbl_order.(member_id, idempotency_key)` unique 제약. Redis 장애 시 infra adapter 가 `OrderIdempotencyStoreUnavailableException` 으로 변환, application 이 catch 해 DB unique 안전망 경로로 fallback 진행 (단독 요청 정상 응답 가능).
 - 재고 복구 이벤트는 Outbox 모듈을 중심으로 Kafka로 전달한다.
 - 외부 결제는 네이버페이 PG 연동 모듈(`payment/naverpay`)을 통해 처리한다.
 

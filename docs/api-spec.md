@@ -706,6 +706,10 @@
 }
 ```
 
+실패 응답:
+- `400 INVALID_REQUEST`: `Idempotency-Key` 헤더 누락 또는 빈 값
+- `409 ORDER_IDEMPOTENCY_IN_PROGRESS`: 같은 `Idempotency-Key` 로 다른 요청이 처리 중. 클라이언트는 backoff 후 재시도 권장.
+
 ### `POST /orders/{orderId}/cancel`
 
 설명:

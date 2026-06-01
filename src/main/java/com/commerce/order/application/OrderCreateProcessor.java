@@ -1,24 +1,20 @@
 package com.commerce.order.application;
 
-import java.time.Duration;
 import java.util.Comparator;
 import java.util.List;
 import java.util.Map;
 import java.util.function.Function;
 import java.util.stream.Collectors;
 
-import org.springframework.context.ApplicationEventPublisher;
 import org.springframework.stereotype.Component;
 import org.springframework.transaction.annotation.Transactional;
 
-import com.commerce.common.log.LogContext;
 import com.commerce.member.domain.Member;
 import com.commerce.member.domain.repository.MemberRepository;
 import com.commerce.member.exception.MemberErrorCode;
 import com.commerce.member.exception.MemberException;
 import com.commerce.order.application.command.OrderCreateCommand;
 import com.commerce.order.application.command.OrderCreateItem;
-import com.commerce.order.application.event.OrderIdempotencyCacheEvent;
 import com.commerce.order.application.port.CartItemRemover;
 import com.commerce.order.application.result.OrderCreateResult;
 import com.commerce.order.domain.Order;
@@ -41,13 +37,12 @@ public class OrderCreateProcessor {
 	private final ProductRepository productRepository;
 	private final OrderRepository orderRepository;
 	private final StockInventoryService stockInventoryService;
-	private final ApplicationEventPublisher applicationEventPublisher;
 	private final CartItemRemover cartItemRemover;
 
 	@Transactional
-	public OrderCreateResult execute(OrderCreateCommand command, Duration ttl) {
+	public OrderCreateResult execute(OrderCreateCommand command) {
 		OrderCreateCommand sortedCommand = sortItemsByProductId(command);
-		return createOrderWithStockDecrease(sortedCommand, ttl);
+		return createOrderWithStockDecrease(sortedCommand);
 	}
 
 	private OrderCreateCommand sortItemsByProductId(OrderCreateCommand command) {
@@ -62,7 +57,7 @@ public class OrderCreateProcessor {
 			.build();
 	}
 
-	private OrderCreateResult createOrderWithStockDecrease(OrderCreateCommand command, Duration ttl) {
+	private OrderCreateResult createOrderWithStockDecrease(OrderCreateCommand command) {
 		Member member = memberRepository.findById(command.getMemberId())
 			.orElseThrow(() -> new MemberException(MemberErrorCode.MEMBER_NOT_FOUND));
 
@@ -91,11 +86,6 @@ public class OrderCreateProcessor {
 
 		log.info("주문 생성 orderId={} memberId={} itemCount={}",
 			order.getId(), command.getMemberId(), command.getItems().size());
-
-		applicationEventPublisher.publishEvent(
-			new OrderIdempotencyCacheEvent(command.getMemberId(), command.getIdempotencyKey(), order.getId(), ttl,
-				LogContext.getTraceId())
-		);
 
 		return OrderCreateResult.from(order);
 	}

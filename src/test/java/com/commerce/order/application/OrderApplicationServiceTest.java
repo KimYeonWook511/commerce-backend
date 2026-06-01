@@ -92,7 +92,8 @@ class OrderApplicationServiceTest {
 
 		// then
 		assertThat(result.getOrderId()).isEqualTo(expected.getOrderId());
-		then(orderCreateProcessor).should().execute(eq(command), any());
+		then(orderCreateProcessor).should().execute(eq(command));
+		then(orderIdempotencyStore).should().clear(1L, idempotencyKey);
 	}
 
 	@DisplayName("같은 상품이 여러 항목으로 들어오면 processor에 위임한다")
@@ -115,7 +116,8 @@ class OrderApplicationServiceTest {
 		orderCreateService.createOrder(command);
 
 		// then
-		then(orderCreateProcessor).should().execute(eq(command), any());
+		then(orderCreateProcessor).should().execute(eq(command));
+		then(orderIdempotencyStore).should().clear(1L, idempotencyKey);
 	}
 
 	@DisplayName("락 없이 주문을 생성하면 기본 차감 로직을 사용한다")
@@ -383,9 +385,9 @@ class OrderApplicationServiceTest {
 			.containsEntry(11L, 1);
 	}
 
-	@DisplayName("Redis reserve 성공 후 DB에 기존 주문이 있으면 Redis complete 후 기존 주문을 반환한다")
+	@DisplayName("Redis reserve 성공 후 DB에 기존 주문이 있으면 기존 주문을 반환한다")
 	@Test
-	void createOrder_whenReservedAndExistingOrderInDb_returnExistingOrderAndComplete() {
+	void createOrder_whenReservedAndExistingOrderInDb_returnExistingOrder() {
 		// given
 		OrderCreateCommand command = OrderCreateCommand.builder()
 			.memberId(1L)
@@ -405,13 +407,13 @@ class OrderApplicationServiceTest {
 
 		// then
 		assertThat(result.getOrderId()).isEqualTo(99L);
-		then(orderIdempotencyStore).should().complete(eq(1L), eq(idempotencyKey), eq(99L), any());
 		then(orderCreateProcessor).shouldHaveNoInteractions();
+		then(orderIdempotencyStore).should().clear(1L, idempotencyKey);
 	}
 
-	@DisplayName("Redis reserve 실패 후 completed orderId가 존재하면 기존 주문을 반환한다")
+	@DisplayName("Redis reserve 실패 시 ORDER_IDEMPOTENCY_IN_PROGRESS 예외를 던진다")
 	@Test
-	void createOrder_whenReserveFailedAndCompletedOrderExists_returnExistingOrder() {
+	void createOrder_whenReserveFailed_throwInProgress() {
 		// given
 		OrderCreateCommand command = OrderCreateCommand.builder()
 			.memberId(1L)
@@ -419,20 +421,16 @@ class OrderApplicationServiceTest {
 			.items(List.of(OrderCreateItem.builder().productId(10L).quantity(1).build()))
 			.build();
 
-		Order existingOrder = Order.create(createMember(1L));
-		ReflectionTestUtils.setField(existingOrder, "id", 77L);
-
 		given(orderIdempotencyStore.reserve(anyLong(), anyString(), any())).willReturn(false);
-		given(orderIdempotencyStore.getCompletedOrderId(1L, idempotencyKey))
-			.willReturn(Optional.of(77L));
-		given(orderRepository.findById(77L)).willReturn(Optional.of(existingOrder));
 
-		// when
-		OrderCreateResult result = orderCreateService.createOrder(command);
+		// when & then
+		assertThatThrownBy(() -> orderCreateService.createOrder(command))
+			.isInstanceOf(OrderException.class)
+			.satisfies(ex -> assertThat(((OrderException)ex).getErrorCode())
+				.isEqualTo(OrderErrorCode.ORDER_IDEMPOTENCY_IN_PROGRESS));
 
-		// then
-		assertThat(result.getOrderId()).isEqualTo(77L);
 		then(orderCreateProcessor).shouldHaveNoInteractions();
+		then(orderIdempotencyStore).should(org.mockito.Mockito.never()).clear(anyLong(), anyString());
 	}
 
 	@DisplayName("processor가 예외를 던지면 멱등키를 clear하고 예외를 재발생한다")
@@ -448,7 +446,7 @@ class OrderApplicationServiceTest {
 		stubForIdempotencyReserved();
 		willThrow(new StockException(StockErrorCode.STOCK_NOT_FOUND))
 			.given(orderCreateProcessor)
-			.execute(eq(command), any());
+			.execute(eq(command));
 
 		// when & then
 		assertThatThrownBy(() -> orderCreateService.createOrder(command))
@@ -497,7 +495,7 @@ class OrderApplicationServiceTest {
 		Order order = Order.create(createMember(1L));
 		ReflectionTestUtils.setField(order, "id", 100L);
 		OrderCreateResult result = OrderCreateResult.from(order);
-		given(orderCreateProcessor.execute(eq(command), any())).willReturn(result);
+		given(orderCreateProcessor.execute(eq(command))).willReturn(result);
 		return result;
 	}
 
