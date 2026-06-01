@@ -32,7 +32,7 @@ CREATE TABLE `tbl_stock` (
   `updated_at` datetime(6) NOT NULL,
   PRIMARY KEY (`id`),
   UNIQUE KEY `uk_stock_product_id` (`product_id`),
-  CONSTRAINT `FKo8mybc2mw82rhti4t1n9i1d0e` FOREIGN KEY (`product_id`) REFERENCES `tbl_product` (`id`)
+  CONSTRAINT `fk_stock_product_id` FOREIGN KEY (`product_id`) REFERENCES `tbl_product` (`id`)
 ) ENGINE=InnoDB DEFAULT CHARSET=utf8mb4 COLLATE=utf8mb4_0900_ai_ci;
 
 CREATE TABLE `tbl_stock_history` (
@@ -44,8 +44,8 @@ CREATE TABLE `tbl_stock_history` (
   `created_at` datetime(6) NOT NULL,
   `updated_at` datetime(6) NOT NULL,
   PRIMARY KEY (`id`),
-  KEY `FKts4aivqh4ede6fty5u650jwc` (`stock_id`),
-  CONSTRAINT `FKts4aivqh4ede6fty5u650jwc` FOREIGN KEY (`stock_id`) REFERENCES `tbl_stock` (`id`)
+  KEY `fk_stock_history_stock_id` (`stock_id`),
+  CONSTRAINT `fk_stock_history_stock_id` FOREIGN KEY (`stock_id`) REFERENCES `tbl_stock` (`id`)
 ) ENGINE=InnoDB DEFAULT CHARSET=utf8mb4 COLLATE=utf8mb4_0900_ai_ci;
 
 CREATE TABLE `tbl_cart_item` (
@@ -73,7 +73,7 @@ CREATE TABLE `tbl_order` (
   PRIMARY KEY (`id`),
   UNIQUE KEY `uk_order_member_idempotency` (`member_id`,`idempotency_key`),
   UNIQUE KEY `uk_order_merchant_pay_key` (`merchant_pay_key`),
-  CONSTRAINT `FKfm4jjqr8ueinggxwcyi809xkf` FOREIGN KEY (`member_id`) REFERENCES `tbl_member` (`id`)
+  CONSTRAINT `fk_order_member_id` FOREIGN KEY (`member_id`) REFERENCES `tbl_member` (`id`)
 ) ENGINE=InnoDB DEFAULT CHARSET=utf8mb4 COLLATE=utf8mb4_0900_ai_ci;
 
 CREATE TABLE `tbl_order_item` (
@@ -84,10 +84,10 @@ CREATE TABLE `tbl_order_item` (
   `created_at` datetime(6) NOT NULL,
   `updated_at` datetime(6) NOT NULL,
   PRIMARY KEY (`id`),
-  KEY `FKmkqpajkg6p2wq4owcv1v08pc5` (`order_id`),
-  KEY `FK1oy9x003q55eqmuiv0y8a15e` (`product_id`),
-  CONSTRAINT `FK1oy9x003q55eqmuiv0y8a15e` FOREIGN KEY (`product_id`) REFERENCES `tbl_product` (`id`),
-  CONSTRAINT `FKmkqpajkg6p2wq4owcv1v08pc5` FOREIGN KEY (`order_id`) REFERENCES `tbl_order` (`id`)
+  KEY `fk_order_item_order_id` (`order_id`),
+  KEY `fk_order_item_product_id` (`product_id`),
+  CONSTRAINT `fk_order_item_product_id` FOREIGN KEY (`product_id`) REFERENCES `tbl_product` (`id`),
+  CONSTRAINT `fk_order_item_order_id` FOREIGN KEY (`order_id`) REFERENCES `tbl_order` (`id`)
 ) ENGINE=InnoDB DEFAULT CHARSET=utf8mb4 COLLATE=utf8mb4_0900_ai_ci;
 
 CREATE TABLE `tbl_payment` (
@@ -105,7 +105,7 @@ CREATE TABLE `tbl_payment` (
   UNIQUE KEY `uk_payment_order_id` (`order_id`),
   UNIQUE KEY `uk_payment_merchant_pay_key` (`merchant_pay_key`),
   UNIQUE KEY `uk_payment_pg_payment_id` (`pg_payment_id`),
-  CONSTRAINT `FKac54xp3r2r3m9datds9351ric` FOREIGN KEY (`order_id`) REFERENCES `tbl_order` (`id`)
+  CONSTRAINT `fk_payment_order_id` FOREIGN KEY (`order_id`) REFERENCES `tbl_order` (`id`)
 ) ENGINE=InnoDB DEFAULT CHARSET=utf8mb4 COLLATE=utf8mb4_0900_ai_ci;
 
 CREATE TABLE `tbl_payment_attempt` (
