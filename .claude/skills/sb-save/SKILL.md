@@ -28,7 +28,7 @@ commerce-backend 세션의 핵심(작업·결정·트레이드오프·막힌 점
 
 명명 가이드:
 - kebab-case 소문자, 3~5 단어
-- 이슈가 명확하면 `issue-<N>-<short>` 권장
+- 세션 결과물이 PR 로 떨어지면 `pr-<N>-<short>` 권장 (한 PR 에 여러 이슈가 묶이는 케이스까지 흡수. raw 는 세션 단위 1 파일이라 이슈별로 쪼개지 않는다)
 - 결정 위주면 `why-<topic>` (예: `why-event-outbox`)
 - 일반화 가능한 패턴이면 `<topic>-<technique>` (예: `kafka-traceid-propagation`)
 
