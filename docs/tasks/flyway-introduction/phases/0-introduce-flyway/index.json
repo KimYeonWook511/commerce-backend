@@ -1,0 +1,11 @@
+{
+  "project": "commerce-backend",
+  "phase": "0-introduce-flyway",
+  "steps": [
+    { "step": 1, "name": "add-flyway-dependency", "status": "pending" },
+    { "step": 2, "name": "generate-v1-init-sql", "status": "pending" },
+    { "step": 3, "name": "enable-flyway-and-switch-validate", "status": "pending" },
+    { "step": 4, "name": "sync-root-docs", "status": "pending" },
+    { "step": 5, "name": "write-retrospective", "status": "pending" }
+  ]
+}
