@@ -36,7 +36,7 @@ public class PaymentApprovalService {
 
 	@Transactional(readOnly = true)
 	public boolean hasCompletedPayment(String merchantPayKey) {
-		return findPaymentByMerchantPayKey(merchantPayKey).isPresent();
+		return paymentRepository.existsByMerchantPayKeyAndStatus(merchantPayKey, PaymentStatus.COMPLETED);
 	}
 
 	@Transactional

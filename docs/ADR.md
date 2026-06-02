@@ -132,7 +132,7 @@
 - **트레이드오프**: Payment 조회 1회 추가되나 인덱스 조회라 성능 영향 미미하다.
 - **PaymentAttempt Aggregate 캡슐화**: `PaymentAttempt.succeed`/`fail` 메서드는 `PaymentApprovalAttemptService`, `PaymentCancellationAttemptService` 외부에서 직접 호출하지 않는다. 정책 강제는 코드가 아닌 ADR과 JavaDoc으로만 명시하며, ArchUnit 도입은 별도 후속 작업으로 분리한다.
 - **후속 (ADR-015, payment-compensation-to-domain task)**: 보상 owner가 `NaverPayApprovalService.failApproveAndCancelApprovedPayment`에서 payment.application의 `PaymentApprovalCompensationService.runPgCancel`로 이동했다. 정책 자체(Payment 존재 체크 → cancel skip)는 동일하게 유지된다.
-- **후속 (#182, 2026-06-02)**: 메서드 이름과 의미를 도메인 사실 조회(`hasCompletedPayment`, `.isPresent()`)로 정리했다. 보상 service의 호출 코드(`if (hasCompletedPayment) skip`)가 정책 적용을 담당한다. "row 존재 = 결제 완료"의 근거(merchantPayKey unique + Order FOR UPDATE 안에서 저장)는 Payment 도메인 소유 지식이므로 사실 조회를 소유자에 박아 두면 Payment 정의 변경 시 한 곳만 갱신하면 된다.
+- **후속 (#182, 2026-06-02)**: 메서드 이름과 의미를 도메인 사실 조회(`hasCompletedPayment`)로 정리하고, 내부 구현은 `existsByMerchantPayKeyAndStatus(merchantPayKey, COMPLETED)`로 status까지 명시해 의미와 본문을 정확히 일치시켰다. 보상 service의 호출 코드(`if (hasCompletedPayment) skip`)가 정책 적용을 담당한다. "row 존재 = 결제 완료"의 근거(merchantPayKey unique + Order FOR UPDATE 안에서 저장)는 Payment 도메인 소유 지식이므로 사실 조회를 소유자에 박아 두면 Payment 정의 변경 시 한 곳만 갱신하면 된다.
 
 ### ADR-015: 보상 정책은 payment.application 책임이고, PG 어댑터는 cancel 콜백만 제공한다
 - **결정**: `NaverPayApprovalService`에 있던 보상 dispatcher 4개와 공통 골격을 `PaymentApprovalCompensationService`(payment.application)로 이동한다. PG cancel 호출은 `PgCanceller` @FunctionalInterface 콜백으로 위임하고, PG 응답은 `CancelOutcome` record로 변환해 payment.application이 `NaverPayCancelResult`를 직접 import하지 않도록 한다.
