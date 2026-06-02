@@ -61,7 +61,7 @@ public class Order extends BaseTimeEntity {
 	@Column(nullable = false)
 	private OrderStatus status;
 
-	@Column
+	@Column(length = 64)
 	private String merchantPayKey;
 
 	@Column

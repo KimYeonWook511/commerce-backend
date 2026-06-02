@@ -87,7 +87,7 @@ COLUMNS:
 - `member_id (FK -> tbl_member.id)`
 - `total_price`
 - `status`
-- `merchant_pay_key (UNIQUE)`
+- `merchant_pay_key (VARCHAR(64), UNIQUE)`
 - `idempotency_key (NULL 허용)`
 
 INDEX:
@@ -96,6 +96,7 @@ INDEX:
 
 비고:
 - `idempotency_key`는 기존 데이터 및 멱등성 없는 경로와의 호환을 위해 NULL 허용. MySQL에서 NULL 값은 unique 제약 대상에서 제외된다.
+- `merchant_pay_key` 길이는 `tbl_payment`, `tbl_payment_attempt`와 동일하게 64로 맞춘다 (cross-entity 일관성, ADR-023 참조).
 
 ### `tbl_order_item`
 
@@ -137,14 +138,17 @@ COLUMNS:
 - `amount`
 - `status`
 - `provider`
-- `merchant_pay_key (UNIQUE)`
-- `pg_payment_id (UNIQUE)`
+- `merchant_pay_key (VARCHAR(64), UNIQUE)`
+- `pg_payment_id (VARCHAR(64), UNIQUE)`
 - `approved_at`
 
 INDEX:
 - `order_id (UNIQUE)`
 - `merchant_pay_key (UNIQUE)`
 - `pg_payment_id (UNIQUE)`
+
+비고:
+- `merchant_pay_key`, `pg_payment_id` 길이는 `tbl_payment_attempt`와 동일하게 64로 맞춘다 (cross-entity 일관성, ADR-023 참조).
 
 ### `tbl_payment_attempt`
 
