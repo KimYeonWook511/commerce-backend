@@ -39,6 +39,7 @@ import com.commerce.support.TestcontainersSupport;
 @SpringBootTest
 @ActiveProfiles("test")
 @Tag("docker")
+@Tag("concurrency")
 @Import({PersistenceCleanupTestSupport.class, MemberPersistenceTestSupport.class, ProductPersistenceTestSupport.class, StockPersistenceTestSupport.class, OrderPersistenceTestSupport.class})
 class OrderCreateConcurrencyIntegrationTest {
 
