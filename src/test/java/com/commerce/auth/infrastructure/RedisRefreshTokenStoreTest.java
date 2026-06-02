@@ -46,14 +46,19 @@ class RedisRefreshTokenStoreTest {
 	@Test
 	void save_whenSuccess_storesWithCorrectKey() {
 		// given
-		given(jwtProperties.getRefreshExpiration()).willReturn(3600000L);
+		long refreshExpirationMs = 3600000L;
+		given(jwtProperties.getRefreshExpiration()).willReturn(refreshExpirationMs);
 		given(redisTemplate.opsForValue()).willReturn(valueOperations);
 
 		// when
 		store.save(1L, "refresh-token");
 
 		// then
-		then(valueOperations).should().set(eq("refresh:1"), eq("refresh-token"), any(Duration.class));
+		then(valueOperations).should().set(
+			eq("refresh:1"),
+			eq("refresh-token"),
+			eq(Duration.ofMillis(refreshExpirationMs))
+		);
 	}
 
 	@DisplayName("save 시 DataAccessException이 발생하면 RefreshTokenStoreUnavailableException으로 변환한다")
