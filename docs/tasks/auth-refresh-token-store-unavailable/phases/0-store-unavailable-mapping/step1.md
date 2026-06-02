@@ -255,7 +255,7 @@ Mockito + `StringRedisTemplate`/`ValueOperations` mock. Order adapter 테스트 
 
 ```bash
 ./gradlew test
-./gradlew dockerTest
+./gradlew integrationTest
 ```
 
 추가 검증:
