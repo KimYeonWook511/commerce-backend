@@ -77,7 +77,7 @@ public class PaymentApprovalCompensationService {
 			failCode, failDetail, now
 		);
 
-		if (!paymentApprovalService.isCompensationRequired(approveAttempt.getMerchantPayKey())) {
+		if (paymentApprovalService.hasCompletedPayment(approveAttempt.getMerchantPayKey())) {
 			log.warn(
 				"Payment already completed, skipping PG cancel: merchantPayKey={}, paymentId={}",
 				approveAttempt.getMerchantPayKey(), approveAttempt.getPaymentId()
