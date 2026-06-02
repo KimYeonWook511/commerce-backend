@@ -16,8 +16,8 @@ public class StockHistoryRepositoryAdapter implements StockHistoryRepository {
 	private final JpaStockHistoryRepository jpaStockHistoryRepository;
 
 	@Override
-	public List<StockHistory> findAllByStockProductIdOrderByCreatedAtDesc(Long productId) {
-		return jpaStockHistoryRepository.findAllByStockProductIdOrderByCreatedAtDesc(productId);
+	public List<StockHistory> findAllByStockIdOrderByCreatedAtDesc(Long stockId) {
+		return jpaStockHistoryRepository.findAllByStockIdOrderByCreatedAtDesc(stockId);
 	}
 
 	@Override

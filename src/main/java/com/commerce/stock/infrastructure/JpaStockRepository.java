@@ -17,10 +17,10 @@ public interface JpaStockRepository extends JpaRepository<Stock, Long> {
 	Optional<Stock> findByProductId(Long productId);
 
 	@Lock(LockModeType.PESSIMISTIC_WRITE)
-	@Query("select s from Stock s where s.product.id = :productId")
+	@Query("select s from Stock s where s.productId = :productId")
 	Optional<Stock> findByProductIdWithPessimisticLock(@Param("productId") Long productId);
 
 	@Lock(LockModeType.PESSIMISTIC_WRITE)
-	@Query("select s from Stock s where s.product.id in :productIds")
+	@Query("select s from Stock s where s.productId in :productIds")
 	List<Stock> findAllByProductIdInWithPessimisticLock(@Param("productIds") List<Long> productIds);
 }

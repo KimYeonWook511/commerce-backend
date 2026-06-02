@@ -21,7 +21,7 @@ public class AdminStockResult {
 
 	public static AdminStockResult from(Stock stock) {
 		return AdminStockResult.builder()
-			.productId(stock.getProduct().getId())
+			.productId(stock.getProductId())
 			.stockId(stock.getId())
 			.quantity(stock.getQuantity())
 			.build();

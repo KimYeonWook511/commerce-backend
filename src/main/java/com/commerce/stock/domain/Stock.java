@@ -1,19 +1,14 @@
 package com.commerce.stock.domain;
 
-import com.commerce.product.domain.Product;
 import com.commerce.stock.exception.StockErrorCode;
 import com.commerce.stock.exception.StockException;
 import com.commerce.common.jpa.BaseTimeEntity;
 
 import jakarta.persistence.Column;
 import jakarta.persistence.Entity;
-import jakarta.persistence.FetchType;
-import jakarta.persistence.ForeignKey;
 import jakarta.persistence.GeneratedValue;
 import jakarta.persistence.GenerationType;
 import jakarta.persistence.Id;
-import jakarta.persistence.JoinColumn;
-import jakarta.persistence.OneToOne;
 import jakarta.persistence.Table;
 import jakarta.persistence.UniqueConstraint;
 import jakarta.persistence.Version;
@@ -38,16 +33,15 @@ public class Stock extends BaseTimeEntity {
 	@Column(nullable = false)
 	private Long version;
 
-	@OneToOne(fetch = FetchType.LAZY)
-	@JoinColumn(name = "product_id", nullable = false, foreignKey = @ForeignKey(name = "fk_stock_product_id"))
-	private Product product;
+	@Column(name = "product_id", nullable = false)
+	private Long productId;
 
 	@Column(nullable = false)
 	private int quantity;
 
 	@Builder
-	private Stock(Product product, int quantity) {
-		this.product = product;
+	private Stock(Long productId, int quantity) {
+		this.productId = productId;
 		this.quantity = quantity;
 	}
 

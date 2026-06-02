@@ -41,9 +41,9 @@ class StockHistoryRepositoryJpaAdapterTest {
 	@Autowired
 	private EntityManager entityManager;
 
-	@DisplayName("상품별 재고 이력 조회는 다른 상품의 이력을 제외한다")
+	@DisplayName("재고 ID별 이력 조회는 다른 재고의 이력을 제외한다")
 	@Test
-	void findAllByStockProductIdOrderByCreatedAtDesc_whenDifferentProductHistories_excludeOtherProductHistories() {
+	void findAllByStockIdOrderByCreatedAtDesc_whenDifferentStockHistories_excludeOtherStockHistories() {
 		// given
 		Product firstProduct = productRepository.save(createProduct("first-product"));
 		Product secondProduct = productRepository.save(createProduct("second-product"));
@@ -55,8 +55,8 @@ class StockHistoryRepositoryJpaAdapterTest {
 		entityManager.clear();
 
 		// when
-		List<StockHistory> results = stockHistoryRepository.findAllByStockProductIdOrderByCreatedAtDesc(
-			firstStock.getProduct().getId()
+		List<StockHistory> results = stockHistoryRepository.findAllByStockIdOrderByCreatedAtDesc(
+			firstStock.getId()
 		);
 
 		// then
@@ -65,9 +65,9 @@ class StockHistoryRepositoryJpaAdapterTest {
 			.containsExactly(firstHistory.getId());
 	}
 
-	@DisplayName("상품별 재고 이력 조회는 최신순으로 정렬한다")
+	@DisplayName("재고 ID별 이력 조회는 최신순으로 정렬한다")
 	@Test
-	void findAllByStockProductIdOrderByCreatedAtDesc_whenMultipleHistories_returnLatestFirst() throws Exception {
+	void findAllByStockIdOrderByCreatedAtDesc_whenMultipleHistories_returnLatestFirst() throws Exception {
 		// given
 		Product product = productRepository.save(createProduct("product"));
 		Stock stock = stockRepository.save(createStock(product, 10));
@@ -83,8 +83,8 @@ class StockHistoryRepositoryJpaAdapterTest {
 		entityManager.clear();
 
 		// when
-		List<StockHistory> results = stockHistoryRepository.findAllByStockProductIdOrderByCreatedAtDesc(
-			stock.getProduct().getId()
+		List<StockHistory> results = stockHistoryRepository.findAllByStockIdOrderByCreatedAtDesc(
+			stock.getId()
 		);
 
 		// then
@@ -104,7 +104,7 @@ class StockHistoryRepositoryJpaAdapterTest {
 
 	private Stock createStock(Product product, int quantity) {
 		return Stock.builder()
-			.product(product)
+			.productId(product.getId())
 			.quantity(quantity)
 			.build();
 	}
@@ -115,7 +115,7 @@ class StockHistoryRepositoryJpaAdapterTest {
 
 	private StockHistory createHistory(Stock stock, int quantityChange, StockAdjustmentReason reason) {
 		return StockHistory.builder()
-			.stock(stock)
+			.stockId(stock.getId())
 			.quantityChange(quantityChange)
 			.reason(reason)
 			.adminMemberId(10L)

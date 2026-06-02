@@ -15,14 +15,14 @@ class StockHistoryTest {
 
 		// when
 		StockHistory stockHistory = StockHistory.builder()
-			.stock(stock)
+			.stockId(stock.getId())
 			.quantityChange(10)
 			.reason(StockAdjustmentReason.INBOUND)
 			.adminMemberId(1L)
 			.build();
 
 		// then
-		assertThat(stockHistory.getStock()).isEqualTo(stock);
+		assertThat(stockHistory.getStockId()).isEqualTo(stock.getId());
 		assertThat(stockHistory.getQuantityChange()).isEqualTo(10);
 		assertThat(stockHistory.getReason()).isEqualTo(StockAdjustmentReason.INBOUND);
 		assertThat(stockHistory.getAdminMemberId()).isEqualTo(1L);
@@ -36,14 +36,14 @@ class StockHistoryTest {
 
 		// when
 		StockHistory stockHistory = StockHistory.builder()
-			.stock(stock)
+			.stockId(stock.getId())
 			.quantityChange(-3)
 			.reason(StockAdjustmentReason.DISPOSAL)
 			.adminMemberId(1L)
 			.build();
 
 		// then
-		assertThat(stockHistory.getStock()).isEqualTo(stock);
+		assertThat(stockHistory.getStockId()).isEqualTo(stock.getId());
 		assertThat(stockHistory.getQuantityChange()).isEqualTo(-3);
 		assertThat(stockHistory.getReason()).isEqualTo(StockAdjustmentReason.DISPOSAL);
 		assertThat(stockHistory.getAdminMemberId()).isEqualTo(1L);
@@ -57,14 +57,14 @@ class StockHistoryTest {
 
 		// when
 		StockHistory stockHistory = StockHistory.builder()
-			.stock(stock)
+			.stockId(stock.getId())
 			.quantityChange(0)
 			.reason(StockAdjustmentReason.ADMIN_ADJUSTMENT)
 			.adminMemberId(1L)
 			.build();
 
 		// then
-		assertThat(stockHistory.getStock()).isEqualTo(stock);
+		assertThat(stockHistory.getStockId()).isEqualTo(stock.getId());
 		assertThat(stockHistory.getQuantityChange()).isZero();
 		assertThat(stockHistory.getReason()).isEqualTo(StockAdjustmentReason.ADMIN_ADJUSTMENT);
 		assertThat(stockHistory.getAdminMemberId()).isEqualTo(1L);
@@ -72,6 +72,7 @@ class StockHistoryTest {
 
 	private Stock createStock() {
 		return Stock.builder()
+			.productId(1L)
 			.quantity(10)
 			.build();
 	}

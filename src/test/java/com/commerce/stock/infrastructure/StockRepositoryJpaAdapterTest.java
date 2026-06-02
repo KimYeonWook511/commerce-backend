@@ -65,7 +65,7 @@ class StockRepositoryJpaAdapterTest {
 
 		// then
 		assertThat(result.getId()).isEqualTo(saved.getId());
-		assertThat(result.getProduct().getId()).isEqualTo(product.getId());
+		assertThat(result.getProductId()).isEqualTo(product.getId());
 	}
 
 	@DisplayName("여러 상품 ID로 비관적 락 재고를 조회한다")
@@ -86,13 +86,13 @@ class StockRepositoryJpaAdapterTest {
 
 		// then
 		assertThat(results)
-			.extracting(stock -> stock.getProduct().getId())
+			.extracting(stock -> stock.getProductId())
 			.containsExactlyInAnyOrder(firstProduct.getId(), secondProduct.getId());
 	}
 
 	private Stock createStock(Product product, int quantity) {
 		return Stock.builder()
-			.product(product)
+			.productId(product.getId())
 			.quantity(quantity)
 			.build();
 	}

@@ -38,11 +38,11 @@ public class StockHistoryResult {
 		this.createdAt = createdAt;
 	}
 
-	public static StockHistoryResult from(StockHistory history) {
+	public static StockHistoryResult from(StockHistory history, Long productId) {
 		return StockHistoryResult.builder()
 			.historyId(history.getId())
-			.productId(history.getStock().getProduct().getId())
-			.stockId(history.getStock().getId())
+			.productId(productId)
+			.stockId(history.getStockId())
 			.quantityChange(history.getQuantityChange())
 			.reason(history.getReason())
 			.adminMemberId(history.getAdminMemberId())

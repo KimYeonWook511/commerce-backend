@@ -6,13 +6,9 @@ import jakarta.persistence.Column;
 import jakarta.persistence.Entity;
 import jakarta.persistence.EnumType;
 import jakarta.persistence.Enumerated;
-import jakarta.persistence.FetchType;
-import jakarta.persistence.ForeignKey;
 import jakarta.persistence.GeneratedValue;
 import jakarta.persistence.GenerationType;
 import jakarta.persistence.Id;
-import jakarta.persistence.JoinColumn;
-import jakarta.persistence.ManyToOne;
 import jakarta.persistence.Table;
 import lombok.AccessLevel;
 import lombok.Builder;
@@ -31,9 +27,8 @@ public class StockHistory extends BaseTimeEntity {
 	@GeneratedValue(strategy = GenerationType.IDENTITY)
 	private Long id;
 
-	@ManyToOne(fetch = FetchType.LAZY)
-	@JoinColumn(name = "stock_id", nullable = false, foreignKey = @ForeignKey(name = "fk_stock_history_stock_id"))
-	private Stock stock;
+	@Column(name = "stock_id", nullable = false)
+	private Long stockId;
 
 	@Column(nullable = false)
 	private int quantityChange;
@@ -47,8 +42,8 @@ public class StockHistory extends BaseTimeEntity {
 	private Long adminMemberId;
 
 	@Builder
-	private StockHistory(Stock stock, int quantityChange, StockAdjustmentReason reason, Long adminMemberId) {
-		this.stock = stock;
+	private StockHistory(Long stockId, int quantityChange, StockAdjustmentReason reason, Long adminMemberId) {
+		this.stockId = stockId;
 		this.quantityChange = quantityChange;
 		this.reason = reason;
 		this.adminMemberId = adminMemberId;

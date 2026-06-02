@@ -8,5 +8,5 @@ import com.commerce.stock.domain.StockHistory;
 
 public interface JpaStockHistoryRepository extends JpaRepository<StockHistory, Long> {
 
-	List<StockHistory> findAllByStockProductIdOrderByCreatedAtDesc(Long productId);
+	List<StockHistory> findAllByStockIdOrderByCreatedAtDesc(Long stockId);
 }

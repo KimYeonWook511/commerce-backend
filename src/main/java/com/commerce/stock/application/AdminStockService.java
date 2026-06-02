@@ -48,11 +48,11 @@ public class AdminStockService {
 		}
 
 		Stock stock = Stock.builder()
-			.product(product)
+			.productId(product.getId())
 			.quantity(command.getQuantity())
 			.build();
 		Stock savedStock = stockRepository.save(stock);
-		saveHistory(savedStock, command.getQuantity(), command.getReason(), command.getAdminMemberId());
+		saveHistory(savedStock.getId(), command.getQuantity(), command.getReason(), command.getAdminMemberId());
 		log.info("재고 초기 설정 productId={} quantity={} reason={} adminMemberId={}",
 			command.getProductId(), command.getQuantity(), command.getReason(), command.getAdminMemberId());
 
@@ -65,7 +65,7 @@ public class AdminStockService {
 			.orElseThrow(() -> new StockException(StockErrorCode.STOCK_NOT_FOUND));
 
 		stock.increase(command.getQuantity());
-		saveHistory(stock, command.getQuantity(), command.getReason(), command.getAdminMemberId());
+		saveHistory(stock.getId(), command.getQuantity(), command.getReason(), command.getAdminMemberId());
 		log.info("재고 운영 증가 productId={} quantity={} reason={} adminMemberId={} newTotal={}",
 			command.getProductId(), command.getQuantity(), command.getReason(), command.getAdminMemberId(), stock.getQuantity());
 
@@ -78,7 +78,7 @@ public class AdminStockService {
 			.orElseThrow(() -> new StockException(StockErrorCode.STOCK_NOT_FOUND));
 
 		stock.decrease(command.getQuantity());
-		saveHistory(stock, -command.getQuantity(), command.getReason(), command.getAdminMemberId());
+		saveHistory(stock.getId(), -command.getQuantity(), command.getReason(), command.getAdminMemberId());
 		log.info("재고 운영 감소 productId={} quantity={} reason={} adminMemberId={} newTotal={}",
 			command.getProductId(), command.getQuantity(), command.getReason(), command.getAdminMemberId(), stock.getQuantity());
 
@@ -86,17 +86,17 @@ public class AdminStockService {
 	}
 
 	public List<StockHistoryResult> getHistoriesByProductId(Long productId) {
-		stockRepository.findByProductId(productId)
+		Stock stock = stockRepository.findByProductId(productId)
 			.orElseThrow(() -> new StockException(StockErrorCode.STOCK_NOT_FOUND));
 
-		return stockHistoryRepository.findAllByStockProductIdOrderByCreatedAtDesc(productId).stream()
-			.map(StockHistoryResult::from)
+		return stockHistoryRepository.findAllByStockIdOrderByCreatedAtDesc(stock.getId()).stream()
+			.map(history -> StockHistoryResult.from(history, productId))
 			.toList();
 	}
 
-	private void saveHistory(Stock stock, int quantityChange, StockAdjustmentReason reason, Long adminMemberId) {
+	private void saveHistory(Long stockId, int quantityChange, StockAdjustmentReason reason, Long adminMemberId) {
 		StockHistory history = StockHistory.builder()
-			.stock(stock)
+			.stockId(stockId)
 			.quantityChange(quantityChange)
 			.reason(reason)
 			.adminMemberId(adminMemberId)
