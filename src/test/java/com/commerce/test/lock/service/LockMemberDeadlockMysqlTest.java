@@ -13,6 +13,7 @@ import java.util.concurrent.Executors;
 import java.util.concurrent.TimeUnit;
 
 import org.junit.jupiter.api.AfterEach;
+import org.junit.jupiter.api.Disabled;
 import org.junit.jupiter.api.DisplayName;
 import org.junit.jupiter.api.Tag;
 import org.junit.jupiter.api.Test;
@@ -30,7 +31,9 @@ import com.commerce.support.TestcontainersSupport;
 
 import jakarta.persistence.EntityManager;
 
-@Tag("test")
+@Tag("docker")
+@Tag("learning")
+@Disabled("학습용 — MySQL row lock 경합과 deadlock 발생/감지 동작 학습. 운영 검증 대상 아님")
 @SpringBootTest
 @ActiveProfiles("test")
 class LockMemberDeadlockMysqlTest {

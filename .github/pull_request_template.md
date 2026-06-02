@@ -77,9 +77,10 @@ feat, fix, refactor, test, docs, chore
 
 ## 테스트
 
-- [ ] `./gradlew test`
-  - 기본 테스트에서는 `concurrency`, `test`, `batch`, `docker`, `sandbox` 태그가 제외됩니다.
-- [ ] 태그 제외 테스트를 별도로 실행했습니다.
+- [ ] `./gradlew test` (단위/슬라이스 — `docker`, `sandbox`, `concurrency`, `batch`, `learning` 태그 제외)
+- [ ] `./gradlew integrationTest` (Docker/Testcontainers 통합)
+- [ ] `./gradlew batchTest` (Spring Batch 통합)
+- [ ] 격리 task (`concurrencyTest`, `sandboxTest`) 를 별도 실행했습니다.
   - 실행 커맨드:
 - [ ] 실행하지 않았습니다.
   - 사유:

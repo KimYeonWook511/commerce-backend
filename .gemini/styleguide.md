@@ -74,7 +74,8 @@
 ## 테스트
 
 - 기본 테스트 명령은 `./gradlew test`입니다.
-- 현재 `./gradlew test`는 `concurrency`, `test`, `batch`, `docker`, `sandbox` 태그 테스트를 제외합니다.
+- 현재 `./gradlew test`는 `concurrency`, `batch`, `docker`, `sandbox`, `learning` 태그 테스트를 제외합니다.
 - 태그 제외 테스트가 변경 범위에 관련되면 별도 실행 필요성을 언급합니다.
-- Docker/Testcontainers 기반 테스트가 변경 범위에 관련되면 `./gradlew dockerTest` 실행 필요성을 언급합니다.
-- 네이버페이 샌드박스 테스트가 변경 범위에 관련되면 `./gradlew naverPaySandboxTest --dry-run` 또는 필요한 환경변수 기반 실행 필요성을 언급합니다.
+- Docker/Testcontainers 기반 통합 테스트가 변경 범위에 관련되면 `./gradlew integrationTest` 실행 필요성을 언급합니다.
+- Spring Batch 통합 테스트가 변경 범위에 관련되면 `./gradlew batchTest` 실행 필요성을 언급합니다.
+- 외부 sandbox API 테스트가 변경 범위에 관련되면 `./gradlew sandboxTest --dry-run` 또는 필요한 환경변수 기반 실행 필요성을 언급합니다.

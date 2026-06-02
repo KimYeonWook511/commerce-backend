@@ -48,7 +48,7 @@ public final class TestcontainersSupport {
 		registry.add("spring.datasource.username", mysql::getUsername);
 		registry.add("spring.datasource.password", mysql::getPassword);
 		registry.add("spring.datasource.driver-class-name", mysql::getDriverClassName);
-		// dockerTest는 Flyway가 V1 적용 — test profile의 flyway.enabled: false override 무효화
+		// integrationTest는 Flyway가 V1 적용 — test profile의 flyway.enabled: false override 무효화
 		registry.add("spring.jpa.hibernate.ddl-auto", () -> "validate");
 		registry.add("spring.flyway.enabled", () -> true);
 	}

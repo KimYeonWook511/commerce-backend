@@ -209,20 +209,79 @@ orderPersistence.count()
 3. CleanupOrder enum에 FK 순서에 맞게 추가
 ```
 
+### 베이스 클래스 미도입 사유
+
+슬라이스/통합 테스트 양쪽에서 공통 베이스 클래스를 도입하지 않는다.
+
+- 각 테스트가 `@DynamicPropertySource` 로 필요한 컨테이너(MySQL/Redis/Kafka)만 명시 선언한다
+- 공통 베이스 클래스로 통합하면 (a) 모든 통합 테스트가 모든 컨테이너에 묶이거나 (b) 컨테이너 조합별 분기 베이스 클래스 트리가 생긴다 — 둘 다 의존 범위가 흐려진다
+- 명시 선언 패턴이 각 테스트의 의존 범위를 한눈에 드러내고, 변경 영향 추적이 쉽다
+- `TestcontainersSupport` 의 정적 메서드 (`registerMySql`, `registerRedis`, `registerKafka`) 호출로 반복 비용은 충분히 낮다
+
 ---
 
 ## 태그 규칙
 
-`@Tag`로 테스트를 분류하고, `build.gradle`에서 태그별로 실행을 분리한다.
+`@Tag`로 테스트를 분류하고, `build.gradle`에서 태그별로 실행을 분리한다. 태그는 **두 축**으로 구성된다.
 
-| 태그 | 대상 | 실행 조건 |
+**환경 요구 축** — 어떤 환경이 있어야 돌릴 수 있는가
+- `docker`: Testcontainers (MySQL/Redis/Kafka) 가 필요한 테스트
+- `sandbox`: 외부 sandbox API 가 필요한 테스트
+
+**격리 분류 축** — 어떤 격리 그룹에 속하는가
+- `concurrency`: 동시성 / 데드락 테스트
+- `batch`: Spring Batch 통합 테스트
+- `learning`: 학습/디버그용 테스트 (`@Disabled` 와 함께 사용)
+
+한 클래스에 두 축의 태그를 동시에 부여할 수 있다 (예: `docker + concurrency`). 두 축은 독립이라 한 클래스가 양쪽에 값을 가질 수 있다.
+
+| 태그 | 축 | 부여 대상 | 실행 명령 |
+|---|---|---|---|
+| `docker` | 환경 | Testcontainers 사용 | `./gradlew integrationTest` |
+| `sandbox` | 환경 | 외부 sandbox API | `./gradlew sandboxTest` (수동) |
+| `concurrency` | 격리 | 동시성 / 데드락 | `./gradlew concurrencyTest` (수동) |
+| `batch` | 격리 | Spring Batch 통합 | `./gradlew batchTest` |
+| `learning` | 격리 | 학습/디버그 (`@Disabled`) | 실행 안 됨 |
+
+### task 정의 (disjoint)
+
+한 클래스는 정확히 0 또는 1개 task 에서 실행되도록 `includeTags`/`excludeTags` 가 구성된다.
+
+| task | includeTags | excludeTags |
 |---|---|---|
-| `docker` | Testcontainers 사용 통합 테스트 | Docker 환경 필요 |
-| `concurrency` | 동시성 / 데드락 테스트 | 별도 실행 |
-| `batch` | Spring Batch 통합 테스트 | 별도 실행 |
-| `sandbox` | 외부 API 샌드박스 테스트 | 별도 실행 |
+| `test` | — | docker, sandbox, concurrency, batch, learning |
+| `integrationTest` | docker | concurrency, batch, sandbox, learning |
+| `concurrencyTest` | concurrency | learning |
+| `batchTest` | batch | learning |
+| `sandboxTest` | sandbox | concurrency, batch, learning |
 
-기본 `test` 태스크는 위 태그를 제외하고 실행한다 (단위 테스트, 슬라이스 테스트만 포함).
+기본 `test` 태스크는 단위/슬라이스 테스트만 실행한다 (도커 불필요, 가장 빠름).
+
+### CI 자동 검증 범위
+
+CI 는 다음 두 잡을 병렬로 실행한다.
+
+- `unit-slice`: `./gradlew test`
+- `integration`: `./gradlew integrationTest batchTest`
+
+`concurrencyTest`, `sandboxTest` 는 CI 미포함 (수동 실행 정책 유지).
+
+`docker + concurrency` 등 격리 축 태그가 함께 부여된 클래스는 격리 task 쪽으로만 매칭되므로 환경 축이 docker 라도 자동 검증에서 빠진다. 동시성/배치/sandbox 관련 코드를 변경하면 영향 범위에 맞춰 수동으로 `./gradlew concurrencyTest` / `./gradlew sandboxTest` 를 직접 실행해 검증한다.
+
+`sandboxTest` 는 외부 PG sandbox 에 실제 API 호출이 발생하므로 동시성 검증보다 더 강한 사전 의도 확인이 필요하다. 새 sandbox 클래스 작성 시 `@Tag("sandbox")` 와 함께 `@EnabledIfEnvironmentVariable` 류의 JUnit 조건 어노테이션으로 필수 환경변수 부재 시 자동 skip 되도록 둔다 — 빌드 task 자체 차단이 약해도 클래스 레벨에서 한 번 더 안전망을 둔다.
+
+---
+
+## 학습용 테스트 격리 정책
+
+학습/실험 목적의 테스트 코드는 운영 검증 대상이 아니지만, 회고와 향후 의사결정 참고용으로 보존한다. 다음 규칙을 따른다.
+
+- `@Tag("learning")` + `@Disabled("학습용 — {간단한 회고 문맥}. 운영 검증 대상 아님")` 부여
+- `@Disabled` 메시지에 무엇을 학습/실험했는지, 결론이 무엇이었는지 한 줄로 기록한다 (코드 자체가 회고 문서 역할을 겸함)
+- 도커가 필요한 학습용 테스트는 `docker` tag 도 함께 부여한다 (다른 docker 사용 클래스와의 일관성)
+- 모든 Test task 의 `excludeTags` 에 `learning` 이 포함되어 있어 `@Disabled` 와 이중 안전망이 된다
+
+학습용 도메인 (`AsyncTestEntity`, `LockMember` 등) 은 별도 모듈로 분리하지 않고 `src/test` 위치를 유지한다. 운영 코드 리팩토링 시 IDE 가 컴파일 깨짐을 알려주는 안전망 역할을 한다.
 
 ---
 
@@ -290,6 +349,14 @@ OrderRepositoryMyBatisAdapterTest  (O)
 - **Infrastructure 테스트** — Mock 사용 금지, H2 또는 Testcontainers 사용
 - Mock은 `@ExtendWith(MockitoExtension.class)` 기반으로 사용한다.
 - Mockito는 BDD 스타일(`BDDMockito.given()`, `BDDMockito.then().should()`)을 사용한다.
+
+### Spring 빈 Mock 어노테이션
+
+Spring Boot 3.4 부터 `@MockBean` / `@SpyBean` 이 deprecated 되었고 `@MockitoBean` / `@MockitoSpyBean` 으로 대체되었다.
+
+- 슬라이스/통합 테스트에서 Spring 빈을 Mock 처리할 때 `@MockitoBean` / `@MockitoSpyBean` 을 사용한다
+- `@MockBean` / `@SpyBean` (Boot 자체 어노테이션) 은 사용하지 않는다
+- 단위 테스트의 순수 Mockito (`@Mock`, `@InjectMocks`) 는 종전과 동일하게 사용한다
 
 ---
 

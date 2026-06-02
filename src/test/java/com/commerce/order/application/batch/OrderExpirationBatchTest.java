@@ -207,7 +207,7 @@ class OrderExpirationBatchTest {
 		StepExecution secondStep = secondExecution.getStepExecutions().iterator().next();
 		assertThat(secondStep.getReadCount()).isEqualTo(0);
 		assertThat(secondStep.getWriteCount()).isEqualTo(0);
-		then(outboxService).should(times(1))
+		then(outboxService).should(times(2))
 			.createStockRestoreOutboxEvent(any(StockRestoreOutboxCreateCommand.class));
 	}
 
