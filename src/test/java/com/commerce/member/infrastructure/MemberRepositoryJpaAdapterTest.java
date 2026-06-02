@@ -53,7 +53,7 @@ class MemberRepositoryJpaAdapterTest {
 	@DisplayName("이메일이 중복되면 저장 시점에 예외가 발생한다")
 	@Test
 	// H2 한계로 DataIntegrityViolationException 타입으로 어서션한다.
-	// 실제 MySQL 환경에서는 DuplicateKeyException이 발생함 — UniqueConstraintViolationIntegrationTest(dockerTest)로 보완.
+	// 실제 MySQL 환경에서는 DuplicateKeyException이 발생함 — UniqueConstraintViolationIntegrationTest(integrationTest)로 보완.
 	void save_whenEmailDuplicated_throwDataIntegrityViolationException() {
 		// given
 		Member firstMember = Member.createUser("duplicate@example.com", "hashed-pass", "user1");
