@@ -5,6 +5,7 @@ import java.util.Optional;
 import org.springframework.stereotype.Repository;
 
 import com.commerce.payment.domain.Payment;
+import com.commerce.payment.domain.PaymentStatus;
 import com.commerce.payment.domain.repository.PaymentRepository;
 
 import lombok.RequiredArgsConstructor;
@@ -23,5 +24,10 @@ public class PaymentRepositoryAdapter implements PaymentRepository {
 	@Override
 	public Optional<Payment> findByMerchantPayKey(String merchantPayKey) {
 		return jpaPaymentRepository.findByMerchantPayKey(merchantPayKey);
+	}
+
+	@Override
+	public boolean existsByMerchantPayKeyAndStatus(String merchantPayKey, PaymentStatus status) {
+		return jpaPaymentRepository.existsByMerchantPayKeyAndStatus(merchantPayKey, status);
 	}
 }

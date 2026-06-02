@@ -34,10 +34,9 @@ public class PaymentApprovalService {
 		return paymentRepository.findByMerchantPayKey(merchantPayKey);
 	}
 
-	// PG 보상 취소 처리 시작 전 커밋된 DB 상태를 기준으로 보상 필요 여부를 판단한다.
 	@Transactional(readOnly = true)
-	public boolean isCompensationRequired(String merchantPayKey) {
-		return findPaymentByMerchantPayKey(merchantPayKey).isEmpty();
+	public boolean hasCompletedPayment(String merchantPayKey) {
+		return paymentRepository.existsByMerchantPayKeyAndStatus(merchantPayKey, PaymentStatus.COMPLETED);
 	}
 
 	@Transactional
