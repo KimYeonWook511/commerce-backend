@@ -7,6 +7,7 @@
 | Task | adr 파일 | 주요 결정 키워드 |
 |---|---|---|
 | auth-redis-timing | [`docs/tasks/auth-redis-timing/adr.md`](tasks/auth-redis-timing/adr.md) | `Propagation.NOT_SUPPORTED`로 DB commit 후 Redis 저장 보장 (ADR-008 연계) |
+| auth-refresh-token-store-unavailable | [`docs/tasks/auth-refresh-token-store-unavailable/adr.md`](tasks/auth-refresh-token-store-unavailable/adr.md) | refresh token Redis 장애 시 도메인 예외 매핑 + 도메인-specific @RestControllerAdvice 응답 매핑 (외부 캐시 장애 규약 통일) |
 | boundary-logging-standardization | [`docs/tasks/boundary-logging-standardization/adr.md`](tasks/boundary-logging-standardization/adr.md) | 외부 시스템 경계 INFO/WARN/ERROR 로깅 표준 |
 | cart | [`docs/tasks/cart/adr.md`](tasks/cart/adr.md) | CartItem-only 단일 entity aggregate, ID 참조(ADR-020), 가격 조회 시 재조회, 동시성 처리(@Version + retry + Processor 분리), 응답·엔드포인트 정책(unavailable·정렬·Remove 4xx) |
 | core-domain-logging | [`docs/tasks/core-domain-logging/adr.md`](tasks/core-domain-logging/adr.md) | 도메인 이벤트 INFO 로그 적용 범위 |
