@@ -643,9 +643,9 @@ class NaverPayApprovalServiceTest {
 			any(), any(), eq(PaymentAttemptFailCode.APPROVE_PROCESS_FAILED), any());
 	}
 
-	@DisplayName("다른 사용자의 paymentId로 승인 응답을 받으면 compensateMerchantKeyMismatch를 호출하고 예외를 던진다")
+	@DisplayName("다른 사용자의 pgPaymentId로 승인 응답을 받으면 compensateMerchantKeyMismatch를 호출하고 예외를 던진다")
 	@Test
-	void approve_whenForeignPaymentIdReturnsDifferentMerchantPayKey_callsCompensateAndThrowException() {
+	void approve_whenForeignPgPaymentIdReturnsDifferentMerchantPayKey_callsCompensateAndThrowException() {
 		// given
 		long memberId = 1L;
 		Order attackerOrder = createOrder(1000);
@@ -670,9 +670,9 @@ class NaverPayApprovalServiceTest {
 		then(paymentApprovalCompensationService).should().compensateMerchantKeyMismatch(any());
 	}
 
-	@DisplayName("다른 사용자의 paymentId로 AlreadyComplete 응답을 받았고 history merchantPayKey가 다르면 실패 처리하고 취소하지 않는다")
+	@DisplayName("다른 사용자의 pgPaymentId로 AlreadyComplete 응답을 받았고 history merchantPayKey가 다르면 실패 처리하고 취소하지 않는다")
 	@Test
-	void approve_whenForeignPaymentIdHistoryReturnsDifferentMerchantPayKey_markFailedWithoutCancel() {
+	void approve_whenForeignPgPaymentIdHistoryReturnsDifferentMerchantPayKey_markFailedWithoutCancel() {
 		// given
 		long memberId = 1L;
 		Order attackerOrder = createOrder(1000);

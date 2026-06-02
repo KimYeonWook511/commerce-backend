@@ -26,12 +26,12 @@ public class PaymentAttemptRepositoryAdapter implements PaymentAttemptRepository
 	public Optional<PaymentAttempt> findApproveAttempt(
 		String merchantPayKey,
 		PaymentProvider provider,
-		String paymentId
+		String pgPaymentId
 	) {
 		return findAttempt(
 			merchantPayKey,
 			provider,
-			paymentId,
+			pgPaymentId,
 			PaymentAttemptType.APPROVE
 		);
 	}
@@ -40,12 +40,12 @@ public class PaymentAttemptRepositoryAdapter implements PaymentAttemptRepository
 	public Optional<PaymentAttempt> findCancelAttempt(
 		String merchantPayKey,
 		PaymentProvider provider,
-		String paymentId
+		String pgPaymentId
 	) {
 		return findAttempt(
 			merchantPayKey,
 			provider,
-			paymentId,
+			pgPaymentId,
 			PaymentAttemptType.CANCEL
 		);
 	}
@@ -54,13 +54,13 @@ public class PaymentAttemptRepositoryAdapter implements PaymentAttemptRepository
 	public Optional<PaymentAttempt> findAttempt(
 		String merchantPayKey,
 		PaymentProvider provider,
-		String paymentId,
+		String pgPaymentId,
 		PaymentAttemptType type
 	) {
-		return jpaPaymentAttemptRepository.findByMerchantPayKeyAndProviderAndPaymentIdAndType(
+		return jpaPaymentAttemptRepository.findByMerchantPayKeyAndProviderAndPgPaymentIdAndType(
 			merchantPayKey,
 			provider,
-			paymentId,
+			pgPaymentId,
 			type
 		);
 	}

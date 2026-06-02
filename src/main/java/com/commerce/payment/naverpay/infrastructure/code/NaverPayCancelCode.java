@@ -3,7 +3,7 @@ package com.commerce.payment.naverpay.infrastructure.code;
 public enum NaverPayCancelCode {
 	SUCCESS("Success", "성공"),
 	INVALID_MERCHANT("InvalidMerchant", "유효하지 않은 가맹점"),
-	INVALID_PAYMENT_ID("InvalidPaymentId", "유효하지 않은 네이버페이 결제번호"),
+	INVALID_PG_PAYMENT_ID("InvalidPaymentId", "유효하지 않은 네이버페이 결제번호"),
 	ALREADY_CANCELED("AlreadyCanceled", "이미 전체 취소된 결제"),
 	OVER_REMAIN_AMOUNT("OverRemainAmount", "취소 요청 금액이 잔여 결제 금액을 초과"),
 	PRE_CANCEL_NOT_COMPLETE(

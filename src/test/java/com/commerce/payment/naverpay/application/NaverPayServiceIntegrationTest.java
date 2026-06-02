@@ -744,9 +744,9 @@ class NaverPayServiceIntegrationTest {
 				.isEqualTo(OrderErrorCode.ORDER_NOT_FOUND));
 	}
 
-	@DisplayName("다른 사용자의 paymentId로 승인 응답을 받아 merchantPayKey가 다르면 실패 처리하고 취소하지 않는다")
+	@DisplayName("다른 사용자의 pgPaymentId로 승인 응답을 받아 merchantPayKey가 다르면 실패 처리하고 취소하지 않는다")
 	@Test
-	void approve_whenForeignPaymentIdReturnsDifferentMerchantPayKey_failAttemptWithoutCancel() {
+	void approve_whenForeignPgPaymentIdReturnsDifferentMerchantPayKey_failAttemptWithoutCancel() {
 		// given
 		Member member = memberPersistence.save(createMember());
 		persistOrder(member, "PAY-INT-10-2", 1000);
@@ -765,9 +765,9 @@ class NaverPayServiceIntegrationTest {
 		then(naverPayGateway).should(never()).cancel(any(), anyInt(), any());
 	}
 
-	@DisplayName("다른 사용자의 paymentId로 AlreadyComplete 응답을 받았고 history merchantPayKey가 다르면 실패 처리하고 취소하지 않는다")
+	@DisplayName("다른 사용자의 pgPaymentId로 AlreadyComplete 응답을 받았고 history merchantPayKey가 다르면 실패 처리하고 취소하지 않는다")
 	@Test
-	void approve_whenForeignPaymentIdHistoryReturnsDifferentMerchantPayKey_failAttemptWithoutCancel() {
+	void approve_whenForeignPgPaymentIdHistoryReturnsDifferentMerchantPayKey_failAttemptWithoutCancel() {
 		// given
 		Member member = memberPersistence.save(createMember());
 		persistOrder(member, "PAY-INT-10-3", 1000);
@@ -856,18 +856,18 @@ class NaverPayServiceIntegrationTest {
 		return order;
 	}
 
-	private PaymentAttempt getAttempt(String merchantPayKey, String paymentId, PaymentAttemptType type) {
+	private PaymentAttempt getAttempt(String merchantPayKey, String pgPaymentId, PaymentAttemptType type) {
 		return paymentPersistence.getAttempt(
 			merchantPayKey,
 			PaymentProvider.NAVERPAY,
-			paymentId,
+			pgPaymentId,
 			type
 		);
 	}
 
-	private void assertCancelAttemptEmpty(String merchantPayKey, String paymentId) {
+	private void assertCancelAttemptEmpty(String merchantPayKey, String pgPaymentId) {
 		assertThat(paymentPersistence.findAttempt(
-			merchantPayKey, PaymentProvider.NAVERPAY, paymentId, PaymentAttemptType.CANCEL
+			merchantPayKey, PaymentProvider.NAVERPAY, pgPaymentId, PaymentAttemptType.CANCEL
 		)).isEmpty();
 	}
 

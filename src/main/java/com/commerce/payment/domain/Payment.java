@@ -56,10 +56,10 @@ public class Payment extends BaseTimeEntity {
 	@Column(nullable = false)
 	private PaymentProvider provider;
 
-	@Column
+	@Column(length = 64)
 	private String merchantPayKey;
 
-	@Column
+	@Column(length = 64)
 	private String pgPaymentId;
 
 	private LocalDateTime approvedAt;

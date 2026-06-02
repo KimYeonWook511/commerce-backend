@@ -21,7 +21,7 @@ DB 스키마 변경은 Flyway 마이그레이션 스크립트로 관리한다 (A
 - `tbl_member`
 - `tbl_payment_attempt`
 - `idx_outbox_event_type_status_next_retry_id`
-- `uk_payment_attempt_merchant_pay_key_provider_payment_id_type`
+- `uk_payment_attempt_merchant_pay_key_provider_pg_payment_id_type`
 
 ## 테이블 요약
 
@@ -87,7 +87,7 @@ COLUMNS:
 - `member_id (FK -> tbl_member.id)`
 - `total_price`
 - `status`
-- `merchant_pay_key (UNIQUE)`
+- `merchant_pay_key (VARCHAR(64), UNIQUE)`
 - `idempotency_key (NULL 허용)`
 
 INDEX:
@@ -96,6 +96,7 @@ INDEX:
 
 비고:
 - `idempotency_key`는 기존 데이터 및 멱등성 없는 경로와의 호환을 위해 NULL 허용. MySQL에서 NULL 값은 unique 제약 대상에서 제외된다.
+- `merchant_pay_key` 길이는 `tbl_payment`, `tbl_payment_attempt`와 동일하게 64로 맞춘다 (cross-entity 일관성, ADR-023 참조).
 
 ### `tbl_order_item`
 
@@ -137,8 +138,8 @@ COLUMNS:
 - `amount`
 - `status`
 - `provider`
-- `merchant_pay_key (UNIQUE)`
-- `pg_payment_id (UNIQUE)`
+- `merchant_pay_key (VARCHAR(64), UNIQUE)`
+- `pg_payment_id (VARCHAR(64), UNIQUE)`
 - `approved_at`
 
 INDEX:
@@ -146,12 +147,15 @@ INDEX:
 - `merchant_pay_key (UNIQUE)`
 - `pg_payment_id (UNIQUE)`
 
+비고:
+- `merchant_pay_key`, `pg_payment_id` 길이는 `tbl_payment_attempt`와 동일하게 64로 맞춘다 (cross-entity 일관성, ADR-023 참조).
+
 ### `tbl_payment_attempt`
 
 COLUMNS:
 - `id (PK)`
 - `merchant_pay_key`
-- `payment_id`
+- `pg_payment_id`
 - `amount`
 - `provider`
 - `type`
@@ -161,10 +165,11 @@ COLUMNS:
 - `responded_at`
 
 INDEX:
-- `uk_payment_attempt_merchant_pay_key_provider_payment_id_type (merchant_pay_key, provider, payment_id, type) UNIQUE`
+- `uk_payment_attempt_merchant_pay_key_provider_pg_payment_id_type (merchant_pay_key, provider, pg_payment_id, type) UNIQUE`
 
 비고:
-- unique key 대상 4개 컬럼(`merchant_pay_key`, `provider`, `payment_id`, `type`)은 `@Column(length=...)`을 명시한다 (각각 64/32/64/32). utf8mb4 + InnoDB unique key 한도 3072 bytes 안에 들어오도록 산정. 상세는 ADR-023 및 `docs/tasks/payment-attempt-unique-key-length/adr.md` 참조.
+- unique key 대상 4개 컬럼(`merchant_pay_key`, `provider`, `pg_payment_id`, `type`)은 `@Column(length=...)`을 명시한다 (각각 64/32/64/32). utf8mb4 + InnoDB unique key 한도 3072 bytes 안에 들어오도록 산정. 상세는 ADR-023 및 `docs/tasks/payment-attempt-unique-key-length/adr.md` 참조.
+- `pg_payment_id`는 PG가 발급한 외부 결제 ID로, `tbl_payment.pg_payment_id`와 같은 의미다. entity별 표현을 통일하기 위해 컬럼명을 `payment_id`에서 변경했다 (issue #194).
 
 ### `tbl_outbox_event`
 

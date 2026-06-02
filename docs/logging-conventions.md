@@ -144,7 +144,7 @@ public class CreateOrderService {
 ## 7. 메시지 작성 규칙
 
 ### 언어
-로그 메시지 본문은 **한국어**로 작성한다. 도메인 식별자(`orderId`, `memberId`, `paymentId` 등)는 영어 그대로 사용한다.
+로그 메시지 본문은 **한국어**로 작성한다. 도메인 식별자(`orderId`, `memberId`, `pgPaymentId` 등)는 영어 그대로 사용한다.
 
 ```java
 // 올바름
@@ -187,7 +187,7 @@ MDC 키는 `com.commerce.common.log.LogContext`에서 단일 관리한다.
 요청 종료 시 **반드시 `MDC.clear()`를 호출**한다. Filter의 `finally` 블록 책임이다. 안 하면 스레드 풀에서 다음 요청에 누적되어 잘못된 traceId·memberId가 남는다.
 
 ### 도메인 확장
-`orderId`, `paymentId` 등 도메인 식별자는 유스케이스 진입 시 push하고 종료 시 remove한다. 도메인별로 후속 작업에서 확장된다.
+`orderId`, `pgPaymentId` 등 도메인 식별자는 유스케이스 진입 시 push하고 종료 시 remove한다. 도메인별로 후속 작업에서 확장된다.
 
 ### 비동기·이벤트 경계의 traceId 전파
 
@@ -263,7 +263,7 @@ Outbox relay 스케줄러는 HTTP 요청 컨텍스트가 없으므로, 원본 HT
 | `memberId` | 사용자 식별자 (MDC, 인증된 요청만) |
 | `exception` | (선택) `{class, message, stackTrace}` — ERROR + stack trace 케이스만 |
 
-도메인별 추가 MDC(`orderId`, `paymentId` 등)는 필요 시 JSON 상위 필드로 자연스럽게 직렬화된다.
+도메인별 추가 MDC(`orderId`, `pgPaymentId` 등)는 필요 시 JSON 상위 필드로 자연스럽게 직렬화된다.
 
 ## 10. 참조
 

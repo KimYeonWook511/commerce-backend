@@ -224,11 +224,11 @@ class PaymentPostProcessTargetPolicyTest {
 			.isEqualTo(PaymentPostProcessTarget.NONE);
 	}
 
-	@DisplayName("cancel attempt가 INVALID_PAYMENT_ID로 실패하면 후처리 대상이 아니다")
+	@DisplayName("cancel attempt가 INVALID_PG_PAYMENT_ID로 실패하면 후처리 대상이 아니다")
 	@Test
-	void resolvePostProcessTarget_whenCancelAttemptFailedByInvalidPaymentId_returnNone() {
-		PaymentAttempt cancelAttempt = failedCancelAttempt(PaymentAttemptFailCode.INVALID_PAYMENT_ID,
-			"INVALID_PAYMENT_ID");
+	void resolvePostProcessTarget_whenCancelAttemptFailedByInvalidPgPaymentId_returnNone() {
+		PaymentAttempt cancelAttempt = failedCancelAttempt(PaymentAttemptFailCode.INVALID_PG_PAYMENT_ID,
+			"INVALID_PG_PAYMENT_ID");
 
 		assertThat(targetPolicy.resolvePostProcessTarget(null, cancelAttempt, LocalDateTime.now()))
 			.isEqualTo(PaymentPostProcessTarget.NONE);

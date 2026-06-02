@@ -73,21 +73,21 @@ class PaymentCancellationAttemptServiceConcurrencyTest {
 	void getOrCreate_whenConcurrentIdempotentRequest_returnSameCancelAttempt() throws Exception {
 		// given: amount=1000 으로 cancel attempt 선행 생성
 		String merchantPayKey = "PAY-ATTEMPT-CON-2";
-		String paymentId = "pg-attempt-con-2";
+		String pgPaymentId = "pg-attempt-con-2";
 		paymentCancellationAttemptService.getOrCreate(
-			merchantPayKey, PaymentProvider.NAVERPAY, paymentId, 1000);
+			merchantPayKey, PaymentProvider.NAVERPAY, pgPaymentId, 1000);
 		ConcurrentLinkedQueue<Throwable> errors = new ConcurrentLinkedQueue<>();
 
 		// when: 20개 스레드가 동일한 amount 로 동시 재요청
 		runConcurrent(20, () -> paymentCancellationAttemptService.getOrCreate(
 			merchantPayKey,
 			PaymentProvider.NAVERPAY,
-			paymentId,
+			pgPaymentId,
 			1000
 		), errors);
 
 		// then: 사전 find 분기로 모두 흡수되어 attempt 는 1건, 에러 없음
-		assertThat(paymentPersistence.countAttempts(merchantPayKey, paymentId, PaymentAttemptType.CANCEL))
+		assertThat(paymentPersistence.countAttempts(merchantPayKey, pgPaymentId, PaymentAttemptType.CANCEL))
 			.isEqualTo(1L);
 		assertThat(errors).isEmpty();
 	}
@@ -97,18 +97,18 @@ class PaymentCancellationAttemptServiceConcurrencyTest {
 	void getOrCreate_whenConcurrentRequestWithDifferentAmount_allThrowAmountMismatch() throws Exception {
 		// given: amount=1000으로 cancel attempt 선행 생성
 		String merchantPayKey = "PAY-ATTEMPT-MISMATCH-2";
-		String paymentId = "pg-attempt-mismatch-2";
+		String pgPaymentId = "pg-attempt-mismatch-2";
 		paymentCancellationAttemptService.getOrCreate(
-			merchantPayKey, PaymentProvider.NAVERPAY, paymentId, 1000);
+			merchantPayKey, PaymentProvider.NAVERPAY, pgPaymentId, 1000);
 
 		ConcurrentLinkedQueue<Throwable> errors = new ConcurrentLinkedQueue<>();
 
 		// when: 20개 스레드가 amount=2000으로 동시 재요청 (mismatch)
 		runConcurrent(20, () -> paymentCancellationAttemptService.getOrCreate(
-			merchantPayKey, PaymentProvider.NAVERPAY, paymentId, 2000), errors);
+			merchantPayKey, PaymentProvider.NAVERPAY, pgPaymentId, 2000), errors);
 
 		// then: attempt는 1건, 재요청 20개 모두 mismatch 예외
-		assertThat(paymentPersistence.countAttempts(merchantPayKey, paymentId, PaymentAttemptType.CANCEL))
+		assertThat(paymentPersistence.countAttempts(merchantPayKey, pgPaymentId, PaymentAttemptType.CANCEL))
 			.isEqualTo(1L);
 		assertThat(errors).hasSize(20);
 		errors.forEach(e -> {

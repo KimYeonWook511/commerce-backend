@@ -83,18 +83,18 @@ class PaymentApprovalServiceConcurrencyTest {
 	void completeApprovedPayment_whenConcurrentCall_createSinglePayment() throws Exception {
 		// given
 		String merchantPayKey = "PAY-CON-1";
-		String paymentId = "pg-con-1";
+		String pgPaymentId = "pg-con-1";
 		Member member = memberPersistence.save(createMember());
 		Product product = productPersistence.save(createProduct("product-" + merchantPayKey, 1000));
 		orderPersistence.saveAndFlush(createOrder(member, product, merchantPayKey));
-		paymentPersistence.save(createApproveAttempt(merchantPayKey, paymentId, 1000));
+		paymentPersistence.save(createApproveAttempt(merchantPayKey, pgPaymentId, 1000));
 		ConcurrentLinkedQueue<Throwable> errors = new ConcurrentLinkedQueue<>();
 
 		// when
 		runConcurrent(20, () -> paymentApprovalService.completeApprovedPayment(
 			merchantPayKey,
 			PaymentProvider.NAVERPAY,
-			paymentId,
+			pgPaymentId,
 			LocalDateTime.now()
 		), errors);
 
@@ -169,10 +169,10 @@ class PaymentApprovalServiceConcurrencyTest {
 		return order;
 	}
 
-	private PaymentAttempt createApproveAttempt(String merchantPayKey, String paymentId, int totalPayAmount) {
+	private PaymentAttempt createApproveAttempt(String merchantPayKey, String pgPaymentId, int totalPayAmount) {
 		return PaymentAttempt.createApproveRequested(
 			merchantPayKey,
-			paymentId,
+			pgPaymentId,
 			totalPayAmount,
 			PaymentProvider.NAVERPAY
 		);

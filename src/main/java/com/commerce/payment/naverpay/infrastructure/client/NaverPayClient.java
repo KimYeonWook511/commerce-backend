@@ -39,13 +39,13 @@ public class NaverPayClient {
 	private final RestTemplate naverPayRestTemplate;
 	private final ObjectMapper objectMapper;
 
-	public NaverPayResponse<NaverPayApproveBody> approve(String paymentId) {
+	public NaverPayResponse<NaverPayApproveBody> approve(String pgPaymentId) {
 		HttpHeaders headers = createHeaders();
 		headers.set("X-NaverPay-Idempotency-Key", UUID.randomUUID().toString());
 		headers.setContentType(MediaType.APPLICATION_FORM_URLENCODED);
 
 		MultiValueMap<String, String> body = new LinkedMultiValueMap<>();
-		body.add("paymentId", paymentId);
+		body.add("paymentId", pgPaymentId);
 
 		return post(properties.getApprovalUrl(), headers, body, new TypeReference<>() {});
 	}
@@ -66,7 +66,7 @@ public class NaverPayClient {
 		return post(properties.getCancelUrl(), headers, body, new TypeReference<>() {});
 	}
 
-	public NaverPayResponse<NaverPayHistoryBody> getApprovalHistory(String paymentId) {
+	public NaverPayResponse<NaverPayHistoryBody> getApprovalHistory(String pgPaymentId) {
 		HttpHeaders headers = createHeaders();
 		headers.setContentType(MediaType.APPLICATION_JSON);
 
@@ -74,11 +74,11 @@ public class NaverPayClient {
 			.approvalType(NaverPayApprovalType.APPROVAL)
 			.build();
 
-		String url = properties.getPaymentHistoryUrl().replace("{paymentId}", paymentId);
+		String url = properties.getPaymentHistoryUrl().replace("{paymentId}", pgPaymentId);
 		return post(url, headers, body, new TypeReference<>() {});
 	}
 
-	public NaverPayResponse<NaverPayHistoryBody> getCancelHistory(String paymentId) {
+	public NaverPayResponse<NaverPayHistoryBody> getCancelHistory(String pgPaymentId) {
 		HttpHeaders headers = createHeaders();
 		headers.setContentType(MediaType.APPLICATION_JSON);
 
@@ -86,11 +86,11 @@ public class NaverPayClient {
 			.approvalType(NaverPayApprovalType.CANCEL)
 			.build();
 
-		String url = properties.getPaymentHistoryUrl().replace("{paymentId}", paymentId);
+		String url = properties.getPaymentHistoryUrl().replace("{paymentId}", pgPaymentId);
 		return post(url, headers, body, new TypeReference<>() {});
 	}
 
-	public NaverPayResponse<NaverPayHistoryBody> getAllHistory(String paymentId) {
+	public NaverPayResponse<NaverPayHistoryBody> getAllHistory(String pgPaymentId) {
 		HttpHeaders headers = createHeaders();
 		headers.setContentType(MediaType.APPLICATION_JSON);
 
@@ -98,7 +98,7 @@ public class NaverPayClient {
 			.approvalType(NaverPayApprovalType.ALL)
 			.build();
 
-		String url = properties.getPaymentHistoryUrl().replace("{paymentId}", paymentId);
+		String url = properties.getPaymentHistoryUrl().replace("{paymentId}", pgPaymentId);
 		return post(url, headers, body, new TypeReference<>() {});
 	}
 

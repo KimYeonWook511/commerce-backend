@@ -10,10 +10,10 @@ import com.commerce.payment.domain.PaymentProvider;
 
 public interface JpaPaymentAttemptRepository extends JpaRepository<PaymentAttempt, Long> {
 
-	Optional<PaymentAttempt> findByMerchantPayKeyAndProviderAndPaymentIdAndType(
+	Optional<PaymentAttempt> findByMerchantPayKeyAndProviderAndPgPaymentIdAndType(
 		String merchantPayKey,
 		PaymentProvider provider,
-		String paymentId,
+		String pgPaymentId,
 		PaymentAttemptType type
 	);
 }

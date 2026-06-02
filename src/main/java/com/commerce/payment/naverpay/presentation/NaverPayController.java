@@ -30,7 +30,7 @@ public class NaverPayController {
 		@RequestParam String merchantPayKey,
 		@RequestParam String resultCode,
 		@RequestParam(required = false) String resultMessage,
-		@RequestParam(required = false) String paymentId,
+		@RequestParam(name = "paymentId", required = false) String pgPaymentId,
 		@RequestParam(required = false) String reserveId
 	) {
 	}
