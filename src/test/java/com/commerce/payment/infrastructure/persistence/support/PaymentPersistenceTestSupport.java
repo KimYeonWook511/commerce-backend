@@ -54,13 +54,13 @@ public class PaymentPersistenceTestSupport implements PersistenceTestSupport {
 	public Optional<PaymentAttempt> findAttempt(
 		String merchantPayKey,
 		PaymentProvider provider,
-		String paymentId,
+		String pgPaymentId,
 		PaymentAttemptType type
 	) {
-		return paymentAttemptRepository.findByMerchantPayKeyAndProviderAndPaymentIdAndType(
+		return paymentAttemptRepository.findByMerchantPayKeyAndProviderAndPgPaymentIdAndType(
 			merchantPayKey,
 			provider,
-			paymentId,
+			pgPaymentId,
 			type
 		);
 	}
@@ -68,16 +68,16 @@ public class PaymentPersistenceTestSupport implements PersistenceTestSupport {
 	public PaymentAttempt getAttempt(
 		String merchantPayKey,
 		PaymentProvider provider,
-		String paymentId,
+		String pgPaymentId,
 		PaymentAttemptType type
 	) {
-		return findAttempt(merchantPayKey, provider, paymentId, type).orElseThrow();
+		return findAttempt(merchantPayKey, provider, pgPaymentId, type).orElseThrow();
 	}
 
-	public long countAttempts(String merchantPayKey, String paymentId, PaymentAttemptType type) {
+	public long countAttempts(String merchantPayKey, String pgPaymentId, PaymentAttemptType type) {
 		return paymentAttemptRepository.findAll().stream()
 			.filter(attempt -> attempt.getMerchantPayKey().equals(merchantPayKey))
-			.filter(attempt -> attempt.getPaymentId().equals(paymentId))
+			.filter(attempt -> attempt.getPgPaymentId().equals(pgPaymentId))
 			.filter(attempt -> attempt.getType() == type)
 			.count();
 	}

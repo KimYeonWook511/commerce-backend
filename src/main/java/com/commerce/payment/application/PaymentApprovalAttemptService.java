@@ -31,10 +31,10 @@ public class PaymentApprovalAttemptService {
 	public PaymentAttempt getOrCreate(
 		String merchantPayKey,
 		PaymentProvider provider,
-		String paymentId,
+		String pgPaymentId,
 		int amount
 	) {
-		return paymentAttemptRepository.findApproveAttempt(merchantPayKey, provider, paymentId)
+		return paymentAttemptRepository.findApproveAttempt(merchantPayKey, provider, pgPaymentId)
 			.map(existing -> {
 				if (existing.getAmount() != amount) {
 					log.warn("PaymentAttempt amount mismatch - key={}, type=APPROVE, existingAmount={}, requested={}",
@@ -44,7 +44,7 @@ public class PaymentApprovalAttemptService {
 				return existing;
 			})
 			.orElseGet(() -> paymentAttemptRepository.save(
-				PaymentAttempt.createApproveRequested(merchantPayKey, paymentId, amount, provider)
+				PaymentAttempt.createApproveRequested(merchantPayKey, pgPaymentId, amount, provider)
 			));
 	}
 
@@ -52,10 +52,10 @@ public class PaymentApprovalAttemptService {
 	public void succeed(
 		String merchantPayKey,
 		PaymentProvider provider,
-		String paymentId,
+		String pgPaymentId,
 		LocalDateTime respondedAt
 	) {
-		PaymentAttempt attempt = paymentAttemptRepository.findApproveAttempt(merchantPayKey, provider, paymentId)
+		PaymentAttempt attempt = paymentAttemptRepository.findApproveAttempt(merchantPayKey, provider, pgPaymentId)
 			.orElseThrow(() -> new PaymentException(PaymentErrorCode.PAYMENT_ATTEMPT_NOT_FOUND));
 		attempt.succeed(respondedAt);
 	}
@@ -64,12 +64,12 @@ public class PaymentApprovalAttemptService {
 	public void fail(
 		String merchantPayKey,
 		PaymentProvider provider,
-		String paymentId,
+		String pgPaymentId,
 		PaymentAttemptFailCode failCode,
 		String failDetail,
 		LocalDateTime respondedAt
 	) {
-		PaymentAttempt attempt = paymentAttemptRepository.findApproveAttempt(merchantPayKey, provider, paymentId)
+		PaymentAttempt attempt = paymentAttemptRepository.findApproveAttempt(merchantPayKey, provider, pgPaymentId)
 			.orElseThrow(() -> new PaymentException(PaymentErrorCode.PAYMENT_ATTEMPT_NOT_FOUND));
 		attempt.fail(failCode, failDetail, respondedAt);
 	}
@@ -82,23 +82,23 @@ public class PaymentApprovalAttemptService {
 	public void failIfRequested(
 		String merchantPayKey,
 		PaymentProvider provider,
-		String paymentId,
+		String pgPaymentId,
 		PaymentAttemptFailCode failCode,
 		String failDetail,
 		LocalDateTime respondedAt
 	) {
-		PaymentAttempt attempt = paymentAttemptRepository.findApproveAttempt(merchantPayKey, provider, paymentId)
+		PaymentAttempt attempt = paymentAttemptRepository.findApproveAttempt(merchantPayKey, provider, pgPaymentId)
 			.orElse(null);
 		if (attempt == null) {
 			log.warn(
-				"PaymentAttempt not found, skipping fail mark: merchantPayKey={}, provider={}, paymentId={}",
-				merchantPayKey, provider, paymentId);
+				"PaymentAttempt not found, skipping fail mark: merchantPayKey={}, provider={}, pgPaymentId={}",
+				merchantPayKey, provider, pgPaymentId);
 			return;
 		}
 		if (attempt.getStatus() != PaymentAttemptStatus.REQUESTED) {
 			log.warn(
-				"PaymentAttempt not in REQUESTED state, skipping fail mark: merchantPayKey={}, paymentId={}, status={}",
-				merchantPayKey, paymentId, attempt.getStatus());
+				"PaymentAttempt not in REQUESTED state, skipping fail mark: merchantPayKey={}, pgPaymentId={}, status={}",
+				merchantPayKey, pgPaymentId, attempt.getStatus());
 			return;
 		}
 		attempt.fail(failCode, failDetail, respondedAt);

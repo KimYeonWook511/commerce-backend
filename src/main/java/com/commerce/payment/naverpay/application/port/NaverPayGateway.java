@@ -6,9 +6,9 @@ import com.commerce.payment.naverpay.application.port.result.NaverPayHistoryResu
 
 public interface NaverPayGateway {
 
-	NaverPayApproveResult approve(String paymentId);
+	NaverPayApproveResult approve(String pgPaymentId);
 
-	NaverPayHistoryResult getApprovalHistory(String paymentId);
+	NaverPayHistoryResult getApprovalHistory(String pgPaymentId);
 
-	NaverPayCancelResult cancel(String paymentId, int cancelAmount, String cancelReason);
+	NaverPayCancelResult cancel(String pgPaymentId, int cancelAmount, String cancelReason);
 }

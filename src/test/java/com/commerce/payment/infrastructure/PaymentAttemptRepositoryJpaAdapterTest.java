@@ -31,9 +31,9 @@ class PaymentAttemptRepositoryJpaAdapterTest {
 	@Autowired
 	private EntityManager entityManager;
 
-	@DisplayName("merchantPayKey와 paymentId로 결제 승인 시도를 조회한다")
+	@DisplayName("merchantPayKey와 pgPaymentId로 결제 승인 시도를 조회한다")
 	@Test
-	void findByMerchantPayKeyAndPaymentId_whenExists_returnAttempt() {
+	void findByMerchantPayKeyAndPgPaymentId_whenExists_returnAttempt() {
 		// given
 		PaymentAttempt attempt =
 			PaymentAttempt.createApproveRequested("PAY-1", "payment-id-1", 1000, PaymentProvider.NAVERPAY);

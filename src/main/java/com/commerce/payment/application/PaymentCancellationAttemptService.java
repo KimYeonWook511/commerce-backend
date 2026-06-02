@@ -30,10 +30,10 @@ public class PaymentCancellationAttemptService {
 	public PaymentAttempt getOrCreate(
 		String merchantPayKey,
 		PaymentProvider provider,
-		String paymentId,
+		String pgPaymentId,
 		int cancelAmount
 	) {
-		return paymentAttemptRepository.findCancelAttempt(merchantPayKey, provider, paymentId)
+		return paymentAttemptRepository.findCancelAttempt(merchantPayKey, provider, pgPaymentId)
 			.map(existing -> {
 				if (existing.getAmount() != cancelAmount) {
 					log.warn("PaymentAttempt amount mismatch - key={}, type=CANCEL, existingAmount={}, requested={}",
@@ -43,7 +43,7 @@ public class PaymentCancellationAttemptService {
 				return existing;
 			})
 			.orElseGet(() -> paymentAttemptRepository.save(
-				PaymentAttempt.createCancelRequested(merchantPayKey, paymentId, cancelAmount, provider)
+				PaymentAttempt.createCancelRequested(merchantPayKey, pgPaymentId, cancelAmount, provider)
 			));
 	}
 
@@ -51,10 +51,10 @@ public class PaymentCancellationAttemptService {
 	public void succeed(
 		String merchantPayKey,
 		PaymentProvider provider,
-		String paymentId,
+		String pgPaymentId,
 		LocalDateTime respondedAt
 	) {
-		PaymentAttempt attempt = paymentAttemptRepository.findCancelAttempt(merchantPayKey, provider, paymentId)
+		PaymentAttempt attempt = paymentAttemptRepository.findCancelAttempt(merchantPayKey, provider, pgPaymentId)
 			.orElseThrow(() -> new PaymentException(PaymentErrorCode.PAYMENT_ATTEMPT_NOT_FOUND));
 		attempt.succeed(respondedAt);
 	}
@@ -63,12 +63,12 @@ public class PaymentCancellationAttemptService {
 	public void fail(
 		String merchantPayKey,
 		PaymentProvider provider,
-		String paymentId,
+		String pgPaymentId,
 		PaymentAttemptFailCode failCode,
 		String failDetail,
 		LocalDateTime respondedAt
 	) {
-		PaymentAttempt attempt = paymentAttemptRepository.findCancelAttempt(merchantPayKey, provider, paymentId)
+		PaymentAttempt attempt = paymentAttemptRepository.findCancelAttempt(merchantPayKey, provider, pgPaymentId)
 			.orElseThrow(() -> new PaymentException(PaymentErrorCode.PAYMENT_ATTEMPT_NOT_FOUND));
 		attempt.fail(failCode, failDetail, respondedAt);
 	}

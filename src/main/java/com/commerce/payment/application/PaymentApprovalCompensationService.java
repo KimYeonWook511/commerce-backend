@@ -27,7 +27,7 @@ public class PaymentApprovalCompensationService {
 	public void compensateMerchantKeyMismatch(PaymentAttempt approveAttempt) {
 		// PG 결제 자체가 없으므로 cancel 없이 failIfRequested만.
 		paymentApprovalAttemptService.failIfRequested(
-			approveAttempt.getMerchantPayKey(), approveAttempt.getProvider(), approveAttempt.getPaymentId(),
+			approveAttempt.getMerchantPayKey(), approveAttempt.getProvider(), approveAttempt.getPgPaymentId(),
 			PaymentAttemptFailCode.MERCHANT_PAY_KEY_MISMATCH, "가맹점 결제 키 불일치", LocalDateTime.now()
 		);
 	}
@@ -73,21 +73,21 @@ public class PaymentApprovalCompensationService {
 		LocalDateTime now = LocalDateTime.now();
 		// approve attempt가 race window에서 이미 SUCCEEDED 상태가 됐어도 PG cancel은 멈추지 않는다. REQUESTED가 아니면 mark만 skip한다.
 		paymentApprovalAttemptService.failIfRequested(
-			approveAttempt.getMerchantPayKey(), approveAttempt.getProvider(), approveAttempt.getPaymentId(),
+			approveAttempt.getMerchantPayKey(), approveAttempt.getProvider(), approveAttempt.getPgPaymentId(),
 			failCode, failDetail, now
 		);
 
 		if (paymentApprovalService.hasCompletedPayment(approveAttempt.getMerchantPayKey())) {
 			log.warn(
-				"Payment already completed, skipping PG cancel: merchantPayKey={}, paymentId={}",
-				approveAttempt.getMerchantPayKey(), approveAttempt.getPaymentId()
+				"Payment already completed, skipping PG cancel: merchantPayKey={}, pgPaymentId={}",
+				approveAttempt.getMerchantPayKey(), approveAttempt.getPgPaymentId()
 			);
 			return;
 		}
 
 		PaymentAttempt cancelAttempt = paymentCancellationAttemptService.getOrCreate(
 			approveAttempt.getMerchantPayKey(), approveAttempt.getProvider(),
-			approveAttempt.getPaymentId(), cancelAmount
+			approveAttempt.getPgPaymentId(), cancelAmount
 		);
 
 		if (cancelAttempt.getStatus() != PaymentAttemptStatus.REQUESTED) {
@@ -99,18 +99,18 @@ public class PaymentApprovalCompensationService {
 			switch (outcome.status()) {
 				case SUCCESS -> paymentCancellationAttemptService.succeed(
 					cancelAttempt.getMerchantPayKey(), cancelAttempt.getProvider(),
-					cancelAttempt.getPaymentId(), now
+					cancelAttempt.getPgPaymentId(), now
 				);
 				case PROCESSING -> {} // no-op
 				case FAILED -> paymentCancellationAttemptService.fail(
 					cancelAttempt.getMerchantPayKey(), cancelAttempt.getProvider(),
-					cancelAttempt.getPaymentId(), outcome.failCode(), outcome.failDetail(), now
+					cancelAttempt.getPgPaymentId(), outcome.failCode(), outcome.failDetail(), now
 				);
 			}
 		} catch (PaymentException ex) {
 			log.warn(
-				"Approved payment cancel failed: merchantPayKey={}, paymentId={}, cancelReason={}, errorCode={}",
-				cancelAttempt.getMerchantPayKey(), cancelAttempt.getPaymentId(),
+				"Approved payment cancel failed: merchantPayKey={}, pgPaymentId={}, cancelReason={}, errorCode={}",
+				cancelAttempt.getMerchantPayKey(), cancelAttempt.getPgPaymentId(),
 				cancelReason, ex.getErrorCode()
 			);
 		}

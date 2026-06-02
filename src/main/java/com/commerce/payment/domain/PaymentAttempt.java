@@ -27,8 +27,8 @@ import org.hibernate.type.SqlTypes;
 	name = "tbl_payment_attempt",
 	uniqueConstraints = {
 		@UniqueConstraint(
-			name = "uk_payment_attempt_merchant_pay_key_provider_payment_id_type",
-			columnNames = {"merchant_pay_key", "provider", "payment_id", "type"}
+			name = "uk_payment_attempt_merchant_pay_key_provider_pg_payment_id_type",
+			columnNames = {"merchant_pay_key", "provider", "pg_payment_id", "type"}
 		)
 	}
 )
@@ -44,7 +44,7 @@ public class PaymentAttempt extends BaseTimeEntity {
 	private String merchantPayKey;
 
 	@Column(nullable = false, length = 64)
-	private String paymentId;
+	private String pgPaymentId;
 
 	@Column(nullable = false)
 	private int amount;
@@ -75,7 +75,7 @@ public class PaymentAttempt extends BaseTimeEntity {
 	@Builder(access = AccessLevel.PRIVATE)
 	private PaymentAttempt(
 		String merchantPayKey,
-		String paymentId,
+		String pgPaymentId,
 		int amount,
 		PaymentProvider provider,
 		PaymentAttemptType type,
@@ -85,7 +85,7 @@ public class PaymentAttempt extends BaseTimeEntity {
 		LocalDateTime respondedAt
 	) {
 		this.merchantPayKey = merchantPayKey;
-		this.paymentId = paymentId;
+		this.pgPaymentId = pgPaymentId;
 		this.amount = amount;
 		this.provider = provider;
 		this.type = type;
@@ -97,13 +97,13 @@ public class PaymentAttempt extends BaseTimeEntity {
 
 	public static PaymentAttempt createApproveRequested(
 		String merchantPayKey,
-		String paymentId,
+		String pgPaymentId,
 		int amount,
 		PaymentProvider provider
 	) {
 		return PaymentAttempt.builder()
 			.merchantPayKey(merchantPayKey)
-			.paymentId(paymentId)
+			.pgPaymentId(pgPaymentId)
 			.amount(amount)
 			.provider(provider)
 			.type(PaymentAttemptType.APPROVE)
@@ -142,13 +142,13 @@ public class PaymentAttempt extends BaseTimeEntity {
 
 	public static PaymentAttempt createCancelRequested(
 		String merchantPayKey,
-		String paymentId,
+		String pgPaymentId,
 		int amount,
 		PaymentProvider provider
 	) {
 		return PaymentAttempt.builder()
 			.merchantPayKey(merchantPayKey)
-			.paymentId(paymentId)
+			.pgPaymentId(pgPaymentId)
 			.amount(amount)
 			.provider(provider)
 			.type(PaymentAttemptType.CANCEL)

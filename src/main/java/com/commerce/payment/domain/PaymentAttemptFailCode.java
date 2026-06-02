@@ -10,7 +10,7 @@ public enum PaymentAttemptFailCode {
 	ALREADY_CANCELED("이미 취소 완료됨"),
 	AMOUNT_MISMATCH("승인 금액 불일치"),
 	MERCHANT_PAY_KEY_MISMATCH("가맹점 결제 키 불일치"),
-	INVALID_PAYMENT_ID("유효하지 않은 결제 번호"),
+	INVALID_PG_PAYMENT_ID("유효하지 않은 결제 번호"),
 	INVALID_MERCHANT("유효하지 않은 가맹점"),
 	OWNER_AUTH_FAILED("본인 인증 실패"),
 	NOT_ENOUGH_ACCOUNT_BALANCE("잔액 부족"),

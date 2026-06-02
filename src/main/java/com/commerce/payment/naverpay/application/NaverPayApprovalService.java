@@ -39,7 +39,7 @@ public class NaverPayApprovalService {
 	private final PaymentApprovalAttemptService paymentApprovalAttemptService;
 	private final PaymentApprovalCompensationService paymentApprovalCompensationService;
 
-	public NaverPayApproveResponse approve(Long memberId, String merchantPayKey, String paymentId) {
+	public NaverPayApproveResponse approve(Long memberId, String merchantPayKey, String pgPaymentId) {
 		Order order = orderQueryService.getOrderByMerchantPayKeyAndMemberId(merchantPayKey, memberId);
 
 		Payment existingPayment = paymentApprovalService.findPaymentByMerchantPayKey(merchantPayKey).orElse(null);
@@ -50,7 +50,7 @@ public class NaverPayApprovalService {
 		PaymentAttempt attempt = paymentApprovalAttemptService.getOrCreate(
 			merchantPayKey,
 			PaymentProvider.NAVERPAY,
-			paymentId,
+			pgPaymentId,
 			order.getTotalPrice()
 		);
 		return processApproveAttempt(attempt);
@@ -66,14 +66,14 @@ public class NaverPayApprovalService {
 	}
 
 	private NaverPayApproveResponse processApproveRequest(PaymentAttempt attempt) {
-		NaverPayApproveResult result = naverPayGateway.approve(attempt.getPaymentId());
+		NaverPayApproveResult result = naverPayGateway.approve(attempt.getPgPaymentId());
 
 		return switch (result.getStatus()) {
-			case PROCESSING -> toResponse(attempt.getPaymentId(), NaverPayApproveStatus.PROCESSING);
+			case PROCESSING -> toResponse(attempt.getPgPaymentId(), NaverPayApproveStatus.PROCESSING);
 			case ALREADY_COMPLETE -> processAlreadyComplete(attempt);
 			case FAILED -> {
 				paymentApprovalAttemptService.failIfRequested(
-					attempt.getMerchantPayKey(), attempt.getProvider(), attempt.getPaymentId(),
+					attempt.getMerchantPayKey(), attempt.getProvider(), attempt.getPgPaymentId(),
 					result.getFailCode(), result.getFailDetail(), LocalDateTime.now()
 				);
 				throw new PaymentException(result.getErrorCode());
@@ -94,7 +94,7 @@ public class NaverPayApprovalService {
 	}
 
 	private NaverPayApproveResponse processAlreadyComplete(PaymentAttempt attempt) {
-		NaverPayHistoryResult result = naverPayGateway.getApprovalHistory(attempt.getPaymentId());
+		NaverPayHistoryResult result = naverPayGateway.getApprovalHistory(attempt.getPgPaymentId());
 
 		if (result.getStatus() == NaverPayHistoryResult.Status.FAILED) {
 			throw new PaymentException(result.getErrorCode());
@@ -103,7 +103,7 @@ public class NaverPayApprovalService {
 		if (result.getStatus() == NaverPayHistoryResult.Status.APPROVED) {
 			if (!attempt.getMerchantPayKey().equals(result.getMerchantPayKey())) {
 				paymentApprovalAttemptService.failIfRequested(
-					attempt.getMerchantPayKey(), attempt.getProvider(), attempt.getPaymentId(),
+					attempt.getMerchantPayKey(), attempt.getProvider(), attempt.getPgPaymentId(),
 					PaymentAttemptFailCode.MERCHANT_PAY_KEY_MISMATCH, "가맹점 결제 키 불일치", LocalDateTime.now()
 				);
 				throw new PaymentException(PaymentErrorCode.PAYMENT_NOT_FOUND);
@@ -113,7 +113,7 @@ public class NaverPayApprovalService {
 
 		if (result.getStatus() == NaverPayHistoryResult.Status.CANCELED) {
 			paymentApprovalAttemptService.failIfRequested(
-				attempt.getMerchantPayKey(), attempt.getProvider(), attempt.getPaymentId(),
+				attempt.getMerchantPayKey(), attempt.getProvider(), attempt.getPgPaymentId(),
 				PaymentAttemptFailCode.ALREADY_CANCELED, "이미 취소된 결제", LocalDateTime.now()
 			);
 			throw new PaymentException(PaymentErrorCode.PAYMENT_ALREADY_CANCELED);
@@ -133,15 +133,15 @@ public class NaverPayApprovalService {
 			Payment completed = paymentApprovalService.completeApprovedPayment(
 				attempt.getMerchantPayKey(),
 				attempt.getProvider(),
-				attempt.getPaymentId(),
+				attempt.getPgPaymentId(),
 				LocalDateTime.now()
 			);
 			return toResponse(completed);
 		} catch (PaymentException ex) {
 			log.error(
-				"NaverPay approve complete failed by payment error: merchantPayKey={}, paymentId={}, responseMerchantPayKey={}, responseTotalAmount={}, errorCode={}",
+				"NaverPay approve complete failed by payment error: merchantPayKey={}, pgPaymentId={}, responseMerchantPayKey={}, responseTotalAmount={}, errorCode={}",
 				attempt.getMerchantPayKey(),
-				attempt.getPaymentId(),
+				attempt.getPgPaymentId(),
 				responseMerchantPayKey,
 				responseTotalAmount,
 				ex.getErrorCode(),
@@ -160,9 +160,9 @@ public class NaverPayApprovalService {
 			throw ex;
 		} catch (CustomException ex) {
 			log.error(
-				"NaverPay approve complete failed by custom error: merchantPayKey={}, paymentId={}, errorCode={}",
+				"NaverPay approve complete failed by custom error: merchantPayKey={}, pgPaymentId={}, errorCode={}",
 				attempt.getMerchantPayKey(),
-				attempt.getPaymentId(),
+				attempt.getPgPaymentId(),
 				ex.getErrorCode(),
 				ex
 			);
@@ -170,9 +170,9 @@ public class NaverPayApprovalService {
 			throw ex;
 		} catch (Exception ex) {
 			log.error(
-				"NaverPay approve complete failed by unexpected error: merchantPayKey={}, paymentId={}",
+				"NaverPay approve complete failed by unexpected error: merchantPayKey={}, pgPaymentId={}",
 				attempt.getMerchantPayKey(),
-				attempt.getPaymentId(),
+				attempt.getPgPaymentId(),
 				ex
 			);
 			paymentApprovalCompensationService.compensateUnexpected(attempt, ex, PaymentAttemptFailCode.APPROVE_PROCESS_FAILED, this::pgCancel);
@@ -182,7 +182,7 @@ public class NaverPayApprovalService {
 
 	private CancelOutcome pgCancel(PaymentAttempt cancelAttempt, String cancelReason) {
 		NaverPayCancelResult result = naverPayGateway.cancel(
-			cancelAttempt.getPaymentId(), cancelAttempt.getAmount(), cancelReason
+			cancelAttempt.getPgPaymentId(), cancelAttempt.getAmount(), cancelReason
 		);
 		return switch (result.getStatus()) {
 			case SUCCESS, ALREADY_CANCELED -> CancelOutcome.success();
@@ -191,9 +191,9 @@ public class NaverPayApprovalService {
 		};
 	}
 
-	private NaverPayApproveResponse toResponse(String paymentId, NaverPayApproveStatus status) {
+	private NaverPayApproveResponse toResponse(String pgPaymentId, NaverPayApproveStatus status) {
 		return NaverPayApproveResponse.builder()
-			.pgPaymentId(paymentId)
+			.pgPaymentId(pgPaymentId)
 			.status(status)
 			.build();
 	}
@@ -216,7 +216,7 @@ public class NaverPayApprovalService {
 		return switch (failCode) {
 			case TIME_EXPIRED -> PaymentErrorCode.PAYMENT_TIME_EXPIRED;
 			case ALREADY_CANCELED -> PaymentErrorCode.PAYMENT_ALREADY_CANCELED;
-			case INVALID_PAYMENT_ID -> PaymentErrorCode.PAYMENT_NOT_FOUND;
+			case INVALID_PG_PAYMENT_ID -> PaymentErrorCode.PAYMENT_NOT_FOUND;
 			case INVALID_MERCHANT -> PaymentErrorCode.PAYMENT_INVALID_MERCHANT;
 			case OWNER_AUTH_FAILED -> PaymentErrorCode.PAYMENT_OWNER_AUTH_FAILED;
 			case NOT_ENOUGH_ACCOUNT_BALANCE -> PaymentErrorCode.PAYMENT_NOT_ENOUGH_ACCOUNT_BALANCE;
