@@ -1,0 +1,9 @@
+{
+  "project": "auth-refresh-token-store-unavailable",
+  "phase": "0-store-unavailable-mapping",
+  "steps": [
+    { "step": 1, "name": "auth-store-unavailable-mapping", "status": "pending" },
+    { "step": 2, "name": "sync-root-docs", "status": "pending" },
+    { "step": 3, "name": "write-retrospective", "status": "pending" }
+  ]
+}
