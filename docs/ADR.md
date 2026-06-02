@@ -27,6 +27,7 @@
 | payment-compensation-to-domain | [`docs/tasks/payment-compensation-to-domain/adr.md`](tasks/payment-compensation-to-domain/adr.md) | 보상 정책 payment.application 이동, `PgCanceller` 콜백 (ADR-015 연계) |
 | product-management | [`docs/tasks/product-management/adr.md`](tasks/product-management/adr.md) | 관리자 command 분리, soft delete, 상태별 공개 조회 |
 | product-query | [`docs/tasks/product-query/adr.md`](tasks/product-query/adr.md) | 공개 상품 조회 노출 조건 |
+| stock-jpa-association-decouple | [`docs/tasks/stock-jpa-association-decouple/adr.md`](tasks/stock-jpa-association-decouple/adr.md) | Stock·StockHistory JPA cross-aggregate association 해제, application 외부 주입 패턴, schema 무변경 원칙 (ADR-020 연계) |
 | stock-management | [`docs/tasks/stock-management/adr.md`](tasks/stock-management/adr.md) | 관리자 재고 변경 이력 (ADR-004 연계) |
 | traceid-mdc-filter | [`docs/tasks/traceid-mdc-filter/adr.md`](tasks/traceid-mdc-filter/adr.md) | `TraceIdFilter` MDC 전파 |
 | unique-find-first-policy | [`docs/tasks/unique-find-first-policy/adr.md`](tasks/unique-find-first-policy/adr.md) | find-first 패턴 (ADR-011 연계) |
@@ -177,6 +178,7 @@
 - **트레이드오프**: DB 참조 무결성을 FK 제약이 보장하지 않는다. 대신 application 흐름·UNIQUE 제약·삭제 순서 정책이 정합성을 책임진다. 기존 Order/Stock/StockHistory 등의 `@ManyToOne` 참조는 호환성 부담이 크고 본 phase 범위가 아니므로 마이그레이션하지 않고 별도 트랙으로 분리한다.
 - **적용 범위**: 본 ADR 이후 신설되는 모든 cross-aggregate 참조에 적용한다. 같은 aggregate 내 root-child 관계(예: `Order ↔ OrderItem` 같이 동일 aggregate 안의 collection)는 본 정책 대상이 아니며 기존대로 객체 참조를 허용한다. 기존 cross-aggregate 객체 참조의 ID 참조로의 마이그레이션은 별도 작업으로 다룬다.
 - **참고**: 상세는 `docs/tasks/cart/adr.md` 결정 2 참조.
+- **후속 (stock-jpa-association-decouple, 2026-06-03)**: Stock·StockHistory aggregate 에 ADR-020 의 cross-aggregate ID 참조 원칙이 적용됐다. JPA `@OneToOne`(`Stock.product`) / `@ManyToOne`(`StockHistory.stock`) 을 제거하고 `Long productId` / `Long stockId` 필드로 전환했다. DB schema (컬럼·FK) 변경 없음. 세부 결정 (응답 조립 외부 주입 패턴, schema 무변경 원칙) 은 `docs/tasks/stock-jpa-association-decouple/adr.md` 참조. 후속 트랙: `order-jpa-association-decouple`, `payment-jpa-association-decouple`.
 
 ### ADR-021: 응용 Service의 `@Transactional`은 method-level에만 부착한다
 - **결정**: 응용 Service(`com.commerce.<domain>.application.*Service`)에 class-level `@Transactional` 부착을 금지한다. 모든 트랜잭션 경계는 method-level `@Transactional`로만 표현한다. retry loop를 포함하는 outer Service는 어노테이션 없이 두고, 트랜잭션 경계는 별도 Processor 빈의 method-level `@Transactional`이 책임진다(`OrderCreateProcessor` 패턴, 본 cart phase의 `AddCartItemProcessor`/`UpdateCartItemQuantityProcessor` 등).
