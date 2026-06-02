@@ -14,7 +14,6 @@ import org.junit.jupiter.api.extension.ExtendWith;
 import org.mockito.InjectMocks;
 import org.mockito.Mock;
 import org.mockito.junit.jupiter.MockitoExtension;
-import org.springframework.dao.QueryTimeoutException;
 import org.springframework.test.util.ReflectionTestUtils;
 
 import com.commerce.auth.application.command.AuthTokenReissueCommand;
@@ -25,6 +24,7 @@ import com.commerce.auth.application.result.AuthTokenIssueResult;
 import com.commerce.auth.application.result.AuthTokenReissueResult;
 import com.commerce.auth.exception.AuthErrorCode;
 import com.commerce.auth.exception.AuthException;
+import com.commerce.auth.exception.RefreshTokenStoreUnavailableException;
 import com.commerce.member.application.MemberQueryService;
 import com.commerce.member.domain.Member;
 
@@ -182,14 +182,14 @@ class AuthTokenReissueServiceTest {
 			});
 	}
 
-	@DisplayName("Redis 조회 중 DataAccessException이 발생하면 INTERNAL_ERROR 예외가 발생한다")
+	@DisplayName("refresh token 조회 실패 시 RefreshTokenStoreUnavailableException을 그대로 propagate한다")
 	@Test
-	void reissue_whenRedisGetFails_throwInternalError() {
+	void reissue_whenRedisGetFails_propagatesStoreUnavailable() {
 		// given
 		ParsedTokenClaims claims = refreshTokenClaims("1");
 
 		given(tokenValidator.validateRefreshToken("refresh-token")).willReturn(claims);
-		willThrow(new QueryTimeoutException("Redis timeout")).given(refreshTokenStore).get(1L);
+		willThrow(new RefreshTokenStoreUnavailableException(new RuntimeException("boom"))).given(refreshTokenStore).get(1L);
 
 		AuthTokenReissueCommand command = AuthTokenReissueCommand.builder()
 			.refreshToken("refresh-token")
@@ -197,11 +197,7 @@ class AuthTokenReissueServiceTest {
 
 		// when & then
 		assertThatThrownBy(() -> authTokenReissueService.reissue(command))
-			.isInstanceOf(AuthException.class)
-			.satisfies(exception -> {
-				AuthException authException = (AuthException) exception;
-				assertThat(authException.getErrorCode()).isEqualTo(AuthErrorCode.INTERNAL_ERROR);
-			});
+			.isInstanceOf(RefreshTokenStoreUnavailableException.class);
 	}
 
 	private ParsedTokenClaims refreshTokenClaims(String subject) {
