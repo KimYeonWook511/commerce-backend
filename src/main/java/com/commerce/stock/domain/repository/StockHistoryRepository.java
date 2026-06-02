@@ -6,7 +6,7 @@ import com.commerce.stock.domain.StockHistory;
 
 public interface StockHistoryRepository {
 
-	List<StockHistory> findAllByStockProductIdOrderByCreatedAtDesc(Long productId);
+	List<StockHistory> findAllByStockIdOrderByCreatedAtDesc(Long stockId);
 
 	StockHistory save(StockHistory stockHistory);
 }

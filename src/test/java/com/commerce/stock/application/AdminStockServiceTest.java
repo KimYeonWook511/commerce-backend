@@ -79,7 +79,7 @@ class AdminStockServiceTest {
 		ArgumentCaptor<StockHistory> historyCaptor = ArgumentCaptor.forClass(StockHistory.class);
 		then(stockHistoryRepository).should().save(historyCaptor.capture());
 		StockHistory history = historyCaptor.getValue();
-		assertThat(history.getStock().getId()).isEqualTo(100L);
+		assertThat(history.getStockId()).isEqualTo(100L);
 		assertThat(history.getQuantityChange()).isEqualTo(10);
 		assertThat(history.getReason()).isEqualTo(StockAdjustmentReason.INBOUND);
 		assertThat(history.getAdminMemberId()).isEqualTo(10L);
@@ -138,7 +138,7 @@ class AdminStockServiceTest {
 		ArgumentCaptor<StockHistory> historyCaptor = ArgumentCaptor.forClass(StockHistory.class);
 		then(stockHistoryRepository).should().save(historyCaptor.capture());
 		StockHistory history = historyCaptor.getValue();
-		assertThat(history.getStock().getId()).isEqualTo(100L);
+		assertThat(history.getStockId()).isEqualTo(100L);
 		assertThat(history.getQuantityChange()).isZero();
 		assertThat(history.getReason()).isEqualTo(StockAdjustmentReason.INBOUND);
 		assertThat(history.getAdminMemberId()).isEqualTo(10L);
@@ -265,7 +265,7 @@ class AdminStockServiceTest {
 			LocalDateTime.of(2026, 4, 30, 12, 0));
 
 		given(stockRepository.findByProductId(1L)).willReturn(Optional.of(stock));
-		given(stockHistoryRepository.findAllByStockProductIdOrderByCreatedAtDesc(1L))
+		given(stockHistoryRepository.findAllByStockIdOrderByCreatedAtDesc(100L))
 			.willReturn(List.of(latestHistory, firstHistory));
 
 		// when
@@ -283,7 +283,7 @@ class AdminStockServiceTest {
 
 	private Stock createStock(Product product, int quantity) {
 		return Stock.builder()
-			.product(product)
+			.productId(product.getId())
 			.quantity(quantity)
 			.build();
 	}
@@ -296,7 +296,7 @@ class AdminStockServiceTest {
 		LocalDateTime createdAt
 	) {
 		StockHistory history = StockHistory.builder()
-			.stock(stock)
+			.stockId(stock.getId())
 			.quantityChange(quantityChange)
 			.reason(reason)
 			.adminMemberId(10L)

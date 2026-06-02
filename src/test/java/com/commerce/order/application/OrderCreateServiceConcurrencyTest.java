@@ -152,7 +152,7 @@ class OrderCreateServiceConcurrencyTest {
 
 	private Stock createStock(Product product, int quantity) {
 		return Stock.builder()
-			.product(product)
+			.productId(product.getId())
 			.quantity(quantity)
 			.build();
 	}

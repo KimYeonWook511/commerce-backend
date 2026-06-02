@@ -1,0 +1,37 @@
+{
+  "project": "stock-jpa-association-decouple",
+  "phase": "0-decouple",
+  "steps": [
+    {
+      "step": 1,
+      "name": "stock-association-decouple",
+      "status": "completed",
+      "started_at": "2026-06-03T01:41:11+0900",
+      "summary": "Stock.product(@OneToOne)을 productId(Long)으로, StockHistory.stock(@ManyToOne)을 stockId(Long)으로 전환한다. JpaStockRepository JPQL을 s.productId 기반으로 수정하고, StockHistoryRepository 시그니처를 findAllByStockIdOrderByCreatedAtDesc로 변경한다. AdminStockService.getHistoriesByProductId에서 stockId로 이력을 조회하고 StockHistoryResult.from(history, productId) 외부 주입 패턴을 적용한다. StockInventoryService.decreaseBatch의 productId 매핑을 stock.getProductId()로 전환한다. 영향받는 모든 테스트 fixture를 갱신하며 gradlew test integrationTest를 통과한다.",
+      "completed_at": "2026-06-03T01:49:25+0900"
+    },
+    {
+      "step": 2,
+      "name": "sync-root-docs",
+      "status": "completed",
+      "started_at": "2026-06-03T01:51:48+0900",
+      "summary": "docs/ADR.md Task ADR 색인에 stock-jpa-association-decouple 항목을 추가하고 ADR-020 본문에 후속 노트를 부착한다. docs/architecture.md의 stock 도메인 책임 섹션을 ID 참조 컨벤션 반영으로 갱신한다. gradlew test 통과.",
+      "completed_at": "2026-06-03T01:53:30+0900"
+    },
+    {
+      "step": 3,
+      "name": "write-retrospective",
+      "status": "completed",
+      "started_at": "2026-06-03T01:54:08+0900",
+      "summary": "docs/tasks/stock-jpa-association-decouple/retrospective.md를 작성한다. 결정 흐름 4가지(도메인별 sub-PR 분리, StockHistory productId 외부 주입 채택, schema 변경 0건 메타 원칙, fetch join 대체 패턴 미선언), 기각된 옵션 비교표, 후속 Order/Payment sub-PR baseline, 운영 점검 사항을 포함한다. ./gradlew test 통과.",
+      "completed_at": "2026-06-03T01:56:24+0900"
+    }
+  ],
+  "created_at": "2026-06-03T01:41:11+0900",
+  "execution": {
+    "developer_model": "sonnet",
+    "reviewer_model": "opus",
+    "commit_model": "haiku"
+  },
+  "completed_at": "2026-06-03T01:57:11+0900"
+}

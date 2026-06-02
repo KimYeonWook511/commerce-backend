@@ -54,7 +54,7 @@ public class StockInventoryService {
 		}
 
 		Map<Long, Stock> stocksByProductId = findStocks.stream()
-			.collect(Collectors.toMap(stock -> stock.getProduct().getId(), Function.identity()));
+			.collect(Collectors.toMap(stock -> stock.getProductId(), Function.identity()));
 
 		for (Long productId : productIds) {
 			Stock stock = stocksByProductId.get(productId);
