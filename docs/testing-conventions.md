@@ -266,6 +266,8 @@ CI 는 다음 두 잡을 병렬로 실행한다.
 
 `concurrencyTest`, `sandboxTest` 는 CI 미포함 (수동 실행 정책 유지).
 
+`docker + concurrency` 등 격리 축 태그가 함께 부여된 클래스는 격리 task 쪽으로만 매칭되므로 환경 축이 docker 라도 자동 검증에서 빠진다. 동시성/배치/sandbox 관련 코드를 변경하면 영향 범위에 맞춰 수동으로 `./gradlew concurrencyTest` / `./gradlew sandboxTest` 를 직접 실행해 검증한다.
+
 ---
 
 ## 학습용 테스트 격리 정책
