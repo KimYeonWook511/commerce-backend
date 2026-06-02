@@ -10,19 +10,16 @@ class StockHistoryTest {
 	@DisplayName("양수 변경 수량으로 재고 이력을 생성한다")
 	@Test
 	void create_whenQuantityChangePositive_createStockHistory() {
-		// given
-		Stock stock = createStock();
-
 		// when
 		StockHistory stockHistory = StockHistory.builder()
-			.stockId(stock.getId())
+			.stockId(1L)
 			.quantityChange(10)
 			.reason(StockAdjustmentReason.INBOUND)
 			.adminMemberId(1L)
 			.build();
 
 		// then
-		assertThat(stockHistory.getStockId()).isEqualTo(stock.getId());
+		assertThat(stockHistory.getStockId()).isEqualTo(1L);
 		assertThat(stockHistory.getQuantityChange()).isEqualTo(10);
 		assertThat(stockHistory.getReason()).isEqualTo(StockAdjustmentReason.INBOUND);
 		assertThat(stockHistory.getAdminMemberId()).isEqualTo(1L);
@@ -31,19 +28,16 @@ class StockHistoryTest {
 	@DisplayName("음수 변경 수량으로 재고 이력을 생성한다")
 	@Test
 	void create_whenQuantityChangeNegative_createStockHistory() {
-		// given
-		Stock stock = createStock();
-
 		// when
 		StockHistory stockHistory = StockHistory.builder()
-			.stockId(stock.getId())
+			.stockId(1L)
 			.quantityChange(-3)
 			.reason(StockAdjustmentReason.DISPOSAL)
 			.adminMemberId(1L)
 			.build();
 
 		// then
-		assertThat(stockHistory.getStockId()).isEqualTo(stock.getId());
+		assertThat(stockHistory.getStockId()).isEqualTo(1L);
 		assertThat(stockHistory.getQuantityChange()).isEqualTo(-3);
 		assertThat(stockHistory.getReason()).isEqualTo(StockAdjustmentReason.DISPOSAL);
 		assertThat(stockHistory.getAdminMemberId()).isEqualTo(1L);
@@ -52,29 +46,19 @@ class StockHistoryTest {
 	@DisplayName("변경 수량이 0인 재고 이력을 생성한다")
 	@Test
 	void create_whenQuantityChangeZero_createStockHistory() {
-		// given
-		Stock stock = createStock();
-
 		// when
 		StockHistory stockHistory = StockHistory.builder()
-			.stockId(stock.getId())
+			.stockId(1L)
 			.quantityChange(0)
 			.reason(StockAdjustmentReason.ADMIN_ADJUSTMENT)
 			.adminMemberId(1L)
 			.build();
 
 		// then
-		assertThat(stockHistory.getStockId()).isEqualTo(stock.getId());
+		assertThat(stockHistory.getStockId()).isEqualTo(1L);
 		assertThat(stockHistory.getQuantityChange()).isZero();
 		assertThat(stockHistory.getReason()).isEqualTo(StockAdjustmentReason.ADMIN_ADJUSTMENT);
 		assertThat(stockHistory.getAdminMemberId()).isEqualTo(1L);
-	}
-
-	private Stock createStock() {
-		return Stock.builder()
-			.productId(1L)
-			.quantity(10)
-			.build();
 	}
 
 }
