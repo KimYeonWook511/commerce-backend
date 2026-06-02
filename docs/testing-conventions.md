@@ -250,7 +250,7 @@ orderPersistence.count()
 | task | includeTags | excludeTags |
 |---|---|---|
 | `test` | — | docker, sandbox, concurrency, batch, learning |
-| `integrationTest` | docker | concurrency, batch, learning |
+| `integrationTest` | docker | concurrency, batch, sandbox, learning |
 | `concurrencyTest` | concurrency | learning |
 | `batchTest` | batch | learning |
 | `sandboxTest` | sandbox | concurrency, batch, learning |
