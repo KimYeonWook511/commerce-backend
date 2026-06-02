@@ -84,7 +84,7 @@ tasks.named('test') {
     systemProperty 'spring.profiles.active', 'test'
 
     useJUnitPlatform {
-        excludeTags "concurrency", "test", "batch", "docker", "sandbox"
+        excludeTags "concurrency", "batch", "docker", "sandbox", "learning"
     }
 }
 
@@ -141,20 +141,9 @@ def resolveDockerCommand = {
     candidates.find { file(it).exists() } ?: 'docker'
 }
 
-tasks.register('ciTest', Test) {
+tasks.register('integrationTest', Test) {
     group = 'verification'
-    description = 'Runs normal tests and Docker/Testcontainers tests for CI.'
-
-    systemProperty 'spring.profiles.active', 'test'
-
-    useJUnitPlatform {
-        excludeTags "concurrency", "test", "batch", "sandbox"
-    }
-}
-
-tasks.register('dockerTest', Test) {
-    group = 'verification'
-    description = 'Runs tests that require Docker/Testcontainers.'
+    description = 'Docker/Testcontainers 가 필요한 통합 테스트를 실행한다.'
     testClassesDirs = sourceSets.test.output.classesDirs
     classpath = sourceSets.test.runtimeClasspath
     shouldRunAfter tasks.named('test')
@@ -186,7 +175,7 @@ tasks.register('dockerTest', Test) {
                 .findAll { !it.isBlank() }
             String details = outputLines.isEmpty() ? null : outputLines.last()
 
-            String message = "Docker daemon에 연결할 수 없습니다. Docker Desktop을 실행한 뒤 dockerTest를 다시 실행하세요."
+            String message = "Docker daemon에 연결할 수 없습니다. Docker Desktop을 실행한 뒤 integrationTest를 다시 실행하세요."
             if (details) {
                 message += "\n세부 원인: ${details}"
             }
@@ -197,13 +186,13 @@ tasks.register('dockerTest', Test) {
 
     useJUnitPlatform {
         includeTags "docker"
-        excludeTags "concurrency"
+        excludeTags "concurrency", "batch", "learning"
     }
 }
 
 tasks.register('concurrencyTest', Test) {
     group = 'verification'
-    description = 'Runs concurrency-tagged tests in isolation from the default test task.'
+    description = '동시성 테스트를 기본 test 태스크와 격리해 실행한다.'
     testClassesDirs = sourceSets.test.output.classesDirs
     classpath = sourceSets.test.runtimeClasspath
     shouldRunAfter tasks.named('test')
@@ -212,12 +201,28 @@ tasks.register('concurrencyTest', Test) {
 
     useJUnitPlatform {
         includeTags "concurrency"
+        excludeTags "learning"
     }
 }
 
-tasks.register('naverPaySandboxTest', Test) {
+tasks.register('batchTest', Test) {
     group = 'verification'
-    description = 'Runs NaverPay sandbox integration tests with values from .env.sandbox.'
+    description = 'Spring Batch 통합 테스트를 기본 test 태스크와 격리해 실행한다.'
+    testClassesDirs = sourceSets.test.output.classesDirs
+    classpath = sourceSets.test.runtimeClasspath
+    shouldRunAfter tasks.named('test')
+
+    systemProperty 'spring.profiles.active', 'test'
+
+    useJUnitPlatform {
+        includeTags "batch"
+        excludeTags "learning"
+    }
+}
+
+tasks.register('sandboxTest', Test) {
+    group = 'verification'
+    description = '외부 sandbox API 테스트를 .env.sandbox 값으로 실행한다.'
     testClassesDirs = sourceSets.test.output.classesDirs
     classpath = sourceSets.test.runtimeClasspath
     shouldRunAfter tasks.named('test')
@@ -230,5 +235,6 @@ tasks.register('naverPaySandboxTest', Test) {
 
     useJUnitPlatform {
         includeTags "sandbox"
+        excludeTags "concurrency", "batch", "learning"
     }
 }
