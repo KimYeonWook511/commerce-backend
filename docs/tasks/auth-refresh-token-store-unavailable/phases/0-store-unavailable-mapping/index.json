@@ -1,0 +1,37 @@
+{
+  "project": "auth-refresh-token-store-unavailable",
+  "phase": "0-store-unavailable-mapping",
+  "steps": [
+    {
+      "step": 1,
+      "name": "auth-store-unavailable-mapping",
+      "status": "completed",
+      "started_at": "2026-06-02T22:38:02+0900",
+      "summary": "RefreshTokenStoreUnavailableException 신규 생성(RuntimeException 직접 상속), RedisRefreshTokenStore에 DataAccessException catch + ERROR 로그 + 도메인 예외 변환 추가, AuthTokenIssueService/AuthTokenReissueService의 인프라 장애 try-catch 제거, AuthExceptionHandler(@RestControllerAdvice) 신규 생성, RedisRefreshTokenStoreTest/AuthExceptionHandlerTest 신규 작성, AuthTokenIssueServiceTest/AuthTokenReissueServiceTest의 인프라 장애 케이스를 propagate 검증으로 갱신. 단위 테스트 및 통합 테스트 모두 통과.",
+      "completed_at": "2026-06-02T22:40:15+0900"
+    },
+    {
+      "step": 2,
+      "name": "sync-root-docs",
+      "status": "completed",
+      "started_at": "2026-06-02T22:41:50+0900",
+      "summary": "docs/exception-strategy.md의 Redis 캐시 장애 처리 섹션을 fallback 가능 여부와 무관한 공통 매핑 패턴으로 재정리하고, catch 위치 분기(application vs presentation) 섹션을 신규 작성하며 로깅 규약에 fallback 불가 케이스 항목을 추가. docs/ADR.md Task ADR 색인 표에 auth-refresh-token-store-unavailable 행을 알파벳 순으로 삽입.",
+      "completed_at": "2026-06-02T22:43:45+0900"
+    },
+    {
+      "step": 3,
+      "name": "write-retrospective",
+      "status": "completed",
+      "started_at": "2026-06-02T22:45:19+0900",
+      "summary": "docs/tasks/auth-refresh-token-store-unavailable/retrospective.md 신규 작성. 배경/결정 과정(ADR-1~4)/핵심 트레이드오프/변경 범위/부수 이슈/미래 결정 시점/배운 점 7개 섹션 포함.",
+      "completed_at": "2026-06-02T22:47:24+0900"
+    }
+  ],
+  "created_at": "2026-06-02T22:21:25+0900",
+  "execution": {
+    "developer_model": "sonnet",
+    "reviewer_model": "opus",
+    "commit_model": "haiku"
+  },
+  "completed_at": "2026-06-02T22:48:20+0900"
+}
