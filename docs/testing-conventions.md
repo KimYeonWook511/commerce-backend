@@ -268,6 +268,8 @@ CI 는 다음 두 잡을 병렬로 실행한다.
 
 `docker + concurrency` 등 격리 축 태그가 함께 부여된 클래스는 격리 task 쪽으로만 매칭되므로 환경 축이 docker 라도 자동 검증에서 빠진다. 동시성/배치/sandbox 관련 코드를 변경하면 영향 범위에 맞춰 수동으로 `./gradlew concurrencyTest` / `./gradlew sandboxTest` 를 직접 실행해 검증한다.
 
+`sandboxTest` 는 외부 PG sandbox 에 실제 API 호출이 발생하므로 동시성 검증보다 더 강한 사전 의도 확인이 필요하다. 새 sandbox 클래스 작성 시 `@Tag("sandbox")` 와 함께 `@EnabledIfEnvironmentVariable` 류의 JUnit 조건 어노테이션으로 필수 환경변수 부재 시 자동 skip 되도록 둔다 — 빌드 task 자체 차단이 약해도 클래스 레벨에서 한 번 더 안전망을 둔다.
+
 ---
 
 ## 학습용 테스트 격리 정책
