@@ -5,6 +5,7 @@ import static org.assertj.core.api.Assertions.assertThat;
 import java.time.Duration;
 
 import org.junit.jupiter.api.AfterEach;
+import org.junit.jupiter.api.Disabled;
 import org.junit.jupiter.api.DisplayName;
 import org.junit.jupiter.api.Tag;
 import org.junit.jupiter.api.Test;
@@ -22,7 +23,8 @@ import com.commerce.test.async.domain.AsyncTestStatus;
 import com.commerce.test.async.repository.AsyncTestEntityRepository;
 import com.commerce.test.async.service.AsyncService;
 
-@Tag("test")
+@Tag("learning")
+@Disabled("학습용 — Spring @Async 동작과 WebClient timeout/실패 시나리오 학습. 운영 검증 대상 아님")
 @SpringBootTest(classes = AsyncTest.AsyncTestApplication.class)
 @ActiveProfiles("test")
 @TestPropertySource(properties = {
