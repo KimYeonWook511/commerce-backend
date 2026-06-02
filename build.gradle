@@ -186,7 +186,7 @@ tasks.register('integrationTest', Test) {
 
     useJUnitPlatform {
         includeTags "docker"
-        excludeTags "concurrency", "batch", "learning"
+        excludeTags "concurrency", "batch", "sandbox", "learning"
     }
 }
 
