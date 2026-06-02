@@ -141,6 +141,40 @@ def resolveDockerCommand = {
     candidates.find { file(it).exists() } ?: 'docker'
 }
 
+def verifyDockerDaemon = { String taskName ->
+    ByteArrayOutputStream output = new ByteArrayOutputStream()
+    ExecResult result
+
+    def dockerCommand = resolveDockerCommand()
+    try {
+        result = exec {
+            commandLine dockerCommand, 'info'
+            standardOutput = output
+            errorOutput = output
+            ignoreExitValue = true
+        }
+    } catch (Exception ex) {
+        throw new GradleException(
+            "docker 명령어를 실행할 수 없습니다. Docker Desktop 설치 상태와 Gradle 실행 환경의 PATH를 확인하세요.",
+            ex
+        )
+    }
+
+    if (result.exitValue != 0) {
+        List<String> outputLines = output.toString()
+            .readLines()
+            .findAll { !it.isBlank() }
+        String details = outputLines.isEmpty() ? null : outputLines.last()
+
+        String message = "Docker daemon에 연결할 수 없습니다. Docker Desktop을 실행한 뒤 ${taskName}를 다시 실행하세요."
+        if (details) {
+            message += "\n세부 원인: ${details}"
+        }
+
+        throw new GradleException(message)
+    }
+}
+
 tasks.register('integrationTest', Test) {
     group = 'verification'
     description = 'Docker/Testcontainers 가 필요한 통합 테스트를 실행한다.'
@@ -151,37 +185,7 @@ tasks.register('integrationTest', Test) {
     systemProperty 'spring.profiles.active', 'test'
 
     doFirst {
-        ByteArrayOutputStream output = new ByteArrayOutputStream()
-        ExecResult result
-
-        def dockerCommand = resolveDockerCommand()
-        try {
-            result = exec {
-                commandLine dockerCommand, 'info'
-                standardOutput = output
-                errorOutput = output
-                ignoreExitValue = true
-            }
-        } catch (Exception ex) {
-            throw new GradleException(
-                "docker 명령어를 실행할 수 없습니다. Docker Desktop 설치 상태와 Gradle 실행 환경의 PATH를 확인하세요.",
-                ex
-            )
-        }
-
-        if (result.exitValue != 0) {
-            List<String> outputLines = output.toString()
-                .readLines()
-                .findAll { !it.isBlank() }
-            String details = outputLines.isEmpty() ? null : outputLines.last()
-
-            String message = "Docker daemon에 연결할 수 없습니다. Docker Desktop을 실행한 뒤 integrationTest를 다시 실행하세요."
-            if (details) {
-                message += "\n세부 원인: ${details}"
-            }
-
-            throw new GradleException(message)
-        }
+        verifyDockerDaemon('integrationTest')
     }
 
     useJUnitPlatform {
@@ -199,6 +203,10 @@ tasks.register('concurrencyTest', Test) {
 
     systemProperty 'spring.profiles.active', 'test'
 
+    doFirst {
+        verifyDockerDaemon('concurrencyTest')
+    }
+
     useJUnitPlatform {
         includeTags "concurrency"
         excludeTags "learning"
@@ -213,6 +221,10 @@ tasks.register('batchTest', Test) {
     shouldRunAfter tasks.named('test')
 
     systemProperty 'spring.profiles.active', 'test'
+
+    doFirst {
+        verifyDockerDaemon('batchTest')
+    }
 
     useJUnitPlatform {
         includeTags "batch"
@@ -231,6 +243,10 @@ tasks.register('sandboxTest', Test) {
 
     loadDotEnv(file('.env.sandbox')).each { key, value ->
         environment key, value
+    }
+
+    doFirst {
+        verifyDockerDaemon('sandboxTest')
     }
 
     useJUnitPlatform {
