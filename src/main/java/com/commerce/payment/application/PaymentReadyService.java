@@ -20,6 +20,8 @@ import com.commerce.payment.provider.PaymentProviderProperties;
 import com.commerce.payment.provider.PaymentProviderPropertiesResolver;
 import com.commerce.product.domain.Product;
 import com.commerce.product.domain.repository.ProductRepository;
+import com.commerce.product.exception.ProductErrorCode;
+import com.commerce.product.exception.ProductException;
 
 import lombok.RequiredArgsConstructor;
 import lombok.extern.slf4j.Slf4j;
@@ -79,7 +81,11 @@ public class PaymentReadyService {
 			throw new OrderException(OrderErrorCode.ORDER_ITEMS_EMPTY);
 		}
 
-		String firstName = productsById.get(items.get(0).getProductId()).getName();
+		Product firstProduct = productsById.get(items.get(0).getProductId());
+		if (firstProduct == null) {
+			throw new ProductException(ProductErrorCode.PRODUCT_NOT_FOUND);
+		}
+		String firstName = firstProduct.getName();
 		if (items.size() == 1) {
 			return firstName;
 		}
