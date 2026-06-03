@@ -1,5 +1,10 @@
 {
   "phases": [
-    { "dir": "0-snapshot", "status": "pending" }
+    {
+      "dir": "0-snapshot",
+      "status": "completed",
+      "started_at": "2026-06-03T22:56:11+0900",
+      "completed_at": "2026-06-03T23:05:52+0900"
+    }
   ]
 }

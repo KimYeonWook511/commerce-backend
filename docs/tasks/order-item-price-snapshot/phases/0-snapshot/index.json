@@ -2,8 +2,36 @@
   "project": "order-item-price-snapshot",
   "phase": "0-snapshot",
   "steps": [
-    { "step": 1, "name": "add-unit-price-snapshot", "status": "pending" },
-    { "step": 2, "name": "sync-root-docs", "status": "pending" },
-    { "step": 3, "name": "write-retrospective", "status": "pending" }
-  ]
+    {
+      "step": 1,
+      "name": "add-unit-price-snapshot",
+      "status": "completed",
+      "started_at": "2026-06-03T22:56:11+0900",
+      "summary": "V5 migration 으로 tbl_order_item.unit_price 컬럼을 추가하고 기존 row 를 product 현재가로 backfill 후 NOT NULL 전환. OrderItem 에 unitPrice 필드·생성자·팩토리 메서드를 추가하고 미해결 주석을 제거. Order.addOrderItem 내부에서 unitPrice 를 OrderItem.of 로 전달. OrderTest 에 unitPrice 보존 assertion 및 snapshot 보존 시나리오 신규 테스트 추가. OrderRepositoryJpaAdapterTest 에 unitPrice round-trip 검증 추가. test·integrationTest 모두 통과.",
+      "completed_at": "2026-06-03T22:58:42+0900"
+    },
+    {
+      "step": 2,
+      "name": "sync-root-docs",
+      "status": "completed",
+      "started_at": "2026-06-03T22:59:57+0900",
+      "summary": "docs/ADR.md Task ADR 색인 표에 order-item-price-snapshot 행을 추가. docs/db-schema.md 마이그레이션 섹션에 V5 한 줄 요약 추가, tbl_order_item 섹션에 unit_price INT NOT NULL 컬럼과 비고 한 줄을 추가. test 통과.",
+      "completed_at": "2026-06-03T23:01:24+0900"
+    },
+    {
+      "step": 3,
+      "name": "write-retrospective",
+      "status": "completed",
+      "started_at": "2026-06-03T23:02:23+0900",
+      "summary": "docs/tasks/order-item-price-snapshot/retrospective.md 를 신규 작성. 개요 / 결정 흐름 (int 채택, backfill, 응답 DTO 노출 분리, task adr 관리) / 기각된 옵션 / series baseline 과의 관계 / 사실 기록 (미해결 주석 lag, backfill 부정확성) / 아쉬운 점 / 후속 작업 7개 섹션 포함. test 통과.",
+      "completed_at": "2026-06-03T23:04:48+0900"
+    }
+  ],
+  "created_at": "2026-06-03T22:56:11+0900",
+  "execution": {
+    "developer_model": "sonnet",
+    "reviewer_model": "opus",
+    "commit_model": "haiku"
+  },
+  "completed_at": "2026-06-03T23:05:52+0900"
 }
