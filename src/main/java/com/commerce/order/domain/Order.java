@@ -87,7 +87,7 @@ public class Order extends BaseTimeEntity {
 	}
 
 	public void addOrderItem(Long productId, int quantity, int unitPrice) {
-		OrderItem orderItem = OrderItem.of(this, productId, quantity);
+		OrderItem orderItem = OrderItem.of(this, productId, quantity, unitPrice);
 		this.orderItems.add(orderItem);
 		this.totalPrice += unitPrice * quantity;
 	}

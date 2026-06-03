@@ -68,6 +68,22 @@ class OrderTest {
 		assertThat(order.getOrderItems().get(0).getOrder()).isEqualTo(order);
 		assertThat(order.getOrderItems().get(0).getProductId()).isEqualTo(10L);
 		assertThat(order.getOrderItems().get(0).getQuantity()).isEqualTo(2);
+		assertThat(order.getOrderItems().get(0).getUnitPrice()).isEqualTo(1500);
+	}
+
+	@DisplayName("서로 다른 unitPrice 로 두 번 addOrderItem 하면 각각의 unitPrice 가 보존된다")
+	@Test
+	void addOrderItem_whenMultipleItemsWithDifferentUnitPrice_preserveEachUnitPrice() {
+		// given
+		Order order = Order.create(1L);
+
+		// when
+		order.addOrderItem(10L, 1, 1000);
+		order.addOrderItem(10L, 1, 2000);
+
+		// then
+		assertThat(order.getOrderItems().get(0).getUnitPrice()).isEqualTo(1000);
+		assertThat(order.getOrderItems().get(1).getUnitPrice()).isEqualTo(2000);
 	}
 
 	@DisplayName("여러 상품을 추가하면 총액이 누적된다")

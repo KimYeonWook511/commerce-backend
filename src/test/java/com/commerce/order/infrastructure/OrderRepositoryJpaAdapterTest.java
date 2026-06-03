@@ -61,6 +61,7 @@ class OrderRepositoryJpaAdapterTest {
 		assertThat(result.getMemberId()).isEqualTo(member.getId());
 		assertThat(result.getOrderItems()).hasSize(1);
 		assertThat(result.getOrderItems().getFirst().getProductId()).isEqualTo(product.getId());
+		assertThat(result.getOrderItems().getFirst().getUnitPrice()).isEqualTo(product.getPrice());
 	}
 
 	@DisplayName("만료 대상 조회 시 상태와 cutoff, lastId 조건에 맞는 주문만 ID 오름차순으로 조회한다")

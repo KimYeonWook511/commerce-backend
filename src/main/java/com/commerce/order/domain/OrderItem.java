@@ -36,17 +36,18 @@ public class OrderItem extends BaseTimeEntity {
 	@Column(nullable = false)
 	private int quantity;
 
-	private OrderItem(Order order, Long productId, int quantity) {
+	@Column(nullable = false)
+	private int unitPrice;
+
+	private OrderItem(Order order, Long productId, int quantity, int unitPrice) {
 		this.order = order;
 		this.productId = productId;
 		this.quantity = quantity;
+		this.unitPrice = unitPrice;
 	}
 
-	public static OrderItem of(Order order, Long productId, int quantity) {
-		return new OrderItem(order, productId, quantity);
+	public static OrderItem of(Order order, Long productId, int quantity, int unitPrice) {
+		return new OrderItem(order, productId, quantity, unitPrice);
 	}
-
-	// 가격도 넣어야 하나? (구매했을때 기준의 가격이 있어야 하지 않나.. 세일,, 등등.. product의 price는 변동하지 않나)
-	// 추후 고려하기
 
 }
