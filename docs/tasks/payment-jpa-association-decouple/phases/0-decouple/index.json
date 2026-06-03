@@ -2,8 +2,36 @@
   "project": "payment-jpa-association-decouple",
   "phase": "0-decouple",
   "steps": [
-    { "step": 1, "name": "payment-association-decouple", "status": "pending" },
-    { "step": 2, "name": "sync-root-docs", "status": "pending" },
-    { "step": 3, "name": "write-retrospective", "status": "pending" }
-  ]
+    {
+      "step": 1,
+      "name": "payment-association-decouple",
+      "status": "completed",
+      "started_at": "2026-06-03T16:53:04+0900",
+      "summary": "Payment 엔티티의 @OneToOne Order 필드를 Long orderId로 전환하고 createCompleted 정적 팩토리 시그니처를 Long orderId + int amount 명시 인자로 변경한다. PaymentApprovalService 호출부를 order.getId()/order.getTotalPrice()로 갱신하고, 관련 테스트 fixture 5개 파일을 새 시그니처로 일괄 갱신한다. DB schema/Flyway 변경 없음. ./gradlew test integrationTest BUILD SUCCESSFUL.",
+      "completed_at": "2026-06-03T16:57:12+0900"
+    },
+    {
+      "step": 2,
+      "name": "sync-root-docs",
+      "status": "completed",
+      "started_at": "2026-06-03T16:58:25+0900",
+      "summary": "docs/ADR.md Task ADR 색인에 payment-jpa-association-decouple 한 줄을 추가하고 ADR-020 본문에 Payment aggregate 후속 노트(series 완료 명시)를 부착한다. docs/architecture.md Payment 섹션을 orderId: Long ID 참조 컨벤션, PaymentAttempt 식별자 기반 동작, ADR-020 series 완료 사실로 갱신한다. ./gradlew test BUILD SUCCESSFUL.",
+      "completed_at": "2026-06-03T17:01:11+0900"
+    },
+    {
+      "step": 3,
+      "name": "write-retrospective",
+      "status": "completed",
+      "started_at": "2026-06-03T17:02:10+0900",
+      "summary": "docs/tasks/payment-jpa-association-decouple/retrospective.md를 작성한다. 결정 흐름 5가지(변경 면적 좁음, createCompleted Long ID 전환, OrderRepository 신설 기각, PaymentAttempt 범위 제외, 응답 echo 별도 트랙), 기각된 옵션 표, series 전체 baseline(메타 원칙/Long ID 패턴/fetch join 일반 원칙/외부 주입 패턴), 운영 점검, 자기 평가를 포함한다. ./gradlew test BUILD SUCCESSFUL.",
+      "completed_at": "2026-06-03T17:04:46+0900"
+    }
+  ],
+  "created_at": "2026-06-03T16:53:04+0900",
+  "execution": {
+    "developer_model": "sonnet",
+    "reviewer_model": "opus",
+    "commit_model": "haiku"
+  },
+  "completed_at": "2026-06-03T17:05:29+0900"
 }
