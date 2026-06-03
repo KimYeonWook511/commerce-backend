@@ -2,8 +2,36 @@
   "project": "cross-aggregate-fk-cleanup",
   "phase": "0-drop-fk",
   "steps": [
-    { "step": 1, "name": "drop-fk-migration", "status": "pending" },
-    { "step": 2, "name": "sync-root-docs", "status": "pending" },
-    { "step": 3, "name": "write-retrospective", "status": "pending" }
-  ]
+    {
+      "step": 1,
+      "name": "drop-fk-migration",
+      "status": "completed",
+      "started_at": "2026-06-03T18:34:20+0900",
+      "summary": "V4__drop_cross_aggregate_fk_constraints.sql을 추가해 cross-aggregate FK 5건(fk_stock_product_id, fk_stock_history_stock_id, fk_order_member_id, fk_order_item_product_id, fk_payment_order_id)을 일괄 제거한다. UNIQUE 제약·same-aggregate FK·기존 KEY index는 유지한다. test 및 integrationTest 모두 통과.",
+      "completed_at": "2026-06-03T18:36:25+0900"
+    },
+    {
+      "step": 2,
+      "name": "sync-root-docs",
+      "status": "completed",
+      "started_at": "2026-06-03T18:37:12+0900",
+      "summary": "docs/ADR.md에 Task ADR 색인 행(cross-aggregate-fk-cleanup) 추가 및 ADR-020 후속 노트 1건 추가. docs/db-schema.md에서 cross-aggregate FK 5건 표기를 제거하고 UNIQUE·same-aggregate FK 유지, 각 테이블 비고에 FK 제거 근거 추가. docs/architecture.md의 stock·order·payment 도메인 섹션을 series 완전 종료(ADR-020 후속 트랙 FK cleanup 완료) 표현으로 정비. test 통과.",
+      "completed_at": "2026-06-03T18:42:06+0900"
+    },
+    {
+      "step": 3,
+      "name": "write-retrospective",
+      "status": "completed",
+      "started_at": "2026-06-03T18:43:30+0900",
+      "summary": "docs/tasks/cross-aggregate-fk-cleanup/retrospective.md를 신규 작성한다. series 4트랙(Stock #199/Order #200/Payment #202/본 FK cleanup) 마무리 시점 회고로, 결정 흐름·기각된 옵션·series baseline·코드-schema lag 사실 기록·lag 표준 미정의 결정·운영 배포 별도 결정을 포함한다. 완료된 task 폴더 변경 0건. test 통과.",
+      "completed_at": "2026-06-03T18:46:28+0900"
+    }
+  ],
+  "created_at": "2026-06-03T18:34:20+0900",
+  "execution": {
+    "developer_model": "sonnet",
+    "reviewer_model": "opus",
+    "commit_model": "haiku"
+  },
+  "completed_at": "2026-06-03T18:47:31+0900"
 }

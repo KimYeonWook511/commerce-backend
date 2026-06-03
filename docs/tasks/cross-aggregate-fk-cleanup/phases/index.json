@@ -1,5 +1,10 @@
 {
   "phases": [
-    { "dir": "0-drop-fk", "status": "pending" }
+    {
+      "dir": "0-drop-fk",
+      "status": "completed",
+      "started_at": "2026-06-03T18:34:20+0900",
+      "completed_at": "2026-06-03T18:47:31+0900"
+    }
   ]
 }
