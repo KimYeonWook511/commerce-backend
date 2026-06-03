@@ -33,7 +33,7 @@
   - `tbl_payment.uk_payment_order_id` UNIQUE — Payment 1:1 Order 도메인 invariant.
   - `tbl_stock_history.KEY fk_stock_history_stock_id` — FK 와 동명 index, FK DROP 시 KEY 만 잔류.
   - `tbl_order_item.KEY fk_order_item_product_id` — 위와 동일.
-  - `tbl_order.fk_order_member_id` 의 InnoDB 자동 생성 index — FK DROP 시 잔류.
+  - `tbl_order.fk_order_member_id` 는 `uk_order_member_idempotency (member_id, idempotency_key)` 복합 UNIQUE 의 leftmost prefix 를 InnoDB 가 재사용해 별도 자동 index 가 생성되지 않았다 — FK DROP 후 잔류 index 가 없다.
 - 옵션:
   - (A) FK 만 DROP, UNIQUE 와 잔류 KEY index 모두 유지
   - (B) FK + 불필요 KEY index 도 함께 DROP (UNIQUE 는 유지)
