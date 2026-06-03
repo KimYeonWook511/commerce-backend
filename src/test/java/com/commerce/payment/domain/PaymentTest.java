@@ -6,10 +6,7 @@ import java.time.LocalDateTime;
 
 import org.junit.jupiter.api.DisplayName;
 import org.junit.jupiter.api.Test;
-import com.commerce.member.domain.Member;
 import com.commerce.order.domain.Order;
-import com.commerce.product.domain.Product;
-import com.commerce.product.domain.ProductStatus;
 
 class PaymentTest {
 
@@ -37,21 +34,8 @@ class PaymentTest {
 	}
 
 	private Order createOrder(int totalPrice) {
-		Order order = Order.create(createMember());
-		Product product = Product.builder()
-			.name("product")
-			.price(totalPrice)
-			.status(ProductStatus.ON_SALE)
-			.build();
-		order.addOrderItem(product, 1);
+		Order order = Order.create(1L);
+		order.addOrderItem(1L, 1, totalPrice);
 		return order;
-	}
-
-	private Member createMember() {
-		return Member.builder()
-			.email("payment@example.com")
-			.password("password123")
-			.username("payer")
-			.build();
 	}
 }

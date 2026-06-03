@@ -142,10 +142,8 @@ class OrderApplicationServiceTest {
 	@Test
 	void cancelOrder_whenInitStatus_restoreStock() {
 		// given
-		Member member = createMember(1L);
-		Product product = createProduct(10L, "product-1", 1000);
-		Order order = Order.create(member);
-		order.addOrderItem(product, 2);
+		Order order = Order.create(1L);
+		order.addOrderItem(10L, 2, 1000);
 		ReflectionTestUtils.setField(order, "id", 100L);
 
 		given(orderRepository.findByIdAndMemberIdWithItems(100L, 1L)).willReturn(Optional.of(order));
@@ -163,12 +161,9 @@ class OrderApplicationServiceTest {
 	@Test
 	void cancelOrder_whenMultipleItems_sortByProductId() {
 		// given
-		Member member = createMember(1L);
-		Product product1 = createProduct(5L, "product-5", 1000);
-		Product product2 = createProduct(2L, "product-2", 1000);
-		Order order = Order.create(member);
-		order.addOrderItem(product1, 1);
-		order.addOrderItem(product2, 1);
+		Order order = Order.create(1L);
+		order.addOrderItem(5L, 1, 1000);
+		order.addOrderItem(2L, 1, 1000);
 		ReflectionTestUtils.setField(order, "id", 100L);
 
 		given(orderRepository.findByIdAndMemberIdWithItems(100L, 1L)).willReturn(Optional.of(order));
@@ -186,10 +181,8 @@ class OrderApplicationServiceTest {
 	@Test
 	void cancelOrder_whenStatusNotInit_throwException() {
 		// given
-		Member member = createMember(1L);
-		Product product = createProduct(10L, "product-1", 1000);
-		Order order = Order.create(member);
-		order.addOrderItem(product, 1);
+		Order order = Order.create(1L);
+		order.addOrderItem(10L, 1, 1000);
 		ReflectionTestUtils.setField(order, "id", 100L);
 		ReflectionTestUtils.setField(order, "status", OrderStatus.RECEIVED);
 
@@ -208,10 +201,8 @@ class OrderApplicationServiceTest {
 	@Test
 	void cancelOrder_whenMemberMismatch_throwException() {
 		// given
-		Member member = createMember(2L);
-		Product product = createProduct(10L, "product-1", 1000);
-		Order order = Order.create(member);
-		order.addOrderItem(product, 1);
+		Order order = Order.create(2L);
+		order.addOrderItem(10L, 1, 1000);
 		ReflectionTestUtils.setField(order, "id", 100L);
 
 		given(orderRepository.findByIdAndMemberIdWithItems(100L, 1L)).willReturn(Optional.empty());
@@ -229,7 +220,7 @@ class OrderApplicationServiceTest {
 	@Test
 	void getOrderByMerchantPayKeyAndMemberId_whenExists_returnOrder() {
 		// given
-		Order order = Order.create(createMember(1L));
+		Order order = Order.create(1L);
 		ReflectionTestUtils.setField(order, "merchantPayKey", "PAY-1");
 		given(orderRepository.findByMerchantPayKeyAndMemberId("PAY-1", 1L)).willReturn(Optional.of(order));
 
@@ -395,7 +386,7 @@ class OrderApplicationServiceTest {
 			.items(List.of(OrderCreateItem.builder().productId(10L).quantity(1).build()))
 			.build();
 
-		Order existingOrder = Order.create(createMember(1L));
+		Order existingOrder = Order.create(1L);
 		ReflectionTestUtils.setField(existingOrder, "id", 99L);
 
 		stubForIdempotencyReserved();
@@ -492,7 +483,7 @@ class OrderApplicationServiceTest {
 	}
 
 	private OrderCreateResult stubProcessorSuccess(OrderCreateCommand command) {
-		Order order = Order.create(createMember(1L));
+		Order order = Order.create(1L);
 		ReflectionTestUtils.setField(order, "id", 100L);
 		OrderCreateResult result = OrderCreateResult.from(order);
 		given(orderCreateProcessor.execute(eq(command))).willReturn(result);

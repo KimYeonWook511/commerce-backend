@@ -34,11 +34,11 @@ public class OrderCancelService {
 		order.cancel();
 
 		List<OrderItem> sortedItems = order.getOrderItems().stream()
-			.sorted(Comparator.comparing(item -> item.getProduct().getId()))
+			.sorted(Comparator.comparing(OrderItem::getProductId))
 			.toList();
 
 		sortedItems.forEach(item ->
-			stockInventoryService.increase(item.getProduct().getId(), item.getQuantity())
+			stockInventoryService.increase(item.getProductId(), item.getQuantity())
 		);
 
 		log.info("주문 취소 orderId={} memberId={} itemCount={}",

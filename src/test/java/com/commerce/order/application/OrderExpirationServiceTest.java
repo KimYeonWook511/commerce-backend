@@ -17,7 +17,6 @@ import org.mockito.Mock;
 import org.mockito.junit.jupiter.MockitoExtension;
 import org.springframework.test.util.ReflectionTestUtils;
 
-import com.commerce.member.domain.Member;
 import com.commerce.order.domain.Order;
 import com.commerce.order.domain.OrderStatus;
 import com.commerce.order.domain.repository.OrderRepository;
@@ -25,8 +24,6 @@ import com.commerce.order.exception.OrderErrorCode;
 import com.commerce.order.exception.OrderException;
 import com.commerce.outbox.application.OutboxService;
 import com.commerce.outbox.stock.application.command.StockRestoreOutboxCreateCommand;
-import com.commerce.product.domain.Product;
-import com.commerce.product.domain.ProductStatus;
 
 @ExtendWith(MockitoExtension.class)
 class OrderExpirationServiceTest {
@@ -98,23 +95,9 @@ class OrderExpirationServiceTest {
 	}
 
 	private Order createOrderWithItem() {
-		Member member = Member.builder()
-			.email("expire@example.com")
-			.password("password123")
-			.username("expire-user")
-			.build();
-		ReflectionTestUtils.setField(member, "id", 10L);
-
-		Product product = Product.builder()
-			.name("expire-product")
-			.price(1000)
-			.status(ProductStatus.ON_SALE)
-			.build();
-		ReflectionTestUtils.setField(product, "id", 1L);
-
-		Order order = Order.create(member);
+		Order order = Order.create(10L);
 		ReflectionTestUtils.setField(order, "id", 100L);
-		order.addOrderItem(product, 2);
+		order.addOrderItem(1L, 2, 1000);
 		return order;
 	}
 }

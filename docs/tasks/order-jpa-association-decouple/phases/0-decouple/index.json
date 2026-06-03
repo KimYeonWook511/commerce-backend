@@ -1,0 +1,37 @@
+{
+  "project": "order-jpa-association-decouple",
+  "phase": "0-decouple",
+  "steps": [
+    {
+      "step": 1,
+      "name": "order-association-decouple",
+      "status": "completed",
+      "started_at": "2026-06-03T14:43:27+0900",
+      "completed_at": "2026-06-03T15:12:29+0900",
+      "summary": "Order.member→Long memberId, OrderItem.product→Long productId 분리 완료. addOrderItem(Long, int, int) 시그니처 변경. JpaOrderRepository JPQL cross-aggregate fetch join 제거. PaymentReadyService에 ProductRepository 주입 및 batch 로딩 적용. 전체 테스트(test + integrationTest + batchTest) 통과."
+    },
+    {
+      "step": 2,
+      "name": "sync-root-docs",
+      "status": "completed",
+      "started_at": "2026-06-03T15:14:11+0900",
+      "completed_at": "2026-06-03T15:16:21+0900",
+      "summary": "docs/ADR.md Task ADR 색인에 order-jpa-association-decouple 한 줄 추가. ADR-020 본문에 후속 노트(order 후속) 부착. docs/architecture.md order 도메인 설명에 ID 참조 컨벤션(memberId/productId, same-aggregate 유지, fetch join 대체 원칙) 반영. ./gradlew test 통과."
+    },
+    {
+      "step": 3,
+      "name": "write-retrospective",
+      "status": "completed",
+      "started_at": "2026-06-03T15:17:28+0900",
+      "completed_at": "2026-06-03T15:19:59+0900",
+      "summary": "retrospective.md 작성 완료. 결정 흐름 4가지(fetch join 대체 사용처별 분석, Long ID 시그니처 + existsById 효율화, same-aggregate 유지, 응답 echo 별도 트랙), 기각된 옵션 표, Payment sub-PR baseline, 운영 점검, 자기 평가 모두 포함. ./gradlew test 통과."
+    }
+  ],
+  "created_at": "2026-06-03T14:43:27+0900",
+  "execution": {
+    "developer_model": "sonnet",
+    "reviewer_model": "opus",
+    "commit_model": "haiku"
+  },
+  "completed_at": "2026-06-03T15:20:59+0900"
+}

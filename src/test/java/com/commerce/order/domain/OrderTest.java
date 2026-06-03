@@ -5,26 +5,21 @@ import static org.assertj.core.api.Assertions.assertThatThrownBy;
 
 import org.junit.jupiter.api.DisplayName;
 import org.junit.jupiter.api.Test;
+import org.springframework.test.util.ReflectionTestUtils;
 
-import com.commerce.member.domain.Member;
 import com.commerce.order.exception.OrderErrorCode;
 import com.commerce.order.exception.OrderException;
-import com.commerce.product.domain.Product;
-import com.commerce.product.domain.ProductStatus;
 
 class OrderTest {
 
 	@DisplayName("주문을 생성하면 상태가 INIT이고 총액이 0이다")
 	@Test
 	void create_whenMemberProvided_initializeWithInitStatusAndZeroTotalPrice() {
-		// given
-		Member member = createMember();
-
 		// when
-		Order order = Order.create(member);
+		Order order = Order.create(1L);
 
 		// then
-		assertThat(order.getMember()).isEqualTo(member);
+		assertThat(order.getMemberId()).isEqualTo(1L);
 		assertThat(order.getStatus()).isEqualTo(OrderStatus.INIT);
 		assertThat(order.getTotalPrice()).isZero();
 		assertThat(order.getMerchantPayKey()).isNull();
@@ -35,7 +30,7 @@ class OrderTest {
 	@Test
 	void assignMerchantPayKey_whenNull_assignMerchantPayKey() {
 		// given
-		Order order = Order.create(createMember());
+		Order order = Order.create(1L);
 
 		// when
 		order.assignMerchantPayKey("PAY-123");
@@ -48,7 +43,7 @@ class OrderTest {
 	@Test
 	void assignMerchantPayKey_whenAlreadyAssigned_keepExistingValue() {
 		// given
-		Order order = Order.create(createMember());
+		Order order = Order.create(1L);
 		order.assignMerchantPayKey("PAY-123");
 
 		// when
@@ -62,17 +57,16 @@ class OrderTest {
 	@Test
 	void addOrderItem_whenCalled_appendOrderItemAndIncreaseTotalPrice() {
 		// given
-		Order order = Order.create(createMember());
-		Product product = createProduct("product-1", 1500);
+		Order order = Order.create(1L);
 
 		// when
-		order.addOrderItem(product, 2);
+		order.addOrderItem(10L, 2, 1500);
 
 		// then
 		assertThat(order.getOrderItems()).hasSize(1);
 		assertThat(order.getTotalPrice()).isEqualTo(3000);
 		assertThat(order.getOrderItems().get(0).getOrder()).isEqualTo(order);
-		assertThat(order.getOrderItems().get(0).getProduct()).isEqualTo(product);
+		assertThat(order.getOrderItems().get(0).getProductId()).isEqualTo(10L);
 		assertThat(order.getOrderItems().get(0).getQuantity()).isEqualTo(2);
 	}
 
@@ -80,13 +74,11 @@ class OrderTest {
 	@Test
 	void addOrderItem_whenMultipleItems_accumulateTotalPrice() {
 		// given
-		Order order = Order.create(createMember());
-		Product product1 = createProduct("product-1", 1000);
-		Product product2 = createProduct("product-2", 2000);
+		Order order = Order.create(1L);
 
 		// when
-		order.addOrderItem(product1, 2);
-		order.addOrderItem(product2, 1);
+		order.addOrderItem(1L, 2, 1000);
+		order.addOrderItem(2L, 1, 2000);
 
 		// then
 		assertThat(order.getOrderItems()).hasSize(2);
@@ -97,7 +89,7 @@ class OrderTest {
 	@Test
 	void cancel_whenInitStatus_changeToCanceled() {
 		// given
-		Order order = Order.create(createMember());
+		Order order = Order.create(1L);
 
 		// when
 		order.cancel();
@@ -110,8 +102,8 @@ class OrderTest {
 	@Test
 	void cancel_whenStatusNotInit_throwException() {
 		// given
-		Order order = Order.create(createMember());
-		order.addOrderItem(createProduct("product-1", 1000), 1);
+		Order order = Order.create(1L);
+		order.addOrderItem(1L, 1, 1000);
 		setStatus(order, OrderStatus.RECEIVED);
 
 		// when & then
@@ -127,7 +119,7 @@ class OrderTest {
 	@Test
 	void completePayment_whenInitStatus_changeToPaid() {
 		// given
-		Order order = Order.create(createMember());
+		Order order = Order.create(1L);
 
 		// when
 		order.completePayment();
@@ -140,7 +132,7 @@ class OrderTest {
 	@Test
 	void completePayment_whenStatusNotInit_throwException() {
 		// given
-		Order order = Order.create(createMember());
+		Order order = Order.create(1L);
 		setStatus(order, OrderStatus.RECEIVED);
 
 		// when & then
@@ -156,7 +148,7 @@ class OrderTest {
 	@Test
 	void checkPayable_whenInitStatus_doNothing() {
 		// given
-		Order order = Order.create(createMember());
+		Order order = Order.create(1L);
 
 		// when
 		order.checkPayable();
@@ -169,7 +161,7 @@ class OrderTest {
 	@Test
 	void checkPayable_whenStatusNotInit_throwException() {
 		// given
-		Order order = Order.create(createMember());
+		Order order = Order.create(1L);
 		setStatus(order, OrderStatus.PAID);
 
 		// when & then
@@ -181,23 +173,7 @@ class OrderTest {
 			});
 	}
 
-	private Member createMember() {
-		return Member.builder()
-			.email("test@example.com")
-			.password("password123")
-			.username("tester")
-			.build();
-	}
-
-	private Product createProduct(String name, int price) {
-		return Product.builder()
-			.name(name)
-			.price(price)
-			.status(ProductStatus.ON_SALE)
-			.build();
-	}
-
 	private void setStatus(Order order, OrderStatus status) {
-		org.springframework.test.util.ReflectionTestUtils.setField(order, "status", status);
+		ReflectionTestUtils.setField(order, "status", status);
 	}
 }

@@ -44,7 +44,7 @@ public class OrderExpirationService {
 	private StockRestoreOutboxCreateCommand toStockRestoreOutboxCreateCommand(Order order, LocalDateTime requestedAt) {
 		Map<Long, Integer> mergedQuantities = new HashMap<>();
 		for (OrderItem orderItem : order.getOrderItems()) {
-			Long productId = orderItem.getProduct().getId();
+			Long productId = orderItem.getProductId();
 			mergedQuantities.merge(productId, orderItem.getQuantity(), Integer::sum);
 		}
 
