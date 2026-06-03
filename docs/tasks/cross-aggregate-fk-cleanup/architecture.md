@@ -41,7 +41,8 @@
 ### UNIQUE / 잔류 KEY index 유지
 
 - UNIQUE 제약 (`uk_stock_product_id`, `uk_payment_order_id`) 은 Stock 1:1 Product, Payment 1:1 Order 도메인 invariant 표현. FK 제거와 무관하게 유지.
-- MySQL InnoDB 가 FK 제거 후에도 동명 KEY index 를 남기는 경우 (`fk_stock_history_stock_id`, `fk_order_item_product_id`, `tbl_order` 의 FK 자동 index) 는 그대로 둔다. 조회 보조용으로 유지해도 무해하며, 운영 lock 단위가 최소화된다.
+- MySQL InnoDB 가 FK 제거 후에도 동명 KEY index 를 남기는 경우 (`fk_stock_history_stock_id`, `fk_order_item_product_id`) 는 그대로 둔다. 조회 보조용으로 유지해도 무해하며, 운영 lock 단위가 최소화된다.
+- `tbl_order.fk_order_member_id` 는 `uk_order_member_idempotency (member_id, idempotency_key)` 복합 UNIQUE 의 leftmost prefix 를 InnoDB 가 재사용했으므로 FK DROP 후 잔류 index 가 없다.
 
 ### same-aggregate FK 유지
 
