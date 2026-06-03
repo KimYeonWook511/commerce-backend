@@ -1,0 +1,9 @@
+{
+  "project": "cross-aggregate-fk-cleanup",
+  "phase": "0-drop-fk",
+  "steps": [
+    { "step": 1, "name": "drop-fk-migration", "status": "pending" },
+    { "step": 2, "name": "sync-root-docs", "status": "pending" },
+    { "step": 3, "name": "write-retrospective", "status": "pending" }
+  ]
+}

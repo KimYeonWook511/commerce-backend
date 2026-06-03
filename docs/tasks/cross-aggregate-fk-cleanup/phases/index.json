@@ -1,0 +1,5 @@
+{
+  "phases": [
+    { "dir": "0-drop-fk", "status": "pending" }
+  ]
+}
