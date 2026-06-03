@@ -1,0 +1,9 @@
+{
+  "project": "order-item-price-snapshot",
+  "phase": "0-snapshot",
+  "steps": [
+    { "step": 1, "name": "add-unit-price-snapshot", "status": "pending" },
+    { "step": 2, "name": "sync-root-docs", "status": "pending" },
+    { "step": 3, "name": "write-retrospective", "status": "pending" }
+  ]
+}
