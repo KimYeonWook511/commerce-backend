@@ -20,7 +20,6 @@ import org.mockito.Mock;
 import org.mockito.junit.jupiter.MockitoExtension;
 import org.springframework.test.util.ReflectionTestUtils;
 
-import com.commerce.member.domain.Member;
 import com.commerce.order.domain.Order;
 import com.commerce.order.exception.OrderErrorCode;
 import com.commerce.order.exception.OrderException;
@@ -40,8 +39,6 @@ import com.commerce.payment.naverpay.application.port.NaverPayGateway;
 import com.commerce.payment.naverpay.application.port.result.NaverPayApproveResult;
 import com.commerce.payment.naverpay.application.port.result.NaverPayCancelResult;
 import com.commerce.payment.naverpay.application.port.result.NaverPayHistoryResult;
-import com.commerce.product.domain.Product;
-import com.commerce.product.domain.ProductStatus;
 import com.commerce.order.application.OrderQueryService;
 
 @ExtendWith(MockitoExtension.class)
@@ -806,22 +803,9 @@ class NaverPayApprovalServiceTest {
 	}
 
 	private Order createOrder(int totalPrice) {
-		Order order = Order.create(createMember());
-		Product product = Product.builder()
-			.name("product")
-			.price(totalPrice)
-			.status(ProductStatus.ON_SALE)
-			.build();
-		order.addOrderItem(product, 1);
+		Order order = Order.create(1L);
+		order.addOrderItem(1L, 1, totalPrice);
 		ReflectionTestUtils.setField(order, "id", 1L);
 		return order;
-	}
-
-	private Member createMember() {
-		return Member.builder()
-			.email("payment@example.com")
-			.password("password123")
-			.username("payer")
-			.build();
 	}
 }

@@ -2,8 +2,10 @@ package com.commerce.payment.application;
 
 import static org.assertj.core.api.Assertions.assertThat;
 import static org.assertj.core.api.Assertions.assertThatThrownBy;
+import static org.mockito.ArgumentMatchers.anyList;
 import static org.mockito.BDDMockito.given;
 
+import java.util.List;
 import java.util.Optional;
 
 import org.junit.jupiter.api.DisplayName;
@@ -14,7 +16,6 @@ import org.mockito.Mock;
 import org.mockito.junit.jupiter.MockitoExtension;
 import org.springframework.test.util.ReflectionTestUtils;
 
-import com.commerce.member.domain.Member;
 import com.commerce.order.domain.Order;
 import com.commerce.order.domain.OrderStatus;
 import com.commerce.order.domain.repository.OrderRepository;
@@ -27,12 +28,16 @@ import com.commerce.payment.provider.PaymentProviderProperties;
 import com.commerce.payment.provider.PaymentProviderPropertiesResolver;
 import com.commerce.product.domain.Product;
 import com.commerce.product.domain.ProductStatus;
+import com.commerce.product.domain.repository.ProductRepository;
 
 @ExtendWith(MockitoExtension.class)
 class PaymentReadyServiceTest {
 
 	@Mock
 	private OrderRepository orderRepository;
+
+	@Mock
+	private ProductRepository productRepository;
 
 	@Mock
 	private PaymentProviderPropertiesResolver propertiesResolver;
@@ -46,9 +51,11 @@ class PaymentReadyServiceTest {
 	@DisplayName("결제 준비 요청을 하면 결제 준비 응답을 반환한다")
 	@Test
 	void readyPayment_whenOrderExists_returnReadyResponse() {
-		Order order = createOrder(1500);
+		Product product = createProduct(10L, "product", 1500);
+		Order order = createOrder(product);
 		setOrderId(order, 1L);
 		given(orderRepository.findByIdAndMemberIdWithItems(1L, 1L)).willReturn(Optional.of(order));
+		given(productRepository.findAllById(anyList())).willReturn(List.of(product));
 		stubPaymentProperties();
 
 		PaymentReadyCommand command = PaymentReadyCommand.builder()
@@ -88,7 +95,8 @@ class PaymentReadyServiceTest {
 	@DisplayName("결제를 진행할 수 없는 주문이면 결제 준비에 실패한다")
 	@Test
 	void readyPayment_whenOrderIsNotPayable_throwException() {
-		Order order = createOrder(1500);
+		Product product = createProduct(10L, "product", 1500);
+		Order order = createOrder(product);
 		setOrderId(order, 1L);
 		ReflectionTestUtils.setField(order, "status", OrderStatus.PAID);
 		given(orderRepository.findByIdAndMemberIdWithItems(1L, 1L)).willReturn(Optional.of(order));
@@ -107,23 +115,20 @@ class PaymentReadyServiceTest {
 			});
 	}
 
-	private Order createOrder(int totalPrice) {
-		Order order = Order.create(createMember());
+	private Product createProduct(Long id, String name, int price) {
 		Product product = Product.builder()
-			.name("product")
-			.price(totalPrice)
+			.name(name)
+			.price(price)
 			.status(ProductStatus.ON_SALE)
 			.build();
-		order.addOrderItem(product, 1);
-		return order;
+		ReflectionTestUtils.setField(product, "id", id);
+		return product;
 	}
 
-	private Member createMember() {
-		return Member.builder()
-			.email("payment@example.com")
-			.password("password123")
-			.username("payer")
-			.build();
+	private Order createOrder(Product product) {
+		Order order = Order.create(1L);
+		order.addOrderItem(product.getId(), 1, product.getPrice());
+		return order;
 	}
 
 	private void setOrderId(Order order, Long orderId) {

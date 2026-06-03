@@ -19,19 +19,15 @@ public interface JpaOrderRepository extends JpaRepository<Order, Long> {
 
 	@Query("""
 		select distinct o from Order o
-		join fetch o.member m
 		join fetch o.orderItems oi
-		join fetch oi.product p
 		where o.id = :orderId
-		and m.id = :memberId
+		and o.memberId = :memberId
 		""")
 	Optional<Order> findByIdAndMemberIdWithItems(@Param("orderId") Long orderId, @Param("memberId") Long memberId);
 
 	@Query("""
 		select distinct o from Order o
-		join fetch o.member m
 		join fetch o.orderItems oi
-		join fetch oi.product p
 		where o.id = :orderId
 		""")
 	Optional<Order> findByIdWithItems(@Param("orderId") Long orderId);
@@ -39,9 +35,8 @@ public interface JpaOrderRepository extends JpaRepository<Order, Long> {
 	@Query("""
 		select o
 		from Order o
-		join o.member m
 		where o.merchantPayKey = :merchantPayKey
-		and m.id = :memberId
+		and o.memberId = :memberId
 		""")
 	Optional<Order> findByMerchantPayKeyAndMemberId(
 		@Param("merchantPayKey") String merchantPayKey,
@@ -76,7 +71,7 @@ public interface JpaOrderRepository extends JpaRepository<Order, Long> {
 	@Query("""
 		select o
 		from Order o
-		where o.member.id = :memberId
+		where o.memberId = :memberId
 		and o.idempotencyKey = :idempotencyKey
 		""")
 	Optional<Order> findByMemberIdAndIdempotencyKey(

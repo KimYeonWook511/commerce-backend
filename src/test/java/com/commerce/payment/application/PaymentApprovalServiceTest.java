@@ -17,7 +17,6 @@ import org.mockito.Mock;
 import org.mockito.junit.jupiter.MockitoExtension;
 import org.springframework.test.util.ReflectionTestUtils;
 
-import com.commerce.member.domain.Member;
 import com.commerce.order.domain.Order;
 import com.commerce.order.domain.OrderStatus;
 import com.commerce.order.domain.repository.OrderRepository;
@@ -28,8 +27,6 @@ import com.commerce.payment.domain.repository.PaymentRepository;
 import com.commerce.payment.application.PaymentApprovalAttemptService;
 import com.commerce.payment.exception.PaymentErrorCode;
 import com.commerce.payment.exception.PaymentException;
-import com.commerce.product.domain.Product;
-import com.commerce.product.domain.ProductStatus;
 
 @ExtendWith(MockitoExtension.class)
 class PaymentApprovalServiceTest {
@@ -132,22 +129,9 @@ class PaymentApprovalServiceTest {
 	}
 
 	private Order createOrder(int totalPrice) {
-		Order order = Order.create(createMember());
-		Product product = Product.builder()
-			.name("product")
-			.price(totalPrice)
-			.status(ProductStatus.ON_SALE)
-			.build();
-		order.addOrderItem(product, 1);
+		Order order = Order.create(1L);
+		order.addOrderItem(1L, 1, totalPrice);
 		return order;
-	}
-
-	private Member createMember() {
-		return Member.builder()
-			.email("payment@example.com")
-			.password("password123")
-			.username("payer")
-			.build();
 	}
 
 	private void setOrderId(Order order, Long orderId) {

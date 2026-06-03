@@ -1,6 +1,9 @@
 package com.commerce.payment.application;
 
 import java.util.List;
+import java.util.Map;
+import java.util.function.Function;
+import java.util.stream.Collectors;
 
 import org.springframework.stereotype.Service;
 import org.springframework.transaction.annotation.Transactional;
@@ -15,6 +18,8 @@ import com.commerce.payment.application.command.PaymentReadyCommand;
 import com.commerce.payment.application.result.PaymentReadyResult;
 import com.commerce.payment.provider.PaymentProviderProperties;
 import com.commerce.payment.provider.PaymentProviderPropertiesResolver;
+import com.commerce.product.domain.Product;
+import com.commerce.product.domain.repository.ProductRepository;
 
 import lombok.RequiredArgsConstructor;
 import lombok.extern.slf4j.Slf4j;
@@ -26,6 +31,7 @@ import lombok.extern.slf4j.Slf4j;
 public class PaymentReadyService {
 
 	private final OrderRepository orderRepository;
+	private final ProductRepository productRepository;
 	private final PaymentProviderPropertiesResolver propertiesResolver;
 
 	@Transactional
@@ -48,6 +54,10 @@ public class PaymentReadyService {
 		int productCount = items.stream().mapToInt(OrderItem::getQuantity).sum();
 		int totalPayAmount = order.getTotalPrice();
 
+		List<Long> productIds = items.stream().map(OrderItem::getProductId).toList();
+		Map<Long, Product> productsById = productRepository.findAllById(productIds).stream()
+			.collect(Collectors.toMap(Product::getId, Function.identity()));
+
 		log.info("결제 준비 완료 merchantPayKey={} orderId={} memberId={} amount={}",
 			order.getMerchantPayKey(), order.getId(), command.getMemberId(), totalPayAmount);
 
@@ -55,7 +65,7 @@ public class PaymentReadyService {
 			.clientId(properties.getClientId())
 			.chainId(properties.getChainId())
 			.merchantPayKey(order.getMerchantPayKey())
-			.productName(buildProductName(items))
+			.productName(buildProductName(items, productsById))
 			.productCount(productCount)
 			.totalPayAmount(totalPayAmount)
 			.taxScopeAmount(totalPayAmount)
@@ -64,12 +74,12 @@ public class PaymentReadyService {
 			.build();
 	}
 
-	private String buildProductName(List<OrderItem> items) {
+	private String buildProductName(List<OrderItem> items, Map<Long, Product> productsById) {
 		if (items.isEmpty()) {
 			throw new OrderException(OrderErrorCode.ORDER_ITEMS_EMPTY);
 		}
 
-		String firstName = items.get(0).getProduct().getName();
+		String firstName = productsById.get(items.get(0).getProductId()).getName();
 		if (items.size() == 1) {
 			return firstName;
 		}

@@ -4,8 +4,6 @@ import java.util.ArrayList;
 import java.util.List;
 
 import com.commerce.common.jpa.BaseTimeEntity;
-import com.commerce.member.domain.Member;
-import com.commerce.product.domain.Product;
 import com.commerce.order.exception.OrderErrorCode;
 import com.commerce.order.exception.OrderException;
 
@@ -14,13 +12,9 @@ import jakarta.persistence.Column;
 import jakarta.persistence.Entity;
 import jakarta.persistence.EnumType;
 import jakarta.persistence.Enumerated;
-import jakarta.persistence.FetchType;
-import jakarta.persistence.ForeignKey;
 import jakarta.persistence.GeneratedValue;
 import jakarta.persistence.GenerationType;
 import jakarta.persistence.Id;
-import jakarta.persistence.JoinColumn;
-import jakarta.persistence.ManyToOne;
 import jakarta.persistence.OneToMany;
 import jakarta.persistence.Table;
 import jakarta.persistence.UniqueConstraint;
@@ -49,9 +43,8 @@ public class Order extends BaseTimeEntity {
 	@Column(nullable = false)
 	private Long version;
 
-	@ManyToOne(fetch = FetchType.LAZY)
-	@JoinColumn(name = "member_id", nullable = false, foreignKey = @ForeignKey(name = "fk_order_member_id"))
-	private Member member;
+	@Column(name = "member_id", nullable = false)
+	private Long memberId;
 
 	@Column(nullable = false)
 	private int totalPrice;
@@ -71,32 +64,32 @@ public class Order extends BaseTimeEntity {
 	private List<OrderItem> orderItems = new ArrayList<>();
 
 	@Builder
-	private Order(Member member, OrderStatus status, String idempotencyKey) {
-		this.member = member;
+	private Order(Long memberId, OrderStatus status, String idempotencyKey) {
+		this.memberId = memberId;
 		this.status = status;
 		this.idempotencyKey = idempotencyKey;
 		this.totalPrice = 0;
 	}
 
-	public static Order create(Member member) {
+	public static Order create(Long memberId) {
 		return Order.builder()
-			.member(member)
+			.memberId(memberId)
 			.status(OrderStatus.INIT)
 			.build();
 	}
 
-	public static Order create(Member member, String idempotencyKey) {
+	public static Order create(Long memberId, String idempotencyKey) {
 		return Order.builder()
-			.member(member)
+			.memberId(memberId)
 			.status(OrderStatus.INIT)
 			.idempotencyKey(idempotencyKey)
 			.build();
 	}
 
-	public void addOrderItem(Product product, int quantity) {
-		OrderItem orderItem = OrderItem.of(this, product, quantity);
+	public void addOrderItem(Long productId, int quantity, int unitPrice) {
+		OrderItem orderItem = OrderItem.of(this, productId, quantity);
 		this.orderItems.add(orderItem);
-		this.totalPrice += product.getPrice() * quantity;
+		this.totalPrice += unitPrice * quantity;
 	}
 
 	public void cancel() {

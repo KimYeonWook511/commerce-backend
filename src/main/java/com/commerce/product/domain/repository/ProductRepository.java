@@ -19,4 +19,6 @@ public interface ProductRepository {
 	Optional<Product> findVisibleProduct(Long productId, List<ProductStatus> statuses);
 
 	Optional<Product> findNotDeletedProduct(Long productId);
+
+	boolean existsById(Long productId);
 }

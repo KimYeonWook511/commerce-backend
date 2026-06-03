@@ -45,7 +45,7 @@ class OrderAuditingTest {
 	void save_whenOrderCreated_setCreatedAtAndUpdatedAt() {
 		// given
 		Member member = memberRepository.save(createMember());
-		Order order = Order.create(member);
+		Order order = Order.create(member.getId());
 
 		// when
 		Order saved = orderRepository.save(order);
@@ -62,14 +62,14 @@ class OrderAuditingTest {
 		// given
 		Member member = memberRepository.save(createMember());
 		Product product = productRepository.save(createProduct());
-		Order order = orderRepository.save(Order.create(member));
+		Order order = orderRepository.save(Order.create(member.getId()));
 		entityManager.flush();
 		LocalDateTime createdAt = order.getCreatedAt();
 		LocalDateTime updatedAt = order.getUpdatedAt();
 
 		// when
 		TimeUnit.MILLISECONDS.sleep(1);
-		order.addOrderItem(product, 1);
+		order.addOrderItem(product.getId(), 1, product.getPrice());
 		Order updated = orderRepository.save(order);
 		entityManager.flush();
 

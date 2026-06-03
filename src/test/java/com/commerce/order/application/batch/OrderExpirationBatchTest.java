@@ -283,8 +283,8 @@ class OrderExpirationBatchTest {
 	}
 
 	private Order createOrder(Member member, Product product, int quantity) {
-		Order order = Order.create(member);
-		order.addOrderItem(product, quantity);
+		Order order = Order.create(member.getId());
+		order.addOrderItem(product.getId(), quantity, product.getPrice());
 		return order;
 	}
 

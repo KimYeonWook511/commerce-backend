@@ -42,14 +42,14 @@ class OrderRepositoryJpaAdapterTest {
 	@Autowired
 	private EntityManager entityManager;
 
-	@DisplayName("주문 ID로 주문을 조회하면 회원과 주문상품, 상품을 함께 조회한다")
+	@DisplayName("주문 ID로 주문을 조회하면 주문상품을 함께 조회한다")
 	@Test
 	void findByIdWithItems_whenOrderExists_returnOrderWithAssociations() {
 		// given
 		Member member = memberRepository.save(createMember());
 		Product product = productRepository.save(createProduct());
-		Order order = Order.create(member);
-		order.addOrderItem(product, 2);
+		Order order = Order.create(member.getId());
+		order.addOrderItem(product.getId(), 2, product.getPrice());
 		Order saved = orderRepository.save(order);
 		entityManager.flush();
 		entityManager.clear();
@@ -58,9 +58,9 @@ class OrderRepositoryJpaAdapterTest {
 		Order result = orderRepository.findByIdWithItems(saved.getId()).orElseThrow();
 
 		// then
-		assertThat(result.getMember().getId()).isEqualTo(member.getId());
+		assertThat(result.getMemberId()).isEqualTo(member.getId());
 		assertThat(result.getOrderItems()).hasSize(1);
-		assertThat(result.getOrderItems().getFirst().getProduct().getId()).isEqualTo(product.getId());
+		assertThat(result.getOrderItems().getFirst().getProductId()).isEqualTo(product.getId());
 	}
 
 	@DisplayName("만료 대상 조회 시 상태와 cutoff, lastId 조건에 맞는 주문만 ID 오름차순으로 조회한다")
@@ -159,8 +159,8 @@ class OrderRepositoryJpaAdapterTest {
 	}
 
 	private Order createInitOrder(Member member, Product product) {
-		Order order = Order.create(member);
-		order.addOrderItem(product, 1);
+		Order order = Order.create(member.getId());
+		order.addOrderItem(product.getId(), 1, product.getPrice());
 		return order;
 	}
 

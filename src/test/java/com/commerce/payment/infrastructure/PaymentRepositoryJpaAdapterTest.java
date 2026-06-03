@@ -102,8 +102,8 @@ class PaymentRepositoryJpaAdapterTest {
 	}
 
 	private Order createOrder(Member member, Product product, String merchantPayKey) {
-		Order order = Order.create(member);
-		order.addOrderItem(product, 1);
+		Order order = Order.create(member.getId());
+		order.addOrderItem(product.getId(), 1, product.getPrice());
 		order.assignMerchantPayKey(merchantPayKey);
 		return order;
 	}

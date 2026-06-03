@@ -9,7 +9,6 @@ import java.util.stream.Collectors;
 import org.springframework.stereotype.Component;
 import org.springframework.transaction.annotation.Transactional;
 
-import com.commerce.member.domain.Member;
 import com.commerce.member.domain.repository.MemberRepository;
 import com.commerce.member.exception.MemberErrorCode;
 import com.commerce.member.exception.MemberException;
@@ -58,7 +57,7 @@ public class OrderCreateProcessor {
 	}
 
 	private OrderCreateResult createOrderWithStockDecrease(OrderCreateCommand command) {
-		Member member = memberRepository.findById(command.getMemberId())
+		memberRepository.findById(command.getMemberId())
 			.orElseThrow(() -> new MemberException(MemberErrorCode.MEMBER_NOT_FOUND));
 
 		List<Long> productIds = extractDistinctProductIds(command);
@@ -68,7 +67,7 @@ public class OrderCreateProcessor {
 			throw new ProductException(ProductErrorCode.PRODUCT_NOT_FOUND);
 		}
 
-		Order order = Order.create(member, command.getIdempotencyKey());
+		Order order = Order.create(command.getMemberId(), command.getIdempotencyKey());
 
 		for (OrderCreateItem item : command.getItems()) {
 			Product product = productsById.get(item.getProductId());
@@ -77,7 +76,7 @@ public class OrderCreateProcessor {
 			}
 
 			stockInventoryService.decrease(product.getId(), item.getQuantity());
-			order.addOrderItem(product, item.getQuantity());
+			order.addOrderItem(product.getId(), item.getQuantity(), product.getPrice());
 		}
 
 		orderRepository.save(order);
