@@ -1,0 +1,9 @@
+{
+  "project": "order-jpa-association-decouple",
+  "phase": "0-decouple",
+  "steps": [
+    { "step": 1, "name": "order-association-decouple", "status": "pending" },
+    { "step": 2, "name": "sync-root-docs", "status": "pending" },
+    { "step": 3, "name": "write-retrospective", "status": "pending" }
+  ]
+}
