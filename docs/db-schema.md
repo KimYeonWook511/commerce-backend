@@ -9,6 +9,7 @@ DB 스키마 변경은 Flyway 마이그레이션 스크립트로 관리한다 (A
 - 본 문서는 테이블/컬럼/제약의 의도를 설명하는 reference이고, 실제 DDL은 `V*__*.sql`이 단일 출처다.
 - 엔티티(@Entity) 변경 PR은 같은 PR에서 대응되는 V 스크립트를 함께 작성한다. ddl-auto: validate라 누락 시 부팅 실패.
 - 적용된 V 스크립트는 수정하지 말고 새 V로 보정한다 (Flyway checksum).
+- **ADR-020 후속 트랙 FK 정비**: `V4__drop_cross_aggregate_fk_constraints.sql` 으로 cross-aggregate FK 5건을 일괄 제거했다 (2026-06-03). UNIQUE 제약 (`uk_stock_product_id`, `uk_payment_order_id`) 과 same-aggregate FK (`fk_order_item_order_id`) 는 유지한다. 세부 결정은 `docs/tasks/cross-aggregate-fk-cleanup/adr.md` 참조.
 
 ## 네이밍 규칙
 
@@ -56,17 +57,20 @@ INDEX:
 COLUMNS:
 - `id (PK)`
 - `version`
-- `product_id (FK -> tbl_product.id, UNIQUE)`
+- `product_id (UNIQUE)`
 - `quantity`
 
 INDEX:
 - `product_id (UNIQUE)`
 
+비고:
+- `product_id` 는 FK 제약을 두지 않는다. `fk_stock_product_id` 가 V4 migration 으로 제거됐다 (ADR-020 후속 트랙). `uk_stock_product_id` UNIQUE 제약은 Stock 1:1 Product 도메인 invariant 로 유지된다.
+
 ### `tbl_stock_history`
 
 COLUMNS:
 - `id (PK)`
-- `stock_id (FK -> tbl_stock.id)`
+- `stock_id`
 - `quantity_change`
 - `reason`
 - `admin_member_id`
@@ -77,6 +81,7 @@ INDEX:
 - 없음
 
 비고:
+- `stock_id` 는 FK 제약을 두지 않는다. `fk_stock_history_stock_id` 가 V4 migration 으로 제거됐다 (ADR-020 후속 트랙). 동명 KEY index (`KEY fk_stock_history_stock_id (stock_id)`) 는 조회 보조용으로 유지된다.
 - 상품별 재고 이력 최신순 조회가 커지면 `idx_stock_history_stock_id_created_at (stock_id, created_at)` 추가를 검토한다.
 
 ### `tbl_order`
@@ -84,7 +89,7 @@ INDEX:
 COLUMNS:
 - `id (PK)`
 - `version`
-- `member_id (FK -> tbl_member.id)`
+- `member_id`
 - `total_price`
 - `status`
 - `merchant_pay_key (VARCHAR(64), UNIQUE)`
@@ -95,6 +100,7 @@ INDEX:
 - `uk_order_member_idempotency (member_id, idempotency_key) UNIQUE`
 
 비고:
+- `member_id` 는 FK 제약을 두지 않는다. `fk_order_member_id` 가 V4 migration 으로 제거됐다 (ADR-020 후속 트랙).
 - `idempotency_key`는 기존 데이터 및 멱등성 없는 경로와의 호환을 위해 NULL 허용. MySQL에서 NULL 값은 unique 제약 대상에서 제외된다.
 - `merchant_pay_key` 길이는 `tbl_payment`, `tbl_payment_attempt`와 동일하게 64로 맞춘다 (cross-entity 일관성, ADR-023 참조).
 
@@ -103,11 +109,15 @@ INDEX:
 COLUMNS:
 - `id (PK)`
 - `order_id (FK -> tbl_order.id)`
-- `product_id (FK -> tbl_product.id)`
+- `product_id`
 - `quantity`
 
 INDEX:
 - 없음
+
+비고:
+- `product_id` 는 FK 제약을 두지 않는다. `fk_order_item_product_id` 가 V4 migration 으로 제거됐다 (ADR-020 후속 트랙). 동명 KEY index (`KEY fk_order_item_product_id (product_id)`) 는 조회 보조용으로 유지된다.
+- `order_id (FK -> tbl_order.id)` 는 same-aggregate FK 로 유지된다. ADR-020 적용 범위 밖 (Order ↔ OrderItem 은 같은 aggregate).
 
 ### `tbl_cart_item`
 
@@ -134,7 +144,7 @@ INDEX:
 
 COLUMNS:
 - `id (PK)`
-- `order_id (FK -> tbl_order.id, UNIQUE)`
+- `order_id (UNIQUE)`
 - `amount`
 - `status`
 - `provider`
@@ -148,6 +158,7 @@ INDEX:
 - `pg_payment_id (UNIQUE)`
 
 비고:
+- `order_id` 는 FK 제약을 두지 않는다. `fk_payment_order_id` 가 V4 migration 으로 제거됐다 (ADR-020 후속 트랙). `uk_payment_order_id` UNIQUE 제약은 Payment 1:1 Order 도메인 invariant 로 유지된다.
 - `merchant_pay_key`, `pg_payment_id` 길이는 `tbl_payment_attempt`와 동일하게 64로 맞춘다 (cross-entity 일관성, ADR-023 참조).
 
 ### `tbl_payment_attempt`
