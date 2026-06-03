@@ -24,7 +24,7 @@
 ### `tbl_order`
 
 - 제거: `CONSTRAINT fk_order_member_id FOREIGN KEY (member_id) REFERENCES tbl_member (id)`
-- 유지: `UNIQUE KEY uk_order_member_idempotency (member_id, idempotency_key)`, `UNIQUE KEY uk_order_merchant_pay_key`. InnoDB 가 FK 위해 자동 생성한 index 는 잔류해도 그대로 둔다.
+- 유지: `UNIQUE KEY uk_order_member_idempotency (member_id, idempotency_key)`, `UNIQUE KEY uk_order_merchant_pay_key`. `fk_order_member_id` 는 `uk_order_member_idempotency` 복합 UNIQUE 의 leftmost prefix 를 InnoDB 가 재사용했으므로 별도 자동 index 가 생성되지 않았다 — FK DROP 후 잔류 index 가 없다.
 
 ### `tbl_order_item`
 
