@@ -28,18 +28,18 @@
 - **개요** — 본 sub-PR 의 목적과 결과를 짧게. 선행 stock sub-PR 과의 관계 (패턴 계승 + Order 특유 결정 추가) 를 명시.
 - **결정 흐름** — 주요 분기점 정리:
   1. fetch join 대체 패턴을 단일 원칙 vs 사용처별 분석 사이에서 사용처별 분석으로 정한 이유. PaymentReady (productName 필요) 와 cancel/expiration (productId 만 필요) 의 데이터 양상 차이.
-  2. `Order.create` / `addOrderItem` 시그니처를 Long ID 로 전환한 이유. application 검증을 `existsById` 로 효율화한 결정의 배경 (객체 로드 불필요 사용처와 객체 필요 사용처의 구분 기준).
+  2. `Order.create` / `addOrderItem` 시그니처를 Long ID 로 전환한 이유. 호출처가 동일 트랜잭션에서 객체 필드를 함께 쓰는 사실을 근거로 기존 `findById` / `findAllById` 검증 흐름을 그대로 유지한 판단 배경.
   3. same-aggregate 관계 (`Order.orderItems`, `OrderItem.order`) 를 유지한 근거. ADR-020 의 "같은 aggregate 내 root-child 는 객체 참조 허용" 원칙 적용 판단.
   4. 응답 echo 정리를 본 sub-PR 에 섞지 않은 이유 (선행 stock sub-PR 의 동일 정책 계승).
 - **기각된 옵션** — 검토했으나 채택하지 않은 옵션과 사유. ADR 의 "근거" 와 중복되지 않도록 토론 중에 나왔던 추가 맥락을 보강.
   - 전부 DTO projection 단일 원칙 / 전부 QueryService 분리 / `findById` 유지 시그니처 등.
 - **후속 트랙으로 넘기는 baseline** — Payment sub-PR 이 본 sub-PR 을 어떻게 참조하면 되는지.
   - fetch join 대체 일반 원칙 (same-aggregate 유지 / cross-aggregate 제거 + 데이터 양상별 batch composition or 컬럼 직접 사용) 적용 가이드.
-  - 도메인 시그니처 (Long ID + `existsById` 검증) 패턴 적용 가이드.
+  - 도메인 시그니처 (Long ID 전환 + 호출처 객체 로드 흐름 유지) 패턴 적용 가이드.
   - schema 무변경 / 응답 계약 무변경 메타 원칙 유지.
 - **운영 점검** — DB FK 가 schema 에 남아있고 JPA 가 인식하지 않는 상태의 운영 모니터링 영향. PaymentReady 의 batch 쿼리 1회 추가가 hot path 에 미치는 영향 (단일 order 의 OrderItem 개수는 보통 한 자릿수이므로 미미함) 등.
 - **자기 평가** — 잘된 점 / 아쉬운 점.
-  - 잘된 점 예: 사용처별 분석으로 cancel/expiration 의 추가 쿼리 0회를 확보, `existsById` 신설로 검증 효율화, Hibernate validate 통과 확인.
+  - 잘된 점 예: 사용처별 분석으로 cancel/expiration 의 추가 쿼리 0회를 확보, Hibernate validate 통과 확인.
   - 아쉬운 점 예: fixture 변경 면적이 payment / cart 도메인까지 침투, 응답 echo 정리를 별도 트랙으로 미룬 점.
 
 ### 작성 톤

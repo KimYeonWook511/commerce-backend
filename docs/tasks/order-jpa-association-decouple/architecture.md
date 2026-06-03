@@ -24,10 +24,6 @@
 
 ### Repository 레이어
 
-- `com.commerce.product.domain.repository.ProductRepository`
-  - `boolean existsById(Long productId)` 메서드 신설.
-- `com.commerce.product.infrastructure.ProductRepositoryAdapter`
-  - 위 메서드 구현. JpaRepository 기본 `existsById` 위임 또는 derived query 사용.
 - `com.commerce.order.infrastructure.JpaOrderRepository`
   - `findByIdAndMemberIdWithItems` — JPQL 에서 `join fetch o.member`, `join fetch oi.product` 제거. `join fetch o.orderItems` 만 유지. `where o.id = :id and o.memberId = :memberId` 로 컬럼 직접 비교.
   - `findByIdWithItems` — 동일하게 cross-aggregate fetch 제거. `join fetch o.orderItems` 만 유지.
@@ -37,7 +33,7 @@
 
 - `com.commerce.order.application.OrderConcurrencyService` 외 Order 생성 경로
   - `Order.create(member)` → `Order.create(memberId)`, `order.addOrderItem(product, qty)` → `order.addOrderItem(productId, qty)` 로 호출부 갱신.
-  - product 존재 검증은 `productRepository.existsById(productId)` 로 효율화. 객체 로드가 필요한 사용처는 기존 `findById` 유지.
+  - product 존재 검증은 기존 `productRepository.findById(...)` / `findAllById(...)` 흐름을 그대로 유지한다. 호출처가 `product.getPrice()` 등 Product 객체 필드를 같은 트랜잭션에서 함께 사용한다.
 - `com.commerce.order.application.OrderCancelService`
   - `item.getProduct().getId()` → `item.getProductId()` 로 traversal 제거.
   - stock 복원 Map (`Map<Long, Integer>`) 구성을 OrderItem.productId 직접 사용으로 변경.
@@ -99,11 +95,11 @@
 - 데이터 필요 양상이 다르다. cancel/expiration 은 productId 만 있으면 충분하므로 추가 쿼리가 0개로 더 효율적이다. PaymentReady 는 productName 노출이 필요하므로 batch 1회를 추가한다.
 - 단일 원칙 (전부 DTO projection 또는 전부 batch composition) 을 강제하면 cancel/expiration 에 불필요한 패턴을 도입하게 된다.
 
-### 도메인 시그니처 — Long ID + existsById 검증
+### 도메인 시그니처 — Long ID 전환
 
 - `Order.create(Member)` / `addOrderItem(Product, int)` 는 객체 의존을 강제해 unit test fixture 가 Member/Product entity 를 모두 만들어야 했다.
 - Long ID 시그니처 전환으로 도메인 invariant 가 ID 기준으로 명확해진다 (Order 의 identity 는 memberId, OrderItem 의 reference 는 productId).
-- application 의 product 존재 검증은 `findById` 객체 로드가 필요 없는 경우 `existsById` 로 전환해 한 row 만 조회한다 (`SELECT 1 FROM tbl_product WHERE id = ?`). 객체가 필요한 사용처는 기존 `findById` 유지.
+- application 의 product 존재 검증은 기존 `findById` / `findAllById` 흐름을 유지한다. 호출처가 `product.getPrice()` 등 Product 객체 필드를 같은 트랜잭션에서 함께 사용하므로 객체 로드가 어차피 필요하다.
 
 ### 응답 조립 패턴 (선행 stock 패턴 확장)
 
@@ -151,17 +147,17 @@ OrderExpirationService.expire(orderId)
 
 ```
 createOrder(command)
-  productRepository.existsById(item.getProductId())  // 존재 검증만 (객체 로드 X)
+  product = productRepository.findById(item.getProductId())
       .orElseThrow(ProductException(PRODUCT_NOT_FOUND))
   Order order = Order.create(command.getMemberId())
   for item in command.getItems():
-      order.addOrderItem(item.getProductId(), item.getQuantity())
+      order.addOrderItem(product.getId(), item.getQuantity(), product.getPrice())
   orderRepository.save(order)
 ```
 
 ## 예외 및 실패 처리
 
-- Product 존재 검증 실패 (`existsById == false`) → `ProductException(PRODUCT_NOT_FOUND)` 유지.
+- Product 존재 검증 실패 (`findById` empty) → `ProductException(PRODUCT_NOT_FOUND)` 유지.
 - Member 존재 검증은 기존 흐름 유지 (인증/JWT 단계에서 보장).
 - Order 미존재 / 권한 없음 → `OrderException` 기존 흐름 유지.
 - 동시성 / 보상 흐름 예외 (`OrderConcurrencyService`, optimistic lock 등) → 기존과 동일.

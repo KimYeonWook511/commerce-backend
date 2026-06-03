@@ -6,7 +6,7 @@
 
 첫째, **fetch join 대체 패턴의 일반 원칙**이다. Stock 도메인에는 fetch join이 없어 선행 sub-PR이 의도적으로 미루어 둔 결정을 Order의 네 가지 사용처를 분석하며 사용처별 분석으로 정립했다.
 
-둘째, **도메인 팩토리 시그니처의 Long ID 전환**이다. `Order.create(Member)` / `addOrderItem(Product, int)` 에서 객체 의존을 제거하고 `Order.create(Long memberId)` / `addOrderItem(Long productId, int)` 로 전환하면서, 존재 검증을 `productRepository.existsById()` 로 효율화했다.
+둘째, **도메인 팩토리 시그니처의 Long ID 전환**이다. `Order.create(Member)` / `addOrderItem(Product, int)` 에서 객체 의존을 제거하고 `Order.create(Long memberId)` / `addOrderItem(Long productId, int, int)` 로 전환했다. application 의 product 존재 검증은 호출처가 같은 트랜잭션에서 `product.getPrice()` 등 객체 필드를 함께 사용하므로 기존 `findById` / `findAllById` 흐름을 그대로 유지했다.
 
 DB schema 변경 없이 JPA 매핑 차원에서만 association을 해제한다는 series 메타 원칙은 그대로 유지됐다.
 
@@ -29,17 +29,15 @@ DB schema 변경 없이 JPA 매핑 차원에서만 association을 해제한다�
 
 이로써 fetch join 대체의 일반 원칙이 Order sub-PR에서 처음으로 명문화됐다. 후속 Payment sub-PR은 이 일반 원칙을 따르되 Payment 도메인의 사용처별 양상에 맞춰 패턴을 결정하면 된다.
 
-### 2. `Order.create` / `addOrderItem` 시그니처 — Long ID 전환과 existsById 효율화
+### 2. `Order.create` / `addOrderItem` 시그니처 — Long ID 전환
 
-`@ManyToOne Member` / `@ManyToOne Product` association을 제거하면 도메인 팩토리에 Member/Product 객체를 넘기는 명목적 이유가 사라진다. 세 가지 옵션을 검토했다.
+`@ManyToOne Member` / `@ManyToOne Product` association을 제거하면 도메인 팩토리에 Member/Product 객체를 넘기는 명목적 이유가 사라진다. 두 가지 옵션을 검토했다.
 
 A안(시그니처 유지)은 application이 Product를 계속 `findById`로 로드해 도메인에 넘기는 구조다. JPA association 해제 후 도메인이 Product 객체를 받아서 할 수 있는 일이 없어지므로 의미 없는 로드가 된다. 단위 테스트 fixture도 Member/Product entity를 계속 만들어야 한다.
 
-B안(Long ID 시그니처, existsById 없이)은 application이 `findById`로 존재 검증 후 ID만 전달한다. A안보다 낫지만 `findById`는 모든 컬럼을 SELECT한다. 결제·주문 hot path에서 단순 존재 검증을 위해 Product 전체 row를 로드할 필요가 없다.
+B안(Long ID 시그니처)을 채택했다. `Order.create(Long memberId)`, `addOrderItem(Long productId, int quantity, int unitPrice)` 로 시그니처를 전환하고, application은 기존 `findById` / `findAllById` 흐름으로 Product를 로드한 뒤 호출처에서 `product.getId()` 와 `product.getPrice()` 를 도메인에 전달한다. 호출처가 단가 등 객체 필드를 같은 트랜잭션에서 함께 쓰므로 객체 로드가 어차피 필요하다. 별도 검증 전용 조회 API 를 신설할 만한 사용처가 없어 ProductRepository 인터페이스는 그대로 유지했다.
 
-C안(Long ID + existsById)을 채택했다. `ProductRepository.existsById(Long productId)` 메서드를 신설해 `SELECT 1 FROM tbl_product WHERE id = ?` 1행 boolean 조회로 효율화한다. 단, 같은 트랜잭션에서 Product의 다른 필드(가격, 상태 등)가 필요한 사용처는 기존 `findById` 를 그대로 유지한다. 용도와 필요 데이터에 맞게 검증 방식을 분기한다는 원칙이다.
-
-부수 효과로 unit test fixture 부담이 줄었다. `Order.create(memberId)`, `addOrderItem(productId, qty)` 호출에 Member/Product entity를 만들지 않아도 된다.
+부수 효과로 unit test fixture 부담이 줄었다. `Order.create(memberId)`, `addOrderItem(productId, qty, unitPrice)` 호출에 Member/Product entity를 만들지 않아도 된다.
 
 ### 3. same-aggregate 관계 유지 — `Order.orderItems` / `OrderItem.order`
 
@@ -65,7 +63,6 @@ ADR-020은 "같은 aggregate 내 root-child는 객체 참조 허용"이라고 �
 | fetch join 대체 단일 원칙(P2: batch composition) | 전체 통일로 단순화 | cancel/expiration에 추가 쿼리 강제. productId만 있으면 충분한 경로에 과도 |
 | fetch join 대체 단일 원칙(P3: QueryService 분리) | read 모델 일관성 | 단순한 cancel/expiration 경로까지 read 모델 신설. 과한 추상화 |
 | `Order.create` 시그니처 유지(A안) | 변경 최소화 | association 해제 후 도메인에 객체 넘기는 명목 사라짐. fixture 부담 존속 |
-| Long ID 시그니처 + `findById` 유지(B안) | 검증 흐름 유지 | `findById`는 모든 컬럼 SELECT. hot path에서 불필요한 row 로드 |
 | `Order.orderItems` / `OrderItem.order` 관계 해제 | 일관된 cross-aggregate 원칙 적용 | cascade ALL + orphanRemoval의 lifecycle 결합이 강함. ADR-020의 "같은 aggregate 내 root-child 허용" 위반 |
 | 응답 echo 정리 포함 | 한 PR에서 완결 | 본 sub-PR의 정책 목적과 다른 축. PR 메시지 흐림 |
 
@@ -86,8 +83,8 @@ ADR-020은 "같은 aggregate 내 root-child는 객체 참조 허용"이라고 �
 
 **도메인 시그니처 패턴** (본 sub-PR에서 Long ID 전환 완성):
 
-- 팩토리 메서드는 Long ID 시그니처. 호출자가 존재 검증 후 ID만 전달.
-- 존재 검증은 객체 필드가 필요 없는 사용처에서 `existsById` 로 효율화. 같은 트랜잭션에서 객체 필드가 필요한 사용처는 `findById` 유지.
+- 팩토리 메서드는 Long ID 시그니처. 호출자가 application 에서 객체 로드 + 필요한 필드 추출 후 ID 및 보조 값 (예: 단가) 만 도메인에 전달.
+- 호출처가 객체 필드를 같은 트랜잭션에서 함께 쓰는 한 기존 `findById` / `findAllById` 검증 흐름을 그대로 유지한다.
 
 **메타 원칙 (series 전체 공통)**:
 
@@ -112,7 +109,6 @@ ADR-020은 "같은 aggregate 내 root-child는 객체 참조 허용"이라고 �
 ### 잘된 점
 
 - **fetch join 대체 일반 원칙 최초 정립**: 선행 stock sub-PR이 의도적으로 위임한 결정을 사용처별 분석으로 명문화했다. cancel/expiration 경로에서 cross-aggregate 추가 쿼리 0회를 확보했고, 일반 원칙이 이후 Payment sub-PR의 가이드로 남는다.
-- **existsById 신설로 검증 효율화**: 결제·주문 hot path의 product 존재 검증이 `SELECT 1` 1행 조회로 개선됐다. 단순하지만 목적에 맞는 API 분리다.
 - **Hibernate validate 검증**: Testcontainers로 실제 MySQL을 기동하는 `integrationTest`를 포함해 validate 통과가 모델 진술이 아닌 실행 결과로 확인됐다. 선행 stock sub-PR의 동일 검증을 Order 도메인에서도 반복해 series 전체의 신뢰도를 높였다.
 - **PaymentReadyResult 외부 주입 패턴**: stock sub-PR의 `from(history, productId)` 패턴이 `from(order, productNameByProductId)` 로 자연스럽게 확장됐다. application이 응답을 의도적으로 조립한다는 의도가 시그니처에 드러난다.
 

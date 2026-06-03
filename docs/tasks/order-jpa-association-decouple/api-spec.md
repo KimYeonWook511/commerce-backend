@@ -41,7 +41,6 @@
 ## 검증 규칙
 
 - 기존 검증 규칙 유지. 본 태스크에서 검증 규칙 변경 없음.
-- application 의 product 존재 검증은 `productRepository.existsById(productId)` 로 효율화. 검증 실패 시 던지는 예외 (`ProductException(PRODUCT_NOT_FOUND)`) 와 응답 형식은 동일.
 
 ## 비고
 

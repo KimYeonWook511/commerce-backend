@@ -46,9 +46,4 @@ public class ProductRepositoryAdapter implements ProductRepository {
 	public Optional<Product> findNotDeletedProduct(Long productId) {
 		return jpaProductRepository.findNotDeletedProduct(productId);
 	}
-
-	@Override
-	public boolean existsById(Long productId) {
-		return jpaProductRepository.existsById(productId);
-	}
 }

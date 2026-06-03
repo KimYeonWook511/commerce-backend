@@ -29,7 +29,7 @@
 - **Task ADR 색인** 표에 본 태스크 한 줄 추가:
   - Task: `order-jpa-association-decouple`
   - adr 파일: `docs/tasks/order-jpa-association-decouple/adr.md`
-  - 주요 결정 키워드: Order·OrderItem JPA cross-aggregate association 해제, fetch join 대체 사용처별 분석 (same-aggregate 유지 / cross-aggregate 제거 + batch composition), `Order.create(Long memberId)` 시그니처, `ProductRepository.existsById` 검증 효율화, schema 무변경 원칙 (ADR-020 / 선행 stock sub-PR 연계)
+  - 주요 결정 키워드: Order·OrderItem JPA cross-aggregate association 해제, fetch join 대체 사용처별 분석 (same-aggregate 유지 / cross-aggregate 제거 + batch composition), `Order.create(Long memberId)` 시그니처, schema 무변경 원칙 (ADR-020 / 선행 stock sub-PR 연계)
 - **ADR-020 본문**의 후속 노트 갱신:
   - 선행 stock sub-PR 노트 옆에 Order / OrderItem aggregate 도 ADR-020 의 cross-aggregate ID 참조 원칙이 적용됨을 명시한다.
   - same-aggregate 유지 / cross-aggregate 해제 의 분리 기준이 본 sub-PR 에서 fetch join 대체 결정과 함께 명문화됐음을 짧게 언급.

@@ -27,7 +27,6 @@
 - `JpaOrderRepository` 의 fetch join JPQL 정리 — `join fetch o.member`, `join fetch oi.product` 제거. same-aggregate `join fetch o.orderItems` 는 유지.
 - application 계층의 객체 traversal (`order.getMember().getId()`, `orderItem.getProduct().getId()`, `getProduct().getName()` 등) 정리.
 - `OrderConcurrencyService` 의 `Order.create(Member)` / `addOrderItem(Product, int)` 호출부 Long ID 시그니처 전환.
-- `ProductRepository.existsById(Long productId)` 메서드 신설 — application 의 product 존재 검증을 `findById` 객체 로드에서 `existsById` boolean 조회로 효율화.
 - `PaymentReadyService` 의 productName 표시를 위한 batch composition 도입 — `ProductRepository.findAllById(productIds)` 로 productName Map 조회 후 응답 DTO 에 외부 주입.
 - test fixture 의 `Order.builder().member(...)`, `OrderItem.builder().product(...)`, `Order.create(member)`, `addOrderItem(product, qty)` 호출부 정리. order, payment, cart 도메인 테스트까지 갱신.
 - 루트 `docs/ADR.md`, `docs/architecture.md` 동기화.
@@ -55,7 +54,6 @@
 - `OrderItem` 은 `productId: Long` 을 가진다. `@ManyToOne Product` 제거.
 - `Order.orderItems` (`@OneToMany`), `OrderItem.order` (`@ManyToOne` parent) 은 same-aggregate 관계로 유지한다.
 - `Order.create(Long memberId)` / `order.addOrderItem(Long productId, int quantity)` 시그니처. 호출자 (application) 가 product 존재 검증 후 productId 만 전달한다.
-- `ProductRepository` 에 `boolean existsById(Long productId)` 메서드 신설.
 - `JpaOrderRepository` 의 fetch join JPQL 은 same-aggregate `join fetch o.orderItems` 만 유지. cross-aggregate `join fetch o.member`, `join fetch oi.product` 제거. `join o.member` 같은 where 보조 join 도 제거하고 `where o.memberId = :memberId` 로 단순화.
 - `PaymentReadyService` 는 OrderItem productId 목록으로 `ProductRepository.findAllById(productIds)` 를 batch 호출해 productName Map 을 만들고, 응답 DTO 조립 시 외부 주입한다.
 - `OrderCancelService`, `OrderExpirationService` 는 OrderItem.productId 를 직접 사용해 stock 복원 Map 을 만든다 (별도 Product 조회 불필요).

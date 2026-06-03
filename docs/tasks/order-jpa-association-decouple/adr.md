@@ -77,7 +77,7 @@
 - 사용처별 분석 결과는 PaymentReady 경로의 batch composition + 외부 주입, 나머지 경로의 컬럼 직접 사용으로 정리된다.
 - 후속 Payment sub-PR 도 동일 일반 원칙을 따르되, Payment 도메인의 사용처별 양상에 맞춰 패턴을 결정한다.
 
-## 결정 3: Order.create / addOrderItem 시그니처는 Long ID + existsById 검증으로 전환한다
+## 결정 3: Order.create / addOrderItem 시그니처를 Long ID 로 전환한다
 
 ### 배경
 
@@ -86,27 +86,24 @@
 - JPA association 해제 후 도메인에 객체를 넘기는 명목적 이유가 사라진다. 시그니처를 재정비할 자연스러운 시점.
 - 옵션:
   - (A) 시그니처 유지 — application 에서 Product 를 계속 로드해 넘긴다.
-  - (B) Long ID 시그니처 — `Order.create(Long memberId)`, `addOrderItem(Long productId, int)`. application 은 `findById` 로 존재 검증 후 ID 만 전달.
-  - (C) Long ID + `existsById` — (B) 와 동일하되 application 의 product 존재 검증을 객체 로드 없이 `existsById(productId)` boolean 1행 조회로 효율화.
+  - (B) Long ID 시그니처 — `Order.create(Long memberId)`, `addOrderItem(Long productId, int)`. application 은 기존 `findById` / `findAllById` 로 검증 + 가격 등 필드 조회 후 ID 만 도메인에 전달.
 
 ### 결정 내용
 
-- (C) 를 채택한다.
-- `Order.create(Long memberId)`, `order.addOrderItem(Long productId, int quantity)`, `OrderItem.of(Order, Long productId, int quantity)` 로 시그니처 전환.
-- `ProductRepository` 에 `boolean existsById(Long productId)` 메서드를 신설한다.
-- application 의 product 존재 검증은 객체 로드가 필요 없는 사용처에서 `existsById` 로 전환한다. 가격/상태 등 객체 필드를 같은 트랜잭션에서 함께 써야 하는 사용처는 기존 `findById` 유지.
+- (B) 를 채택한다.
+- `Order.create(Long memberId)`, `order.addOrderItem(Long productId, int quantity, int unitPrice)`, `OrderItem.of(Order, Long productId, int quantity)` 로 시그니처 전환.
+- application 의 product 존재 검증은 기존 `productRepository.findById(productId)` / `findAllById(productIds)` 흐름을 그대로 유지한다. 호출처가 동일 트랜잭션에서 `product.getPrice()` 등 객체 필드를 함께 사용하므로 객체 로드가 어차피 필요하다.
 
 ### 근거
 
 - 도메인 invariant 가 ID 기준으로 명확해진다. Order/OrderItem entity 가 외부 객체에 의존하지 않는다.
-- application 의 검증 효율이 올라간다. `findById` 는 모든 컬럼을 SELECT 하지만 `existsById` 는 1행 boolean 만 조회한다. 결제·주문 hot path 에서 의미 있는 차이.
 - test fixture 의 builder 시그니처 부담이 줄어든다. unit test 에서 Member/Product entity 를 만들지 않아도 ID 만으로 Order 를 만들 수 있다.
 
 ### 결과
 
 - domain layer 의 외부 객체 의존 0건.
-- application 검증 패턴이 사용처에 맞게 분기 (`existsById` vs `findById`).
-- `ProductRepository` 인터페이스에 신규 메서드 1개 추가.
+- application 의 product 조회 패턴은 기존 그대로 유지 (`findById`, `findAllById`).
+- `ProductRepository` 인터페이스에 신규 메서드 추가 없음.
 
 ## 결정 4: DB schema 변경 / Flyway migration 없이 진행한다 (메타 원칙 재확인)
 

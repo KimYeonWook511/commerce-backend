@@ -53,10 +53,6 @@ Order / OrderItem 도메인의 JPA cross-aggregate association 을 해제하고 
 
 ### Repository 변경
 
-- `ProductRepository` (domain 인터페이스)
-  - `boolean existsById(Long productId)` 메서드 신설.
-- `ProductRepositoryAdapter`
-  - 위 메서드 구현. Spring Data JPA 의 기본 `existsById` 를 위임하거나 derived query 로 구현. 가장 단순한 구현 채택.
 - `JpaOrderRepository`
   - `findByIdAndMemberIdWithItems(Long id, Long memberId)`
     - 기존: `join fetch o.member`, `join fetch o.orderItems`, `join fetch oi.product` 사용.
@@ -74,7 +70,7 @@ Order / OrderItem 도메인의 JPA cross-aggregate association 을 해제하고 
 - Order 생성 경로 (`OrderConcurrencyService` 및 호출 흐름)
   - `Order.create(member)` 호출부를 `Order.create(memberId)` 로 변경.
   - `order.addOrderItem(product, qty)` 호출부를 `order.addOrderItem(productId, qty)` 로 변경.
-  - product 존재 검증을 `productRepository.findById(productId).orElseThrow(...)` 에서 `if (!productRepository.existsById(productId)) throw new ProductException(PRODUCT_NOT_FOUND)` 패턴으로 변경. **단, 같은 트랜잭션 내에서 Product 객체의 다른 필드 (가격, 상태 등) 가 필요한 사용처는 기존 `findById` 유지**.
+  - product 존재 검증은 기존 `productRepository.findById(...)` / `findAllById(...)` 흐름을 그대로 유지한다. 호출처가 `product.getPrice()` 등 객체 필드를 같은 트랜잭션에서 함께 사용한다.
 - `OrderCancelService`
   - `item.getProduct().getId()` → `item.getProductId()` 로 치환.
   - stock 복원 Map (`Map<Long, Integer>` productId → quantity) 구성을 OrderItem.productId 직접 사용으로 변경.
@@ -172,7 +168,6 @@ Order / OrderItem 도메인의 JPA cross-aggregate association 을 해제하고 
      - `rg "orderItem\.getProduct\(\)" src/main`
      - `rg "item\.getProduct\(\)" src/main/java/com/commerce/order`
    - `JpaOrderRepository` 의 JPQL 이 cross-aggregate `join fetch` 를 포함하지 않는가? — `rg "join fetch o\.member" src/main` / `rg "join fetch oi\.product" src/main` / `rg "join o\.member" src/main` 결과 0건.
-   - `ProductRepository.existsById(Long)` 가 신설됐고, application 의 product 존재 검증이 객체 로드 불필요한 사용처에서 `existsById` 를 사용하는가?
    - `PaymentReadyService` 가 productIds 를 모아 `findAllById` 로 batch 조회하고 응답 DTO 에 productName Map 을 외부 주입하는가?
    - DB schema 변경 / Flyway V 파일 추가가 없는가? — `git diff src/main/resources/db/migration/` 결과 없음.
    - architecture.md 의 디렉토리 구조와 컨벤션을 따랐는가?
