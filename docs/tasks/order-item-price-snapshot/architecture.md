@@ -43,16 +43,17 @@
 ## 마이그레이션 흐름
 
 1. `ALTER TABLE tbl_order_item ADD COLUMN unit_price INT NULL AFTER quantity` — 우선 nullable 로 컬럼 추가.
-2. `UPDATE tbl_order_item oi JOIN tbl_product p ON oi.product_id = p.id SET oi.unit_price = p.price WHERE oi.unit_price IS NULL` — 기존 row 를 product 현재가로 backfill.
+2. `UPDATE tbl_order_item oi LEFT JOIN tbl_product p ON oi.product_id = p.id SET oi.unit_price = COALESCE(p.price, 0) WHERE oi.unit_price IS NULL` — 기존 row 를 product 현재가로 backfill. product 가 hard-delete 된 row 는 `0` sentinel 로 fallback.
 3. `ALTER TABLE tbl_order_item MODIFY COLUMN unit_price INT NOT NULL` — NOT NULL 전환.
 
 - backfill 정확도: 이미 `Product.price` 가 변동된 row 는 결제 시점 가격이 아닌 현재가로 채워진다는 한계가 있다. 본 결정의 trade-off 이며 task adr 에 명문화한다.
+- product hard-delete 안전망: `product_id` 의 FK 가 V4 에서 제거된 상태라 product 가 hard-delete 된 row 가 존재할 수 있다. LEFT JOIN + COALESCE 로 NULL 을 막아 migration 안정성을 확보한다 (task adr 결정 2).
 - `product_id` 의 FK 제약은 PR #203 (V4) 에서 제거됐다. JOIN UPDATE 는 일반 nested loop 으로 수행되며 deadlock 위험은 낮다.
 
 ## 예외 및 실패 처리
 
 - `unitPrice` 가 `int` 이므로 음수 / 0 검증은 도메인에 추가하지 않는다 (현재 `Product.price` 자체에 검증이 있고, 본 PR 은 snapshot 의미만 추가).
-- backfill 단계에서 product 가 hard-delete 된 row 가 있는 경우 `unit_price` 가 NULL 로 남아 NOT NULL 전환이 실패할 수 있다. 현재 운영 데이터에 hard-delete 가 없으므로 가드를 추가하지 않는다. 발생 시 migration 실패로 가시화되어 운영 단계에서 대응한다.
+- backfill 단계에서 product 가 hard-delete 된 row 가 있어도 LEFT JOIN + `COALESCE(p.price, 0)` 로 `0` sentinel 을 채워 migration 실패를 막는다. `0` 으로 채워진 row 는 후속 통계 / 영수증 사용처에서 이상치로 잡힌다.
 
 ## 테스트 포인트
 

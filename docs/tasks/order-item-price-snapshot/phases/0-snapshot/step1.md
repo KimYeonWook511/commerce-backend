@@ -40,13 +40,14 @@
 ```sql
 -- OrderItem 에 결제 시점 가격 snapshot 컬럼을 추가한다.
 -- 기존 row 는 tbl_product.price (현재가) 로 backfill 후 NOT NULL 로 전환한다.
--- backfill 정확도의 한계는 docs/tasks/order-item-price-snapshot/adr.md 결정 2 에 명문화돼 있다.
+-- product 가 hard-delete 된 row 는 LEFT JOIN + COALESCE 로 0 fallback 한다.
+-- backfill 정확도의 한계와 0 fallback 의미는 docs/tasks/order-item-price-snapshot/adr.md 결정 2 에 명문화돼 있다.
 
 ALTER TABLE `tbl_order_item` ADD COLUMN `unit_price` INT NULL AFTER `quantity`;
 
 UPDATE `tbl_order_item` oi
-JOIN `tbl_product` p ON oi.product_id = p.id
-SET oi.unit_price = p.price
+LEFT JOIN `tbl_product` p ON oi.product_id = p.id
+SET oi.unit_price = COALESCE(p.price, 0)
 WHERE oi.unit_price IS NULL;
 
 ALTER TABLE `tbl_order_item` MODIFY COLUMN `unit_price` INT NOT NULL;
@@ -54,7 +55,7 @@ ALTER TABLE `tbl_order_item` MODIFY COLUMN `unit_price` INT NOT NULL;
 
 SQL 작성 규칙:
 - backtick (`` ` ``) 으로 식별자 감싸기 — V1 / V4 의 컨벤션과 일관.
-- SQL 3개 (ADD COLUMN, UPDATE backfill, MODIFY COLUMN NOT NULL) 만 포함. 다른 ALTER / DROP / CREATE / INDEX 명령을 추가하지 마라.
+- SQL 3개 (ADD COLUMN, UPDATE backfill with LEFT JOIN + COALESCE, MODIFY COLUMN NOT NULL) 만 포함. 다른 ALTER / DROP / CREATE / INDEX 명령을 추가하지 마라.
 - 다른 V 파일을 만들지 마라. 본 task 의 정책 단위는 단일 V 파일.
 
 ### Domain entity 수정

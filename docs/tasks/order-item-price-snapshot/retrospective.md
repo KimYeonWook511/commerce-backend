@@ -28,7 +28,7 @@
 - **(B) `tbl_product.price` JOIN 으로 채운다**: 결제 시점 가격이 아닌 "migration 적용 시점의 product 현재가" 라는 부정확성이 있지만, 사용처가 없는 지금은 통계 / 영수증보다 "그럴듯한 추정값" 이 낫다.
 - **(C) NULL 허용 유지**: snapshot 정책이 무력화된다. NOT NULL 제약이 "snapshot 보존" 이라는 도메인 invariant 를 표현하므로 이 안은 설계 의도와 맞지 않는다.
 
-(B) 를 선택했다. 운영 데이터에 product hard-delete 가 없어 JOIN UPDATE 의 NULL 잔여 위험도 없다. backfill 정확도의 한계는 task adr 결정 2 에 명문화해 두었다.
+(B) 를 선택했다. 다만 PR review 단계에서 `product_id` FK 가 V4 에서 제거된 상태라 product hard-delete 가능성을 schema 차원에서 막아주지 않는다는 지적이 있었고, INNER JOIN backfill 은 NULL 잔여로 migration 이 실패할 수 있다는 점이 드러났다. LEFT JOIN + `COALESCE(p.price, 0)` 로 fallback 하여 운영 안정성을 확보하는 방향으로 보강했다. `0` 으로 채워진 row 는 "product 부재" 의 sentinel 로 후속 사용처에서 이상치로 잡힌다. backfill 정확도의 한계와 0 fallback 의미는 task adr 결정 2 에 명문화해 두었다.
 
 ### 3. 응답 DTO 노출은 본 PR 범위 밖이다
 

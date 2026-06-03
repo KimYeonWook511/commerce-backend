@@ -32,12 +32,13 @@
 ### 적용 순서
 
 1. `ALTER TABLE tbl_order_item ADD COLUMN unit_price INT NULL AFTER quantity` — 우선 nullable 로 컬럼 추가.
-2. `UPDATE tbl_order_item oi JOIN tbl_product p ON oi.product_id = p.id SET oi.unit_price = p.price WHERE oi.unit_price IS NULL` — 기존 row 를 product 현재가로 backfill.
+2. `UPDATE tbl_order_item oi LEFT JOIN tbl_product p ON oi.product_id = p.id SET oi.unit_price = COALESCE(p.price, 0) WHERE oi.unit_price IS NULL` — 기존 row 를 product 현재가로 backfill. product 가 hard-delete 된 row 는 `0` sentinel 로 fallback.
 3. `ALTER TABLE tbl_order_item MODIFY COLUMN unit_price INT NOT NULL` — NOT NULL 전환.
 
 ### Backfill 한계
 
-- 기존 row 의 `unit_price` 는 "migration 적용 시점의 product 현재가" 로 채워진다. 결제 시점 가격이 아니다 (애초에 결제 시점 가격이 휘발한 상태였기에 정확한 값은 불가능).
+- 기존 row 의 `unit_price` 는 "migration 적용 시점의 product 현재가 (또는 product 부재 시 0)" 로 채워진다. 결제 시점 가격이 아니다 (애초에 결제 시점 가격이 휘발한 상태였기에 정확한 값은 불가능).
+- product 가 hard-delete 된 row 는 `0` sentinel 로 fallback 되어 migration 안정성을 보장한다. `0` 은 후속 사용처에서 이상치로 잡혀 데이터 무결성 위반이 가시화된다.
 - 본 결정은 task adr 결정 2 에 명문화되어 있다.
 
 ### Lock / Deadlock

@@ -37,20 +37,23 @@
 
 ### 결정 내용
 
-- V5 migration 에서 컬럼을 nullable 로 추가한 뒤 `UPDATE tbl_order_item oi JOIN tbl_product p ON oi.product_id = p.id SET oi.unit_price = p.price WHERE oi.unit_price IS NULL` 로 backfill 한다.
+- V5 migration 에서 컬럼을 nullable 로 추가한 뒤 `UPDATE tbl_order_item oi LEFT JOIN tbl_product p ON oi.product_id = p.id SET oi.unit_price = COALESCE(p.price, 0) WHERE oi.unit_price IS NULL` 로 backfill 한다.
+- product 가 존재하는 row 는 product 현재가로 채우고, product 가 hard-delete 된 row 는 `0` 으로 fallback 한다.
 - 그 후 `MODIFY COLUMN unit_price INT NOT NULL` 로 NOT NULL 전환한다.
 
 ### 근거
 
-- 결제 시점 가격이 휘발한 이상 어떤 값으로도 정확성을 보장할 수 없다. `0` 으로 채우는 것보다 "그럴듯한 추정값" (Product 현재가) 이 향후 운영 통계에서 덜 오해를 부른다.
-- `tbl_product.price` 는 `int NOT NULL` 이므로 JOIN UPDATE 가 NULL 을 남기지 않는다 (단, product 가 hard-delete 됐다면 NULL 잔여 → migration 실패로 가시화. 운영 데이터에 hard-delete 가 없는 현재 상태에서는 안전).
+- 결제 시점 가격이 휘발한 이상 어떤 값으로도 정확성을 보장할 수 없다. `0` 으로 일괄 채우는 것보다 "그럴듯한 추정값" (Product 현재가) 이 향후 운영 통계에서 덜 오해를 부른다.
+- 다만 `product_id` 의 FK 는 PR #203 (V4) 에서 제거된 상태라 product 가 hard-delete 됐을 가능성을 schema 차원에서 막아주지 않는다. INNER JOIN 으로 backfill 하면 hard-delete 된 row 의 `unit_price` 가 NULL 로 남아 마지막 `MODIFY ... NOT NULL` 단계에서 migration 이 실패할 수 있다.
+- 따라서 LEFT JOIN + `COALESCE(p.price, 0)` 로 fallback 하여 migration 안정성을 보장한다. `0` 으로 채워진 row 는 "product 가 존재하지 않아 결제 시점 가격을 재구성할 수 없음" 의 sentinel 역할을 하며, 0 이라는 의미상 비현실적인 값으로 인해 후속 통계 / 영수증 사용처에서 이상치로 잡힌다.
 - `product_id` 의 FK 는 PR #203 (V4) 에서 제거됐다. JOIN UPDATE 는 일반 nested loop 으로 수행되어 deadlock 위험이 낮다.
 
 ### 결과
 
-- 기존 row 도 NOT NULL 제약을 만족하면서 "현재가" 라는 정확하지 않은 추정값으로 채워진다.
+- 기존 row 도 NOT NULL 제약을 만족하면서 "현재가" 또는 (product 가 없는 경우) `0` sentinel 로 채워진다.
 - 신규 row 부터는 결제 시점 가격이 정확히 보존된다 — 본 결정이 보장하는 핵심.
-- trade-off: 기존 row 의 `unit_price` 는 "결제 시점이 아니라 migration 시점의 product 현재가" 라는 의미라 통계 / 영수증 등 사용처가 생기면 row 의 `created_at` 과 migration 적용 시점을 함께 봐야 정확히 해석할 수 있다. 현재 사용처가 없으므로 본 PR 에서는 이슈가 되지 않는다.
+- product hard-delete 된 row 가 있어도 migration 이 실패하지 않는다. 운영 안정성 우선.
+- trade-off: 기존 row 의 `unit_price` 는 "결제 시점이 아니라 migration 시점의 product 현재가 (또는 product 부재 시 0)" 라는 의미라 통계 / 영수증 등 사용처가 생기면 row 의 `created_at` 과 migration 적용 시점, 그리고 `unit_price = 0` sentinel 가능성을 함께 봐야 정확히 해석할 수 있다. 현재 사용처가 없으므로 본 PR 에서는 이슈가 되지 않는다.
 
 ## 결정 3: 응답 DTO 노출은 본 task 범위 밖이다
 
