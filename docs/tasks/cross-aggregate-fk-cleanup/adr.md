@@ -42,12 +42,13 @@
 
 - (A) 를 채택한다.
 - UNIQUE 제약 (`uk_stock_product_id`, `uk_payment_order_id`) 은 도메인 invariant 표현으로 유지한다. JPA `@Table(uniqueConstraints = ...)` 매핑도 그대로.
-- MySQL 의 FK 동명 KEY index 와 InnoDB 자동 index 는 그대로 둔다.
+- FK 컬럼의 index 는 모두 그대로 둔다 — FK 가 자동 생성한 동명 KEY index (`fk_stock_history_stock_id`, `fk_order_item_product_id`) 와 FK 가 재사용한 기존 UNIQUE index (`uk_stock_product_id`, `uk_order_member_idempotency`, `uk_payment_order_id`) 둘 다.
 
 ### 근거
 
 - UNIQUE 는 FK 와 서로 다른 제약이며, "Stock 1:1 Product / Payment 1:1 Order" 라는 도메인 invariant 를 DB 차원에서 보증한다. FK 제거로 약해지지 않는다.
-- 잔류 KEY index 는 조회 보조용으로 유지해도 무해 (storage / 쓰기 cost 미미) 하고, 본 PR 의 ALTER 횟수를 최소화해 운영 lock 단위를 줄인다.
+- **FK 와 index 는 서로 다른 레이어다** — FK 는 참조 무결성 제약, index 는 조회 성능 구조. FK DROP 으로 무결성 제약이 사라져도 그 컬럼의 index 는 application 의 `WHERE` / `JOIN` 조건으로 계속 필요하다. 본 PR 의 5개 FK 컬럼은 모두 application 조회·검증의 키 (e.g. Order 의 `WHERE member_id = ?`, Payment 의 `WHERE order_id = ?`, StockHistory 의 `WHERE stock_id = ?` 등) 로 사용되므로 index 가 없으면 full table scan 으로 떨어진다.
+- 잔류 KEY index 와 재사용 index 는 조회 성능 보존 차원에서 유지한다 (storage / 쓰기 cost 미미). 본 PR 의 ALTER 횟수를 최소화해 운영 lock 단위를 줄이는 부수 효과도 있다.
 - 운영 lock 영향을 줄이는 결정은 운영 배포 절차 결정 (결정 4) 의 자유도를 키운다 — index DROP 까지 묶지 않음으로써 향후 운영 배포 시 ALTER 단위가 작게 유지된다.
 
 ### 결과
