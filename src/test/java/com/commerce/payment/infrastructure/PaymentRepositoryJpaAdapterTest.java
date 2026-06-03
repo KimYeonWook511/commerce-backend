@@ -55,7 +55,8 @@ class PaymentRepositoryJpaAdapterTest {
 		Product product = productPersistence.save(createProduct("product-PAY-FIXTURE", 1000));
 		Order order = orderPersistence.saveAndFlush(createOrder(member, product, "PAY-FIXTURE"));
 		Payment payment = Payment.createCompleted(
-			order,
+			order.getId(),
+			order.getTotalPrice(),
 			PaymentProvider.NAVERPAY,
 			"PAY-1",
 			"pg-payment-id-1",

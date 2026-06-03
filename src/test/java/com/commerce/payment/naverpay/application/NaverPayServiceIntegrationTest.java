@@ -389,7 +389,7 @@ class NaverPayServiceIntegrationTest {
 		Member member = memberPersistence.save(createMember());
 		Order order = persistOrder(member, "PAY-INT-6-1", 1000);
 		paymentPersistence.save(
-			Payment.createCompleted(order, PaymentProvider.NAVERPAY, "PAY-INT-6-1", "pg-existing", LocalDateTime.now())
+			Payment.createCompleted(order.getId(), order.getTotalPrice(), PaymentProvider.NAVERPAY, "PAY-INT-6-1", "pg-existing", LocalDateTime.now())
 		);
 
 		// when
