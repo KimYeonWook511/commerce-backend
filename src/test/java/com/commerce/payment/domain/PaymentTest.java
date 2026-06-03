@@ -6,7 +6,6 @@ import java.time.LocalDateTime;
 
 import org.junit.jupiter.api.DisplayName;
 import org.junit.jupiter.api.Test;
-import com.commerce.order.domain.Order;
 
 class PaymentTest {
 
@@ -14,12 +13,12 @@ class PaymentTest {
 	@Test
 	void createCompleted_whenCalled_setCompletedState() {
 		// given
-		Order order = createOrder(1000);
 		LocalDateTime approvedAt = LocalDateTime.now();
 
 		// when
 		Payment payment = Payment.createCompleted(
-			order,
+			1L,
+			1000,
 			PaymentProvider.NAVERPAY,
 			"PAY-1",
 			"pg-payment-id",
@@ -31,11 +30,7 @@ class PaymentTest {
 		assertThat(payment.getMerchantPayKey()).isEqualTo("PAY-1");
 		assertThat(payment.getPgPaymentId()).isEqualTo("pg-payment-id");
 		assertThat(payment.getApprovedAt()).isEqualTo(approvedAt);
-	}
-
-	private Order createOrder(int totalPrice) {
-		Order order = Order.create(1L);
-		order.addOrderItem(1L, 1, totalPrice);
-		return order;
+		assertThat(payment.getOrderId()).isEqualTo(1L);
+		assertThat(payment.getAmount()).isEqualTo(1000);
 	}
 }

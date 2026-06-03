@@ -69,7 +69,7 @@ public class PaymentApprovalService {
 
 		// 결제 최종 정보 저장
 		Payment savedPayment = paymentRepository.save(
-			Payment.createCompleted(order, provider, merchantPayKey, pgPaymentId, approvedAt)
+			Payment.createCompleted(order.getId(), order.getTotalPrice(), provider, merchantPayKey, pgPaymentId, approvedAt)
 		);
 		log.info("결제 승인 완료 merchantPayKey={} provider={} pgPaymentId={} orderId={}",
 			merchantPayKey, provider, pgPaymentId, order.getId());

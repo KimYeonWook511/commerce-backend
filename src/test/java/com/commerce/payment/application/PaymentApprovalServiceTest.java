@@ -63,7 +63,7 @@ class PaymentApprovalServiceTest {
 		assertThat(result.getStatus()).isEqualTo(PaymentStatus.COMPLETED);
 		assertThat(result.getPgPaymentId()).isEqualTo("pg-payment-id");
 		assertThat(result.getMerchantPayKey()).isEqualTo("PAY-1");
-		assertThat(result.getOrder().getStatus()).isEqualTo(OrderStatus.PAID);
+		assertThat(order.getStatus()).isEqualTo(OrderStatus.PAID);
 	}
 
 	@DisplayName("이미 완료된 동일 결제가 있으면 기존 payment를 반환한다")
@@ -71,7 +71,8 @@ class PaymentApprovalServiceTest {
 	void completeApprovedPayment_whenPaymentExistsAndSameRequest_returnExistingPayment() {
 		Order order = createOrder(1000);
 		Payment payment = Payment.createCompleted(
-			order,
+			1L,
+			1000,
 			PaymentProvider.NAVERPAY,
 			"PAY-1",
 			"pg-payment-id",
@@ -105,7 +106,8 @@ class PaymentApprovalServiceTest {
 	void completeApprovedPayment_whenExistingPaymentHasDifferentPgPaymentId_throwException() {
 		Order order = createOrder(1000);
 		Payment payment = Payment.createCompleted(
-			order,
+			1L,
+			1000,
 			PaymentProvider.NAVERPAY,
 			"PAY-1",
 			"other-payment-id",

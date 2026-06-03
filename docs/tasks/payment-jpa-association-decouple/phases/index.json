@@ -1,0 +1,10 @@
+{
+  "phases": [
+    {
+      "dir": "0-decouple",
+      "status": "completed",
+      "started_at": "2026-06-03T16:53:04+0900",
+      "completed_at": "2026-06-03T17:05:29+0900"
+    }
+  ]
+}

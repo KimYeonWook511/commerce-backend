@@ -3,19 +3,14 @@ package com.commerce.payment.domain;
 import java.time.LocalDateTime;
 
 import com.commerce.common.jpa.BaseTimeEntity;
-import com.commerce.order.domain.Order;
 
 import jakarta.persistence.Column;
 import jakarta.persistence.Entity;
 import jakarta.persistence.EnumType;
 import jakarta.persistence.Enumerated;
-import jakarta.persistence.FetchType;
-import jakarta.persistence.ForeignKey;
 import jakarta.persistence.GeneratedValue;
 import jakarta.persistence.GenerationType;
 import jakarta.persistence.Id;
-import jakarta.persistence.JoinColumn;
-import jakarta.persistence.OneToOne;
 import jakarta.persistence.Table;
 import jakarta.persistence.UniqueConstraint;
 import lombok.AccessLevel;
@@ -39,9 +34,8 @@ public class Payment extends BaseTimeEntity {
 	@GeneratedValue(strategy = GenerationType.IDENTITY)
 	private Long id;
 
-	@OneToOne(fetch = FetchType.LAZY)
-	@JoinColumn(name = "order_id", nullable = false, foreignKey = @ForeignKey(name = "fk_payment_order_id"))
-	private Order order;
+	@Column(name = "order_id", nullable = false)
+	private Long orderId;
 
 	@Column(nullable = false)
 	private int amount;
@@ -66,7 +60,7 @@ public class Payment extends BaseTimeEntity {
 
 	@Builder(access = AccessLevel.PRIVATE)
 	private Payment(
-		Order order,
+		Long orderId,
 		int amount,
 		PaymentStatus status,
 		PaymentProvider provider,
@@ -74,7 +68,7 @@ public class Payment extends BaseTimeEntity {
 		String pgPaymentId,
 		LocalDateTime approvedAt
 	) {
-		this.order = order;
+		this.orderId = orderId;
 		this.amount = amount;
 		this.status = status;
 		this.provider = provider;
@@ -84,15 +78,16 @@ public class Payment extends BaseTimeEntity {
 	}
 
 	public static Payment createCompleted(
-		Order order,
+		Long orderId,
+		int amount,
 		PaymentProvider provider,
 		String merchantPayKey,
 		String pgPaymentId,
 		LocalDateTime approvedAt
 	) {
 		return Payment.builder()
-			.order(order)
-			.amount(order.getTotalPrice())
+			.orderId(orderId)
+			.amount(amount)
 			.status(PaymentStatus.COMPLETED)
 			.provider(provider)
 			.merchantPayKey(merchantPayKey)

@@ -73,7 +73,7 @@ class NaverPayApprovalServiceTest {
 			PaymentProvider.NAVERPAY);
 		attempt.succeed(LocalDateTime.now());
 		Payment completed = Payment.createCompleted(
-			order, PaymentProvider.NAVERPAY, "PAY-1", "pg-payment-id", LocalDateTime.now());
+			1L, 1000, PaymentProvider.NAVERPAY, "PAY-1", "pg-payment-id", LocalDateTime.now());
 
 		given(orderQueryService.getOrderByMerchantPayKeyAndMemberId("PAY-1", memberId)).willReturn(order);
 		given(paymentApprovalService.findPaymentByMerchantPayKey("PAY-1")).willReturn(Optional.of(completed));
@@ -95,7 +95,7 @@ class NaverPayApprovalServiceTest {
 		Order order = createOrder(1000);
 		order.assignMerchantPayKey("PAY-1");
 		Payment completed = Payment.createCompleted(
-			order, PaymentProvider.NAVERPAY, "PAY-1", "pg-payment-id", LocalDateTime.now());
+			1L, 1000, PaymentProvider.NAVERPAY, "PAY-1", "pg-payment-id", LocalDateTime.now());
 
 		given(orderQueryService.getOrderByMerchantPayKeyAndMemberId("PAY-1", memberId)).willReturn(order);
 		given(paymentApprovalService.findPaymentByMerchantPayKey("PAY-1")).willReturn(Optional.empty());
@@ -149,7 +149,7 @@ class NaverPayApprovalServiceTest {
 		Order order = createOrder(1000);
 		order.assignMerchantPayKey("PAY-1");
 		Payment completed = Payment.createCompleted(
-			order, PaymentProvider.NAVERPAY, "PAY-1", "pg-payment-id", LocalDateTime.now());
+			1L, 1000, PaymentProvider.NAVERPAY, "PAY-1", "pg-payment-id", LocalDateTime.now());
 
 		given(orderQueryService.getOrderByMerchantPayKeyAndMemberId("PAY-1", memberId)).willReturn(order);
 		given(paymentApprovalService.findPaymentByMerchantPayKey("PAY-1")).willReturn(Optional.empty());
@@ -733,7 +733,7 @@ class NaverPayApprovalServiceTest {
 		PaymentAttempt attempt = PaymentAttempt.createApproveRequested("PAY-1", "pg-payment-id", 1000, PaymentProvider.NAVERPAY);
 		attempt.succeed(LocalDateTime.now());
 		Payment completed = Payment.createCompleted(
-			order, PaymentProvider.NAVERPAY, "PAY-1", "pg-payment-id", LocalDateTime.now());
+			1L, 1000, PaymentProvider.NAVERPAY, "PAY-1", "pg-payment-id", LocalDateTime.now());
 
 		given(orderQueryService.getOrderByMerchantPayKeyAndMemberId("PAY-1", memberId)).willReturn(order);
 		given(paymentApprovalService.findPaymentByMerchantPayKey("PAY-1"))
