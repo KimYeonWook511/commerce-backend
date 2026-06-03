@@ -10,6 +10,7 @@ DB 스키마 변경은 Flyway 마이그레이션 스크립트로 관리한다 (A
 - 엔티티(@Entity) 변경 PR은 같은 PR에서 대응되는 V 스크립트를 함께 작성한다. ddl-auto: validate라 누락 시 부팅 실패.
 - 적용된 V 스크립트는 수정하지 말고 새 V로 보정한다 (Flyway checksum).
 - **ADR-020 후속 트랙 FK 정비**: `V4__drop_cross_aggregate_fk_constraints.sql` 으로 cross-aggregate FK 5건을 일괄 제거했다 (2026-06-03). UNIQUE 제약 (`uk_stock_product_id`, `uk_payment_order_id`) 과 same-aggregate FK (`fk_order_item_order_id`) 는 유지한다. 세부 결정은 `docs/tasks/cross-aggregate-fk-cleanup/adr.md` 참조.
+- **결제 시점 가격 snapshot**: `V5__add_order_item_unit_price.sql` 으로 `tbl_order_item.unit_price INT NOT NULL` 컬럼을 신설했다 (2026-06-03). 기존 row 는 `tbl_product.price` JOIN backfill 후 NOT NULL 전환. 세부 결정은 `docs/tasks/order-item-price-snapshot/adr.md` 참조.
 
 ## 네이밍 규칙
 
@@ -111,6 +112,7 @@ COLUMNS:
 - `order_id (FK -> tbl_order.id)`
 - `product_id`
 - `quantity`
+- `unit_price INT NOT NULL`
 
 INDEX:
 - 없음
@@ -118,6 +120,7 @@ INDEX:
 비고:
 - `product_id` 는 FK 제약을 두지 않는다. `fk_order_item_product_id` 가 V4 migration 으로 제거됐다 (ADR-020 후속 트랙). 동명 KEY index (`KEY fk_order_item_product_id (product_id)`) 는 조회 보조용으로 유지된다.
 - `order_id (FK -> tbl_order.id)` 는 same-aggregate FK 로 유지된다. ADR-020 적용 범위 밖 (Order ↔ OrderItem 은 같은 aggregate).
+- `unit_price` 는 V5 migration 으로 신설된 결제 시점 가격 snapshot 컬럼이다. Product.price 변동 후에도 결제 시점 단가가 보존된다. 세부 결정은 `docs/tasks/order-item-price-snapshot/adr.md` 참조.
 
 ### `tbl_cart_item`
 
