@@ -116,3 +116,4 @@ ADR-020은 "같은 aggregate 내 root-child는 객체 참조 허용"이라고 �
 
 - **fixture 변경 면적이 payment / cart까지 침투**: `Order.create(member)`, `addOrderItem(product, qty)` 호출부가 order 도메인 외부(payment, cart)의 테스트까지 퍼져 있어 변경 면적이 컸다. 선행 stock sub-PR에서도 동일한 현상이 있었는데, cross-aggregate 객체 참조가 test fixture에서도 도메인 경계를 넘어 침투한 결과다. 향후 Payment sub-PR에서도 동일한 면적 확산이 예상된다.
 - **응답 echo 정리를 별도 트랙으로 미룸**: PaymentReady 응답의 merchantPayKey echo 구조 등이 이번 리팩토링으로 코드에서 더 명시적으로 드러났다. 본 sub-PR 범위에서 분리한 것은 정책적으로 옳으나, 적절한 시점에 별도 트랙 정리가 필요하다.
+- **`addOrderItem` 의 `unitPrice` 인자가 OrderItem 컬럼에 저장되지 않음**: 시그니처 전환 중 도메인에 단가가 흘러 들어가게 됐지만 `OrderItem` 에 가격 컬럼이 없어 `Order.totalPrice` 누적에만 쓰이고 휘발한다. 결제 시점 가격 snapshot 은 e-commerce 표준이라 필요한 정비이지만, 컬럼 신설은 본 series 의 "schema 변경 0건" 메타 원칙을 깨므로 후속 별도 트랙으로 분리했다. `OrderItem.java` 의 "가격도 넣어야 하나?" 미해결 주석도 그 트랙에서 함께 결정한다.

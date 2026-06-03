@@ -105,6 +105,10 @@
 - application 의 product 조회 패턴은 기존 그대로 유지 (`findById`, `findAllById`).
 - `ProductRepository` 인터페이스에 신규 메서드 추가 없음.
 
+### 후속 정비 항목
+
+- `addOrderItem(Long productId, int quantity, int unitPrice)` 의 `unitPrice` 인자는 현재 `Order.totalPrice` 누적에만 쓰이고 `OrderItem` 컬럼에는 저장되지 않는다. 결제 시점 가격 snapshot (`OrderItem.unitPrice` 컬럼 + Flyway migration) 은 본 sub-PR series 의 메타 원칙 (schema 변경 0건) 을 깨므로 별도 후속 트랙으로 분리한다. `OrderItem.java` 의 "가격도 넣어야 하나?" 미해결 주석은 그 트랙에서 함께 결정한다.
+
 ## 결정 4: DB schema 변경 / Flyway migration 없이 진행한다 (메타 원칙 재확인)
 
 ### 배경
