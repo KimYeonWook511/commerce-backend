@@ -116,9 +116,9 @@ class NaverPayGatewayImplTest {
 	}
 
 	@Test
-	@DisplayName("approve 호출 예외 시 요청 INFO + 호출 실패 WARN이 남는다")
-	void approve_naverPayException_infoAndWarn() {
-		// Given
+	@DisplayName("approve 호출 시 네트워크 오류(NETWORK)는 결과 불명이므로 UNKNOWN으로 분류한다")
+	void approve_networkError_returnsUnknown() {
+		// Given: timeout/네트워크 단절은 PG 처리 여부가 불명하므로 FAILED가 아닌 UNKNOWN이어야 한다 (이중결제 방지)
 		given(naverPayClient.approve("PAY003"))
 			.willThrow(new NaverPayException(NaverPayErrorCode.NETWORK, "네트워크 오류"));
 
@@ -126,13 +126,41 @@ class NaverPayGatewayImplTest {
 		NaverPayApproveResult result = gateway.approve("PAY003");
 
 		// Then
-		assertThat(result.getStatus()).isEqualTo(NaverPayApproveResult.Status.FAILED);
+		assertThat(result.getStatus()).isEqualTo(NaverPayApproveResult.Status.UNKNOWN);
 		List<ILoggingEvent> logs = listAppender.list;
 		assertThat(logs).hasSize(2);
 		assertThat(logs.get(0).getLevel()).isEqualTo(Level.INFO);
 		assertThat(logs.get(0).getFormattedMessage()).contains("네이버페이 승인 요청").contains("PAY003");
 		assertThat(logs.get(1).getLevel()).isEqualTo(Level.WARN);
-		assertThat(logs.get(1).getFormattedMessage()).contains("네이버페이 승인 호출 실패").contains("PAY003");
+		assertThat(logs.get(1).getFormattedMessage()).contains("네이버페이 승인 결과 불명").contains("PAY003");
+	}
+
+	@Test
+	@DisplayName("approve 호출 시 서버 오류(SERVER_ERROR)와 응답 해석 불가(INVALID_RESPONSE)도 UNKNOWN으로 분류한다")
+	void approve_serverErrorOrInvalidResponse_returnsUnknown() {
+		// Given
+		given(naverPayClient.approve("PAY-SVR"))
+			.willThrow(new NaverPayException(NaverPayErrorCode.SERVER_ERROR, "PG 서버 오류"));
+		given(naverPayClient.approve("PAY-INV"))
+			.willThrow(new NaverPayException(NaverPayErrorCode.INVALID_RESPONSE, "응답 해석 불가"));
+
+		// When & Then
+		assertThat(gateway.approve("PAY-SVR").getStatus()).isEqualTo(NaverPayApproveResult.Status.UNKNOWN);
+		assertThat(gateway.approve("PAY-INV").getStatus()).isEqualTo(NaverPayApproveResult.Status.UNKNOWN);
+	}
+
+	@Test
+	@DisplayName("approve 호출 시 인증 실패/잘못된 요청은 처리되지 않았음이 확실하므로 FAILED로 분류한다")
+	void approve_clientOrAuthError_returnsFailed() {
+		// Given
+		given(naverPayClient.approve("PAY-AUTH"))
+			.willThrow(new NaverPayException(NaverPayErrorCode.AUTHENTICATION, "인증 실패"));
+		given(naverPayClient.approve("PAY-CLIENT"))
+			.willThrow(new NaverPayException(NaverPayErrorCode.CLIENT_ERROR, "잘못된 요청"));
+
+		// When & Then
+		assertThat(gateway.approve("PAY-AUTH").getStatus()).isEqualTo(NaverPayApproveResult.Status.FAILED);
+		assertThat(gateway.approve("PAY-CLIENT").getStatus()).isEqualTo(NaverPayApproveResult.Status.FAILED);
 	}
 
 	@Test
