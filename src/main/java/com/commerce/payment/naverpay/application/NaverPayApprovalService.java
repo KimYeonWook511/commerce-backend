@@ -63,11 +63,13 @@ public class NaverPayApprovalService {
 			throw new PaymentException(PaymentErrorCode.PAYMENT_RESULT_PENDING);
 		}
 
-		// USED Reservation: 같은 merchantPayKey로 redirect가 두 번째로 도착한 경우 → 멱등 응답 (ADR-5)
+		// USED Reservation: 같은 merchantPayKey로 redirect가 두 번째로 도착한 경우 (ADR-5)
+		// 기존 APPROVE attempt를 상태별로 재처리한다. SUCCEEDED면 멱등 응답, REQUESTED면 PG 재확인
+		// (PROCESSING/중단으로 미완료된 시도가 영구 차단되지 않도록), FAILED/UNKNOWN이면 해당 사유로 응답.
 		if (reservation.getStatus() == PaymentReservationStatus.USED) {
-			Payment existing = paymentRepository.findApproveSucceeded(merchantPayKey)
+			Payment attempt = paymentRepository.findApproveAttempt(merchantPayKey, reservation.getProvider(), pgPaymentId)
 				.orElseThrow(() -> new PaymentException(PaymentErrorCode.PAYMENT_NOT_FOUND));
-			return toResponse(existing);
+			return processApproveAttempt(attempt);
 		}
 
 		Payment attempt = paymentApprovalAttemptService.create(reservation, pgPaymentId);

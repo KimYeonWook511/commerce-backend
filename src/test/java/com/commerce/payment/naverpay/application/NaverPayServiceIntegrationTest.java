@@ -393,10 +393,10 @@ class NaverPayServiceIntegrationTest {
 		Member member = memberPersistence.save(createMember());
 		persistOrder(member, "PAY-INT-6-1", 1000);
 		PaymentReservation reservation = reservationPersistence.findByMerchantPayKey("PAY-INT-6-1").orElseThrow();
-		// USED: 이미 한 번 approve 흐름을 통과한 상태 (redirect 중복 도착 시나리오)
+		// USED: 이미 한 번 approve 흐름을 통과한 상태 (같은 pgPaymentId로 redirect 중복 도착 시나리오)
 		reservation.markUsed();
 		reservationPersistence.save(reservation);
-		Payment existingPayment = Payment.createRequested(reservation, PaymentType.APPROVE, "pg-existing");
+		Payment existingPayment = Payment.createRequested(reservation, PaymentType.APPROVE, "pg-int-6-1");
 		existingPayment.succeed(LocalDateTime.now());
 		paymentPersistence.save(existingPayment);
 
@@ -405,7 +405,7 @@ class NaverPayServiceIntegrationTest {
 
 		// then: 멱등 200 응답 — PG 호출 0회
 		assertThat(result.getStatus()).isEqualTo(NaverPayApproveStatus.SUCCESS);
-		assertThat(result.getPgPaymentId()).isEqualTo("pg-existing");
+		assertThat(result.getPgPaymentId()).isEqualTo("pg-int-6-1");
 		then(naverPayGateway).should(never()).approve(any());
 	}
 

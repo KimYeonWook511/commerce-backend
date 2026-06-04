@@ -144,7 +144,8 @@ class NaverPayApprovalServiceTest {
 		given(paymentReservationRepository.findByMerchantPayKey("PAY-1")).willReturn(Optional.of(reservation));
 		given(orderRepository.findByIdAndMemberId(reservation.getOrderId(), memberId)).willReturn(Optional.of(order));
 		given(paymentRepository.existsUnknownByOrderId(reservation.getOrderId())).willReturn(false);
-		given(paymentRepository.findApproveSucceeded("PAY-1")).willReturn(Optional.of(succeededAttempt));
+		given(paymentRepository.findApproveAttempt("PAY-1", PaymentProvider.NAVERPAY, "pg-payment-id"))
+			.willReturn(Optional.of(succeededAttempt));
 
 		// when
 		assertThatNoException().isThrownBy(() -> {
@@ -158,6 +159,35 @@ class NaverPayApprovalServiceTest {
 		then(paymentApprovalAttemptService).should(never()).create(any(), any());
 		then(paymentRepository).should(never()).save(any());
 		then(paymentReservationRepository).should(never()).save(any());
+	}
+
+	@DisplayName("USED Reservation이지만 기존 시도가 REQUESTED로 미완료면 PG를 재확인해 결제를 완료한다 (영구 차단 방지)")
+	@Test
+	void approve_whenReservationUsedAndAttemptRequested_reprocessesPgAndCompletes() {
+		// given: 첫 redirect에서 attempt 생성 후 PG PROCESSING/중단으로 REQUESTED 잔존, reservation은 USED
+		long memberId = 1L;
+		PaymentReservation reservation = createUsedReservation("PAY-1", memberId, 1000);
+		Order order = createOrder(1000);
+		Payment requestedAttempt = createAttempt("PAY-1", "pg-payment-id", 1000);
+		Payment completedAttempt = createAttempt("PAY-1", "pg-payment-id", 1000);
+		completedAttempt.succeed(LocalDateTime.now());
+
+		given(paymentReservationRepository.findByMerchantPayKey("PAY-1")).willReturn(Optional.of(reservation));
+		given(orderRepository.findByIdAndMemberId(reservation.getOrderId(), memberId)).willReturn(Optional.of(order));
+		given(paymentRepository.existsUnknownByOrderId(reservation.getOrderId())).willReturn(false);
+		given(paymentRepository.findApproveAttempt("PAY-1", PaymentProvider.NAVERPAY, "pg-payment-id"))
+			.willReturn(Optional.of(requestedAttempt));
+		given(naverPayGateway.approve("pg-payment-id"))
+			.willReturn(NaverPayApproveResult.success("PAY-1", 1000));
+		given(paymentApprovalService.succeedApproval(any(Payment.class), any())).willReturn(completedAttempt);
+
+		// when
+		NaverPayApproveResponse result = naverPayApprovalService.approve(memberId, "PAY-1", "pg-payment-id");
+
+		// then: 새 attempt 생성 없이 기존 REQUESTED 시도를 재확인해 성공 완료
+		assertThat(result.getStatus()).isEqualTo(NaverPayApproveStatus.SUCCESS);
+		then(naverPayGateway).should().approve("pg-payment-id");
+		then(paymentApprovalAttemptService).should(never()).create(any(), any());
 	}
 
 	@DisplayName("승인 응답 코드가 Success면 결제 완료를 반영하고 성공 결과를 반환한다")
