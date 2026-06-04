@@ -777,14 +777,14 @@ class NaverPayApprovalServiceTest {
 			.willReturn(attempt);
 		given(naverPayGateway.approve("pg-payment-id")).willReturn(NaverPayApproveResult.success("PAY-1", 1000));
 		given(paymentApprovalService.succeedApproval(any(Payment.class), any()))
-			.willThrow(new PaymentException(PaymentErrorCode.PAYMENT_STATUS_NOT_ALLOWED));
+			.willThrow(new PaymentException(PaymentErrorCode.PAYMENT_ATTEMPT_STATUS_TRANSITION_NOT_ALLOWED));
 
 		// when & then
 		assertThatThrownBy(() -> naverPayApprovalService.approve(memberId, "PAY-1", "pg-payment-id"))
 			.isInstanceOf(PaymentException.class)
 			.satisfies(exception -> {
 				PaymentException paymentException = (PaymentException)exception;
-				assertThat(paymentException.getErrorCode()).isEqualTo(PaymentErrorCode.PAYMENT_STATUS_NOT_ALLOWED);
+				assertThat(paymentException.getErrorCode()).isEqualTo(PaymentErrorCode.PAYMENT_ATTEMPT_STATUS_TRANSITION_NOT_ALLOWED);
 			});
 		then(paymentApprovalCompensationService).should().compensateUnexpected(
 			any(), any(), eq(PaymentFailCode.APPROVE_PROCESS_FAILED), any());

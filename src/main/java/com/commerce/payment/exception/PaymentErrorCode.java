@@ -24,17 +24,13 @@ public enum PaymentErrorCode implements ErrorCode {
 	PAYMENT_PG_SERVER_ERROR(HttpStatus.BAD_GATEWAY, "PAYMENT-502-2", "PG 서버 오류가 발생했습니다"),
 	PAYMENT_PG_INVALID_RESPONSE(HttpStatus.BAD_GATEWAY, "PAYMENT-502-3", "PG 응답이 올바르지 않습니다"),
 	PAYMENT_DUPLICATE(HttpStatus.CONFLICT, "PAYMENT-409-2", "이미 다른 결제가 완료된 주문입니다"),
-	PAYMENT_STATUS_NOT_ALLOWED(HttpStatus.CONFLICT, "PAYMENT-409-1", "결제 상태 변경이 허용되지 않습니다"),
 	PAYMENT_ATTEMPT_AMOUNT_MISMATCH(HttpStatus.CONFLICT, "PAYMENT-409-3",
 		"결제 시도 이력의 금액과 요청 금액이 일치하지 않습니다"),
 	PAYMENT_ATTEMPT_STATUS_TRANSITION_NOT_ALLOWED(HttpStatus.INTERNAL_SERVER_ERROR, "PAYMENT-500-1",
 		"결제 시도 상태 전이가 허용되지 않습니다"),
-	PAYMENT_ATTEMPT_TYPE_MISMATCH(HttpStatus.INTERNAL_SERVER_ERROR, "PAYMENT-500-2",
-		"결제 시도 타입과 mark 요청이 일치하지 않습니다"),
 	PAYMENT_RESERVATION_STATUS_TRANSITION_NOT_ALLOWED(HttpStatus.INTERNAL_SERVER_ERROR, "PAYMENT-500-3",
 		"결제 예약 상태 전이가 허용되지 않습니다"),
 	PAYMENT_MEMBER_MISMATCH(HttpStatus.FORBIDDEN, "PAYMENT-403-1", "결제 예약의 회원 정보가 일치하지 않습니다"),
-	PAYMENT_RESERVATION_NOT_REUSABLE(HttpStatus.CONFLICT, "PAYMENT-409-4", "재사용할 수 없는 결제 예약입니다"),
 	PAYMENT_RESULT_PENDING(HttpStatus.CONFLICT, "PAYMENT-409-5", "결제 결과 확인 중입니다. 잠시 후 주문 내역에서 확인해 주세요.");
 
 	private final HttpStatus status;
