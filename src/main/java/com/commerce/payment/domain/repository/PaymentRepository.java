@@ -3,13 +3,19 @@ package com.commerce.payment.domain.repository;
 import java.util.Optional;
 
 import com.commerce.payment.domain.Payment;
-import com.commerce.payment.domain.PaymentStatus;
+import com.commerce.payment.domain.PaymentProvider;
 
 public interface PaymentRepository {
 
 	Payment save(Payment payment);
 
-	Optional<Payment> findByMerchantPayKey(String merchantPayKey);
+	Optional<Payment> findApproveAttempt(String merchantPayKey, PaymentProvider provider, String pgPaymentId);
 
-	boolean existsByMerchantPayKeyAndStatus(String merchantPayKey, PaymentStatus status);
+	Optional<Payment> findCancelAttempt(String merchantPayKey, PaymentProvider provider, String pgPaymentId);
+
+	Optional<Payment> findApproveSucceeded(String merchantPayKey);
+
+	boolean existsApproveSucceeded(String merchantPayKey);
+
+	boolean existsUnknownByOrderId(Long orderId);
 }

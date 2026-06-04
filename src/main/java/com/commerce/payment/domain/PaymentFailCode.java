@@ -5,7 +5,7 @@ import lombok.RequiredArgsConstructor;
 
 @Getter
 @RequiredArgsConstructor
-public enum PaymentAttemptFailCode {
+public enum PaymentFailCode {
 	TIME_EXPIRED("결제 시간 만료"),
 	ALREADY_CANCELED("이미 취소 완료됨"),
 	AMOUNT_MISMATCH("승인 금액 불일치"),

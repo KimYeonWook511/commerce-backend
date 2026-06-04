@@ -23,12 +23,12 @@ import com.commerce.auth.application.TokenAuthenticationService;
 import com.commerce.auth.application.result.TokenAuthenticationResult;
 import com.commerce.security.resolver.AuthenticatedMemberIdArgumentResolver;
 import com.commerce.common.config.WebConfig;
-import com.commerce.payment.application.PaymentReadyService;
-import com.commerce.payment.application.command.PaymentReadyCommand;
-import com.commerce.payment.application.result.PaymentReadyResult;
+import com.commerce.payment.application.ReservePaymentService;
+import com.commerce.payment.application.command.ReservePaymentCommand;
+import com.commerce.payment.application.result.ReservePaymentResult;
 
 
-@WebMvcTest(PaymentController.class)
+@WebMvcTest(ReservePaymentController.class)
 @AutoConfigureMockMvc(addFilters = true)
 @ActiveProfiles("test")
 @Import({
@@ -37,24 +37,24 @@ import com.commerce.payment.application.result.PaymentReadyResult;
 	AuthorizationInterceptor.class,
 	JwtAuthenticationFilter.class
 })
-class PaymentControllerTest {
+class ReservePaymentControllerTest {
 
 	@Autowired
 	private MockMvc mockMvc;
 
 	@MockitoBean
-	private PaymentReadyService paymentReadyService;
+	private ReservePaymentService reservePaymentService;
 
 	@MockitoBean
 	private TokenAuthenticationService tokenAuthenticationService;
 
-	@DisplayName("결제 준비 요청이 유효하면 결제 준비 응답을 반환한다")
+	@DisplayName("결제 예약 요청이 유효하면 결제 예약 응답을 반환한다")
 	@Test
-	void readyPayment_whenValidRequest_returnOk() throws Exception {
+	void reserve_whenValidRequest_returnOk() throws Exception {
 		// given
 		stubForValidToken();
 
-		PaymentReadyResult result = PaymentReadyResult.builder()
+		ReservePaymentResult result = ReservePaymentResult.builder()
 			.clientId("clientId")
 			.chainId("chainId")
 			.merchantPayKey("PAY-1")
@@ -65,7 +65,7 @@ class PaymentControllerTest {
 			.taxExScopeAmount(0)
 			.returnUrl("https://return-url")
 			.build();
-		given(paymentReadyService.readyPayment(any(PaymentReadyCommand.class)))
+		given(reservePaymentService.reserve(any(ReservePaymentCommand.class)))
 			.willReturn(result);
 
 		String requestBody = """
@@ -76,7 +76,7 @@ class PaymentControllerTest {
 			""";
 
 		// when & then
-		mockMvc.perform(post("/payments/ready")
+		mockMvc.perform(post("/payments/reserve")
 				.header("Authorization", "Bearer access-token")
 				.contentType(MediaType.APPLICATION_JSON)
 				.content(requestBody))
@@ -96,7 +96,7 @@ class PaymentControllerTest {
 
 	@DisplayName("지원하지 않는 결제 수단이면 요청이 실패한다")
 	@Test
-	void readyPayment_whenProviderInvalid_returnBadRequest() throws Exception {
+	void reserve_whenProviderInvalid_returnBadRequest() throws Exception {
 		// given
 		stubForValidToken();
 		String requestBody = """
@@ -107,19 +107,19 @@ class PaymentControllerTest {
 			""";
 
 		// when & then
-		mockMvc.perform(post("/payments/ready")
+		mockMvc.perform(post("/payments/reserve")
 				.header("Authorization", "Bearer access-token")
 				.contentType(MediaType.APPLICATION_JSON)
 				.content(requestBody))
 			.andExpect(status().isBadRequest())
 			.andExpect(jsonPath("$.code").value("PAYMENT-400-1"))
-				.andExpect(jsonPath("$.message").value("지원하지 않는 결제 수단입니다"))
-				.andExpect(jsonPath("$.data").doesNotExist());
+			.andExpect(jsonPath("$.message").value("지원하지 않는 결제 수단입니다"))
+			.andExpect(jsonPath("$.data").doesNotExist());
 	}
 
 	@DisplayName("주문 ID가 없으면 요청 값 검증에 실패한다")
 	@Test
-	void readyPayment_whenOrderIdIsNull_returnBadRequest() throws Exception {
+	void reserve_whenOrderIdIsNull_returnBadRequest() throws Exception {
 		// given
 		stubForValidToken();
 		String requestBody = """
@@ -129,7 +129,7 @@ class PaymentControllerTest {
 			""";
 
 		// when & then
-		mockMvc.perform(post("/payments/ready")
+		mockMvc.perform(post("/payments/reserve")
 				.header("Authorization", "Bearer access-token")
 				.contentType(MediaType.APPLICATION_JSON)
 				.content(requestBody))
@@ -140,7 +140,7 @@ class PaymentControllerTest {
 
 	@DisplayName("결제 수단이 비어있으면 요청 값 검증에 실패한다")
 	@Test
-	void readyPayment_whenProviderIsBlank_returnBadRequest() throws Exception {
+	void reserve_whenProviderIsBlank_returnBadRequest() throws Exception {
 		// given
 		stubForValidToken();
 		String requestBody = """
@@ -151,7 +151,7 @@ class PaymentControllerTest {
 			""";
 
 		// when & then
-		mockMvc.perform(post("/payments/ready")
+		mockMvc.perform(post("/payments/reserve")
 				.header("Authorization", "Bearer access-token")
 				.contentType(MediaType.APPLICATION_JSON)
 				.content(requestBody))

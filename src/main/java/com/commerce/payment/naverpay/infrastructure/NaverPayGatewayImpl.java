@@ -4,7 +4,7 @@ import java.util.NoSuchElementException;
 
 import org.springframework.stereotype.Component;
 
-import com.commerce.payment.domain.PaymentAttemptFailCode;
+import com.commerce.payment.domain.PaymentFailCode;
 import com.commerce.payment.exception.PaymentErrorCode;
 import com.commerce.payment.naverpay.application.port.NaverPayGateway;
 import com.commerce.payment.naverpay.application.port.result.NaverPayApproveResult;
@@ -40,7 +40,7 @@ public class NaverPayGatewayImpl implements NaverPayGateway {
 			response = naverPayClient.approve(pgPaymentId);
 		} catch (NaverPayException ex) {
 			log.warn("네이버페이 승인 호출 실패 pgPaymentId={} message={}", pgPaymentId, ex.getMessage());
-			return NaverPayApproveResult.failed(toAttemptFailCode(ex), toPaymentErrorCode(ex), ex.getMessage());
+			return NaverPayApproveResult.failed(toFailCode(ex), toPaymentErrorCode(ex), ex.getMessage());
 		}
 
 		NaverPayApproveCode code = NaverPayApproveCode.from(response.getCode());
@@ -52,7 +52,7 @@ public class NaverPayGatewayImpl implements NaverPayGateway {
 			} catch (NullPointerException ex) {
 				log.warn("네이버페이 승인 응답 파싱 실패 pgPaymentId={}", pgPaymentId);
 				return NaverPayApproveResult.failed(
-					PaymentAttemptFailCode.PG_INVALID_RESPONSE,
+					PaymentFailCode.PG_INVALID_RESPONSE,
 					PaymentErrorCode.PAYMENT_PG_INVALID_RESPONSE,
 					"네이버페이 응답 처리에 실패했습니다"
 				);
@@ -67,7 +67,7 @@ public class NaverPayGatewayImpl implements NaverPayGateway {
 
 		log.warn("네이버페이 승인 실패 pgPaymentId={} code={} message={}",
 			pgPaymentId, response.getCode(), code.getDescription());
-		return NaverPayApproveResult.failed(toAttemptFailCode(code), toPaymentErrorCode(code), code.getDescription());
+		return NaverPayApproveResult.failed(toFailCode(code), toPaymentErrorCode(code), code.getDescription());
 	}
 
 	@Override
@@ -123,7 +123,7 @@ public class NaverPayGatewayImpl implements NaverPayGateway {
 			);
 		} catch (NaverPayException ex) {
 			log.warn("네이버페이 취소 호출 실패 pgPaymentId={} message={}", pgPaymentId, ex.getMessage());
-			return NaverPayCancelResult.failed(toAttemptFailCode(ex), ex.getMessage());
+			return NaverPayCancelResult.failed(toFailCode(ex), ex.getMessage());
 		}
 
 		NaverPayCancelCode code = NaverPayCancelCode.from(response.getCode());
@@ -140,15 +140,15 @@ public class NaverPayGatewayImpl implements NaverPayGateway {
 
 		log.warn("네이버페이 취소 실패 pgPaymentId={} code={} message={}",
 			pgPaymentId, response.getCode(), code.getDescription());
-		return NaverPayCancelResult.failed(toAttemptFailCode(code), code.getDescription());
+		return NaverPayCancelResult.failed(toFailCode(code), code.getDescription());
 	}
 
-	private PaymentAttemptFailCode toAttemptFailCode(NaverPayException ex) {
+	private PaymentFailCode toFailCode(NaverPayException ex) {
 		return switch (ex.getErrorCode()) {
-			case NETWORK -> PaymentAttemptFailCode.PG_NETWORK_ERROR;
-			case SERVER_ERROR -> PaymentAttemptFailCode.PG_SERVER_ERROR;
-			case INVALID_RESPONSE -> PaymentAttemptFailCode.PG_INVALID_RESPONSE;
-			case CLIENT_ERROR, AUTHENTICATION -> PaymentAttemptFailCode.PG_REQUEST_REJECTED;
+			case NETWORK -> PaymentFailCode.PG_NETWORK_ERROR;
+			case SERVER_ERROR -> PaymentFailCode.PG_SERVER_ERROR;
+			case INVALID_RESPONSE -> PaymentFailCode.PG_INVALID_RESPONSE;
+			case CLIENT_ERROR, AUTHENTICATION -> PaymentFailCode.PG_REQUEST_REJECTED;
 		};
 	}
 
@@ -161,16 +161,16 @@ public class NaverPayGatewayImpl implements NaverPayGateway {
 		};
 	}
 
-	private PaymentAttemptFailCode toAttemptFailCode(NaverPayApproveCode code) {
+	private PaymentFailCode toFailCode(NaverPayApproveCode code) {
 		return switch (code) {
-			case TIME_EXPIRED -> PaymentAttemptFailCode.TIME_EXPIRED;
-			case INVALID_MERCHANT -> PaymentAttemptFailCode.INVALID_MERCHANT;
-			case OWNER_AUTH_FAIL -> PaymentAttemptFailCode.OWNER_AUTH_FAILED;
-			case NOT_ENOUGH_ACCOUNT_BALANCE -> PaymentAttemptFailCode.NOT_ENOUGH_ACCOUNT_BALANCE;
-			case BANK_MAINTENANCE, MAINTENANCE_ONGOING, FAULT_CHECK_ONGOING -> PaymentAttemptFailCode.PG_MAINTENANCE;
-			case FAIL -> PaymentAttemptFailCode.PG_REQUEST_REJECTED;
+			case TIME_EXPIRED -> PaymentFailCode.TIME_EXPIRED;
+			case INVALID_MERCHANT -> PaymentFailCode.INVALID_MERCHANT;
+			case OWNER_AUTH_FAIL -> PaymentFailCode.OWNER_AUTH_FAILED;
+			case NOT_ENOUGH_ACCOUNT_BALANCE -> PaymentFailCode.NOT_ENOUGH_ACCOUNT_BALANCE;
+			case BANK_MAINTENANCE, MAINTENANCE_ONGOING, FAULT_CHECK_ONGOING -> PaymentFailCode.PG_MAINTENANCE;
+			case FAIL -> PaymentFailCode.PG_REQUEST_REJECTED;
 			default -> throw new IllegalArgumentException(
-				"Non-failure approve code cannot be mapped to attempt fail code: " + code);
+				"Non-failure approve code cannot be mapped to fail code: " + code);
 		};
 	}
 
@@ -185,17 +185,17 @@ public class NaverPayGatewayImpl implements NaverPayGateway {
 		};
 	}
 
-	private PaymentAttemptFailCode toAttemptFailCode(NaverPayCancelCode code) {
+	private PaymentFailCode toFailCode(NaverPayCancelCode code) {
 		return switch (code) {
-			case INVALID_MERCHANT -> PaymentAttemptFailCode.INVALID_MERCHANT;
-			case INVALID_PG_PAYMENT_ID -> PaymentAttemptFailCode.INVALID_PG_PAYMENT_ID;
-			case PRE_CANCEL_NOT_COMPLETE, CANCEL_NOT_COMPLETE -> PaymentAttemptFailCode.CANCEL_PROCESS_FAILED;
-			case MAINTENANCE_ONGOING, FAULT_CHECK_ONGOING -> PaymentAttemptFailCode.PG_MAINTENANCE;
+			case INVALID_MERCHANT -> PaymentFailCode.INVALID_MERCHANT;
+			case INVALID_PG_PAYMENT_ID -> PaymentFailCode.INVALID_PG_PAYMENT_ID;
+			case PRE_CANCEL_NOT_COMPLETE, CANCEL_NOT_COMPLETE -> PaymentFailCode.CANCEL_PROCESS_FAILED;
+			case MAINTENANCE_ONGOING, FAULT_CHECK_ONGOING -> PaymentFailCode.PG_MAINTENANCE;
 			case OVER_REMAIN_AMOUNT, CANCEL_DEADLINE_EXPIRED, TAX_SCOPE_AMT_GREATER_THAN_REMAIN_ERROR,
 				 TAX_SCOPE_AMOUNT_ERROR, REST_AMOUNT_DIFF, INVALID_DISCOUNT_CANCEL_CONDITION,
-				 FAIL -> PaymentAttemptFailCode.PG_REQUEST_REJECTED;
+				 FAIL -> PaymentFailCode.PG_REQUEST_REJECTED;
 			default -> throw new IllegalArgumentException(
-				"Non-failure cancel code cannot be mapped to attempt fail code: " + code);
+				"Non-failure cancel code cannot be mapped to fail code: " + code);
 		};
 	}
 

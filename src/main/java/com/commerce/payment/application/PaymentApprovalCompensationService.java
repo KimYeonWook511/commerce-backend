@@ -7,9 +7,9 @@ import org.springframework.stereotype.Service;
 
 import com.commerce.payment.application.port.PgCanceller;
 import com.commerce.payment.application.port.result.CancelOutcome;
-import com.commerce.payment.domain.PaymentAttempt;
-import com.commerce.payment.domain.PaymentAttemptFailCode;
-import com.commerce.payment.domain.PaymentAttemptStatus;
+import com.commerce.payment.domain.Payment;
+import com.commerce.payment.domain.PaymentFailCode;
+import com.commerce.payment.domain.PaymentStatus;
 import com.commerce.payment.exception.PaymentException;
 
 import lombok.RequiredArgsConstructor;
@@ -24,17 +24,17 @@ public class PaymentApprovalCompensationService {
 	private final PaymentApprovalService paymentApprovalService;
 	private final PaymentCancellationAttemptService paymentCancellationAttemptService;
 
-	public void compensateMerchantKeyMismatch(PaymentAttempt approveAttempt) {
+	public void compensateMerchantKeyMismatch(Payment approveAttempt) {
 		// PG 결제 자체가 없으므로 cancel 없이 failIfRequested만.
 		paymentApprovalAttemptService.failIfRequested(
 			approveAttempt.getMerchantPayKey(), approveAttempt.getProvider(), approveAttempt.getPgPaymentId(),
-			PaymentAttemptFailCode.MERCHANT_PAY_KEY_MISMATCH, "가맹점 결제 키 불일치", LocalDateTime.now()
+			PaymentFailCode.MERCHANT_PAY_KEY_MISMATCH, "가맹점 결제 키 불일치", LocalDateTime.now()
 		);
 	}
 
-	public void compensateAmountMismatch(PaymentAttempt approveAttempt, int responseTotalAmount, PgCanceller pgCanceller) {
+	public void compensateAmountMismatch(Payment approveAttempt, int responseTotalAmount, PgCanceller pgCanceller) {
 		runPgCancel(approveAttempt,
-			PaymentAttemptFailCode.AMOUNT_MISMATCH,
+			PaymentFailCode.AMOUNT_MISMATCH,
 			String.format("attemptAmount=%d, responseTotalAmount=%d", approveAttempt.getAmount(), responseTotalAmount),
 			responseTotalAmount,
 			"승인 금액 불일치",
@@ -42,9 +42,9 @@ public class PaymentApprovalCompensationService {
 		);
 	}
 
-	public void compensateDuplicatePayment(PaymentAttempt approveAttempt, Exception ex, PgCanceller pgCanceller) {
+	public void compensateDuplicatePayment(Payment approveAttempt, Exception ex, PgCanceller pgCanceller) {
 		runPgCancel(approveAttempt,
-			PaymentAttemptFailCode.DUPLICATE_PAYMENT,
+			PaymentFailCode.DUPLICATE_PAYMENT,
 			Objects.toString(ex.getMessage(), "이미 완료된 결제 반영 시도"),
 			approveAttempt.getAmount(),
 			"이미 다른 결제가 완료된 주문으로 인한 취소",
@@ -52,7 +52,7 @@ public class PaymentApprovalCompensationService {
 		);
 	}
 
-	public void compensateUnexpected(PaymentAttempt approveAttempt, Exception ex, PaymentAttemptFailCode failCode, PgCanceller pgCanceller) {
+	public void compensateUnexpected(Payment approveAttempt, Exception ex, PaymentFailCode failCode, PgCanceller pgCanceller) {
 		runPgCancel(approveAttempt,
 			failCode,
 			Objects.toString(ex.getMessage(), "예상치 못한 오류 발생"),
@@ -63,8 +63,8 @@ public class PaymentApprovalCompensationService {
 	}
 
 	private void runPgCancel(
-		PaymentAttempt approveAttempt,
-		PaymentAttemptFailCode failCode,
+		Payment approveAttempt,
+		PaymentFailCode failCode,
 		String failDetail,
 		int cancelAmount,
 		String cancelReason,
@@ -85,12 +85,12 @@ public class PaymentApprovalCompensationService {
 			return;
 		}
 
-		PaymentAttempt cancelAttempt = paymentCancellationAttemptService.getOrCreate(
+		Payment cancelAttempt = paymentCancellationAttemptService.getOrCreate(
 			approveAttempt.getMerchantPayKey(), approveAttempt.getProvider(),
 			approveAttempt.getPgPaymentId(), cancelAmount
 		);
 
-		if (cancelAttempt.getStatus() != PaymentAttemptStatus.REQUESTED) {
+		if (cancelAttempt.getStatus() != PaymentStatus.REQUESTED) {
 			return;
 		}
 

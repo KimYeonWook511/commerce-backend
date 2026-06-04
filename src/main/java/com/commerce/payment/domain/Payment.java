@@ -3,6 +3,8 @@ package com.commerce.payment.domain;
 import java.time.LocalDateTime;
 
 import com.commerce.common.jpa.BaseTimeEntity;
+import com.commerce.payment.exception.PaymentErrorCode;
+import com.commerce.payment.exception.PaymentException;
 
 import jakarta.persistence.Column;
 import jakarta.persistence.Entity;
@@ -21,11 +23,13 @@ import org.hibernate.annotations.JdbcTypeCode;
 import org.hibernate.type.SqlTypes;
 
 @Entity
-@Table(name = "tbl_payment", uniqueConstraints = {
-	@UniqueConstraint(name = "uk_payment_order_id", columnNames = {"order_id"}),
-	@UniqueConstraint(name = "uk_payment_merchant_pay_key", columnNames = {"merchant_pay_key"}),
-	@UniqueConstraint(name = "uk_payment_pg_payment_id", columnNames = {"pg_payment_id"})
-})
+@Table(
+	name = "tbl_payment",
+	uniqueConstraints = {
+		// NULL trick: APPROVE+SUCCEEDED 일 때만 orderId 값이 채워져 unique 제약이 동작함
+		@UniqueConstraint(name = "uk_payment_approved_order_key", columnNames = {"approved_order_key"})
+	}
+)
 @NoArgsConstructor(access = AccessLevel.PROTECTED)
 @Getter
 public class Payment extends BaseTimeEntity {
@@ -34,65 +38,139 @@ public class Payment extends BaseTimeEntity {
 	@GeneratedValue(strategy = GenerationType.IDENTITY)
 	private Long id;
 
-	@Column(name = "order_id", nullable = false)
-	private Long orderId;
+	@Column(nullable = false, length = 64)
+	private String merchantPayKey;
+
+	@Column(nullable = false, length = 64)
+	private String pgPaymentId;
 
 	@Column(nullable = false)
 	private int amount;
 
 	@Enumerated(EnumType.STRING)
 	@JdbcTypeCode(SqlTypes.VARCHAR)
-	@Column(nullable = false)
+	@Column(nullable = false, length = 32)
+	private PaymentProvider provider;
+
+	@Enumerated(EnumType.STRING)
+	@JdbcTypeCode(SqlTypes.VARCHAR)
+	@Column(nullable = false, length = 32)
+	private PaymentType type;
+
+	@Enumerated(EnumType.STRING)
+	@JdbcTypeCode(SqlTypes.VARCHAR)
+	@Column(nullable = false, length = 32)
 	private PaymentStatus status;
 
 	@Enumerated(EnumType.STRING)
 	@JdbcTypeCode(SqlTypes.VARCHAR)
-	@Column(nullable = false)
-	private PaymentProvider provider;
+	private PaymentFailCode failCode;
 
-	@Column(length = 64)
-	private String merchantPayKey;
+	private String failDetail;
 
-	@Column(length = 64)
-	private String pgPaymentId;
+	private LocalDateTime respondedAt;
 
-	private LocalDateTime approvedAt;
+	@Column(name = "order_id")
+	private Long orderId;
+
+	// NULL trick: APPROVE+SUCCEEDED 일 때만 orderId 값이 채워짐
+	@Column(name = "approved_order_key")
+	private Long approvedOrderKey;
 
 	@Builder(access = AccessLevel.PRIVATE)
 	private Payment(
-		Long orderId,
-		int amount,
-		PaymentStatus status,
-		PaymentProvider provider,
 		String merchantPayKey,
 		String pgPaymentId,
-		LocalDateTime approvedAt
+		int amount,
+		PaymentProvider provider,
+		PaymentType type,
+		PaymentStatus status,
+		PaymentFailCode failCode,
+		String failDetail,
+		LocalDateTime respondedAt,
+		Long orderId,
+		Long approvedOrderKey
 	) {
-		this.orderId = orderId;
-		this.amount = amount;
-		this.status = status;
-		this.provider = provider;
 		this.merchantPayKey = merchantPayKey;
 		this.pgPaymentId = pgPaymentId;
-		this.approvedAt = approvedAt;
+		this.amount = amount;
+		this.provider = provider;
+		this.type = type;
+		this.status = status;
+		this.failCode = failCode;
+		this.failDetail = failDetail;
+		this.respondedAt = respondedAt;
+		this.orderId = orderId;
+		this.approvedOrderKey = approvedOrderKey;
 	}
 
-	public static Payment createCompleted(
-		Long orderId,
-		int amount,
-		PaymentProvider provider,
+	public static Payment createRequested(PaymentReservation reservation, PaymentType type, String pgPaymentId) {
+		return Payment.builder()
+			.merchantPayKey(reservation.getMerchantPayKey())
+			.pgPaymentId(pgPaymentId)
+			.amount(reservation.getAmount())
+			.provider(reservation.getProvider())
+			.type(type)
+			.status(PaymentStatus.REQUESTED)
+			.orderId(reservation.getOrderId())
+			.build();
+	}
+
+	public static Payment createCancelRequested(
 		String merchantPayKey,
 		String pgPaymentId,
-		LocalDateTime approvedAt
+		int amount,
+		PaymentProvider provider
 	) {
 		return Payment.builder()
-			.orderId(orderId)
-			.amount(amount)
-			.status(PaymentStatus.COMPLETED)
-			.provider(provider)
 			.merchantPayKey(merchantPayKey)
 			.pgPaymentId(pgPaymentId)
-			.approvedAt(approvedAt)
+			.amount(amount)
+			.provider(provider)
+			.type(PaymentType.CANCEL)
+			.status(PaymentStatus.REQUESTED)
 			.build();
+	}
+
+	public void succeed(LocalDateTime respondedAt) {
+		if (this.status != PaymentStatus.REQUESTED) {
+			throw new PaymentException(PaymentErrorCode.PAYMENT_ATTEMPT_STATUS_TRANSITION_NOT_ALLOWED);
+		}
+		this.status = PaymentStatus.SUCCEEDED;
+		// APPROVE 타입은 approvedOrderKey 에 orderId 를 채워 uk_payment_approved_order_key 제약을 활성화
+		if (this.type == PaymentType.APPROVE) {
+			this.approvedOrderKey = this.orderId;
+		}
+		this.failCode = null;
+		this.failDetail = null;
+		this.respondedAt = respondedAt;
+	}
+
+	public void fail(PaymentFailCode failCode, String failDetail, LocalDateTime respondedAt) {
+		if (this.status != PaymentStatus.REQUESTED) {
+			throw new PaymentException(PaymentErrorCode.PAYMENT_ATTEMPT_STATUS_TRANSITION_NOT_ALLOWED);
+		}
+		this.status = PaymentStatus.FAILED;
+		this.failCode = failCode;
+		this.failDetail = failDetail;
+		this.respondedAt = respondedAt;
+	}
+
+	public void markUnknown(String failDetail, LocalDateTime respondedAt) {
+		if (this.status != PaymentStatus.REQUESTED) {
+			throw new PaymentException(PaymentErrorCode.PAYMENT_ATTEMPT_STATUS_TRANSITION_NOT_ALLOWED);
+		}
+		this.status = PaymentStatus.UNKNOWN;
+		this.failDetail = failDetail;
+		this.respondedAt = respondedAt;
+	}
+
+	public void verifyApprovedResponse(String responseMerchantPayKey, int responseTotalAmount) {
+		if (!this.merchantPayKey.equals(responseMerchantPayKey)) {
+			throw new PaymentException(PaymentErrorCode.PAYMENT_MERCHANT_KEY_MISMATCH);
+		}
+		if (this.amount != responseTotalAmount) {
+			throw new PaymentException(PaymentErrorCode.PAYMENT_AMOUNT_MISMATCH);
+		}
 	}
 }

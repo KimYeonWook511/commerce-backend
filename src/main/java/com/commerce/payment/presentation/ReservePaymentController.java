@@ -7,15 +7,15 @@ import org.springframework.web.bind.annotation.RequestBody;
 import org.springframework.web.bind.annotation.RequestMapping;
 import org.springframework.web.bind.annotation.RestController;
 
-import com.commerce.security.annotation.AuthenticatedMemberId;
 import com.commerce.common.ApiResponse;
-import com.commerce.payment.application.PaymentReadyService;
-import com.commerce.payment.application.command.PaymentReadyCommand;
-import com.commerce.payment.application.result.PaymentReadyResult;
+import com.commerce.payment.application.ReservePaymentService;
+import com.commerce.payment.application.command.ReservePaymentCommand;
+import com.commerce.payment.application.result.ReservePaymentResult;
 import com.commerce.payment.domain.PaymentProvider;
 import com.commerce.payment.exception.PaymentErrorCode;
 import com.commerce.payment.exception.PaymentException;
-import com.commerce.payment.presentation.request.PaymentReadyRequest;
+import com.commerce.payment.presentation.request.ReservePaymentRequest;
+import com.commerce.security.annotation.AuthenticatedMemberId;
 
 import jakarta.validation.Valid;
 import lombok.RequiredArgsConstructor;
@@ -23,21 +23,21 @@ import lombok.RequiredArgsConstructor;
 @RestController
 @RequiredArgsConstructor
 @RequestMapping("/payments")
-public class PaymentController {
+public class ReservePaymentController {
 
-	private final PaymentReadyService paymentReadyService;
+	private final ReservePaymentService reservePaymentService;
 
-	@PostMapping("/ready")
-	public ResponseEntity<ApiResponse<PaymentReadyResult>> readyPayment(
+	@PostMapping("/reserve")
+	public ResponseEntity<ApiResponse<ReservePaymentResult>> reserve(
 		@AuthenticatedMemberId Long memberId,
-		@Valid @RequestBody PaymentReadyRequest request
+		@Valid @RequestBody ReservePaymentRequest request
 	) {
-		PaymentReadyCommand command = PaymentReadyCommand.builder()
+		ReservePaymentCommand command = ReservePaymentCommand.builder()
 			.memberId(memberId)
 			.orderId(request.getOrderId())
 			.provider(parseProvider(request.getProvider()))
 			.build();
-		PaymentReadyResult result = paymentReadyService.readyPayment(command);
+		ReservePaymentResult result = reservePaymentService.reserve(command);
 		return ResponseEntity.status(HttpStatus.OK).body(ApiResponse.of(result));
 	}
 

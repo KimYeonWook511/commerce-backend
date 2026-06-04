@@ -1,5 +1,6 @@
 package com.commerce.payment.application;
 
+import java.time.LocalDateTime;
 import java.util.List;
 import java.util.Map;
 import java.util.function.Function;
@@ -9,13 +10,15 @@ import org.springframework.stereotype.Service;
 import org.springframework.transaction.annotation.Transactional;
 
 import com.commerce.common.util.UlidGenerator;
-import com.commerce.order.domain.repository.OrderRepository;
 import com.commerce.order.domain.Order;
+import com.commerce.order.domain.OrderItem;
+import com.commerce.order.domain.repository.OrderRepository;
 import com.commerce.order.exception.OrderErrorCode;
 import com.commerce.order.exception.OrderException;
-import com.commerce.order.domain.OrderItem;
-import com.commerce.payment.application.command.PaymentReadyCommand;
-import com.commerce.payment.application.result.PaymentReadyResult;
+import com.commerce.payment.application.command.ReservePaymentCommand;
+import com.commerce.payment.application.result.ReservePaymentResult;
+import com.commerce.payment.domain.PaymentReservation;
+import com.commerce.payment.domain.repository.PaymentReservationRepository;
 import com.commerce.payment.provider.PaymentProviderProperties;
 import com.commerce.payment.provider.PaymentProviderPropertiesResolver;
 import com.commerce.product.domain.Product;
@@ -30,26 +33,22 @@ import lombok.extern.slf4j.Slf4j;
 @Service
 @RequiredArgsConstructor
 @Transactional(readOnly = true)
-public class PaymentReadyService {
+public class ReservePaymentService {
 
 	private final OrderRepository orderRepository;
 	private final ProductRepository productRepository;
+	private final PaymentReservationRepository paymentReservationRepository;
 	private final PaymentProviderPropertiesResolver propertiesResolver;
 
+	private static final int RESERVATION_EXPIRE_MINUTES = 30;
+
 	@Transactional
-	public PaymentReadyResult readyPayment(PaymentReadyCommand command) {
+	public ReservePaymentResult reserve(ReservePaymentCommand command) {
 		Order order = orderRepository.findByIdAndMemberIdWithItems(command.getOrderId(), command.getMemberId())
 			.orElseThrow(() -> new OrderException(OrderErrorCode.ORDER_NOT_FOUND));
 
-		// 주문 상태 확인
 		order.checkPayable();
 
-		// 주문 결제 키 생성
-		if (order.getMerchantPayKey() == null) {
-			order.assignMerchantPayKey("PAY-" + UlidGenerator.generate());
-		}
-
-		// 결제 수단에 맞는 프로퍼티 가져오기
 		PaymentProviderProperties properties = propertiesResolver.resolve(command.getProvider());
 
 		List<OrderItem> items = order.getOrderItems();
@@ -60,19 +59,33 @@ public class PaymentReadyService {
 		Map<Long, Product> productsById = productRepository.findAllById(productIds).stream()
 			.collect(Collectors.toMap(Product::getId, Function.identity()));
 
-		log.info("결제 준비 완료 merchantPayKey={} orderId={} memberId={} amount={}",
-			order.getMerchantPayKey(), order.getId(), command.getMemberId(), totalPayAmount);
+		String merchantPayKey = "PAY-" + UlidGenerator.generate();
+		LocalDateTime expiresAt = LocalDateTime.now().plusMinutes(RESERVATION_EXPIRE_MINUTES);
 
-		return PaymentReadyResult.builder()
+		PaymentReservation reservation = paymentReservationRepository.save(
+			PaymentReservation.createReserved(
+				order.getId(),
+				command.getMemberId(),
+				totalPayAmount,
+				command.getProvider(),
+				merchantPayKey,
+				expiresAt
+			)
+		);
+
+		log.info("결제 예약 완료 merchantPayKey={} orderId={} memberId={} amount={}",
+			reservation.getMerchantPayKey(), order.getId(), command.getMemberId(), totalPayAmount);
+
+		return ReservePaymentResult.builder()
 			.clientId(properties.getClientId())
 			.chainId(properties.getChainId())
-			.merchantPayKey(order.getMerchantPayKey())
+			.merchantPayKey(reservation.getMerchantPayKey())
 			.productName(buildProductName(items, productsById))
 			.productCount(productCount)
 			.totalPayAmount(totalPayAmount)
 			.taxScopeAmount(totalPayAmount)
 			.taxExScopeAmount(0)
-			.returnUrl(buildReturnUrl(properties.getReturnUrl(), order.getMerchantPayKey()))
+			.returnUrl(buildReturnUrl(properties.getReturnUrl(), reservation.getMerchantPayKey()))
 			.build();
 	}
 

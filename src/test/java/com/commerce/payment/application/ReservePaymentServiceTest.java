@@ -2,6 +2,7 @@ package com.commerce.payment.application;
 
 import static org.assertj.core.api.Assertions.assertThat;
 import static org.assertj.core.api.Assertions.assertThatThrownBy;
+import static org.mockito.ArgumentMatchers.any;
 import static org.mockito.ArgumentMatchers.anyList;
 import static org.mockito.BDDMockito.given;
 
@@ -21,9 +22,11 @@ import com.commerce.order.domain.OrderStatus;
 import com.commerce.order.domain.repository.OrderRepository;
 import com.commerce.order.exception.OrderErrorCode;
 import com.commerce.order.exception.OrderException;
-import com.commerce.payment.application.command.PaymentReadyCommand;
-import com.commerce.payment.application.result.PaymentReadyResult;
+import com.commerce.payment.application.command.ReservePaymentCommand;
+import com.commerce.payment.application.result.ReservePaymentResult;
 import com.commerce.payment.domain.PaymentProvider;
+import com.commerce.payment.domain.PaymentReservation;
+import com.commerce.payment.domain.repository.PaymentReservationRepository;
 import com.commerce.payment.provider.PaymentProviderProperties;
 import com.commerce.payment.provider.PaymentProviderPropertiesResolver;
 import com.commerce.product.domain.Product;
@@ -31,7 +34,7 @@ import com.commerce.product.domain.ProductStatus;
 import com.commerce.product.domain.repository.ProductRepository;
 
 @ExtendWith(MockitoExtension.class)
-class PaymentReadyServiceTest {
+class ReservePaymentServiceTest {
 
 	@Mock
 	private OrderRepository orderRepository;
@@ -40,31 +43,36 @@ class PaymentReadyServiceTest {
 	private ProductRepository productRepository;
 
 	@Mock
+	private PaymentReservationRepository paymentReservationRepository;
+
+	@Mock
 	private PaymentProviderPropertiesResolver propertiesResolver;
 
 	@Mock
 	private PaymentProviderProperties providerProperties;
 
 	@InjectMocks
-	private PaymentReadyService paymentReadyService;
+	private ReservePaymentService reservePaymentService;
 
-	@DisplayName("결제 준비 요청을 하면 결제 준비 응답을 반환한다")
+	@DisplayName("결제 예약 요청을 하면 결제 예약 응답을 반환한다")
 	@Test
-	void readyPayment_whenOrderExists_returnReadyResponse() {
+	void reserve_whenOrderExists_returnReserveResponse() {
 		Product product = createProduct(10L, "product", 1500);
 		Order order = createOrder(product);
 		setOrderId(order, 1L);
 		given(orderRepository.findByIdAndMemberIdWithItems(1L, 1L)).willReturn(Optional.of(order));
 		given(productRepository.findAllById(anyList())).willReturn(List.of(product));
+		given(paymentReservationRepository.save(any(PaymentReservation.class)))
+			.willAnswer(invocation -> invocation.getArgument(0));
 		stubPaymentProperties();
 
-		PaymentReadyCommand command = PaymentReadyCommand.builder()
+		ReservePaymentCommand command = ReservePaymentCommand.builder()
 			.memberId(1L)
 			.orderId(1L)
 			.provider(PaymentProvider.NAVERPAY)
 			.build();
 
-		PaymentReadyResult result = paymentReadyService.readyPayment(command);
+		ReservePaymentResult result = reservePaymentService.reserve(command);
 
 		assertThat(result.getClientId()).isEqualTo("client-id");
 		assertThat(result.getChainId()).isEqualTo("chain-id");
@@ -73,18 +81,18 @@ class PaymentReadyServiceTest {
 		assertThat(result.getTotalPayAmount()).isEqualTo(1500);
 	}
 
-	@DisplayName("주문이 없으면 결제 준비에 실패한다")
+	@DisplayName("주문이 없으면 결제 예약에 실패한다")
 	@Test
-	void readyPayment_whenOrderNotFound_throwException() {
+	void reserve_whenOrderNotFound_throwException() {
 		given(orderRepository.findByIdAndMemberIdWithItems(1L, 1L)).willReturn(Optional.empty());
 
-		PaymentReadyCommand command = PaymentReadyCommand.builder()
+		ReservePaymentCommand command = ReservePaymentCommand.builder()
 			.memberId(1L)
 			.orderId(1L)
 			.provider(PaymentProvider.NAVERPAY)
 			.build();
 
-		assertThatThrownBy(() -> paymentReadyService.readyPayment(command))
+		assertThatThrownBy(() -> reservePaymentService.reserve(command))
 			.isInstanceOf(OrderException.class)
 			.satisfies(exception -> {
 				OrderException orderException = (OrderException)exception;
@@ -92,22 +100,22 @@ class PaymentReadyServiceTest {
 			});
 	}
 
-	@DisplayName("결제를 진행할 수 없는 주문이면 결제 준비에 실패한다")
+	@DisplayName("결제를 진행할 수 없는 주문이면 결제 예약에 실패한다")
 	@Test
-	void readyPayment_whenOrderIsNotPayable_throwException() {
+	void reserve_whenOrderIsNotPayable_throwException() {
 		Product product = createProduct(10L, "product", 1500);
 		Order order = createOrder(product);
 		setOrderId(order, 1L);
 		ReflectionTestUtils.setField(order, "status", OrderStatus.PAID);
 		given(orderRepository.findByIdAndMemberIdWithItems(1L, 1L)).willReturn(Optional.of(order));
 
-		PaymentReadyCommand command = PaymentReadyCommand.builder()
+		ReservePaymentCommand command = ReservePaymentCommand.builder()
 			.memberId(1L)
 			.orderId(1L)
 			.provider(PaymentProvider.NAVERPAY)
 			.build();
 
-		assertThatThrownBy(() -> paymentReadyService.readyPayment(command))
+		assertThatThrownBy(() -> reservePaymentService.reserve(command))
 			.isInstanceOf(OrderException.class)
 			.satisfies(exception -> {
 				OrderException orderException = (OrderException)exception;

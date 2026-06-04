@@ -3,14 +3,16 @@ package com.commerce.payment.application;
 import java.time.LocalDateTime;
 
 import org.springframework.stereotype.Service;
-import org.springframework.transaction.annotation.Propagation;
 import org.springframework.transaction.annotation.Transactional;
 
-import com.commerce.payment.domain.PaymentAttempt;
-import com.commerce.payment.domain.PaymentAttemptFailCode;
-import com.commerce.payment.domain.PaymentAttemptStatus;
+import com.commerce.payment.domain.Payment;
+import com.commerce.payment.domain.PaymentFailCode;
 import com.commerce.payment.domain.PaymentProvider;
-import com.commerce.payment.domain.repository.PaymentAttemptRepository;
+import com.commerce.payment.domain.PaymentReservation;
+import com.commerce.payment.domain.PaymentStatus;
+import com.commerce.payment.domain.PaymentType;
+import com.commerce.payment.domain.repository.PaymentRepository;
+import com.commerce.payment.domain.repository.PaymentReservationRepository;
 import com.commerce.payment.exception.PaymentErrorCode;
 import com.commerce.payment.exception.PaymentException;
 
@@ -22,42 +24,24 @@ import lombok.extern.slf4j.Slf4j;
 @RequiredArgsConstructor
 public class PaymentApprovalAttemptService {
 
-	private final PaymentAttemptRepository paymentAttemptRepository;
+	private final PaymentRepository paymentRepository;
+	private final PaymentReservationRepository paymentReservationRepository;
 
 	/**
-	 * - 해당 메소드는 트랜잭션을 열지 않음 (Repository에 있는 @Transactional 사용)
+	 * reservation.markUsed() + Payment 생성을 한 트랜잭션으로 묶어 원자성을 보장한다 (ADR-8).
+	 * 재시도 시 attempt가 이미 존재하면 markUsed를 건너뛰고 기존 attempt를 반환한다.
 	 */
-	@Transactional(propagation = Propagation.NOT_SUPPORTED)
-	public PaymentAttempt getOrCreate(
-		String merchantPayKey,
-		PaymentProvider provider,
-		String pgPaymentId,
-		int amount
-	) {
-		return paymentAttemptRepository.findApproveAttempt(merchantPayKey, provider, pgPaymentId)
-			.map(existing -> {
-				if (existing.getAmount() != amount) {
-					log.warn("PaymentAttempt amount mismatch - key={}, type=APPROVE, existingAmount={}, requested={}",
-						merchantPayKey, existing.getAmount(), amount);
-					throw new PaymentException(PaymentErrorCode.PAYMENT_ATTEMPT_AMOUNT_MISMATCH);
-				}
-				return existing;
-			})
-			.orElseGet(() -> paymentAttemptRepository.save(
-				PaymentAttempt.createApproveRequested(merchantPayKey, pgPaymentId, amount, provider)
-			));
-	}
-
 	@Transactional
-	public void succeed(
-		String merchantPayKey,
-		PaymentProvider provider,
-		String pgPaymentId,
-		LocalDateTime respondedAt
-	) {
-		PaymentAttempt attempt = paymentAttemptRepository.findApproveAttempt(merchantPayKey, provider, pgPaymentId)
-			.orElseThrow(() -> new PaymentException(PaymentErrorCode.PAYMENT_ATTEMPT_NOT_FOUND));
-		attempt.succeed(respondedAt);
+	public Payment create(PaymentReservation reservation, String pgPaymentId) {
+		return paymentRepository.findApproveAttempt(
+				reservation.getMerchantPayKey(), reservation.getProvider(), pgPaymentId)
+			.orElseGet(() -> {
+				reservation.markUsed();
+				paymentReservationRepository.save(reservation);
+				return paymentRepository.save(
+					Payment.createRequested(reservation, PaymentType.APPROVE, pgPaymentId)
+				);
+			});
 	}
 
 	@Transactional
@@ -65,11 +49,11 @@ public class PaymentApprovalAttemptService {
 		String merchantPayKey,
 		PaymentProvider provider,
 		String pgPaymentId,
-		PaymentAttemptFailCode failCode,
+		PaymentFailCode failCode,
 		String failDetail,
 		LocalDateTime respondedAt
 	) {
-		PaymentAttempt attempt = paymentAttemptRepository.findApproveAttempt(merchantPayKey, provider, pgPaymentId)
+		Payment attempt = paymentRepository.findApproveAttempt(merchantPayKey, provider, pgPaymentId)
 			.orElseThrow(() -> new PaymentException(PaymentErrorCode.PAYMENT_ATTEMPT_NOT_FOUND));
 		attempt.fail(failCode, failDetail, respondedAt);
 	}
@@ -83,21 +67,21 @@ public class PaymentApprovalAttemptService {
 		String merchantPayKey,
 		PaymentProvider provider,
 		String pgPaymentId,
-		PaymentAttemptFailCode failCode,
+		PaymentFailCode failCode,
 		String failDetail,
 		LocalDateTime respondedAt
 	) {
-		PaymentAttempt attempt = paymentAttemptRepository.findApproveAttempt(merchantPayKey, provider, pgPaymentId)
+		Payment attempt = paymentRepository.findApproveAttempt(merchantPayKey, provider, pgPaymentId)
 			.orElse(null);
 		if (attempt == null) {
 			log.warn(
-				"PaymentAttempt not found, skipping fail mark: merchantPayKey={}, provider={}, pgPaymentId={}",
+				"Payment not found, skipping fail mark: merchantPayKey={}, provider={}, pgPaymentId={}",
 				merchantPayKey, provider, pgPaymentId);
 			return;
 		}
-		if (attempt.getStatus() != PaymentAttemptStatus.REQUESTED) {
+		if (attempt.getStatus() != PaymentStatus.REQUESTED) {
 			log.warn(
-				"PaymentAttempt not in REQUESTED state, skipping fail mark: merchantPayKey={}, pgPaymentId={}, status={}",
+				"Payment not in REQUESTED state, skipping fail mark: merchantPayKey={}, pgPaymentId={}, status={}",
 				merchantPayKey, pgPaymentId, attempt.getStatus());
 			return;
 		}

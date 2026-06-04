@@ -5,10 +5,9 @@ import lombok.RequiredArgsConstructor;
 
 @Getter
 @RequiredArgsConstructor
-public enum PaymentAttemptStatus {
-	REQUESTED("요청"),
-	SUCCEEDED("성공"),
-	FAILED("실패");
+public enum PaymentReservationStatus {
+	RESERVED("예약"),
+	USED("사용 완료");
 
 	private final String description;
 }

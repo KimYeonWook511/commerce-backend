@@ -121,44 +121,6 @@ class OrderRepositoryJpaAdapterTest {
 		assertThat(results).isEmpty();
 	}
 
-	@DisplayName("merchantPayKey와 회원 ID로 주문을 조회한다")
-	@Test
-	void findByMerchantPayKeyAndMemberId_whenOrderExists_returnOrder() {
-		// given
-		Member member = memberRepository.save(createMember());
-		Product product = productRepository.save(createProduct());
-		Order order = createInitOrder(member, product);
-		order.assignMerchantPayKey("PAY-REPO-1");
-		Order saved = orderRepository.save(order);
-		entityManager.flush();
-		entityManager.clear();
-
-		// when
-		Order result = orderRepository.findByMerchantPayKeyAndMemberId("PAY-REPO-1", member.getId()).orElseThrow();
-
-		// then
-		assertThat(result.getId()).isEqualTo(saved.getId());
-	}
-
-	@DisplayName("merchantPayKey로 주문을 조회한다")
-	@Test
-	void findByMerchantPayKey_whenOrderExists_returnOrder() {
-		// given
-		Member member = memberRepository.save(createMember());
-		Product product = productRepository.save(createProduct());
-		Order order = createInitOrder(member, product);
-		order.assignMerchantPayKey("PAY-REPO-2");
-		Order saved = orderRepository.save(order);
-		entityManager.flush();
-		entityManager.clear();
-
-		// when
-		Order result = orderRepository.findByMerchantPayKey("PAY-REPO-2").orElseThrow();
-
-		// then
-		assertThat(result.getId()).isEqualTo(saved.getId());
-	}
-
 	private Order createInitOrder(Member member, Product product) {
 		Order order = Order.create(member.getId());
 		order.addOrderItem(product.getId(), 1, product.getPrice());

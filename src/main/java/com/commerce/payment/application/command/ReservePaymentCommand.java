@@ -6,14 +6,14 @@ import lombok.Builder;
 import lombok.Getter;
 
 @Getter
-public class PaymentReadyCommand {
+public class ReservePaymentCommand {
 
 	private Long memberId;
 	private Long orderId;
 	private PaymentProvider provider;
 
 	@Builder
-	private PaymentReadyCommand(Long memberId, Long orderId, PaymentProvider provider) {
+	private ReservePaymentCommand(Long memberId, Long orderId, PaymentProvider provider) {
 		this.memberId = memberId;
 		this.orderId = orderId;
 		this.provider = provider;

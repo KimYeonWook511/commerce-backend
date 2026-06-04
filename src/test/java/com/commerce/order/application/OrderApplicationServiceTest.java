@@ -72,9 +72,6 @@ class OrderApplicationServiceTest {
 	private OrderCancelService orderCancelService;
 
 	@InjectMocks
-	private OrderQueryService orderQueryService;
-
-	@InjectMocks
 	private OrderConcurrencyService orderConcurrencyService;
 
 	private final String idempotencyKey = "idempotency-key";
@@ -212,36 +209,6 @@ class OrderApplicationServiceTest {
 			.isInstanceOf(OrderException.class)
 			.satisfies(exception -> {
 				OrderException orderException = (OrderException) exception;
-				assertThat(orderException.getErrorCode()).isEqualTo(OrderErrorCode.ORDER_NOT_FOUND);
-			});
-	}
-
-	@DisplayName("merchantPayKey와 회원 ID가 일치하면 주문을 조회한다")
-	@Test
-	void getOrderByMerchantPayKeyAndMemberId_whenExists_returnOrder() {
-		// given
-		Order order = Order.create(1L);
-		ReflectionTestUtils.setField(order, "merchantPayKey", "PAY-1");
-		given(orderRepository.findByMerchantPayKeyAndMemberId("PAY-1", 1L)).willReturn(Optional.of(order));
-
-		// when
-		Order result = orderQueryService.getOrderByMerchantPayKeyAndMemberId("PAY-1", 1L);
-
-		// then
-		assertThat(result).isEqualTo(order);
-	}
-
-	@DisplayName("merchantPayKey와 회원 ID에 해당하는 주문이 없으면 예외를 던진다")
-	@Test
-	void getOrderByMerchantPayKeyAndMemberId_whenNotFound_throwException() {
-		// given
-		given(orderRepository.findByMerchantPayKeyAndMemberId("PAY-1", 1L)).willReturn(Optional.empty());
-
-		// when & then
-		assertThatThrownBy(() -> orderQueryService.getOrderByMerchantPayKeyAndMemberId("PAY-1", 1L))
-			.isInstanceOf(OrderException.class)
-			.satisfies(exception -> {
-				OrderException orderException = (OrderException)exception;
 				assertThat(orderException.getErrorCode()).isEqualTo(OrderErrorCode.ORDER_NOT_FOUND);
 			});
 	}

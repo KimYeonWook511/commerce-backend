@@ -1,6 +1,7 @@
 package com.commerce.support;
 
 public enum CleanupOrder {
+	PAYMENT_RESERVATION(5),
 	PAYMENT(10),
 	OUTBOX(20),
 	CART(25),
