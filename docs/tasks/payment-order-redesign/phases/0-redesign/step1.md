@@ -60,7 +60,7 @@
   - `boolean isReusableFor(Long memberId, PaymentProvider provider, int amount, LocalDateTime now)`:
     - `status == RESERVED && expiresAt.isAfter(now) && this.memberId.equals(memberId) && this.provider == provider && this.amount == amount`
   - `void markUsed()`:
-    - 선조건: `status == RESERVED` (위반 시 `PaymentException(PAYMENT_RESERVATION_NOT_REUSABLE)` 또는 적절 코드)
+    - 선조건: `status == RESERVED` (위반 시 `PaymentException(PAYMENT_RESERVATION_STATUS_TRANSITION_NOT_ALLOWED)`)
     - **status=USED + reservedKey=null *같은 메서드 호출 안에서* set** (NULL 트릭 캡슐화 핵심)
 
 ### 2. 신규 `PaymentReservationStatus` enum

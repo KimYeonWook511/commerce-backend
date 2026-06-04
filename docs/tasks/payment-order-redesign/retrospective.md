@@ -2,7 +2,9 @@
 
 ## 1. 작업 요약
 
-결제 도메인의 책임 누수를 정리하고 이중결제·따닥·UNKNOWN 의 방어선을 DB 제약으로 끌어올렸다. 핵심은 결제창 준비물(`PaymentReservation`)과 PG 에 실제로 보낸 사건(`Payment`)을 두 테이블로 분리하고, `Order`가 알고 있던 `merchantPayKey` 발급/저장 책임을 `PaymentReservation`으로 옮긴 것이다. MySQL InnoDB의 partial unique index 미지원 한계는 NULL 트릭(`uk_payment_approved_order_key`, `uk_payment_reservation_reserved_key`)으로 우회했다. reserve 흐름은 Reservation 생성/재사용(만료는 마킹 없이 필터로만), approve 흐름은 Reservation 역조회 + USED 멱등 흡수 + `RESERVED → USED` 한 번 전이 + `Payment(APPROVE)` 신규 행 구조로 재배선했다. UNKNOWN 상태는 마킹과 차단까지만 이번 task에 포함하고 해소는 후속으로 분리했다. 외부 API 이름도 의미에 맞게 `/payments/ready` → `/payments/reserve`로 정정했다.
+결제 도메인의 책임 누수를 정리하고 이중결제·따닥·UNKNOWN 의 방어선을 DB 제약으로 끌어올렸다. 핵심은 결제창 준비물(`PaymentReservation`)과 PG 에 실제로 보낸 사건(`Payment`)을 두 테이블로 분리하고, `Order`가 알고 있던 `merchantPayKey` 발급/저장 책임을 `PaymentReservation`으로 옮긴 것이다. MySQL InnoDB의 partial unique index 미지원 한계는 NULL 트릭(`uk_payment_approved_order_key`, `uk_payment_reservation_reserved_key`)으로 우회했다. reserve 흐름은 Reservation 생성/재사용(만료/무효 예약은 `markExpired`로 reservedKey를 회수), approve 흐름은 Reservation 역조회 + USED 멱등 흡수 + `RESERVED → USED` 한 번 전이 + `Payment(APPROVE)` 신규 행 구조로 재배선했다. UNKNOWN 상태는 마킹과 차단까지만 이번 task에 포함하고 해소는 후속으로 분리했다. 외부 API 이름도 의미에 맞게 `/payments/ready` → `/payments/reserve`로 정정했다.
+
+코드 리뷰에서 드러난 결함들도 후속 수정으로 닫았다 — (1) 만료 예약의 reservedKey 미회수로 같은 주문 재예약이 영구 차단되던 것, (2) USED 예약의 미완료 승인(PROCESSING/중단)이 redirect 재시도에서 404로 영구 차단되던 것, (3) PG 네트워크 오류가 UNKNOWN이 아닌 FAILED로 분류돼 이중결제가 열려 있던 것. 세 건의 배경은 아래 발견 섹션에 정리한다.
 
 ---
 
@@ -16,7 +18,7 @@
 | ADR-2 | `merchantPayKey` 발급/저장 책임을 Order → PaymentReservation으로 이동. Order는 결제 식별자 모름. |
 | ADR-3 | 이중결제·따닥 최종 방어선을 NULL 트릭 unique 두 개로 구현. `succeed()`/`markUsed()` 안에서 두 필드 동시 set 강제. |
 | ADR-4 | 결제 완료 판단 = `EXISTS(성공 APPROVE)`. 마지막 행 기반 판단 금지. |
-| ADR-5 | reserve 흐름은 Reservation 생성/재사용. 만료는 EXPIRED 마킹 없이 `expires_at` 필터로만. 만료 후 늦은 redirect도 승인 차단 안 함. |
+| ADR-5 | reserve 흐름은 Reservation 생성/재사용. 만료/무효 예약은 reserve 진입 시 `markExpired`로 reservedKey 회수(EXPIRED). 만료 후 늦은 redirect도 승인 차단 안 함. |
 | ADR-6 | UNKNOWN은 마킹·차단까지만 이번 task. 해소(`PaymentReconciliationService`)는 후속 분리. |
 | ADR-7 | 운영 데이터 없음 가정으로 backfill 없이 단순 schema 변경. |
 | ADR-8 | 외부 PG 호출은 트랜잭션 밖, payment + order DB 쓰기는 한 트랜잭션 안. |
@@ -42,9 +44,19 @@ B안으로 전환하자 `tbl_payment`의 `pg_payment_id`가 NOT NULL로 돌아�
 
 `RESERVED → USED` 한 번만 허용함으로써 *재시도 = 새 Reservation* 정신이 명확해졌다. FAILED 후 재시도가 *같은 merchantPayKey*로 들어오는 모호함이 사라졌다. 같은 키로 redirect가 또 오면 USED Reservation에서 기존 결제 결과를 멱등 응답으로 돌려주는 흐름이 자연스럽게 도출된다.
 
-### EXPIRED 상태 제거가 박제 자동 복구를 가능하게 한다
+### 만료 회수는 필터만으로 부족했다 — 성급한 EXPIRED 제거가 정합성 구멍을 만들었다
 
-만료 마킹을 두면 "누가 언제 마킹할지"의 박제 위험이 새로 생긴다. `expires_at` 필터만으로 충분하다 — *유효 RESERVED = `status=RESERVED ∧ expires_at>now`*. 판단 로직이 단순해지고 별도 마킹 단계가 사라지며 박제 자동 복구가 이루어진다.
+초기 B안은 EXPIRED 상태를 제거하고 `expires_at` 필터만으로 박제를 자동 복구하려 했다 — "만료 마킹을 두면 누가 언제 마킹할지의 박제 위험이 새로 생긴다"는 판단이었다. 그러나 코드 리뷰에서 결함이 드러났다. 만료된 RESERVED 행은 status가 여전히 RESERVED라 `reserved_key`(`"{orderId}:{provider}"`)를 계속 점유한다. `expires_at` 필터는 *재사용*만 막을 뿐, *새 발급*은 같은 `reserved_key`로 `uk_payment_reservation_reserved_key` 위반을 일으켜 같은 주문이 영구 재예약 불가가 된다. "필터로 충분하다"가 *재사용* 한쪽만 본 결론이었던 것이다.
+
+해법으로 EXPIRED를 재도입하되 *reserve 진입 시 lazy 회수*(`markExpired`: status=EXPIRED + reservedKey=null) 방식을 택했다. reserve를 호출하는 요청이 자기가 쓸 자리를 정리하므로, 초기에 우려했던 "누가 언제 마킹할지"의 별도 배치/스케줄러 박제 위험은 생기지 않는다. amount 변경 같은 무효화도 같은 경로로 회수된다. 단순화를 위해 상태를 성급히 제거한 것이 정합성 구멍을 만든 사례다 — *제거의 영향은 모든 경로(재사용 + 재발급)에서 따져야 한다.*
+
+### USED 멱등 흡수는 "완료된 결제"만 다뤄 미완료를 가뒀다
+
+USED Reservation에 redirect가 다시 오면 기존 결제 결과를 멱등 응답하도록 설계했으나, 초기 구현은 *SUCCEEDED Payment*만 찾아 반환하고 없으면 `PAYMENT_NOT_FOUND`(404)를 던졌다. PG가 PROCESSING을 반환했거나 호출 직전 중단되어 attempt가 REQUESTED로 남은 경우, redirect 재시도가 404로 막혀 결제가 영구 진행 불가가 된다. `findApproveAttempt`로 기존 시도를 찾아 `processApproveAttempt`(REQUESTED→PG 재확인 / SUCCEEDED→멱등 / FAILED→실제 사유)로 재처리하도록 고쳤다. "멱등 = 완료된 것 재반환"이라는 가정이 *진행 중* 상태를 빠뜨린 사례다.
+
+### 결과 불명 오류를 FAILED로 분류하면 이중결제가 열린다
+
+PG 승인 호출의 timeout/네트워크 오류는 `NaverPayClient`가 `NaverPayException(NETWORK)`으로 감싸고, `NaverPayGatewayImpl`이 이를 *FAILED*로 반환하고 있었다(그 아래 `catch (Exception)`의 UNKNOWN 분기는 도달 불가능한 죽은 코드였다). timeout은 *PG가 승인을 처리했는지 불명*인데 FAILED로 기록하면 `existsUnknownByOrderId` 차단이 걸리지 않아 재결제가 허용되고, PG가 이미 승인했다면 *이중결제*가 발생한다. 결과 불명 계열(NETWORK / SERVER_ERROR / INVALID_RESPONSE)을 UNKNOWN으로, 명확한 거절(CLIENT_ERROR / AUTHENTICATION)만 FAILED로 분류하도록 정정했다. 예외를 "실패"로 뭉뚱그리면 *결과 모름*과 *처리 안 됨*이 섞여 정합성이 깨진다 — UNKNOWN이라는 세 번째 상태가 필요한 이유다. (PG 예외 분류의 후속 정비는 #206으로 분리했다.)
 
 ### 만료 후 늦은 redirect를 막으면 오히려 더 위험하다
 
@@ -78,7 +90,7 @@ task 문서 초안에서 `uq_` prefix를 썼지만 기존 V1~V4 마이그레이�
 | 부분취소 도입 시 클라이언트 `idempotencyKey` 컬럼 | 미도입 | 부분취소 도입 시점. 자연 멱등키 부족해지는 시점 |
 | `PaymentSummary` 집계 테이블 | 안 만듦 | 부분취소 도입 + 잔액 SUM 부담 커질 때 |
 | PG 응답 원문 보관 테이블 (`PgTransactionLog`) | 로그 대체 중 | 분쟁/CS 증가 시 |
-| 만료된 Reservation 물리 정리 batch | 안 만듦 | 테이블 비대 시점 |
+| USED/EXPIRED Reservation 물리 정리 batch | 안 만듦 | 테이블 비대 시점 |
 | ArchUnit으로 `Payment.approvedOrderKey` / `PaymentReservation.reservedKey` 직접 set 가시성 강제 | 안 함 | 도메인 캡슐화 정책 위반 사고 발생 시 |
 | workspace `docs/api-contract.md`의 `/payments/reserve` 반영 | Frontend 세션 책임 | 본 PR 머지 후 Frontend 세션이 갱신 |
 
