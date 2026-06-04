@@ -82,7 +82,7 @@ Port 인터페이스 설계 원칙:
 | stock | `StockInventoryService`, `AdminStockService`, `StockConcurrencyService` |
 | order | `OrderCreateService`, `OrderCancelService`, `OrderQueryService`, `OrderExpirationService`, `OrderConcurrencyService` |
 | cart | `AddCartItemService`, `GetMyCartService`, `UpdateCartItemQuantityService`, `RemoveCartItemService` |
-| payment | `PaymentReadyService`, `PaymentApprovalService`, `PaymentApprovalAttemptService`, `PaymentCancellationAttemptService`, `PaymentApprovalCompensationService` |
+| payment | `ReservePaymentService`, `PaymentApprovalService`, `PaymentApprovalAttemptService`, `PaymentCancellationAttemptService`, `PaymentApprovalCompensationService` |
 | naverpay | `NaverPayApprovalService` |
 | outbox/stock | `StockRestoreOutboxCreateService`, `StockRestoreOutboxRelayService`, `StockRestoreOutboxConsumeService` |
 
@@ -109,16 +109,28 @@ CartController → RemoveCartItemService → CartItemRepository (deleteByMemberI
 # 주문 생성
 OrderController → OrderCreateService
   → StockInventoryService (재고 차감)
-  → PaymentReadyService (결제 준비)
+  → ReservePaymentService (결제 준비 — PaymentReservation 생성/재사용)
   → CartItemRemover (cart.infrastructure.CartItemRemoverAdapter, 주문된 productId만 cart에서 제거)
+
+# 결제 reserve (구 ready)
+ReservePaymentController → ReservePaymentService
+  → OrderRepository (주문 확인 + checkPayable)
+  → PaymentRepository (UNKNOWN 차단 검사)
+  → PaymentReservationRepository (재사용 가능 Reservation 탐색 또는 신규 RESERVED INSERT)
+  → uk_payment_reservation_reserved_key 가 동시 따닥 차단
 
 # 결제 승인 (네이버페이)
 NaverPayController → NaverPayApprovalService
-  → NaverPayGateway (PG 호출, 응답 코드 매핑)
-  → PaymentApprovalService (결제 완료 반영, 보상 가능 여부 판단)
-  → PaymentApprovalAttemptService (승인 시도 이력 기록)
+  → PaymentReservationRepository (merchantPayKey 로 Reservation 역조회 — Order 안 거침)
+  → memberId 검증 (Reservation.memberId vs SecurityContext)
+  → PaymentRepository (UNKNOWN 차단 검사)
+  → USED Reservation 발견 시 멱등 응답 200 반환
+  → [트랜잭션 안] reservation.markUsed() + Payment(APPROVE, REQUESTED) INSERT
+  → [트랜잭션 밖] NaverPayGateway (PG approve API 호출)
+  → PaymentApprovalAttemptService (승인 시도 상태 반영)
+  → PaymentApprovalService.hasCompletedPayment (보상 가능 여부 판단)
   → PaymentCancellationAttemptService (취소 시도 이력 기록, 보상 흐름)
-  → PaymentApprovalCompensationService (보상 dispatcher — catch 분기 시, this::pgCancel 콜백 주입)
+  → PaymentApprovalCompensationService (보상 dispatcher — compensateDuplicateApproval 포함, this::pgCancel 콜백 주입)
 
 # 주문 만료 배치
 OrderExpirationBatchConfig (Spring Batch)
@@ -141,7 +153,7 @@ OrderExpirationBatchConfig (Spring Batch)
 - `stock` 도메인은 상품별 현재 재고, 주문 경로의 재고 차감·복구, 관리자 초기 재고 생성, 관리자 수동 조정, 재고 변경 이력을 담당한다. `Product : Stock = 1:1` 관계를 유지하며, `Stock` 은 `productId: Long` 으로 Product 를 ID 참조한다(ADR-020). `StockHistory` 는 Stock 과 별도 aggregate 로 `stockId: Long` 으로 Stock 을 ID 참조한다. 응답 조립 시 application 계층이 `StockHistoryResult.from(history, productId)` 로 path 컨텍스트를 외부 주입한다. 후속 트랙(`order-jpa-association-decouple`, `payment-jpa-association-decouple`)에서 Order·Payment aggregate 에도 동일 원칙이 적용됐다. DB FK 일괄 제거는 `cross-aggregate-fk-cleanup` 트랙에서 완료됐다.
 - `order` 도메인은 주문 생성·취소·만료를 담당한다. 주문 생성은 멱등 키로 중복 요청을 방어한다. 만료 처리는 Spring Batch로 스케줄링한다. 주문 생성 트랜잭션 내에서 `CartItemRemover` port를 통해 주문된 항목만 cart에서 제거한다. `Order` 는 `memberId: Long` 으로 Member 를, `OrderItem` 은 `productId: Long` 으로 Product 를 ID 참조한다(ADR-020). same-aggregate 관계(`Order.orderItems`, `OrderItem.order`)는 객체 참조를 유지한다. cross-aggregate fetch join 은 제거하고 사용처별로 batch composition(PaymentReady — `productRepository.findAllById` 1회) 또는 컬럼 직접 사용(cancel/expiration)으로 대체한다. 세부 결정은 `docs/tasks/order-jpa-association-decouple/adr.md` 참조. 후속 트랙: `payment-jpa-association-decouple`. DB FK 일괄 제거는 `cross-aggregate-fk-cleanup` 트랙에서 완료됐다.
 - `cart` 도메인은 회원의 장바구니 항목 추가(UPSERT)·조회(최신 가격 재조립, 구매 불가 마킹)·수량 변경·삭제를 담당한다. 다른 aggregate(Member, Product)는 `Long` ID로만 참조한다(ADR-020). 주문-cart 연동은 `order.application.port.CartItemRemover` 인터페이스를 `cart.infrastructure.CartItemRemoverAdapter`가 구현하는 방식으로 의존 방향을 보존한다.
-- `payment` core는 결제 준비·완료 반영·시도 이력 관리를 담당한다. `naverpay`는 provider 서브패키지로, PG 호출과 내부 결제 상태 반영을 분리한다. `Payment` 는 `orderId: Long` 으로 Order 를 ID 참조한다(ADR-020). Payment ↔ Order 는 별 aggregate 다 (cascade / orphanRemoval 없음, lifecycle 결합 약함). `PaymentAttempt` 는 `merchantPayKey` / `pgPaymentId` / `provider` 식별자 기반이며 다른 entity 와 객체 참조가 없다. Payment 도메인은 fetch join 사용처가 없으므로 fetch join 대체 원칙은 `docs/tasks/order-jpa-association-decouple/adr.md` 에서 단일 관리한다. 세부 결정은 `docs/tasks/payment-jpa-association-decouple/adr.md` 참조. ADR-020 후속 트랙 series (Stock / Order / Payment / FK cleanup) 완전 종료. `cross-aggregate-fk-cleanup` 트랙에서 cross-aggregate FK 5건을 Flyway V4 migration 으로 일괄 제거해 코드 + DB schema 정합성이 회복됐다. 운영 DB 의 FK 제거 적용은 별도 결정.
+- `payment` core는 결제 예약(reserve)·승인·시도 이력 관리를 담당한다. `naverpay`는 provider 서브패키지로, PG 호출과 내부 결제 상태 반영을 분리한다. 도메인은 두 엔티티로 분리됐다 (ADR-026): `PaymentReservation` (결제창 준비물, `RESERVED → USED` 전이) + `Payment` (PG 사건 append-only, type ∈ `{APPROVE, CANCEL}`). Order 는 결제 식별자를 모른다 — merchantPayKey 발급·저장 책임이 `PaymentReservation` 으로 이동했다. `Payment` 는 `orderId: Long` 으로 Order 를, `merchantPayKey` 로 `PaymentReservation` 을 값 참조한다. `PaymentApprovalService.hasCompletedPayment` 는 *성공 APPROVE 행 존재 (EXISTS)* 기반 완료 판단이다 (ADR-014, ADR-026). `PaymentApprovalCompensationService` 는 `compensateDuplicateApproval` 포함 보상 정책을 소유한다 (ADR-015, ADR-026). UNKNOWN 마킹 — PG 호출 결과 불명 시 `Payment.markUnknown` 흔적 보존, UNKNOWN 행 있는 주문은 reserve/approve 차단 (`PAYMENT_RESULT_PENDING` 409). ADR-020 후속 트랙 series (Stock / Order / Payment / FK cleanup) 완전 종료. `cross-aggregate-fk-cleanup` 트랙에서 cross-aggregate FK 5건을 Flyway V4 migration 으로 일괄 제거해 코드 + DB schema 정합성이 회복됐다. 운영 DB 의 FK 제거 적용은 별도 결정. 결제 도메인 재설계 세부 결정은 `docs/tasks/payment-order-redesign/` 참조 (ADR-026).
 - `outbox` 도메인은 재고 복구 이벤트를 Outbox 패턴으로 처리한다. 이벤트 생성, Kafka 릴레이, 소비 책임을 별도 서비스로 분리한다.
 
 ---
@@ -170,7 +182,7 @@ log.info("결제 승인 완료 merchantPayKey={} provider={} pgPaymentId={} orde
 | Order | `OrderCreateService`, `OrderCreateProcessor`, `OrderCancelService`, `OrderConcurrencyService`, `OrderExpirationService` |
 | Cart | `AddCartItemService`, `UpdateCartItemQuantityService`, `RemoveCartItemService` |
 | Outbox | `StockRestoreOutboxCreateService` |
-| Payment | `PaymentApprovalService`, `PaymentReadyService` |
+| Payment | `PaymentApprovalService`, `ReservePaymentService` |
 | Stock | `StockInventoryService`, `AdminStockService` |
 | Auth | `AuthLoginService`, `AuthSignUpService` |
 | Member | `MemberRegistrationService` |

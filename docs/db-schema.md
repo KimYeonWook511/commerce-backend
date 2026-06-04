@@ -11,6 +11,7 @@ DB 스키마 변경은 Flyway 마이그레이션 스크립트로 관리한다 (A
 - 적용된 V 스크립트는 수정하지 말고 새 V로 보정한다 (Flyway checksum).
 - **ADR-020 후속 트랙 FK 정비**: `V4__drop_cross_aggregate_fk_constraints.sql` 으로 cross-aggregate FK 5건을 일괄 제거했다 (2026-06-03). UNIQUE 제약 (`uk_stock_product_id`, `uk_payment_order_id`) 과 same-aggregate FK (`fk_order_item_order_id`) 는 유지한다. 세부 결정은 `docs/tasks/cross-aggregate-fk-cleanup/adr.md` 참조.
 - **결제 시점 가격 snapshot**: `V5__add_order_item_unit_price.sql` 으로 `tbl_order_item.unit_price INT NOT NULL` 컬럼을 신설했다 (2026-06-03). 기존 row 는 `tbl_product.price` JOIN backfill 후 NOT NULL 전환. 세부 결정은 `docs/tasks/order-item-price-snapshot/adr.md` 참조.
+- **결제 도메인 재설계**: `V6__redesign_payment_to_reservation_and_attempt.sql` 으로 (1) 기존 `tbl_payment` (성공 1:1) DROP, (2) `tbl_payment_attempt` → `tbl_payment` RENAME + 컬럼 정리 (order_id 신규, approved_order_key 신규, pg_payment_id NOT NULL 복원), (3) `tbl_payment_reservation` CREATE, (4) `tbl_order.merchant_pay_key` + `uk_order_merchant_pay_key` DROP. 세부 결정은 `docs/tasks/payment-order-redesign/db-schema.md` 참조 (ADR-026).
 
 ## 네이밍 규칙
 
@@ -21,9 +22,9 @@ DB 스키마 변경은 Flyway 마이그레이션 스크립트로 관리한다 (A
 
 예시:
 - `tbl_member`
-- `tbl_payment_attempt`
+- `tbl_payment_reservation`
 - `idx_outbox_event_type_status_next_retry_id`
-- `uk_payment_attempt_merchant_pay_key_provider_pg_payment_id_type`
+- `uk_payment_reservation_reserved_key`
 
 ## 테이블 요약
 
@@ -93,17 +94,15 @@ COLUMNS:
 - `member_id`
 - `total_price`
 - `status`
-- `merchant_pay_key (VARCHAR(64), UNIQUE)`
 - `idempotency_key (NULL 허용)`
 
 INDEX:
-- `merchant_pay_key (UNIQUE)`
 - `uk_order_member_idempotency (member_id, idempotency_key) UNIQUE`
 
 비고:
 - `member_id` 는 FK 제약을 두지 않는다. `fk_order_member_id` 가 V4 migration 으로 제거됐다 (ADR-020 후속 트랙).
 - `idempotency_key`는 기존 데이터 및 멱등성 없는 경로와의 호환을 위해 NULL 허용. MySQL에서 NULL 값은 unique 제약 대상에서 제외된다.
-- `merchant_pay_key` 길이는 `tbl_payment`, `tbl_payment_attempt`와 동일하게 64로 맞춘다 (cross-entity 일관성, ADR-023 참조).
+- `merchant_pay_key` 컬럼과 `uk_order_merchant_pay_key` 는 V6 migration 으로 제거됐다 (ADR-026). merchantPayKey 책임은 `tbl_payment_reservation` 으로 이동했다. Order 는 결제 식별자를 모른다.
 
 ### `tbl_order_item`
 
@@ -143,47 +142,66 @@ INDEX:
 - 신규 항목 동시 insert race window의 UNIQUE 충돌은 ADR-011 find-first 패턴 + 안전망 500으로 위임한다. retry catch에는 포함하지 않는다.
 - `quantity`는 도메인 invariant(`MIN=1, MAX=99`)와 DTO Bean Validation(`@Min(1) @Max(99)`)이 이중 가드한다.
 
-### `tbl_payment`
+### `tbl_payment_reservation` (신규 — V6)
+
+결제창 준비물. 서버가 reserve 단계에서 merchantPayKey 를 발급해 저장한다. redirect 역조회 entry point 역할. `RESERVED → USED` 한 번 전이만 허용.
 
 COLUMNS:
 - `id (PK)`
-- `order_id (UNIQUE)`
-- `amount`
-- `status`
-- `provider`
-- `merchant_pay_key (VARCHAR(64), UNIQUE)`
-- `pg_payment_id (VARCHAR(64), UNIQUE)`
-- `approved_at`
+- `order_id BIGINT NOT NULL` — 소속 Order PK 값. FK 제약 없음 (참조용 값)
+- `member_id BIGINT NOT NULL` — 소유 회원. approve 진입 시 검증용
+- `provider VARCHAR(32) NOT NULL` — PG (`NAVERPAY` 등)
+- `merchant_pay_key VARCHAR(64) NOT NULL` — 서버 발급. redirect 역조회 키
+- `amount INT NOT NULL` — 결제 예정 금액 (승인 시 PG 응답 대조용)
+- `status VARCHAR(32) NOT NULL` — `RESERVED` / `USED`
+- `expires_at DATETIME(6) NOT NULL` — 만료 시각 (재사용/박제 판단용)
+- `reserved_key VARCHAR(96) NULL` — RESERVED 일 때만 `"{order_id}:{provider}"`, USED 면 NULL (NULL 트릭)
+- `created_at DATETIME(6) NOT NULL`
+- `updated_at DATETIME(6) NOT NULL`
 
 INDEX:
-- `order_id (UNIQUE)`
-- `merchant_pay_key (UNIQUE)`
-- `pg_payment_id (UNIQUE)`
+- `uk_payment_reservation_merchant_pay_key (merchant_pay_key) UNIQUE` — redirect 역조회 키 unique 보장
+- `uk_payment_reservation_reserved_key (reserved_key) UNIQUE` — RESERVED 중 (주문, 수단) 1 개 보장. reserve 따닥 차단 (NULL 트릭)
+- `idx_reservation_order (order_id)` — UNKNOWN 차단 검사 / 주문별 조회
 
 비고:
-- `order_id` 는 FK 제약을 두지 않는다. `fk_payment_order_id` 가 V4 migration 으로 제거됐다 (ADR-020 후속 트랙). `uk_payment_order_id` UNIQUE 제약은 Payment 1:1 Order 도메인 invariant 로 유지된다.
-- `merchant_pay_key`, `pg_payment_id` 길이는 `tbl_payment_attempt`와 동일하게 64로 맞춘다 (cross-entity 일관성, ADR-023 참조).
+- **NULL 트릭 캡슐화**: `reserved_key` 값 set 은 *반드시* `status=RESERVED` 와 같은 INSERT 안에서. status 가 USED 로 가면 *같은 UPDATE* 에서 NULL 로 비움. 도메인 메서드 (`createReserved`, `markUsed`) 안에 캡슐화. 우회 setter 금지
+- **상태 전이**: `RESERVED → USED` 한 번 전이만 허용. EXPIRED 별도 마킹 없음 — 만료는 `expires_at` 필터로만 판단 (박제 자동 복구)
+- **amount 불변**: 결제 예정 금액이 바뀌면 새 Reservation 발급. 기존 행 amount UPDATE 금지
+- **FK**: `order_id`, `member_id` 는 FK 제약 없음 (참조용 값)
 
-### `tbl_payment_attempt`
+### `tbl_payment` (V6 이후 — 구 `tbl_payment_attempt` rename)
+
+> 기존 `tbl_payment` (성공 결제 1:1 단위) 는 V6 migration 으로 DROP 됐다. 이름을 차지하는 것은 구 `tbl_payment_attempt` 이며 의미는 *PG 에 보낸 실제 요청 사건* (append-only).
+
+PG 에 실제로 보낸 요청 사건. type ∈ `{APPROVE, CANCEL}`. append-only.
 
 COLUMNS:
 - `id (PK)`
-- `merchant_pay_key`
-- `pg_payment_id`
-- `amount`
-- `provider`
-- `type`
-- `status`
-- `fail_code`
-- `fail_detail`
-- `responded_at`
+- `order_id BIGINT NOT NULL` — 소속 Order PK 값. FK 제약 없음 (참조용 값)
+- `merchant_pay_key VARCHAR(64) NOT NULL` — 어느 Reservation 에서 비롯됐는지 (값으로 연결)
+- `pg_payment_id VARCHAR(64) NOT NULL` — PG 가 발급한 외부 결제 ID. NOT NULL (RESERVE 가 빠져 항상 존재)
+- `amount INT NOT NULL` — "그 시도가 움직인 금액"
+- `provider VARCHAR(32) NOT NULL`
+- `type VARCHAR(32) NOT NULL` — `APPROVE` / `CANCEL`
+- `status VARCHAR(32) NOT NULL` — `REQUESTED` / `SUCCEEDED` / `FAILED` / `UNKNOWN`
+- `fail_code VARCHAR(32) NULL`
+- `fail_detail VARCHAR(255) NULL`
+- `approved_order_key BIGINT NULL` — APPROVE+SUCCEEDED 일 때만 `order_id`, 그 외 NULL (NULL 트릭)
+- `responded_at DATETIME(6) NULL`
+- `created_at DATETIME(6) NOT NULL`
+- `updated_at DATETIME(6) NOT NULL`
 
 INDEX:
-- `uk_payment_attempt_merchant_pay_key_provider_pg_payment_id_type (merchant_pay_key, provider, pg_payment_id, type) UNIQUE`
+- `uk_payment_approved_order_key (approved_order_key) UNIQUE` — 주문당 성공 APPROVE 1 개 보장. 이중결제 최종 방어선 (NULL 트릭)
+- `uk_payment_merchant_pay_key_provider_pg_payment_id_type (merchant_pay_key, provider, pg_payment_id, type) UNIQUE` — 같은 시도 중복 기록 차단
+- `idx_payment_order (order_id)` — UNKNOWN 차단 검사 / 주문별 조회
 
 비고:
-- unique key 대상 4개 컬럼(`merchant_pay_key`, `provider`, `pg_payment_id`, `type`)은 `@Column(length=...)`을 명시한다 (각각 64/32/64/32). utf8mb4 + InnoDB unique key 한도 3072 bytes 안에 들어오도록 산정. 상세는 ADR-023 및 `docs/tasks/payment-attempt-unique-key-length/adr.md` 참조.
-- `pg_payment_id`는 PG가 발급한 외부 결제 ID로, `tbl_payment.pg_payment_id`와 같은 의미다. entity별 표현을 통일하기 위해 컬럼명을 `payment_id`에서 변경했다 (issue #194).
+- **NULL 트릭 캡슐화**: `approved_order_key` 값 set 은 *반드시* `status=SUCCEEDED AND type=APPROVE` 와 같은 UPDATE 안에서. 그 외 모든 상태/타입에선 NULL. 도메인 메서드 (`succeed`) 안에 캡슐화. 우회 setter 금지
+- **FK**: `order_id` 는 FK 제약 없음 (참조용 값)
+- **append-only**: Payment 행은 한번 INSERT 후 상태 전이 (UPDATE) 만 일어남. 행 삭제 금지
+- unique key 대상 컬럼(`merchant_pay_key` 64, `provider` 32, `pg_payment_id` 64, `type` 32)은 `@Column(length=...)`을 명시한다. utf8mb4 + InnoDB unique key 한도 3072 bytes 안에 들어오도록 산정 (ADR-023 참조)
 
 ### `tbl_outbox_event`
 
@@ -225,4 +243,8 @@ INDEX:
 - `tbl_product` 1:1 `tbl_stock`
 - `tbl_stock` 1:N `tbl_stock_history`
 - `tbl_product` 1:N `tbl_order_item`
-- `tbl_order` 1:1 `tbl_payment`
+- `tbl_order` 1:N `tbl_payment_reservation` (orderId 값 참조, FK 제약 없음)
+- `tbl_payment_reservation` 1:N `tbl_payment` (merchantPayKey 값 참조, FK 제약 없음)
+- `tbl_order` 1:N `tbl_payment` (orderId 값 참조, FK 제약 없음)
+
+> **V6 이전 관계**: `tbl_order` 1:1 `tbl_payment` (성공 결제 1:1 모델) 는 ADR-026 결제 도메인 재설계로 폐기됐다.
