@@ -62,10 +62,10 @@ class PaymentApprovalCompensationServiceTest {
 	@Test
 	void compensateAmountMismatch_whenCompensationRequiredAndSuccess_callsSucceed() {
 		Payment attempt = createApproveAttempt("PAY-1", "pg-id", 1000);
-		Payment cancelAttempt = Payment.createCancelRequested("PAY-1", "pg-id", 2000, PaymentProvider.NAVERPAY);
+		Payment cancelAttempt = Payment.createCancelRequested(1L, "PAY-1", "pg-id", 2000, PaymentProvider.NAVERPAY);
 
 		given(paymentApprovalService.hasCompletedPayment("PAY-1")).willReturn(false);
-		given(paymentCancellationAttemptService.getOrCreate(eq("PAY-1"), eq(PaymentProvider.NAVERPAY), eq("pg-id"), eq(2000)))
+		given(paymentCancellationAttemptService.getOrCreate(eq(1L), eq("PAY-1"), eq(PaymentProvider.NAVERPAY), eq("pg-id"), eq(2000)))
 			.willReturn(cancelAttempt);
 		given(pgCanceller.cancel(eq(cancelAttempt), any())).willReturn(CancelOutcome.success());
 
@@ -80,10 +80,10 @@ class PaymentApprovalCompensationServiceTest {
 	@Test
 	void compensateAmountMismatch_whenCompensationRequiredAndProcessing_noOp() {
 		Payment attempt = createApproveAttempt("PAY-1", "pg-id", 1000);
-		Payment cancelAttempt = Payment.createCancelRequested("PAY-1", "pg-id", 2000, PaymentProvider.NAVERPAY);
+		Payment cancelAttempt = Payment.createCancelRequested(1L, "PAY-1", "pg-id", 2000, PaymentProvider.NAVERPAY);
 
 		given(paymentApprovalService.hasCompletedPayment("PAY-1")).willReturn(false);
-		given(paymentCancellationAttemptService.getOrCreate(eq("PAY-1"), eq(PaymentProvider.NAVERPAY), eq("pg-id"), eq(2000)))
+		given(paymentCancellationAttemptService.getOrCreate(eq(1L), eq("PAY-1"), eq(PaymentProvider.NAVERPAY), eq("pg-id"), eq(2000)))
 			.willReturn(cancelAttempt);
 		given(pgCanceller.cancel(eq(cancelAttempt), any())).willReturn(CancelOutcome.processing());
 
@@ -97,10 +97,10 @@ class PaymentApprovalCompensationServiceTest {
 	@Test
 	void compensateAmountMismatch_whenCompensationRequiredAndFailed_callsFail() {
 		Payment attempt = createApproveAttempt("PAY-1", "pg-id", 1000);
-		Payment cancelAttempt = Payment.createCancelRequested("PAY-1", "pg-id", 2000, PaymentProvider.NAVERPAY);
+		Payment cancelAttempt = Payment.createCancelRequested(1L, "PAY-1", "pg-id", 2000, PaymentProvider.NAVERPAY);
 
 		given(paymentApprovalService.hasCompletedPayment("PAY-1")).willReturn(false);
-		given(paymentCancellationAttemptService.getOrCreate(eq("PAY-1"), eq(PaymentProvider.NAVERPAY), eq("pg-id"), eq(2000)))
+		given(paymentCancellationAttemptService.getOrCreate(eq(1L), eq("PAY-1"), eq(PaymentProvider.NAVERPAY), eq("pg-id"), eq(2000)))
 			.willReturn(cancelAttempt);
 		given(pgCanceller.cancel(eq(cancelAttempt), any()))
 			.willReturn(CancelOutcome.failed(PaymentFailCode.PG_REQUEST_REJECTED, "reject"));
@@ -123,18 +123,18 @@ class PaymentApprovalCompensationServiceTest {
 		compensationService.compensateAmountMismatch(attempt, 2000, pgCanceller);
 
 		then(pgCanceller).should(never()).cancel(any(), any());
-		then(paymentCancellationAttemptService).should(never()).getOrCreate(any(), any(), any(), anyInt());
+		then(paymentCancellationAttemptService).should(never()).getOrCreate(any(), any(), any(), any(), anyInt());
 	}
 
 	@DisplayName("amountMismatch 보상: cancelAttempt 상태가 REQUESTED가 아니면 pgCanceller.cancel 미호출")
 	@Test
 	void compensateAmountMismatch_whenCancelAttemptNotRequested_skipPgCancel() {
 		Payment attempt = createApproveAttempt("PAY-1", "pg-id", 1000);
-		Payment cancelAttempt = Payment.createCancelRequested("PAY-1", "pg-id", 2000, PaymentProvider.NAVERPAY);
+		Payment cancelAttempt = Payment.createCancelRequested(1L, "PAY-1", "pg-id", 2000, PaymentProvider.NAVERPAY);
 		cancelAttempt.succeed(LocalDateTime.now());
 
 		given(paymentApprovalService.hasCompletedPayment("PAY-1")).willReturn(false);
-		given(paymentCancellationAttemptService.getOrCreate(eq("PAY-1"), eq(PaymentProvider.NAVERPAY), eq("pg-id"), eq(2000)))
+		given(paymentCancellationAttemptService.getOrCreate(eq(1L), eq("PAY-1"), eq(PaymentProvider.NAVERPAY), eq("pg-id"), eq(2000)))
 			.willReturn(cancelAttempt);
 
 		compensationService.compensateAmountMismatch(attempt, 2000, pgCanceller);
@@ -146,10 +146,10 @@ class PaymentApprovalCompensationServiceTest {
 	@Test
 	void compensateAmountMismatch_whenPgCancelThrowsPaymentException_swallow() {
 		Payment attempt = createApproveAttempt("PAY-1", "pg-id", 1000);
-		Payment cancelAttempt = Payment.createCancelRequested("PAY-1", "pg-id", 2000, PaymentProvider.NAVERPAY);
+		Payment cancelAttempt = Payment.createCancelRequested(1L, "PAY-1", "pg-id", 2000, PaymentProvider.NAVERPAY);
 
 		given(paymentApprovalService.hasCompletedPayment("PAY-1")).willReturn(false);
-		given(paymentCancellationAttemptService.getOrCreate(eq("PAY-1"), eq(PaymentProvider.NAVERPAY), eq("pg-id"), eq(2000)))
+		given(paymentCancellationAttemptService.getOrCreate(eq(1L), eq("PAY-1"), eq(PaymentProvider.NAVERPAY), eq("pg-id"), eq(2000)))
 			.willReturn(cancelAttempt);
 		given(pgCanceller.cancel(any(), any()))
 			.willThrow(new PaymentException(PaymentErrorCode.PAYMENT_PG_NETWORK_ERROR));
@@ -161,11 +161,11 @@ class PaymentApprovalCompensationServiceTest {
 	@Test
 	void compensateDuplicatePayment_whenCompensationRequiredAndSuccess_callsSucceed() {
 		Payment attempt = createApproveAttempt("PAY-1", "pg-id", 1000);
-		Payment cancelAttempt = Payment.createCancelRequested("PAY-1", "pg-id", 1000, PaymentProvider.NAVERPAY);
+		Payment cancelAttempt = Payment.createCancelRequested(1L, "PAY-1", "pg-id", 1000, PaymentProvider.NAVERPAY);
 		Exception ex = new PaymentException(PaymentErrorCode.PAYMENT_DUPLICATE);
 
 		given(paymentApprovalService.hasCompletedPayment("PAY-1")).willReturn(false);
-		given(paymentCancellationAttemptService.getOrCreate(eq("PAY-1"), eq(PaymentProvider.NAVERPAY), eq("pg-id"), eq(1000)))
+		given(paymentCancellationAttemptService.getOrCreate(eq(1L), eq("PAY-1"), eq(PaymentProvider.NAVERPAY), eq("pg-id"), eq(1000)))
 			.willReturn(cancelAttempt);
 		given(pgCanceller.cancel(eq(cancelAttempt), any())).willReturn(CancelOutcome.success());
 
@@ -193,11 +193,11 @@ class PaymentApprovalCompensationServiceTest {
 	@Test
 	void compensateDuplicatePayment_whenCompensationRequiredAndFailed_callsFail() {
 		Payment attempt = createApproveAttempt("PAY-1", "pg-id", 1000);
-		Payment cancelAttempt = Payment.createCancelRequested("PAY-1", "pg-id", 1000, PaymentProvider.NAVERPAY);
+		Payment cancelAttempt = Payment.createCancelRequested(1L, "PAY-1", "pg-id", 1000, PaymentProvider.NAVERPAY);
 		Exception ex = new PaymentException(PaymentErrorCode.PAYMENT_DUPLICATE);
 
 		given(paymentApprovalService.hasCompletedPayment("PAY-1")).willReturn(false);
-		given(paymentCancellationAttemptService.getOrCreate(eq("PAY-1"), eq(PaymentProvider.NAVERPAY), eq("pg-id"), eq(1000)))
+		given(paymentCancellationAttemptService.getOrCreate(eq(1L), eq("PAY-1"), eq(PaymentProvider.NAVERPAY), eq("pg-id"), eq(1000)))
 			.willReturn(cancelAttempt);
 		given(pgCanceller.cancel(eq(cancelAttempt), any()))
 			.willReturn(CancelOutcome.failed(PaymentFailCode.CANCEL_PROCESS_FAILED, "취소 실패"));
@@ -214,11 +214,11 @@ class PaymentApprovalCompensationServiceTest {
 	@Test
 	void compensateUnexpected_whenCompensationRequiredAndSuccess_callsSucceed() {
 		Payment attempt = createApproveAttempt("PAY-1", "pg-id", 1000);
-		Payment cancelAttempt = Payment.createCancelRequested("PAY-1", "pg-id", 1000, PaymentProvider.NAVERPAY);
+		Payment cancelAttempt = Payment.createCancelRequested(1L, "PAY-1", "pg-id", 1000, PaymentProvider.NAVERPAY);
 		Exception ex = new RuntimeException("unexpected");
 
 		given(paymentApprovalService.hasCompletedPayment("PAY-1")).willReturn(false);
-		given(paymentCancellationAttemptService.getOrCreate(eq("PAY-1"), eq(PaymentProvider.NAVERPAY), eq("pg-id"), eq(1000)))
+		given(paymentCancellationAttemptService.getOrCreate(eq(1L), eq("PAY-1"), eq(PaymentProvider.NAVERPAY), eq("pg-id"), eq(1000)))
 			.willReturn(cancelAttempt);
 		given(pgCanceller.cancel(eq(cancelAttempt), any())).willReturn(CancelOutcome.success());
 
@@ -246,11 +246,11 @@ class PaymentApprovalCompensationServiceTest {
 	@Test
 	void compensateUnexpected_whenCompensationRequiredAndFailed_callsFail() {
 		Payment attempt = createApproveAttempt("PAY-1", "pg-id", 1000);
-		Payment cancelAttempt = Payment.createCancelRequested("PAY-1", "pg-id", 1000, PaymentProvider.NAVERPAY);
+		Payment cancelAttempt = Payment.createCancelRequested(1L, "PAY-1", "pg-id", 1000, PaymentProvider.NAVERPAY);
 		Exception ex = new RuntimeException("unexpected");
 
 		given(paymentApprovalService.hasCompletedPayment("PAY-1")).willReturn(false);
-		given(paymentCancellationAttemptService.getOrCreate(eq("PAY-1"), eq(PaymentProvider.NAVERPAY), eq("pg-id"), eq(1000)))
+		given(paymentCancellationAttemptService.getOrCreate(eq(1L), eq("PAY-1"), eq(PaymentProvider.NAVERPAY), eq("pg-id"), eq(1000)))
 			.willReturn(cancelAttempt);
 		given(pgCanceller.cancel(eq(cancelAttempt), any()))
 			.willReturn(CancelOutcome.failed(PaymentFailCode.PG_SERVER_ERROR, "서버 오류"));
@@ -267,9 +267,9 @@ class PaymentApprovalCompensationServiceTest {
 	@Test
 	void compensateDuplicateApproval_whenPgCancelSucceeds_callsSucceedAndFailIfRequested() {
 		Payment attempt = createApproveAttempt("PAY-1", "pg-id", 1000);
-		Payment cancelAttempt = Payment.createCancelRequested("PAY-1", "pg-id", 1000, PaymentProvider.NAVERPAY);
+		Payment cancelAttempt = Payment.createCancelRequested(1L, "PAY-1", "pg-id", 1000, PaymentProvider.NAVERPAY);
 
-		given(paymentCancellationAttemptService.getOrCreate(eq("PAY-1"), eq(PaymentProvider.NAVERPAY), eq("pg-id"), eq(1000)))
+		given(paymentCancellationAttemptService.getOrCreate(eq(1L), eq("PAY-1"), eq(PaymentProvider.NAVERPAY), eq("pg-id"), eq(1000)))
 			.willReturn(cancelAttempt);
 		given(pgCanceller.cancel(eq(cancelAttempt), any())).willReturn(CancelOutcome.success());
 
@@ -288,9 +288,9 @@ class PaymentApprovalCompensationServiceTest {
 	@Test
 	void compensateDuplicateApproval_whenPgCancelProcessing_noSucceedOrFail() {
 		Payment attempt = createApproveAttempt("PAY-1", "pg-id", 1000);
-		Payment cancelAttempt = Payment.createCancelRequested("PAY-1", "pg-id", 1000, PaymentProvider.NAVERPAY);
+		Payment cancelAttempt = Payment.createCancelRequested(1L, "PAY-1", "pg-id", 1000, PaymentProvider.NAVERPAY);
 
-		given(paymentCancellationAttemptService.getOrCreate(eq("PAY-1"), eq(PaymentProvider.NAVERPAY), eq("pg-id"), eq(1000)))
+		given(paymentCancellationAttemptService.getOrCreate(eq(1L), eq("PAY-1"), eq(PaymentProvider.NAVERPAY), eq("pg-id"), eq(1000)))
 			.willReturn(cancelAttempt);
 		given(pgCanceller.cancel(eq(cancelAttempt), any())).willReturn(CancelOutcome.processing());
 
@@ -308,9 +308,9 @@ class PaymentApprovalCompensationServiceTest {
 	@Test
 	void compensateDuplicateApproval_whenPgCancelFails_callsFailAndFailIfRequested() {
 		Payment attempt = createApproveAttempt("PAY-1", "pg-id", 1000);
-		Payment cancelAttempt = Payment.createCancelRequested("PAY-1", "pg-id", 1000, PaymentProvider.NAVERPAY);
+		Payment cancelAttempt = Payment.createCancelRequested(1L, "PAY-1", "pg-id", 1000, PaymentProvider.NAVERPAY);
 
-		given(paymentCancellationAttemptService.getOrCreate(eq("PAY-1"), eq(PaymentProvider.NAVERPAY), eq("pg-id"), eq(1000)))
+		given(paymentCancellationAttemptService.getOrCreate(eq(1L), eq("PAY-1"), eq(PaymentProvider.NAVERPAY), eq("pg-id"), eq(1000)))
 			.willReturn(cancelAttempt);
 		given(pgCanceller.cancel(eq(cancelAttempt), any()))
 			.willReturn(CancelOutcome.failed(PaymentFailCode.CANCEL_PROCESS_FAILED, "취소 실패"));

@@ -28,6 +28,7 @@ public class PaymentCancellationAttemptService {
 	 */
 	@Transactional(propagation = Propagation.NOT_SUPPORTED)
 	public Payment getOrCreate(
+		Long orderId,
 		String merchantPayKey,
 		PaymentProvider provider,
 		String pgPaymentId,
@@ -43,7 +44,7 @@ public class PaymentCancellationAttemptService {
 				return existing;
 			})
 			.orElseGet(() -> paymentRepository.save(
-				Payment.createCancelRequested(merchantPayKey, pgPaymentId, cancelAmount, provider)
+				Payment.createCancelRequested(orderId, merchantPayKey, pgPaymentId, cancelAmount, provider)
 			));
 	}
 

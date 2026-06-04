@@ -75,11 +75,12 @@ class PaymentCancellationAttemptServiceConcurrencyTest {
 		String merchantPayKey = "PAY-ATTEMPT-CON-2";
 		String pgPaymentId = "pg-attempt-con-2";
 		paymentCancellationAttemptService.getOrCreate(
-			merchantPayKey, PaymentProvider.NAVERPAY, pgPaymentId, 1000);
+			1L, merchantPayKey, PaymentProvider.NAVERPAY, pgPaymentId, 1000);
 		ConcurrentLinkedQueue<Throwable> errors = new ConcurrentLinkedQueue<>();
 
 		// when: 20개 스레드가 동일한 amount로 동시 재요청
 		runConcurrent(20, () -> paymentCancellationAttemptService.getOrCreate(
+			1L,
 			merchantPayKey,
 			PaymentProvider.NAVERPAY,
 			pgPaymentId,
@@ -99,13 +100,13 @@ class PaymentCancellationAttemptServiceConcurrencyTest {
 		String merchantPayKey = "PAY-ATTEMPT-MISMATCH-2";
 		String pgPaymentId = "pg-attempt-mismatch-2";
 		paymentCancellationAttemptService.getOrCreate(
-			merchantPayKey, PaymentProvider.NAVERPAY, pgPaymentId, 1000);
+			1L, merchantPayKey, PaymentProvider.NAVERPAY, pgPaymentId, 1000);
 
 		ConcurrentLinkedQueue<Throwable> errors = new ConcurrentLinkedQueue<>();
 
 		// when: 20개 스레드가 amount=2000으로 동시 재요청 (mismatch)
 		runConcurrent(20, () -> paymentCancellationAttemptService.getOrCreate(
-			merchantPayKey, PaymentProvider.NAVERPAY, pgPaymentId, 2000), errors);
+			1L, merchantPayKey, PaymentProvider.NAVERPAY, pgPaymentId, 2000), errors);
 
 		// then: attempt는 1건, 재요청 20개 모두 mismatch 예외
 		assertThat(paymentPersistence.countPayments(merchantPayKey, pgPaymentId, PaymentType.CANCEL))

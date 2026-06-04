@@ -29,12 +29,12 @@ class PaymentPostProcessTargetPolicyTest {
 		setCreatedAt(approveRequestedAttempt, now.minusMinutes(4));
 
 		Payment cancelRequestedAttempt = Payment.createCancelRequested(
-			"PAY-1", "pg-1", 1000, PaymentProvider.NAVERPAY
+			1L, "PAY-1", "pg-1", 1000, PaymentProvider.NAVERPAY
 		);
 		setCreatedAt(cancelRequestedAttempt, now.minusMinutes(4));
 
 		Payment failedCancelAttempt = Payment.createCancelRequested(
-			"PAY-1", "pg-1", 1000, PaymentProvider.NAVERPAY
+			1L, "PAY-1", "pg-1", 1000, PaymentProvider.NAVERPAY
 		);
 		failedCancelAttempt.fail(PaymentFailCode.CANCEL_PROCESS_FAILED, "PRE_CANCEL_NOT_COMPLETE",
 			now.minusMinutes(1));
@@ -207,7 +207,7 @@ class PaymentPostProcessTargetPolicyTest {
 	void resolvePostProcessTarget_whenCancelAttemptSucceeded_returnNone() {
 		LocalDateTime now = LocalDateTime.now();
 		Payment cancelAttempt = Payment.createCancelRequested(
-			"PAY-1", "pg-1", 1000, PaymentProvider.NAVERPAY
+			1L, "PAY-1", "pg-1", 1000, PaymentProvider.NAVERPAY
 		);
 		cancelAttempt.succeed(now.minusMinutes(1));
 		setCreatedAt(cancelAttempt, now.minusMinutes(10));
@@ -239,7 +239,7 @@ class PaymentPostProcessTargetPolicyTest {
 	void resolvePostProcessTarget_whenCancelAttemptRequested_returnCancelRequestedTarget() {
 		LocalDateTime now = LocalDateTime.now();
 		Payment cancelAttempt = Payment.createCancelRequested(
-			"PAY-1", "pg-1", 1000, PaymentProvider.NAVERPAY
+			1L, "PAY-1", "pg-1", 1000, PaymentProvider.NAVERPAY
 		);
 		setCreatedAt(cancelAttempt, now.minusMinutes(5));
 
@@ -253,7 +253,7 @@ class PaymentPostProcessTargetPolicyTest {
 		LocalDateTime now = LocalDateTime.now();
 		Payment approveAttempt = failedApproveAttempt(PaymentFailCode.AMOUNT_MISMATCH, "AMOUNT_NOT_MATCH");
 		Payment cancelAttempt = Payment.createCancelRequested(
-			"PAY-1", "pg-1", 1000, PaymentProvider.NAVERPAY
+			1L, "PAY-1", "pg-1", 1000, PaymentProvider.NAVERPAY
 		);
 		setCreatedAt(cancelAttempt, now.minusMinutes(10));
 
@@ -267,7 +267,7 @@ class PaymentPostProcessTargetPolicyTest {
 		LocalDateTime now = LocalDateTime.now();
 		Payment approveAttempt = failedApproveAttempt(PaymentFailCode.AMOUNT_MISMATCH, "AMOUNT_NOT_MATCH");
 		Payment cancelAttempt = Payment.createCancelRequested(
-			"PAY-1", "pg-1", 1000, PaymentProvider.NAVERPAY
+			1L, "PAY-1", "pg-1", 1000, PaymentProvider.NAVERPAY
 		);
 		setCreatedAt(cancelAttempt, now.minusMinutes(10));
 
@@ -283,7 +283,7 @@ class PaymentPostProcessTargetPolicyTest {
 		LocalDateTime now = LocalDateTime.now();
 		Payment approveAttempt = failedApproveAttempt(PaymentFailCode.DUPLICATE_PAYMENT, "DUPLICATE_PAYMENT");
 		Payment cancelAttempt = Payment.createCancelRequested(
-			"PAY-1", "pg-1", 1000, PaymentProvider.NAVERPAY
+			1L, "PAY-1", "pg-1", 1000, PaymentProvider.NAVERPAY
 		);
 		setCreatedAt(cancelAttempt, now.minusMinutes(10));
 
@@ -300,7 +300,7 @@ class PaymentPostProcessTargetPolicyTest {
 			"MERCHANT_PAY_KEY_MISMATCH"
 		);
 		Payment cancelAttempt = Payment.createCancelRequested(
-			"PAY-1", "pg-1", 1000, PaymentProvider.NAVERPAY
+			1L, "PAY-1", "pg-1", 1000, PaymentProvider.NAVERPAY
 		);
 		setCreatedAt(cancelAttempt, now.minusMinutes(10));
 
@@ -374,7 +374,7 @@ class PaymentPostProcessTargetPolicyTest {
 	private Payment failedCancelAttempt(PaymentFailCode failCode, String failDetail) {
 		LocalDateTime now = LocalDateTime.now();
 		Payment attempt = Payment.createCancelRequested(
-			"PAY-1", "pg-1", 1000, PaymentProvider.NAVERPAY
+			1L, "PAY-1", "pg-1", 1000, PaymentProvider.NAVERPAY
 		);
 		attempt.fail(failCode, failDetail, now.minusMinutes(1));
 		setCreatedAt(attempt, now.minusMinutes(10));

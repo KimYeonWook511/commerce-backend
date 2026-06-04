@@ -117,12 +117,14 @@ public class Payment extends BaseTimeEntity {
 	}
 
 	public static Payment createCancelRequested(
+		Long orderId,
 		String merchantPayKey,
 		String pgPaymentId,
 		int amount,
 		PaymentProvider provider
 	) {
 		return Payment.builder()
+			.orderId(orderId)
 			.merchantPayKey(merchantPayKey)
 			.pgPaymentId(pgPaymentId)
 			.amount(amount)

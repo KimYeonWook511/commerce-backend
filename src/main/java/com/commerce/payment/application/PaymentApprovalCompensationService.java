@@ -54,6 +54,7 @@ public class PaymentApprovalCompensationService {
 
 		LocalDateTime now = LocalDateTime.now();
 		Payment cancelAttempt = paymentCancellationAttemptService.getOrCreate(
+			approveAttempt.getOrderId(),
 			approveAttempt.getMerchantPayKey(), approveAttempt.getProvider(),
 			approveAttempt.getPgPaymentId(), approveAttempt.getAmount()
 		);
@@ -129,6 +130,7 @@ public class PaymentApprovalCompensationService {
 		}
 
 		Payment cancelAttempt = paymentCancellationAttemptService.getOrCreate(
+			approveAttempt.getOrderId(),
 			approveAttempt.getMerchantPayKey(), approveAttempt.getProvider(),
 			approveAttempt.getPgPaymentId(), cancelAmount
 		);

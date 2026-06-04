@@ -918,7 +918,7 @@ class NaverPayApprovalServiceTest {
 	@DisplayName("pgCancel: NaverPayCancelResult.SUCCESS → CancelOutcome.SUCCESS")
 	@Test
 	void pgCancel_whenResultIsSuccess_returnSuccessOutcome() {
-		Payment cancelAttempt = Payment.createCancelRequested("PAY-1", "pg-id", 1000, PaymentProvider.NAVERPAY);
+		Payment cancelAttempt = Payment.createCancelRequested(1L, "PAY-1", "pg-id", 1000, PaymentProvider.NAVERPAY);
 		given(naverPayGateway.cancel("pg-id", 1000, "취소 사유")).willReturn(NaverPayCancelResult.success());
 
 		CancelOutcome outcome = ReflectionTestUtils.invokeMethod(naverPayApprovalService, "pgCancel", cancelAttempt, "취소 사유");
@@ -929,7 +929,7 @@ class NaverPayApprovalServiceTest {
 	@DisplayName("pgCancel: NaverPayCancelResult.ALREADY_CANCELED → CancelOutcome.SUCCESS")
 	@Test
 	void pgCancel_whenResultIsAlreadyCanceled_returnSuccessOutcome() {
-		Payment cancelAttempt = Payment.createCancelRequested("PAY-1", "pg-id", 1000, PaymentProvider.NAVERPAY);
+		Payment cancelAttempt = Payment.createCancelRequested(1L, "PAY-1", "pg-id", 1000, PaymentProvider.NAVERPAY);
 		given(naverPayGateway.cancel("pg-id", 1000, "취소 사유")).willReturn(NaverPayCancelResult.alreadyCanceled());
 
 		CancelOutcome outcome = ReflectionTestUtils.invokeMethod(naverPayApprovalService, "pgCancel", cancelAttempt, "취소 사유");
@@ -940,7 +940,7 @@ class NaverPayApprovalServiceTest {
 	@DisplayName("pgCancel: NaverPayCancelResult.PROCESSING → CancelOutcome.PROCESSING")
 	@Test
 	void pgCancel_whenResultIsProcessing_returnProcessingOutcome() {
-		Payment cancelAttempt = Payment.createCancelRequested("PAY-1", "pg-id", 1000, PaymentProvider.NAVERPAY);
+		Payment cancelAttempt = Payment.createCancelRequested(1L, "PAY-1", "pg-id", 1000, PaymentProvider.NAVERPAY);
 		given(naverPayGateway.cancel("pg-id", 1000, "취소 사유")).willReturn(NaverPayCancelResult.processing());
 
 		CancelOutcome outcome = ReflectionTestUtils.invokeMethod(naverPayApprovalService, "pgCancel", cancelAttempt, "취소 사유");
@@ -951,7 +951,7 @@ class NaverPayApprovalServiceTest {
 	@DisplayName("pgCancel: NaverPayCancelResult.FAILED → CancelOutcome.FAILED with failCode/failDetail")
 	@Test
 	void pgCancel_whenResultIsFailed_returnFailedOutcomeWithDetails() {
-		Payment cancelAttempt = Payment.createCancelRequested("PAY-1", "pg-id", 1000, PaymentProvider.NAVERPAY);
+		Payment cancelAttempt = Payment.createCancelRequested(1L, "PAY-1", "pg-id", 1000, PaymentProvider.NAVERPAY);
 		given(naverPayGateway.cancel("pg-id", 1000, "취소 사유"))
 			.willReturn(NaverPayCancelResult.failed(PaymentFailCode.PG_REQUEST_REJECTED, "reject reason"));
 

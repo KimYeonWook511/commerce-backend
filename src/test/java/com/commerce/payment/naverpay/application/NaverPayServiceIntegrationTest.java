@@ -443,7 +443,7 @@ class NaverPayServiceIntegrationTest {
 		Member member = memberPersistence.save(createMember());
 		persistOrder(member, "PAY-INT-6-3", 1000);
 		Payment cancelAttempt = Payment.createCancelRequested(
-			"PAY-INT-6-3", "pg-int-6-3", 1000, PaymentProvider.NAVERPAY
+			1L, "PAY-INT-6-3", "pg-int-6-3", 1000, PaymentProvider.NAVERPAY
 		);
 		cancelAttempt.succeed(LocalDateTime.now());
 		paymentPersistence.save(cancelAttempt);
@@ -498,7 +498,7 @@ class NaverPayServiceIntegrationTest {
 		Member member = memberPersistence.save(createMember());
 		persistOrder(member, "PAY-INT-6-5", 1000);
 		paymentPersistence.save(
-			Payment.createCancelRequested("PAY-INT-6-5", "pg-int-6-5", 1000, PaymentProvider.NAVERPAY)
+			Payment.createCancelRequested(1L, "PAY-INT-6-5", "pg-int-6-5", 1000, PaymentProvider.NAVERPAY)
 		);
 
 		given(naverPayGateway.approve("pg-int-6-5"))

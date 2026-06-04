@@ -38,7 +38,7 @@ class PaymentTest {
 	@Test
 	void succeed_whenCancelType_updateStatusWithoutApprovedOrderKey() {
 		// given
-		Payment cancelAttempt = Payment.createCancelRequested("PAY-1", "pg-payment-id", 1000, PaymentProvider.NAVERPAY);
+		Payment cancelAttempt = Payment.createCancelRequested(1L, "PAY-1", "pg-payment-id", 1000, PaymentProvider.NAVERPAY);
 		LocalDateTime respondedAt = LocalDateTime.of(2026, 3, 5, 20, 10);
 
 		// when
@@ -54,7 +54,7 @@ class PaymentTest {
 	@Test
 	void fail_whenCalled_updateFailedState() {
 		// given
-		Payment attempt = Payment.createCancelRequested("PAY-1", "pg-payment-id", 1000, PaymentProvider.NAVERPAY);
+		Payment attempt = Payment.createCancelRequested(1L, "PAY-1", "pg-payment-id", 1000, PaymentProvider.NAVERPAY);
 		LocalDateTime respondedAt = LocalDateTime.of(2026, 3, 5, 20, 20);
 
 		// when

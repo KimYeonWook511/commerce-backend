@@ -48,7 +48,7 @@ class PaymentCancellationAttemptServiceTest {
 
 		// when
 		Payment result = paymentCancellationAttemptService.getOrCreate(
-			"PAY-1", PaymentProvider.NAVERPAY, "payment-id-1", 1000);
+			1L, "PAY-1", PaymentProvider.NAVERPAY, "payment-id-1", 1000);
 
 		// then
 		assertThat(result.getStatus()).isEqualTo(PaymentStatus.REQUESTED);
@@ -60,7 +60,7 @@ class PaymentCancellationAttemptServiceTest {
 	@Test
 	void getOrCreate_whenCancelAttemptExistsWithSameAmount_returnExistingAttempt() {
 		// given
-		Payment existingAttempt = Payment.createCancelRequested("PAY-1", "payment-id-1", 1000,
+		Payment existingAttempt = Payment.createCancelRequested(1L, "PAY-1", "payment-id-1", 1000,
 			PaymentProvider.NAVERPAY);
 		given(paymentRepository.findCancelAttempt(
 			eq("PAY-1"), eq(PaymentProvider.NAVERPAY), eq("payment-id-1")))
@@ -68,7 +68,7 @@ class PaymentCancellationAttemptServiceTest {
 
 		// when
 		Payment result = paymentCancellationAttemptService.getOrCreate(
-			"PAY-1", PaymentProvider.NAVERPAY, "payment-id-1", 1000);
+			1L, "PAY-1", PaymentProvider.NAVERPAY, "payment-id-1", 1000);
 
 		// then
 		assertThat(result).isSameAs(existingAttempt);
@@ -80,14 +80,14 @@ class PaymentCancellationAttemptServiceTest {
 	void getOrCreate_whenCancelAttemptExistsWithDifferentAmount_throwAmountMismatch() {
 		// given
 		Payment existing = Payment.createCancelRequested(
-			"PAY-1", "payment-id-1", 1000, PaymentProvider.NAVERPAY);
+			1L, "PAY-1", "payment-id-1", 1000, PaymentProvider.NAVERPAY);
 		given(paymentRepository.findCancelAttempt(
 			eq("PAY-1"), eq(PaymentProvider.NAVERPAY), eq("payment-id-1")))
 			.willReturn(Optional.of(existing));
 
 		// when & then
 		assertThatThrownBy(() -> paymentCancellationAttemptService.getOrCreate(
-			"PAY-1", PaymentProvider.NAVERPAY, "payment-id-1", 2000))
+			1L, "PAY-1", PaymentProvider.NAVERPAY, "payment-id-1", 2000))
 			.isInstanceOf(PaymentException.class)
 			.extracting(e -> ((PaymentException) e).getErrorCode())
 			.isEqualTo(PaymentErrorCode.PAYMENT_ATTEMPT_AMOUNT_MISMATCH);
@@ -99,7 +99,7 @@ class PaymentCancellationAttemptServiceTest {
 	void succeed_whenAttemptExists_updateAttempt() {
 		// given
 		LocalDateTime respondedAt = LocalDateTime.of(2026, 3, 3, 16, 21);
-		Payment attempt = Payment.createCancelRequested("PAY-1", "payment-id-1", 1000,
+		Payment attempt = Payment.createCancelRequested(1L, "PAY-1", "payment-id-1", 1000,
 			PaymentProvider.NAVERPAY);
 		given(paymentRepository.findCancelAttempt(
 			eq("PAY-1"), eq(PaymentProvider.NAVERPAY), eq("payment-id-1")))
@@ -118,7 +118,7 @@ class PaymentCancellationAttemptServiceTest {
 	void fail_whenAttemptExists_updateAttempt() {
 		// given
 		LocalDateTime respondedAt = LocalDateTime.of(2026, 3, 3, 16, 21);
-		Payment attempt = Payment.createCancelRequested("PAY-1", "payment-id-1", 1000,
+		Payment attempt = Payment.createCancelRequested(1L, "PAY-1", "payment-id-1", 1000,
 			PaymentProvider.NAVERPAY);
 		given(paymentRepository.findCancelAttempt(
 			eq("PAY-1"), eq(PaymentProvider.NAVERPAY), eq("payment-id-1")))

@@ -71,7 +71,7 @@ class PaymentRepositoryJpaAdapterTest {
 	void findCancelAttempt_whenAttemptExists_returnAttempt() {
 		// given
 		Payment cancelPayment = paymentRepository.save(
-			Payment.createCancelRequested("PAY-2", "pg-payment-id-2", 1000, PaymentProvider.NAVERPAY));
+			Payment.createCancelRequested(1L, "PAY-2", "pg-payment-id-2", 1000, PaymentProvider.NAVERPAY));
 		em.flush();
 		em.clear();
 
