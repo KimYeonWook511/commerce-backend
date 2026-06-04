@@ -1,0 +1,11 @@
+{
+  "project": "payment-order-redesign",
+  "phase": "0-redesign",
+  "steps": [
+    { "step": 1, "name": "payment-and-reservation-domain-baseline-rewrite", "status": "pending" },
+    { "step": 2, "name": "reservation-reuse-and-merchant-key-lookup", "status": "pending" },
+    { "step": 3, "name": "approval-safety-net-and-idempotent-redirect", "status": "pending" },
+    { "step": 4, "name": "sync-root-docs", "status": "pending" },
+    { "step": 5, "name": "write-retrospective", "status": "pending" }
+  ]
+}
