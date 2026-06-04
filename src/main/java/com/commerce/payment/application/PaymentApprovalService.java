@@ -33,7 +33,7 @@ public class PaymentApprovalService {
 
 	/**
 	 * PG 승인 응답 수신 후 attempt.succeed() + order.completePayment()를 한 트랜잭션으로 처리한다 (ADR-8).
-	 * 동일 주문은 같은 순서로 잠가서 주문/결제 락 경합을 줄인다.
+	 * 주문 행을 PK로 잠가(findByIdForUpdate) 같은 주문의 동시 승인 반영을 직렬화한다.
 	 */
 	@Transactional
 	public Payment succeedApproval(
@@ -50,7 +50,7 @@ public class PaymentApprovalService {
 			return current;
 		}
 
-		// 동일 주문은 같은 순서로 잠가서 주문/결제 락 경합을 줄인다.
+		// 주문 행을 PK로 잠가 같은 주문의 동시 승인 반영을 직렬화한다 (결제 행 락은 없음).
 		Order order = orderRepository.findByIdForUpdate(current.getOrderId())
 			.orElseThrow(() -> new OrderException(OrderErrorCode.ORDER_NOT_FOUND));
 
