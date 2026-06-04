@@ -257,10 +257,12 @@ class NaverPayServiceConcurrencyTest {
 		).getStatus()).isEqualTo(PaymentStatus.REQUESTED);
 	}
 
-	@DisplayName("SUCCEEDED approve attempt에 Payment가 없으면 모든 스레드가 상태 전이 불가 예외를 받는다")
+	@DisplayName("SUCCEEDED Payment가 이미 있으면 동시 요청도 모두 멱등 응답을 반환한다")
 	@Test
 	void approve_whenConcurrentAttemptSucceededAndPaymentMissing_throwsConsistently() throws Exception {
-		// given
+		// given: SUCCEEDED Payment가 이미 DB에 있는 상태
+		// 새 모델에서 "attempt SUCCEEDED + payment 없음" 부패 상태는 존재하지 않음.
+		// SUCCEEDED Payment = findApproveSucceeded 로 발견 → 멱등 응답 경로
 		String merchantPayKey = "PAY-NAVER-CON-5";
 		String pgPaymentId = "pg-naver-con-5";
 		Member member = memberPersistence.save(createMember());
@@ -271,25 +273,15 @@ class NaverPayServiceConcurrencyTest {
 		paymentPersistence.save(attempt);
 
 		ConcurrentLinkedQueue<Throwable> errors = new ConcurrentLinkedQueue<>();
-		given(naverPayGateway.getApprovalHistory(pgPaymentId))
-			.willReturn(NaverPayHistoryResult.approved(merchantPayKey, 1000));
-		// attempt SUCCEEDED + payment 없음 시 보상 cancel이 시도되므로 stub을 제공한다
-		given(naverPayGateway.cancel(any(), anyInt(), any()))
-			.willReturn(NaverPayCancelResult.success());
 
 		// when
 		runConcurrent(20, () -> naverPayApprovalService.approve(member.getId(), merchantPayKey, pgPaymentId), errors);
 
-		// then
-		// attempt SUCCEEDED + payment 없음 = 정상 트랜잭션 경계에서 발생할 수 없는 데이터 오염 상태.
-		// 조용히 복구하지 않고 PAYMENT_ATTEMPT_STATUS_TRANSITION_NOT_ALLOWED 를 던진다.
-		assertThat(errors).hasSize(20);
+		// then: SUCCEEDED Payment 발견 → findApproveSucceeded 에서 조기 반환, 에러 없음
+		assertThat(errors).isEmpty();
 		assertThat(paymentPersistence.countPayments(merchantPayKey, pgPaymentId, PaymentType.APPROVE))
 			.isEqualTo(1L);
-		errors.forEach(e -> assertRaceOrPaymentError(
-			e, PaymentErrorCode.PAYMENT_ATTEMPT_STATUS_TRANSITION_NOT_ALLOWED
-		));
-		assertThat(paymentPersistence.findApproveSucceeded(merchantPayKey)).isEmpty();
+		assertThat(paymentPersistence.findApproveSucceeded(merchantPayKey)).isPresent();
 	}
 
 	@DisplayName("approve mismatch와 history mismatch가 섞여 동시에 들어와도 외부에는 PAYMENT_MERCHANT_KEY_MISMATCH 또는 PAYMENT_NOT_FOUND만 노출되고 approve attempt는 MERCHANT_PAY_KEY_MISMATCH로 FAILED가 된다")

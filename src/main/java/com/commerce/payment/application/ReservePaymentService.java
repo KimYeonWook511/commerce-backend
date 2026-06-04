@@ -1,5 +1,6 @@
 package com.commerce.payment.application;
 
+import java.time.Duration;
 import java.time.LocalDateTime;
 import java.util.List;
 import java.util.Map;
@@ -40,7 +41,7 @@ public class ReservePaymentService {
 	private final PaymentReservationRepository paymentReservationRepository;
 	private final PaymentProviderPropertiesResolver propertiesResolver;
 
-	private static final int RESERVATION_EXPIRE_MINUTES = 30;
+	private static final Duration PAYMENT_RESERVATION_EXPIRY = Duration.ofMinutes(30);
 
 	@Transactional
 	public ReservePaymentResult reserve(ReservePaymentCommand command) {
@@ -48,6 +49,12 @@ public class ReservePaymentService {
 			.orElseThrow(() -> new OrderException(OrderErrorCode.ORDER_NOT_FOUND));
 
 		order.checkPayable();
+		// UNKNOWN 차단은 step 3 에서 추가
+
+		LocalDateTime now = LocalDateTime.now();
+		PaymentReservation reservation = paymentReservationRepository
+			.findReusable(order.getId(), command.getMemberId(), command.getProvider(), order.getTotalPrice(), now)
+			.orElseGet(() -> createNewReservation(order, command, now));
 
 		PaymentProviderProperties properties = propertiesResolver.resolve(command.getProvider());
 
@@ -58,20 +65,6 @@ public class ReservePaymentService {
 		List<Long> productIds = items.stream().map(OrderItem::getProductId).toList();
 		Map<Long, Product> productsById = productRepository.findAllById(productIds).stream()
 			.collect(Collectors.toMap(Product::getId, Function.identity()));
-
-		String merchantPayKey = "PAY-" + UlidGenerator.generate();
-		LocalDateTime expiresAt = LocalDateTime.now().plusMinutes(RESERVATION_EXPIRE_MINUTES);
-
-		PaymentReservation reservation = paymentReservationRepository.save(
-			PaymentReservation.createReserved(
-				order.getId(),
-				command.getMemberId(),
-				totalPayAmount,
-				command.getProvider(),
-				merchantPayKey,
-				expiresAt
-			)
-		);
 
 		log.info("결제 예약 완료 merchantPayKey={} orderId={} memberId={} amount={}",
 			reservation.getMerchantPayKey(), order.getId(), command.getMemberId(), totalPayAmount);
@@ -87,6 +80,20 @@ public class ReservePaymentService {
 			.taxExScopeAmount(0)
 			.returnUrl(buildReturnUrl(properties.getReturnUrl(), reservation.getMerchantPayKey()))
 			.build();
+	}
+
+	private PaymentReservation createNewReservation(Order order, ReservePaymentCommand command, LocalDateTime now) {
+		String merchantPayKey = "PAY-" + UlidGenerator.generate();
+		return paymentReservationRepository.save(
+			PaymentReservation.createReserved(
+				order.getId(),
+				command.getMemberId(),
+				order.getTotalPrice(),
+				command.getProvider(),
+				merchantPayKey,
+				now.plus(PAYMENT_RESERVATION_EXPIRY)
+			)
+		);
 	}
 
 	private String buildProductName(List<OrderItem> items, Map<Long, Product> productsById) {

@@ -34,4 +34,8 @@ public class PaymentReservationPersistenceTestSupport implements PersistenceTest
 	public Optional<PaymentReservation> findByMerchantPayKey(String merchantPayKey) {
 		return reservationRepository.findByMerchantPayKey(merchantPayKey);
 	}
+
+	public long count() {
+		return reservationRepository.count();
+	}
 }

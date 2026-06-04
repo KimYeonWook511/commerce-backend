@@ -7,7 +7,6 @@ import org.springframework.stereotype.Repository;
 
 import com.commerce.payment.domain.PaymentProvider;
 import com.commerce.payment.domain.PaymentReservation;
-import com.commerce.payment.domain.PaymentReservationStatus;
 import com.commerce.payment.domain.repository.PaymentReservationRepository;
 
 import lombok.RequiredArgsConstructor;
@@ -30,6 +29,6 @@ public class PaymentReservationRepositoryAdapter implements PaymentReservationRe
 
 	@Override
 	public Optional<PaymentReservation> findReusable(Long orderId, Long memberId, PaymentProvider provider, int amount, LocalDateTime now) {
-		return jpaPaymentReservationRepository.findReusable(orderId, memberId, provider, amount, PaymentReservationStatus.RESERVED, now);
+		return jpaPaymentReservationRepository.findReusable(orderId, memberId, provider, amount, now);
 	}
 }
