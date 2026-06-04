@@ -70,7 +70,7 @@ public class Payment extends BaseTimeEntity {
 
 	private LocalDateTime respondedAt;
 
-	@Column(name = "order_id")
+	@Column(name = "order_id", nullable = false)
 	private Long orderId;
 
 	// NULL trick: APPROVE+SUCCEEDED 일 때만 orderId 값이 채워짐
