@@ -16,7 +16,7 @@ RENAME TABLE `tbl_payment_attempt` TO `tbl_payment`;
 -- 4. tbl_payment에 order_id, approved_order_key 컬럼 추가 및 unique key 재구성
 ALTER TABLE `tbl_payment`
   DROP INDEX `uk_payment_attempt_merchant_pay_key_provider_pg_payment_id_type`,
-  ADD COLUMN `order_id` BIGINT NULL,
+  ADD COLUMN `order_id` BIGINT NOT NULL,
   ADD COLUMN `approved_order_key` BIGINT NULL,
   -- NULL trick: APPROVE+SUCCEEDED일 때만 orderId 값이 채워져 unique 제약이 동작
   ADD UNIQUE KEY `uk_payment_approved_order_key` (`approved_order_key`),
