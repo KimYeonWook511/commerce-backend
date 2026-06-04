@@ -33,6 +33,7 @@ import com.commerce.payment.application.command.ReservePaymentCommand;
 import com.commerce.payment.application.result.ReservePaymentResult;
 import com.commerce.payment.domain.PaymentProvider;
 import com.commerce.payment.domain.PaymentReservation;
+import com.commerce.payment.domain.PaymentReservationStatus;
 import com.commerce.payment.domain.repository.PaymentRepository;
 import com.commerce.payment.domain.repository.PaymentReservationRepository;
 import com.commerce.payment.exception.PaymentErrorCode;
@@ -74,7 +75,7 @@ class ReservePaymentServiceTest {
 		Order order = createOrder(product);
 		setOrderId(order, 1L);
 		given(orderRepository.findByIdAndMemberIdWithItems(1L, 1L)).willReturn(Optional.of(order));
-		given(paymentReservationRepository.findReusable(anyLong(), anyLong(), any(), anyInt(), any(LocalDateTime.class)))
+		given(paymentReservationRepository.findReserved(anyLong(), any()))
 			.willReturn(Optional.empty());
 		given(paymentReservationRepository.save(any(PaymentReservation.class)))
 			.willAnswer(invocation -> invocation.getArgument(0));
@@ -150,8 +151,7 @@ class ReservePaymentServiceTest {
 			1L, 1L, 1500, PaymentProvider.NAVERPAY, "PAY-EXISTING", LocalDateTime.now().plusMinutes(15));
 
 		given(orderRepository.findByIdAndMemberIdWithItems(1L, 1L)).willReturn(Optional.of(order));
-		given(paymentReservationRepository.findReusable(
-			eq(1L), eq(1L), eq(PaymentProvider.NAVERPAY), eq(1500), any(LocalDateTime.class)))
+		given(paymentReservationRepository.findReserved(eq(1L), eq(PaymentProvider.NAVERPAY)))
 			.willReturn(Optional.of(existingReservation));
 		given(productRepository.findAllById(anyList())).willReturn(List.of(product));
 		stubPaymentProperties();
@@ -179,7 +179,7 @@ class ReservePaymentServiceTest {
 		setOrderId(order, 1L);
 
 		given(orderRepository.findByIdAndMemberIdWithItems(1L, 1L)).willReturn(Optional.of(order));
-		given(paymentReservationRepository.findReusable(anyLong(), anyLong(), any(), anyInt(), any(LocalDateTime.class)))
+		given(paymentReservationRepository.findReserved(anyLong(), any()))
 			.willReturn(Optional.empty());
 		given(paymentReservationRepository.save(any(PaymentReservation.class)))
 			.willAnswer(invocation -> invocation.getArgument(0));
@@ -200,18 +200,20 @@ class ReservePaymentServiceTest {
 		assertThat(result.getMerchantPayKey()).startsWith("PAY-");
 	}
 
-	@DisplayName("금액이 변경되면 기존 RESERVED 행을 그대로 두고 새 예약을 발급한다")
+	@DisplayName("금액이 변경되면 기존 RESERVED 예약을 만료 처리하고 새 예약을 발급한다")
 	@Test
-	void reserve_whenAmountChanged_createsNewReservation() {
-		// given: order.totalPrice = 2000 (이전 예약은 1500이었지만 findReusable이 amount 조건 불일치로 빈 결과 반환)
+	void reserve_whenAmountChanged_expiresOldAndCreatesNew() {
+		// given: 기존 RESERVED는 1500, 현재 order.totalPrice=2000 → isReusableFor=false → markExpired 후 새 발급
 		Product product = createProduct(10L, "product", 2000);
 		Order order = createOrder(product);
 		setOrderId(order, 1L);
 
+		PaymentReservation staleReservation = PaymentReservation.createReserved(
+			1L, 1L, 1500, PaymentProvider.NAVERPAY, "PAY-STALE", LocalDateTime.now().plusMinutes(15));
+
 		given(orderRepository.findByIdAndMemberIdWithItems(1L, 1L)).willReturn(Optional.of(order));
-		given(paymentReservationRepository.findReusable(
-			eq(1L), eq(1L), eq(PaymentProvider.NAVERPAY), eq(2000), any(LocalDateTime.class)))
-			.willReturn(Optional.empty());
+		given(paymentReservationRepository.findReserved(eq(1L), eq(PaymentProvider.NAVERPAY)))
+			.willReturn(Optional.of(staleReservation));
 		given(paymentReservationRepository.save(any(PaymentReservation.class)))
 			.willAnswer(invocation -> invocation.getArgument(0));
 		given(productRepository.findAllById(anyList())).willReturn(List.of(product));
@@ -226,10 +228,47 @@ class ReservePaymentServiceTest {
 		// when
 		ReservePaymentResult result = reservePaymentService.reserve(command);
 
-		// then: 새 예약 생성, 기존 RESERVED 행은 그대로 (expire/markExpired 호출 없음)
-		then(paymentReservationRepository).should(times(1)).save(any());
+		// then: 기존 행은 EXPIRED로 회수(reservedKey=null), 새 예약 발급 → save 2회
+		then(paymentReservationRepository).should(times(2)).save(any());
+		assertThat(staleReservation.getStatus()).isEqualTo(PaymentReservationStatus.EXPIRED);
+		assertThat(staleReservation.getReservedKey()).isNull();
 		assertThat(result.getMerchantPayKey()).startsWith("PAY-");
 		assertThat(result.getTotalPayAmount()).isEqualTo(2000);
+	}
+
+	@DisplayName("만료된 RESERVED 예약이 있으면 만료 처리해 reservedKey를 회수하고 새 예약을 발급한다")
+	@Test
+	void reserve_whenExpiredReservationExists_recyclesAndCreatesNew() {
+		// given: 기존 RESERVED는 expiresAt이 과거 → isReusableFor=false → markExpired로 reservedKey 회수 후 새 발급
+		Product product = createProduct(10L, "product", 1500);
+		Order order = createOrder(product);
+		setOrderId(order, 1L);
+
+		PaymentReservation expiredReservation = PaymentReservation.createReserved(
+			1L, 1L, 1500, PaymentProvider.NAVERPAY, "PAY-OLD", LocalDateTime.now().minusMinutes(1));
+
+		given(orderRepository.findByIdAndMemberIdWithItems(1L, 1L)).willReturn(Optional.of(order));
+		given(paymentReservationRepository.findReserved(eq(1L), eq(PaymentProvider.NAVERPAY)))
+			.willReturn(Optional.of(expiredReservation));
+		given(paymentReservationRepository.save(any(PaymentReservation.class)))
+			.willAnswer(invocation -> invocation.getArgument(0));
+		given(productRepository.findAllById(anyList())).willReturn(List.of(product));
+		stubPaymentProperties();
+
+		ReservePaymentCommand command = ReservePaymentCommand.builder()
+			.memberId(1L)
+			.orderId(1L)
+			.provider(PaymentProvider.NAVERPAY)
+			.build();
+
+		// when
+		ReservePaymentResult result = reservePaymentService.reserve(command);
+
+		// then: 만료 행 회수(EXPIRED + reservedKey=null) + 새 예약 발급 → save 2회
+		then(paymentReservationRepository).should(times(2)).save(any());
+		assertThat(expiredReservation.getStatus()).isEqualTo(PaymentReservationStatus.EXPIRED);
+		assertThat(expiredReservation.getReservedKey()).isNull();
+		assertThat(result.getMerchantPayKey()).startsWith("PAY-");
 	}
 
 	@DisplayName("다른 provider로 reserve하면 새 예약을 발급한다")
@@ -241,8 +280,7 @@ class ReservePaymentServiceTest {
 		setOrderId(order, 1L);
 
 		given(orderRepository.findByIdAndMemberIdWithItems(1L, 1L)).willReturn(Optional.of(order));
-		given(paymentReservationRepository.findReusable(
-			eq(1L), eq(1L), eq(PaymentProvider.KAKAOPAY), eq(1500), any(LocalDateTime.class)))
+		given(paymentReservationRepository.findReserved(eq(1L), eq(PaymentProvider.KAKAOPAY)))
 			.willReturn(Optional.empty());
 		given(paymentReservationRepository.save(any(PaymentReservation.class)))
 			.willAnswer(invocation -> invocation.getArgument(0));
@@ -304,8 +342,7 @@ class ReservePaymentServiceTest {
 			1L, 1L, 1500, PaymentProvider.NAVERPAY, "PAY-REUSED", LocalDateTime.now().plusMinutes(30));
 
 		given(orderRepository.findByIdAndMemberIdWithItems(1L, 1L)).willReturn(Optional.of(order));
-		given(paymentReservationRepository.findReusable(
-			eq(1L), eq(1L), eq(PaymentProvider.NAVERPAY), eq(1500), any(LocalDateTime.class)))
+		given(paymentReservationRepository.findReserved(eq(1L), eq(PaymentProvider.NAVERPAY)))
 			.willReturn(Optional.empty())       // 첫 번째 호출: 재사용 없음
 			.willReturn(Optional.of(savedReservation)); // 두 번째 호출: 재사용 가능
 		given(paymentReservationRepository.save(any(PaymentReservation.class)))

@@ -1,6 +1,5 @@
 package com.commerce.payment.infrastructure;
 
-import java.time.LocalDateTime;
 import java.util.Optional;
 
 import org.springframework.stereotype.Repository;
@@ -28,7 +27,7 @@ public class PaymentReservationRepositoryAdapter implements PaymentReservationRe
 	}
 
 	@Override
-	public Optional<PaymentReservation> findReusable(Long orderId, Long memberId, PaymentProvider provider, int amount, LocalDateTime now) {
-		return jpaPaymentReservationRepository.findReusable(orderId, memberId, provider, amount, now);
+	public Optional<PaymentReservation> findReserved(Long orderId, PaymentProvider provider) {
+		return jpaPaymentReservationRepository.findReserved(orderId, provider);
 	}
 }

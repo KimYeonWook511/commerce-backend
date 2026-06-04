@@ -41,6 +41,34 @@ class PaymentReservationTest {
 		assertThat(reservation.getReservedKey()).isNull();
 	}
 
+	@DisplayName("markExpired 호출 시 상태가 EXPIRED가 되고 reservedKey가 null이 된다")
+	@Test
+	void markExpired_whenCalled_setExpiredStatusAndNullReservedKey() {
+		// given
+		PaymentReservation reservation = PaymentReservation.createReserved(
+			1L, 1L, 1000, PaymentProvider.NAVERPAY, "PAY-1", LocalDateTime.now().plusMinutes(15));
+
+		// when
+		reservation.markExpired();
+
+		// then: reservedKey를 비워 uk_payment_reservation_reserved_key 점유를 해제한다
+		assertThat(reservation.getStatus()).isEqualTo(PaymentReservationStatus.EXPIRED);
+		assertThat(reservation.getReservedKey()).isNull();
+	}
+
+	@DisplayName("RESERVED 외 상태에서 markExpired 호출 시 예외가 발생한다")
+	@Test
+	void markExpired_whenNotReserved_throwException() {
+		// given
+		PaymentReservation reservation = PaymentReservation.createReserved(
+			1L, 1L, 1000, PaymentProvider.NAVERPAY, "PAY-1", LocalDateTime.now().plusMinutes(15));
+		reservation.markUsed();
+
+		// when & then
+		org.assertj.core.api.Assertions.assertThatThrownBy(reservation::markExpired)
+			.isInstanceOf(com.commerce.payment.exception.PaymentException.class);
+	}
+
 	@DisplayName("RESERVED이고 만료되지 않았으며 memberId/provider/amount가 일치하면 isReusableFor이 true를 반환한다")
 	@Test
 	void isReusableFor_whenReservedAndNotExpiredAndMatchingConditions_returnTrue() {

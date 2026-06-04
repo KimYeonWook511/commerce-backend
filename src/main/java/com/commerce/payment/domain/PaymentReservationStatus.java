@@ -7,7 +7,8 @@ import lombok.RequiredArgsConstructor;
 @RequiredArgsConstructor
 public enum PaymentReservationStatus {
 	RESERVED("예약"),
-	USED("사용 완료");
+	USED("사용 완료"),
+	EXPIRED("만료");
 
 	private final String description;
 }

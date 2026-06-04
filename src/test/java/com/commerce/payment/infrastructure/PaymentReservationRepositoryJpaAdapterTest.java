@@ -12,6 +12,7 @@ import org.springframework.boot.test.autoconfigure.orm.jpa.DataJpaTest;
 import org.springframework.context.annotation.Import;
 import org.springframework.test.context.ActiveProfiles;
 
+import com.commerce.common.jpa.JpaConfig;
 import com.commerce.payment.domain.PaymentProvider;
 import com.commerce.payment.domain.PaymentReservation;
 import com.commerce.payment.domain.PaymentReservationStatus;
@@ -23,6 +24,7 @@ import jakarta.persistence.EntityManager;
 @DataJpaTest
 @ActiveProfiles("test")
 @Import({
+	JpaConfig.class,
 	PaymentReservationRepositoryAdapter.class,
 	PaymentReservationPersistenceTestSupport.class
 })
@@ -37,123 +39,120 @@ class PaymentReservationRepositoryJpaAdapterTest {
 	@Autowired
 	private EntityManager em;
 
-	// ─── findReusable ────────────────────────────────────────────────────────────
+	// ─── findReserved ────────────────────────────────────────────────────────────
 
-	@DisplayName("모든 조건이 일치하면 재사용 가능한 예약을 반환한다")
+	@DisplayName("RESERVED 상태의 예약을 (orderId, provider)로 조회하면 반환한다")
 	@Test
-	void findReusable_whenAllConditionsMatch_returnsReservation() {
+	void findReserved_whenReservedExists_returnsReservation() {
 		// given
-		LocalDateTime now = LocalDateTime.now();
 		reservationRepository.save(
 			PaymentReservation.createReserved(1L, 1L, 1000, PaymentProvider.NAVERPAY, "PAY-1",
-				now.plusMinutes(15)));
+				LocalDateTime.now().plusMinutes(15)));
 		em.flush();
 		em.clear();
 
 		// when
-		Optional<PaymentReservation> result =
-			reservationRepository.findReusable(1L, 1L, PaymentProvider.NAVERPAY, 1000, now);
+		Optional<PaymentReservation> result = reservationRepository.findReserved(1L, PaymentProvider.NAVERPAY);
 
 		// then
 		assertThat(result).isPresent();
 		assertThat(result.get().getMerchantPayKey()).isEqualTo("PAY-1");
 	}
 
-	@DisplayName("provider가 다르면 재사용 가능한 예약이 없다")
+	@DisplayName("만료 시각이 지났어도 status가 RESERVED면 조회된다 (reservedKey 회수 대상)")
 	@Test
-	void findReusable_whenProviderDiffers_returnsEmpty() {
-		// given
-		LocalDateTime now = LocalDateTime.now();
+	void findReserved_whenExpiredButStillReserved_returnsReservation() {
+		// given: expiresAt은 과거지만 아직 markExpired 전이라 status=RESERVED → reservedKey 점유 중
 		reservationRepository.save(
 			PaymentReservation.createReserved(1L, 1L, 1000, PaymentProvider.NAVERPAY, "PAY-2",
-				now.plusMinutes(15)));
-		em.flush();
-		em.clear();
-
-		// when: KAKAOPAY로 조회
-		Optional<PaymentReservation> result =
-			reservationRepository.findReusable(1L, 1L, PaymentProvider.KAKAOPAY, 1000, now);
-
-		// then
-		assertThat(result).isEmpty();
-	}
-
-	@DisplayName("memberId가 다르면 재사용 가능한 예약이 없다")
-	@Test
-	void findReusable_whenMemberDiffers_returnsEmpty() {
-		// given
-		LocalDateTime now = LocalDateTime.now();
-		reservationRepository.save(
-			PaymentReservation.createReserved(1L, 1L, 1000, PaymentProvider.NAVERPAY, "PAY-3",
-				now.plusMinutes(15)));
-		em.flush();
-		em.clear();
-
-		// when: memberId=2로 조회
-		Optional<PaymentReservation> result =
-			reservationRepository.findReusable(1L, 2L, PaymentProvider.NAVERPAY, 1000, now);
-
-		// then
-		assertThat(result).isEmpty();
-	}
-
-	@DisplayName("amount가 다르면 재사용 가능한 예약이 없다")
-	@Test
-	void findReusable_whenAmountDiffers_returnsEmpty() {
-		// given
-		LocalDateTime now = LocalDateTime.now();
-		reservationRepository.save(
-			PaymentReservation.createReserved(1L, 1L, 1000, PaymentProvider.NAVERPAY, "PAY-4",
-				now.plusMinutes(15)));
-		em.flush();
-		em.clear();
-
-		// when: amount=2000으로 조회
-		Optional<PaymentReservation> result =
-			reservationRepository.findReusable(1L, 1L, PaymentProvider.NAVERPAY, 2000, now);
-
-		// then
-		assertThat(result).isEmpty();
-	}
-
-	@DisplayName("만료된 예약은 재사용 가능한 예약 결과에서 제외된다")
-	@Test
-	void findReusable_whenExpired_returnsEmpty() {
-		// given
-		LocalDateTime now = LocalDateTime.now();
-		// expiresAt이 now보다 이전 (만료됨)
-		reservationRepository.save(
-			PaymentReservation.createReserved(1L, 1L, 1000, PaymentProvider.NAVERPAY, "PAY-5",
-				now.minusMinutes(1)));
+				LocalDateTime.now().minusMinutes(1)));
 		em.flush();
 		em.clear();
 
 		// when
-		Optional<PaymentReservation> result =
-			reservationRepository.findReusable(1L, 1L, PaymentProvider.NAVERPAY, 1000, now);
+		Optional<PaymentReservation> result = reservationRepository.findReserved(1L, PaymentProvider.NAVERPAY);
+
+		// then: 만료됐어도 RESERVED 상태라 회수 대상으로 조회되어야 함
+		assertThat(result).isPresent();
+		assertThat(result.get().getMerchantPayKey()).isEqualTo("PAY-2");
+	}
+
+	@DisplayName("provider가 다르면 빈 결과를 반환한다")
+	@Test
+	void findReserved_whenDifferentProvider_returnsEmpty() {
+		// given
+		reservationRepository.save(
+			PaymentReservation.createReserved(1L, 1L, 1000, PaymentProvider.NAVERPAY, "PAY-3",
+				LocalDateTime.now().plusMinutes(15)));
+		em.flush();
+		em.clear();
+
+		// when: KAKAOPAY로 조회
+		Optional<PaymentReservation> result = reservationRepository.findReserved(1L, PaymentProvider.KAKAOPAY);
 
 		// then
 		assertThat(result).isEmpty();
 	}
 
-	@DisplayName("USED 상태의 예약은 재사용 가능한 예약 결과에서 제외된다")
+	@DisplayName("USED 상태의 예약은 findReserved 결과에서 제외된다")
 	@Test
-	void findReusable_whenUsed_returnsEmpty() {
+	void findReserved_whenUsed_returnsEmpty() {
 		// given
-		LocalDateTime now = LocalDateTime.now();
 		PaymentReservation reservation = PaymentReservation.createReserved(
-			1L, 1L, 1000, PaymentProvider.NAVERPAY, "PAY-6", now.plusMinutes(15));
+			1L, 1L, 1000, PaymentProvider.NAVERPAY, "PAY-4", LocalDateTime.now().plusMinutes(15));
 		reservation.markUsed();
 		reservationRepository.save(reservation);
 		em.flush();
 		em.clear();
 
 		// when
-		Optional<PaymentReservation> result =
-			reservationRepository.findReusable(1L, 1L, PaymentProvider.NAVERPAY, 1000, now);
+		Optional<PaymentReservation> result = reservationRepository.findReserved(1L, PaymentProvider.NAVERPAY);
 
 		// then
 		assertThat(result).isEmpty();
+	}
+
+	@DisplayName("EXPIRED 상태의 예약은 findReserved 결과에서 제외된다")
+	@Test
+	void findReserved_whenExpiredStatus_returnsEmpty() {
+		// given: markExpired로 회수된 행
+		PaymentReservation reservation = PaymentReservation.createReserved(
+			1L, 1L, 1000, PaymentProvider.NAVERPAY, "PAY-5", LocalDateTime.now().plusMinutes(15));
+		reservation.markExpired();
+		reservationRepository.save(reservation);
+		em.flush();
+		em.clear();
+
+		// when
+		Optional<PaymentReservation> result = reservationRepository.findReserved(1L, PaymentProvider.NAVERPAY);
+
+		// then
+		assertThat(result).isEmpty();
+	}
+
+	@DisplayName("markExpired로 reservedKey를 회수하면 같은 (orderId, provider)로 새 예약을 저장할 수 있다")
+	@Test
+	void save_whenExpiredReleasedReservedKey_allowsNewReservationWithSameKey() {
+		// given: RESERVED 저장 (reservedKey="1:NAVERPAY" 점유)
+		PaymentReservation first = PaymentReservation.createReserved(
+			1L, 1L, 1000, PaymentProvider.NAVERPAY, "PAY-FIRST", LocalDateTime.now().plusMinutes(15));
+		reservationRepository.save(first);
+		em.flush();
+
+		// when: 만료 회수(reservedKey=null) 후 같은 (orderId, provider)로 새 예약 저장
+		first.markExpired();
+		reservationRepository.save(first);
+		em.flush();
+		PaymentReservation second = PaymentReservation.createReserved(
+			1L, 1L, 1000, PaymentProvider.NAVERPAY, "PAY-SECOND", LocalDateTime.now().plusMinutes(15));
+		reservationRepository.save(second);
+		em.flush();
+		em.clear();
+
+		// then: uk_payment_reservation_reserved_key 위반 없이 저장 성공 (C2 회귀 방어)
+		Optional<PaymentReservation> reserved = reservationRepository.findReserved(1L, PaymentProvider.NAVERPAY);
+		assertThat(reserved).isPresent();
+		assertThat(reserved.get().getMerchantPayKey()).isEqualTo("PAY-SECOND");
 	}
 
 	// ─── findByMerchantPayKey ────────────────────────────────────────────────────
