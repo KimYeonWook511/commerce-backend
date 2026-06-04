@@ -22,35 +22,7 @@ class OrderTest {
 		assertThat(order.getMemberId()).isEqualTo(1L);
 		assertThat(order.getStatus()).isEqualTo(OrderStatus.INIT);
 		assertThat(order.getTotalPrice()).isZero();
-		assertThat(order.getMerchantPayKey()).isNull();
 		assertThat(order.getOrderItems()).isEmpty();
-	}
-
-	@DisplayName("merchantPayKey가 없으면 주문에 merchantPayKey를 저장한다")
-	@Test
-	void assignMerchantPayKey_whenNull_assignMerchantPayKey() {
-		// given
-		Order order = Order.create(1L);
-
-		// when
-		order.assignMerchantPayKey("PAY-123");
-
-		// then
-		assertThat(order.getMerchantPayKey()).isEqualTo("PAY-123");
-	}
-
-	@DisplayName("merchantPayKey가 이미 있으면 기존 값을 유지한다")
-	@Test
-	void assignMerchantPayKey_whenAlreadyAssigned_keepExistingValue() {
-		// given
-		Order order = Order.create(1L);
-		order.assignMerchantPayKey("PAY-123");
-
-		// when
-		order.assignMerchantPayKey("PAY-456");
-
-		// then
-		assertThat(order.getMerchantPayKey()).isEqualTo("PAY-123");
 	}
 
 	@DisplayName("주문 상품을 추가하면 주문 상품이 등록되고 총액이 증가한다")

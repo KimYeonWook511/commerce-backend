@@ -1,10 +1,10 @@
 package com.commerce.payment.application.port;
 
 import com.commerce.payment.application.port.result.CancelOutcome;
-import com.commerce.payment.domain.PaymentAttempt;
+import com.commerce.payment.domain.Payment;
 
 @FunctionalInterface
 public interface PgCanceller {
 
-	CancelOutcome cancel(PaymentAttempt cancelAttempt, String cancelReason);
+	CancelOutcome cancel(Payment cancelAttempt, String cancelReason);
 }

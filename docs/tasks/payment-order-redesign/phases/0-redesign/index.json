@@ -1,0 +1,53 @@
+{
+  "project": "payment-order-redesign",
+  "phase": "0-redesign",
+  "steps": [
+    {
+      "step": 1,
+      "name": "payment-and-reservation-domain-baseline-rewrite",
+      "status": "completed",
+      "started_at": "2026-06-04T17:09:44+0900",
+      "summary": "Step 1 완료. RESERVATION_EXPIRE_MINUTES = 15를 30으로 수정하여 PRD 및 architecture 문서의 expiresAt=now+30m 사양과 일치시켰다. ./gradlew test와 ./gradlew integrationTest 모두 통과하였으며, 모든 식별자 검증(PaymentAttempt 잔존 0건, merchantPayKey in Order 0건, 폐기 메서드명 0건, PaymentReady//payments/ready 0건)이 확인되었다.",
+      "completed_at": "2026-06-04T17:31:00+0900"
+    },
+    {
+      "step": 2,
+      "name": "reservation-reuse-and-merchant-key-lookup",
+      "status": "completed",
+      "started_at": "2026-06-04T17:31:00+0900",
+      "summary": "Step 2 완료. 모든 AC 체크(./gradlew test, ./gradlew integrationTest, ./gradlew concurrencyTest) 통과 후 index.json까지 업데이트 완료되었다.",
+      "completed_at": "2026-06-04T17:52:00+0900"
+    },
+    {
+      "step": 3,
+      "name": "approval-safety-net-and-idempotent-redirect",
+      "status": "completed",
+      "started_at": "2026-06-04T19:00:12+0900",
+      "summary": "uk_payment_approved_order_key 위반 보상 path(compensateDuplicateApproval), UNKNOWN 마킹/차단 흐름(markUnknownIfRequested + existsUnknownByOrderId), USED Reservation 멱등 응답(redirect 중복 흡수), DataIntegrityViolationException catch를 추가했다. PAYMENT_RESULT_PENDING을 HTTP 409로 수정하고, NaverPayApproveResult에 UNKNOWN status를 추가하며, NaverPayGatewayImpl에서 timeout/IOException을 UNKNOWN으로 변환한다. 단위/통합/동시성 테스트 모두 통과했다.",
+      "completed_at": "2026-06-04T19:33:25+0900"
+    },
+    {
+      "step": 4,
+      "name": "sync-root-docs",
+      "status": "completed",
+      "started_at": "2026-06-04T19:36:15+0900",
+      "summary": "docs/ADR.md (ADR-010/014/015 후속 노트 + ADR-026 신규), docs/db-schema.md (tbl_order merchant_pay_key 제거, tbl_payment 전면 갱신, tbl_payment_reservation 신규, tbl_payment_attempt 섹션 삭제), docs/architecture.md (결제 흐름 갱신, ReservePaymentService 등장, 폐기 메서드명 0건), docs/api-spec.md (POST /payments/reserve rename, PAYMENT_RESULT_PENDING/PAYMENT_MEMBER_MISMATCH 추가), docs/exception-strategy.md (compensateDuplicateApproval 적용 예 추가, UNKNOWN 처리 섹션 신규, redirect 멱등 응답 섹션 신규)를 갱신했다. ./gradlew test 통과, 머지된 task 폴더 수정 없음.",
+      "completed_at": "2026-06-04T19:42:38+0900"
+    },
+    {
+      "step": 5,
+      "name": "write-retrospective",
+      "status": "completed",
+      "started_at": "2026-06-04T19:44:20+0900",
+      "summary": "docs/tasks/payment-order-redesign/retrospective.md를 5단 구조(작업 요약 / 설계 결정 / 발견 / 미결 과제 / 개선 제안)로 작성했다. ADR-10 A→B 전환의 4 위화감, NULL 트릭 캡슐화, Reservation 한 번 전이, EXPIRED 상태 제거, 만료 후 늦은 redirect 진행 정책 등 task에서 발견한 핵심 insight를 발견 섹션에 반영했다. 미결 과제 표는 승격 조건과 함께 9개 항목으로 정리했다. ./gradlew test 통과.",
+      "completed_at": "2026-06-04T19:46:09+0900"
+    }
+  ],
+  "created_at": "2026-06-04T18:53:27+0900",
+  "execution": {
+    "developer_model": "sonnet",
+    "reviewer_model": "opus",
+    "commit_model": "haiku"
+  },
+  "completed_at": "2026-06-04T19:47:12+0900"
+}

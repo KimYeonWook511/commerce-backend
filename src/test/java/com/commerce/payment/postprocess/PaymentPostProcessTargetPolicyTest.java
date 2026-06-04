@@ -8,9 +8,11 @@ import org.junit.jupiter.api.DisplayName;
 import org.junit.jupiter.api.Test;
 import org.springframework.test.util.ReflectionTestUtils;
 
-import com.commerce.payment.domain.PaymentAttempt;
-import com.commerce.payment.domain.PaymentAttemptFailCode;
+import com.commerce.payment.domain.Payment;
+import com.commerce.payment.domain.PaymentFailCode;
 import com.commerce.payment.domain.PaymentProvider;
+import com.commerce.payment.domain.PaymentReservation;
+import com.commerce.payment.domain.PaymentType;
 import com.commerce.payment.postprocess.target.PaymentPostProcessTarget;
 import com.commerce.payment.postprocess.target.PaymentPostProcessTargetPolicy;
 
@@ -23,27 +25,23 @@ class PaymentPostProcessTargetPolicyTest {
 	void resolvePostProcessTarget_whenThresholdNotElapsed_returnNone() {
 		LocalDateTime now = LocalDateTime.now();
 
-		PaymentAttempt approveRequestedAttempt = PaymentAttempt.createApproveRequested(
-			"PAY-1", "pg-1", 1000, PaymentProvider.NAVERPAY
-		);
+		Payment approveRequestedAttempt = createApproveRequested("PAY-1", "pg-1", 1000);
 		setCreatedAt(approveRequestedAttempt, now.minusMinutes(4));
 
-		PaymentAttempt cancelRequestedAttempt = PaymentAttempt.createCancelRequested(
-			"PAY-1", "pg-1", 1000, PaymentProvider.NAVERPAY
+		Payment cancelRequestedAttempt = Payment.createCancelRequested(
+			1L, "PAY-1", "pg-1", 1000, PaymentProvider.NAVERPAY
 		);
 		setCreatedAt(cancelRequestedAttempt, now.minusMinutes(4));
 
-		PaymentAttempt failedCancelAttempt = PaymentAttempt.createCancelRequested(
-			"PAY-1", "pg-1", 1000, PaymentProvider.NAVERPAY
+		Payment failedCancelAttempt = Payment.createCancelRequested(
+			1L, "PAY-1", "pg-1", 1000, PaymentProvider.NAVERPAY
 		);
-		failedCancelAttempt.fail(PaymentAttemptFailCode.CANCEL_PROCESS_FAILED, "PRE_CANCEL_NOT_COMPLETE",
+		failedCancelAttempt.fail(PaymentFailCode.CANCEL_PROCESS_FAILED, "PRE_CANCEL_NOT_COMPLETE",
 			now.minusMinutes(1));
 		setCreatedAt(failedCancelAttempt, now.minusMinutes(4));
 
-		PaymentAttempt amountMismatchAttempt = PaymentAttempt.createApproveRequested(
-			"PAY-1", "pg-1", 1000, PaymentProvider.NAVERPAY
-		);
-		amountMismatchAttempt.fail(PaymentAttemptFailCode.AMOUNT_MISMATCH, "AMOUNT_NOT_MATCH",
+		Payment amountMismatchAttempt = createApproveRequested("PAY-1", "pg-1", 1000);
+		amountMismatchAttempt.fail(PaymentFailCode.AMOUNT_MISMATCH, "AMOUNT_NOT_MATCH",
 			now.minusMinutes(1));
 		setCreatedAt(amountMismatchAttempt, now.minusMinutes(4));
 
@@ -61,9 +59,7 @@ class PaymentPostProcessTargetPolicyTest {
 	@Test
 	void resolvePostProcessTarget_whenApproveAttemptSucceeded_returnNone() {
 		LocalDateTime now = LocalDateTime.now();
-		PaymentAttempt approveAttempt = PaymentAttempt.createApproveRequested(
-			"PAY-1", "pg-1", 1000, PaymentProvider.NAVERPAY
-		);
+		Payment approveAttempt = createApproveRequested("PAY-1", "pg-1", 1000);
 		approveAttempt.succeed(now.minusMinutes(1));
 		setCreatedAt(approveAttempt, now.minusMinutes(10));
 
@@ -74,7 +70,7 @@ class PaymentPostProcessTargetPolicyTest {
 	@DisplayName("approve attempt가 TIME_EXPIRED로 실패하면 후처리 대상이 아니다")
 	@Test
 	void resolvePostProcessTarget_whenApproveAttemptFailedByTimeExpired_returnNone() {
-		PaymentAttempt approveAttempt = failedApproveAttempt(PaymentAttemptFailCode.TIME_EXPIRED, "TIME_EXPIRED");
+		Payment approveAttempt = failedApproveAttempt(PaymentFailCode.TIME_EXPIRED, "TIME_EXPIRED");
 
 		assertThat(targetPolicy.resolvePostProcessTarget(approveAttempt, null, LocalDateTime.now()))
 			.isEqualTo(PaymentPostProcessTarget.NONE);
@@ -83,7 +79,7 @@ class PaymentPostProcessTargetPolicyTest {
 	@DisplayName("approve attempt가 PG_REQUEST_REJECTED로 실패하면 후처리 대상이 아니다")
 	@Test
 	void resolvePostProcessTarget_whenApproveAttemptFailedByPgRequestRejected_returnNone() {
-		PaymentAttempt approveAttempt = failedApproveAttempt(PaymentAttemptFailCode.PG_REQUEST_REJECTED, "FAIL");
+		Payment approveAttempt = failedApproveAttempt(PaymentFailCode.PG_REQUEST_REJECTED, "FAIL");
 
 		assertThat(targetPolicy.resolvePostProcessTarget(approveAttempt, null, LocalDateTime.now()))
 			.isEqualTo(PaymentPostProcessTarget.NONE);
@@ -92,7 +88,7 @@ class PaymentPostProcessTargetPolicyTest {
 	@DisplayName("approve attempt가 INVALID_MERCHANT로 실패하면 후처리 대상이 아니다")
 	@Test
 	void resolvePostProcessTarget_whenApproveAttemptFailedByInvalidMerchant_returnNone() {
-		PaymentAttempt approveAttempt = failedApproveAttempt(PaymentAttemptFailCode.INVALID_MERCHANT, "INVALID_MERCHANT");
+		Payment approveAttempt = failedApproveAttempt(PaymentFailCode.INVALID_MERCHANT, "INVALID_MERCHANT");
 
 		assertThat(targetPolicy.resolvePostProcessTarget(approveAttempt, null, LocalDateTime.now()))
 			.isEqualTo(PaymentPostProcessTarget.NONE);
@@ -101,8 +97,7 @@ class PaymentPostProcessTargetPolicyTest {
 	@DisplayName("approve attempt가 OWNER_AUTH_FAILED로 실패하면 후처리 대상이 아니다")
 	@Test
 	void resolvePostProcessTarget_whenApproveAttemptFailedByOwnerAuthFailed_returnNone() {
-		PaymentAttempt approveAttempt = failedApproveAttempt(PaymentAttemptFailCode.OWNER_AUTH_FAILED,
-			"OWNER_AUTH_FAIL");
+		Payment approveAttempt = failedApproveAttempt(PaymentFailCode.OWNER_AUTH_FAILED, "OWNER_AUTH_FAIL");
 
 		assertThat(targetPolicy.resolvePostProcessTarget(approveAttempt, null, LocalDateTime.now()))
 			.isEqualTo(PaymentPostProcessTarget.NONE);
@@ -111,7 +106,7 @@ class PaymentPostProcessTargetPolicyTest {
 	@DisplayName("approve attempt가 NOT_ENOUGH_ACCOUNT_BALANCE로 실패하면 후처리 대상이 아니다")
 	@Test
 	void resolvePostProcessTarget_whenApproveAttemptFailedByNotEnoughAccountBalance_returnNone() {
-		PaymentAttempt approveAttempt = failedApproveAttempt(PaymentAttemptFailCode.NOT_ENOUGH_ACCOUNT_BALANCE,
+		Payment approveAttempt = failedApproveAttempt(PaymentFailCode.NOT_ENOUGH_ACCOUNT_BALANCE,
 			"NOT_ENOUGH_ACCOUNT_BALANCE");
 
 		assertThat(targetPolicy.resolvePostProcessTarget(approveAttempt, null, LocalDateTime.now()))
@@ -122,9 +117,7 @@ class PaymentPostProcessTargetPolicyTest {
 	@Test
 	void resolvePostProcessTarget_whenApproveAttemptRequested_returnApproveRequestedTarget() {
 		LocalDateTime now = LocalDateTime.now();
-		PaymentAttempt approveAttempt = PaymentAttempt.createApproveRequested(
-			"PAY-1", "pg-1", 1000, PaymentProvider.NAVERPAY
-		);
+		Payment approveAttempt = createApproveRequested("PAY-1", "pg-1", 1000);
 		setCreatedAt(approveAttempt, now.minusMinutes(5));
 
 		assertThat(targetPolicy.resolvePostProcessTarget(approveAttempt, null, now))
@@ -134,8 +127,8 @@ class PaymentPostProcessTargetPolicyTest {
 	@DisplayName("approve attempt가 MERCHANT_PAY_KEY_MISMATCH로 실패하면 관련 주문 상태 확인 대상이다")
 	@Test
 	void resolvePostProcessTarget_whenApproveAttemptFailedByMerchantPayKeyMismatch_returnMerchantPayKeyMismatchTarget() {
-		PaymentAttempt approveAttempt = failedApproveAttempt(
-			PaymentAttemptFailCode.MERCHANT_PAY_KEY_MISMATCH,
+		Payment approveAttempt = failedApproveAttempt(
+			PaymentFailCode.MERCHANT_PAY_KEY_MISMATCH,
 			"MERCHANT_PAY_KEY_MISMATCH"
 		);
 
@@ -146,8 +139,8 @@ class PaymentPostProcessTargetPolicyTest {
 	@DisplayName("approve attempt가 APPROVE_PROCESS_FAILED로 실패하면 승인 결과 확인 대상이다")
 	@Test
 	void resolvePostProcessTarget_whenApproveAttemptFailedByApproveProcessFailed_returnFailedApproveResultTarget() {
-		PaymentAttempt approveAttempt = failedApproveAttempt(
-			PaymentAttemptFailCode.APPROVE_PROCESS_FAILED,
+		Payment approveAttempt = failedApproveAttempt(
+			PaymentFailCode.APPROVE_PROCESS_FAILED,
 			"APPROVE_PROCESS_FAILED"
 		);
 
@@ -158,8 +151,8 @@ class PaymentPostProcessTargetPolicyTest {
 	@DisplayName("approve attempt가 PG_INVALID_RESPONSE로 실패하면 승인 결과 확인 대상이다")
 	@Test
 	void resolvePostProcessTarget_whenApproveAttemptFailedByPgInvalidResponse_returnFailedApproveResultTarget() {
-		PaymentAttempt approveAttempt = failedApproveAttempt(
-			PaymentAttemptFailCode.PG_INVALID_RESPONSE,
+		Payment approveAttempt = failedApproveAttempt(
+			PaymentFailCode.PG_INVALID_RESPONSE,
 			"INVALID_RESPONSE"
 		);
 
@@ -170,8 +163,8 @@ class PaymentPostProcessTargetPolicyTest {
 	@DisplayName("approve attempt가 PG_NETWORK_ERROR로 실패하면 승인 결과 확인 대상이다")
 	@Test
 	void resolvePostProcessTarget_whenApproveAttemptFailedByPgNetworkError_returnFailedApproveResultTarget() {
-		PaymentAttempt approveAttempt = failedApproveAttempt(
-			PaymentAttemptFailCode.PG_NETWORK_ERROR,
+		Payment approveAttempt = failedApproveAttempt(
+			PaymentFailCode.PG_NETWORK_ERROR,
 			"NETWORK_ERROR"
 		);
 
@@ -182,8 +175,8 @@ class PaymentPostProcessTargetPolicyTest {
 	@DisplayName("approve attempt가 PG_SERVER_ERROR로 실패하면 승인 결과 확인 대상이다")
 	@Test
 	void resolvePostProcessTarget_whenApproveAttemptFailedByPgServerError_returnFailedApproveResultTarget() {
-		PaymentAttempt approveAttempt = failedApproveAttempt(
-			PaymentAttemptFailCode.PG_SERVER_ERROR,
+		Payment approveAttempt = failedApproveAttempt(
+			PaymentFailCode.PG_SERVER_ERROR,
 			"SERVER_ERROR"
 		);
 
@@ -194,7 +187,7 @@ class PaymentPostProcessTargetPolicyTest {
 	@DisplayName("approve attempt가 AMOUNT_MISMATCH로 실패하고 cancel attempt가 없으면 취소 보상 대상이다")
 	@Test
 	void resolvePostProcessTarget_whenApproveAttemptFailedByAmountMismatchWithoutCancelAttempt_returnApprovedPaymentCancelAction() {
-		PaymentAttempt approveAttempt = failedApproveAttempt(PaymentAttemptFailCode.AMOUNT_MISMATCH, "AMOUNT_NOT_MATCH");
+		Payment approveAttempt = failedApproveAttempt(PaymentFailCode.AMOUNT_MISMATCH, "AMOUNT_NOT_MATCH");
 
 		assertThat(targetPolicy.resolvePostProcessTarget(approveAttempt, null, LocalDateTime.now()))
 			.isEqualTo(PaymentPostProcessTarget.APPROVED_PAYMENT_CANCEL_ACTION);
@@ -203,8 +196,7 @@ class PaymentPostProcessTargetPolicyTest {
 	@DisplayName("approve attempt가 DUPLICATE_PAYMENT로 실패하고 cancel attempt가 없으면 취소 보상 대상이다")
 	@Test
 	void resolvePostProcessTarget_whenApproveAttemptFailedByDuplicatePaymentWithoutCancelAttempt_returnApprovedPaymentCancelAction() {
-		PaymentAttempt approveAttempt = failedApproveAttempt(PaymentAttemptFailCode.DUPLICATE_PAYMENT,
-			"DUPLICATE_PAYMENT");
+		Payment approveAttempt = failedApproveAttempt(PaymentFailCode.DUPLICATE_PAYMENT, "DUPLICATE_PAYMENT");
 
 		assertThat(targetPolicy.resolvePostProcessTarget(approveAttempt, null, LocalDateTime.now()))
 			.isEqualTo(PaymentPostProcessTarget.APPROVED_PAYMENT_CANCEL_ACTION);
@@ -214,8 +206,8 @@ class PaymentPostProcessTargetPolicyTest {
 	@Test
 	void resolvePostProcessTarget_whenCancelAttemptSucceeded_returnNone() {
 		LocalDateTime now = LocalDateTime.now();
-		PaymentAttempt cancelAttempt = PaymentAttempt.createCancelRequested(
-			"PAY-1", "pg-1", 1000, PaymentProvider.NAVERPAY
+		Payment cancelAttempt = Payment.createCancelRequested(
+			1L, "PAY-1", "pg-1", 1000, PaymentProvider.NAVERPAY
 		);
 		cancelAttempt.succeed(now.minusMinutes(1));
 		setCreatedAt(cancelAttempt, now.minusMinutes(10));
@@ -227,8 +219,7 @@ class PaymentPostProcessTargetPolicyTest {
 	@DisplayName("cancel attempt가 INVALID_PG_PAYMENT_ID로 실패하면 후처리 대상이 아니다")
 	@Test
 	void resolvePostProcessTarget_whenCancelAttemptFailedByInvalidPgPaymentId_returnNone() {
-		PaymentAttempt cancelAttempt = failedCancelAttempt(PaymentAttemptFailCode.INVALID_PG_PAYMENT_ID,
-			"INVALID_PG_PAYMENT_ID");
+		Payment cancelAttempt = failedCancelAttempt(PaymentFailCode.INVALID_PG_PAYMENT_ID, "INVALID_PG_PAYMENT_ID");
 
 		assertThat(targetPolicy.resolvePostProcessTarget(null, cancelAttempt, LocalDateTime.now()))
 			.isEqualTo(PaymentPostProcessTarget.NONE);
@@ -237,7 +228,7 @@ class PaymentPostProcessTargetPolicyTest {
 	@DisplayName("cancel attempt가 INVALID_MERCHANT로 실패하면 후처리 대상이 아니다")
 	@Test
 	void resolvePostProcessTarget_whenCancelAttemptFailedByInvalidMerchant_returnNone() {
-		PaymentAttempt cancelAttempt = failedCancelAttempt(PaymentAttemptFailCode.INVALID_MERCHANT, "INVALID_MERCHANT");
+		Payment cancelAttempt = failedCancelAttempt(PaymentFailCode.INVALID_MERCHANT, "INVALID_MERCHANT");
 
 		assertThat(targetPolicy.resolvePostProcessTarget(null, cancelAttempt, LocalDateTime.now()))
 			.isEqualTo(PaymentPostProcessTarget.NONE);
@@ -247,8 +238,8 @@ class PaymentPostProcessTargetPolicyTest {
 	@Test
 	void resolvePostProcessTarget_whenCancelAttemptRequested_returnCancelRequestedTarget() {
 		LocalDateTime now = LocalDateTime.now();
-		PaymentAttempt cancelAttempt = PaymentAttempt.createCancelRequested(
-			"PAY-1", "pg-1", 1000, PaymentProvider.NAVERPAY
+		Payment cancelAttempt = Payment.createCancelRequested(
+			1L, "PAY-1", "pg-1", 1000, PaymentProvider.NAVERPAY
 		);
 		setCreatedAt(cancelAttempt, now.minusMinutes(5));
 
@@ -260,9 +251,9 @@ class PaymentPostProcessTargetPolicyTest {
 	@Test
 	void resolvePostProcessTarget_whenAmountMismatchAndCancelAttemptRequested_returnCancelRequestedTarget() {
 		LocalDateTime now = LocalDateTime.now();
-		PaymentAttempt approveAttempt = failedApproveAttempt(PaymentAttemptFailCode.AMOUNT_MISMATCH, "AMOUNT_NOT_MATCH");
-		PaymentAttempt cancelAttempt = PaymentAttempt.createCancelRequested(
-			"PAY-1", "pg-1", 1000, PaymentProvider.NAVERPAY
+		Payment approveAttempt = failedApproveAttempt(PaymentFailCode.AMOUNT_MISMATCH, "AMOUNT_NOT_MATCH");
+		Payment cancelAttempt = Payment.createCancelRequested(
+			1L, "PAY-1", "pg-1", 1000, PaymentProvider.NAVERPAY
 		);
 		setCreatedAt(cancelAttempt, now.minusMinutes(10));
 
@@ -274,9 +265,9 @@ class PaymentPostProcessTargetPolicyTest {
 	@Test
 	void resolvePostProcessTarget_whenAmountMismatchAlreadyProcessedWithCancelAttempt_doNotReturnApprovedPaymentCancelAction() {
 		LocalDateTime now = LocalDateTime.now();
-		PaymentAttempt approveAttempt = failedApproveAttempt(PaymentAttemptFailCode.AMOUNT_MISMATCH, "AMOUNT_NOT_MATCH");
-		PaymentAttempt cancelAttempt = PaymentAttempt.createCancelRequested(
-			"PAY-1", "pg-1", 1000, PaymentProvider.NAVERPAY
+		Payment approveAttempt = failedApproveAttempt(PaymentFailCode.AMOUNT_MISMATCH, "AMOUNT_NOT_MATCH");
+		Payment cancelAttempt = Payment.createCancelRequested(
+			1L, "PAY-1", "pg-1", 1000, PaymentProvider.NAVERPAY
 		);
 		setCreatedAt(cancelAttempt, now.minusMinutes(10));
 
@@ -290,10 +281,9 @@ class PaymentPostProcessTargetPolicyTest {
 	@Test
 	void resolvePostProcessTarget_whenDuplicatePaymentAndCancelAttemptRequested_returnCancelRequestedTarget() {
 		LocalDateTime now = LocalDateTime.now();
-		PaymentAttempt approveAttempt = failedApproveAttempt(PaymentAttemptFailCode.DUPLICATE_PAYMENT,
-			"DUPLICATE_PAYMENT");
-		PaymentAttempt cancelAttempt = PaymentAttempt.createCancelRequested(
-			"PAY-1", "pg-1", 1000, PaymentProvider.NAVERPAY
+		Payment approveAttempt = failedApproveAttempt(PaymentFailCode.DUPLICATE_PAYMENT, "DUPLICATE_PAYMENT");
+		Payment cancelAttempt = Payment.createCancelRequested(
+			1L, "PAY-1", "pg-1", 1000, PaymentProvider.NAVERPAY
 		);
 		setCreatedAt(cancelAttempt, now.minusMinutes(10));
 
@@ -305,12 +295,12 @@ class PaymentPostProcessTargetPolicyTest {
 	@Test
 	void resolvePostProcessTarget_whenMerchantPayKeyMismatchAlreadyProcessedWithCancelAttempt_doNotReturnMerchantPayKeyMismatchTarget() {
 		LocalDateTime now = LocalDateTime.now();
-		PaymentAttempt approveAttempt = failedApproveAttempt(
-			PaymentAttemptFailCode.MERCHANT_PAY_KEY_MISMATCH,
+		Payment approveAttempt = failedApproveAttempt(
+			PaymentFailCode.MERCHANT_PAY_KEY_MISMATCH,
 			"MERCHANT_PAY_KEY_MISMATCH"
 		);
-		PaymentAttempt cancelAttempt = PaymentAttempt.createCancelRequested(
-			"PAY-1", "pg-1", 1000, PaymentProvider.NAVERPAY
+		Payment cancelAttempt = Payment.createCancelRequested(
+			1L, "PAY-1", "pg-1", 1000, PaymentProvider.NAVERPAY
 		);
 		setCreatedAt(cancelAttempt, now.minusMinutes(10));
 
@@ -323,8 +313,7 @@ class PaymentPostProcessTargetPolicyTest {
 	@DisplayName("cancel attempt가 PG_INVALID_RESPONSE로 실패하면 취소 상태 확인 대상이다")
 	@Test
 	void resolvePostProcessTarget_whenCancelAttemptFailedByPgInvalidResponse_returnCancelRequestedTarget() {
-		PaymentAttempt cancelAttempt = failedCancelAttempt(PaymentAttemptFailCode.PG_INVALID_RESPONSE,
-			"INVALID_RESPONSE");
+		Payment cancelAttempt = failedCancelAttempt(PaymentFailCode.PG_INVALID_RESPONSE, "INVALID_RESPONSE");
 
 		assertThat(targetPolicy.resolvePostProcessTarget(null, cancelAttempt, LocalDateTime.now()))
 			.isEqualTo(PaymentPostProcessTarget.CANCEL_REQUESTED_TARGET);
@@ -333,8 +322,7 @@ class PaymentPostProcessTargetPolicyTest {
 	@DisplayName("cancel attempt가 CANCEL_PROCESS_FAILED로 실패하면 취소 상태 확인 대상이다")
 	@Test
 	void resolvePostProcessTarget_whenCancelAttemptFailedByCancelProcessFailed_returnCancelRequestedTarget() {
-		PaymentAttempt cancelAttempt = failedCancelAttempt(PaymentAttemptFailCode.CANCEL_PROCESS_FAILED,
-			"CANCEL_NOT_COMPLETE");
+		Payment cancelAttempt = failedCancelAttempt(PaymentFailCode.CANCEL_PROCESS_FAILED, "CANCEL_NOT_COMPLETE");
 
 		assertThat(targetPolicy.resolvePostProcessTarget(null, cancelAttempt, LocalDateTime.now()))
 			.isEqualTo(PaymentPostProcessTarget.CANCEL_REQUESTED_TARGET);
@@ -343,7 +331,7 @@ class PaymentPostProcessTargetPolicyTest {
 	@DisplayName("cancel attempt가 PG_REQUEST_REJECTED로 실패하면 수동 확인 대상이다")
 	@Test
 	void resolvePostProcessTarget_whenCancelAttemptFailedByPgRequestRejected_returnManualReviewTarget() {
-		PaymentAttempt cancelAttempt = failedCancelAttempt(PaymentAttemptFailCode.PG_REQUEST_REJECTED, "FAIL");
+		Payment cancelAttempt = failedCancelAttempt(PaymentFailCode.PG_REQUEST_REJECTED, "FAIL");
 
 		assertThat(targetPolicy.resolvePostProcessTarget(null, cancelAttempt, LocalDateTime.now()))
 			.isEqualTo(PaymentPostProcessTarget.MANUAL_REVIEW_TARGET);
@@ -352,8 +340,8 @@ class PaymentPostProcessTargetPolicyTest {
 	@DisplayName("approve attempt가 AMOUNT_MISMATCH로 실패하고 cancel attempt가 PG_REQUEST_REJECTED로 실패하면 수동 확인 대상이다")
 	@Test
 	void resolvePostProcessTarget_whenAmountMismatchAndCancelAttemptFailedByPgRequestRejected_returnManualReviewTarget() {
-		PaymentAttempt approveAttempt = failedApproveAttempt(PaymentAttemptFailCode.AMOUNT_MISMATCH, "AMOUNT_NOT_MATCH");
-		PaymentAttempt cancelAttempt = failedCancelAttempt(PaymentAttemptFailCode.PG_REQUEST_REJECTED, "FAIL");
+		Payment approveAttempt = failedApproveAttempt(PaymentFailCode.AMOUNT_MISMATCH, "AMOUNT_NOT_MATCH");
+		Payment cancelAttempt = failedCancelAttempt(PaymentFailCode.PG_REQUEST_REJECTED, "FAIL");
 
 		assertThat(targetPolicy.resolvePostProcessTarget(approveAttempt, cancelAttempt, LocalDateTime.now()))
 			.isEqualTo(PaymentPostProcessTarget.MANUAL_REVIEW_TARGET);
@@ -362,35 +350,38 @@ class PaymentPostProcessTargetPolicyTest {
 	@DisplayName("approve attempt가 DUPLICATE_PAYMENT로 실패하고 cancel attempt가 PG_REQUEST_REJECTED로 실패하면 수동 확인 대상이다")
 	@Test
 	void resolvePostProcessTarget_whenDuplicatePaymentAndCancelAttemptFailedByPgRequestRejected_returnManualReviewTarget() {
-		PaymentAttempt approveAttempt = failedApproveAttempt(PaymentAttemptFailCode.DUPLICATE_PAYMENT,
-			"DUPLICATE_PAYMENT");
-		PaymentAttempt cancelAttempt = failedCancelAttempt(PaymentAttemptFailCode.PG_REQUEST_REJECTED, "FAIL");
+		Payment approveAttempt = failedApproveAttempt(PaymentFailCode.DUPLICATE_PAYMENT, "DUPLICATE_PAYMENT");
+		Payment cancelAttempt = failedCancelAttempt(PaymentFailCode.PG_REQUEST_REJECTED, "FAIL");
 
 		assertThat(targetPolicy.resolvePostProcessTarget(approveAttempt, cancelAttempt, LocalDateTime.now()))
 			.isEqualTo(PaymentPostProcessTarget.MANUAL_REVIEW_TARGET);
 	}
 
-	private PaymentAttempt failedApproveAttempt(PaymentAttemptFailCode failCode, String failDetail) {
+	private Payment createApproveRequested(String merchantPayKey, String pgPaymentId, int amount) {
+		PaymentReservation reservation = PaymentReservation.createReserved(
+			1L, 1L, amount, PaymentProvider.NAVERPAY, merchantPayKey, LocalDateTime.now().plusMinutes(15));
+		return Payment.createRequested(reservation, PaymentType.APPROVE, pgPaymentId);
+	}
+
+	private Payment failedApproveAttempt(PaymentFailCode failCode, String failDetail) {
 		LocalDateTime now = LocalDateTime.now();
-		PaymentAttempt attempt = PaymentAttempt.createApproveRequested(
-			"PAY-1", "pg-1", 1000, PaymentProvider.NAVERPAY
-		);
+		Payment attempt = createApproveRequested("PAY-1", "pg-1", 1000);
 		attempt.fail(failCode, failDetail, now.minusMinutes(1));
 		setCreatedAt(attempt, now.minusMinutes(30));
 		return attempt;
 	}
 
-	private PaymentAttempt failedCancelAttempt(PaymentAttemptFailCode failCode, String failDetail) {
+	private Payment failedCancelAttempt(PaymentFailCode failCode, String failDetail) {
 		LocalDateTime now = LocalDateTime.now();
-		PaymentAttempt attempt = PaymentAttempt.createCancelRequested(
-			"PAY-1", "pg-1", 1000, PaymentProvider.NAVERPAY
+		Payment attempt = Payment.createCancelRequested(
+			1L, "PAY-1", "pg-1", 1000, PaymentProvider.NAVERPAY
 		);
 		attempt.fail(failCode, failDetail, now.minusMinutes(1));
 		setCreatedAt(attempt, now.minusMinutes(10));
 		return attempt;
 	}
 
-	private void setCreatedAt(PaymentAttempt attempt, LocalDateTime createdAt) {
+	private void setCreatedAt(Payment attempt, LocalDateTime createdAt) {
 		ReflectionTestUtils.setField(attempt, "createdAt", createdAt);
 	}
 }

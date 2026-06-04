@@ -4,7 +4,7 @@ import lombok.Builder;
 import lombok.Getter;
 
 @Getter
-public class PaymentReadyResult {
+public class ReservePaymentResult {
 
 	private String clientId;
 	private String chainId;
@@ -17,7 +17,7 @@ public class PaymentReadyResult {
 	private String returnUrl;
 
 	@Builder
-	private PaymentReadyResult(String clientId, String chainId, String merchantPayKey, String productName,
+	private ReservePaymentResult(String clientId, String chainId, String merchantPayKey, String productName,
 		int productCount, int totalPayAmount, int taxScopeAmount, int taxExScopeAmount, String returnUrl) {
 		this.clientId = clientId;
 		this.chainId = chainId;

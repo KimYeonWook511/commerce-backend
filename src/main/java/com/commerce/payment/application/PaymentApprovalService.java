@@ -1,17 +1,15 @@
 package com.commerce.payment.application;
 
 import java.time.LocalDateTime;
-import java.util.Optional;
 
 import org.springframework.stereotype.Service;
 import org.springframework.transaction.annotation.Transactional;
 
-import com.commerce.order.domain.repository.OrderRepository;
 import com.commerce.order.domain.Order;
+import com.commerce.order.domain.repository.OrderRepository;
 import com.commerce.order.exception.OrderErrorCode;
 import com.commerce.order.exception.OrderException;
 import com.commerce.payment.domain.Payment;
-import com.commerce.payment.domain.PaymentProvider;
 import com.commerce.payment.domain.PaymentStatus;
 import com.commerce.payment.domain.repository.PaymentRepository;
 import com.commerce.payment.exception.PaymentErrorCode;
@@ -27,70 +25,42 @@ public class PaymentApprovalService {
 
 	private final OrderRepository orderRepository;
 	private final PaymentRepository paymentRepository;
-	private final PaymentApprovalAttemptService paymentApprovalAttemptService;
-
-	@Transactional(readOnly = true)
-	public Optional<Payment> findPaymentByMerchantPayKey(String merchantPayKey) {
-		return paymentRepository.findByMerchantPayKey(merchantPayKey);
-	}
 
 	@Transactional(readOnly = true)
 	public boolean hasCompletedPayment(String merchantPayKey) {
-		return paymentRepository.existsByMerchantPayKeyAndStatus(merchantPayKey, PaymentStatus.COMPLETED);
+		return paymentRepository.existsApproveSucceeded(merchantPayKey);
 	}
 
+	/**
+	 * PG 승인 응답 수신 후 attempt.succeed() + order.completePayment()를 한 트랜잭션으로 처리한다 (ADR-8).
+	 * 주문 행을 PK로 잠가(findByIdForUpdate) 같은 주문의 동시 승인 반영을 직렬화한다.
+	 */
 	@Transactional
-	public Payment completeApprovedPayment(
-		String merchantPayKey,
-		PaymentProvider provider,
-		String pgPaymentId,
-		LocalDateTime approvedAt
+	public Payment succeedApproval(
+		Payment attempt,
+		LocalDateTime now
 	) {
-		// 동일 주문은 같은 순서로 잠가서 주문/결제 락 경합을 줄인다.
-		Order order = orderRepository.findByMerchantPayKeyForUpdate(merchantPayKey)
+		Payment current = paymentRepository.findApproveAttempt(
+				attempt.getMerchantPayKey(), attempt.getProvider(), attempt.getPgPaymentId())
+			.orElseThrow(() -> new PaymentException(PaymentErrorCode.PAYMENT_ATTEMPT_NOT_FOUND));
+
+		if (current.getStatus() == PaymentStatus.SUCCEEDED) {
+			log.info("결제 승인 멱등 흡수 merchantPayKey={} provider={} pgPaymentId={} orderId={}",
+				current.getMerchantPayKey(), current.getProvider(), current.getPgPaymentId(), current.getOrderId());
+			return current;
+		}
+
+		// 주문 행을 PK로 잠가 같은 주문의 동시 승인 반영을 직렬화한다 (결제 행 락은 없음).
+		Order order = orderRepository.findByIdForUpdate(current.getOrderId())
 			.orElseThrow(() -> new OrderException(OrderErrorCode.ORDER_NOT_FOUND));
 
-		// 이미 해당 결제로 성공한 payment가 있는지 확인 -> 해당 부분이 없으면 try-catch에서 failed처리가 되어버림
-		Payment completedPayment = paymentRepository.findByMerchantPayKey(merchantPayKey)
-			.map(payment -> validateCompletedPaymentOrThrow(payment, provider, pgPaymentId))
-			.orElse(null);
-
-		// 결제 시도 완료 처리
-		paymentApprovalAttemptService.succeed(merchantPayKey, provider, pgPaymentId, approvedAt);
-
-		if (completedPayment != null) {
-			log.info("결제 승인 멱등 흡수 merchantPayKey={} provider={} pgPaymentId={} orderId={}",
-				merchantPayKey, provider, pgPaymentId, order.getId());
-			return completedPayment; // 이미 해당 결제로 성공한 payment 반환
-		}
-
-		// 주문 결제 완료 처리
+		current.succeed(now);
+		paymentRepository.save(current);
 		order.completePayment();
+		orderRepository.save(order);
 
-		// 결제 최종 정보 저장
-		Payment savedPayment = paymentRepository.save(
-			Payment.createCompleted(order.getId(), order.getTotalPrice(), provider, merchantPayKey, pgPaymentId, approvedAt)
-		);
 		log.info("결제 승인 완료 merchantPayKey={} provider={} pgPaymentId={} orderId={}",
-			merchantPayKey, provider, pgPaymentId, order.getId());
-		return savedPayment;
+			current.getMerchantPayKey(), current.getProvider(), current.getPgPaymentId(), order.getId());
+		return current;
 	}
-
-	private Payment validateCompletedPaymentOrThrow(
-		Payment payment,
-		PaymentProvider provider,
-		String pgPaymentId
-	) {
-		if (payment.getProvider() != provider) {
-			throw new PaymentException(PaymentErrorCode.PAYMENT_DUPLICATE);
-		}
-		if (!pgPaymentId.equals(payment.getPgPaymentId())) {
-			throw new PaymentException(PaymentErrorCode.PAYMENT_DUPLICATE);
-		}
-		if (payment.getStatus() != PaymentStatus.COMPLETED) {
-			throw new PaymentException(PaymentErrorCode.PAYMENT_STATUS_NOT_ALLOWED);
-		}
-		return payment;
-	}
-
 }

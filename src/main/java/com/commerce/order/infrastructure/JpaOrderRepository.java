@@ -17,6 +17,22 @@ import com.commerce.order.domain.OrderStatus;
 
 public interface JpaOrderRepository extends JpaRepository<Order, Long> {
 
+	@Lock(LockModeType.PESSIMISTIC_WRITE)
+	@Query("""
+		select o
+		from Order o
+		where o.id = :id
+		""")
+	Optional<Order> findByIdForUpdate(@Param("id") Long id);
+
+	@Query("""
+		select o
+		from Order o
+		where o.id = :orderId
+		and o.memberId = :memberId
+		""")
+	Optional<Order> findByIdAndMemberId(@Param("orderId") Long orderId, @Param("memberId") Long memberId);
+
 	@Query("""
 		select distinct o from Order o
 		join fetch o.orderItems oi
@@ -31,27 +47,6 @@ public interface JpaOrderRepository extends JpaRepository<Order, Long> {
 		where o.id = :orderId
 		""")
 	Optional<Order> findByIdWithItems(@Param("orderId") Long orderId);
-
-	@Query("""
-		select o
-		from Order o
-		where o.merchantPayKey = :merchantPayKey
-		and o.memberId = :memberId
-		""")
-	Optional<Order> findByMerchantPayKeyAndMemberId(
-		@Param("merchantPayKey") String merchantPayKey,
-		@Param("memberId") Long memberId
-	);
-
-	Optional<Order> findByMerchantPayKey(String merchantPayKey);
-
-	@Lock(LockModeType.PESSIMISTIC_WRITE)
-	@Query("""
-		select o
-		from Order o
-		where o.merchantPayKey = :merchantPayKey
-		""")
-	Optional<Order> findByMerchantPayKeyForUpdate(@Param("merchantPayKey") String merchantPayKey);
 
 	@Query("""
 		select o

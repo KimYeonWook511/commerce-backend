@@ -1,8 +1,8 @@
 package com.commerce.payment.application.port.result;
 
-import com.commerce.payment.domain.PaymentAttemptFailCode;
+import com.commerce.payment.domain.PaymentFailCode;
 
-public record CancelOutcome(Status status, PaymentAttemptFailCode failCode, String failDetail) {
+public record CancelOutcome(Status status, PaymentFailCode failCode, String failDetail) {
 
 	public enum Status {
 		SUCCESS,
@@ -18,7 +18,7 @@ public record CancelOutcome(Status status, PaymentAttemptFailCode failCode, Stri
 		return new CancelOutcome(Status.PROCESSING, null, null);
 	}
 
-	public static CancelOutcome failed(PaymentAttemptFailCode failCode, String failDetail) {
+	public static CancelOutcome failed(PaymentFailCode failCode, String failDetail) {
 		return new CancelOutcome(Status.FAILED, failCode, failDetail);
 	}
 }

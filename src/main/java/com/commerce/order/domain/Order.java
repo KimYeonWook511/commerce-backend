@@ -28,8 +28,7 @@ import org.hibernate.type.SqlTypes;
 
 @Entity
 @Table(name = "tbl_order", uniqueConstraints = {
-	@UniqueConstraint(name = "uk_order_member_idempotency", columnNames = {"member_id", "idempotency_key"}),
-	@UniqueConstraint(name = "uk_order_merchant_pay_key", columnNames = {"merchant_pay_key"})
+	@UniqueConstraint(name = "uk_order_member_idempotency", columnNames = {"member_id", "idempotency_key"})
 })
 @NoArgsConstructor(access = AccessLevel.PROTECTED)
 @Getter
@@ -53,9 +52,6 @@ public class Order extends BaseTimeEntity {
 	@JdbcTypeCode(SqlTypes.VARCHAR)
 	@Column(nullable = false)
 	private OrderStatus status;
-
-	@Column(length = 64)
-	private String merchantPayKey;
 
 	@Column
 	private String idempotencyKey;
@@ -111,12 +107,6 @@ public class Order extends BaseTimeEntity {
 	public void checkPayable() {
 		if (this.status != OrderStatus.INIT) {
 			throw new OrderException(OrderErrorCode.ORDER_PAYMENT_NOT_ALLOWED);
-		}
-	}
-
-	public void assignMerchantPayKey(String merchantPayKey) {
-		if (this.merchantPayKey == null) {
-			this.merchantPayKey = merchantPayKey;
 		}
 	}
 

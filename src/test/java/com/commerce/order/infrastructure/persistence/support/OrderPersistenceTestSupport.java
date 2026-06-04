@@ -48,10 +48,6 @@ public class OrderPersistenceTestSupport implements PersistenceTestSupport {
 		return orderRepository.findAllById(orderIds);
 	}
 
-	public Optional<Order> findByMerchantPayKey(String merchantPayKey) {
-		return orderRepository.findByMerchantPayKey(merchantPayKey);
-	}
-
 	public long count() {
 		return orderRepository.count();
 	}
@@ -60,7 +56,7 @@ public class OrderPersistenceTestSupport implements PersistenceTestSupport {
 		return orderItemRepository.count();
 	}
 
-	public OrderStatus getOrderStatusByMerchantPayKey(String merchantPayKey) {
-		return findByMerchantPayKey(merchantPayKey).orElseThrow().getStatus();
+	public OrderStatus getOrderStatusById(Long orderId) {
+		return findById(orderId).orElseThrow().getStatus();
 	}
 }

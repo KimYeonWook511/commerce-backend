@@ -31,6 +31,16 @@ public class OrderRepositoryAdapter implements OrderRepository {
 	}
 
 	@Override
+	public Optional<Order> findByIdForUpdate(Long orderId) {
+		return jpaOrderRepository.findByIdForUpdate(orderId);
+	}
+
+	@Override
+	public Optional<Order> findByIdAndMemberId(Long orderId, Long memberId) {
+		return jpaOrderRepository.findByIdAndMemberId(orderId, memberId);
+	}
+
+	@Override
 	public Optional<Order> findByIdAndMemberIdWithItems(Long orderId, Long memberId) {
 		return jpaOrderRepository.findByIdAndMemberIdWithItems(orderId, memberId);
 	}
@@ -38,21 +48,6 @@ public class OrderRepositoryAdapter implements OrderRepository {
 	@Override
 	public Optional<Order> findByIdWithItems(Long orderId) {
 		return jpaOrderRepository.findByIdWithItems(orderId);
-	}
-
-	@Override
-	public Optional<Order> findByMerchantPayKeyAndMemberId(String merchantPayKey, Long memberId) {
-		return jpaOrderRepository.findByMerchantPayKeyAndMemberId(merchantPayKey, memberId);
-	}
-
-	@Override
-	public Optional<Order> findByMerchantPayKey(String merchantPayKey) {
-		return jpaOrderRepository.findByMerchantPayKey(merchantPayKey);
-	}
-
-	@Override
-	public Optional<Order> findByMerchantPayKeyForUpdate(String merchantPayKey) {
-		return jpaOrderRepository.findByMerchantPayKeyForUpdate(merchantPayKey);
 	}
 
 	@Override

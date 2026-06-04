@@ -1,10 +1,10 @@
 package com.commerce.payment.application;
 
 import static org.assertj.core.api.Assertions.assertThat;
-import static org.assertj.core.api.Assertions.assertThatThrownBy;
-import static org.mockito.ArgumentMatchers.any;
+import static org.mockito.ArgumentMatchers.eq;
 import static org.mockito.BDDMockito.given;
 import static org.mockito.BDDMockito.then;
+import static org.mockito.Mockito.never;
 
 import java.time.LocalDateTime;
 import java.util.Optional;
@@ -22,11 +22,10 @@ import com.commerce.order.domain.OrderStatus;
 import com.commerce.order.domain.repository.OrderRepository;
 import com.commerce.payment.domain.Payment;
 import com.commerce.payment.domain.PaymentProvider;
+import com.commerce.payment.domain.PaymentReservation;
 import com.commerce.payment.domain.PaymentStatus;
+import com.commerce.payment.domain.PaymentType;
 import com.commerce.payment.domain.repository.PaymentRepository;
-import com.commerce.payment.application.PaymentApprovalAttemptService;
-import com.commerce.payment.exception.PaymentErrorCode;
-import com.commerce.payment.exception.PaymentException;
 
 @ExtendWith(MockitoExtension.class)
 class PaymentApprovalServiceTest {
@@ -37,106 +36,94 @@ class PaymentApprovalServiceTest {
 	@Mock
 	private PaymentRepository paymentRepository;
 
-	@Mock
-	private PaymentApprovalAttemptService paymentApprovalAttemptService;
-
 	@InjectMocks
 	private PaymentApprovalService paymentApprovalService;
 
-	@DisplayName("결제 완료에 성공하면 payment를 생성한다")
+	@DisplayName("승인 완료된 결제가 있으면 true를 반환한다")
 	@Test
-	void completeApprovedPayment_whenPaymentNotExists_createPayment() {
-		Order order = createOrder(1000);
-		setOrderId(order, 1L);
-		LocalDateTime approvedAt = LocalDateTime.now();
-		given(orderRepository.findByMerchantPayKeyForUpdate("PAY-1")).willReturn(Optional.of(order));
-		given(paymentRepository.findByMerchantPayKey("PAY-1")).willReturn(Optional.empty());
-		given(paymentRepository.save(any(Payment.class))).willAnswer(invocation -> invocation.getArgument(0));
+	void hasCompletedPayment_whenSucceededExists_returnTrue() {
+		// given
+		given(paymentRepository.existsApproveSucceeded("PAY-1")).willReturn(true);
 
-		Payment result = paymentApprovalService.completeApprovedPayment(
-			"PAY-1",
-			PaymentProvider.NAVERPAY,
-			"pg-payment-id",
-			approvedAt
-		);
+		// when
+		boolean result = paymentApprovalService.hasCompletedPayment("PAY-1");
 
-		assertThat(result.getStatus()).isEqualTo(PaymentStatus.COMPLETED);
-		assertThat(result.getPgPaymentId()).isEqualTo("pg-payment-id");
-		assertThat(result.getMerchantPayKey()).isEqualTo("PAY-1");
+		// then
+		assertThat(result).isTrue();
+	}
+
+	@DisplayName("승인 완료된 결제가 없으면 false를 반환한다")
+	@Test
+	void hasCompletedPayment_whenSucceededNotExists_returnFalse() {
+		// given
+		given(paymentRepository.existsApproveSucceeded("PAY-1")).willReturn(false);
+
+		// when
+		boolean result = paymentApprovalService.hasCompletedPayment("PAY-1");
+
+		// then
+		assertThat(result).isFalse();
+	}
+
+	@DisplayName("succeedApproval 호출 시 attempt가 SUCCEEDED가 되고 order가 PAID가 된다")
+	@Test
+	void succeedApproval_whenAttemptRequested_completeAndReturn() {
+		// given
+		long orderId = 1L;
+		long memberId = 1L;
+		String merchantPayKey = "PAY-1";
+		String pgPaymentId = "pg-payment-id";
+		LocalDateTime now = LocalDateTime.now();
+
+		PaymentReservation reservation = PaymentReservation.createReserved(
+			orderId, memberId, 1000, PaymentProvider.NAVERPAY, merchantPayKey, now.plusMinutes(15));
+		Order order = createOrder(orderId, 1000);
+		Payment attempt = Payment.createRequested(reservation, PaymentType.APPROVE, pgPaymentId);
+
+		given(paymentRepository.findApproveAttempt(eq(merchantPayKey), eq(PaymentProvider.NAVERPAY), eq(pgPaymentId)))
+			.willReturn(Optional.of(attempt));
+		given(orderRepository.findByIdForUpdate(orderId)).willReturn(Optional.of(order));
+
+		// when
+		Payment result = paymentApprovalService.succeedApproval(attempt, now);
+
+		// then
+		assertThat(result).isSameAs(attempt);
+		assertThat(attempt.getStatus()).isEqualTo(PaymentStatus.SUCCEEDED);
 		assertThat(order.getStatus()).isEqualTo(OrderStatus.PAID);
 	}
 
-	@DisplayName("이미 완료된 동일 결제가 있으면 기존 payment를 반환한다")
+	@DisplayName("succeedApproval 호출 시 attempt가 이미 SUCCEEDED면 멱등으로 반환하고 order를 잠그지 않는다")
 	@Test
-	void completeApprovedPayment_whenPaymentExistsAndSameRequest_returnExistingPayment() {
-		Order order = createOrder(1000);
-		Payment payment = Payment.createCompleted(
-			1L,
-			1000,
-			PaymentProvider.NAVERPAY,
-			"PAY-1",
-			"pg-payment-id",
-			LocalDateTime.now()
-		);
-		LocalDateTime approvedAt = LocalDateTime.now();
+	void succeedApproval_whenAttemptAlreadySucceeded_returnIdempotent() {
+		// given
+		long orderId = 1L;
+		long memberId = 1L;
+		String merchantPayKey = "PAY-1";
+		String pgPaymentId = "pg-payment-id";
+		LocalDateTime now = LocalDateTime.now();
 
-		given(orderRepository.findByMerchantPayKeyForUpdate("PAY-1")).willReturn(Optional.of(order));
-		given(paymentRepository.findByMerchantPayKey("PAY-1")).willReturn(Optional.of(payment));
+		PaymentReservation reservation = PaymentReservation.createReserved(
+			orderId, memberId, 1000, PaymentProvider.NAVERPAY, merchantPayKey, now.plusMinutes(15));
+		Payment attempt = Payment.createRequested(reservation, PaymentType.APPROVE, pgPaymentId);
+		attempt.succeed(now.minusMinutes(1));
 
-		Payment result = paymentApprovalService.completeApprovedPayment(
-			"PAY-1",
-			PaymentProvider.NAVERPAY,
-			"pg-payment-id",
-			approvedAt
-		);
+		given(paymentRepository.findApproveAttempt(eq(merchantPayKey), eq(PaymentProvider.NAVERPAY), eq(pgPaymentId)))
+			.willReturn(Optional.of(attempt));
 
-		assertThat(result).isEqualTo(payment);
-		then(orderRepository).should().findByMerchantPayKeyForUpdate("PAY-1");
-		then(paymentApprovalAttemptService).should().succeed(
-			"PAY-1",
-			PaymentProvider.NAVERPAY,
-			"pg-payment-id",
-			approvedAt
-		);
-		then(paymentRepository).shouldHaveNoMoreInteractions();
+		// when
+		Payment result = paymentApprovalService.succeedApproval(attempt, now);
+
+		// then
+		assertThat(result).isSameAs(attempt);
+		assertThat(attempt.getStatus()).isEqualTo(PaymentStatus.SUCCEEDED);
+		then(orderRepository).should(never()).findByIdForUpdate(orderId);
 	}
 
-	@DisplayName("이미 완료된 결제의 pgPaymentId가 다르면 예외가 발생한다")
-	@Test
-	void completeApprovedPayment_whenExistingPaymentHasDifferentPgPaymentId_throwException() {
-		Order order = createOrder(1000);
-		Payment payment = Payment.createCompleted(
-			1L,
-			1000,
-			PaymentProvider.NAVERPAY,
-			"PAY-1",
-			"other-payment-id",
-			LocalDateTime.now()
-		);
-
-		given(orderRepository.findByMerchantPayKeyForUpdate("PAY-1")).willReturn(Optional.of(order));
-		given(paymentRepository.findByMerchantPayKey("PAY-1")).willReturn(Optional.of(payment));
-
-		assertThatThrownBy(() -> paymentApprovalService.completeApprovedPayment(
-			"PAY-1",
-			PaymentProvider.NAVERPAY,
-			"pg-payment-id",
-			LocalDateTime.now()
-		))
-			.isInstanceOf(PaymentException.class)
-			.satisfies(exception -> {
-				PaymentException paymentException = (PaymentException)exception;
-				assertThat(paymentException.getErrorCode()).isEqualTo(PaymentErrorCode.PAYMENT_DUPLICATE);
-			});
-	}
-
-	private Order createOrder(int totalPrice) {
+	private Order createOrder(long orderId, int totalPrice) {
 		Order order = Order.create(1L);
 		order.addOrderItem(1L, 1, totalPrice);
-		return order;
-	}
-
-	private void setOrderId(Order order, Long orderId) {
 		ReflectionTestUtils.setField(order, "id", orderId);
+		return order;
 	}
 }

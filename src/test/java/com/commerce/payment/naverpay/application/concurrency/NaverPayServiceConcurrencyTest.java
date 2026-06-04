@@ -33,11 +33,12 @@ import org.springframework.test.context.bean.override.mockito.MockitoBean;
 import com.commerce.member.domain.Member;
 import com.commerce.order.domain.Order;
 import com.commerce.order.domain.OrderStatus;
-import com.commerce.payment.domain.PaymentAttempt;
-import com.commerce.payment.domain.PaymentAttemptFailCode;
-import com.commerce.payment.domain.PaymentAttemptStatus;
-import com.commerce.payment.domain.PaymentAttemptType;
+import com.commerce.payment.domain.Payment;
+import com.commerce.payment.domain.PaymentFailCode;
 import com.commerce.payment.domain.PaymentProvider;
+import com.commerce.payment.domain.PaymentReservation;
+import com.commerce.payment.domain.PaymentStatus;
+import com.commerce.payment.domain.PaymentType;
 import com.commerce.payment.exception.PaymentErrorCode;
 import com.commerce.payment.exception.PaymentException;
 import com.commerce.payment.naverpay.application.NaverPayApprovalService;
@@ -48,6 +49,7 @@ import com.commerce.payment.naverpay.application.port.result.NaverPayApproveResu
 import com.commerce.payment.naverpay.application.port.result.NaverPayCancelResult;
 import com.commerce.payment.naverpay.application.port.result.NaverPayHistoryResult;
 import com.commerce.payment.infrastructure.persistence.support.PaymentPersistenceTestSupport;
+import com.commerce.payment.infrastructure.persistence.support.PaymentReservationPersistenceTestSupport;
 import com.commerce.member.infrastructure.persistence.support.MemberPersistenceTestSupport;
 import com.commerce.order.infrastructure.persistence.support.OrderPersistenceTestSupport;
 import com.commerce.product.domain.Product;
@@ -64,7 +66,7 @@ import com.commerce.support.PersistenceCleanupTestSupport;
 	"spring.datasource.hikari.connection-timeout=30000"
 })
 @ActiveProfiles("test")
-@Import({PersistenceCleanupTestSupport.class, PaymentPersistenceTestSupport.class, MemberPersistenceTestSupport.class, ProductPersistenceTestSupport.class, OrderPersistenceTestSupport.class})
+@Import({PersistenceCleanupTestSupport.class, PaymentPersistenceTestSupport.class, PaymentReservationPersistenceTestSupport.class, MemberPersistenceTestSupport.class, ProductPersistenceTestSupport.class, OrderPersistenceTestSupport.class})
 class NaverPayServiceConcurrencyTest {
 
 	@Autowired
@@ -82,6 +84,9 @@ class NaverPayServiceConcurrencyTest {
 	@Autowired
 	private PaymentPersistenceTestSupport paymentPersistence;
 
+	@Autowired
+	private PaymentReservationPersistenceTestSupport reservationPersistence;
+
 	@MockitoBean
 	private NaverPayGateway naverPayGateway;
 
@@ -96,7 +101,7 @@ class NaverPayServiceConcurrencyTest {
 	@AfterEach
 	void tearDown() {
 		persistenceCleanup.deleteAllInBatch(
-			paymentPersistence, memberPersistence, productPersistence, orderPersistence
+			paymentPersistence, reservationPersistence, memberPersistence, productPersistence, orderPersistence
 		);
 	}
 
@@ -107,7 +112,7 @@ class NaverPayServiceConcurrencyTest {
 		String merchantPayKey = "PAY-NAVER-CON-1";
 		String pgPaymentId = "pg-naver-con-1";
 		Member member = memberPersistence.save(createMember());
-		persistOrder(member, merchantPayKey, 1000);
+		Order order = persistOrder(member, merchantPayKey, 1000);
 		AtomicInteger approveCallCount = new AtomicInteger();
 		ConcurrentLinkedQueue<NaverPayApproveResponse> results = new ConcurrentLinkedQueue<>();
 		ConcurrentLinkedQueue<Throwable> errors = new ConcurrentLinkedQueue<>();
@@ -123,23 +128,24 @@ class NaverPayServiceConcurrencyTest {
 		runConcurrent(20, () -> results.add(naverPayApprovalService.approve(member.getId(), merchantPayKey, pgPaymentId)), errors);
 
 		// then
-		// race window 발생 시 일부 요청은 attempt unique 위반으로 안전망 500 에 도달한다.
-		errors.forEach(e -> assertThat(e).isInstanceOf(DataIntegrityViolationException.class));
+		// race window 발생 시 일부 요청은 unique 위반(DataIntegrityViolationException) 또는
+		// USED 예약 후 미결제 구간 PAYMENT_NOT_FOUND(PaymentException) 에 도달한다.
+		errors.forEach(e -> assertRaceOrPaymentError(e, PaymentErrorCode.PAYMENT_NOT_FOUND));
 		assertThat(paymentPersistence.countPaymentsByMerchantPayKey(merchantPayKey)).isEqualTo(1L);
-		assertThat(orderPersistence.getOrderStatusByMerchantPayKey(merchantPayKey))
+		assertThat(orderPersistence.getOrderStatusById(order.getId()))
 			.isEqualTo(OrderStatus.PAID);
-		assertThat(paymentPersistence.countAttempts(merchantPayKey, pgPaymentId, PaymentAttemptType.APPROVE))
+		assertThat(paymentPersistence.countPayments(merchantPayKey, pgPaymentId, PaymentType.APPROVE))
 			.isEqualTo(1L);
-		assertThat(paymentPersistence.getAttempt(
-			merchantPayKey, PaymentProvider.NAVERPAY, pgPaymentId, PaymentAttemptType.APPROVE
-		).getStatus()).isEqualTo(PaymentAttemptStatus.SUCCEEDED);
+		assertThat(paymentPersistence.getPayment(
+			merchantPayKey, PaymentProvider.NAVERPAY, pgPaymentId, PaymentType.APPROVE
+		).getStatus()).isEqualTo(PaymentStatus.SUCCEEDED);
 		assertThat(results).isNotEmpty();
 		assertThat(results.stream().map(NaverPayApproveResponse::getStatus))
 			.allMatch(status -> status == NaverPayApproveStatus.SUCCESS || status == NaverPayApproveStatus.PROCESSING);
 		assertThat(results.stream().map(NaverPayApproveResponse::getStatus))
 			.anyMatch(status -> status == NaverPayApproveStatus.SUCCESS);
-		assertThat(paymentPersistence.findAttempt(
-			merchantPayKey, PaymentProvider.NAVERPAY, pgPaymentId, PaymentAttemptType.CANCEL
+		assertThat(paymentPersistence.findPayment(
+			merchantPayKey, PaymentProvider.NAVERPAY, pgPaymentId, PaymentType.CANCEL
 		)).isEmpty();
 		then(naverPayGateway).should(never()).cancel(any(), anyInt(), any());
 	}
@@ -151,7 +157,7 @@ class NaverPayServiceConcurrencyTest {
 		String merchantPayKey = "PAY-NAVER-CON-2";
 		String pgPaymentId = "pg-naver-con-2";
 		Member member = memberPersistence.save(createMember());
-		persistOrder(member, merchantPayKey, 1000);
+		Order order = persistOrder(member, merchantPayKey, 1000);
 		AtomicInteger approveCallCount = new AtomicInteger();
 		ConcurrentLinkedQueue<NaverPayApproveResponse> results = new ConcurrentLinkedQueue<>();
 		ConcurrentLinkedQueue<Throwable> errors = new ConcurrentLinkedQueue<>();
@@ -169,16 +175,17 @@ class NaverPayServiceConcurrencyTest {
 		runConcurrent(20, () -> results.add(naverPayApprovalService.approve(member.getId(), merchantPayKey, pgPaymentId)), errors);
 
 		// then
-		// race window 발생 시 일부 요청은 attempt unique 위반으로 안전망 500 에 도달한다.
-		errors.forEach(e -> assertThat(e).isInstanceOf(DataIntegrityViolationException.class));
+		// race window 발생 시 일부 요청은 unique 위반(DataIntegrityViolationException) 또는
+		// USED 예약 후 미결제 구간 PAYMENT_NOT_FOUND(PaymentException) 에 도달한다.
+		errors.forEach(e -> assertRaceOrPaymentError(e, PaymentErrorCode.PAYMENT_NOT_FOUND));
 		assertThat(paymentPersistence.countPaymentsByMerchantPayKey(merchantPayKey)).isEqualTo(1L);
-		assertThat(orderPersistence.getOrderStatusByMerchantPayKey(merchantPayKey))
+		assertThat(orderPersistence.getOrderStatusById(order.getId()))
 			.isEqualTo(OrderStatus.PAID);
-		assertThat(paymentPersistence.countAttempts(merchantPayKey, pgPaymentId, PaymentAttemptType.APPROVE))
+		assertThat(paymentPersistence.countPayments(merchantPayKey, pgPaymentId, PaymentType.APPROVE))
 			.isEqualTo(1L);
-		assertThat(paymentPersistence.getAttempt(
-			merchantPayKey, PaymentProvider.NAVERPAY, pgPaymentId, PaymentAttemptType.APPROVE
-		).getStatus()).isEqualTo(PaymentAttemptStatus.SUCCEEDED);
+		assertThat(paymentPersistence.getPayment(
+			merchantPayKey, PaymentProvider.NAVERPAY, pgPaymentId, PaymentType.APPROVE
+		).getStatus()).isEqualTo(PaymentStatus.SUCCEEDED);
 		assertThat(results.stream().map(NaverPayApproveResponse::getStatus))
 			.allMatch(status -> status == NaverPayApproveStatus.SUCCESS || status == NaverPayApproveStatus.PROCESSING);
 		then(naverPayGateway).should(never()).cancel(any(), anyInt(), any());
@@ -206,14 +213,14 @@ class NaverPayServiceConcurrencyTest {
 		errors.forEach(e -> assertRaceOrPaymentError(
 			e, PaymentErrorCode.PAYMENT_MERCHANT_KEY_MISMATCH, PaymentErrorCode.PAYMENT_NOT_FOUND
 		));
-		assertThat(paymentPersistence.findPaymentByMerchantPayKey(merchantPayKey)).isEmpty();
-		assertThat(paymentPersistence.countAttempts(merchantPayKey, pgPaymentId, PaymentAttemptType.APPROVE))
+		assertThat(paymentPersistence.findApproveSucceeded(merchantPayKey)).isEmpty();
+		assertThat(paymentPersistence.countPayments(merchantPayKey, pgPaymentId, PaymentType.APPROVE))
 			.isEqualTo(1L);
-		assertThat(paymentPersistence.getAttempt(
-			merchantPayKey, PaymentProvider.NAVERPAY, pgPaymentId, PaymentAttemptType.APPROVE
-		).getStatus()).isEqualTo(PaymentAttemptStatus.FAILED);
-		assertThat(paymentPersistence.findAttempt(
-			merchantPayKey, PaymentProvider.NAVERPAY, pgPaymentId, PaymentAttemptType.CANCEL
+		assertThat(paymentPersistence.getPayment(
+			merchantPayKey, PaymentProvider.NAVERPAY, pgPaymentId, PaymentType.APPROVE
+		).getStatus()).isEqualTo(PaymentStatus.FAILED);
+		assertThat(paymentPersistence.findPayment(
+			merchantPayKey, PaymentProvider.NAVERPAY, pgPaymentId, PaymentType.CANCEL
 		)).isEmpty();
 		then(naverPayGateway).should(never()).cancel(any(), anyInt(), any());
 	}
@@ -238,54 +245,47 @@ class NaverPayServiceConcurrencyTest {
 
 		// then
 		// race window 시 일부 요청은 unique 위반(안전망 500), 나머지는 도메인 AMOUNT_MISMATCH.
+		// USED 예약 후 미결제 구간에서 PAYMENT_NOT_FOUND 도 발생할 수 있다.
 		assertThat(errors).isNotEmpty();
-		errors.forEach(e -> assertRaceOrPaymentError(e, PaymentErrorCode.PAYMENT_AMOUNT_MISMATCH));
-		assertThat(paymentPersistence.findPaymentByMerchantPayKey(merchantPayKey)).isEmpty();
-		assertThat(paymentPersistence.countAttempts(merchantPayKey, pgPaymentId, PaymentAttemptType.APPROVE))
+		errors.forEach(e -> assertRaceOrPaymentError(e,
+			PaymentErrorCode.PAYMENT_AMOUNT_MISMATCH, PaymentErrorCode.PAYMENT_NOT_FOUND));
+		assertThat(paymentPersistence.findApproveSucceeded(merchantPayKey)).isEmpty();
+		assertThat(paymentPersistence.countPayments(merchantPayKey, pgPaymentId, PaymentType.APPROVE))
 			.isEqualTo(1L);
-		assertThat(paymentPersistence.getAttempt(
-			merchantPayKey, PaymentProvider.NAVERPAY, pgPaymentId, PaymentAttemptType.APPROVE
-		).getFailCode()).isEqualTo(PaymentAttemptFailCode.AMOUNT_MISMATCH);
-		assertThat(paymentPersistence.countCancelAttempts(merchantPayKey)).isEqualTo(1L);
-		assertThat(paymentPersistence.getAttempt(
-			merchantPayKey, PaymentProvider.NAVERPAY, pgPaymentId, PaymentAttemptType.CANCEL
-		).getStatus()).isEqualTo(PaymentAttemptStatus.REQUESTED);
+		assertThat(paymentPersistence.getPayment(
+			merchantPayKey, PaymentProvider.NAVERPAY, pgPaymentId, PaymentType.APPROVE
+		).getFailCode()).isEqualTo(PaymentFailCode.AMOUNT_MISMATCH);
+		assertThat(paymentPersistence.countCancelPayments(merchantPayKey)).isEqualTo(1L);
+		assertThat(paymentPersistence.getPayment(
+			merchantPayKey, PaymentProvider.NAVERPAY, pgPaymentId, PaymentType.CANCEL
+		).getStatus()).isEqualTo(PaymentStatus.REQUESTED);
 	}
 
-	@DisplayName("SUCCEEDED approve attempt에 Payment가 없으면 모든 스레드가 상태 전이 불가 예외를 받는다")
+	@DisplayName("SUCCEEDED Payment가 이미 있으면 동시 요청도 모두 멱등 응답을 반환한다")
 	@Test
 	void approve_whenConcurrentAttemptSucceededAndPaymentMissing_throwsConsistently() throws Exception {
-		// given
+		// given: SUCCEEDED Payment가 이미 DB에 있는 상태
+		// 새 모델에서 "attempt SUCCEEDED + payment 없음" 부패 상태는 존재하지 않음.
+		// SUCCEEDED Payment = findApproveSucceeded 로 발견 → 멱등 응답 경로
 		String merchantPayKey = "PAY-NAVER-CON-5";
 		String pgPaymentId = "pg-naver-con-5";
 		Member member = memberPersistence.save(createMember());
 		persistOrder(member, merchantPayKey, 1000);
-		PaymentAttempt attempt = PaymentAttempt.createApproveRequested(
-			merchantPayKey, pgPaymentId, 1000, PaymentProvider.NAVERPAY
-		);
+		PaymentReservation reservation = reservationPersistence.findByMerchantPayKey(merchantPayKey).orElseThrow();
+		Payment attempt = Payment.createRequested(reservation, PaymentType.APPROVE, pgPaymentId);
 		attempt.succeed(LocalDateTime.now());
 		paymentPersistence.save(attempt);
 
 		ConcurrentLinkedQueue<Throwable> errors = new ConcurrentLinkedQueue<>();
-		given(naverPayGateway.getApprovalHistory(pgPaymentId))
-			.willReturn(NaverPayHistoryResult.approved(merchantPayKey, 1000));
-		// attempt SUCCEEDED + payment 없음 시 보상 cancel이 시도되므로 stub을 제공한다
-		given(naverPayGateway.cancel(any(), anyInt(), any()))
-			.willReturn(NaverPayCancelResult.success());
 
 		// when
 		runConcurrent(20, () -> naverPayApprovalService.approve(member.getId(), merchantPayKey, pgPaymentId), errors);
 
-		// then
-		// attempt SUCCEEDED + payment 없음 = 정상 트랜잭션 경계에서 발생할 수 없는 데이터 오염 상태.
-		// 조용히 복구하지 않고 PAYMENT_ATTEMPT_STATUS_TRANSITION_NOT_ALLOWED 를 던진다.
-		assertThat(errors).hasSize(20);
-		assertThat(paymentPersistence.countAttempts(merchantPayKey, pgPaymentId, PaymentAttemptType.APPROVE))
+		// then: SUCCEEDED Payment 발견 → findApproveSucceeded 에서 조기 반환, 에러 없음
+		assertThat(errors).isEmpty();
+		assertThat(paymentPersistence.countPayments(merchantPayKey, pgPaymentId, PaymentType.APPROVE))
 			.isEqualTo(1L);
-		errors.forEach(e -> assertRaceOrPaymentError(
-			e, PaymentErrorCode.PAYMENT_ATTEMPT_STATUS_TRANSITION_NOT_ALLOWED
-		));
-		assertThat(paymentPersistence.findPaymentByMerchantPayKey(merchantPayKey)).isEmpty();
+		assertThat(paymentPersistence.findApproveSucceeded(merchantPayKey)).isPresent();
 	}
 
 	@DisplayName("approve mismatch와 history mismatch가 섞여 동시에 들어와도 외부에는 PAYMENT_MERCHANT_KEY_MISMATCH 또는 PAYMENT_NOT_FOUND만 노출되고 approve attempt는 MERCHANT_PAY_KEY_MISMATCH로 FAILED가 된다")
@@ -317,17 +317,17 @@ class NaverPayServiceConcurrencyTest {
 		errors.forEach(e -> assertRaceOrPaymentError(
 			e, PaymentErrorCode.PAYMENT_MERCHANT_KEY_MISMATCH, PaymentErrorCode.PAYMENT_NOT_FOUND
 		));
-		assertThat(paymentPersistence.findPaymentByMerchantPayKey(merchantPayKey)).isEmpty();
-		assertThat(paymentPersistence.countAttempts(merchantPayKey, pgPaymentId, PaymentAttemptType.APPROVE))
+		assertThat(paymentPersistence.findApproveSucceeded(merchantPayKey)).isEmpty();
+		assertThat(paymentPersistence.countPayments(merchantPayKey, pgPaymentId, PaymentType.APPROVE))
 			.isEqualTo(1L);
-		assertThat(paymentPersistence.getAttempt(
-			merchantPayKey, PaymentProvider.NAVERPAY, pgPaymentId, PaymentAttemptType.APPROVE
-		).getStatus()).isEqualTo(PaymentAttemptStatus.FAILED);
-		assertThat(paymentPersistence.getAttempt(
-			merchantPayKey, PaymentProvider.NAVERPAY, pgPaymentId, PaymentAttemptType.APPROVE
-		).getFailCode()).isEqualTo(PaymentAttemptFailCode.MERCHANT_PAY_KEY_MISMATCH);
-		assertThat(paymentPersistence.findAttempt(
-			merchantPayKey, PaymentProvider.NAVERPAY, pgPaymentId, PaymentAttemptType.CANCEL
+		assertThat(paymentPersistence.getPayment(
+			merchantPayKey, PaymentProvider.NAVERPAY, pgPaymentId, PaymentType.APPROVE
+		).getStatus()).isEqualTo(PaymentStatus.FAILED);
+		assertThat(paymentPersistence.getPayment(
+			merchantPayKey, PaymentProvider.NAVERPAY, pgPaymentId, PaymentType.APPROVE
+		).getFailCode()).isEqualTo(PaymentFailCode.MERCHANT_PAY_KEY_MISMATCH);
+		assertThat(paymentPersistence.findPayment(
+			merchantPayKey, PaymentProvider.NAVERPAY, pgPaymentId, PaymentType.CANCEL
 		)).isEmpty();
 		then(naverPayGateway).should(never()).cancel(any(), anyInt(), any());
 	}
@@ -384,7 +384,12 @@ class NaverPayServiceConcurrencyTest {
 
 	private Order persistOrder(Member member, String merchantPayKey, int totalPrice) {
 		Product product = productPersistence.save(createProduct("product-" + merchantPayKey, totalPrice));
-		return orderPersistence.saveAndFlush(createOrder(member, product, merchantPayKey));
+		Order order = orderPersistence.saveAndFlush(createOrder(member, product));
+		reservationPersistence.save(
+			PaymentReservation.createReserved(order.getId(), member.getId(), totalPrice, PaymentProvider.NAVERPAY,
+				merchantPayKey, LocalDateTime.now().plusMinutes(15))
+		);
+		return order;
 	}
 
 	private Product createProduct(String name, int price) {
@@ -395,10 +400,9 @@ class NaverPayServiceConcurrencyTest {
 			.build();
 	}
 
-	private Order createOrder(Member member, Product product, String merchantPayKey) {
+	private Order createOrder(Member member, Product product) {
 		Order order = Order.create(member.getId());
 		order.addOrderItem(product.getId(), 1, product.getPrice());
-		order.assignMerchantPayKey(merchantPayKey);
 		return order;
 	}
 }

@@ -734,11 +734,13 @@
 
 ## 결제
 
-### `POST /payments/ready`
+### `POST /payments/reserve` (구 `/payments/ready`)
 
 설명:
-- 결제 승인 전에 필요한 결제 준비 정보를 생성합니다.
-- 현재 provider 문자열은 내부적으로 `PaymentProvider` enum으로 변환됩니다.
+- 결제창 준비 (예약). 유효한 `PaymentReservation` (`status=RESERVED ∧ expiresAt>now ∧ provider·memberId·amount 일치`) 이 있으면 재사용, 없으면 새 `RESERVED` 행 발급합니다.
+- 서버가 merchantPayKey 를 발급하고 `PaymentReservation` 에 저장합니다. 클라이언트 발급 금지.
+- **호환 깨는 변경**: URL `POST /payments/ready` → `POST /payments/reserve` (frontend 미개발이라 무방). DTO class 이름만 rename (`PaymentReadyRequest` → `ReservePaymentRequest`, `PaymentReadyResponse` → `ReservePaymentResponse`). 응답 본문 구조 동일.
+- UNKNOWN 행 있는 주문 요청은 `PAYMENT_RESULT_PENDING` (409) 으로 차단합니다.
 
 요청:
 - Body
@@ -750,10 +752,10 @@
 }
 ```
 
-- `orderId`: 주문 ID, 필수
-- `provider`: 결제 수단, 필수
+- `orderId`: 주문 ID, 양의 정수, 필수
+- `provider`: `PaymentProvider` enum 값, 필수
 
-응답:
+응답 (200):
 
 ```json
 {
@@ -762,16 +764,21 @@
   "data": {
     "clientId": "client-id",
     "chainId": "chain-id",
-    "merchantPayKey": "merchant-pay-key",
+    "merchantPayKey": "PAY-01HXXX...",
     "productName": "대표 상품명",
     "productCount": 2,
     "totalPayAmount": 20000,
     "taxScopeAmount": 20000,
     "taxExScopeAmount": 0,
-    "returnUrl": "http://localhost:8080/payments/naverpay/return"
+    "returnUrl": "https://.../return?merchantPayKey=PAY-01HXXX..."
   }
 }
 ```
+
+실패 응답:
+- `PAYMENT_RESULT_PENDING` (409): 해당 주문에 UNKNOWN 상태의 Payment 시도가 있어 차단
+- `ORDER-404`: 주문 미존재 또는 다른 회원 주문
+- `ORDER-409-1`: 결제 불가 주문 상태 (`checkPayable` 실패)
 
 ### `GET /payments/naverpay/return`
 
@@ -793,30 +800,49 @@
 ### `POST /payments/naverpay/approve`
 
 설명:
-- 네이버페이 승인 결과를 반영하고 결제를 완료 처리합니다.
+- PG redirect 후 승인 처리. `PaymentReservation.merchantPayKey` 기반으로 역조회하여 승인을 진행합니다. Order 를 거치지 않습니다.
+- **멱등 응답**: 같은 `merchantPayKey` 의 redirect 가 중복 도착하고 `status=USED` Reservation 이 발견되면, 차단이 아닌 *기존 결제 결과 200 응답* 으로 흡수합니다.
+- UNKNOWN 행 있는 주문 요청은 `PAYMENT_RESULT_PENDING` (409) 으로 차단합니다.
+- Reservation 의 `memberId` 와 SecurityContext `memberId` 가 불일치하면 `PAYMENT_MEMBER_MISMATCH` (403) 으로 거부합니다.
 
 요청:
 - Body
 
 ```json
 {
-  "merchantPayKey": "merchant-pay-key",
-  "paymentId": "naver-pay-payment-id"
+  "merchantPayKey": "PAY-01HXXX...",
+  "pgPaymentId": "naver-pg-id-xxx"
 }
 ```
 
-- `merchantPayKey`: 필수
-- `paymentId`: 필수
+- `merchantPayKey`: 64 자 이내, 필수
+- `pgPaymentId`: 64 자 이내, 필수
 
-응답:
+응답 (200):
 
 ```json
 {
   "code": "SUCCESS",
   "message": "OK",
   "data": {
-    "pgPaymentId": "naver-pay-payment-id",
-    "status": "SUCCEEDED"
+    "pgPaymentId": "naver-pg-id-xxx",
+    "status": "SUCCESS"
   }
 }
 ```
+
+멱등 응답 동작:
+- USED Reservation 발견 시 기존 `Payment(type=APPROVE, status=SUCCEEDED)` 의 결과를 그대로 반환합니다.
+- 차단/에러 응답이 아닙니다. PG redirect 의 *한 번 = 한 번* 정신에 따라 같은 키 중복은 *동일 결과 재반환* 으로 처리합니다 (ADR-026 참조).
+
+실패 응답:
+- `PAYMENT_RESULT_PENDING` (409): 해당 주문에 UNKNOWN 상태의 Payment 시도가 있어 차단
+- `PAYMENT_MEMBER_MISMATCH` (403): Reservation.memberId 와 요청 회원 불일치
+- `PAYMENT-404`: merchantPayKey 로 Reservation 미발견
+
+### 새 응답 코드 (payment-order-redesign 추가)
+
+| 코드 | HTTP | 의미 |
+|---|---|---|
+| `PAYMENT_RESULT_PENDING` | 409 | 해당 주문에 UNKNOWN 상태의 Payment 시도가 있어 reserve/approve 차단. 사용자에게 "결제 결과 확인 중" 안내 |
+| `PAYMENT_MEMBER_MISMATCH` | 403 | Reservation.memberId 와 SecurityContext memberId 불일치 — 다른 회원이 결제 승인을 시도한 경우 |

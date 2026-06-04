@@ -29,6 +29,7 @@
 | payment-compensation-policy | [`docs/tasks/payment-compensation-policy/adr.md`](tasks/payment-compensation-policy/adr.md) | 보상 catch 2차 예외 처리 (ADR-013 연계) |
 | payment-compensation-to-domain | [`docs/tasks/payment-compensation-to-domain/adr.md`](tasks/payment-compensation-to-domain/adr.md) | 보상 정책 payment.application 이동, `PgCanceller` 콜백 (ADR-015 연계) |
 | payment-jpa-association-decouple | [`docs/tasks/payment-jpa-association-decouple/adr.md`](tasks/payment-jpa-association-decouple/adr.md) | Payment JPA cross-aggregate association 해제 (`@OneToOne Order` → `Long orderId`), `Payment.createCompleted(Long orderId, int amount, ...)` Long ID 시그니처, schema 무변경 원칙, series 완료 (ADR-020 / 선행 sub-PR 연계) |
+| payment-order-redesign | [`docs/tasks/payment-order-redesign/adr.md`](tasks/payment-order-redesign/adr.md) | 결제 도메인 두 테이블 분리 (PaymentReservation + Payment append-only), merchantPayKey 책임 Order → Reservation 이동, NULL 트릭 partial unique, UNKNOWN 마킹, `/payments/ready` → `/payments/reserve` rename (ADR-026 연계) |
 | product-management | [`docs/tasks/product-management/adr.md`](tasks/product-management/adr.md) | 관리자 command 분리, soft delete, 상태별 공개 조회 |
 | product-query | [`docs/tasks/product-query/adr.md`](tasks/product-query/adr.md) | 공개 상품 조회 노출 조건 |
 | stock-jpa-association-decouple | [`docs/tasks/stock-jpa-association-decouple/adr.md`](tasks/stock-jpa-association-decouple/adr.md) | Stock·StockHistory JPA cross-aggregate association 해제, application 외부 주입 패턴, schema 무변경 원칙 (ADR-020 연계) |
@@ -110,6 +111,7 @@
 - **배경**: 기존에는 unique 제약 충돌 시 catch 블록에서 기존 attempt를 그대로 반환했다. amount가 다른 경우에도 침묵 처리되어 호출자 측 산출 오류나 PG 응답 검증/보상 취소 흐름에서 어떤 amount를 기준으로 삼을지 모호해진다. 멱등성 계약("같은 요청 → 같은 결과") 위반이 가시화되지 않는 문제다.
 - **이유**: 호출자 측 mismatch(내부 원인)는 PG 응답 mismatch(`PAYMENT_AMOUNT_MISMATCH`, 400, 외부 원인)와 의미·모니터링 기준이 다르다. 별도 코드로 분리하면 알람/대시보드에서 원인 추적이 가능하다. 409 Conflict는 "이미 기록된 상태와 충돌한다"는 의미가 정확하다. amount 변경이 필요하면 새 `merchantPayKey`로 새 요청을 발급하는 게 정상 흐름이다.
 - **트레이드오프**: 호출자가 잘못된 amount로 재시도하면 즉시 4xx로 실패한다. 기존에는 침묵 처리되어 후속 흐름에서 뒤늦게 발견될 수 있었다.
+- **후속 (payment-order-redesign)**: 본 ADR 의 *재요청* 의미는 `payment-order-redesign` task 에서 *PaymentReservation 신규 발급* 으로 명확히 정리됐다. `Reservation.amount` 는 불변이며, amount mismatch 는 *새 Reservation (새 merchantPayKey)* 으로 표현된다. 기존 "amount 변경이 필요하면 새 `merchantPayKey`로 새 요청을 발급하는 게 정상 흐름이다" 표현은 이 결정의 반영이다.
 
 ### ADR-011: DB unique 위반은 안전망 500 으로 위임하고 정상 흐름은 사전 `find` 로 처리한다 (find-first 패턴 통일)
 - **결정**: Application 계층 6곳(`MemberRegistrationService`, `PaymentApprovalService`, `PaymentApprovalAttemptService`, `PaymentCancellationAttemptService`, `OrderCreateService`, `StockRestoreOutboxConsumeService`) 모두 `DB find → 없으면 insert → 충돌 시 500` 본질 흐름으로 통일한다. Application 과 Adapter 어디서도 `DuplicateKeyException` 을 catch 하지 않는다. `GlobalExceptionHandler` 에 `DataAccessException` 부모 핸들러(`COMMON-500-2`) 를 추가해 DAO 카테고리 fallback 을 stack trace 와 함께 500 으로 처리한다. ADR-002 의 `(member_id, idempotency_key)` unique 위반 fallback 재조회 로직은 본 정책으로 대체되어, 정당한 멱등 재요청은 Redis reserve 성공 후 DB find 사전 체크로 흡수하고 race window 충돌은 안전망 500 으로 위임한다.
@@ -139,6 +141,7 @@
 - **PaymentAttempt Aggregate 캡슐화**: `PaymentAttempt.succeed`/`fail` 메서드는 `PaymentApprovalAttemptService`, `PaymentCancellationAttemptService` 외부에서 직접 호출하지 않는다. 정책 강제는 코드가 아닌 ADR과 JavaDoc으로만 명시하며, ArchUnit 도입은 별도 후속 작업으로 분리한다.
 - **후속 (ADR-015, payment-compensation-to-domain task)**: 보상 owner가 `NaverPayApprovalService.failApproveAndCancelApprovedPayment`에서 payment.application의 `PaymentApprovalCompensationService.runPgCancel`로 이동했다. 정책 자체(Payment 존재 체크 → cancel skip)는 동일하게 유지된다.
 - **후속 (#182, 2026-06-02)**: 메서드 이름과 의미를 도메인 사실 조회(`hasCompletedPayment`)로 정리하고, 내부 구현은 `existsByMerchantPayKeyAndStatus(merchantPayKey, COMPLETED)`로 status까지 명시해 의미와 본문을 정확히 일치시켰다. 보상 service의 호출 코드(`if (hasCompletedPayment) skip`)가 정책 적용을 담당한다. "row 존재 = 결제 완료"의 근거(merchantPayKey unique + Order FOR UPDATE 안에서 저장)는 Payment 도메인 소유 지식이므로 사실 조회를 소유자에 박아 두면 Payment 정의 변경 시 한 곳만 갱신하면 된다.
+- **후속 (payment-order-redesign)**: 두 테이블 분리 모델에서 *Payment row 존재 = 결제 완료* 사실 조회가 재정의됐다. 구현은 `existsApproveSucceeded(merchantPayKey)` — `tbl_payment` 에서 `type=APPROVE ∧ status=SUCCEEDED` 인 행 존재. 메서드 의미(`hasCompletedPayment`)와 정책(cancel skip 판단)은 동일하게 유지된다. 세부 결정은 `docs/tasks/payment-order-redesign/adr.md` 참조.
 
 ### ADR-015: 보상 정책은 payment.application 책임이고, PG 어댑터는 cancel 콜백만 제공한다
 - **결정**: `NaverPayApprovalService`에 있던 보상 dispatcher 4개와 공통 골격을 `PaymentApprovalCompensationService`(payment.application)로 이동한다. PG cancel 호출은 `PgCanceller` @FunctionalInterface 콜백으로 위임하고, PG 응답은 `CancelOutcome` record로 변환해 payment.application이 `NaverPayCancelResult`를 직접 import하지 않도록 한다.
@@ -146,6 +149,7 @@
 - **이유**: `PgCanceller` 좁은 콜백은 PaymentGateway port 완전 inversion(PG 둘 이상 추가 시)보다 지금 필요한 최소 구조만 도입한다. NaverPayApprovalService가 메서드 참조(`this::pgCancel`)로 구현하므로 인터페이스 추가 없이 의존 역전이 성립한다.
 - **트랜잭션 정책**: `PaymentApprovalCompensationService`에 클래스 레벨 `@Transactional` 없음. 보상 흐름의 단계별 독립 commit 을 유지하기 위해 각 단계(`failIfRequested`, `hasCompletedPayment`, `getOrCreate`, `succeed`/`fail`)가 자기 트랜잭션을 가진다. 단일 트랜잭션으로 묶이면 한 단계 실패가 이전 단계 진행까지 롤백시켜 부분 진행 보존이 불가능해진다.
 - **트레이드오프**: PG가 둘 이상 추가될 때 `PgCanceller` 주입 위치를 재설계해야 한다. 이때 PaymentGateway port 완전 inversion으로 자연 승격 가능하다.
+- **후속 (payment-order-redesign)**: `compensateDuplicateApproval` 보상 dispatcher 가 추가됐다. `uk_payment_approved_order_key` (NULL 트릭 partial unique) 위반 시나리오 — 같은 orderId 에 두 번째 APPROVE 가 성공으로 진입한 경우 — 를 막고 PG cancel 로 환불한다. 책임 위치는 본 ADR 그대로 (`PaymentApprovalCompensationService`). 세부 결정은 `docs/tasks/payment-order-redesign/adr.md` 참조.
 
 ### ADR-016: 부하 테스트 도구로 k6 + InfluxDB + Grafana 채택
 - **결정**: 부하 테스트는 k6를 사용하고, 메트릭은 InfluxDB(1.8)에 저장해 Grafana로 시각화한다. 로컬 환경에서만 실행한다.
@@ -280,3 +284,19 @@
   - **외부 시스템이 같은 DB에 INSERT하는 시나리오가 추가되면 본 결정을 재검토해야 한다**. 마이크로서비스 분리, BI/ETL 도구 직접 접근, 운영자 raw SQL 수정 같은 경로가 일상화되면 application layer만으로는 안전망이 부족할 수 있다.
   - 본 결정이 적용되는 영역은 enum CHECK 한정이다. `NOT NULL`, `UNIQUE`, `FOREIGN KEY` 같은 다른 제약은 본 결정 대상이 아니며 각자의 도메인 의도에 따라 유지한다.
 - **연계**: ADR-018(ENUM → VARCHAR 매핑), ADR-024(Flyway 도입의 silent drift 트레이드오프 섹션)와 같은 결의 결정.
+
+### ADR-026: 결제 도메인 재설계 — Order↔Payment 경계 분리 + RESERVE 별도 거주지 (B안)
+
+- **결정 요약**:
+  1. **두 테이블 분리** — `tbl_payment_reservation` (상태 `{RESERVED, USED, EXPIRED}`, 결제창 준비물, RESERVED → USED/EXPIRED 한 번 전이) + `tbl_payment` (타입 `{APPROVE, CANCEL}`, PG 사건 append-only)
+  2. **merchantPayKey 책임 이동** — Order.merchantPayKey / assignMerchantPayKey / findByMerchantPayKey* 전량 제거. merchantPayKey 발급·저장 책임이 PaymentReservation 으로 이동
+  3. **NULL 트릭 partial unique** — MySQL InnoDB 의 partial unique index 미지원 → `uk_payment_approved_order_key (approved_order_key NULL)` + `uk_payment_reservation_reserved_key (reserved_key NULL)` 로 대체. 조건 불충족 행은 NULL 로 두어 unique 제외. 두 컬럼 모두 도메인 메서드(`succeed`, `markUsed`, `markExpired`) 안에서 상태 변경과 *같은 UPDATE* 에 묶어 캡슐화 강제. 만료/무효 예약은 reserve 진입 시 `markExpired` 로 reservedKey 를 회수해 재예약 허용
+  4. **완료 판단 = EXISTS** — `(성공 APPROVE 존재) AND (무효화 성공 CANCEL 부재)`. 마지막 행 기반 판단 금지. 현재는 `existsApproveSucceeded(merchantPayKey)` 로 단순 구현
+  5. **UNKNOWN 마킹** — PG 호출 timeout / DB 반영 실패 시 `Payment.markUnknown` 흔적 보존. UNKNOWN 행 있는 주문에 reserve/approve 차단 (`PAYMENT_RESULT_PENDING` 409). 해소는 후속 task `PaymentReconciliationService`
+  6. **API rename** — `POST /payments/ready` → `POST /payments/reserve` (frontend 미개발이라 호환 깨도 무방)
+  7. **멱등 redirect 흡수** — 같은 merchantPayKey 의 redirect 중복은 차단이 아닌 *기존 결제 결과 200 응답* 으로 흡수
+  8. **reserve 재사용 정책** — `(status=RESERVED ∧ expiresAt>now ∧ provider 일치 ∧ memberId 일치 ∧ amount 일치)` 조건으로 기존 Reservation 재사용. 만료·amount mismatch 시 새 Reservation 발급 (amount UPDATE 금지)
+  9. **외부 PG 호출 경계 유지** — PG 호출은 트랜잭션 밖, payment+order DB 쓰기는 한 트랜잭션 안 (ADR-008 정책 유지)
+  10. **Flyway V6 마이그레이션** — `tbl_payment` (구 성공 1:1) DROP → `tbl_payment_attempt` → `tbl_payment` RENAME + 컬럼 정리 + `tbl_payment_reservation` CREATE + `tbl_order` merchant_pay_key 관련 DROP
+- **상세**: `docs/tasks/payment-order-redesign/adr.md` (ADR-1 ~ ADR-10)
+- **연계 ADR**: ADR-010 (후속, amount mismatch → 새 Reservation), ADR-014 (후속, `existsApproveSucceeded` 구현 갱신), ADR-015 (후속, `compensateDuplicateApproval` 추가)

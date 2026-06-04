@@ -117,7 +117,51 @@ catch 안에서 호출하는 메서드는 가급적 예외를 던지지 않게 �
 - `NaverPayApprovalService.completeVerifiedApproval`의 상위 catch(`PaymentException`, `CustomException`, `Exception`)는 모두 진입 직후 1차 예외를 `log.error`로 남긴다.
 - `PaymentApprovalAttemptService.failIfRequested`는 보상 흐름에서 "현재 상태가 REQUESTED면 실패 처리, 아니면 skip" 의도를 캡슐화해 호출처(`PaymentApprovalCompensationService.runPgCancel`)가 try-catch 없이 평탄하게 보상을 진행하도록 한다. approve attempt가 race window에서 이미 SUCCEEDED 상태가 됐어도 PG cancel 자체는 멈추지 않으며, mark만 skip된다.
 - `PaymentApprovalService.hasCompletedPayment`는 Payment 도메인의 사실 조회(완료된 Payment row 존재 여부)를 소유자에 박아 두고, 보상 service의 호출 코드(`if (hasCompletedPayment) skip`)가 그 사실을 보상 정책에 적용한다. 사실과 정책을 분리해 도메인 정의 변경 시 영향 범위를 한 곳에 가둔다. NaverPay adapter가 Payment 저장소에 직접 접근하지 않는 의도는 유지된다.
+- **`compensateDuplicateApproval` (payment-order-redesign 추가)**: `uk_payment_approved_order_key` UNIQUE 위반 (`DataIntegrityViolationException`) 은 find-first 원칙의 예외적 허용 케이스다. 이유: `approved_order_key` 는 APPROVE+SUCCEEDED 상태 전이 시 단 한 번 set 되는 NULL 트릭 컬럼이라 사전 `find` 로 레이스를 흡수하기 어렵고, 위반 발생 자체가 *이미 다른 결제가 성공했다* 는 신호이므로 즉시 PG cancel 보상이 필요하다. catch 하여 `compensateDuplicateApproval` 를 실행하고 원 예외를 전파한다.
 
 ### PG cancel 콜백 (PgCanceller)
 
 `PgCanceller.cancel(cancelAttempt, cancelReason) → CancelOutcome` 시그니처. PG-specific 응답(`NaverPayCancelResult.Status` 등)을 도메인 `CancelOutcome.Status`(SUCCESS/PROCESSING/FAILED)로 변환한 뒤 cancel attempt mark를 결정한다. `ALREADY_CANCELED`는 `SUCCESS`와 동일하게 매핑한다. `payment.application`이 `NaverPayCancelResult`를 직접 import하지 않아 레이어 의존 방향이 보존된다.
+
+## 결제 결과 UNKNOWN 처리
+
+PG 호출 결과가 확인되지 않아 결제 상태가 불명확한 경우의 처리 정책이다 (ADR-026 참조).
+
+### 마킹 정책
+
+- PG approve API 호출 timeout 또는 IOException 발생 시 → `Payment.markUnknown(failDetail, respondedAt)` — `status=UNKNOWN` 흔적 보존
+- PG approve 응답 OK 후 DB 반영 실패 시에도 가능한 경우 UNKNOWN 흔적 보존
+- UNKNOWN 은 "결과를 알 수 없다" 는 사실을 DB 에 남기는 것이 목적이다. 사용자 재시도를 허용하면 이중결제 위험이 있으므로 차단한다
+
+### 차단 정책
+
+- UNKNOWN 행이 있는 주문에 reserve 또는 approve 요청이 오면 `PAYMENT_RESULT_PENDING` (409 Conflict) 응답으로 차단한다
+- 판단: `paymentRepository.existsUnknownByOrderId(orderId)` — 해당 orderId 에 `status=UNKNOWN` 인 Payment 행 존재
+- 사용자에게 "결제 결과 확인 중입니다. 잠시 후 다시 시도해 주세요" 안내
+
+### 해소 정책
+
+- UNKNOWN 해소 (단건 대사, 배치 대사) 는 후속 task 의 `PaymentReconciliationService` 신설로 처리한다
+- 이번 task 는 마킹 + 차단까지만 포함한다. 해소 없이도 시스템은 안전하다 (사용자 안내 + 재시도 차단으로 추가 사고 없음)
+
+## 결제 redirect 멱등 응답
+
+같은 merchantPayKey 의 PG redirect 가 중복 도착한 경우의 처리 정책이다 (ADR-026 참조).
+
+### 정책
+
+- `PaymentReservation.status == USED` 인 Reservation 을 발견하면, 해당 merchantPayKey 로 기존 결제 결과를 조회해 *200 OK + 기존 결과 응답* 으로 흡수한다
+- 차단 (4xx/5xx) 응답이 아니다
+
+### 근거
+
+- PG 의 redirect 본질은 *한 번 결제 = 한 번 redirect*. 같은 키 중복은 *동일 결과 재반환* 으로 처리하는 것이 PG redirect 정신에 부합한다
+- USED Reservation 이 발견됐다는 것은 이미 APPROVE 시도가 시작됐다는 사실이다. 막으면 *결제는 됐는데 확인 불가* 박제 위험이 있다
+
+### 구현
+
+```
+reservation.status == USED
+  → paymentRepository.findApproveSucceeded(merchantPayKey).orElseThrow(...)
+  → return toResponse(approvedPayment)  // 200 OK
+```

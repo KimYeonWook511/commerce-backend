@@ -1,6 +1,6 @@
 package com.commerce.payment.naverpay.application.port.result;
 
-import com.commerce.payment.domain.PaymentAttemptFailCode;
+import com.commerce.payment.domain.PaymentFailCode;
 import com.commerce.payment.exception.PaymentErrorCode;
 
 import lombok.Getter;
@@ -12,18 +12,20 @@ public class NaverPayApproveResult {
 		SUCCESS,
 		PROCESSING,
 		ALREADY_COMPLETE,
-		FAILED
+		FAILED,
+		// PG 호출 timeout / 네트워크 단절로 결과를 알 수 없음
+		UNKNOWN
 	}
 
 	private final Status status;
 	private final String merchantPayKey;
 	private final int totalPayAmount;
-	private final PaymentAttemptFailCode failCode;
+	private final PaymentFailCode failCode;
 	private final PaymentErrorCode errorCode;
 	private final String failDetail;
 
 	private NaverPayApproveResult(Status status, String merchantPayKey, int totalPayAmount,
-		PaymentAttemptFailCode failCode, PaymentErrorCode errorCode, String failDetail) {
+		PaymentFailCode failCode, PaymentErrorCode errorCode, String failDetail) {
 		this.status = status;
 		this.merchantPayKey = merchantPayKey;
 		this.totalPayAmount = totalPayAmount;
@@ -44,8 +46,12 @@ public class NaverPayApproveResult {
 		return new NaverPayApproveResult(Status.ALREADY_COMPLETE, null, 0, null, null, null);
 	}
 
-	public static NaverPayApproveResult failed(PaymentAttemptFailCode failCode, PaymentErrorCode errorCode,
+	public static NaverPayApproveResult failed(PaymentFailCode failCode, PaymentErrorCode errorCode,
 		String failDetail) {
 		return new NaverPayApproveResult(Status.FAILED, null, 0, failCode, errorCode, failDetail);
+	}
+
+	public static NaverPayApproveResult unknown(String failDetail) {
+		return new NaverPayApproveResult(Status.UNKNOWN, null, 0, null, null, failDetail);
 	}
 }

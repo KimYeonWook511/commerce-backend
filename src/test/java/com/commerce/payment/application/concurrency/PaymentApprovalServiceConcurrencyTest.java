@@ -27,12 +27,15 @@ import com.commerce.order.domain.Order;
 import com.commerce.order.domain.OrderStatus;
 import com.commerce.order.exception.OrderErrorCode;
 import com.commerce.order.exception.OrderException;
-import com.commerce.payment.domain.PaymentAttempt;
+import com.commerce.payment.domain.Payment;
 import com.commerce.payment.domain.PaymentProvider;
+import com.commerce.payment.domain.PaymentReservation;
+import com.commerce.payment.domain.PaymentType;
 import com.commerce.payment.exception.PaymentErrorCode;
 import com.commerce.payment.exception.PaymentException;
 import com.commerce.payment.application.PaymentApprovalService;
 import com.commerce.payment.infrastructure.persistence.support.PaymentPersistenceTestSupport;
+import com.commerce.payment.infrastructure.persistence.support.PaymentReservationPersistenceTestSupport;
 import com.commerce.member.infrastructure.persistence.support.MemberPersistenceTestSupport;
 import com.commerce.order.infrastructure.persistence.support.OrderPersistenceTestSupport;
 import com.commerce.product.domain.Product;
@@ -45,7 +48,7 @@ import com.commerce.support.PersistenceCleanupTestSupport;
 @Tag("docker")
 @SpringBootTest
 @ActiveProfiles("test")
-@Import({PersistenceCleanupTestSupport.class, PaymentPersistenceTestSupport.class, MemberPersistenceTestSupport.class, ProductPersistenceTestSupport.class, OrderPersistenceTestSupport.class})
+@Import({PersistenceCleanupTestSupport.class, PaymentPersistenceTestSupport.class, PaymentReservationPersistenceTestSupport.class, MemberPersistenceTestSupport.class, ProductPersistenceTestSupport.class, OrderPersistenceTestSupport.class})
 class PaymentApprovalServiceConcurrencyTest {
 
 	@Autowired
@@ -53,6 +56,9 @@ class PaymentApprovalServiceConcurrencyTest {
 
 	@Autowired
 	private PaymentPersistenceTestSupport paymentPersistence;
+
+	@Autowired
+	private PaymentReservationPersistenceTestSupport reservationPersistence;
 
 	@Autowired
 	private MemberPersistenceTestSupport memberPersistence;
@@ -74,33 +80,32 @@ class PaymentApprovalServiceConcurrencyTest {
 	@AfterEach
 	void tearDown() {
 		persistenceCleanup.deleteAllInBatch(
-			paymentPersistence, memberPersistence, productPersistence, orderPersistence
+			paymentPersistence, reservationPersistence, memberPersistence, productPersistence, orderPersistence
 		);
 	}
 
 	@DisplayName("동시에 결제 완료를 호출해도 payment는 하나만 생성된다")
 	@Test
-	void completeApprovedPayment_whenConcurrentCall_createSinglePayment() throws Exception {
+	void succeedApproval_whenConcurrentCall_createSinglePayment() throws Exception {
 		// given
 		String merchantPayKey = "PAY-CON-1";
 		String pgPaymentId = "pg-con-1";
 		Member member = memberPersistence.save(createMember());
 		Product product = productPersistence.save(createProduct("product-" + merchantPayKey, 1000));
-		orderPersistence.saveAndFlush(createOrder(member, product, merchantPayKey));
-		paymentPersistence.save(createApproveAttempt(merchantPayKey, pgPaymentId, 1000));
+		Order order = orderPersistence.saveAndFlush(createOrder(member, product));
+		PaymentReservation reservation = reservationPersistence.save(
+			PaymentReservation.createReserved(order.getId(), member.getId(), 1000, PaymentProvider.NAVERPAY,
+				merchantPayKey, LocalDateTime.now().plusMinutes(15))
+		);
+		Payment attempt = paymentPersistence.save(createApproveAttempt(reservation, pgPaymentId));
 		ConcurrentLinkedQueue<Throwable> errors = new ConcurrentLinkedQueue<>();
 
 		// when
-		runConcurrent(20, () -> paymentApprovalService.completeApprovedPayment(
-			merchantPayKey,
-			PaymentProvider.NAVERPAY,
-			pgPaymentId,
-			LocalDateTime.now()
-		), errors);
+		runConcurrent(20, () -> paymentApprovalService.succeedApproval(attempt, LocalDateTime.now()), errors);
 
 		// then
 		assertThat(paymentPersistence.countPaymentsByMerchantPayKey(merchantPayKey)).isEqualTo(1L);
-		assertThat(orderPersistence.getOrderStatusByMerchantPayKey(merchantPayKey))
+		assertThat(orderPersistence.getOrderStatusById(order.getId()))
 			.isEqualTo(OrderStatus.PAID);
 		assertThat(errors.stream().allMatch(this::isAllowedConcurrentException)).isTrue();
 	}
@@ -162,19 +167,13 @@ class PaymentApprovalServiceConcurrencyTest {
 			.build();
 	}
 
-	private Order createOrder(Member member, Product product, String merchantPayKey) {
+	private Order createOrder(Member member, Product product) {
 		Order order = Order.create(member.getId());
 		order.addOrderItem(product.getId(), 1, product.getPrice());
-		order.assignMerchantPayKey(merchantPayKey);
 		return order;
 	}
 
-	private PaymentAttempt createApproveAttempt(String merchantPayKey, String pgPaymentId, int totalPayAmount) {
-		return PaymentAttempt.createApproveRequested(
-			merchantPayKey,
-			pgPaymentId,
-			totalPayAmount,
-			PaymentProvider.NAVERPAY
-		);
+	private Payment createApproveAttempt(PaymentReservation reservation, String pgPaymentId) {
+		return Payment.createRequested(reservation, PaymentType.APPROVE, pgPaymentId);
 	}
 }

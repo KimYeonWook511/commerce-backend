@@ -5,7 +5,7 @@ import lombok.RequiredArgsConstructor;
 
 @Getter
 @RequiredArgsConstructor
-public enum PaymentAttemptType {
+public enum PaymentType {
 	APPROVE("승인"),
 	CANCEL("취소");
 

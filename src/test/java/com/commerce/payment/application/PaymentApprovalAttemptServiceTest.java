@@ -1,7 +1,6 @@
 package com.commerce.payment.application;
 
 import static org.assertj.core.api.Assertions.assertThat;
-import static org.assertj.core.api.Assertions.assertThatThrownBy;
 import static org.mockito.ArgumentMatchers.any;
 import static org.mockito.ArgumentMatchers.eq;
 import static org.mockito.BDDMockito.given;
@@ -18,99 +17,70 @@ import org.mockito.InjectMocks;
 import org.mockito.Mock;
 import org.mockito.junit.jupiter.MockitoExtension;
 
-import com.commerce.payment.domain.PaymentAttempt;
-import com.commerce.payment.domain.PaymentAttemptFailCode;
-import com.commerce.payment.domain.PaymentAttemptStatus;
-import com.commerce.payment.domain.PaymentAttemptType;
+import com.commerce.payment.domain.Payment;
+import com.commerce.payment.domain.PaymentFailCode;
 import com.commerce.payment.domain.PaymentProvider;
-import com.commerce.payment.domain.repository.PaymentAttemptRepository;
-import com.commerce.payment.exception.PaymentErrorCode;
-import com.commerce.payment.exception.PaymentException;
+import com.commerce.payment.domain.PaymentReservation;
+import com.commerce.payment.domain.PaymentStatus;
+import com.commerce.payment.domain.PaymentType;
+import com.commerce.payment.domain.repository.PaymentRepository;
+import com.commerce.payment.domain.repository.PaymentReservationRepository;
 
 @ExtendWith(MockitoExtension.class)
 class PaymentApprovalAttemptServiceTest {
 
 	@Mock
-	private PaymentAttemptRepository paymentAttemptRepository;
+	private PaymentRepository paymentRepository;
+
+	@Mock
+	private PaymentReservationRepository paymentReservationRepository;
 
 	@InjectMocks
 	private PaymentApprovalAttemptService paymentApprovalAttemptService;
 
-	@DisplayName("같은 결제 시도 이력이 없으면 승인 요청 이력을 생성한다")
+	@DisplayName("같은 결제 시도 이력이 없으면 reservation을 USED로 전이하고 승인 요청 이력을 생성하고 반환한다")
 	@Test
-	void getOrCreate_whenAttemptNotExists_createAttempt() {
+	void create_whenAttemptNotExists_markUsedAndCreateAttempt() {
 		// given
-		given(paymentAttemptRepository.findApproveAttempt(
+		PaymentReservation reservation = PaymentReservation.createReserved(
+			1L, 1L, 1000, PaymentProvider.NAVERPAY, "PAY-1", LocalDateTime.now().plusMinutes(15));
+		given(paymentRepository.findApproveAttempt(
 			eq("PAY-1"), eq(PaymentProvider.NAVERPAY), eq("payment-id-1")))
 			.willReturn(Optional.empty());
-		given(paymentAttemptRepository.save(any(PaymentAttempt.class)))
-			.willAnswer(invocation -> invocation.getArgument(0, PaymentAttempt.class));
+		given(paymentReservationRepository.save(any(PaymentReservation.class)))
+			.willAnswer(invocation -> invocation.getArgument(0, PaymentReservation.class));
+		given(paymentRepository.save(any(Payment.class)))
+			.willAnswer(invocation -> invocation.getArgument(0, Payment.class));
 
 		// when
-		PaymentAttempt result = paymentApprovalAttemptService.getOrCreate(
-			"PAY-1", PaymentProvider.NAVERPAY, "payment-id-1", 1000);
+		Payment result = paymentApprovalAttemptService.create(reservation, "payment-id-1");
 
 		// then
-		assertThat(result.getStatus()).isEqualTo(PaymentAttemptStatus.REQUESTED);
-		assertThat(result.getType()).isEqualTo(PaymentAttemptType.APPROVE);
+		assertThat(result.getStatus()).isEqualTo(PaymentStatus.REQUESTED);
+		assertThat(result.getType()).isEqualTo(PaymentType.APPROVE);
 		assertThat(result.getAmount()).isEqualTo(1000);
+		assertThat(reservation.getStatus()).isEqualTo(com.commerce.payment.domain.PaymentReservationStatus.USED);
+		assertThat(reservation.getReservedKey()).isNull();
+		then(paymentReservationRepository).should().save(reservation);
 	}
 
-	@DisplayName("승인 시도 이력이 이미 존재하고 amount 가 같으면 기존 이력을 반환한다")
+	@DisplayName("승인 시도 이력이 이미 존재하면 기존 이력을 반환한다")
 	@Test
-	void getOrCreate_whenAttemptExistsWithSameAmount_returnExistingAttempt() {
+	void create_whenAttemptExists_returnExisting() {
 		// given
-		PaymentAttempt existingAttempt = PaymentAttempt.createApproveRequested("PAY-1", "payment-id-1", 1000,
-			PaymentProvider.NAVERPAY);
-		given(paymentAttemptRepository.findApproveAttempt(
+		PaymentReservation reservation = PaymentReservation.createReserved(
+			1L, 1L, 1000, PaymentProvider.NAVERPAY, "PAY-1", LocalDateTime.now().plusMinutes(15));
+		Payment existingAttempt = Payment.createRequested(reservation, PaymentType.APPROVE, "payment-id-1");
+		given(paymentRepository.findApproveAttempt(
 			eq("PAY-1"), eq(PaymentProvider.NAVERPAY), eq("payment-id-1")))
 			.willReturn(Optional.of(existingAttempt));
 
 		// when
-		PaymentAttempt result = paymentApprovalAttemptService.getOrCreate(
-			"PAY-1", PaymentProvider.NAVERPAY, "payment-id-1", 1000);
+		Payment result = paymentApprovalAttemptService.create(reservation, "payment-id-1");
 
 		// then
 		assertThat(result).isSameAs(existingAttempt);
-		then(paymentAttemptRepository).should(never()).save(any(PaymentAttempt.class));
-	}
-
-	@DisplayName("승인 시도 이력이 이미 존재하고 amount 가 다르면 예외를 던진다")
-	@Test
-	void getOrCreate_whenAttemptExistsWithDifferentAmount_throwAmountMismatch() {
-		// given
-		PaymentAttempt existing = PaymentAttempt.createApproveRequested(
-			"PAY-1", "payment-id-1", 1000, PaymentProvider.NAVERPAY);
-		given(paymentAttemptRepository.findApproveAttempt(
-			eq("PAY-1"), eq(PaymentProvider.NAVERPAY), eq("payment-id-1")))
-			.willReturn(Optional.of(existing));
-
-		// when & then
-		assertThatThrownBy(() -> paymentApprovalAttemptService.getOrCreate(
-			"PAY-1", PaymentProvider.NAVERPAY, "payment-id-1", 2000))
-			.isInstanceOf(PaymentException.class)
-			.extracting(e -> ((PaymentException) e).getErrorCode())
-			.isEqualTo(PaymentErrorCode.PAYMENT_ATTEMPT_AMOUNT_MISMATCH);
-		then(paymentAttemptRepository).should(never()).save(any(PaymentAttempt.class));
-	}
-
-	@DisplayName("승인 성공 시 결제 시도 이력의 상태를 SUCCEEDED로 갱신한다")
-	@Test
-	void succeed_whenAttemptExists_updateAttempt() {
-		// given
-		LocalDateTime respondedAt = LocalDateTime.of(2026, 3, 3, 16, 21);
-		PaymentAttempt attempt = PaymentAttempt.createApproveRequested("PAY-1", "payment-id-1", 1000,
-			PaymentProvider.NAVERPAY);
-		given(paymentAttemptRepository.findApproveAttempt(
-			eq("PAY-1"), eq(PaymentProvider.NAVERPAY), eq("payment-id-1")))
-			.willReturn(Optional.of(attempt));
-
-		// when
-		paymentApprovalAttemptService.succeed("PAY-1", PaymentProvider.NAVERPAY, "payment-id-1", respondedAt);
-
-		// then
-		assertThat(attempt.getStatus()).isEqualTo(PaymentAttemptStatus.SUCCEEDED);
-		assertThat(attempt.getRespondedAt()).isEqualTo(respondedAt);
+		then(paymentRepository).should(never()).save(any(Payment.class));
 	}
 
 	@DisplayName("승인 실패 시 결제 시도 이력의 실패 사유를 저장한다")
@@ -118,22 +88,23 @@ class PaymentApprovalAttemptServiceTest {
 	void fail_whenAttemptExists_updateAttempt() {
 		// given
 		LocalDateTime respondedAt = LocalDateTime.of(2026, 3, 3, 16, 21);
-		PaymentAttempt attempt = PaymentAttempt.createApproveRequested("PAY-1", "payment-id-1", 1000,
-			PaymentProvider.NAVERPAY);
-		given(paymentAttemptRepository.findApproveAttempt(
+		PaymentReservation reservation = PaymentReservation.createReserved(
+			1L, 1L, 1000, PaymentProvider.NAVERPAY, "PAY-1", LocalDateTime.now().plusMinutes(15));
+		Payment attempt = Payment.createRequested(reservation, PaymentType.APPROVE, "payment-id-1");
+		given(paymentRepository.findApproveAttempt(
 			eq("PAY-1"), eq(PaymentProvider.NAVERPAY), eq("payment-id-1")))
 			.willReturn(Optional.of(attempt));
 
 		// when
 		paymentApprovalAttemptService.fail("PAY-1", PaymentProvider.NAVERPAY, "payment-id-1",
-			PaymentAttemptFailCode.PG_NETWORK_ERROR,
+			PaymentFailCode.PG_NETWORK_ERROR,
 			"network error",
 			respondedAt
 		);
 
 		// then
-		assertThat(attempt.getStatus()).isEqualTo(PaymentAttemptStatus.FAILED);
-		assertThat(attempt.getFailCode()).isEqualTo(PaymentAttemptFailCode.PG_NETWORK_ERROR);
+		assertThat(attempt.getStatus()).isEqualTo(PaymentStatus.FAILED);
+		assertThat(attempt.getFailCode()).isEqualTo(PaymentFailCode.PG_NETWORK_ERROR);
 		assertThat(attempt.getFailDetail()).isEqualTo("network error");
 		assertThat(attempt.getRespondedAt()).isEqualTo(respondedAt);
 	}
@@ -143,47 +114,49 @@ class PaymentApprovalAttemptServiceTest {
 	void failIfRequested_whenRequested_updateAttempt() {
 		// given
 		LocalDateTime respondedAt = LocalDateTime.of(2026, 3, 3, 16, 21);
-		PaymentAttempt attempt = PaymentAttempt.createApproveRequested("PAY-1", "payment-id-1", 1000,
-			PaymentProvider.NAVERPAY);
-		given(paymentAttemptRepository.findApproveAttempt(
+		PaymentReservation reservation = PaymentReservation.createReserved(
+			1L, 1L, 1000, PaymentProvider.NAVERPAY, "PAY-1", LocalDateTime.now().plusMinutes(15));
+		Payment attempt = Payment.createRequested(reservation, PaymentType.APPROVE, "payment-id-1");
+		given(paymentRepository.findApproveAttempt(
 			eq("PAY-1"), eq(PaymentProvider.NAVERPAY), eq("payment-id-1")))
 			.willReturn(Optional.of(attempt));
 
 		// when
 		paymentApprovalAttemptService.failIfRequested("PAY-1", PaymentProvider.NAVERPAY, "payment-id-1",
-			PaymentAttemptFailCode.APPROVE_PROCESS_FAILED,
+			PaymentFailCode.APPROVE_PROCESS_FAILED,
 			"compensation",
 			respondedAt
 		);
 
 		// then
-		assertThat(attempt.getStatus()).isEqualTo(PaymentAttemptStatus.FAILED);
-		assertThat(attempt.getFailCode()).isEqualTo(PaymentAttemptFailCode.APPROVE_PROCESS_FAILED);
+		assertThat(attempt.getStatus()).isEqualTo(PaymentStatus.FAILED);
+		assertThat(attempt.getFailCode()).isEqualTo(PaymentFailCode.APPROVE_PROCESS_FAILED);
 		assertThat(attempt.getFailDetail()).isEqualTo("compensation");
 		assertThat(attempt.getRespondedAt()).isEqualTo(respondedAt);
 	}
 
-	@DisplayName("보상 흐름 실패 처리 시 REQUESTED 가 아니면 상태를 갱신하지 않고 종료한다")
+	@DisplayName("보상 흐름 실패 처리 시 REQUESTED가 아니면 상태를 갱신하지 않고 종료한다")
 	@Test
 	void failIfRequested_whenNotRequested_skipMark() {
 		// given
 		LocalDateTime succeededAt = LocalDateTime.of(2026, 3, 3, 16, 21);
-		PaymentAttempt attempt = PaymentAttempt.createApproveRequested("PAY-1", "payment-id-1", 1000,
-			PaymentProvider.NAVERPAY);
+		PaymentReservation reservation = PaymentReservation.createReserved(
+			1L, 1L, 1000, PaymentProvider.NAVERPAY, "PAY-1", LocalDateTime.now().plusMinutes(15));
+		Payment attempt = Payment.createRequested(reservation, PaymentType.APPROVE, "payment-id-1");
 		attempt.succeed(succeededAt);
-		given(paymentAttemptRepository.findApproveAttempt(
+		given(paymentRepository.findApproveAttempt(
 			eq("PAY-1"), eq(PaymentProvider.NAVERPAY), eq("payment-id-1")))
 			.willReturn(Optional.of(attempt));
 
 		// when
 		paymentApprovalAttemptService.failIfRequested("PAY-1", PaymentProvider.NAVERPAY, "payment-id-1",
-			PaymentAttemptFailCode.APPROVE_PROCESS_FAILED,
+			PaymentFailCode.APPROVE_PROCESS_FAILED,
 			"compensation",
 			LocalDateTime.of(2026, 3, 3, 16, 22)
 		);
 
 		// then
-		assertThat(attempt.getStatus()).isEqualTo(PaymentAttemptStatus.SUCCEEDED);
+		assertThat(attempt.getStatus()).isEqualTo(PaymentStatus.SUCCEEDED);
 		assertThat(attempt.getFailCode()).isNull();
 		assertThat(attempt.getRespondedAt()).isEqualTo(succeededAt);
 	}
@@ -192,18 +165,18 @@ class PaymentApprovalAttemptServiceTest {
 	@Test
 	void failIfRequested_whenAttemptNotFound_skipMark() {
 		// given
-		given(paymentAttemptRepository.findApproveAttempt(
+		given(paymentRepository.findApproveAttempt(
 			eq("PAY-1"), eq(PaymentProvider.NAVERPAY), eq("payment-id-1")))
 			.willReturn(Optional.empty());
 
 		// when
 		paymentApprovalAttemptService.failIfRequested(
 			"PAY-1", PaymentProvider.NAVERPAY, "payment-id-1",
-			PaymentAttemptFailCode.APPROVE_PROCESS_FAILED,
+			PaymentFailCode.APPROVE_PROCESS_FAILED,
 			"compensation",
 			LocalDateTime.of(2026, 3, 3, 16, 21));
 
 		// then
-		then(paymentAttemptRepository).should(never()).save(any());
+		then(paymentRepository).should(never()).save(any());
 	}
 }
