@@ -1,0 +1,11 @@
+{
+  "project": "payment-naming-cleanup",
+  "phase": "0-cleanup",
+  "steps": [
+    { "step": 1, "name": "verbize-reservation-methods", "status": "pending" },
+    { "step": 2, "name": "remove-succeed-dead-reset", "status": "pending" },
+    { "step": 3, "name": "purge-payment-attempt-identifiers", "status": "pending" },
+    { "step": 4, "name": "sync-root-docs", "status": "pending" },
+    { "step": 5, "name": "write-retrospective", "status": "pending" }
+  ]
+}
