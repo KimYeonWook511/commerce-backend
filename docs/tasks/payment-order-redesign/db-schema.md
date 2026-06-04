@@ -12,7 +12,7 @@
 
 ### `tbl_payment_reservation` (신규)
 
-결제창 준비물. status `{RESERVED, USED}` 의 한 번 전이만 허용.
+결제창 준비물. status `{RESERVED, USED, EXPIRED}` 의 한 번 전이만 허용 (RESERVED → USED 또는 RESERVED → EXPIRED).
 
 | 컬럼 | 타입 | NULL | 비고 |
 |---|---|---|---|
@@ -22,9 +22,9 @@
 | `provider` | VARCHAR(32) | NOT NULL | PG (`NAVERPAY` 등) |
 | `merchant_pay_key` | VARCHAR(64) | NOT NULL | 서버 발급. redirect 역조회 키 |
 | `amount` | INT | NOT NULL | 결제 예정 금액 (승인 시 PG 응답 대조용) |
-| `status` | VARCHAR(32) | NOT NULL | `RESERVED` / `USED` |
+| `status` | VARCHAR(32) | NOT NULL | `RESERVED` / `USED` / `EXPIRED` |
 | `expires_at` | DATETIME(6) | NOT NULL | 만료 시각 (재사용/박제 판단) |
-| `reserved_key` | VARCHAR(96) | NULL | RESERVED 일 때만 `"{order_id}:{provider}"`, USED 면 NULL (NULL 트릭) |
+| `reserved_key` | VARCHAR(96) | NULL | RESERVED 일 때만 `"{order_id}:{provider}"`, USED/EXPIRED 면 NULL (NULL 트릭) |
 | `created_at` | DATETIME(6) | NOT NULL | BaseTimeEntity |
 | `updated_at` | DATETIME(6) | NOT NULL | BaseTimeEntity |
 
@@ -87,11 +87,11 @@
 ### `tbl_payment_reservation` 무결성 규칙
 
 - **NULL 트릭 캡슐화**:
-  - `reserved_key` 값 set 은 *반드시* `status=RESERVED` 와 같은 INSERT 안에서. status 가 USED 로 가면 *같은 UPDATE* 에서 NULL 로 비움
+  - `reserved_key` 값 set 은 *반드시* `status=RESERVED` 와 같은 INSERT 안에서. status 가 USED/EXPIRED 로 가면 *같은 UPDATE* 에서 NULL 로 비움 (`markUsed` / `markExpired`)
   - 도메인 메서드 (`createReserved`, `markUsed`) 안에 캡슐화. 우회 setter 금지
 - **상태 전이**:
   - `RESERVED → USED` 한 번 전이만 허용. USED 행은 더 이상 변하지 않음
-  - EXPIRED 별도 마킹 없음 — 만료는 `expires_at` 필터로만 판단 (박제 자동 복구 정신)
+  - 만료/무효 예약은 reserve 진입 시 `markExpired` 로 회수 (status=EXPIRED + reservedKey=NULL). reservedKey 점유를 풀어 같은 (order, provider) 재예약을 허용 (ADR-5)
 - **amount 변경 금지**: 결제 예정 금액이 바뀌면 새 Reservation 발급. 기존 행 amount UPDATE 금지
 - **FK**: `order_id`, `member_id` 는 *참조용 값* 으로만 가짐. `FOREIGN KEY` 제약 없음
 

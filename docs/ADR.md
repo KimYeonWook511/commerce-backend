@@ -288,9 +288,9 @@
 ### ADR-026: 결제 도메인 재설계 — Order↔Payment 경계 분리 + RESERVE 별도 거주지 (B안)
 
 - **결정 요약**:
-  1. **두 테이블 분리** — `tbl_payment_reservation` (상태 `{RESERVED, USED}`, 결제창 준비물, `RESERVED → USED` 한 번 전이) + `tbl_payment` (타입 `{APPROVE, CANCEL}`, PG 사건 append-only)
+  1. **두 테이블 분리** — `tbl_payment_reservation` (상태 `{RESERVED, USED, EXPIRED}`, 결제창 준비물, RESERVED → USED/EXPIRED 한 번 전이) + `tbl_payment` (타입 `{APPROVE, CANCEL}`, PG 사건 append-only)
   2. **merchantPayKey 책임 이동** — Order.merchantPayKey / assignMerchantPayKey / findByMerchantPayKey* 전량 제거. merchantPayKey 발급·저장 책임이 PaymentReservation 으로 이동
-  3. **NULL 트릭 partial unique** — MySQL InnoDB 의 partial unique index 미지원 → `uk_payment_approved_order_key (approved_order_key NULL)` + `uk_payment_reservation_reserved_key (reserved_key NULL)` 로 대체. 조건 불충족 행은 NULL 로 두어 unique 제외. 두 컬럼 모두 도메인 메서드(`succeed`, `markUsed`) 안에서 상태 변경과 *같은 UPDATE* 에 묶어 캡슐화 강제
+  3. **NULL 트릭 partial unique** — MySQL InnoDB 의 partial unique index 미지원 → `uk_payment_approved_order_key (approved_order_key NULL)` + `uk_payment_reservation_reserved_key (reserved_key NULL)` 로 대체. 조건 불충족 행은 NULL 로 두어 unique 제외. 두 컬럼 모두 도메인 메서드(`succeed`, `markUsed`, `markExpired`) 안에서 상태 변경과 *같은 UPDATE* 에 묶어 캡슐화 강제. 만료/무효 예약은 reserve 진입 시 `markExpired` 로 reservedKey 를 회수해 재예약 허용
   4. **완료 판단 = EXISTS** — `(성공 APPROVE 존재) AND (무효화 성공 CANCEL 부재)`. 마지막 행 기반 판단 금지. 현재는 `existsApproveSucceeded(merchantPayKey)` 로 단순 구현
   5. **UNKNOWN 마킹** — PG 호출 timeout / DB 반영 실패 시 `Payment.markUnknown` 흔적 보존. UNKNOWN 행 있는 주문에 reserve/approve 차단 (`PAYMENT_RESULT_PENDING` 409). 해소는 후속 task `PaymentReconciliationService`
   6. **API rename** — `POST /payments/ready` → `POST /payments/reserve` (frontend 미개발이라 호환 깨도 무방)

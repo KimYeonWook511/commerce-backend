@@ -153,9 +153,9 @@ COLUMNS:
 - `provider VARCHAR(32) NOT NULL` — PG (`NAVERPAY` 등)
 - `merchant_pay_key VARCHAR(64) NOT NULL` — 서버 발급. redirect 역조회 키
 - `amount INT NOT NULL` — 결제 예정 금액 (승인 시 PG 응답 대조용)
-- `status VARCHAR(32) NOT NULL` — `RESERVED` / `USED`
+- `status VARCHAR(32) NOT NULL` — `RESERVED` / `USED` / `EXPIRED`
 - `expires_at DATETIME(6) NOT NULL` — 만료 시각 (재사용/박제 판단용)
-- `reserved_key VARCHAR(96) NULL` — RESERVED 일 때만 `"{order_id}:{provider}"`, USED 면 NULL (NULL 트릭)
+- `reserved_key VARCHAR(96) NULL` — RESERVED 일 때만 `"{order_id}:{provider}"`, USED/EXPIRED 면 NULL (NULL 트릭)
 - `created_at DATETIME(6) NOT NULL`
 - `updated_at DATETIME(6) NOT NULL`
 
@@ -165,8 +165,8 @@ INDEX:
 - `idx_reservation_order (order_id)` — UNKNOWN 차단 검사 / 주문별 조회
 
 비고:
-- **NULL 트릭 캡슐화**: `reserved_key` 값 set 은 *반드시* `status=RESERVED` 와 같은 INSERT 안에서. status 가 USED 로 가면 *같은 UPDATE* 에서 NULL 로 비움. 도메인 메서드 (`createReserved`, `markUsed`) 안에 캡슐화. 우회 setter 금지
-- **상태 전이**: `RESERVED → USED` 한 번 전이만 허용. EXPIRED 별도 마킹 없음 — 만료는 `expires_at` 필터로만 판단 (박제 자동 복구)
+- **NULL 트릭 캡슐화**: `reserved_key` 값 set 은 *반드시* `status=RESERVED` 와 같은 INSERT 안에서. status 가 USED/EXPIRED 로 가면 *같은 UPDATE* 에서 NULL 로 비움. 도메인 메서드 (`createReserved`, `markUsed`, `markExpired`) 안에 캡슐화. 우회 setter 금지
+- **상태 전이**: `RESERVED → USED` (승인 시작) 또는 `RESERVED → EXPIRED` (만료/무효 회수) 한 번 전이만 허용. 만료/무효 예약은 reserve 진입 시 `markExpired` 로 reservedKey 를 회수해 재예약 허용 (박제 자동 복구)
 - **amount 불변**: 결제 예정 금액이 바뀌면 새 Reservation 발급. 기존 행 amount UPDATE 금지
 - **FK**: `order_id`, `member_id` 는 FK 제약 없음 (참조용 값)
 

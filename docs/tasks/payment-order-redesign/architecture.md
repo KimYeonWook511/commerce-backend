@@ -18,13 +18,14 @@
 
 - 패키지: `com.commerce.payment.domain`
 - 필드:
-  - `id`, `orderId`, `memberId`, `provider`, `merchantPayKey`, `amount`, `status` (`RESERVED|USED`), `expiresAt`, `reservedKey` (`RESERVED` 일 때만 `"{orderId}:{provider}"`, 그 외 NULL)
+  - `id`, `orderId`, `memberId`, `provider`, `merchantPayKey`, `amount`, `status` (`RESERVED|USED|EXPIRED`), `expiresAt`, `reservedKey` (`RESERVED` 일 때만 `"{orderId}:{provider}"`, 그 외 NULL)
 - 도메인 메서드:
   - `createReserved(orderId, memberId, provider, amount, ttl)` — 정적 팩토리. status=RESERVED, reservedKey set, expiresAt=now+ttl
   - `isReusableFor(memberId, provider, amount, now)` — `(status=RESERVED ∧ expiresAt>now ∧ provider 일치 ∧ memberId 일치 ∧ amount 일치)`
   - `markUsed()` — status=USED + **reservedKey=NULL** *같은 UPDATE 안에서* set (NULL 트릭 캡슐화)
-- 부수: `PaymentReservationStatus` enum (`RESERVED, USED`)
-- Repository: `PaymentReservationRepository` + `JpaPaymentReservationRepository` + `PaymentReservationRepositoryAdapter`
+  - `markExpired()` — status=EXPIRED + **reservedKey=NULL** *같은 UPDATE 안에서* set. 만료/무효 예약의 reservedKey 점유를 풀어 재예약 허용
+- 부수: `PaymentReservationStatus` enum (`RESERVED, USED, EXPIRED`)
+- Repository: `PaymentReservationRepository` (`findReserved(orderId, provider)` — 만료 무관 RESERVED 조회) + `JpaPaymentReservationRepository` + `PaymentReservationRepositoryAdapter`
 
 #### Rename + 확장: `PaymentAttempt` → `Payment`
 
@@ -135,10 +136,11 @@ NULL 은 unique 중복 허용 — 실패/취소/USED 행은 제약 받지 않음
 
 ### Reservation 의 만료
 
-- `expires_at` 은 *재사용 판단* 에만 쓰임 (필터)
-- 별도 EXPIRED 상태/마킹 없음 — 박제 자동 복구 정신과 일치
+- `expires_at` 은 *재사용 판단* 에만 쓰임 (`isReusableFor` 필터)
+- 만료/무효 (금액 변경 등) Reservation 은 reserve 진입 시 `markExpired` 로 *lazy 회수* (status=EXPIRED + reservedKey=NULL). reservedKey 점유를 풀어야 같은 (order, provider) 재예약이 `uk_payment_reservation_reserved_key` 위반 없이 가능
+- lazy 회수라 별도 배치/스케줄러의 박제 위험 없음 (reserve 호출 요청이 자기 자리를 정리)
 - 만료된 Reservation 에 redirect 가 늦게 와도 승인 진행 차단 안 함 (PG 가 SUCCESS 줬으면 우리 정책으로 막을 이유 없음)
-- 물리 정리는 batch sweep 으로 (후속, 우선순위 낮음)
+- 물리 정리(EXPIRED 행 삭제)는 batch sweep 으로 (후속, 우선순위 낮음)
 
 ## 데이터 흐름
 
@@ -149,7 +151,9 @@ NULL 은 unique 중복 허용 — 실패/취소/USED 행은 제약 받지 않음
   ├─ order = orderRepository.findByIdAndMemberIdWithItems(orderId, memberId)
   ├─ order.checkPayable()
   ├─ paymentRepository.existsUnknownByOrderId(orderId) → true 면 PAYMENT_RESULT_PENDING
-  ├─ reservation = paymentReservationRepository.findReusable(orderId, memberId, provider, order.totalPrice, now())
+  ├─ existing = paymentReservationRepository.findReserved(orderId, provider)   // RESERVED, 만료 무관
+  ├─ if existing 유효(isReusableFor): reservation = existing                    // 재사용
+  ├─ else if existing 만료/무효: existing.markExpired() + save → 새 발급          // reservedKey 회수
   ├─ if 없음:
   │     reservation = paymentReservationRepository.save(
   │         PaymentReservation.createReserved(orderId, memberId, provider, order.totalPrice, ttl=30m)
@@ -198,7 +202,7 @@ NULL 은 unique 중복 허용 — 실패/취소/USED 행은 제약 받지 않음
 | PG approve 호출 timeout / 네트워크 단절 | `Payment.markUnknown(failDetail, now)` — UNKNOWN 흔적 |
 | PG approve 응답 OK + DB 반영 실패 | UNKNOWN 흔적 (가능한 경우). 박제 RESERVED 방지 |
 | UNKNOWN 행 있는 주문에 reserve/approve 재요청 | `PAYMENT_RESULT_PENDING` 응답 + 차단 |
-| Reservation 박제 (status=RESERVED 인 채로 expiresAt 초과) | 다음 reserve 호출 시 재사용 대상에서 자동 제외 → 새 RESERVED 발급. EXPIRED 별도 마킹 없음 |
+| Reservation 박제 (status=RESERVED 인 채로 expiresAt 초과) | 다음 reserve 호출 시 `markExpired` 로 회수 (reservedKey=NULL) 후 새 RESERVED 발급 |
 | 만료된 Reservation 에 redirect 도착 | 승인 진행 OK (expires_at 은 reserve 재사용 판단에만 쓰임) |
 | 같은 merchantPayKey 의 redirect 중복 (USED Reservation) | 멱등 응답 — 기존 결제 결과 200 반환 (차단 아님) |
 | ADR-010 amount mismatch | 새 Reservation 발급 (기존 Reservation amount UPDATE 금지) + `PAYMENT_ATTEMPT_AMOUNT_MISMATCH` (409) |

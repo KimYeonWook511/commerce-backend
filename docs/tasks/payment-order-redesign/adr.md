@@ -3,7 +3,7 @@
 ## ADR-1: 결제 도메인을 두 테이블 (Reservation + Payment) 로 분리하고 Payment 는 시도 단위 append-only 로 재정의한다
 
 - **결정**:
-  - 신규 `PaymentReservation` 도메인 — 결제창 준비물. status `{RESERVED, USED}` 의 한 번 전이만 허용.
+  - 신규 `PaymentReservation` 도메인 — 결제창 준비물. status `{RESERVED, USED, EXPIRED}`. RESERVED 에서 USED (승인 시작) 또는 EXPIRED (만료/무효 회수) 로의 한 번 전이만 허용.
   - 현재 `PaymentAttempt` 를 `Payment` 로 rename. type ∈ `{APPROVE, CANCEL}` (RESERVE 없음), status ∈ `{REQUESTED, SUCCEEDED, FAILED, UNKNOWN}`. *PG 에 실제로 보낸 요청 사건* 의미. append-only.
   - 기존 `Payment` (성공 결제 1:1 단위) 폐기.
 - **배경**: 현재 `Payment` 가 들고 있던 모든 사실 (`order_id`, `pgPaymentId`, `amount`, `approvedAt`, `provider`) 은 성공한 APPROVE PaymentAttempt 행이 이미 갖고 있다. 별도 테이블은 *성공 시도의 복사본* 일 뿐이다. 두 의미를 같은 이름 (`Payment`) 으로 충돌시키면 모델 의미가 흐려지므로 한쪽은 폐기, 한쪽은 의미 명확화. RESERVE 의 임시성·만료·상태 변화·대량 발생 성격은 PG 사건 (APPROVE/CANCEL) 과 본질이 달라 별도 테이블이 필요하다 (자세한 동기는 ADR-10).
@@ -26,13 +26,13 @@
 
 - **결정**: MySQL InnoDB 가 partial unique index 를 미지원하므로 *조건 만족 시에만 값, 아니면 NULL* 컬럼 + 일반 unique 로 대체한다.
   - `tbl_payment.approved_order_key BIGINT NULL` + `UNIQUE uk_payment_approved_order_key (approved_order_key)` — APPROVE+SUCCEEDED 일 때만 `order_id`, 그 외 NULL
-  - `tbl_payment_reservation.reserved_key VARCHAR(96) NULL` + `UNIQUE uk_payment_reservation_reserved_key (reserved_key)` — RESERVED 일 때만 `"{order_id}:{provider}"`, USED 면 NULL
+  - `tbl_payment_reservation.reserved_key VARCHAR(96) NULL` + `UNIQUE uk_payment_reservation_reserved_key (reserved_key)` — RESERVED 일 때만 `"{order_id}:{provider}"`, USED/EXPIRED 면 NULL
 - **배경**: 다중 PG 이중결제는 merchantPayKey unique (PG 안에서의 중복) 로는 못 막는다. *주문 단위* 멱등을 끌어올려야 함. 동시에 reserve 단계의 동시 따닥도 *(주문, 수단) 당 RESERVED 1 개* 로 제약 필요. PostgreSQL 이라면 `WHERE` 조건 partial unique 로 깔끔하지만 InnoDB 미지원.
 - **근거**:
   - InnoDB unique 는 NULL 을 중복으로 치지 않음 → 조건 안 맞는 행은 NULL 로 두면 제약 빠짐 → partial unique 와 동일 효과.
   - **캡슐화 강제** (두 도메인 모두에 적용):
     - `Payment.succeed()` 메서드 안에서 `status=SUCCEEDED` 와 `approvedOrderKey=orderId` *같은 UPDATE* 에 묶음.
-    - `PaymentReservation.markUsed()` 메서드 안에서 `status=USED` 와 `reservedKey=NULL` *같은 UPDATE* 에 묶음.
+    - `PaymentReservation.markUsed()` / `markExpired()` 메서드 안에서 `status` (USED / EXPIRED) 와 `reservedKey=NULL` *같은 UPDATE* 에 묶음.
     - 둘 다 우회 setter 금지. 도메인 테스트로 "한 메서드 호출 시 두 필드 동시 set" 을 단언 박아둠. 이 캡슐화가 깨지면 정합성 무너짐.
 - **결과**: 이중결제 / reserve 따닥의 race condition 이 DB 레벨에서 차단. 효과는 partial unique 와 동일. NULL 트릭 자체는 SQL 마법이라 코드 캡슐화의 명확성 (한 메서드에서 두 필드를 함께 변경) 이 보장돼야 의미가 살아남.
 
@@ -51,18 +51,18 @@
   - ADR-014 의 `hasCompletedPayment` 는 *완료 사실 조회* 의 단순 케이스 (전액 취소 부재 검증은 부분취소 도입 시 확장).
 - **결과**: 부분취소 도입 시 모델 수술 없이 검증 확장. 현재는 `existsByMerchantPayKeyAndTypeAndStatus(merchantPayKey, APPROVE, SUCCEEDED)` 로 단순 구현. ADR-014 본문에 후속 노트 추가 (구현 갱신).
 
-## ADR-5: reserve 흐름은 PaymentReservation 을 생성/재사용하고 만료는 마킹 없이 필터로만 처리한다
+## ADR-5: reserve 흐름은 PaymentReservation 을 생성/재사용하고 만료/무효 예약은 진입 시 lazy 회수한다
 
-- **결정**: `ReservePaymentService.reserve` (구 `PaymentReadyService.ready`) 는 `PaymentReservation` 행을 생성/재사용 + 반환한다. 재사용 조건은 `(status=RESERVED ∧ expiresAt>now ∧ provider 일치 ∧ memberId 일치 ∧ amount 일치)`. 만료된 Reservation 은 별도 EXPIRED 마킹 *없이* 재사용 대상에서 자동 제외되며 다음 요청이 새 행 발급. 만료된 Reservation 에 redirect 가 늦게 도착해도 *승인 진행은 차단하지 않는다.*
+- **결정**: `ReservePaymentService.reserve` (구 `PaymentReadyService.ready`) 는 `PaymentReservation` 행을 생성/재사용 + 반환한다. 진입 시 같은 `(orderId, provider)` 의 RESERVED 행을 만료 무관하게 조회 (`findReserved`) 한 뒤 도메인 `isReusableFor` (`status=RESERVED ∧ expiresAt>now ∧ provider 일치 ∧ memberId 일치 ∧ amount 일치`) 로 판정한다. 유효하면 재사용, 만료/무효 (금액 변경 등) 면 `markExpired` 로 `reservedKey` 를 회수 (status=EXPIRED + reservedKey=NULL) 한 뒤 새 행을 발급한다. 만료된 Reservation 에 redirect 가 늦게 도착해도 *승인 진행은 차단하지 않는다.*
 - **배경**: 현재 코드 문제 (1) merchantPayKey 를 Order 에 저장해 키 고정 (2) Reservation 행 부재로 redirect 역조회 불가 (3) expiresAt/provider 기반 재사용/만료 부재.
 - **근거**:
   - **redirect 역조회**: 네이버가 redirect 로 `merchantPayKey`, `pgPaymentId` 만 줌. 키를 저장해둔 적이 없으면 주문을 못 찾는다 → Reservation 생성이 *역조회 entry point* 의 전제.
-  - **박제 (stale RESERVED) 자동 복구**: 판단에 expiresAt 을 넣어 *유효 RESERVED = status=RESERVED ∧ expiresAt>now*. 박제된 행은 만료되는 순간 재사용 대상에서 빠지고 다음 요청이 새로 발급. EXPIRED 마킹은 *누가 언제 마킹할지* (또 박제 위험) 의 문제를 새로 만들어 의도적으로 두지 않는다.
+  - **박제 (stale RESERVED) 자동 복구**: 판단에 expiresAt 을 넣어 *유효 RESERVED = status=RESERVED ∧ expiresAt>now*. 박제된 행은 만료되는 순간 재사용 대상에서 빠진다. 다만 RESERVED 상태인 동안 `reservedKey` (`"{orderId}:{provider}"`) 를 계속 점유하므로, 단순 필터만으로는 *새 발급* 이 `uk_payment_reservation_reserved_key` 위반으로 막힌다. 따라서 reserve 진입 시 만료 행을 `markExpired` 로 회수 (reservedKey=NULL) 한 뒤 새로 발급한다. 이 회수는 *reserve 를 호출하는 요청이 자기가 쓸 자리를 정리하는 lazy 방식* 이라 별도 배치/스케줄러의 박제 위험이 없다. (초기 B안은 EXPIRED 상태를 제거하고 필터만으로 두려 했으나, 만료 후 reservedKey 가 회수되지 않아 같은 주문의 재예약이 영구 차단되는 결함이 발견되어 EXPIRED + lazy 회수로 정정했다.)
   - **provider/memberId/amount 일치 조건**: 네이버로 띄웠다 카카오 선택한 사용자에게 네이버 결제창이 뜨는 사고 방지. amount 가 바뀌면 새 Reservation (Reservation 의 amount UPDATE 금지) — 같은 키로 다른 금액의 결제 시도를 추적 불가하게 만드는 모순 방지.
   - **만료 후 늦은 redirect 진행**: 돈은 PG 가 빼간 것. 우리 30m 정책으로 막으면 *돈은 빠졌는데 주문은 미결제* 박제 발생. expires_at 은 *우리 내부 재사용 관리* 용일 뿐 *PG 결과 거절* 사유가 될 수 없다. 단, 승인 시 amount 대조는 그대로.
   - **NaverPay reserve API 호출 없음** — 우리 서버가 키 발급 + 결제창 정보 (clientId/chainId/returnUrl) 만 만들어 프론트에 반환.
   - **같은 키 redirect 중복 → 멱등 응답**: USED Reservation 발견 시 *이미 결제됨* 차단이 아니라 기존 결제 결과 200 응답으로 흡수 (PG 의 redirect 멱등 정신).
-- **결과**: reserve 따닥은 `uk_payment_reservation_reserved_key` + expiresAt 재사용으로 차단. 박제 자동 복구. 다중 PG 자연 지원. status enum 이 `{RESERVED, USED}` 로 단순화 (EXPIRED 제거).
+- **결과**: reserve 따닥은 `uk_payment_reservation_reserved_key` + expiresAt 재사용으로 차단. 박제 자동 복구. 다중 PG 자연 지원. status enum 은 `{RESERVED, USED, EXPIRED}`. 만료/무효 행은 reserve 진입 시 EXPIRED 로 회수되어 reservedKey 점유를 푼다. 재사용 판정은 JPQL 이 아니라 도메인 `isReusableFor` 가 담당한다 (규칙 단일화).
 
 ## ADR-6: UNKNOWN 상태는 *마킹* 까지만 이번 task 에 포함하고 *해소 (대사)* 는 후속 task 로 분리한다
 
@@ -99,7 +99,7 @@
 
 ## ADR-10: RESERVE 거주지를 Payment 단일 테이블에서 PaymentReservation 별도 테이블로 분리한다 (A안 → B안 전환)
 
-- **결정**: 초기안 (A안) 은 *단일 `tbl_payment` 테이블에 `type ∈ {RESERVE, APPROVE, CANCEL}` 을 모두 담는* 구조였다. 본 task 에서 이를 **두 테이블 분리 (B안)** — `tbl_payment_reservation` (RESERVED/USED) + `tbl_payment` (APPROVE/CANCEL append-only) — 로 전환한다.
+- **결정**: 초기안 (A안) 은 *단일 `tbl_payment` 테이블에 `type ∈ {RESERVE, APPROVE, CANCEL}` 을 모두 담는* 구조였다. 본 task 에서 이를 **두 테이블 분리 (B안)** — `tbl_payment_reservation` (RESERVED/USED/EXPIRED) + `tbl_payment` (APPROVE/CANCEL append-only) — 로 전환한다.
 - **배경 (A안에서 발견된 4 위화감)**:
   1. **RESERVE 와 APPROVE/CANCEL 은 본질이 다르다.** APPROVE/CANCEL 은 PG 에 보낸 사건이고 결과 확정 후 불변. RESERVE 는 결제창 준비물이고 임시·만료·따닥 대량 발생·상태 변화 영역. 한 테이블에 두면 RESERVE 가 APPROVE/CANCEL 테이블을 오염시킨다.
   2. **A안은 `pg_payment_id` 를 NULL 허용으로 완화시킨다.** RESERVE 에 pgPaymentId 가 없어서다. APPROVE/CANCEL 만 보면 NOT NULL 이 자연스러운데 RESERVE 때문에 보장을 포기.
@@ -107,7 +107,7 @@
   4. **단일 테이블의 단순함은 착시.** 테이블 수는 줄지만 각 행에 NULL 컬럼 (`expires_at`, `reserved_key`) 이 늘고 status 의미가 혼재하고 조회 분기가 생긴다. 테이블 내부 복잡도와 쿼리 복잡도가 올라간다.
 - **근거 (B안의 이득)**:
   - Reservation 의 "상태 변화 + 임시 + 만료 + 대량" 성격을 Reservation 테이블이 자기 책임으로 가져가면, `tbl_payment` 는 "PG 사건" 만 담는 순수한 append-only 테이블이 되고 `pg_payment_id` 도 NOT NULL 로 돌아온다.
-  - `Reservation.status` enum 이 `{RESERVED, USED}` 2개로 단순화 (EXPIRED 도 ADR-5 의 박제 자동 복구 정신으로 제거).
+  - `Reservation.status` enum 이 `{RESERVED, USED, EXPIRED}` 로 정리됨 (A안의 status 의미 혼재 제거). EXPIRED 는 만료/무효 예약의 reservedKey 회수용으로, reserve 진입 시 lazy 처리된다 (ADR-5 참조).
   - `Payment.status` enum 도 `{REQUESTED, SUCCEEDED, FAILED, UNKNOWN}` 4개로 정리되어 의미가 한 결.
 - **트레이드오프**: 테이블 수 +1. 그러나 의미·스키마 단순화 + 쿼리 명확성 + NOT NULL 회복의 이득이 크다.
 - **불변 결정 (A안→B안에서도 그대로)**:

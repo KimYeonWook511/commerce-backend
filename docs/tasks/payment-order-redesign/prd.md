@@ -16,7 +16,7 @@
 ## 목표
 
 - 결제 도메인을 두 테이블로 분리한다:
-  - **`PaymentReservation`** — 결제창 준비물 (임시·만료·따닥 대량 발생). `RESERVED → USED` 한 번 전이.
+  - **`PaymentReservation`** — 결제창 준비물 (임시·만료·따닥 대량 발생). `RESERVED → USED` (승인 시작) 또는 `RESERVED → EXPIRED` (만료/무효 회수) 한 번 전이.
   - **`Payment`** — PG 에 실제로 보낸 요청 사건 (APPROVE / CANCEL). append-only.
 - merchantPayKey 발급/저장 책임을 결제 도메인 (`PaymentReservation`) 으로 옮기고 Order 에서 제거한다.
 - 이중결제 / reserve 따닥 / UNKNOWN 의 *최종 방어선* 을 DB 제약으로 박는다 (1차 필터 + 최종 방어선 이중 구조).
@@ -60,7 +60,7 @@
 1. 사용자가 결제 시작 → `POST /payments/reserve`
 2. Order 조회 + `checkPayable()`
 3. UNKNOWN 차단 검사 — 해당 orderId 에 UNKNOWN Payment 행 있으면 `PAYMENT_RESULT_PENDING` 응답
-4. `paymentReservationRepository.findReusable(orderId, memberId, provider, amount, now())` — `(status=RESERVED ∧ expiresAt>now ∧ provider 일치 ∧ memberId 일치 ∧ amount 일치)`
+4. `findReserved(orderId, provider)` 로 RESERVED 행을 만료 무관 조회 → 도메인 `isReusableFor(memberId, provider, amount, now())` 판정. 유효하면 재사용, 만료/무효면 `markExpired` 로 reservedKey 회수 후 새 발급
 5. 있으면 그 Reservation 의 `merchantPayKey` 재사용. 없으면 새 RESERVED 행 INSERT (`status=RESERVED`, `expiresAt=now+30m`, `reservedKey="{orderId}:{provider}"`)
 6. 결제창 호출 정보 반환 (`merchantPayKey` 포함, `returnUrl` 에 키 박힘)
 7. 동시 따닥은 Reservation 의 `uk_payment_reservation_reserved_key` 가 두 번째 INSERT 차단
@@ -105,7 +105,7 @@
 - 같은 merchantPayKey 의 redirect 중복은 *차단이 아닌* 멱등 응답으로 흡수 (USED Reservation 발견 시 기존 결제 결과 반환)
 - amount 변경 시 새 Reservation 발급 (Reservation 의 amount UPDATE 금지)
 - expires_at 은 ready 재사용 판단에만 쓰임. 만료된 Reservation 에 늦은 redirect 가 도착해도 승인 진행 차단 사유 아님
-- Reservation 의 status 는 `{RESERVED, USED}` 2개. EXPIRED 별도 마킹 없음 (필터로만 처리)
+- Reservation 의 status 는 `{RESERVED, USED, EXPIRED}`. 만료/무효 예약은 reserve 진입 시 `markExpired` 로 reservedKey 를 회수해 같은 (order, provider) 재예약을 허용
 
 ## 제약사항
 
