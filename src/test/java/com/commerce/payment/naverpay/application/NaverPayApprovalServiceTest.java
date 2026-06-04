@@ -1,9 +1,11 @@
 package com.commerce.payment.naverpay.application;
 
 import static org.assertj.core.api.Assertions.assertThat;
+import static org.assertj.core.api.Assertions.assertThatNoException;
 import static org.assertj.core.api.Assertions.assertThatThrownBy;
 import static org.mockito.ArgumentMatchers.any;
 import static org.mockito.ArgumentMatchers.anyInt;
+import static org.mockito.ArgumentMatchers.anyLong;
 import static org.mockito.ArgumentMatchers.eq;
 import static org.mockito.BDDMockito.given;
 import static org.mockito.BDDMockito.then;
@@ -18,31 +20,33 @@ import org.junit.jupiter.api.extension.ExtendWith;
 import org.mockito.InjectMocks;
 import org.mockito.Mock;
 import org.mockito.junit.jupiter.MockitoExtension;
+import org.springframework.dao.DataIntegrityViolationException;
 import org.springframework.test.util.ReflectionTestUtils;
 
 import com.commerce.order.domain.Order;
 import com.commerce.order.domain.repository.OrderRepository;
 import com.commerce.order.exception.OrderErrorCode;
 import com.commerce.order.exception.OrderException;
+import com.commerce.payment.application.PaymentApprovalAttemptService;
+import com.commerce.payment.application.PaymentApprovalCompensationService;
+import com.commerce.payment.application.PaymentApprovalService;
+import com.commerce.payment.application.port.result.CancelOutcome;
 import com.commerce.payment.domain.Payment;
 import com.commerce.payment.domain.PaymentFailCode;
 import com.commerce.payment.domain.PaymentProvider;
 import com.commerce.payment.domain.PaymentReservation;
+import com.commerce.payment.domain.PaymentReservationStatus;
 import com.commerce.payment.domain.PaymentType;
 import com.commerce.payment.domain.repository.PaymentRepository;
 import com.commerce.payment.domain.repository.PaymentReservationRepository;
 import com.commerce.payment.exception.PaymentErrorCode;
 import com.commerce.payment.exception.PaymentException;
-import com.commerce.payment.application.PaymentApprovalAttemptService;
-import com.commerce.payment.application.PaymentApprovalCompensationService;
-import com.commerce.payment.application.PaymentApprovalService;
-import com.commerce.payment.application.port.result.CancelOutcome;
-import com.commerce.payment.naverpay.application.result.NaverPayApproveResponse;
-import com.commerce.payment.naverpay.application.result.NaverPayApproveStatus;
 import com.commerce.payment.naverpay.application.port.NaverPayGateway;
 import com.commerce.payment.naverpay.application.port.result.NaverPayApproveResult;
 import com.commerce.payment.naverpay.application.port.result.NaverPayCancelResult;
 import com.commerce.payment.naverpay.application.port.result.NaverPayHistoryResult;
+import com.commerce.payment.naverpay.application.result.NaverPayApproveResponse;
+import com.commerce.payment.naverpay.application.result.NaverPayApproveStatus;
 
 @ExtendWith(MockitoExtension.class)
 class NaverPayApprovalServiceTest {
@@ -104,27 +108,56 @@ class NaverPayApprovalServiceTest {
 			});
 	}
 
-	@DisplayName("이미 생성된 결제가 있으면 기존 결제 결과를 반환한다")
+	@DisplayName("UNKNOWN 상태 Payment가 있는 주문은 approve 진입 시 PAYMENT_RESULT_PENDING을 던진다")
 	@Test
-	void approve_whenPaymentExists_returnExistingResult() {
+	void approve_whenUnknownByOrderId_throwsPaymentResultPending() {
 		// given
 		long memberId = 1L;
 		PaymentReservation reservation = createReservation("PAY-1", memberId, 1000);
+		Order order = createOrder(1000);
+
+		given(paymentReservationRepository.findByMerchantPayKey("PAY-1")).willReturn(Optional.of(reservation));
+		given(orderRepository.findByIdAndMemberId(reservation.getOrderId(), memberId)).willReturn(Optional.of(order));
+		given(paymentRepository.existsUnknownByOrderId(reservation.getOrderId())).willReturn(true);
+
+		// when & then
+		assertThatThrownBy(() -> naverPayApprovalService.approve(memberId, "PAY-1", "pg-payment-id"))
+			.isInstanceOf(PaymentException.class)
+			.satisfies(exception -> {
+				PaymentException paymentException = (PaymentException)exception;
+				assertThat(paymentException.getErrorCode()).isEqualTo(PaymentErrorCode.PAYMENT_RESULT_PENDING);
+			});
+		then(naverPayGateway).should(never()).approve(any());
+		then(paymentApprovalAttemptService).should(never()).create(any(), any());
+	}
+
+	@DisplayName("USED Reservation에 같은 merchantPayKey redirect가 중복 도착하면 기존 결제 결과를 반환한다 (멱등 응답)")
+	@Test
+	void approve_whenReservationUsedAndApproveSucceededExists_returnsIdempotentResponse() {
+		// given
+		long memberId = 1L;
+		PaymentReservation reservation = createUsedReservation("PAY-1", memberId, 1000);
 		Order order = createOrder(1000);
 		Payment succeededAttempt = createAttempt("PAY-1", "pg-payment-id", 1000);
 		succeededAttempt.succeed(LocalDateTime.now());
 
 		given(paymentReservationRepository.findByMerchantPayKey("PAY-1")).willReturn(Optional.of(reservation));
 		given(orderRepository.findByIdAndMemberId(reservation.getOrderId(), memberId)).willReturn(Optional.of(order));
+		given(paymentRepository.existsUnknownByOrderId(reservation.getOrderId())).willReturn(false);
 		given(paymentRepository.findApproveSucceeded("PAY-1")).willReturn(Optional.of(succeededAttempt));
 
 		// when
-		NaverPayApproveResponse result = naverPayApprovalService.approve(memberId, "PAY-1", "pg-payment-id");
+		assertThatNoException().isThrownBy(() -> {
+			NaverPayApproveResponse result = naverPayApprovalService.approve(memberId, "PAY-1", "pg-payment-id");
 
-		// then
-		assertThat(result.getStatus()).isEqualTo(NaverPayApproveStatus.SUCCESS);
-		assertThat(result.getPgPaymentId()).isEqualTo("pg-payment-id");
+			// then: 멱등 200 응답 — PG 호출 0회, 새 attempt/reservation save 0회
+			assertThat(result.getStatus()).isEqualTo(NaverPayApproveStatus.SUCCESS);
+			assertThat(result.getPgPaymentId()).isEqualTo("pg-payment-id");
+		});
 		then(naverPayGateway).should(never()).approve(any());
+		then(paymentApprovalAttemptService).should(never()).create(any(), any());
+		then(paymentRepository).should(never()).save(any());
+		then(paymentReservationRepository).should(never()).save(any());
 	}
 
 	@DisplayName("승인 응답 코드가 Success면 결제 완료를 반영하고 성공 결과를 반환한다")
@@ -140,7 +173,6 @@ class NaverPayApprovalServiceTest {
 
 		given(paymentReservationRepository.findByMerchantPayKey("PAY-1")).willReturn(Optional.of(reservation));
 		given(orderRepository.findByIdAndMemberId(reservation.getOrderId(), memberId)).willReturn(Optional.of(order));
-		given(paymentRepository.findApproveSucceeded("PAY-1")).willReturn(Optional.empty());
 		given(paymentApprovalAttemptService.create(any(PaymentReservation.class), eq("pg-payment-id")))
 			.willReturn(attempt);
 		given(naverPayGateway.approve("pg-payment-id"))
@@ -169,7 +201,6 @@ class NaverPayApprovalServiceTest {
 
 		given(paymentReservationRepository.findByMerchantPayKey("PAY-1")).willReturn(Optional.of(reservation));
 		given(orderRepository.findByIdAndMemberId(reservation.getOrderId(), memberId)).willReturn(Optional.of(order));
-		given(paymentRepository.findApproveSucceeded("PAY-1")).willReturn(Optional.empty());
 		given(paymentApprovalAttemptService.create(any(PaymentReservation.class), eq("pg-payment-id")))
 			.willReturn(attempt);
 		given(naverPayGateway.approve("pg-payment-id")).willReturn(NaverPayApproveResult.processing());
@@ -196,7 +227,6 @@ class NaverPayApprovalServiceTest {
 
 		given(paymentReservationRepository.findByMerchantPayKey("PAY-1")).willReturn(Optional.of(reservation));
 		given(orderRepository.findByIdAndMemberId(reservation.getOrderId(), memberId)).willReturn(Optional.of(order));
-		given(paymentRepository.findApproveSucceeded("PAY-1")).willReturn(Optional.empty());
 		given(paymentApprovalAttemptService.create(any(PaymentReservation.class), eq("pg-payment-id")))
 			.willReturn(attempt);
 		given(naverPayGateway.approve("pg-payment-id")).willReturn(NaverPayApproveResult.alreadyComplete());
@@ -223,7 +253,6 @@ class NaverPayApprovalServiceTest {
 
 		given(paymentReservationRepository.findByMerchantPayKey("PAY-1")).willReturn(Optional.of(reservation));
 		given(orderRepository.findByIdAndMemberId(reservation.getOrderId(), memberId)).willReturn(Optional.of(order));
-		given(paymentRepository.findApproveSucceeded("PAY-1")).willReturn(Optional.empty());
 		given(paymentApprovalAttemptService.create(any(PaymentReservation.class), eq("pg-payment-id")))
 			.willReturn(attempt);
 		given(naverPayGateway.approve("pg-payment-id")).willReturn(NaverPayApproveResult.alreadyComplete());
@@ -254,7 +283,6 @@ class NaverPayApprovalServiceTest {
 
 		given(paymentReservationRepository.findByMerchantPayKey("PAY-1")).willReturn(Optional.of(reservation));
 		given(orderRepository.findByIdAndMemberId(reservation.getOrderId(), memberId)).willReturn(Optional.of(order));
-		given(paymentRepository.findApproveSucceeded("PAY-1")).willReturn(Optional.empty());
 		given(paymentApprovalAttemptService.create(any(PaymentReservation.class), eq("pg-payment-id")))
 			.willReturn(attempt);
 		given(naverPayGateway.approve("pg-payment-id")).willReturn(NaverPayApproveResult.alreadyComplete());
@@ -281,7 +309,6 @@ class NaverPayApprovalServiceTest {
 
 		given(paymentReservationRepository.findByMerchantPayKey("PAY-1")).willReturn(Optional.of(reservation));
 		given(orderRepository.findByIdAndMemberId(reservation.getOrderId(), memberId)).willReturn(Optional.of(order));
-		given(paymentRepository.findApproveSucceeded("PAY-1")).willReturn(Optional.empty());
 		given(paymentApprovalAttemptService.create(any(PaymentReservation.class), eq("pg-payment-id")))
 			.willReturn(attempt);
 		given(naverPayGateway.approve("pg-payment-id")).willReturn(NaverPayApproveResult.alreadyComplete());
@@ -308,7 +335,6 @@ class NaverPayApprovalServiceTest {
 
 		given(paymentReservationRepository.findByMerchantPayKey("PAY-1")).willReturn(Optional.of(reservation));
 		given(orderRepository.findByIdAndMemberId(reservation.getOrderId(), memberId)).willReturn(Optional.of(order));
-		given(paymentRepository.findApproveSucceeded("PAY-1")).willReturn(Optional.empty());
 		given(paymentApprovalAttemptService.create(any(PaymentReservation.class), eq("pg-payment-id")))
 			.willReturn(attempt);
 		given(naverPayGateway.approve("pg-payment-id")).willReturn(NaverPayApproveResult.alreadyComplete());
@@ -337,7 +363,6 @@ class NaverPayApprovalServiceTest {
 
 		given(paymentReservationRepository.findByMerchantPayKey("PAY-1")).willReturn(Optional.of(reservation));
 		given(orderRepository.findByIdAndMemberId(reservation.getOrderId(), memberId)).willReturn(Optional.of(order));
-		given(paymentRepository.findApproveSucceeded("PAY-1")).willReturn(Optional.empty());
 		given(paymentApprovalAttemptService.create(any(PaymentReservation.class), eq("pg-payment-id")))
 			.willReturn(attempt);
 		given(naverPayGateway.approve("pg-payment-id")).willReturn(NaverPayApproveResult.alreadyComplete());
@@ -364,7 +389,6 @@ class NaverPayApprovalServiceTest {
 
 		given(paymentReservationRepository.findByMerchantPayKey("PAY-1")).willReturn(Optional.of(reservation));
 		given(orderRepository.findByIdAndMemberId(reservation.getOrderId(), memberId)).willReturn(Optional.of(order));
-		given(paymentRepository.findApproveSucceeded("PAY-1")).willReturn(Optional.empty());
 		given(paymentApprovalAttemptService.create(any(PaymentReservation.class), eq("pg-payment-id")))
 			.willReturn(attempt);
 		given(naverPayGateway.approve("pg-payment-id"))
@@ -393,7 +417,6 @@ class NaverPayApprovalServiceTest {
 
 		given(paymentReservationRepository.findByMerchantPayKey("PAY-1")).willReturn(Optional.of(reservation));
 		given(orderRepository.findByIdAndMemberId(reservation.getOrderId(), memberId)).willReturn(Optional.of(order));
-		given(paymentRepository.findApproveSucceeded("PAY-1")).willReturn(Optional.empty());
 		given(paymentApprovalAttemptService.create(any(PaymentReservation.class), eq("pg-payment-id")))
 			.willReturn(attempt);
 		given(naverPayGateway.approve("pg-payment-id"))
@@ -422,7 +445,6 @@ class NaverPayApprovalServiceTest {
 
 		given(paymentReservationRepository.findByMerchantPayKey("PAY-1")).willReturn(Optional.of(reservation));
 		given(orderRepository.findByIdAndMemberId(reservation.getOrderId(), memberId)).willReturn(Optional.of(order));
-		given(paymentRepository.findApproveSucceeded("PAY-1")).willReturn(Optional.empty());
 		given(paymentApprovalAttemptService.create(any(PaymentReservation.class), eq("pg-payment-id")))
 			.willReturn(attempt);
 		given(naverPayGateway.approve("pg-payment-id"))
@@ -452,7 +474,6 @@ class NaverPayApprovalServiceTest {
 
 		given(paymentReservationRepository.findByMerchantPayKey("PAY-1")).willReturn(Optional.of(reservation));
 		given(orderRepository.findByIdAndMemberId(reservation.getOrderId(), memberId)).willReturn(Optional.of(order));
-		given(paymentRepository.findApproveSucceeded("PAY-1")).willReturn(Optional.empty());
 		given(paymentApprovalAttemptService.create(any(PaymentReservation.class), eq("pg-payment-id")))
 			.willReturn(attempt);
 		given(naverPayGateway.approve("pg-payment-id"))
@@ -481,7 +502,6 @@ class NaverPayApprovalServiceTest {
 
 		given(paymentReservationRepository.findByMerchantPayKey("PAY-1")).willReturn(Optional.of(reservation));
 		given(orderRepository.findByIdAndMemberId(reservation.getOrderId(), memberId)).willReturn(Optional.of(order));
-		given(paymentRepository.findApproveSucceeded("PAY-1")).willReturn(Optional.empty());
 		given(paymentApprovalAttemptService.create(any(PaymentReservation.class), eq("pg-payment-id")))
 			.willReturn(attempt);
 		given(naverPayGateway.approve("pg-payment-id"))
@@ -499,6 +519,34 @@ class NaverPayApprovalServiceTest {
 			eq(PaymentFailCode.PG_MAINTENANCE), eq("서비스 점검중"), any());
 	}
 
+	@DisplayName("게이트웨이 UNKNOWN 결과 시 markUnknownIfRequested를 호출하고 PAYMENT_RESULT_PENDING을 던진다")
+	@Test
+	void approve_whenGatewayReturnsUnknown_callsMarkUnknownAndThrowsResultPending() {
+		// given
+		long memberId = 1L;
+		PaymentReservation reservation = createReservation("PAY-1", memberId, 1000);
+		Order order = createOrder(1000);
+		Payment attempt = createAttempt("PAY-1", "pg-payment-id", 1000);
+
+		given(paymentReservationRepository.findByMerchantPayKey("PAY-1")).willReturn(Optional.of(reservation));
+		given(orderRepository.findByIdAndMemberId(reservation.getOrderId(), memberId)).willReturn(Optional.of(order));
+		given(paymentApprovalAttemptService.create(any(PaymentReservation.class), eq("pg-payment-id")))
+			.willReturn(attempt);
+		given(naverPayGateway.approve("pg-payment-id"))
+			.willReturn(NaverPayApproveResult.unknown("승인 호출 중 네트워크 오류: timeout"));
+
+		// when & then
+		assertThatThrownBy(() -> naverPayApprovalService.approve(memberId, "PAY-1", "pg-payment-id"))
+			.isInstanceOf(PaymentException.class)
+			.satisfies(exception -> {
+				PaymentException paymentException = (PaymentException)exception;
+				assertThat(paymentException.getErrorCode()).isEqualTo(PaymentErrorCode.PAYMENT_RESULT_PENDING);
+			});
+		then(paymentApprovalAttemptService).should().markUnknownIfRequested(
+			eq("PAY-1"), eq(PaymentProvider.NAVERPAY), eq("pg-payment-id"), any(), any());
+		then(paymentApprovalService).should(never()).succeedApproval(any(), any());
+	}
+
 	@DisplayName("승인 응답 merchantPayKey가 다르면 compensateMerchantKeyMismatch를 호출하고 예외를 던진다")
 	@Test
 	void approve_whenApproveResponseMerchantPayKeyMismatch_callsCompensateAndThrowException() {
@@ -510,7 +558,6 @@ class NaverPayApprovalServiceTest {
 
 		given(paymentReservationRepository.findByMerchantPayKey("PAY-1")).willReturn(Optional.of(reservation));
 		given(orderRepository.findByIdAndMemberId(reservation.getOrderId(), memberId)).willReturn(Optional.of(order));
-		given(paymentRepository.findApproveSucceeded("PAY-1")).willReturn(Optional.empty());
 		given(paymentApprovalAttemptService.create(any(PaymentReservation.class), eq("pg-payment-id")))
 			.willReturn(attempt);
 		given(naverPayGateway.approve("pg-payment-id"))
@@ -537,7 +584,6 @@ class NaverPayApprovalServiceTest {
 
 		given(paymentReservationRepository.findByMerchantPayKey("PAY-1")).willReturn(Optional.of(reservation));
 		given(orderRepository.findByIdAndMemberId(reservation.getOrderId(), memberId)).willReturn(Optional.of(order));
-		given(paymentRepository.findApproveSucceeded("PAY-1")).willReturn(Optional.empty());
 		given(paymentApprovalAttemptService.create(any(PaymentReservation.class), eq("pg-payment-id")))
 			.willReturn(attempt);
 		given(naverPayGateway.approve("pg-payment-id")).willReturn(NaverPayApproveResult.success("PAY-1", 2000));
@@ -552,6 +598,33 @@ class NaverPayApprovalServiceTest {
 		then(paymentApprovalCompensationService).should().compensateAmountMismatch(any(), eq(2000), any());
 	}
 
+	@DisplayName("uk_payment_approved_order_key 위반 시 compensateDuplicateApproval을 호출하고 PAYMENT_DUPLICATE를 던진다")
+	@Test
+	void approve_whenUkPaymentApprovedOrderKeyViolation_callsCompensateDuplicateApproval() {
+		// given
+		long memberId = 1L;
+		PaymentReservation reservation = createReservation("PAY-1", memberId, 1000);
+		Order order = createOrder(1000);
+		Payment attempt = createAttempt("PAY-1", "pg-payment-id", 1000);
+
+		given(paymentReservationRepository.findByMerchantPayKey("PAY-1")).willReturn(Optional.of(reservation));
+		given(orderRepository.findByIdAndMemberId(reservation.getOrderId(), memberId)).willReturn(Optional.of(order));
+		given(paymentApprovalAttemptService.create(any(PaymentReservation.class), eq("pg-payment-id")))
+			.willReturn(attempt);
+		given(naverPayGateway.approve("pg-payment-id")).willReturn(NaverPayApproveResult.success("PAY-1", 1000));
+		given(paymentApprovalService.succeedApproval(any(Payment.class), any()))
+			.willThrow(new DataIntegrityViolationException("uk_payment_approved_order_key violation"));
+
+		// when & then
+		assertThatThrownBy(() -> naverPayApprovalService.approve(memberId, "PAY-1", "pg-payment-id"))
+			.isInstanceOf(PaymentException.class)
+			.satisfies(exception -> {
+				PaymentException paymentException = (PaymentException)exception;
+				assertThat(paymentException.getErrorCode()).isEqualTo(PaymentErrorCode.PAYMENT_DUPLICATE);
+			});
+		then(paymentApprovalCompensationService).should().compensateDuplicateApproval(any(), any());
+	}
+
 	@DisplayName("이미 다른 결제가 완료된 주문이면 compensateDuplicatePayment를 호출하고 예외를 던진다")
 	@Test
 	void approve_whenDuplicateApproval_callsCompensateAndThrowException() {
@@ -562,7 +635,6 @@ class NaverPayApprovalServiceTest {
 
 		given(paymentReservationRepository.findByMerchantPayKey("PAY-1")).willReturn(Optional.of(reservation));
 		given(orderRepository.findByIdAndMemberId(reservation.getOrderId(), memberId)).willReturn(Optional.of(order));
-		given(paymentRepository.findApproveSucceeded("PAY-1")).willReturn(Optional.empty());
 		given(paymentApprovalAttemptService.create(any(PaymentReservation.class), eq("pg-payment-id")))
 			.willReturn(attempt);
 		given(naverPayGateway.approve("pg-payment-id")).willReturn(NaverPayApproveResult.success("PAY-1", 1000));
@@ -589,7 +661,6 @@ class NaverPayApprovalServiceTest {
 
 		given(paymentReservationRepository.findByMerchantPayKey("PAY-1")).willReturn(Optional.of(reservation));
 		given(orderRepository.findByIdAndMemberId(reservation.getOrderId(), memberId)).willReturn(Optional.of(order));
-		given(paymentRepository.findApproveSucceeded("PAY-1")).willReturn(Optional.empty());
 		given(paymentApprovalAttemptService.create(any(PaymentReservation.class), eq("pg-payment-id")))
 			.willReturn(attempt);
 		given(naverPayGateway.approve("pg-payment-id")).willReturn(NaverPayApproveResult.success("PAY-1", 1000));
@@ -617,7 +688,6 @@ class NaverPayApprovalServiceTest {
 
 		given(paymentReservationRepository.findByMerchantPayKey("PAY-1")).willReturn(Optional.of(reservation));
 		given(orderRepository.findByIdAndMemberId(reservation.getOrderId(), memberId)).willReturn(Optional.of(order));
-		given(paymentRepository.findApproveSucceeded("PAY-1")).willReturn(Optional.empty());
 		given(paymentApprovalAttemptService.create(any(PaymentReservation.class), eq("pg-payment-id")))
 			.willReturn(attempt);
 		given(naverPayGateway.approve("pg-payment-id")).willReturn(NaverPayApproveResult.success("PAY-1", 1000));
@@ -645,7 +715,6 @@ class NaverPayApprovalServiceTest {
 
 		given(paymentReservationRepository.findByMerchantPayKey("PAY-1")).willReturn(Optional.of(reservation));
 		given(orderRepository.findByIdAndMemberId(reservation.getOrderId(), memberId)).willReturn(Optional.of(order));
-		given(paymentRepository.findApproveSucceeded("PAY-1")).willReturn(Optional.empty());
 		given(paymentApprovalAttemptService.create(any(PaymentReservation.class), eq("pg-payment-id")))
 			.willReturn(attempt);
 		given(naverPayGateway.approve("pg-payment-id")).willReturn(NaverPayApproveResult.success("PAY-1", 1000));
@@ -674,7 +743,6 @@ class NaverPayApprovalServiceTest {
 
 		given(paymentReservationRepository.findByMerchantPayKey("PAY-1")).willReturn(Optional.of(reservation));
 		given(orderRepository.findByIdAndMemberId(reservation.getOrderId(), memberId)).willReturn(Optional.of(order));
-		given(paymentRepository.findApproveSucceeded("PAY-1")).willReturn(Optional.empty());
 		given(paymentApprovalAttemptService.create(any(PaymentReservation.class), eq("pg-payment-id")))
 			.willReturn(attempt);
 		given(naverPayGateway.approve("pg-payment-id")).willReturn(NaverPayApproveResult.success("PAY-1", 1000));
@@ -703,7 +771,6 @@ class NaverPayApprovalServiceTest {
 
 		given(paymentReservationRepository.findByMerchantPayKey("PAY-1")).willReturn(Optional.of(reservation));
 		given(orderRepository.findByIdAndMemberId(reservation.getOrderId(), memberId)).willReturn(Optional.of(order));
-		given(paymentRepository.findApproveSucceeded("PAY-1")).willReturn(Optional.empty());
 		given(paymentApprovalAttemptService.create(any(PaymentReservation.class), eq("pg-payment-id")))
 			.willReturn(attempt);
 		given(naverPayGateway.approve("pg-payment-id")).willReturn(NaverPayApproveResult.success("PAY-1", 1000));
@@ -729,7 +796,6 @@ class NaverPayApprovalServiceTest {
 
 		given(paymentReservationRepository.findByMerchantPayKey("PAY-ATTACKER")).willReturn(Optional.of(attackerReservation));
 		given(orderRepository.findByIdAndMemberId(attackerReservation.getOrderId(), memberId)).willReturn(Optional.of(attackerOrder));
-		given(paymentRepository.findApproveSucceeded("PAY-ATTACKER")).willReturn(Optional.empty());
 		given(paymentApprovalAttemptService.create(any(PaymentReservation.class), eq("pg-victim-payment-id")))
 			.willReturn(attackerAttempt);
 		given(naverPayGateway.approve("pg-victim-payment-id"))
@@ -756,7 +822,6 @@ class NaverPayApprovalServiceTest {
 
 		given(paymentReservationRepository.findByMerchantPayKey("PAY-ATTACKER")).willReturn(Optional.of(attackerReservation));
 		given(orderRepository.findByIdAndMemberId(attackerReservation.getOrderId(), memberId)).willReturn(Optional.of(attackerOrder));
-		given(paymentRepository.findApproveSucceeded("PAY-ATTACKER")).willReturn(Optional.empty());
 		given(paymentApprovalAttemptService.create(any(PaymentReservation.class), eq("pg-victim-payment-id")))
 			.willReturn(attackerAttempt);
 		given(naverPayGateway.approve("pg-victim-payment-id")).willReturn(NaverPayApproveResult.alreadyComplete());
@@ -788,7 +853,6 @@ class NaverPayApprovalServiceTest {
 
 		given(paymentReservationRepository.findByMerchantPayKey("PAY-1")).willReturn(Optional.of(reservation));
 		given(orderRepository.findByIdAndMemberId(reservation.getOrderId(), memberId)).willReturn(Optional.of(order));
-		given(paymentRepository.findApproveSucceeded("PAY-1")).willReturn(Optional.empty());
 		given(paymentApprovalAttemptService.create(any(PaymentReservation.class), eq("pg-payment-id")))
 			.willReturn(attempt);
 
@@ -814,7 +878,6 @@ class NaverPayApprovalServiceTest {
 
 		given(paymentReservationRepository.findByMerchantPayKey("PAY-1")).willReturn(Optional.of(reservation));
 		given(orderRepository.findByIdAndMemberId(reservation.getOrderId(), memberId)).willReturn(Optional.of(order));
-		given(paymentRepository.findApproveSucceeded("PAY-1")).willReturn(Optional.empty());
 		given(paymentApprovalAttemptService.create(any(PaymentReservation.class), eq("pg-payment-id")))
 			.willReturn(attempt);
 
@@ -840,7 +903,6 @@ class NaverPayApprovalServiceTest {
 
 		given(paymentReservationRepository.findByMerchantPayKey("PAY-1")).willReturn(Optional.of(reservation));
 		given(orderRepository.findByIdAndMemberId(reservation.getOrderId(), memberId)).willReturn(Optional.of(order));
-		given(paymentRepository.findApproveSucceeded("PAY-1")).willReturn(Optional.empty());
 		given(paymentApprovalAttemptService.create(any(PaymentReservation.class), eq("pg-payment-id")))
 			.willReturn(attempt);
 
@@ -904,6 +966,15 @@ class NaverPayApprovalServiceTest {
 		PaymentReservation r = PaymentReservation.createReserved(
 			1L, memberId, amount, PaymentProvider.NAVERPAY, merchantPayKey,
 			LocalDateTime.now().plusMinutes(15));
+		ReflectionTestUtils.setField(r, "id", 1L);
+		return r;
+	}
+
+	private PaymentReservation createUsedReservation(String merchantPayKey, long memberId, int amount) {
+		PaymentReservation r = PaymentReservation.createReserved(
+			1L, memberId, amount, PaymentProvider.NAVERPAY, merchantPayKey,
+			LocalDateTime.now().plusMinutes(15));
+		r.markUsed();
 		ReflectionTestUtils.setField(r, "id", 1L);
 		return r;
 	}

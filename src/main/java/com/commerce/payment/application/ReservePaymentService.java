@@ -19,7 +19,10 @@ import com.commerce.order.exception.OrderException;
 import com.commerce.payment.application.command.ReservePaymentCommand;
 import com.commerce.payment.application.result.ReservePaymentResult;
 import com.commerce.payment.domain.PaymentReservation;
+import com.commerce.payment.domain.repository.PaymentRepository;
 import com.commerce.payment.domain.repository.PaymentReservationRepository;
+import com.commerce.payment.exception.PaymentErrorCode;
+import com.commerce.payment.exception.PaymentException;
 import com.commerce.payment.provider.PaymentProviderProperties;
 import com.commerce.payment.provider.PaymentProviderPropertiesResolver;
 import com.commerce.product.domain.Product;
@@ -39,6 +42,7 @@ public class ReservePaymentService {
 	private final OrderRepository orderRepository;
 	private final ProductRepository productRepository;
 	private final PaymentReservationRepository paymentReservationRepository;
+	private final PaymentRepository paymentRepository;
 	private final PaymentProviderPropertiesResolver propertiesResolver;
 
 	private static final Duration PAYMENT_RESERVATION_EXPIRY = Duration.ofMinutes(30);
@@ -49,7 +53,11 @@ public class ReservePaymentService {
 			.orElseThrow(() -> new OrderException(OrderErrorCode.ORDER_NOT_FOUND));
 
 		order.checkPayable();
-		// UNKNOWN 차단은 step 3 에서 추가
+
+		// UNKNOWN 행이 있는 주문은 결제 시도 차단 (ADR-6)
+		if (paymentRepository.existsUnknownByOrderId(order.getId())) {
+			throw new PaymentException(PaymentErrorCode.PAYMENT_RESULT_PENDING);
+		}
 
 		LocalDateTime now = LocalDateTime.now();
 		PaymentReservation reservation = paymentReservationRepository

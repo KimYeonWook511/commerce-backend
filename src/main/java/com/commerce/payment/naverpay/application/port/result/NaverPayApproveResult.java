@@ -12,7 +12,9 @@ public class NaverPayApproveResult {
 		SUCCESS,
 		PROCESSING,
 		ALREADY_COMPLETE,
-		FAILED
+		FAILED,
+		// PG 호출 timeout / 네트워크 단절로 결과를 알 수 없음
+		UNKNOWN
 	}
 
 	private final Status status;
@@ -47,5 +49,9 @@ public class NaverPayApproveResult {
 	public static NaverPayApproveResult failed(PaymentFailCode failCode, PaymentErrorCode errorCode,
 		String failDetail) {
 		return new NaverPayApproveResult(Status.FAILED, null, 0, failCode, errorCode, failDetail);
+	}
+
+	public static NaverPayApproveResult unknown(String failDetail) {
+		return new NaverPayApproveResult(Status.UNKNOWN, null, 0, null, null, failDetail);
 	}
 }

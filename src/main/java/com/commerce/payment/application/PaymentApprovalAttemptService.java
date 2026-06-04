@@ -59,6 +59,33 @@ public class PaymentApprovalAttemptService {
 	}
 
 	/**
+	 * REQUESTED 상태일 때만 UNKNOWN 마킹. 그 외 상태이거나 이력이 없으면 조용히 skip한다.
+	 * PG 호출 timeout / 네트워크 단절 시 결과 불명 흔적을 보존한다 (ADR-6).
+	 */
+	@Transactional
+	public void markUnknownIfRequested(
+		String merchantPayKey,
+		PaymentProvider provider,
+		String pgPaymentId,
+		String failDetail,
+		LocalDateTime respondedAt
+	) {
+		Payment attempt = paymentRepository.findApproveAttempt(merchantPayKey, provider, pgPaymentId).orElse(null);
+		if (attempt == null) {
+			log.warn("Payment not found, skipping unknown mark: merchantPayKey={}, pgPaymentId={}", merchantPayKey,
+				pgPaymentId);
+			return;
+		}
+		if (attempt.getStatus() != PaymentStatus.REQUESTED) {
+			log.warn("Payment not in REQUESTED state, skipping unknown mark: merchantPayKey={}, pgPaymentId={}, status={}",
+				merchantPayKey, pgPaymentId, attempt.getStatus());
+			return;
+		}
+		attempt.markUnknown(failDetail, respondedAt);
+		paymentRepository.save(attempt);
+	}
+
+	/**
 	 * 보상 흐름 전용: REQUESTED 상태일 때만 실패 처리하고, 그 외 상태이거나 이력이 없으면 조용히 skip한다.
 	 * 호출처(catch 블록)가 상태를 확인하거나 try-catch로 mark 예외를 잡지 않도록 의도를 캡슐화한다.
 	 */

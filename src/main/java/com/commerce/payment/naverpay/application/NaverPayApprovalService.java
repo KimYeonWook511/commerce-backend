@@ -2,6 +2,7 @@ package com.commerce.payment.naverpay.application;
 
 import java.time.LocalDateTime;
 
+import org.springframework.dao.DataIntegrityViolationException;
 import org.springframework.stereotype.Service;
 
 import com.commerce.common.exception.CustomException;
@@ -13,6 +14,7 @@ import com.commerce.payment.domain.Payment;
 import com.commerce.payment.domain.PaymentFailCode;
 import com.commerce.payment.domain.PaymentProvider;
 import com.commerce.payment.domain.PaymentReservation;
+import com.commerce.payment.domain.PaymentReservationStatus;
 import com.commerce.payment.domain.repository.PaymentRepository;
 import com.commerce.payment.domain.repository.PaymentReservationRepository;
 import com.commerce.payment.exception.PaymentErrorCode;
@@ -56,9 +58,16 @@ public class NaverPayApprovalService {
 		Order order = orderRepository.findByIdAndMemberId(reservation.getOrderId(), memberId)
 			.orElseThrow(() -> new OrderException(OrderErrorCode.ORDER_NOT_FOUND));
 
-		Payment existingSucceeded = paymentRepository.findApproveSucceeded(merchantPayKey).orElse(null);
-		if (existingSucceeded != null) {
-			return toResponse(existingSucceeded);
+		// UNKNOWN 행이 있는 주문은 추가 결제 시도 차단 (ADR-6)
+		if (paymentRepository.existsUnknownByOrderId(reservation.getOrderId())) {
+			throw new PaymentException(PaymentErrorCode.PAYMENT_RESULT_PENDING);
+		}
+
+		// USED Reservation: 같은 merchantPayKey로 redirect가 두 번째로 도착한 경우 → 멱등 응답 (ADR-5)
+		if (reservation.getStatus() == PaymentReservationStatus.USED) {
+			Payment existing = paymentRepository.findApproveSucceeded(merchantPayKey)
+				.orElseThrow(() -> new PaymentException(PaymentErrorCode.PAYMENT_NOT_FOUND));
+			return toResponse(existing);
 		}
 
 		Payment attempt = paymentApprovalAttemptService.create(reservation, pgPaymentId);
@@ -89,6 +98,14 @@ public class NaverPayApprovalService {
 			}
 			case SUCCESS ->
 				completeVerifiedApproval(attempt, result.getMerchantPayKey(), result.getTotalPayAmount());
+			// PG 호출 timeout / 네트워크 단절: 결과 불명 흔적 보존 + 사용자 재시도 차단 (ADR-6)
+			case UNKNOWN -> {
+				paymentApprovalAttemptService.markUnknownIfRequested(
+					attempt.getMerchantPayKey(), attempt.getProvider(), attempt.getPgPaymentId(),
+					result.getFailDetail(), LocalDateTime.now()
+				);
+				throw new PaymentException(PaymentErrorCode.PAYMENT_RESULT_PENDING);
+			}
 		};
 	}
 
@@ -131,6 +148,12 @@ public class NaverPayApprovalService {
 
 			Payment completed = paymentApprovalService.succeedApproval(attempt, LocalDateTime.now());
 			return toResponse(completed);
+		} catch (DataIntegrityViolationException ex) {
+			// uk_payment_approved_order_key 위반: 같은 orderId에 이미 SUCCEEDED APPROVE 행 존재 → 이중 결제
+			log.error("uk_payment_approved_order_key 위반 — 이중 결제: orderId={} merchantPayKey={}",
+				attempt.getOrderId(), attempt.getMerchantPayKey(), ex);
+			paymentApprovalCompensationService.compensateDuplicateApproval(attempt, this::pgCancel);
+			throw new PaymentException(PaymentErrorCode.PAYMENT_DUPLICATE);
 		} catch (PaymentException ex) {
 			log.error(
 				"NaverPay approve complete failed by payment error: merchantPayKey={}, pgPaymentId={}, responseMerchantPayKey={}, responseTotalAmount={}, errorCode={}",

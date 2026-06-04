@@ -33,7 +33,10 @@ import com.commerce.payment.application.command.ReservePaymentCommand;
 import com.commerce.payment.application.result.ReservePaymentResult;
 import com.commerce.payment.domain.PaymentProvider;
 import com.commerce.payment.domain.PaymentReservation;
+import com.commerce.payment.domain.repository.PaymentRepository;
 import com.commerce.payment.domain.repository.PaymentReservationRepository;
+import com.commerce.payment.exception.PaymentErrorCode;
+import com.commerce.payment.exception.PaymentException;
 import com.commerce.payment.provider.PaymentProviderProperties;
 import com.commerce.payment.provider.PaymentProviderPropertiesResolver;
 import com.commerce.product.domain.Product;
@@ -51,6 +54,9 @@ class ReservePaymentServiceTest {
 
 	@Mock
 	private PaymentReservationRepository paymentReservationRepository;
+
+	@Mock
+	private PaymentRepository paymentRepository;
 
 	@Mock
 	private PaymentProviderPropertiesResolver propertiesResolver;
@@ -258,6 +264,32 @@ class ReservePaymentServiceTest {
 		// then
 		then(paymentReservationRepository).should(times(1)).save(any());
 		assertThat(result.getMerchantPayKey()).startsWith("PAY-");
+	}
+
+	@DisplayName("UNKNOWN 상태 Payment가 있는 주문은 reserve 진입 시 PAYMENT_RESULT_PENDING을 던진다")
+	@Test
+	void reserve_whenUnknownByOrderId_throwsPaymentResultPending() {
+		// given
+		Product product = createProduct(10L, "product", 1500);
+		Order order = createOrder(product);
+		setOrderId(order, 1L);
+		given(orderRepository.findByIdAndMemberIdWithItems(1L, 1L)).willReturn(Optional.of(order));
+		given(paymentRepository.existsUnknownByOrderId(1L)).willReturn(true);
+
+		ReservePaymentCommand command = ReservePaymentCommand.builder()
+			.memberId(1L)
+			.orderId(1L)
+			.provider(PaymentProvider.NAVERPAY)
+			.build();
+
+		// when & then
+		assertThatThrownBy(() -> reservePaymentService.reserve(command))
+			.isInstanceOf(PaymentException.class)
+			.satisfies(exception -> {
+				PaymentException paymentException = (PaymentException)exception;
+				assertThat(paymentException.getErrorCode()).isEqualTo(PaymentErrorCode.PAYMENT_RESULT_PENDING);
+			});
+		then(paymentReservationRepository).should(never()).save(any());
 	}
 
 	@DisplayName("같은 조건으로 순차 두 번 호출하면 두 번째 호출에서 save 없이 동일한 merchantPayKey를 반환한다")

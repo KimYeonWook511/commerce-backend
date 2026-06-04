@@ -128,8 +128,9 @@ class NaverPayServiceConcurrencyTest {
 		runConcurrent(20, () -> results.add(naverPayApprovalService.approve(member.getId(), merchantPayKey, pgPaymentId)), errors);
 
 		// then
-		// race window 발생 시 일부 요청은 attempt unique 위반으로 안전망 500 에 도달한다.
-		errors.forEach(e -> assertThat(e).isInstanceOf(DataIntegrityViolationException.class));
+		// race window 발생 시 일부 요청은 unique 위반(DataIntegrityViolationException) 또는
+		// USED 예약 후 미결제 구간 PAYMENT_NOT_FOUND(PaymentException) 에 도달한다.
+		errors.forEach(e -> assertRaceOrPaymentError(e, PaymentErrorCode.PAYMENT_NOT_FOUND));
 		assertThat(paymentPersistence.countPaymentsByMerchantPayKey(merchantPayKey)).isEqualTo(1L);
 		assertThat(orderPersistence.getOrderStatusById(order.getId()))
 			.isEqualTo(OrderStatus.PAID);
@@ -174,8 +175,9 @@ class NaverPayServiceConcurrencyTest {
 		runConcurrent(20, () -> results.add(naverPayApprovalService.approve(member.getId(), merchantPayKey, pgPaymentId)), errors);
 
 		// then
-		// race window 발생 시 일부 요청은 attempt unique 위반으로 안전망 500 에 도달한다.
-		errors.forEach(e -> assertThat(e).isInstanceOf(DataIntegrityViolationException.class));
+		// race window 발생 시 일부 요청은 unique 위반(DataIntegrityViolationException) 또는
+		// USED 예약 후 미결제 구간 PAYMENT_NOT_FOUND(PaymentException) 에 도달한다.
+		errors.forEach(e -> assertRaceOrPaymentError(e, PaymentErrorCode.PAYMENT_NOT_FOUND));
 		assertThat(paymentPersistence.countPaymentsByMerchantPayKey(merchantPayKey)).isEqualTo(1L);
 		assertThat(orderPersistence.getOrderStatusById(order.getId()))
 			.isEqualTo(OrderStatus.PAID);
@@ -243,8 +245,10 @@ class NaverPayServiceConcurrencyTest {
 
 		// then
 		// race window 시 일부 요청은 unique 위반(안전망 500), 나머지는 도메인 AMOUNT_MISMATCH.
+		// USED 예약 후 미결제 구간에서 PAYMENT_NOT_FOUND 도 발생할 수 있다.
 		assertThat(errors).isNotEmpty();
-		errors.forEach(e -> assertRaceOrPaymentError(e, PaymentErrorCode.PAYMENT_AMOUNT_MISMATCH));
+		errors.forEach(e -> assertRaceOrPaymentError(e,
+			PaymentErrorCode.PAYMENT_AMOUNT_MISMATCH, PaymentErrorCode.PAYMENT_NOT_FOUND));
 		assertThat(paymentPersistence.findApproveSucceeded(merchantPayKey)).isEmpty();
 		assertThat(paymentPersistence.countPayments(merchantPayKey, pgPaymentId, PaymentType.APPROVE))
 			.isEqualTo(1L);

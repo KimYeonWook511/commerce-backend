@@ -41,6 +41,10 @@ public class NaverPayGatewayImpl implements NaverPayGateway {
 		} catch (NaverPayException ex) {
 			log.warn("네이버페이 승인 호출 실패 pgPaymentId={} message={}", pgPaymentId, ex.getMessage());
 			return NaverPayApproveResult.failed(toFailCode(ex), toPaymentErrorCode(ex), ex.getMessage());
+		} catch (Exception ex) {
+			// RestClient timeout / 네트워크 단절: PG 처리 여부 불명 → UNKNOWN
+			log.warn("네이버페이 승인 timeout/네트워크 단절 pgPaymentId={} message={}", pgPaymentId, ex.getMessage());
+			return NaverPayApproveResult.unknown("승인 호출 중 네트워크 오류: " + ex.getMessage());
 		}
 
 		NaverPayApproveCode code = NaverPayApproveCode.from(response.getCode());

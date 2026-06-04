@@ -11,6 +11,7 @@ import com.commerce.payment.domain.Payment;
 import com.commerce.payment.domain.PaymentFailCode;
 import com.commerce.payment.domain.PaymentStatus;
 import com.commerce.payment.exception.PaymentException;
+import com.commerce.payment.exception.PaymentErrorCode;
 
 import lombok.RequiredArgsConstructor;
 import lombok.extern.slf4j.Slf4j;
@@ -39,6 +40,48 @@ public class PaymentApprovalCompensationService {
 			responseTotalAmount,
 			"승인 금액 불일치",
 			pgCanceller
+		);
+	}
+
+	/**
+	 * uk_payment_approved_order_key 위반 시 보상 — 이중 결제 감지.
+	 * PG 에서 돈이 빠진 attempt 를 cancel + FAILED 마킹한다 (ADR-14, ADR-015).
+	 * hasCompletedPayment 검사 없음: uk 위반이 이미 "다른 행이 SUCCEEDED" 임을 보장.
+	 */
+	public void compensateDuplicateApproval(Payment approveAttempt, PgCanceller pgCanceller) {
+		log.error("이중 결제 감지 — 이미 결제된 주문 orderId={} merchantPayKey={}",
+			approveAttempt.getOrderId(), approveAttempt.getMerchantPayKey());
+
+		LocalDateTime now = LocalDateTime.now();
+		Payment cancelAttempt = paymentCancellationAttemptService.getOrCreate(
+			approveAttempt.getMerchantPayKey(), approveAttempt.getProvider(),
+			approveAttempt.getPgPaymentId(), approveAttempt.getAmount()
+		);
+
+		if (cancelAttempt.getStatus() == PaymentStatus.REQUESTED) {
+			try {
+				CancelOutcome outcome = pgCanceller.cancel(cancelAttempt, "이중 결제로 인한 보상 취소");
+				switch (outcome.status()) {
+					case SUCCESS -> paymentCancellationAttemptService.succeed(
+						cancelAttempt.getMerchantPayKey(), cancelAttempt.getProvider(),
+						cancelAttempt.getPgPaymentId(), now
+					);
+					case PROCESSING -> {} // no-op
+					case FAILED -> paymentCancellationAttemptService.fail(
+						cancelAttempt.getMerchantPayKey(), cancelAttempt.getProvider(),
+						cancelAttempt.getPgPaymentId(), outcome.failCode(), outcome.failDetail(), now
+					);
+				}
+			} catch (PaymentException ex) {
+				log.warn("이중 결제 보상 취소 실패 merchantPayKey={} pgPaymentId={} errorCode={}",
+					cancelAttempt.getMerchantPayKey(), cancelAttempt.getPgPaymentId(), ex.getErrorCode());
+			}
+		}
+
+		// 원 approve attempt 를 FAILED 마킹 (보상 cancel 이후)
+		paymentApprovalAttemptService.failIfRequested(
+			approveAttempt.getMerchantPayKey(), approveAttempt.getProvider(), approveAttempt.getPgPaymentId(),
+			PaymentFailCode.DUPLICATE_PAYMENT, "이중 결제 감지로 인한 실패 처리", now
 		);
 	}
 

@@ -35,7 +35,7 @@ public enum PaymentErrorCode implements ErrorCode {
 		"결제 예약 상태 전이가 허용되지 않습니다"),
 	PAYMENT_MEMBER_MISMATCH(HttpStatus.FORBIDDEN, "PAYMENT-403-1", "결제 예약의 회원 정보가 일치하지 않습니다"),
 	PAYMENT_RESERVATION_NOT_REUSABLE(HttpStatus.CONFLICT, "PAYMENT-409-4", "재사용할 수 없는 결제 예약입니다"),
-	PAYMENT_RESULT_PENDING(HttpStatus.ACCEPTED, "PAYMENT-202-1", "결제 결과를 아직 확인할 수 없습니다");
+	PAYMENT_RESULT_PENDING(HttpStatus.CONFLICT, "PAYMENT-409-5", "결제 결과 확인 중입니다. 잠시 후 주문 내역에서 확인해 주세요.");
 
 	private final HttpStatus status;
 	private final String code;

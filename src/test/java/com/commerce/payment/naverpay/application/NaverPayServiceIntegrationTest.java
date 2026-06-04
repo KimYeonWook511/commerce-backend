@@ -386,13 +386,16 @@ class NaverPayServiceIntegrationTest {
 	 * 6. 중복 결제
 	 * ===================================================
 	 */
-	@DisplayName("같은 merchantPayKey에 기존 결제가 있으면 중복 승인 시도여도 기존 결제를 반환한다")
+	@DisplayName("USED Reservation에 같은 merchantPayKey redirect가 중복 도착하면 기존 결제 결과를 반환한다 (멱등 응답)")
 	@Test
 	void approve_whenPaymentAlreadyExists_returnExistingPayment() {
 		// given
 		Member member = memberPersistence.save(createMember());
 		persistOrder(member, "PAY-INT-6-1", 1000);
 		PaymentReservation reservation = reservationPersistence.findByMerchantPayKey("PAY-INT-6-1").orElseThrow();
+		// USED: 이미 한 번 approve 흐름을 통과한 상태 (redirect 중복 도착 시나리오)
+		reservation.markUsed();
+		reservationPersistence.save(reservation);
 		Payment existingPayment = Payment.createRequested(reservation, PaymentType.APPROVE, "pg-existing");
 		existingPayment.succeed(LocalDateTime.now());
 		paymentPersistence.save(existingPayment);
@@ -400,7 +403,7 @@ class NaverPayServiceIntegrationTest {
 		// when
 		NaverPayApproveResponse result = naverPayApprovalService.approve(member.getId(), "PAY-INT-6-1", "pg-int-6-1");
 
-		// then
+		// then: 멱등 200 응답 — PG 호출 0회
 		assertThat(result.getStatus()).isEqualTo(NaverPayApproveStatus.SUCCESS);
 		assertThat(result.getPgPaymentId()).isEqualTo("pg-existing");
 		then(naverPayGateway).should(never()).approve(any());
