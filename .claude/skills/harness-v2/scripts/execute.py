@@ -45,8 +45,12 @@ import step_verifier
 # .claude/skills/harness-v2/scripts/execute.py -> repository root
 ROOT = Path(__file__).resolve().parents[4]
 
-# 로그 tail pane 식별용 title (중단으로 남은 stale pane 정리에 사용)
-LOG_PANE_TITLE = "harness-v2-log"
+# 로그 tail pane의 title prefix. 역할명을 붙여(harness-v2:developer_agent 등) 화면 라벨과
+# stale pane 정리(중단으로 남은 pane 식별)를 겸한다.
+PANE_TITLE_PREFIX = "harness-v2:"
+# 로그 pane이 있는 윈도우에 임시 적용할 border 포맷. 사용자 전역 포맷은 보통 명령명을 보여주므로,
+# 이 윈도우에서만 pane title이 보이도록 바꾸고 종료 시 원복한다.
+PANE_BORDER_FORMAT = " #{pane_index} #{pane_title} "
 
 
 @contextlib.contextmanager
@@ -138,6 +142,7 @@ class StepExecutor:
         self.branch_name: str = ""  # _validate_worktree_context에서 실제 브랜치로 설정
         self._tmux = bool(os.environ.get("TMUX"))
         self.log_panes: list[str] = []
+        self._main_pane = ""  # 로그 pane을 띄운 메인 pane (border-format 원복용)
         self.validate_task_phase_registration()
 
     def resolve_phase_dir(self, phase_path: str) -> Path:
@@ -225,11 +230,17 @@ class StepExecutor:
         self._kill_stale_log_panes()
         logs_dir = self.phase_dir / "logs"
         logs_dir.mkdir(parents=True, exist_ok=True)
+        self._main_pane = self._tmux_current_pane()
+        # 이 윈도우에서만 pane title이 보이도록 border-format을 임시 변경한다 (_teardown에서 원복).
+        subprocess.run(
+            ["tmux", "set-option", "-w", "-t", self._main_pane, "pane-border-format", PANE_BORDER_FORMAT],
+            capture_output=True,
+        )
         # 현재 pane을 좌우로 나눠(-h) 오른쪽 컬럼을 만들고, 그 컬럼을 위→아래로(-v) 쌓아 三 형태를 만든다.
-        target = self._tmux_current_pane()
-        plan = [("-h", "developer_agent.log"), ("-v", "reviewer_agent.log"), ("-v", "commit_agent.log")]
-        for direction, fname in plan:
-            pane = self._tmux_split(target, direction, logs_dir / fname)
+        target = self._main_pane
+        plan = [("-h", "developer_agent"), ("-v", "reviewer_agent"), ("-v", "commit_agent")]
+        for direction, role in plan:
+            pane = self._tmux_split(target, direction, logs_dir / f"{role}.log", f"{PANE_TITLE_PREFIX}{role}")
             if not pane:
                 break
             self.log_panes.append(pane)
@@ -238,10 +249,17 @@ class StepExecutor:
             print(f"  ✓ 로그 pane {len(self.log_panes)}개 생성 (오른쪽: developer / reviewer / commit)")
 
     def _teardown_log_panes(self):
-        """생성한 로그 pane을 정리한다 (정상 종료·중단 모두에서 호출)."""
+        """생성한 로그 pane과 임시 border-format을 정리한다 (정상 종료·중단 모두에서 호출)."""
         for pane in self.log_panes:
             subprocess.run(["tmux", "kill-pane", "-t", pane], capture_output=True)
         self.log_panes = []
+        # 임시로 바꾼 pane-border-format을 원복한다 (윈도우 설정 제거 → 전역값 상속).
+        if self._main_pane:
+            subprocess.run(
+                ["tmux", "set-option", "-w", "-u", "-t", self._main_pane, "pane-border-format"],
+                capture_output=True,
+            )
+            self._main_pane = ""
 
     def _kill_stale_log_panes(self):
         """이전 실행이 중단으로 남긴 harness-v2 로그 pane을 정리한다(다음 run 오염 방지)."""
@@ -251,7 +269,7 @@ class StepExecutor:
         )
         for line in result.stdout.splitlines():
             parts = line.split(None, 1)
-            if len(parts) == 2 and parts[1] == LOG_PANE_TITLE:
+            if len(parts) == 2 and parts[1].startswith(PANE_TITLE_PREFIX):
                 subprocess.run(["tmux", "kill-pane", "-t", parts[0]], capture_output=True)
 
     def _tmux_current_pane(self) -> str:
@@ -264,8 +282,8 @@ class StepExecutor:
             capture_output=True, text=True,
         ).stdout.strip()
 
-    def _tmux_split(self, target: str, direction: str, log_path: Path) -> Optional[str]:
-        """target pane을 direction(-h/-v)으로 나눠 log_path를 tail하는 pane을 만든다."""
+    def _tmux_split(self, target: str, direction: str, log_path: Path, title: str) -> Optional[str]:
+        """target pane을 direction(-h/-v)으로 나눠 log_path를 tail하는 pane을 만들고 title을 단다."""
         log_path.touch()  # tail -f가 즉시 붙도록 미리 생성
         result = subprocess.run(
             ["tmux", "split-window", direction, "-d", "-t", target,
@@ -275,7 +293,7 @@ class StepExecutor:
         pane = result.stdout.strip()
         if not pane:
             return None
-        subprocess.run(["tmux", "select-pane", "-t", pane, "-T", LOG_PANE_TITLE], capture_output=True)
+        subprocess.run(["tmux", "select-pane", "-t", pane, "-T", title], capture_output=True)
         return pane
 
     # --- 진행 표시 ---
