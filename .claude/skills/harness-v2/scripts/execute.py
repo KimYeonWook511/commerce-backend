@@ -263,8 +263,10 @@ class StepExecutor:
 
     def _kill_stale_log_panes(self):
         """이전 실행이 중단으로 남긴 harness-v2 로그 pane을 정리한다(다음 run 오염 방지)."""
+        # 현재 세션으로 제한한다 (-a는 머신의 모든 세션을 훑어, 다른 세션에서 동시 실행 중인
+        # harness-v2의 로그 pane까지 오살할 수 있다). 우리 로그 pane은 현재 세션에 생성된다.
         result = subprocess.run(
-            ["tmux", "list-panes", "-a", "-F", "#{pane_id} #{pane_title}"],
+            ["tmux", "list-panes", "-s", "-F", "#{pane_id} #{pane_title}"],
             capture_output=True, text=True,
         )
         for line in result.stdout.splitlines():
