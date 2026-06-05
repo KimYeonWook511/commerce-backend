@@ -891,9 +891,14 @@ class StepExecutor:
         task-level과 모든 phase의 index.json은 다음 chore 커밋용이므로 와일드카드로 제외한다.
         """
         task_relpath = Path(self.task_phases_relpath).parent.as_posix()
-        self.run_git("add", "--", task_relpath)
-        self.run_git("reset", "HEAD", "--", f"{self.task_phases_relpath}/index.json")
-        self.run_git("reset", "HEAD", "--", f"{self.task_phases_relpath}/*/index.json")
+        # phase index 두 개는 다음 chore 커밋용이므로 pathspec 제외로 처음부터 스테이징에서 뺀다.
+        self.run_git(
+            "add",
+            "--",
+            task_relpath,
+            f":(exclude){self.task_phases_relpath}/index.json",
+            f":(exclude){self.task_phases_relpath}/*/index.json",
+        )
         if self.run_git("diff", "--cached", "--quiet").returncode != 0:
             message = f"docs: {self.task_name} Task 문서 변경분을 반영한다"
             result = self.run_git("commit", "-m", message)
