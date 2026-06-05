@@ -42,7 +42,7 @@ def _get_head(root: str) -> str:
     return result.stdout.strip() if result.returncode == 0 else ""
 
 
-def run(root: str, phase_dir: Path, step: dict, model: str = "haiku", attempt: int = 1) -> None:
+def run(root: str, phase_dir: Path, step: dict, model: str = "haiku", attempt: int = 1, max_retries: "int | None" = None) -> None:
     """commit agent를 subprocess로 실행한다."""
     step_num = step["step"]
     step_name = step.get("name", f"step{step_num}")
@@ -58,7 +58,9 @@ def run(root: str, phase_dir: Path, step: dict, model: str = "haiku", attempt: i
         role="commit_agent",
         logs_dir=phase_dir / "logs",
         step_num=step_num,
+        step_name=step_name,
         attempt=attempt,
+        max_retries=max_retries,
         allowed_tools="Bash(git *) Read",
     )
     after_head = _get_head(root)

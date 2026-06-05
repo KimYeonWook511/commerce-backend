@@ -42,7 +42,9 @@ def run_agent(
     role: str,  # "developer_agent" | "reviewer_agent" | "commit_agent" — 로그 파일명 prefix
     logs_dir: Path,
     step_num: int,
+    step_name: str = "",
     attempt: int = 1,
+    max_retries: "int | None" = None,
     allowed_tools: "str | None" = None,
     echo: "bool | None" = None,
 ) -> AgentResult:
@@ -58,12 +60,15 @@ def run_agent(
     raw_path = logs_dir / f"{role}.raw.jsonl"
     log_path = logs_dir / f"{role}.log"
 
-    header = (
-        f"===== step {step_num} 시작 ====="
-        if attempt <= 1
-        else f"----- step {step_num} (retry {attempt}) -----"
-    )
-    _append(log_path, f"\n{header}\n")
+    if attempt <= 1:
+        title = f" ▶ step {step_num} 시작" + (f": {step_name}" if step_name else "")
+        header = f"\n{format_events.BAR}\n{title}\n{format_events.BAR}\n\n"
+    else:
+        retry_label = f"{attempt}/{max_retries}" if max_retries else str(attempt)
+        header = f"\n{format_events.DOT}\n ↻ step {step_num} · RETRY {retry_label}\n{format_events.DOT}\n\n"
+    _append(log_path, header)
+    if echo:
+        print(header, end="", flush=True)
 
     cmd = [
         "claude", "-p", "--dangerously-skip-permissions",
@@ -92,27 +97,31 @@ def run_agent(
                 text=True, start_new_session=True,
             )
         _CURRENT_PROC = proc
+        tool_names: dict = {}  # tool_use_id -> name (tool_result에 도구 동사를 붙이기 위함)
         with open(raw_path, "a", encoding="utf-8") as raw_f, open(log_path, "a", encoding="utf-8") as log_f:
             for line in proc.stdout:
                 raw_f.write(line)
                 raw_f.flush()
                 event = _safe_json(line)
-                if event is not None and event.get("type") == "result":
-                    # 이번 실행의 마지막 result 이벤트를 최종 결과로 채택한다(재실행 누적 대비).
-                    result_text = event.get("result", "") or result_text
-                    is_error = bool(event.get("is_error")) or event.get("subtype") not in (None, "success")
-                formatted = format_events.format_line(line)
+                formatted = None
+                if event is not None:
+                    if event.get("type") == "result":
+                        # 이번 실행의 마지막 result 이벤트를 최종 결과로 채택한다(재실행 누적 대비).
+                        result_text = event.get("result", "") or result_text
+                        is_error = bool(event.get("is_error")) or event.get("subtype") not in (None, "success")
+                    _record_tool_names(event, tool_names)
+                    formatted = format_events.format_event(event, step_num=step_num, tool_names=tool_names)
                 if formatted is not None:
-                    log_f.write(formatted + "\n")
+                    # 단위 사이 빈 줄 한 개로 가독성을 높인다.
+                    log_f.write(formatted + "\n\n")
                     log_f.flush()
                     if echo:
-                        print(formatted, flush=True)
+                        print(formatted + "\n", flush=True)
         exit_code = proc.wait()
     finally:
         _terminate(proc)
         _CURRENT_PROC = None
         prompt_path.unlink(missing_ok=True)
-        _append(log_path, f"===== step {step_num} 완료 (exit={exit_code}) =====\n")
 
     return AgentResult(exit_code=exit_code, result_text=result_text, is_error=is_error)
 
@@ -144,6 +153,20 @@ def _killpg(proc: "subprocess.Popen", sig: int) -> None:
         os.killpg(os.getpgid(proc.pid), sig)
     except (ProcessLookupError, PermissionError, OSError):
         pass
+
+
+def _record_tool_names(event: dict, tool_names: dict) -> None:
+    """assistant 이벤트의 tool_use 블록에서 id→name을 기록한다 (tool_result 결과 줄 라벨용)."""
+    message = event.get("message")
+    if isinstance(message, dict) and isinstance(message.get("content"), list):
+        blocks = message["content"]
+    elif isinstance(event.get("content"), list):
+        blocks = event["content"]
+    else:
+        return
+    for block in blocks:
+        if isinstance(block, dict) and block.get("type") == "tool_use":
+            tool_names[block.get("id")] = block.get("name")
 
 
 def _safe_json(line: str) -> "dict | None":

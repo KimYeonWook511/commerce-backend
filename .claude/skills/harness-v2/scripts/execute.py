@@ -551,6 +551,7 @@ class StepExecutor:
             guardrails_text=self.build_reviewer_guardrails(),
             model=self.reviewer_model,
             attempt=attempt,
+            max_retries=self.MAX_RETRIES,
         )
 
     def run_acceptance_checks(self, current: dict, step_text: str) -> dict | None:
@@ -585,7 +586,7 @@ class StepExecutor:
 
     def run_developer_agent(self, step: dict, context_text: str, guardrails_text: str, attempt: int = 1) -> dict:
         """developer agent를 실행한다."""
-        return developer_agent.run(self.root, self.phase_dir, self.write_json, step, context_text, guardrails_text, model=self.developer_model, attempt=attempt)
+        return developer_agent.run(self.root, self.phase_dir, self.write_json, step, context_text, guardrails_text, model=self.developer_model, attempt=attempt, max_retries=self.MAX_RETRIES)
 
     # --- header & validation ---
 
@@ -773,7 +774,7 @@ class StepExecutor:
 
                 current["completed_at"] = timestamp
                 try:
-                    commit_agent.run(self.root, self.phase_dir, current, model=self.commit_model, attempt=attempt)
+                    commit_agent.run(self.root, self.phase_dir, current, model=self.commit_model, attempt=attempt, max_retries=self.MAX_RETRIES)
                 except Exception as e:
                     self.mark_step_error(current, str(e), timestamp)
                     self.write_json(self.index_file, index)

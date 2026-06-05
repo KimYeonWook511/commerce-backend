@@ -50,6 +50,7 @@ def run(
     guardrails_text: str,
     model: str = "sonnet",
     attempt: int = 1,
+    max_retries: "int | None" = None,
 ) -> dict:
     """developer agent를 subprocess로 실행하고 step output 파일을 기록한다."""
     step_num = step["step"]
@@ -69,7 +70,9 @@ def run(
         role="developer_agent",
         logs_dir=phase_dir / "logs",
         step_num=step_num,
+        step_name=step_name,
         attempt=attempt,
+        max_retries=max_retries,
     )
     last_message = result.result_text
     exit_code = result.exit_code

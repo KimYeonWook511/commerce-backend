@@ -75,6 +75,7 @@ def run(
     guardrails_text: str,
     model: str = "opus",
     attempt: int = 1,
+    max_retries: "int | None" = None,
 ) -> ReviewResult:
     """reviewer agent를 subprocess(read-only)로 실행하고 review output 파일을 기록한다."""
     prompt = build_prompt(guardrails_text, step, step_text, changed_paths, output, ac_output)
@@ -87,7 +88,9 @@ def run(
         role="reviewer_agent",
         logs_dir=phase_dir / "logs",
         step_num=step["step"],
+        step_name=step.get("name", ""),
         attempt=attempt,
+        max_retries=max_retries,
         allowed_tools="Read,Grep,Glob,Bash",
     )
     last_message = result.result_text
