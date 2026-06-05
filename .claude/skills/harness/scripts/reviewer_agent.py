@@ -49,7 +49,7 @@ def build_prompt(
 
 def parse_review_result(raw: str) -> ReviewResult:
     decision_match = re.search(r"^DECISION:\s*(pass|retryable_error|blocked)\s*$", raw, re.MULTILINE)
-    message_match = re.search(r"^MESSAGE:\s*(.+)$", raw, re.MULTILINE)
+    message_match = re.search(r"^MESSAGE:\s*(.*)$", raw, re.MULTILINE)
     if not decision_match or not message_match:
         return ReviewResult("retryable_error", "reviewer agent 출력 형식이 올바르지 않습니다.", raw)
 
