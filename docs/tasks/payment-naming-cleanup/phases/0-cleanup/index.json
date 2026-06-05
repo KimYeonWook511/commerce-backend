@@ -2,10 +2,48 @@
   "project": "payment-naming-cleanup",
   "phase": "0-cleanup",
   "steps": [
-    { "step": 1, "name": "verbize-reservation-methods", "status": "pending" },
-    { "step": 2, "name": "remove-succeed-dead-reset", "status": "pending" },
-    { "step": 3, "name": "purge-payment-attempt-identifiers", "status": "pending" },
-    { "step": 4, "name": "sync-root-docs", "status": "pending" },
-    { "step": 5, "name": "write-retrospective", "status": "pending" }
-  ]
+    {
+      "step": 1,
+      "name": "verbize-reservation-methods",
+      "status": "completed",
+      "started_at": "2026-06-05T12:06:34+0900",
+      "summary": "PaymentReservation.markUsed() → use(), markExpired() → expire() 로 rename하고 호출부·테스트 전체에 반영한다. NULL 트릭 캡슐화(status + reservedKey = null 동시 set) 보존 확인. gradlew test 통과.",
+      "completed_at": "2026-06-05T12:07:30+0900"
+    },
+    {
+      "step": 2,
+      "name": "remove-succeed-dead-reset",
+      "status": "completed",
+      "started_at": "2026-06-05T12:15:08+0900",
+      "summary": "Payment.succeed()에서 failCode = null / failDetail = null dead code 2줄을 제거한다. fail()/markUnknown()의 failCode/failDetail set은 보존한다. gradlew test 통과.",
+      "completed_at": "2026-06-05T12:20:00+0900"
+    },
+    {
+      "step": 3,
+      "name": "purge-payment-attempt-identifiers",
+      "status": "completed",
+      "started_at": "2026-06-05T12:17:55+0900",
+      "summary": "PaymentAttempt 엔티티 참조 식별자를 전면 정리한다. 신규 클래스 PaymentApprovalRecordService·PaymentCancellationService 생성, 삭제 클래스 PaymentApprovalAttemptService·PaymentCancellationAttemptService 제거. repository/adapter·error code·service·test 전 계층의 attempt→payment rename 완료. postprocess 패키지·attackerAttempt·동시성 attempt 표현(KEEP LIST)은 보존. PgCanceller.cancelAttempt→cancelPayment 누락 건 재수정 포함. gradlew test + integrationTest 통과.",
+      "completed_at": "2026-06-05T12:49:40+0900"
+    },
+    {
+      "step": 4,
+      "name": "sync-root-docs",
+      "status": "completed",
+      "started_at": "2026-06-05T12:51:48+0900",
+      "summary": "architecture.md·exception-strategy.md·testing-conventions.md의 현재 구조 기술을 Step 1~3 변경에 맞춰 동기화한다. 서비스명(PaymentApprovalAttemptService→PaymentApprovalRecordService, PaymentCancellationAttemptService→PaymentCancellationService), 메서드명(reservation.markUsed()→use()), 변수명(cancelAttempt→cancelPayment), invariant 참조(countAttempts→countPayments) 갱신. docs/ADR.md 역사 기록 불변 확인. gradlew test 통과.",
+      "completed_at": "2026-06-05T13:05:00+0900"
+    },
+    {
+      "step": 5,
+      "name": "write-retrospective",
+      "status": "pending"
+    }
+  ],
+  "created_at": "2026-06-05T03:00:23+0900",
+  "execution": {
+    "developer_model": "sonnet",
+    "reviewer_model": "opus",
+    "commit_model": "haiku"
+  }
 }
