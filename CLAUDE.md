@@ -27,7 +27,7 @@ Java, Spring Boot, Gradle, MySQL, JPA(Hibernate) 백엔드 프로젝트.
 | `git commit` 전 | `docs/commit-conventions.md` — 타입, subject 문체(`~한다`), 형식 |
 | `gh pr create` 전 | `docs/pr-conventions.md` — 타입, 형식, draft 여부 |
 | `gh pr merge` 전 | `docs/pr-conventions.md` 머지 규칙 — extended description 정리, 후속 작업 체크 상태 |
-| `gh issue create` 전 | `.github/ISSUE_TEMPLATE.md` — 섹션 구조 |
+| `gh issue create` 전 | `.github/issue_template.md` — 섹션 구조 |
 | `git worktree add` 전 | `docs/branch-conventions.md` — 형식 |
 
 ### 코드 변경 후 루트 문서 동기화
@@ -39,7 +39,7 @@ Java, Spring Boot, Gradle, MySQL, JPA(Hibernate) 백엔드 프로젝트.
 | API 계약 (엔드포인트·요청·응답·실패코드) | `docs/api-spec.md` | 현재 상태로 갱신 |
 | DB 스키마 (테이블·컬럼·인덱스·제약) | `docs/db-schema.md` | 현재 상태로 갱신 (실제 DDL은 Flyway V스크립트가 단일 출처) |
 | 구조 (모듈·레이어·책임 이동, 서비스 신설/이동) | `docs/architecture.md` | 현재 상태로 갱신 |
-| 설계 결정 (정책·트레이드오프) | `docs/ADR.md` | **append** (기존 ADR 수정 금지, 새 번호 추가 + supersede 표시) |
+| 설계 결정 (정책·트레이드오프) | `docs/adr.md` | **append** (기존 ADR 수정 금지, 새 번호 추가 + supersede 표시) |
 | 내부 구현만 (이름 정리·로직 리팩터) | 없음 | 동기화 불필요 |
 
 동기화 규율:
@@ -72,8 +72,8 @@ Java, Spring Boot, Gradle, MySQL, JPA(Hibernate) 백엔드 프로젝트.
 ## 참고 문서
 
 핵심 설계·스펙
-- 기능 범위: `docs/PRD.md`
-- 설계 결정: `docs/ADR.md`
+- 기능 범위: `docs/prd.md`
+- 설계 결정: `docs/adr.md`
 - 백엔드 구조와 의존성: `docs/architecture.md`
 - API 스펙: `docs/api-spec.md`
 - DB 스키마: `docs/db-schema.md`

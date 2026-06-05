@@ -24,8 +24,8 @@
 
 ## 참고 문서
 
-- 기능 범위: `docs/PRD.md`
-- 설계 결정: `docs/ADR.md`
+- 기능 범위: `docs/prd.md`
+- 설계 결정: `docs/adr.md`
 - 백엔드 구조와 의존성: `docs/architecture.md`
 - API 스펙: `docs/api-spec.md`
 - DB 스키마: `docs/db-schema.md`

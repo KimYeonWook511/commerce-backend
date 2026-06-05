@@ -4,7 +4,7 @@
 
 회원이 상품을 조회하고, 장바구니에 담고, 안전하게 주문·결제하는 핵심 구매 흐름을 제공하는 커머스 백엔드다. 정합성(재고·결제·멱등)과 장애 격리(외부 캐시·PG 장애가 핵심 흐름을 막지 않음)를 우선한다.
 
-이 문서는 제품이 제공하는 기능의 상위 인덱스다. 각 기능의 상세 계약은 `docs/api-spec.md`, 설계 결정은 `docs/ADR.md`, 기능별 작업 맥락은 각 task의 `docs/tasks/<task>/prd.md`를 가리킨다. 본 문서는 task PRD 본문을 흡수하지 않는다.
+이 문서는 제품이 제공하는 기능의 상위 인덱스다. 각 기능의 상세 계약은 `docs/api-spec.md`, 설계 결정은 `docs/adr.md`, 기능별 작업 맥락은 각 task의 `docs/tasks/<task>/prd.md`를 가리킨다. 본 문서는 task PRD 본문을 흡수하지 않는다.
 
 ## 제품 기능
 
@@ -22,7 +22,7 @@
 
 ## 기반 기술
 
-제품 기능은 아니지만 정합성·운영성을 떠받치는 기반이다. 카테고리별로 묶으며, 개별 task를 나열하지 않고 대표 ADR을 가리킨다. 상세·이력은 `docs/ADR.md`가 단일 출처다.
+제품 기능은 아니지만 정합성·운영성을 떠받치는 기반이다. 카테고리별로 묶으며, 개별 task를 나열하지 않고 대표 ADR을 가리킨다. 상세·이력은 `docs/adr.md`가 단일 출처다.
 
 - **아키텍처 정책**: cross-aggregate는 ID 참조, same-aggregate만 객체 참조 (ADR-020). 응용 트랜잭션은 method-level `@Transactional` (ADR-021), 영속화 명시 호출 (ADR-022), DB unique 위반은 find-first + 안전망 500 (ADR-011).
 - **마이그레이션·스키마**: Flyway 도입, `ddl-auto: validate` (ADR-024). enum은 `@JdbcTypeCode(VARCHAR)` (ADR-018), enum CHECK 제약 미사용 (ADR-025), multi-column unique 컬럼 길이 명시 (ADR-023).

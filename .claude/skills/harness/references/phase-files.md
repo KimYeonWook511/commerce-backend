@@ -157,7 +157,7 @@ step 실행 상태 파일이다.
 Task 문서만으로 부족한 공통 맥락이 있으면 아래처럼 루트 문서를 추가로 읽는다.
 
 - `/docs/architecture.md`
-- `/docs/ADR.md`
+- `/docs/adr.md`
 
 이전 step에서 만들어진 코드와 task 문서를 꼼꼼히 읽고, 설계 의도를 이해한 뒤 작업하라.
 
