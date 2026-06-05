@@ -109,7 +109,7 @@ ReservePaymentController → ReservePaymentService
   → OrderRepository (주문 확인 + 결제 가능 상태 검증)
   → PaymentRepository (UNKNOWN 차단 검사)
   → PaymentReservationRepository (재사용 가능 Reservation 탐색 또는 신규 RESERVED INSERT)
-  → uk_payment_reservation_reserved_key UNIQUE 가 동시 따닥 차단
+  → uk_payment_reservation_reserved_key UNIQUE 가 동시 중복 요청(따닥) 차단
 
 # 결제 승인 (네이버페이)
 NaverPayController → NaverPayApprovalService
