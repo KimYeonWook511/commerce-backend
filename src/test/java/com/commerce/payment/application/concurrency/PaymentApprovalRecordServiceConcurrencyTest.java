@@ -76,8 +76,8 @@ class PaymentApprovalRecordServiceConcurrencyTest {
 	@Test
 	void create_whenConcurrentIdempotentRequest_returnSameApprovePayment() throws Exception {
 		// given: reservation 선행 생성 후 approve payment 선행 생성
-		String merchantPayKey = "PAY-ATTEMPT-CON-1";
-		String pgPaymentId = "pg-attempt-con-1";
+		String merchantPayKey = "PAY-RECORD-CON-1";
+		String pgPaymentId = "pg-record-con-1";
 		PaymentReservation reservation = reservationPersistence.save(
 			PaymentReservation.createReserved(1L, 1L, 1000, PaymentProvider.NAVERPAY, merchantPayKey,
 				LocalDateTime.now().plusMinutes(15))

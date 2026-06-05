@@ -822,12 +822,12 @@ class NaverPayApprovalServiceTest {
 		long memberId = 1L;
 		PaymentReservation attackerReservation = createReservation("PAY-ATTACKER", memberId, 1000);
 		Order attackerOrder = createOrder(1000);
-		Payment attackerAttempt = createPayment("PAY-ATTACKER", "pg-victim-payment-id", 1000);
+		Payment attackerPayment = createPayment("PAY-ATTACKER", "pg-victim-payment-id", 1000);
 
 		given(paymentReservationRepository.findByMerchantPayKey("PAY-ATTACKER")).willReturn(Optional.of(attackerReservation));
 		given(orderRepository.findByIdAndMemberId(attackerReservation.getOrderId(), memberId)).willReturn(Optional.of(attackerOrder));
 		given(paymentApprovalRecordService.create(any(PaymentReservation.class), eq("pg-victim-payment-id")))
-			.willReturn(attackerAttempt);
+			.willReturn(attackerPayment);
 		given(naverPayGateway.approve("pg-victim-payment-id"))
 			.willReturn(NaverPayApproveResult.success("PAY-VICTIM", 1000));
 
@@ -848,12 +848,12 @@ class NaverPayApprovalServiceTest {
 		long memberId = 1L;
 		PaymentReservation attackerReservation = createReservation("PAY-ATTACKER", memberId, 1000);
 		Order attackerOrder = createOrder(1000);
-		Payment attackerAttempt = createPayment("PAY-ATTACKER", "pg-victim-payment-id", 1000);
+		Payment attackerPayment = createPayment("PAY-ATTACKER", "pg-victim-payment-id", 1000);
 
 		given(paymentReservationRepository.findByMerchantPayKey("PAY-ATTACKER")).willReturn(Optional.of(attackerReservation));
 		given(orderRepository.findByIdAndMemberId(attackerReservation.getOrderId(), memberId)).willReturn(Optional.of(attackerOrder));
 		given(paymentApprovalRecordService.create(any(PaymentReservation.class), eq("pg-victim-payment-id")))
-			.willReturn(attackerAttempt);
+			.willReturn(attackerPayment);
 		given(naverPayGateway.approve("pg-victim-payment-id")).willReturn(NaverPayApproveResult.alreadyComplete());
 		given(naverPayGateway.getApprovalHistory("pg-victim-payment-id"))
 			.willReturn(NaverPayHistoryResult.approved("PAY-VICTIM", 1000));

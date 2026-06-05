@@ -111,13 +111,13 @@ class PaymentApprovalServiceConcurrencyTest {
 	}
 
 	private boolean isAllowedConcurrentException(Throwable throwable) {
-		// race window에서 attempt unique 위반 또는 payment unique 위반으로 발생
+		// race window에서 payment unique 위반으로 발생
 		if (throwable instanceof DataIntegrityViolationException) {
 			return true;
 		}
 		if (throwable instanceof PaymentException paymentException) {
 			return paymentException.getErrorCode() == PaymentErrorCode.PAYMENT_DUPLICATE
-				// Order FOR UPDATE 직렬화 후 두 번째 스레드가 이미 SUCCEEDED 상태인 attempt를 다시 mark할 때 발생
+				// Order FOR UPDATE 직렬화 후 두 번째 스레드가 이미 SUCCEEDED 상태인 payment를 다시 mark할 때 발생
 				|| paymentException.getErrorCode() == PaymentErrorCode.PAYMENT_STATUS_TRANSITION_NOT_ALLOWED;
 		}
 		if (throwable instanceof OrderException orderException) {

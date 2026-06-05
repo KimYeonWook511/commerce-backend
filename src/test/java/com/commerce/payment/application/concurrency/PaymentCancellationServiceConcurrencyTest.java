@@ -72,8 +72,8 @@ class PaymentCancellationServiceConcurrencyTest {
 	@Test
 	void getOrCreate_whenConcurrentIdempotentRequest_returnSameCancelPayment() throws Exception {
 		// given: amount=1000으로 cancel payment 선행 생성
-		String merchantPayKey = "PAY-ATTEMPT-CON-2";
-		String pgPaymentId = "pg-attempt-con-2";
+		String merchantPayKey = "PAY-RECORD-CON-2";
+		String pgPaymentId = "pg-record-con-2";
 		paymentCancellationService.getOrCreate(
 			1L, merchantPayKey, PaymentProvider.NAVERPAY, pgPaymentId, 1000);
 		ConcurrentLinkedQueue<Throwable> errors = new ConcurrentLinkedQueue<>();
@@ -97,8 +97,8 @@ class PaymentCancellationServiceConcurrencyTest {
 	@Test
 	void getOrCreate_whenConcurrentRequestWithDifferentAmount_allThrowAmountMismatch() throws Exception {
 		// given: amount=1000으로 cancel payment 선행 생성
-		String merchantPayKey = "PAY-ATTEMPT-MISMATCH-2";
-		String pgPaymentId = "pg-attempt-mismatch-2";
+		String merchantPayKey = "PAY-RECORD-MISMATCH-2";
+		String pgPaymentId = "pg-record-mismatch-2";
 		paymentCancellationService.getOrCreate(
 			1L, merchantPayKey, PaymentProvider.NAVERPAY, pgPaymentId, 1000);
 

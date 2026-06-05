@@ -20,18 +20,18 @@ class PaymentTest {
 		// given
 		PaymentReservation reservation = PaymentReservation.createReserved(
 			1L, 1L, 1000, PaymentProvider.NAVERPAY, "PAY-1", LocalDateTime.now().plusMinutes(15));
-		Payment attempt = Payment.createRequested(reservation, PaymentType.APPROVE, "pg-payment-id");
+		Payment payment = Payment.createRequested(reservation, PaymentType.APPROVE, "pg-payment-id");
 		LocalDateTime respondedAt = LocalDateTime.of(2026, 3, 5, 20, 10);
 
 		// when
-		attempt.succeed(respondedAt);
+		payment.succeed(respondedAt);
 
 		// then
-		assertThat(attempt.getStatus()).isEqualTo(PaymentStatus.SUCCEEDED);
-		assertThat(attempt.getRespondedAt()).isEqualTo(respondedAt);
-		assertThat(attempt.getApprovedOrderKey()).isEqualTo(1L);
-		assertThat(attempt.getFailCode()).isNull();
-		assertThat(attempt.getFailDetail()).isNull();
+		assertThat(payment.getStatus()).isEqualTo(PaymentStatus.SUCCEEDED);
+		assertThat(payment.getRespondedAt()).isEqualTo(respondedAt);
+		assertThat(payment.getApprovedOrderKey()).isEqualTo(1L);
+		assertThat(payment.getFailCode()).isNull();
+		assertThat(payment.getFailDetail()).isNull();
 	}
 
 	@DisplayName("CANCEL 타입 승인 성공 처리 시 상태가 SUCCEEDED가 되고 approvedOrderKey는 변경되지 않는다")
@@ -54,17 +54,17 @@ class PaymentTest {
 	@Test
 	void fail_whenCalled_updateFailedState() {
 		// given
-		Payment attempt = Payment.createCancelRequested(1L, "PAY-1", "pg-payment-id", 1000, PaymentProvider.NAVERPAY);
+		Payment payment = Payment.createCancelRequested(1L, "PAY-1", "pg-payment-id", 1000, PaymentProvider.NAVERPAY);
 		LocalDateTime respondedAt = LocalDateTime.of(2026, 3, 5, 20, 20);
 
 		// when
-		attempt.fail(PaymentFailCode.PG_REQUEST_REJECTED, "cancel failed", respondedAt);
+		payment.fail(PaymentFailCode.PG_REQUEST_REJECTED, "cancel failed", respondedAt);
 
 		// then
-		assertThat(attempt.getStatus()).isEqualTo(PaymentStatus.FAILED);
-		assertThat(attempt.getFailCode()).isEqualTo(PaymentFailCode.PG_REQUEST_REJECTED);
-		assertThat(attempt.getFailDetail()).isEqualTo("cancel failed");
-		assertThat(attempt.getRespondedAt()).isEqualTo(respondedAt);
+		assertThat(payment.getStatus()).isEqualTo(PaymentStatus.FAILED);
+		assertThat(payment.getFailCode()).isEqualTo(PaymentFailCode.PG_REQUEST_REJECTED);
+		assertThat(payment.getFailDetail()).isEqualTo("cancel failed");
+		assertThat(payment.getRespondedAt()).isEqualTo(respondedAt);
 	}
 
 	@DisplayName("markUnknown 호출 시 상태가 UNKNOWN이 되고 failDetail과 respondedAt이 저장된다")
@@ -73,17 +73,17 @@ class PaymentTest {
 		// given
 		PaymentReservation reservation = PaymentReservation.createReserved(
 			1L, 1L, 1000, PaymentProvider.NAVERPAY, "PAY-1", LocalDateTime.now().plusMinutes(15));
-		Payment attempt = Payment.createRequested(reservation, PaymentType.APPROVE, "pg-payment-id");
+		Payment payment = Payment.createRequested(reservation, PaymentType.APPROVE, "pg-payment-id");
 		LocalDateTime respondedAt = LocalDateTime.of(2026, 3, 5, 20, 30);
 
 		// when
-		attempt.markUnknown("PG 응답 타임아웃", respondedAt);
+		payment.markUnknown("PG 응답 타임아웃", respondedAt);
 
 		// then
-		assertThat(attempt.getStatus()).isEqualTo(PaymentStatus.UNKNOWN);
-		assertThat(attempt.getFailDetail()).isEqualTo("PG 응답 타임아웃");
-		assertThat(attempt.getRespondedAt()).isEqualTo(respondedAt);
-		assertThat(attempt.getApprovedOrderKey()).isNull();
+		assertThat(payment.getStatus()).isEqualTo(PaymentStatus.UNKNOWN);
+		assertThat(payment.getFailDetail()).isEqualTo("PG 응답 타임아웃");
+		assertThat(payment.getRespondedAt()).isEqualTo(respondedAt);
+		assertThat(payment.getApprovedOrderKey()).isNull();
 	}
 
 	@DisplayName("markUnknown을 REQUESTED 외 상태에서 호출 시 예외가 발생한다")
@@ -92,11 +92,11 @@ class PaymentTest {
 		// given
 		PaymentReservation reservation = PaymentReservation.createReserved(
 			1L, 1L, 1000, PaymentProvider.NAVERPAY, "PAY-1", LocalDateTime.now().plusMinutes(15));
-		Payment attempt = Payment.createRequested(reservation, PaymentType.APPROVE, "pg-payment-id");
-		attempt.succeed(LocalDateTime.now());
+		Payment payment = Payment.createRequested(reservation, PaymentType.APPROVE, "pg-payment-id");
+		payment.succeed(LocalDateTime.now());
 
 		// when & then
-		assertThatThrownBy(() -> attempt.markUnknown("detail", LocalDateTime.now()))
+		assertThatThrownBy(() -> payment.markUnknown("detail", LocalDateTime.now()))
 			.isInstanceOf(PaymentException.class)
 			.satisfies(e -> assertThat(((PaymentException)e).getErrorCode())
 				.isEqualTo(PaymentErrorCode.PAYMENT_STATUS_TRANSITION_NOT_ALLOWED));
@@ -108,11 +108,11 @@ class PaymentTest {
 		// given
 		PaymentReservation reservation = PaymentReservation.createReserved(
 			1L, 1L, 1000, PaymentProvider.NAVERPAY, "PAY-1", LocalDateTime.now().plusMinutes(15));
-		Payment attempt = Payment.createRequested(reservation, PaymentType.APPROVE, "pg-payment-id");
-		attempt.succeed(LocalDateTime.now());
+		Payment payment = Payment.createRequested(reservation, PaymentType.APPROVE, "pg-payment-id");
+		payment.succeed(LocalDateTime.now());
 
 		// when & then
-		assertThatThrownBy(() -> attempt.succeed(LocalDateTime.now()))
+		assertThatThrownBy(() -> payment.succeed(LocalDateTime.now()))
 			.isInstanceOf(PaymentException.class)
 			.satisfies(e -> assertThat(((PaymentException)e).getErrorCode())
 				.isEqualTo(PaymentErrorCode.PAYMENT_STATUS_TRANSITION_NOT_ALLOWED));
@@ -124,11 +124,11 @@ class PaymentTest {
 		// given
 		PaymentReservation reservation = PaymentReservation.createReserved(
 			1L, 1L, 1000, PaymentProvider.NAVERPAY, "PAY-1", LocalDateTime.now().plusMinutes(15));
-		Payment attempt = Payment.createRequested(reservation, PaymentType.APPROVE, "pg-payment-id");
-		attempt.fail(PaymentFailCode.TIME_EXPIRED, "timeout", LocalDateTime.now());
+		Payment payment = Payment.createRequested(reservation, PaymentType.APPROVE, "pg-payment-id");
+		payment.fail(PaymentFailCode.TIME_EXPIRED, "timeout", LocalDateTime.now());
 
 		// when & then
-		assertThatThrownBy(() -> attempt.fail(PaymentFailCode.TIME_EXPIRED, "timeout", LocalDateTime.now()))
+		assertThatThrownBy(() -> payment.fail(PaymentFailCode.TIME_EXPIRED, "timeout", LocalDateTime.now()))
 			.isInstanceOf(PaymentException.class)
 			.satisfies(e -> assertThat(((PaymentException)e).getErrorCode())
 				.isEqualTo(PaymentErrorCode.PAYMENT_STATUS_TRANSITION_NOT_ALLOWED));
@@ -140,10 +140,10 @@ class PaymentTest {
 		// given
 		PaymentReservation reservation = PaymentReservation.createReserved(
 			1L, 1L, 1000, PaymentProvider.NAVERPAY, "PAY-1", LocalDateTime.now().plusMinutes(15));
-		Payment attempt = Payment.createRequested(reservation, PaymentType.APPROVE, "pg-payment-id");
+		Payment payment = Payment.createRequested(reservation, PaymentType.APPROVE, "pg-payment-id");
 
 		// when & then
-		assertThatCode(() -> attempt.verifyApprovedResponse("PAY-1", 1000)).doesNotThrowAnyException();
+		assertThatCode(() -> payment.verifyApprovedResponse("PAY-1", 1000)).doesNotThrowAnyException();
 	}
 
 	@DisplayName("merchantPayKey가 다르면 verifyApprovedResponse에서 PAYMENT_MERCHANT_KEY_MISMATCH를 던진다")
@@ -152,10 +152,10 @@ class PaymentTest {
 		// given
 		PaymentReservation reservation = PaymentReservation.createReserved(
 			1L, 1L, 1000, PaymentProvider.NAVERPAY, "PAY-1", LocalDateTime.now().plusMinutes(15));
-		Payment attempt = Payment.createRequested(reservation, PaymentType.APPROVE, "pg-payment-id");
+		Payment payment = Payment.createRequested(reservation, PaymentType.APPROVE, "pg-payment-id");
 
 		// when & then
-		assertThatThrownBy(() -> attempt.verifyApprovedResponse("OTHER-PAY", 1000))
+		assertThatThrownBy(() -> payment.verifyApprovedResponse("OTHER-PAY", 1000))
 			.isInstanceOf(PaymentException.class)
 			.satisfies(e -> assertThat(((PaymentException)e).getErrorCode())
 				.isEqualTo(PaymentErrorCode.PAYMENT_MERCHANT_KEY_MISMATCH));
@@ -167,10 +167,10 @@ class PaymentTest {
 		// given
 		PaymentReservation reservation = PaymentReservation.createReserved(
 			1L, 1L, 1000, PaymentProvider.NAVERPAY, "PAY-1", LocalDateTime.now().plusMinutes(15));
-		Payment attempt = Payment.createRequested(reservation, PaymentType.APPROVE, "pg-payment-id");
+		Payment payment = Payment.createRequested(reservation, PaymentType.APPROVE, "pg-payment-id");
 
 		// when & then
-		assertThatThrownBy(() -> attempt.verifyApprovedResponse("PAY-1", 2000))
+		assertThatThrownBy(() -> payment.verifyApprovedResponse("PAY-1", 2000))
 			.isInstanceOf(PaymentException.class)
 			.satisfies(e -> assertThat(((PaymentException)e).getErrorCode())
 				.isEqualTo(PaymentErrorCode.PAYMENT_AMOUNT_MISMATCH));

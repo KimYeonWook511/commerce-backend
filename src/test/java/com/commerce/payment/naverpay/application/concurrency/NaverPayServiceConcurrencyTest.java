@@ -191,7 +191,7 @@ class NaverPayServiceConcurrencyTest {
 		then(naverPayGateway).should(never()).cancel(any(), anyInt(), any());
 	}
 
-	@DisplayName("동시에 merchantPayKey가 다른 승인 응답이 들어오면 payment 없이 approve attempt만 FAILED가 된다")
+	@DisplayName("동시에 merchantPayKey가 다른 승인 응답이 들어오면 payment 없이 approve payment만 FAILED가 된다")
 	@Test
 	void approve_whenConcurrentRequestAndMerchantPayKeyMismatch_failApproveWithoutCancel() throws Exception {
 		// given
@@ -225,7 +225,7 @@ class NaverPayServiceConcurrencyTest {
 		then(naverPayGateway).should(never()).cancel(any(), anyInt(), any());
 	}
 
-	@DisplayName("동시에 금액이 다른 승인 응답이 들어오면 payment 없이 cancel attempt는 REQUESTED로 유지된다")
+	@DisplayName("동시에 금액이 다른 승인 응답이 들어오면 payment 없이 cancel payment는 REQUESTED로 유지된다")
 	@Test
 	void approve_whenConcurrentRequestAndAmountMismatch_keepSingleCancelRequested() throws Exception {
 		// given
@@ -263,18 +263,17 @@ class NaverPayServiceConcurrencyTest {
 
 	@DisplayName("SUCCEEDED Payment가 이미 있으면 동시 요청도 모두 멱등 응답을 반환한다")
 	@Test
-	void approve_whenConcurrentAttemptSucceededAndPaymentMissing_throwsConsistently() throws Exception {
+	void approve_whenConcurrentPaymentAlreadySucceeded_returnIdempotent() throws Exception {
 		// given: SUCCEEDED Payment가 이미 DB에 있는 상태
-		// 새 모델에서 "attempt SUCCEEDED + payment 없음" 부패 상태는 존재하지 않음.
 		// SUCCEEDED Payment = findApproveSucceeded 로 발견 → 멱등 응답 경로
 		String merchantPayKey = "PAY-NAVER-CON-5";
 		String pgPaymentId = "pg-naver-con-5";
 		Member member = memberPersistence.save(createMember());
 		persistOrder(member, merchantPayKey, 1000);
 		PaymentReservation reservation = reservationPersistence.findByMerchantPayKey(merchantPayKey).orElseThrow();
-		Payment attempt = Payment.createRequested(reservation, PaymentType.APPROVE, pgPaymentId);
-		attempt.succeed(LocalDateTime.now());
-		paymentPersistence.save(attempt);
+		Payment payment = Payment.createRequested(reservation, PaymentType.APPROVE, pgPaymentId);
+		payment.succeed(LocalDateTime.now());
+		paymentPersistence.save(payment);
 
 		ConcurrentLinkedQueue<Throwable> errors = new ConcurrentLinkedQueue<>();
 
@@ -288,7 +287,7 @@ class NaverPayServiceConcurrencyTest {
 		assertThat(paymentPersistence.findApproveSucceeded(merchantPayKey)).isPresent();
 	}
 
-	@DisplayName("approve mismatch와 history mismatch가 섞여 동시에 들어와도 외부에는 PAYMENT_MERCHANT_KEY_MISMATCH 또는 PAYMENT_NOT_FOUND만 노출되고 approve attempt는 MERCHANT_PAY_KEY_MISMATCH로 FAILED가 된다")
+	@DisplayName("approve mismatch와 history mismatch가 섞여 동시에 들어와도 외부에는 PAYMENT_MERCHANT_KEY_MISMATCH 또는 PAYMENT_NOT_FOUND만 노출되고 approve payment는 MERCHANT_PAY_KEY_MISMATCH로 FAILED가 된다")
 	@Test
 	void approve_whenConcurrentApproveAndHistoryMismatch_failApproveConsistently() throws Exception {
 		// given

@@ -83,7 +83,7 @@ class NaverPayServiceIntegrationTest {
 	private PaymentApprovalService paymentApprovalService;
 
 	// succeed / fail 강제 예외 주입 시나리오용 spy.
-	// find-first 리팩토링 이후 H2 우회용 getOrCreate*Attempt doReturn 스텁은 모두 제거됐다.
+	// find-first 리팩토링 이후 H2 우회용 getOrCreate* doReturn 스텁은 모두 제거됐다.
 	@MockitoSpyBean
 	private PaymentCancellationService paymentCancellationService;
 
