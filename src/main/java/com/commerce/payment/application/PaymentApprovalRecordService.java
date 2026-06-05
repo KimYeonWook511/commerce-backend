@@ -114,5 +114,6 @@ public class PaymentApprovalRecordService {
 			return;
 		}
 		payment.fail(failCode, failDetail, respondedAt);
+		paymentRepository.save(payment);
 	}
 }
