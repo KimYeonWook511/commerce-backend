@@ -44,11 +44,15 @@ def run_agent(
     step_num: int,
     attempt: int = 1,
     allowed_tools: "str | None" = None,
+    echo: "bool | None" = None,
 ) -> AgentResult:
     """claude -p를 stream-json으로 실행하고 완료까지 대기한다.
 
     prompt는 임시 파일을 통해 stdin으로 전달한다(큰 prompt에서 파이프 deadlock 방지).
+    echo가 None이면 tmux 세션 밖일 때만 포맷 로그를 콘솔로도 흘린다(degraded fallback).
     """
+    if echo is None:
+        echo = not os.environ.get("TMUX")
     logs_dir = Path(logs_dir)
     logs_dir.mkdir(parents=True, exist_ok=True)
     raw_path = logs_dir / f"{role}.raw.jsonl"
@@ -101,6 +105,8 @@ def run_agent(
                 if formatted is not None:
                     log_f.write(formatted + "\n")
                     log_f.flush()
+                    if echo:
+                        print(formatted, flush=True)
         exit_code = proc.wait()
     finally:
         _terminate(proc)

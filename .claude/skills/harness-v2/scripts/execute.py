@@ -16,7 +16,9 @@ import atexit
 import contextlib
 import json
 import os
+import shlex
 import signal
+import subprocess
 import sys
 import threading
 import time
@@ -42,6 +44,9 @@ import step_verifier
 
 # .claude/skills/harness-v2/scripts/execute.py -> repository root
 ROOT = Path(__file__).resolve().parents[4]
+
+# 로그 tail pane 식별용 title (중단으로 남은 stale pane 정리에 사용)
+LOG_PANE_TITLE = "harness-v2-log"
 
 
 @contextlib.contextmanager
@@ -127,6 +132,8 @@ class StepExecutor:
         self.task_name = self.extract_task_name(index)
         self.total_steps = len(index["steps"])
         self.branch_name: str = ""  # _validate_worktree_context에서 실제 브랜치로 설정
+        self._tmux = bool(os.environ.get("TMUX"))
+        self.log_panes: list[str] = []
         self.validate_task_phase_registration()
 
     def resolve_phase_dir(self, phase_path: str) -> Path:
@@ -167,8 +174,12 @@ class StepExecutor:
         self._validate_worktree_context()
         self.mark_workflow_execution_in_progress()
         self.ensure_created_at()
-        self.execute_all_steps()
-        self.finalize()
+        self._setup_log_panes()
+        try:
+            self.execute_all_steps()
+            self.finalize()
+        finally:
+            self._teardown_log_panes()
 
     def _install_signal_handlers(self):
         """SIGINT/SIGTERM에서 실행 중인 agent 자식 프로세스를 회수한다.
@@ -178,6 +189,7 @@ class StepExecutor:
         """
         def handler(signum, frame):
             agent_runner.terminate_current()
+            self._teardown_log_panes()
             raise SystemExit(130)
         for sig in (signal.SIGINT, signal.SIGTERM):
             signal.signal(sig, handler)
@@ -189,6 +201,90 @@ class StepExecutor:
         if not shutil.which("claude"):
             print("\n  ERROR: 'claude'가 설치되어 있지 않습니다. execute.py 실행 전 설치하세요.")
             raise SystemExit(1)
+
+    # --- tmux 로그 pane (3-pane 관찰) ---
+
+    def _setup_log_panes(self):
+        """tmux 세션 안이면 오른쪽 절반을 3등분해 agent 로그를 tail한다.
+
+        레이아웃: 왼쪽 = execute.py(메인), 오른쪽 = 위→아래 developer / reviewer / commit.
+        tmux 밖이면(degraded) pane을 만들지 않고 agent_runner가 로그를 콘솔로 흘린다.
+        """
+        if not self._tmux:
+            print("  ⚠ tmux 세션 밖이라 로그 pane을 생략합니다(로그는 콘솔로 출력).")
+            return
+        self._kill_stale_log_panes()
+        logs_dir = self.phase_dir / "logs"
+        logs_dir.mkdir(parents=True, exist_ok=True)
+        # 현재 pane을 좌우로 나눠(-h) 오른쪽 컬럼을 만들고, 그 컬럼을 위→아래로(-v) 쌓아 三 형태를 만든다.
+        target = self._tmux_current_pane()
+        plan = [("-h", "developer_agent.log"), ("-v", "reviewer_agent.log"), ("-v", "commit_agent.log")]
+        for direction, fname in plan:
+            pane = self._tmux_split(target, direction, logs_dir / fname)
+            if not pane:
+                break
+            self.log_panes.append(pane)
+            target = pane  # 다음 split은 방금 만든 pane을 나눈다
+        if self.log_panes:
+            print(f"  ✓ 로그 pane {len(self.log_panes)}개 생성 (오른쪽: developer / reviewer / commit)")
+
+    def _teardown_log_panes(self):
+        """생성한 로그 pane을 정리한다 (정상 종료·중단 모두에서 호출)."""
+        for pane in self.log_panes:
+            subprocess.run(["tmux", "kill-pane", "-t", pane], capture_output=True)
+        self.log_panes = []
+
+    def _kill_stale_log_panes(self):
+        """이전 실행이 중단으로 남긴 harness-v2 로그 pane을 정리한다(다음 run 오염 방지)."""
+        result = subprocess.run(
+            ["tmux", "list-panes", "-a", "-F", "#{pane_id} #{pane_title}"],
+            capture_output=True, text=True,
+        )
+        for line in result.stdout.splitlines():
+            parts = line.split(None, 1)
+            if len(parts) == 2 and parts[1] == LOG_PANE_TITLE:
+                subprocess.run(["tmux", "kill-pane", "-t", parts[0]], capture_output=True)
+
+    def _tmux_current_pane(self) -> str:
+        """execute.py가 도는 현재 pane id를 반환한다."""
+        env_pane = os.environ.get("TMUX_PANE")
+        if env_pane:
+            return env_pane
+        return subprocess.run(
+            ["tmux", "display-message", "-p", "#{pane_id}"],
+            capture_output=True, text=True,
+        ).stdout.strip()
+
+    def _tmux_split(self, target: str, direction: str, log_path: Path) -> Optional[str]:
+        """target pane을 direction(-h/-v)으로 나눠 log_path를 tail하는 pane을 만든다."""
+        log_path.touch()  # tail -f가 즉시 붙도록 미리 생성
+        result = subprocess.run(
+            ["tmux", "split-window", direction, "-d", "-t", target,
+             "-P", "-F", "#{pane_id}", f"exec tail -f {shlex.quote(str(log_path))}"],
+            capture_output=True, text=True,
+        )
+        pane = result.stdout.strip()
+        if not pane:
+            return None
+        subprocess.run(["tmux", "select-pane", "-t", pane, "-T", LOG_PANE_TITLE], capture_output=True)
+        return pane
+
+    # --- 진행 표시 ---
+
+    @contextlib.contextmanager
+    def _plain_progress(self, label: str):
+        """degraded(tmux 밖) 진행 표시. 스피너 없이 라벨만 출력하고 경과 시간을 잰다."""
+        print(f"\n▶ {label}")
+        started = time.monotonic()
+        info = types.SimpleNamespace(elapsed=0.0)
+        try:
+            yield info
+        finally:
+            info.elapsed = time.monotonic() - started
+
+    def _step_progress(self, label: str):
+        """tmux면 스피너 진행 표시, degraded면 콘솔 로그가 진행을 보여주므로 라벨만 출력한다."""
+        return progress_indicator(label) if self._tmux else self._plain_progress(label)
 
     def _read_current_branch(self) -> str:
         """현재 브랜치명을 git에서 읽어 반환한다."""
@@ -592,7 +688,7 @@ class StepExecutor:
             if attempt > 1:
                 label += f" [retry {attempt}/{self.MAX_RETRIES}]"
 
-            with progress_indicator(label) as info:
+            with self._step_progress(label) as info:
                 self.run_developer_agent(step, developer_context, developer_rules, attempt=attempt)
                 elapsed = int(info.elapsed)
 
