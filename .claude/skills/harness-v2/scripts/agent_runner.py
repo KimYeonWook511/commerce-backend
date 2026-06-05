@@ -94,7 +94,7 @@ def run_agent(
             proc = subprocess.Popen(
                 cmd, cwd=cwd, stdin=stdin_f,
                 stdout=subprocess.PIPE, stderr=subprocess.STDOUT,
-                text=True, start_new_session=True,
+                text=True, start_new_session=True, bufsize=1,
             )
         _CURRENT_PROC = proc
         tool_names: dict = {}  # tool_use_id -> name (tool_result에 도구 동사를 붙이기 위함)
