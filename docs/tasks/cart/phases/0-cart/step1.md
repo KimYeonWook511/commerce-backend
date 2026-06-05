@@ -11,7 +11,7 @@
 - `/docs/tasks/cart/db-schema.md`
 - `/docs/architecture.md`
 - `/docs/testing-conventions.md`
-- `/docs/ADR.md` (ADR-011 find-first 패턴, ADR-018 enum 매핑)
+- `/docs/adr.md` (ADR-011 find-first 패턴, ADR-018 enum 매핑)
 - `/src/main/java/com/commerce/common/jpa/BaseTimeEntity.java`
 - `/src/main/java/com/commerce/stock/domain/StockHistory.java` (단일 entity aggregate 참고)
 - `/src/main/java/com/commerce/order/domain/Order.java` (entity 작성 패턴 참고)

@@ -31,7 +31,7 @@
       "name": "sync-root-docs",
       "status": "completed",
       "started_at": "2026-06-01T17:08:26+0900",
-      "summary": "docs/ADR.md에 ADR-024(Flyway 도입 결정)를 추가한다. 두 사고(ENUM silent drift #142, unique constraint silent 미적용 #176)의 공통 패턴과 회고 원문 인용, 대안 비교, 트레이드오프, 연계 ADR을 포함한다. docs/db-schema.md 상단에 마이그레이션 위치/네이밍/운영 규칙 안내 섹션을 추가한다.",
+      "summary": "docs/adr.md에 ADR-024(Flyway 도입 결정)를 추가한다. 두 사고(ENUM silent drift #142, unique constraint silent 미적용 #176)의 공통 패턴과 회고 원문 인용, 대안 비교, 트레이드오프, 연계 ADR을 포함한다. docs/db-schema.md 상단에 마이그레이션 위치/네이밍/운영 규칙 안내 섹션을 추가한다.",
       "completed_at": "2026-06-01T17:12:48+0900"
     },
     {

@@ -19,7 +19,7 @@
 ### 변경하지 않는 루트 문서
 
 - `docs/architecture.md`: HTTP 요청 처리 Filter 절과 비동기 경계 절은 동작·키 문자열 기준 설명이라 코드 식별자 변경에 영향이 없다.
-- `docs/ADR.md`: ADR-017(Kafka traceId 전파 설계 결정)은 동작 기준 결정 문서이므로 본 리팩토링으로 갱신할 필요가 없다.
+- `docs/adr.md`: ADR-017(Kafka traceId 전파 설계 결정)은 동작 기준 결정 문서이므로 본 리팩토링으로 갱신할 필요가 없다.
 - `docs/exception-strategy.md`, `docs/testing-conventions.md` 등: MDC 키 관련 언급 없음.
 
 ## Acceptance Criteria

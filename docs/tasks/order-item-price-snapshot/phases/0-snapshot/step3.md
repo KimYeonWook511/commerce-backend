@@ -19,7 +19,7 @@
 - `/src/main/java/com/commerce/order/domain/Order.java`
 - `/src/test/java/com/commerce/order/domain/OrderTest.java`
 - `/src/test/java/com/commerce/order/infrastructure/OrderRepositoryJpaAdapterTest.java`
-- `/docs/ADR.md` (Task ADR 색인 표 갱신)
+- `/docs/adr.md` (Task ADR 색인 표 갱신)
 - `/docs/db-schema.md` (`tbl_order_item` 섹션 갱신)
 
 회고 작성 컨벤션 참고:
@@ -45,7 +45,7 @@
    - 타입: `int` 채택. Money VO 도입은 별도 트랙으로 보류.
    - Backfill: `tbl_product.price` JOIN 으로 채움. 결제 시점 가격 정확성은 보장 못 함.
    - 응답 DTO 노출: 본 PR 범위 밖.
-   - ADR.md 본문 ADR 신규는 만들지 않고 task adr + 색인 표 한 줄로 관리.
+   - adr.md 본문 ADR 신규는 만들지 않고 task adr + 색인 표 한 줄로 관리.
 3. **기각된 옵션**:
    - NOT NULL + 0 backfill: 통계 / 영수증 사용처가 생겼을 때 0 이 더 큰 오해를 부른다는 판단으로 기각.
    - NULL 허용: snapshot 정책의 무력화 우려로 기각.
@@ -89,14 +89,14 @@
      - `grep -E "결정|기각|baseline|아쉬운|후속" docs/tasks/order-item-price-snapshot/retrospective.md` 결과 ≥ 4.
    - main / test 자바 코드 변경이 없는가?
      - `git diff --name-only HEAD -- src/main/java src/test/java` (step 2 commit 이후) 결과 0건.
-   - 루트 docs (ADR.md / db-schema.md 외) 변경이 없는가?
-     - `git diff --name-only HEAD -- docs/PRD.md docs/architecture.md docs/api-spec.md docs/ADR.md docs/db-schema.md` 결과 0건 (step 2 commit 이후).
+   - 루트 docs (adr.md / db-schema.md 외) 변경이 없는가?
+     - `git diff --name-only HEAD -- docs/prd.md docs/architecture.md docs/api-spec.md docs/adr.md docs/db-schema.md` 결과 0건 (step 2 commit 이후).
 3. 결과에 따라 step 상태를 갱신한다.
 
 ## 금지사항
 
 - 머지된 task 폴더 (`docs/tasks/order-jpa-association-decouple/*`, `docs/tasks/payment-jpa-association-decouple/*`, `docs/tasks/cross-aggregate-fk-cleanup/*`) 의 문서를 수정하지 마라. 이유: 완료 task 폴더 불변 원칙.
 - main / test 자바 코드를 수정하지 마라. 이유: step 1 의 책임.
-- 루트 docs (ADR.md / db-schema.md) 를 본 step 에서 수정하지 마라. 이유: step 2 의 책임.
+- 루트 docs (adr.md / db-schema.md) 를 본 step 에서 수정하지 마라. 이유: step 2 의 책임.
 - 회고를 미래형 / 추측 문체로 쓰지 마라. 이유: 회고는 결정과 trade-off 의 시점 기록이다.
 - 기존 테스트를 깨뜨리지 마라.

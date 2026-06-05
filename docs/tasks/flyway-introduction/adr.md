@@ -2,15 +2,15 @@
 
 ## 결정 제목
 
-Flyway 도입 결정은 cross-cutting이므로 본 `docs/ADR.md` 본문에 **ADR-024**로 기록한다. 이 task-local adr은 본 결정과 직접 연계된 task 내부 결정 한 가지만 다룬다.
+Flyway 도입 결정은 cross-cutting이므로 본 `docs/adr.md` 본문에 **ADR-024**로 기록한다. 이 task-local adr은 본 결정과 직접 연계된 task 내부 결정 한 가지만 다룬다.
 
 ## 배경
 
-Flyway 도입은 단일 도메인이 아니라 전 환경의 스키마 관리 정책을 바꾸는 결정이라, task 범위 안에 두면 후속 task adr에서 cross-reference하기 어려워진다. ADR-002(주문 멱등성), ADR-018(ENUM 매핑), ADR-023(unique 길이 명시) 같은 cross-cutting 결정들은 모두 본 ADR.md에 두는 컨벤션을 따른다.
+Flyway 도입은 단일 도메인이 아니라 전 환경의 스키마 관리 정책을 바꾸는 결정이라, task 범위 안에 두면 후속 task adr에서 cross-reference하기 어려워진다. ADR-002(주문 멱등성), ADR-018(ENUM 매핑), ADR-023(unique 길이 명시) 같은 cross-cutting 결정들은 모두 본 adr.md에 두는 컨벤션을 따른다.
 
 ## 결정 내용
 
-- **본 결정은 `docs/ADR.md`의 ADR-024로 기록**한다. (task adr이 아닌 root adr)
+- **본 결정은 `docs/adr.md`의 ADR-024로 기록**한다. (task adr이 아닌 root adr)
 - ADR-024 본문 구성:
   - 결정
   - 배경 (그동안 미뤄온 입장 / 입장을 뒤집은 두 사고 / 공통 패턴 / 시점 선택)
@@ -22,7 +22,7 @@ Flyway 도입은 단일 도메인이 아니라 전 환경의 스키마 관리 �
 
 ## 근거
 
-- `docs/ADR.md` 색인 본문 안내 그대로: "코드베이스 전반에 영향을 주는 cross-cutting 결정은 본 ADR.md 본문에, 특정 도메인 한정 결정은 task adr에 둔다."
+- `docs/adr.md` 색인 본문 안내 그대로: "코드베이스 전반에 영향을 주는 cross-cutting 결정은 본 adr.md 본문에, 특정 도메인 한정 결정은 task adr에 둔다."
 - Flyway 도입은 의존성, 모든 프로파일의 yml, Testcontainers 지원, 부팅 흐름까지 전 영역에 영향을 준다. cross-cutting 정의에 정확히 부합.
 
 ## 결과

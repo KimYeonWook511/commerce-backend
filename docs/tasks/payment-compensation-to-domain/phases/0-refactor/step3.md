@@ -6,7 +6,7 @@
 
 - `docs/tasks/payment-compensation-to-domain/prd.md`
 - `docs/tasks/payment-compensation-to-domain/adr.md`
-- `docs/ADR.md`
+- `docs/adr.md`
 - `docs/architecture.md`
 - `docs/exception-strategy.md`
 - `docs/testing-conventions.md`
@@ -15,7 +15,7 @@
 
 이 step은 코드 변경 없이 루트 docs만 동기화한다.
 
-### `docs/ADR.md` 수정
+### `docs/adr.md` 수정
 
 **ADR-015 신설** (ADR-014 다음에 추가):
 
@@ -96,7 +96,7 @@ then(pgCanceller).should(never()).cancel(any(), any());
 
 ### 영향 없음 확인 (수정 불필요)
 
-- `docs/PRD.md` — 기능 범위 변동 없음
+- `docs/prd.md` — 기능 범위 변동 없음
 - `docs/api-spec.md` — 외부 API 변동 없음
 - `docs/db-schema.md` — DB 스키마 변동 없음
 - `docs/branch-conventions.md`, `docs/commit-conventions.md`, `docs/pr-conventions.md` — 규칙 문서
@@ -115,7 +115,7 @@ then(pgCanceller).should(never()).cancel(any(), any());
 
 1. 위 커맨드를 실행해 회귀 없음을 확인한다 (문서 전용 step이므로 빌드만 통과하면 된다).
 2. 아래를 확인한다:
-   - ADR-015가 `docs/ADR.md`에 추가됐는가?
+   - ADR-015가 `docs/adr.md`에 추가됐는가?
    - ADR-014 후속 노트가 추가됐는가?
    - `docs/architecture.md`의 서비스 테이블과 데이터 흐름이 갱신됐는가?
    - `docs/exception-strategy.md`의 `failIfRequested` 호출처 명칭이 갱신됐는가?

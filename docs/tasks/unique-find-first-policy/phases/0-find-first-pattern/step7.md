@@ -10,7 +10,7 @@
 - `/docs/tasks/unique-find-first-policy/api-spec.md`
 - `/docs/tasks/unique-find-first-policy/db-schema.md`
 - `/docs/architecture.md` (라인 140-181 정책 섹션 — 갱신 대상)
-- `/docs/ADR.md` (새 ADR 항목 추가)
+- `/docs/adr.md` (새 ADR 항목 추가)
 - `/CLAUDE.md` (commerce-backend 루트 — 규칙 문구 갱신)
 - `/docs/tasks/db-constraint-violation-handling/prd.md`
 - `/docs/tasks/db-constraint-violation-handling/architecture.md`
@@ -41,7 +41,7 @@ step 5 가 끝나 있어야 한다.
 - `DataAccessException` 부모 핸들러 도입 사실 + `COMMON-500-2` ErrorCode
 - `JpaConfig` 빈 등록 목적을 "안전망에서 정확한 분류/로깅" 으로 재기술
 
-### 2. `docs/ADR.md` 새 항목 추가
+### 2. `docs/adr.md` 새 항목 추가
 
 다음 형식으로 추가한다:
 
@@ -101,7 +101,7 @@ anchor 는 문서 제목 바로 아래(첫 헤딩 이후 첫 줄) 에 둔다.
 1. 위 Acceptance Criteria 커맨드를 실행한다.
 2. 아래를 확인한다.
    - `docs/architecture.md` 라인 140-181 정책 섹션이 새 흐름과 적용 조건 섹션으로 교체되었는가?
-   - `docs/ADR.md` 에 새 ADR 항목이 추가되었고 결정 근거(충돌 확률 낮음) 가 명시되었는가?
+   - `docs/adr.md` 에 새 ADR 항목이 추가되었고 결정 근거(충돌 확률 낮음) 가 명시되었는가?
    - `commerce-backend/CLAUDE.md` 구현 규칙 문구가 갱신되었는가?
    - 이전 태스크 폴더 4 개 문서에 폐기 anchor 가 한 줄씩 추가되었고 본문은 그대로 유지되었는가?
    - `retrospective.md` 와 `phases/**` 는 수정되지 않았는가?
@@ -109,7 +109,7 @@ anchor 는 문서 제목 바로 아래(첫 헤딩 이후 첫 줄) 에 둔다.
 
 ## 금지사항
 
-- `docs/PRD.md`, `docs/api-spec.md`, `docs/db-schema.md` 를 수정하지 마라. 이유: 본 태스크는 PRD 수준 기능 범위 변경 / 외부 API 명세 변경 / DB 스키마 변경이 없다.
+- `docs/prd.md`, `docs/api-spec.md`, `docs/db-schema.md` 를 수정하지 마라. 이유: 본 태스크는 PRD 수준 기능 범위 변경 / 외부 API 명세 변경 / DB 스키마 변경이 없다.
 - `commerce-workspace/docs/` 의 어떤 문서도 수정하지 마라. 이유: 본 세션은 backend 서브모듈 컨텍스트이며, 워크스페이스 문서는 Frontend 세션의 "계약 싱크" 책임.
 - 이전 태스크 폴더의 `retrospective.md`, `phases/**` 를 수정하지 마라. 이유: 회고/실행 기록 immutable 정책.
 - 이전 태스크 폴더의 본문을 수정하거나 삭제하지 마라. 이유: 역사 기록 보존. 정책 폐기 사실은 anchor 한 줄로만 알리며 본문은 그대로 둔다.

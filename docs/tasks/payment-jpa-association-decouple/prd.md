@@ -28,7 +28,7 @@
 - `Payment.createCompleted(Order, ...)` 정적 팩토리를 `Payment.createCompleted(Long orderId, int amount, ...)` Long ID 시그니처로 전환. 호출처가 `order.getId()`, `order.getTotalPrice()` 를 추출해 전달.
 - application 호출부 (`PaymentApprovalService.completeApprovedPayment`) 가 Long ID 인자로 도메인 호출.
 - test fixture 의 `Payment.createCompleted(order, ...)`, `payment.getOrder()...` 사용처 정리.
-- 루트 `docs/ADR.md`, `docs/architecture.md` 동기화 — ADR-020 후속 트랙 완료 명시.
+- 루트 `docs/adr.md`, `docs/architecture.md` 동기화 — ADR-020 후속 트랙 완료 명시.
 - 회고록 작성 — series 전체 마무리 baseline 포함.
 
 ### 제외 범위

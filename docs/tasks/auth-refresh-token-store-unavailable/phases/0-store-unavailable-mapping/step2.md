@@ -20,7 +20,7 @@ step 1 결과 코드 (변경 반영 확인):
 
 수정 대상 루트 문서 (현재 상태 파악):
 
-- `/docs/ADR.md`
+- `/docs/adr.md`
 - `/docs/exception-strategy.md`
 
 ## 작업
@@ -74,7 +74,7 @@ step 1 결과 코드 (변경 반영 확인):
 
 - *fallback 불가 케이스 (Auth)*: application과 presentation 모두 로그를 남기지 않는다. infra ERROR + stack으로 운영 인지가 보장되며, 정책 결정 사실 (`AUTH-500-1` 응답 매핑)은 운영 로그에서 별도 식별 가치가 없다.
 
-### 2. `docs/ADR.md` — Task ADR 색인 표 행 추가
+### 2. `docs/adr.md` — Task ADR 색인 표 행 추가
 
 `auth-redis-timing` 다음 줄, `boundary-logging-standardization` 직전에 알파벳 순으로 한 줄을 추가한다:
 
@@ -91,7 +91,7 @@ step 1 결과 코드 (변경 반영 확인):
 추가 수동 확인 (커맨드는 정보 목적):
 
 ```bash
-grep -n "auth-refresh-token-store-unavailable" docs/ADR.md
+grep -n "auth-refresh-token-store-unavailable" docs/adr.md
 grep -n "RefreshTokenStore\|AuthExceptionHandler" docs/exception-strategy.md
 ```
 
@@ -105,7 +105,7 @@ grep -n "RefreshTokenStore\|AuthExceptionHandler" docs/exception-strategy.md
    - *catch 위치 분기* 가 application catch (Order) vs presentation 위임 (Auth)으로 설명됐다.
    - 적용처 줄에 `RefreshTokenStore` ↔ Auth 흐름 (infra adapter → `AuthExceptionHandler`)이 추가됐다.
    - 로깅 규약에 fallback 불가 케이스의 application/presentation 로그 생략 규칙이 명시됐다.
-   - `docs/ADR.md` task 표에 `auth-refresh-token-store-unavailable` 행이 알파벳 순으로 들어갔다.
+   - `docs/adr.md` task 표에 `auth-refresh-token-store-unavailable` 행이 알파벳 순으로 들어갔다.
 3. 결과에 따라 step 상태를 갱신한다.
 
 ## 금지사항

@@ -142,6 +142,6 @@ k6 native InfluxDB v1 output은 현재 유효하다. 향후 deprecation 시 `xk6
 ## 참고
 
 - Epic: [#137](https://github.com/KimYeonWook511/commerce-backend/issues/137)
-- 도구 선택 결정: [`docs/ADR.md`](../docs/ADR.md) ADR-016
+- 도구 선택 결정: [`docs/adr.md`](../docs/adr.md) ADR-016
 - k6 문서: <https://grafana.com/docs/k6/latest/>
 - Grafana 공식 k6 대시보드: <https://grafana.com/grafana/dashboards/2587-k6-load-testing-results/>

@@ -23,7 +23,7 @@
 
 ### 루트 docs
 
-- `docs/ADR.md` — ADR-020 본문에 series FK 일괄 제거 완료 후속 노트 1건 추가.
+- `docs/adr.md` — ADR-020 본문에 series FK 일괄 제거 완료 후속 노트 1건 추가.
 - `docs/db-schema.md` — 5개 FK 표기 (`tbl_stock.product_id (FK -> ...)`, `tbl_stock_history.stock_id (FK -> ...)`, `tbl_order.member_id (FK -> ...)`, `tbl_order_item.product_id (FK -> ...)`, `tbl_payment.order_id (FK -> ..., UNIQUE)`) 에서 `FK -> ...` 부분 제거. UNIQUE 표기 유지. same-aggregate `tbl_order_item.order_id (FK -> tbl_order.id)` 는 유지.
 - `docs/architecture.md` — 코드 + DB schema 정합성 회복 (cross-aggregate FK 0건, ID 참조 일관) 명시.
 

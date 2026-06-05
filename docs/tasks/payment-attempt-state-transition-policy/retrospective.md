@@ -11,7 +11,7 @@
 - `PaymentAttempt` 4개 mark 메서드에 type 정합성 + status REQUESTED 선조건 검증 추가
 - `NaverPayApprovalService.failApproveAndCancelApprovedPayment` 내 `failApprove` 호출을 try-catch로 보호
 - `PaymentAttemptTest`에 전이/type 위반 케이스 9개 추가
-- `docs/ADR.md`에 ADR-012 추가
+- `docs/adr.md`에 ADR-012 추가
 
 ### 왜 변경했는가
 

@@ -30,7 +30,7 @@
 - `src/main/java/com/commerce/order/domain/repository/OrderRepository.java`
 - `src/main/java/com/commerce/order/application/OrderQueryService.java`
 - `src/main/resources/db/migration/V1__init.sql`
-- `docs/ADR.md` (ADR-010, ADR-014, ADR-015 섹션)
+- `docs/adr.md` (ADR-010, ADR-014, ADR-015 섹션)
 
 ## 작업
 

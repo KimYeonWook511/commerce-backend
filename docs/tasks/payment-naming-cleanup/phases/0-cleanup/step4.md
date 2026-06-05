@@ -33,7 +33,7 @@
 
 ### 건드리지 않는 문서
 
-- `docs/ADR.md`: 과거 ADR 서술(ADR-010/012/013/018 등 PaymentAttempt 시절 기록)과 `payment-attempt-*` task 폴더명 참조는 역사 기록이라 수정하지 않는다.
+- `docs/adr.md`: 과거 ADR 서술(ADR-010/012/013/018 등 PaymentAttempt 시절 기록)과 `payment-attempt-*` task 폴더명 참조는 역사 기록이라 수정하지 않는다.
 - `docs/logging-conventions.md` 의 "retry attempt={}", `docs/db-schema.md` 의 outbox `attempt_count`: payment과 무관한 영어 단어라 수정하지 않는다.
 - 머지된 task 폴더(`docs/tasks/payment-order-redesign/` 등)와 migration 파일: 불변.
 
@@ -51,12 +51,12 @@
 
 1. `./gradlew test` 통과를 확인한다 (문서 변경이라 영향 없어야 함).
 2. 두 번째 커맨드 결과가 0건인지 확인한다 (현재 구조 기술 문서에 옛 클래스명이 남지 않음).
-3. `docs/ADR.md` 가 변경되지 않았는지 확인한다.
+3. `docs/adr.md` 가 변경되지 않았는지 확인한다.
 4. 결과에 따라 step 상태를 갱신한다.
 
 ## 금지사항
 
-- `docs/ADR.md` 의 과거 ADR 서술을 소급 수정하지 마라. 이유: 결정 당시 상태(PaymentAttempt)를 기록한 역사다.
+- `docs/adr.md` 의 과거 ADR 서술을 소급 수정하지 마라. 이유: 결정 당시 상태(PaymentAttempt)를 기록한 역사다.
 - 머지된 task 폴더 문서를 수정하지 마라. 이유: 완료된 task 문서 불변 원칙.
 - outbox `attempt_count`, "retry attempt" 를 바꾸지 마라. 이유: payment과 무관한 영어 단어다.
 - 기존 테스트를 깨뜨리지 마라.

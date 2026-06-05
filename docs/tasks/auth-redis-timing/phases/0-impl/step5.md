@@ -4,13 +4,13 @@
 
 - `docs/features/auth-redis-timing/adr.md`
 - `docs/commit-conventions.md`
-- `docs/ADR.md`
+- `docs/adr.md`
 
 ## 작업
 
 이번 기능에서 내린 설계 결정을 루트 ADR에 반영한다.
 
-**`docs/ADR.md`** — 기존 마지막 항목 다음에 아래 세 결정을 추가한다:
+**`docs/adr.md`** — 기존 마지막 항목 다음에 아래 세 결정을 추가한다:
 - ADR-1: 인증 토큰 Redis 저장 실패 정책 — strict
 - ADR-2: 회원가입 트랜잭션 분리 — `Propagation.NOT_SUPPORTED`
 - ADR-3: `RefreshTokenStore.delete()` 제거
@@ -21,7 +21,7 @@
 
 ## 수정 가능 경로
 
-- `docs/ADR.md`
+- `docs/adr.md`
 - `docs/features/auth-redis-timing/**`
 
 ## Acceptance Criteria
@@ -33,7 +33,7 @@
 ## 검증 절차
 
 1. 전체 테스트 통과 확인
-2. `docs/ADR.md`에 ADR-1, ADR-2, ADR-3 세 결정이 반영됐는지 확인
+2. `docs/adr.md`에 ADR-1, ADR-2, ADR-3 세 결정이 반영됐는지 확인
 
 ## 금지사항
 

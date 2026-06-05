@@ -13,7 +13,7 @@ application 계층(`PaymentAttemptService`)의 catch 블록 보강이 핵심이�
 | application | `payment/application/PaymentAttemptService.java` | catch 블록 보강, 파라미터 명명 통일 |
 | test (unit) | `payment/application/PaymentAttemptServiceTest.java` | 신규 케이스 추가, 기존 케이스 수정 |
 | test (concurrency) | `payment/application/concurrency/PaymentAttemptServiceConcurrencyTest.java` | 신규 케이스 추가 |
-| docs | `docs/ADR.md` | ADR-010 추가 |
+| docs | `docs/adr.md` | ADR-010 추가 |
 
 ## 설계 방향
 

@@ -11,7 +11,7 @@
 - `/src/main/java/com/commerce/payment/exception/PaymentErrorCode.java`
 - `/src/main/java/com/commerce/payment/naverpay/application/NaverPayApprovalService.java`
 - `/src/test/java/com/commerce/payment/domain/PaymentAttemptTest.java`
-- `/docs/ADR.md`
+- `/docs/adr.md`
 
 기존 회고 문서 참고 (형식 일관성):
 

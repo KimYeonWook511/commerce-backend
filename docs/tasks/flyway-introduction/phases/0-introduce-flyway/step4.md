@@ -7,7 +7,7 @@
 - `/docs/tasks/flyway-introduction/prd.md`
 - `/docs/tasks/flyway-introduction/architecture.md`
 - `/docs/tasks/flyway-introduction/adr.md`
-- `/docs/ADR.md` ← 기존 ADR-001~023 형식과 마지막 번호 확인
+- `/docs/adr.md` ← 기존 ADR-001~023 형식과 마지막 번호 확인
 - `/docs/db-schema.md` ← 마이그레이션 안내를 추가할 위치
 - `/docs/tasks/hibernate-enum-jdbc-type-code/adr.md`
 - `/docs/tasks/hibernate-enum-jdbc-type-code/retrospective.md` (있다면)
@@ -16,7 +16,7 @@
 
 ## 작업
 
-### 변경 1: `docs/ADR.md`에 ADR-024 신규 추가
+### 변경 1: `docs/adr.md`에 ADR-024 신규 추가
 
 기존 마지막 ADR(ADR-023) 다음에 `### ADR-024: ...` 형식으로 추가한다. 기존 ADR-001~023의 `결정 / 배경 / 이유 / 트레이드오프` 구조를 따른다.
 
@@ -92,15 +92,15 @@ DB 스키마 변경은 Flyway 마이그레이션 스크립트로 관리한다 (A
 
 ```bash
 # (a) ADR-024 헤더 존재
-grep -q '### ADR-024: DB 스키마 마이그레이션 도구로 Flyway 도입' docs/ADR.md
+grep -q '### ADR-024: DB 스키마 마이그레이션 도구로 Flyway 도입' docs/adr.md
 
 # (b) ADR-024 핵심 키워드들 존재
-grep -q 'silent drift' docs/ADR.md
-grep -q 'ADR-018' docs/ADR.md
-grep -q 'ADR-023' docs/ADR.md
-grep -q 'baseline-on-migrate' docs/ADR.md
-grep -q 'clean-disabled' docs/ADR.md
-grep -q '운영 복잡성' docs/ADR.md
+grep -q 'silent drift' docs/adr.md
+grep -q 'ADR-018' docs/adr.md
+grep -q 'ADR-023' docs/adr.md
+grep -q 'baseline-on-migrate' docs/adr.md
+grep -q 'clean-disabled' docs/adr.md
+grep -q '운영 복잡성' docs/adr.md
 
 # (c) db-schema.md 마이그레이션 섹션
 grep -q '## 마이그레이션' docs/db-schema.md
@@ -108,15 +108,15 @@ grep -q 'db/migration' docs/db-schema.md
 grep -q 'ADR-024' docs/db-schema.md
 
 # (d) 기존 ADR이 깨지지 않음
-grep -q '### ADR-023:' docs/ADR.md
-grep -q '### ADR-001:' docs/ADR.md
+grep -q '### ADR-023:' docs/adr.md
+grep -q '### ADR-001:' docs/adr.md
 ```
 
 위 모든 명령이 exit 0이어야 한다.
 
 ## 검증 절차
 
-1. `docs/ADR.md`에 ADR-024 추가 후 본문이 위 구성 (`결정 / 배경 / 이유 / 트레이드오프` + 연계 ADR)을 모두 포함하는지 확인.
+1. `docs/adr.md`에 ADR-024 추가 후 본문이 위 구성 (`결정 / 배경 / 이유 / 트레이드오프` + 연계 ADR)을 모두 포함하는지 확인.
 2. 두 사고 인용문이 ADR-018 회고와 payment-attempt-unique-key-length 회고에서 그대로 가져온 한국어 문장인지 확인. 의역하지 않는다.
 3. `docs/db-schema.md` 상단 안내 추가 후 기존 본문이 망가지지 않았는지 확인.
 4. Acceptance Criteria 모든 명령 exit 0 확인.
@@ -124,7 +124,7 @@ grep -q '### ADR-001:' docs/ADR.md
 ## 금지사항
 
 - 두 사고 인용문을 의역하지 마라. 이유: 회고 원문이 결정 근거의 출처다.
-- ADR.md의 색인 표를 갱신하지 마라. 이유: ADR-024는 task-local이 아닌 cross-cutting root ADR이라 색인 대상 아님.
+- adr.md의 색인 표를 갱신하지 마라. 이유: ADR-024는 task-local이 아닌 cross-cutting root ADR이라 색인 대상 아님.
 - 기존 ADR-001~023 본문을 수정하지 마라. 이유: 회고/결정 문서는 사후 소급 수정 안 함.
 - `docs/tasks/hibernate-enum-jdbc-type-code/` 및 `docs/tasks/payment-attempt-unique-key-length/` 안의 문서를 수정하지 마라. 이유: 과거 task 회고는 immutable.
-- `docs/architecture.md`, `docs/PRD.md`를 갱신하지 마라. 이유: 본 task는 그 문서들에 영향을 주지 않는다 (architecture는 변경 없고, PRD는 기능 변경 없음).
+- `docs/architecture.md`, `docs/prd.md`를 갱신하지 마라. 이유: 본 task는 그 문서들에 영향을 주지 않는다 (architecture는 변경 없고, PRD는 기능 변경 없음).

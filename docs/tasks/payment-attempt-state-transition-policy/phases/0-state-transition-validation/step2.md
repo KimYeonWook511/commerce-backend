@@ -3,7 +3,7 @@
 ## 읽어야 할 파일
 
 - `/docs/tasks/payment-attempt-state-transition-policy/adr.md`
-- `/docs/ADR.md` (기존 ADR-010, ADR-011 형식 참고)
+- `/docs/adr.md` (기존 ADR-010, ADR-011 형식 참고)
 
 step1에서 생성/수정된 파일:
 
@@ -12,7 +12,7 @@ step1에서 생성/수정된 파일:
 
 ## 작업
 
-`docs/ADR.md`에 ADR-012 항목을 ADR-011 다음에 추가한다. 기존 ADR-010, ADR-011 형식(간결한 5~7줄 요약)과 일치시킨다.
+`docs/adr.md`에 ADR-012 항목을 ADR-011 다음에 추가한다. 기존 ADR-010, ADR-011 형식(간결한 5~7줄 요약)과 일치시킨다.
 
 추가할 내용:
 
@@ -27,14 +27,14 @@ step1에서 생성/수정된 파일:
 ## Acceptance Criteria
 
 ```bash
-grep -n "ADR-012" docs/ADR.md
+grep -n "ADR-012" docs/adr.md
 ```
 
 ADR-012 항목이 존재하면 통과.
 
 ## 검증 절차
 
-1. `docs/ADR.md`에서 ADR-012가 ADR-011 다음에 위치하는지 확인한다.
+1. `docs/adr.md`에서 ADR-012가 ADR-011 다음에 위치하는지 확인한다.
 2. 기존 ADR-010, ADR-011과 동일한 형식(굵은 항목 제목: 결정/배경/이유/트레이드오프)인지 확인한다.
 3. 후속 Issue 번호 `#111`이 트레이드오프 항목에 명시됐는지 확인한다.
 

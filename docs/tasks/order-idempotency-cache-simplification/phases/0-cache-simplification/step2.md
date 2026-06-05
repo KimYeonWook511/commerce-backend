@@ -18,7 +18,7 @@ step 1 결과 코드 (변경 반영 확인):
 
 수정 대상 루트 문서 (현재 상태 파악):
 
-- `/docs/ADR.md`
+- `/docs/adr.md`
 - `/docs/api-spec.md`
 - `/docs/architecture.md`
 - `/docs/logging-conventions.md`
@@ -34,7 +34,7 @@ step 1 결과 코드 (변경 반영 확인):
 
 본 step 은 step 1 의 코드 변경에 맞춰 루트 docs 와 기존 task adr 의 cross-reference 를 동기화한다. *문서만 만진다.* 코드 변경 없음.
 
-### 1. `docs/ADR.md` 갱신
+### 1. `docs/adr.md` 갱신
 
 #### task 표 (line 20 근처)
 
@@ -180,7 +180,7 @@ OrderIdempotencyCacheEvent 예시 제거. Outbox 사례 또는 일반 가이드�
 
 # 핵심 키워드 추가 확인
 grep -n "ORDER_IDEMPOTENCY_IN_PROGRESS" docs/api-spec.md
-grep -n "in-flight" docs/ADR.md
+grep -n "in-flight" docs/adr.md
 grep -n "in-flight 마커" docs/architecture.md
 
 # cross-reference 한 줄 추가 확인

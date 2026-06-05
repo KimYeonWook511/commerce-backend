@@ -33,7 +33,7 @@
   - 서비스 클래스명 verb/noun 컨벤션 전면 정리 (별도 후속 이슈).
   - 진짜 "시도(try)" 를 뜻하는 식별자(`attackerAttempt`, concurrent/retry attempt 등)와 한국어 "시도" 표현.
   - test-only `postprocess` 패키지 (배치 도입 시 일괄 정비 예정).
-  - 역사 기록 문서: `docs/ADR.md` 과거 ADR 서술, 머지된 task 폴더, migration 파일, `logging-conventions.md`/`db-schema.md` 의 outbox `attempt_count`.
+  - 역사 기록 문서: `docs/adr.md` 과거 ADR 서술, 머지된 task 폴더, migration 파일, `logging-conventions.md`/`db-schema.md` 의 outbox `attempt_count`.
 
 ## 주요 시나리오
 

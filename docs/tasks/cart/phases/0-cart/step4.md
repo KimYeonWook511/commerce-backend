@@ -8,7 +8,7 @@
 - `/docs/tasks/cart/architecture.md`
 - `/docs/tasks/cart/adr.md` (결정 4, 결정 5)
 - `/docs/architecture.md` (port + adapter 패턴, 트랜잭션 정책)
-- `/docs/ADR.md` (ADR-002 멱등, ADR-005 AFTER_COMMIT 정책, ADR-011 find-first)
+- `/docs/adr.md` (ADR-002 멱등, ADR-005 AFTER_COMMIT 정책, ADR-011 find-first)
 - `/docs/tasks/cart/phases/0-cart/step1.md`
 - `/docs/tasks/cart/phases/0-cart/step2.md`
 - `/docs/tasks/cart/phases/0-cart/step3.md`

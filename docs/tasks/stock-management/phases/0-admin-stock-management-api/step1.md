@@ -16,7 +16,7 @@
 기능 문서만으로 부족한 공통 맥락이 있으면 아래 문서를 추가로 읽는다.
 
 - `docs/architecture.md`
-- `docs/ADR.md`
+- `docs/adr.md`
 - `docs/db-schema.md`
 
 ## 작업

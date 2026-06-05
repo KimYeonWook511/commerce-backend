@@ -15,7 +15,7 @@
       "name": "sync-root-docs",
       "status": "completed",
       "started_at": "2026-06-03T18:37:12+0900",
-      "summary": "docs/ADR.md에 Task ADR 색인 행(cross-aggregate-fk-cleanup) 추가 및 ADR-020 후속 노트 1건 추가. docs/db-schema.md에서 cross-aggregate FK 5건 표기를 제거하고 UNIQUE·same-aggregate FK 유지, 각 테이블 비고에 FK 제거 근거 추가. docs/architecture.md의 stock·order·payment 도메인 섹션을 series 완전 종료(ADR-020 후속 트랙 FK cleanup 완료) 표현으로 정비. test 통과.",
+      "summary": "docs/adr.md에 Task ADR 색인 행(cross-aggregate-fk-cleanup) 추가 및 ADR-020 후속 노트 1건 추가. docs/db-schema.md에서 cross-aggregate FK 5건 표기를 제거하고 UNIQUE·same-aggregate FK 유지, 각 테이블 비고에 FK 제거 근거 추가. docs/architecture.md의 stock·order·payment 도메인 섹션을 series 완전 종료(ADR-020 후속 트랙 FK cleanup 완료) 표현으로 정비. test 통과.",
       "completed_at": "2026-06-03T18:42:06+0900"
     },
     {

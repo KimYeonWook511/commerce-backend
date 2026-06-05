@@ -6,13 +6,13 @@
 
 - `/docs/tasks/hibernate-enum-jdbc-type-code/prd.md`
 - `/docs/tasks/hibernate-enum-jdbc-type-code/adr.md`
-- `/docs/ADR.md` (기존 ADR 톤·형식 확인)
+- `/docs/adr.md` (기존 ADR 톤·형식 확인)
 
 이전 step에서 변경된 entity 파일도 함께 확인하여 ADR 본문에 정확히 반영한다.
 
 ## 작업
 
-`docs/ADR.md` 끝에 `ADR-018` 항목을 추가한다. 기존 ADR(`ADR-001` ~ `ADR-017`)의 헤더·문체·구조를 그대로 따른다.
+`docs/adr.md` 끝에 `ADR-018` 항목을 추가한다. 기존 ADR(`ADR-001` ~ `ADR-017`)의 헤더·문체·구조를 그대로 따른다.
 
 ### 추가할 ADR 항목 (참고 구조)
 
@@ -32,7 +32,7 @@
 ### 손대지 않을 것
 
 - 기존 ADR-001 ~ ADR-017 본문
-- `docs/ADR.md` 머리말 (`# Architecture Decision Records`)
+- `docs/adr.md` 머리말 (`# Architecture Decision Records`)
 - 다른 root docs (`architecture.md`, `db-schema.md` 등)
 - `commerce-backend/CLAUDE.md` (의도적으로 건드리지 않음, 가벼움 유지)
 
@@ -48,9 +48,9 @@
 
 1. 위 Acceptance Criteria 커맨드를 실행한다.
 2. 아래를 확인한다.
-   - `docs/ADR.md`에 `### ADR-018:` 헤더가 추가됐는지 `rg "ADR-018" docs/ADR.md`로 확인.
+   - `docs/adr.md`에 `### ADR-018:` 헤더가 추가됐는지 `rg "ADR-018" docs/adr.md`로 확인.
    - 추가된 항목이 기존 ADR과 동일한 헤더·문체를 따르는가?
-   - 다른 ADR 항목이 의도치 않게 수정되지 않았는가? (`git diff docs/ADR.md`)
+   - 다른 ADR 항목이 의도치 않게 수정되지 않았는가? (`git diff docs/adr.md`)
 3. 결과에 따라 step 상태를 갱신한다.
 
 ## 금지사항

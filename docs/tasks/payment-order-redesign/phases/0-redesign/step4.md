@@ -9,7 +9,7 @@
 - `docs/tasks/payment-order-redesign/adr.md`
 - `docs/tasks/payment-order-redesign/db-schema.md`
 - `docs/tasks/payment-order-redesign/api-spec.md`
-- `docs/ADR.md`
+- `docs/adr.md`
 - `docs/architecture.md`
 - `docs/db-schema.md`
 - `docs/api-spec.md`
@@ -19,7 +19,7 @@
 
 이번 task 결정을 루트 docs 에 반영한다. **머지된 task 폴더는 건드리지 않는다** (CLAUDE.md 불변 원칙).
 
-### 1. `docs/ADR.md`
+### 1. `docs/adr.md`
 
 #### ADR-010 정정 (amount 변경 시 새 Reservation)
 
@@ -161,7 +161,7 @@
 ## 검증 절차
 
 1. 위 커맨드 통과
-2. `docs/ADR.md`:
+2. `docs/adr.md`:
    - ADR-010 본문 정정 + 후속 노트 추가됨
    - ADR-014 후속 노트 추가됨
    - ADR-015 후속 노트 추가됨

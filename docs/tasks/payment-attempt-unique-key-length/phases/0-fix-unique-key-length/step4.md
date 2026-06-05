@@ -5,7 +5,7 @@
 - `/docs/tasks/payment-attempt-unique-key-length/prd.md`
 - `/docs/tasks/payment-attempt-unique-key-length/adr.md`
 - `/docs/tasks/payment-attempt-unique-key-length/db-schema.md`
-- `/docs/ADR.md`
+- `/docs/adr.md`
 - `/docs/db-schema.md`
 - `/docs/testing-conventions.md`
 - 이전 step 산출물.
@@ -14,7 +14,7 @@
 
 루트 docs를 본 task의 결정과 정합되게 갱신한다.
 
-### (a) `docs/ADR.md`
+### (a) `docs/adr.md`
 
 새 ADR 항목을 추가한다. 위치는 현재 마지막 ADR(ADR-022) 다음으로, 다음 형식의 한 항목을 추가한다. ADR 번호는 현재 색인의 다음 번호(ADR-023 또는 그 시점의 다음 번호)를 사용한다.
 
@@ -63,7 +63,7 @@
 
 1. AC 명령을 실행한다.
 2. 아래를 확인한다.
-   - `docs/ADR.md`에 새 ADR 항목이 추가되었는가?
+   - `docs/adr.md`에 새 ADR 항목이 추가되었는가?
    - `docs/db-schema.md`의 `tbl_payment_attempt` 섹션 비고가 보강되었는가?
    - `docs/testing-conventions.md`에 `halt_on_error` 적용 사실과 환경 범위가 명시되었는가?
    - 다른 ADR 본문, 다른 task의 retrospective는 변경되지 않았는가?
@@ -73,4 +73,4 @@
 
 - ADR-011, ADR-018 본문을 수정하지 마라. 이유: 본 task는 ADR-011 정책의 전제 복원이며, ADR-018의 일반 정책은 유지된다. 두 ADR과의 정합은 신규 ADR 본문에서 표현한다.
 - 다른 task의 retrospective 문서를 수정하지 마라. 이유: 회고 문서는 역사 기록으로 사후 수정하지 않는다.
-- `docs/PRD.md`, `docs/architecture.md`, `docs/api-spec.md`를 변경하지 마라. 이유: 본 task는 사용자/제품 기능을 변경하지 않는다.
+- `docs/prd.md`, `docs/architecture.md`, `docs/api-spec.md`를 변경하지 마라. 이유: 본 task는 사용자/제품 기능을 변경하지 않는다.

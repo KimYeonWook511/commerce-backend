@@ -5,11 +5,11 @@
 먼저 아래 파일들을 읽어라:
 
 - `docs/features/payment-attempt-idempotency/adr.md`
-- `docs/ADR.md` (현재 마지막 항목 확인 — ADR-009까지 존재)
+- `docs/adr.md` (현재 마지막 항목 확인 — ADR-009까지 존재)
 
 ## 작업
 
-`docs/ADR.md` 파일 끝에 ADR-010을 추가한다.
+`docs/adr.md` 파일 끝에 ADR-010을 추가한다.
 
 ```markdown
 ### ADR-010: PaymentAttempt 멱등 재요청 amount mismatch는 명시적 예외로 거부
@@ -23,12 +23,12 @@
 
 변경 후 아래를 확인한다:
 ```bash
-grep "ADR-010" docs/ADR.md
+grep "ADR-010" docs/adr.md
 ```
 
 ## 검증 절차
 
-1. `docs/ADR.md`에 ADR-010이 정상 추가되었는지 확인한다.
+1. `docs/adr.md`에 ADR-010이 정상 추가되었는지 확인한다.
 2. ADR 형식이 ADR-001~ADR-009와 일관되는지 확인한다 (`**결정**`, `**배경**`, `**이유**`, `**트레이드오프**` 항목).
 3. 결과에 따라 step 상태를 갱신한다.
 

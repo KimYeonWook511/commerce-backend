@@ -23,7 +23,7 @@
       "name": "sync-root-docs",
       "status": "completed",
       "started_at": "2026-05-27T00:31:50+0900",
-      "summary": "docs/logging-conventions.md §8을 갱신해 @TransactionalEventListener와 Outbox 경계의 구현 완료를 반영하고 적용/미적용 경계 구분과 신규 경계 가이드를 정리한다. docs/ADR.md에 ADR-019를 추가해 본 태스크의 핵심 결정(이벤트 동봉/DB 컬럼 저장/스케줄러 미발급/null 호환)을 요약한다. docs/db-schema.md의 tbl_outbox_event에 trace_id VARCHAR(64) NULL 컬럼을 반영한다. docs/architecture.md 비동기 경계 절에 TransactionalEventListener와 Outbox 흐름 다이어그램을 추가한다.",
+      "summary": "docs/logging-conventions.md §8을 갱신해 @TransactionalEventListener와 Outbox 경계의 구현 완료를 반영하고 적용/미적용 경계 구분과 신규 경계 가이드를 정리한다. docs/adr.md에 ADR-019를 추가해 본 태스크의 핵심 결정(이벤트 동봉/DB 컬럼 저장/스케줄러 미발급/null 호환)을 요약한다. docs/db-schema.md의 tbl_outbox_event에 trace_id VARCHAR(64) NULL 컬럼을 반영한다. docs/architecture.md 비동기 경계 절에 TransactionalEventListener와 Outbox 흐름 다이어그램을 추가한다.",
       "completed_at": "2026-05-27T00:34:31+0900"
     },
     {

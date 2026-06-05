@@ -38,7 +38,7 @@
 | 6 | 구매 불가 상품은 `unavailable=true` 마킹 | row 자동 삭제 없음. 조회 endpoint side effect 회피(CQS). |
 | 7 | 항목당 수량 상한 MIN=1, MAX=99 도메인 강제 | 재고 검증은 주문 단계. cart 상한은 abuse 방지 가벼운 가드. |
 
-ADR-020 "신규 도메인의 cross-aggregate 참조는 ID로 한다"를 본 phase에서 루트 `docs/ADR.md`에 누적 추가했다.
+ADR-020 "신규 도메인의 cross-aggregate 참조는 ID로 한다"를 본 phase에서 루트 `docs/adr.md`에 누적 추가했다.
 
 ## 단계별 작업 요약
 
@@ -78,11 +78,11 @@ order 도메인이 cart 도메인을 직접 의존하지 않도록 `order.applic
 
 루트 docs를 cart phase 산출물에 맞춰 동기화했다.
 
-- `docs/PRD.md`: MVP 제외 사항에서 장바구니를 제거하고 핵심 기능에 추가
+- `docs/prd.md`: MVP 제외 사항에서 장바구니를 제거하고 핵심 기능에 추가
 - `docs/architecture.md`: 패키지 트리에 `cart/` 추가, 도메인별 주요 서비스 표에 cart 4개 서비스 등록, 데이터 흐름에 cart CRUD 4개와 주문 생성의 `CartItemRemover` 호출 추가, 도메인 이벤트 INFO 로그 적용 범위를 8개 도메인 17개 컴포넌트로 갱신
 - `docs/api-spec.md`: cart API 4종 스펙 추가
 - `docs/db-schema.md`: `tbl_cart_item`과 `uk_cart_item_member_product` UNIQUE 제약, FK 미사용 정책(ADR-020) 명시
-- `docs/ADR.md`: **ADR-020 "신규 도메인의 cross-aggregate 참조는 ID로 한다"** 누적 추가
+- `docs/adr.md`: **ADR-020 "신규 도메인의 cross-aggregate 참조는 ID로 한다"** 누적 추가
 
 워크스페이스 공유 docs(`api-contract.md`, `progress.md`)는 backend 세션 책임 범위 밖이므로 건드리지 않았다.
 
@@ -126,7 +126,7 @@ ADR-005가 "외부 시스템 연동은 AFTER_COMMIT 이벤트로 분리"를 가�
 
 - 결정 5(cart 존재 검증 제외)의 근거를 처음 정리할 때 "TEMP-TODO에 검증 항목이 있는데 왜 안 하는가"를 ADR에 명확히 설명해야 했다. Buy Now 시나리오를 명시적으로 인용하지 않으면 누군가 미래에 "검증을 추가해야 한다"고 회귀시킬 수 있어 ADR-007 결정 5에 결과 시나리오까지 적어둔 이유다.
 - 결정 4(동일 트랜잭션)와 결정 6(`unavailable` 마킹)는 ADR-005 패턴과 표면적으로 충돌하는 것처럼 보여, ADR에 "왜 ADR-005가 적용 안 되는가"를 의식적으로 명시해야 했다.
-- ADR-020을 본 phase의 ADR로만 두지 않고 루트 `docs/ADR.md`에 누적 추가하는 결정이 phase 도중에 명확해졌다. 신규 도메인 기본값이라는 의미가 phase 산출물에 머물면 후속 phase에서 같은 논의가 반복될 위험이 있었다.
+- ADR-020을 본 phase의 ADR로만 두지 않고 루트 `docs/adr.md`에 누적 추가하는 결정이 phase 도중에 명확해졌다. 신규 도메인 기본값이라는 의미가 phase 산출물에 머물면 후속 phase에서 같은 논의가 반복될 위험이 있었다.
 
 ## 후속 과제
 

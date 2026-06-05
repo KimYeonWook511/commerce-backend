@@ -26,7 +26,7 @@
 - `src/main/java/com/commerce/common/log/kafka/TraceIdKafkaConfig.java` 신규
 - `src/main/java/com/commerce/outbox/stock/infrastructure/StockRestoreKafkaConsumerConfig.java` 수정 — `TraceIdRecordInterceptor` 등록
 - 통합 테스트: `src/test/java/com/commerce/common/log/kafka/TraceIdKafkaPropagationIntegrationTest.java`
-- 루트 문서 갱신: `docs/ADR.md`, `docs/logging-conventions.md` §8, `docs/architecture.md`
+- 루트 문서 갱신: `docs/adr.md`, `docs/logging-conventions.md` §8, `docs/architecture.md`
 
 ### 제외 범위
 

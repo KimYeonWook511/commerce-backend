@@ -15,7 +15,7 @@ step 1, 2 결과 변경 사항:
 - `/src/main/java/com/commerce/order/application/port/OrderIdempotencyStore.java`
 - `/src/main/java/com/commerce/order/application/OrderCreateService.java`
 - `/src/main/java/com/commerce/order/infrastructure/RedisOrderIdempotencyStore.java`
-- `/docs/ADR.md` (갱신 부분)
+- `/docs/adr.md` (갱신 부분)
 
 참고 (기존 결정 맥락):
 

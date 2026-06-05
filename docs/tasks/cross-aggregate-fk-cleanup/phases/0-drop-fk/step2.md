@@ -14,7 +14,7 @@
 
 루트 docs 동기화 대상 파일도 모두 읽는다.
 
-- `/docs/ADR.md` (ADR-020 본문 및 series 후속 노트 위치 파악)
+- `/docs/adr.md` (ADR-020 본문 및 series 후속 노트 위치 파악)
 - `/docs/db-schema.md` (FK 표기 위치 파악)
 - `/docs/architecture.md` (stock / order / payment 도메인 섹션 위치 파악)
 
@@ -26,7 +26,7 @@
 
 step1 의 V4 migration 으로 cross-aggregate FK 5건이 schema 에서 제거된 사실을 루트 docs 3건에 반영한다.
 
-### `docs/ADR.md` — ADR-020 후속 노트 1건 추가
+### `docs/adr.md` — ADR-020 후속 노트 1건 추가
 
 - ADR-020 본문 (현재 마지막 후속 노트가 `payment-jpa-association-decouple, 2026-06-03` 인 위치) 뒤에 cross-aggregate FK 일괄 제거 완료 후속 노트 1건을 추가한다.
 - 추가 노트의 내용 가이드 (실제 문장은 worker 가 series 마무리 톤으로 작성):
@@ -35,7 +35,7 @@ step1 의 V4 migration 으로 cross-aggregate FK 5건이 schema 에서 제거된
   - 코드 + DB schema 정합성 회복으로 ADR-020 후속 트랙 (Stock / Order / Payment / FK cleanup) series 완전 종료.
   - 운영 DB 의 FK 제거 적용 절차는 별도 결정.
   - 세부 결정은 `docs/tasks/cross-aggregate-fk-cleanup/adr.md` 참조.
-- ADR.md 의 Task ADR 색인 표 (현재 stock / order / payment-jpa-association-decouple 행 위치) 에 `cross-aggregate-fk-cleanup` 한 행 추가. 정렬은 기존 행과 동일한 알파벳 / 카테고리 순서 컨벤션을 따른다.
+- adr.md 의 Task ADR 색인 표 (현재 stock / order / payment-jpa-association-decouple 행 위치) 에 `cross-aggregate-fk-cleanup` 한 행 추가. 정렬은 기존 행과 동일한 알파벳 / 카테고리 순서 컨벤션을 따른다.
 
 ### `docs/db-schema.md` — FK 표기 정비
 
@@ -57,7 +57,7 @@ step1 의 V4 migration 으로 cross-aggregate FK 5건이 schema 에서 제거된
 
 ## 수정 가능 경로
 
-- `docs/ADR.md`
+- `docs/adr.md`
 - `docs/db-schema.md`
 - `docs/architecture.md`
 - `docs/tasks/cross-aggregate-fk-cleanup/**` (필요 시 보정)
@@ -72,8 +72,8 @@ step1 의 V4 migration 으로 cross-aggregate FK 5건이 schema 에서 제거된
 
 1. 위 Acceptance Criteria 커맨드를 실행한다.
 2. 아래를 확인한다.
-   - `docs/ADR.md` 에 ADR-020 의 본 트랙 후속 노트가 1건 추가됐는가?
-     - `grep -n "cross-aggregate-fk-cleanup\|FK 일괄 제거\|fk_stock_product_id" docs/ADR.md` 로 후속 노트와 색인 행 추가 확인.
+   - `docs/adr.md` 에 ADR-020 의 본 트랙 후속 노트가 1건 추가됐는가?
+     - `grep -n "cross-aggregate-fk-cleanup\|FK 일괄 제거\|fk_stock_product_id" docs/adr.md` 로 후속 노트와 색인 행 추가 확인.
    - `docs/db-schema.md` 에서 5개 cross-aggregate FK 표기가 제거됐는가?
      - `grep -nE "fk_stock_product_id|fk_stock_history_stock_id|fk_order_member_id|fk_order_item_product_id|fk_payment_order_id" docs/db-schema.md` 결과 0건.
      - `grep -n "FK -> tbl_product\|FK -> tbl_stock\|FK -> tbl_member" docs/db-schema.md` 로 표기 정비 확인. (단, `tbl_order_item.order_id (FK -> tbl_order.id)` 표기는 1건 남아 있어야 함 — same-aggregate FK 유지)

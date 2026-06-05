@@ -7,7 +7,7 @@
 - `docs/features/payment-attempt-idempotency/prd.md`
 - `docs/features/payment-attempt-idempotency/architecture.md`
 - `docs/features/payment-attempt-idempotency/adr.md`
-- `docs/ADR.md` (ADR-010 확인)
+- `docs/adr.md` (ADR-010 확인)
 - `src/main/java/com/commerce/payment/application/PaymentAttemptService.java` (최종 상태)
 - `src/test/java/com/commerce/payment/application/PaymentAttemptServiceTest.java` (최종 상태)
 - `src/test/java/com/commerce/payment/application/concurrency/PaymentAttemptServiceConcurrencyTest.java` (최종 상태)

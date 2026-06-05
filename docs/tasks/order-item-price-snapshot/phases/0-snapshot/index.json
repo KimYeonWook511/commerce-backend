@@ -15,7 +15,7 @@
       "name": "sync-root-docs",
       "status": "completed",
       "started_at": "2026-06-03T22:59:57+0900",
-      "summary": "docs/ADR.md Task ADR 색인 표에 order-item-price-snapshot 행을 추가. docs/db-schema.md 마이그레이션 섹션에 V5 한 줄 요약 추가, tbl_order_item 섹션에 unit_price INT NOT NULL 컬럼과 비고 한 줄을 추가. test 통과.",
+      "summary": "docs/adr.md Task ADR 색인 표에 order-item-price-snapshot 행을 추가. docs/db-schema.md 마이그레이션 섹션에 V5 한 줄 요약 추가, tbl_order_item 섹션에 unit_price INT NOT NULL 컬럼과 비고 한 줄을 추가. test 통과.",
       "completed_at": "2026-06-03T23:01:24+0900"
     },
     {

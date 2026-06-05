@@ -12,7 +12,7 @@
 
 태스크 문서만으로 부족한 공통 맥락이 있으면 아래를 추가로 읽는다.
 
-- `/docs/ADR.md` (ADR-020 — 신규 도메인 cross-aggregate ID 참조, ADR-011 — find-first 패턴)
+- `/docs/adr.md` (ADR-020 — 신규 도메인 cross-aggregate ID 참조, ADR-011 — find-first 패턴)
 - `/docs/architecture.md`
 - `/docs/tasks/stock-jpa-association-decouple/adr.md` (series 메타 원칙 / 외부 주입 패턴 최초 정립)
 - `/docs/tasks/stock-jpa-association-decouple/retrospective.md`

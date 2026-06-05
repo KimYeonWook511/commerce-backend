@@ -29,7 +29,7 @@
 - `OrderConcurrencyService` 의 `Order.create(Member)` / `addOrderItem(Product, int)` 호출부 Long ID 시그니처 전환.
 - `PaymentReadyService` 의 productName 표시를 위한 batch composition 도입 — `ProductRepository.findAllById(productIds)` 로 productName Map 조회 후 응답 DTO 에 외부 주입.
 - test fixture 의 `Order.builder().member(...)`, `OrderItem.builder().product(...)`, `Order.create(member)`, `addOrderItem(product, qty)` 호출부 정리. order, payment, cart 도메인 테스트까지 갱신.
-- 루트 `docs/ADR.md`, `docs/architecture.md` 동기화.
+- 루트 `docs/adr.md`, `docs/architecture.md` 동기화.
 - 회고록 작성.
 
 ### 제외 범위

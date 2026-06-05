@@ -15,7 +15,7 @@
       "name": "sync-root-docs",
       "status": "completed",
       "started_at": "2026-06-03T01:51:48+0900",
-      "summary": "docs/ADR.md Task ADR 색인에 stock-jpa-association-decouple 항목을 추가하고 ADR-020 본문에 후속 노트를 부착한다. docs/architecture.md의 stock 도메인 책임 섹션을 ID 참조 컨벤션 반영으로 갱신한다. gradlew test 통과.",
+      "summary": "docs/adr.md Task ADR 색인에 stock-jpa-association-decouple 항목을 추가하고 ADR-020 본문에 후속 노트를 부착한다. docs/architecture.md의 stock 도메인 책임 섹션을 ID 참조 컨벤션 반영으로 갱신한다. gradlew test 통과.",
       "completed_at": "2026-06-03T01:53:30+0900"
     },
     {

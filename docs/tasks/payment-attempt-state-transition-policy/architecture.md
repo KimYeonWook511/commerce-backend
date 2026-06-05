@@ -66,4 +66,4 @@ NaverPayApprovalService.completeVerifiedApproval:
 | `src/main/java/com/commerce/payment/domain/PaymentAttempt.java` | 4개 mark 메서드에 type + status 검증 |
 | `src/main/java/com/commerce/payment/naverpay/application/NaverPayApprovalService.java` | `failApproveAndCancelApprovedPayment` 내 `failApprove` try-catch 보호 |
 | `src/test/java/com/commerce/payment/domain/PaymentAttemptTest.java` | 전이/type 위반 케이스 9개 추가 |
-| `docs/ADR.md` | ADR-012 추가 |
+| `docs/adr.md` | ADR-012 추가 |

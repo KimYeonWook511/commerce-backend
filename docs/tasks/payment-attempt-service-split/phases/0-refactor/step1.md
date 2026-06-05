@@ -13,7 +13,7 @@
 - `src/test/java/com/commerce/payment/domain/PaymentAttemptTest.java`
 
 루트 docs 추가:
-- `docs/ADR.md` — ADR-012 (mark 메서드 선조건 검증 정책) 확인 필수
+- `docs/adr.md` — ADR-012 (mark 메서드 선조건 검증 정책) 확인 필수
 
 ## 작업
 

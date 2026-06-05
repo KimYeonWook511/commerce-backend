@@ -4,7 +4,7 @@
 
 본 트랙은 ADR-020 후속 시리즈 (Stock #199 / Order #200 / Payment #202 / 본 FK cleanup) 의 마지막 작업이다. 선행 세 sub-PR이 JPA 매핑 차원에서 cross-aggregate association 을 모두 해제한 상태에서, DB schema 에 남아있던 cross-aggregate FK 5건을 단일 Flyway V4 migration 으로 일괄 제거했다.
 
-변경 면적이 의도적으로 좁다. 코드 변경 0건, 자바 파일 1줄도 바뀌지 않았다. 산출물은 `V4__drop_cross_aggregate_fk_constraints.sql` 1개 + 루트 docs 3개 (`docs/ADR.md`, `docs/db-schema.md`, `docs/architecture.md`) 갱신이 전부다. 선행 세 sub-PR에서 정책 결정이 이미 완료된 덕분에 본 트랙의 결정 사항이 schema 전환 1건 + 운영 배포 분리 1건으로 수렴할 수 있었다.
+변경 면적이 의도적으로 좁다. 코드 변경 0건, 자바 파일 1줄도 바뀌지 않았다. 산출물은 `V4__drop_cross_aggregate_fk_constraints.sql` 1개 + 루트 docs 3개 (`docs/adr.md`, `docs/db-schema.md`, `docs/architecture.md`) 갱신이 전부다. 선행 세 sub-PR에서 정책 결정이 이미 완료된 덕분에 본 트랙의 결정 사항이 schema 전환 1건 + 운영 배포 분리 1건으로 수렴할 수 있었다.
 
 본 PR 머지 시점에 series 4 트랙 전체가 완전히 종료됐다. 코드 차원 cross-aggregate association 0건 + DB cross-aggregate FK 0건 — 두 축이 일치하는 정합성이 회복됐다.
 
@@ -46,7 +46,7 @@ FK 와 동명으로 잔류하는 KEY index (`KEY fk_stock_history_stock_id (stoc
 
 본 트랙이 series 마무리이기 때문에 선행 sub-PR 의 ADR / 회고에 "FK 제거 완료" 같은 후속 노트를 부착하고 싶은 유혹이 있었다. 그러나 CLAUDE.md / `docs/tasks/README.md` 의 "완료된 tasks 불변 원칙" 이 이를 금지한다. 머지 완료된 task 폴더 문서는 그 시점 결정의 기록이며, 이후 변경은 루트 `docs/` 문서에서 표현한다.
 
-series 마무리 사실은 본 트랙의 이 회고와 `docs/ADR.md` ADR-020 후속 노트로만 표현했다.
+series 마무리 사실은 본 트랙의 이 회고와 `docs/adr.md` ADR-020 후속 노트로만 표현했다.
 
 ---
 

@@ -31,7 +31,7 @@
       "name": "sync-root-docs",
       "status": "completed",
       "started_at": "2026-05-31T23:43:44+0900",
-      "summary": "docs/ADR.md에 ADR-023(multi-column unique constraint 대상 컬럼 length 명시 + halt_on_error local 적용) 추가. docs/db-schema.md tbl_payment_attempt 섹션에 4개 컬럼 length 비고 보강. docs/testing-conventions.md에 halt_on_error 적용 환경(local)·제외 환경(test/prod)·효과·fragility 명시.",
+      "summary": "docs/adr.md에 ADR-023(multi-column unique constraint 대상 컬럼 length 명시 + halt_on_error local 적용) 추가. docs/db-schema.md tbl_payment_attempt 섹션에 4개 컬럼 length 비고 보강. docs/testing-conventions.md에 halt_on_error 적용 환경(local)·제외 환경(test/prod)·효과·fragility 명시.",
       "completed_at": "2026-05-31T23:45:34+0900"
     },
     {

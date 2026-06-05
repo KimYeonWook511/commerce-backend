@@ -6,14 +6,14 @@
 
 - `docs/tasks/payment-attempt-service-split/prd.md`
 - `docs/tasks/payment-attempt-service-split/adr.md`
-- `docs/ADR.md` — ADR-011(find-first), ADR-012(mark 메서드 선조건 검증) 확인
+- `docs/adr.md` — ADR-011(find-first), ADR-012(mark 메서드 선조건 검증) 확인
 - `docs/architecture.md` — line 83-84(도메인별 서비스 테이블), line 107-110(결제 승인 흐름)
 - `docs/exception-strategy.md` — line 25(find-first 적용 대상), line 79(failApproveAttemptIfRequested 언급)
 - `docs/testing-conventions.md` — line 97(`PaymentAttemptService` 언급)
 
 ## 작업
 
-### 1. `docs/ADR.md`
+### 1. `docs/adr.md`
 
 **(a) ADR-012 본문 수정**
 
@@ -63,7 +63,7 @@ line 97의 `PaymentAttemptService` 언급:
 
 1. 위 Acceptance Criteria를 실행한다.
 2. 아래를 확인한다:
-   - `docs/ADR.md`에 `PaymentAttemptService` 언급이 없거나 갱신됐는가?
+   - `docs/adr.md`에 `PaymentAttemptService` 언급이 없거나 갱신됐는가?
    - `docs/architecture.md` 서비스 테이블과 결제 승인 흐름이 분리된 두 서비스를 반영하는가?
    - `docs/exception-strategy.md`의 find-first 적용 대상과 failIfRequested 언급이 갱신됐는가?
    - `rg "PaymentAttemptService" docs/` 결과에서 갱신되지 않은 언급이 없는가?

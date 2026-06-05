@@ -11,7 +11,7 @@
 - `/docs/tasks/cross-aggregate-fk-cleanup/db-schema.md`
 - step1 / step2 에서 생성·수정된 파일:
   - `/src/main/resources/db/migration/V4__drop_cross_aggregate_fk_constraints.sql`
-  - `/docs/ADR.md`
+  - `/docs/adr.md`
   - `/docs/db-schema.md`
   - `/docs/architecture.md`
 

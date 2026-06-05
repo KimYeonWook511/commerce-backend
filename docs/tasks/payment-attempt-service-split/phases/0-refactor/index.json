@@ -23,7 +23,7 @@
       "name": "sync-root-docs-task-a",
       "status": "completed",
       "started_at": "2026-05-20T17:04:25+0900",
-      "summary": "docs/ADR.md의 ADR-011 적용 대상을 PaymentApprovalAttemptService+PaymentCancellationAttemptService로 갱신하고, ADR-012 제목·본문을 succeed/fail 2개 통합 및 type 가드 제거 결정에 맞게 수정하며, ADR-014의 Aggregate 캡슐화 언급도 갱신한다. docs/architecture.md 서비스 테이블과 결제 승인 흐름을 분리된 두 Service로 반영한다. docs/exception-strategy.md의 find-first 적용 대상 목록과 failIfRequested 언급을 PaymentApprovalAttemptService 기준으로 갱신한다.",
+      "summary": "docs/adr.md의 ADR-011 적용 대상을 PaymentApprovalAttemptService+PaymentCancellationAttemptService로 갱신하고, ADR-012 제목·본문을 succeed/fail 2개 통합 및 type 가드 제거 결정에 맞게 수정하며, ADR-014의 Aggregate 캡슐화 언급도 갱신한다. docs/architecture.md 서비스 테이블과 결제 승인 흐름을 분리된 두 Service로 반영한다. docs/exception-strategy.md의 find-first 적용 대상 목록과 failIfRequested 언급을 PaymentApprovalAttemptService 기준으로 갱신한다.",
       "completed_at": "2026-05-20T17:07:43+0900"
     },
     {

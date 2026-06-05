@@ -6,13 +6,13 @@
 
 - `docs/tasks/kafka-trace-propagation/prd.md`
 - `docs/tasks/kafka-trace-propagation/adr.md`
-- `docs/ADR.md` — 신규 ADR 항목 추가 위치 확인 (현재 마지막 항목: ADR-016)
+- `docs/adr.md` — 신규 ADR 항목 추가 위치 확인 (현재 마지막 항목: ADR-016)
 - `docs/logging-conventions.md` — §8 비동기·이벤트 경계 traceId 전파 절 갱신 위치 확인
 - `docs/architecture.md` — "비동기 경계와 traceId 전파" 절 신규 추가 위치 확인
 
 ## 작업
 
-### 1. `docs/ADR.md` — ADR-017 신규 항목 추가
+### 1. `docs/adr.md` — ADR-017 신규 항목 추가
 
 기존 `ADR-016` 항목 다음에 아래 항목을 추가하라.
 
@@ -96,7 +96,7 @@ outbox relay 스케줄러는 HTTP 요청 컨텍스트가 없으므로 publish �
 
 1. 위 커맨드를 실행한다.
 2. 아래를 확인한다.
-   - `docs/ADR.md`에 ADR-017 항목이 추가됐는가?
+   - `docs/adr.md`에 ADR-017 항목이 추가됐는가?
    - `docs/logging-conventions.md` §8의 Kafka 전파 내용이 갱신됐는가?
    - `docs/architecture.md`에 "비동기 경계와 traceId 전파" 절이 추가됐는가?
    - 기존 테스트가 통과하는가?

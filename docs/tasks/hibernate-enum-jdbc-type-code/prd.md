@@ -25,7 +25,7 @@ Spring Boot 3.x(Hibernate 6.x)부터 `@Enumerated(EnumType.STRING)`이 MySQL에�
 ### 포함
 - 14개 entity 필드(8개 entity)에 `@JdbcTypeCode(SqlTypes.VARCHAR)` 부착
 - 기존 `@Column(length=N)`의 `length` 속성 제거 (Hibernate 기본 VARCHAR(255) 사용)
-- `docs/ADR.md`에 ADR-018 추가
+- `docs/adr.md`에 ADR-018 추가
 
 ### 제외
 - `OrderIdempotencyStatus` (Redis 직렬화용, `@Entity` 매핑 아님)

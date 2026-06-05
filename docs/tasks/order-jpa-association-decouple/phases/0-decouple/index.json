@@ -16,7 +16,7 @@
       "status": "completed",
       "started_at": "2026-06-03T15:14:11+0900",
       "completed_at": "2026-06-03T15:16:21+0900",
-      "summary": "docs/ADR.md Task ADR 색인에 order-jpa-association-decouple 한 줄 추가. ADR-020 본문에 후속 노트(order 후속) 부착. docs/architecture.md order 도메인 설명에 ID 참조 컨벤션(memberId/productId, same-aggregate 유지, fetch join 대체 원칙) 반영. ./gradlew test 통과."
+      "summary": "docs/adr.md Task ADR 색인에 order-jpa-association-decouple 한 줄 추가. ADR-020 본문에 후속 노트(order 후속) 부착. docs/architecture.md order 도메인 설명에 ID 참조 컨벤션(memberId/productId, same-aggregate 유지, fetch join 대체 원칙) 반영. ./gradlew test 통과."
     },
     {
       "step": 3,

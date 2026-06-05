@@ -30,7 +30,7 @@
 | 스케줄러 traceId 발급 | 발급하지 않음. 각 outbox 이벤트의 trace_id를 개별 복원 | 배치 단위 traceId는 독립 이벤트들이 공유하게 되어 traceId 의미 희석. 운영 통계 로그(selected/published)는 traceId 없이도 모니터링 가능 |
 | traceId null 케이스 | null 저장 허용, relay 시 null이면 MDC 조작 없이 진행 | 강제 신규 UUID 발급은 "원본 흐름" 없는 traceId 생성으로 추적성 저하. Kafka producer 인터셉터의 fallback에 위임. 기존 outbox 데이터의 null 호환에도 필수 |
 
-이 4개 결정을 묶어 루트 `docs/ADR.md`에 ADR-019로 추가했다.
+이 4개 결정을 묶어 루트 `docs/adr.md`에 ADR-019로 추가했다.
 
 ---
 
@@ -70,7 +70,7 @@
 | 파일 | 변경 내용 |
 |------|-----------|
 | `docs/logging-conventions.md` | §8 비동기·이벤트 경계 절을 `@TransactionalEventListener`와 Outbox 경계의 구현 완료로 갱신. 적용/미적용 경계 구분과 신규 경계 가이드 추가 |
-| `docs/ADR.md` | ADR-019(이벤트/Outbox traceId 전파 설계 결정) 항목 추가 |
+| `docs/adr.md` | ADR-019(이벤트/Outbox traceId 전파 설계 결정) 항목 추가 |
 | `docs/db-schema.md` | `tbl_outbox_event`에 `trace_id VARCHAR(64) NULL` 컬럼 반영 |
 | `docs/architecture.md` | 비동기 경계 절에 `TransactionalEventListener`와 Outbox 흐름 다이어그램 추가 |
 

@@ -8,7 +8,7 @@
 - `/docs/tasks/flyway-introduction/architecture.md`
 - `/docs/tasks/flyway-introduction/adr.md`
 - `/docs/tasks/flyway-introduction/db-schema.md`
-- `/docs/ADR.md` ADR-024 (Step 4 결과)
+- `/docs/adr.md` ADR-024 (Step 4 결과)
 - `/src/main/resources/db/migration/V1__init.sql` (Step 2 결과)
 - 본 phase 안의 git 커밋 로그: `git log --oneline develop..HEAD`
 

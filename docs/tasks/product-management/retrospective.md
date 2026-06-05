@@ -43,7 +43,7 @@
 ### 6. step2 루트 문서 동기화는 실행기로 이어가지 못했다
 
 - step1이 blocked 상태로 종료되면서 step2 문서 동기화는 자동 진행되지 않았다.
-- 루트 `docs/api-spec.md`, `docs/db-schema.md`, `docs/architecture.md`, `docs/PRD.md`는 수동으로 feature 구현과 맞췄다.
+- 루트 `docs/api-spec.md`, `docs/db-schema.md`, `docs/architecture.md`, `docs/prd.md`는 수동으로 feature 구현과 맞췄다.
 - phase 상태도 실제 완료 결과에 맞게 수동 갱신했다.
 
 ## 이번 작업에서 적용한 해결
@@ -72,7 +72,7 @@
 - feature 문서와 루트 문서의 정책을 맞췄다.
 - `docs/api-spec.md`에 관리자 상품 API와 공개 상품 노출 조건을 추가했다.
 - `docs/db-schema.md`에 `description`, `image_url`, `status`, `deleted_at`을 반영했다.
-- `docs/architecture.md`와 `docs/PRD.md`에 관리자 상품 관리 책임을 반영했다.
+- `docs/architecture.md`와 `docs/prd.md`에 관리자 상품 관리 책임을 반영했다.
 
 ## 우선순위
 

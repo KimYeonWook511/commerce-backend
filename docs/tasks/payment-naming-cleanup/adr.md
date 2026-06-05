@@ -63,7 +63,7 @@
   - 진짜 시도(try) 를 뜻하는 식별자: `attackerAttempt`(공격 시도), concurrent/retry attempt 등.
   - 한국어 "시도" 표현(@DisplayName·주석·에러 메시지).
   - test-only `postprocess` 패키지 전체 (배치 도입 시 일괄 정비 예정).
-  - 역사 기록: `docs/ADR.md` 과거 ADR 서술, 머지된 task 폴더, migration 파일, `logging-conventions.md`/`db-schema.md` 의 outbox `attempt_count`.
+  - 역사 기록: `docs/adr.md` 과거 ADR 서술, 머지된 task 폴더, migration 파일, `logging-conventions.md`/`db-schema.md` 의 outbox `attempt_count`.
 - `Payment.succeed()` 의 `failCode`/`failDetail` null 리셋 2줄은 제거한다. succeed 는 REQUESTED 상태에서만 호출되고 REQUESTED 결제는 failCode 가 없으므로 증명 가능한 no-op dead code다.
 - `saveAndFlush` 즉시 flush에 의존하는 `succeed`/`succeedApproval` 의 명시 `save()` 호출은 손대지 않는다.
 

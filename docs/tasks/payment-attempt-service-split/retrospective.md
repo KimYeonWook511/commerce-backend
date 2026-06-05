@@ -29,7 +29,7 @@
 - `NaverPayApprovalService`: `paymentAttemptService` → `paymentApprovalAttemptService` + `paymentCancellationAttemptService` 교체, `validateApproved*` private 메서드 삭제 후 `attempt.verifyApprovedResponse(...)` 한 줄로 교체
 
 **갱신된 루트 docs:**
-- `docs/ADR.md`: ADR-011 적용 대상, ADR-012 제목·본문, ADR-014 갱신
+- `docs/adr.md`: ADR-011 적용 대상, ADR-012 제목·본문, ADR-014 갱신
 - `docs/architecture.md`: 서비스 테이블 및 결제 승인 흐름
 - `docs/exception-strategy.md`: find-first 적용 대상 목록, failIfRequested 언급 갱신
 

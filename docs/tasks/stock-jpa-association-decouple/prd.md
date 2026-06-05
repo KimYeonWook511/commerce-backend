@@ -26,7 +26,7 @@
 - application 계층의 객체 traversal (`stock.getProduct().getId()` 등) 정리.
 - `StockHistoryResult.from(history, productId)` 외부 주입 패턴 도입.
 - test fixture 의 `Stock.builder().product(...)` / `StockHistory.builder().stock(...)` 호출부 정리.
-- 루트 `docs/ADR.md`, `docs/architecture.md` 동기화.
+- 루트 `docs/adr.md`, `docs/architecture.md` 동기화.
 - 회고록 작성.
 
 ### 제외 범위

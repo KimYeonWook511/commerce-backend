@@ -27,7 +27,7 @@ unique 제약 충돌이 나면 catch 블록에서 기존 attempt를 재조회해
 - `PaymentAttemptService.getOrCreateCancelAttempt` catch 블록 보강
 - 파라미터 명명 통일 (`pgPaymentId` → `paymentId`)
 - 단위 테스트 및 동시성 테스트 추가
-- `docs/ADR.md`에 ADR-010 추가
+- `docs/adr.md`에 ADR-010 추가
 
 **제외**:
 - `PaymentAttempt` 상태 전이 검증 (Issue #99)

@@ -15,7 +15,7 @@
       "name": "sync-root-docs",
       "status": "completed",
       "started_at": "2026-06-03T16:58:25+0900",
-      "summary": "docs/ADR.md Task ADR 색인에 payment-jpa-association-decouple 한 줄을 추가하고 ADR-020 본문에 Payment aggregate 후속 노트(series 완료 명시)를 부착한다. docs/architecture.md Payment 섹션을 orderId: Long ID 참조 컨벤션, PaymentAttempt 식별자 기반 동작, ADR-020 series 완료 사실로 갱신한다. ./gradlew test BUILD SUCCESSFUL.",
+      "summary": "docs/adr.md Task ADR 색인에 payment-jpa-association-decouple 한 줄을 추가하고 ADR-020 본문에 Payment aggregate 후속 노트(series 완료 명시)를 부착한다. docs/architecture.md Payment 섹션을 orderId: Long ID 참조 컨벤션, PaymentAttempt 식별자 기반 동작, ADR-020 series 완료 사실로 갱신한다. ./gradlew test BUILD SUCCESSFUL.",
       "completed_at": "2026-06-03T17:01:11+0900"
     },
     {

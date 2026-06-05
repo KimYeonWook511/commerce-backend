@@ -128,7 +128,7 @@ docs/tasks/<task-name>/phases/<phase-name>/step1.md
 태스크가 끝나면 아래를 함께 수행한다.
 
 1. 태스크 폴더 문서 기준으로 구현과 검증을 마친다.
-2. 루트 `docs/architecture.md`, `docs/api-spec.md`, `docs/ADR.md`, `docs/db-schema.md` 등 필요한 기준 문서에 반영한다.
+2. 루트 `docs/architecture.md`, `docs/api-spec.md`, `docs/adr.md`, `docs/db-schema.md` 등 필요한 기준 문서에 반영한다.
 3. 태스크 폴더 문서는 유지한다.
 
 ## 완료된 tasks 불변 원칙
@@ -146,7 +146,7 @@ docs/tasks/<task-name>/phases/<phase-name>/step1.md
 
 - 완료된 task 폴더 문서(`prd.md`, `architecture.md`, `adr.md`, `api-spec.md`, `db-schema.md`, `retrospective.md`, `phases/**`)는 머지 후 수정하지 않는다. 본문은 그 시점 결정과 의도의 기록 그대로 둔다.
 - 완료 후 발생한 변경은 루트 `docs/` 문서에서 표현한다.
-  - 결정의 변경/진화: `docs/ADR.md`의 해당 ADR 본문 갱신 또는 "후속" 노트 추가.
+  - 결정의 변경/진화: `docs/adr.md`의 해당 ADR 본문 갱신 또는 "후속" 노트 추가.
   - 현재 상태 묘사가 어긋난 부분: 살아있는 루트 정책 문서(`exception-strategy.md`, `architecture.md`, `api-spec.md`, `db-schema.md` 등) 갱신.
-- 완료된 task 폴더 본문이 현재 코드와 어긋나 보일 때는 루트 `docs/ADR.md`의 후속 노트를 통해 변경 흐름을 추적할 수 있어야 한다. 완료된 task 폴더 본문에 후속 노트를 흩어 추가하지 않는다.
+- 완료된 task 폴더 본문이 현재 코드와 어긋나 보일 때는 루트 `docs/adr.md`의 후속 노트를 통해 변경 흐름을 추적할 수 있어야 한다. 완료된 task 폴더 본문에 후속 노트를 흩어 추가하지 않는다.
 - 새 살아있는 정책 문서를 만드는 것은 기존 문서에 흡수하기 어려울 때만. "결정 1개 = 문서 1개"가 아니라 "영역 1개 = 문서 1개".

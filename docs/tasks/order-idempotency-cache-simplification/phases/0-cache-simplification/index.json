@@ -15,7 +15,7 @@
       "name": "sync-docs",
       "status": "completed",
       "started_at": "2026-06-01T11:43:41+0900",
-      "summary": "루트 docs(ADR.md, api-spec.md, architecture.md, logging-conventions.md, testing-conventions.md)를 step 1 코드 변경에 맞춰 동기화한다. ADR-002에 in-flight 차단 전용 갱신 결정을 추가하고, api-spec.md에 409 ORDER_IDEMPOTENCY_IN_PROGRESS 응답을 명시한다. AFTER_COMMIT listener 사례 제거를 architecture.md·logging-conventions.md에 반영하고, 기존 task adr(order-idempotency, event-outbox-trace-propagation, unique-find-first-policy) 상단에 cross-reference 한 줄을 추가한다.",
+      "summary": "루트 docs(adr.md, api-spec.md, architecture.md, logging-conventions.md, testing-conventions.md)를 step 1 코드 변경에 맞춰 동기화한다. ADR-002에 in-flight 차단 전용 갱신 결정을 추가하고, api-spec.md에 409 ORDER_IDEMPOTENCY_IN_PROGRESS 응답을 명시한다. AFTER_COMMIT listener 사례 제거를 architecture.md·logging-conventions.md에 반영하고, 기존 task adr(order-idempotency, event-outbox-trace-propagation, unique-find-first-policy) 상단에 cross-reference 한 줄을 추가한다.",
       "completed_at": "2026-06-01T11:45:44+0900"
     },
     {

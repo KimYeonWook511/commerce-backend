@@ -161,7 +161,7 @@ COLUMNS:
 
 INDEX:
 - `uk_payment_reservation_merchant_pay_key (merchant_pay_key) UNIQUE` — redirect 역조회 키 unique 보장
-- `uk_payment_reservation_reserved_key (reserved_key) UNIQUE` — RESERVED 중 (주문, 수단) 1 개 보장. reserve 따닥 차단 (NULL 트릭)
+- `uk_payment_reservation_reserved_key (reserved_key) UNIQUE` — RESERVED 중 (주문, 수단) 1 개 보장. reserve 중복 요청(따닥) 차단 (NULL 트릭)
 - `idx_reservation_order (order_id)` — UNKNOWN 차단 검사 / 주문별 조회
 
 비고:

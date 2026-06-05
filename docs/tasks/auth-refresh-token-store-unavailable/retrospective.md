@@ -74,7 +74,7 @@ YAGNI로 거부. 사용처가 2곳뿐이고, Order는 application catch, Auth는
 
 - **신규**: `RefreshTokenStoreUnavailableException` (RuntimeException 직접 상속), `AuthExceptionHandler` (@RestControllerAdvice), `RedisRefreshTokenStoreTest`, `AuthExceptionHandlerTest`.
 - **수정**: `RedisRefreshTokenStore` — `@Slf4j` 추가, `save`/`get`에 `DataAccessException` catch + ERROR 로그 + 도메인 예외 변환. `AuthTokenIssueService` — try-catch 제거, DAO import 제거. `AuthTokenReissueService` — try-catch 제거, DAO import 제거. `AuthTokenIssueServiceTest`, `AuthTokenReissueServiceTest` — 인프라 장애 케이스를 propagate 검증으로 갱신.
-- **문서**: `docs/exception-strategy.md` 캐시 장애 처리 섹션을 fallback 가능 여부와 무관한 공통 매핑 패턴으로 재정리. catch 위치 분기(application vs presentation), 로깅 규약 fallback 불가 케이스 항목 신규 추가. `docs/ADR.md` Task ADR 색인 표에 `auth-refresh-token-store-unavailable` 행 추가.
+- **문서**: `docs/exception-strategy.md` 캐시 장애 처리 섹션을 fallback 가능 여부와 무관한 공통 매핑 패턴으로 재정리. catch 위치 분기(application vs presentation), 로깅 규약 fallback 불가 케이스 항목 신규 추가. `docs/adr.md` Task ADR 색인 표에 `auth-refresh-token-store-unavailable` 행 추가.
 
 ---
 

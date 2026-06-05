@@ -100,7 +100,7 @@
 - concurrent/동시 시도, retry 시도처럼 `Payment` 가 아니라 행위의 "시도(try)" 를 뜻하는 식별자/표현 (예: `whenConcurrentAttemptSucceededAndPaymentMissing` 의 "concurrent attempt"). 의미가 모호하면 보고한다.
 - 한국어 "시도" 표현 전부.
 - test-only `postprocess` 패키지 전체 (`src/test/java/com/commerce/payment/postprocess/**`).
-- `docs/ADR.md`, migration 파일, `docs/logging-conventions.md`, `docs/db-schema.md` 의 outbox `attempt_count`. (이 step은 코드만 다룬다)
+- `docs/adr.md`, migration 파일, `docs/logging-conventions.md`, `docs/db-schema.md` 의 outbox `attempt_count`. (이 step은 코드만 다룬다)
 
 ## Acceptance Criteria
 
