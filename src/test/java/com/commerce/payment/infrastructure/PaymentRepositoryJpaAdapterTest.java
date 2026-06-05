@@ -46,7 +46,7 @@ class PaymentRepositoryJpaAdapterTest {
 
 	@DisplayName("merchantPayKey, provider, pgPaymentId로 APPROVE 시도를 조회한다")
 	@Test
-	void findApproveAttempt_whenAttemptExists_returnAttempt() {
+	void findApprovePayment_whenPaymentExists_returnPayment() {
 		// given
 		PaymentReservation reservation = reservationPersistence.save(
 			PaymentReservation.createReserved(1L, 1L, 1000, PaymentProvider.NAVERPAY, "PAY-1",
@@ -57,7 +57,7 @@ class PaymentRepositoryJpaAdapterTest {
 		em.clear();
 
 		// when
-		Optional<Payment> result = paymentRepository.findApproveAttempt("PAY-1", PaymentProvider.NAVERPAY, "pg-payment-id-1");
+		Optional<Payment> result = paymentRepository.findApprovePayment("PAY-1", PaymentProvider.NAVERPAY, "pg-payment-id-1");
 
 		// then
 		assertThat(result).isPresent();
@@ -68,7 +68,7 @@ class PaymentRepositoryJpaAdapterTest {
 
 	@DisplayName("merchantPayKey, provider, pgPaymentId로 CANCEL 시도를 조회한다")
 	@Test
-	void findCancelAttempt_whenAttemptExists_returnAttempt() {
+	void findCancelPayment_whenPaymentExists_returnPayment() {
 		// given
 		Payment cancelPayment = paymentRepository.save(
 			Payment.createCancelRequested(1L, "PAY-2", "pg-payment-id-2", 1000, PaymentProvider.NAVERPAY));
@@ -76,7 +76,7 @@ class PaymentRepositoryJpaAdapterTest {
 		em.clear();
 
 		// when
-		Optional<Payment> result = paymentRepository.findCancelAttempt("PAY-2", PaymentProvider.NAVERPAY, "pg-payment-id-2");
+		Optional<Payment> result = paymentRepository.findCancelPayment("PAY-2", PaymentProvider.NAVERPAY, "pg-payment-id-2");
 
 		// then
 		assertThat(result).isPresent();

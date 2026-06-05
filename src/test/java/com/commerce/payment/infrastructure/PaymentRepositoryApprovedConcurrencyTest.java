@@ -81,7 +81,7 @@ class PaymentRepositoryApprovedConcurrencyTest {
 			PaymentReservation reservation = reservationPersistence.save(
 				PaymentReservation.createReserved(orderId, 1L, 1000, PaymentProvider.NAVERPAY, merchantPayKey, expiresAt)
 			);
-			reservation.markUsed();
+			reservation.use();
 			reservationPersistence.save(reservation);
 			payments[i] = paymentPersistence.save(
 				Payment.createRequested(reservation, PaymentType.APPROVE, "pg-" + i)

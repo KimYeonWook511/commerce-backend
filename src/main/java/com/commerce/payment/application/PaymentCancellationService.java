@@ -19,7 +19,7 @@ import lombok.extern.slf4j.Slf4j;
 @Slf4j
 @Service
 @RequiredArgsConstructor
-public class PaymentCancellationAttemptService {
+public class PaymentCancellationService {
 
 	private final PaymentRepository paymentRepository;
 
@@ -34,12 +34,12 @@ public class PaymentCancellationAttemptService {
 		String pgPaymentId,
 		int cancelAmount
 	) {
-		return paymentRepository.findCancelAttempt(merchantPayKey, provider, pgPaymentId)
+		return paymentRepository.findCancelPayment(merchantPayKey, provider, pgPaymentId)
 			.map(existing -> {
 				if (existing.getAmount() != cancelAmount) {
 					log.warn("Payment cancel amount mismatch - key={}, type=CANCEL, existingAmount={}, requested={}",
 						merchantPayKey, existing.getAmount(), cancelAmount);
-					throw new PaymentException(PaymentErrorCode.PAYMENT_ATTEMPT_AMOUNT_MISMATCH);
+					throw new PaymentException(PaymentErrorCode.PAYMENT_RECORD_AMOUNT_MISMATCH);
 				}
 				return existing;
 			})
@@ -55,9 +55,10 @@ public class PaymentCancellationAttemptService {
 		String pgPaymentId,
 		LocalDateTime respondedAt
 	) {
-		Payment attempt = paymentRepository.findCancelAttempt(merchantPayKey, provider, pgPaymentId)
-			.orElseThrow(() -> new PaymentException(PaymentErrorCode.PAYMENT_ATTEMPT_NOT_FOUND));
-		attempt.succeed(respondedAt);
+		Payment payment = paymentRepository.findCancelPayment(merchantPayKey, provider, pgPaymentId)
+			.orElseThrow(() -> new PaymentException(PaymentErrorCode.PAYMENT_RECORD_NOT_FOUND));
+		payment.succeed(respondedAt);
+		paymentRepository.save(payment);
 	}
 
 	@Transactional
@@ -69,8 +70,9 @@ public class PaymentCancellationAttemptService {
 		String failDetail,
 		LocalDateTime respondedAt
 	) {
-		Payment attempt = paymentRepository.findCancelAttempt(merchantPayKey, provider, pgPaymentId)
-			.orElseThrow(() -> new PaymentException(PaymentErrorCode.PAYMENT_ATTEMPT_NOT_FOUND));
-		attempt.fail(failCode, failDetail, respondedAt);
+		Payment payment = paymentRepository.findCancelPayment(merchantPayKey, provider, pgPaymentId)
+			.orElseThrow(() -> new PaymentException(PaymentErrorCode.PAYMENT_RECORD_NOT_FOUND));
+		payment.fail(failCode, failDetail, respondedAt);
+		paymentRepository.save(payment);
 	}
 }

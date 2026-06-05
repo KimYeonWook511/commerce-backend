@@ -23,7 +23,7 @@ import org.springframework.test.context.DynamicPropertySource;
 import com.commerce.payment.domain.PaymentProvider;
 import com.commerce.payment.domain.PaymentReservation;
 import com.commerce.payment.domain.PaymentType;
-import com.commerce.payment.application.PaymentApprovalAttemptService;
+import com.commerce.payment.application.PaymentApprovalRecordService;
 import com.commerce.payment.infrastructure.persistence.support.PaymentPersistenceTestSupport;
 import com.commerce.payment.infrastructure.persistence.support.PaymentReservationPersistenceTestSupport;
 import com.commerce.member.infrastructure.persistence.support.MemberPersistenceTestSupport;
@@ -37,10 +37,10 @@ import com.commerce.support.PersistenceCleanupTestSupport;
 @SpringBootTest
 @ActiveProfiles("test")
 @Import({PersistenceCleanupTestSupport.class, PaymentPersistenceTestSupport.class, PaymentReservationPersistenceTestSupport.class, MemberPersistenceTestSupport.class, ProductPersistenceTestSupport.class, OrderPersistenceTestSupport.class})
-class PaymentApprovalAttemptServiceConcurrencyTest {
+class PaymentApprovalRecordServiceConcurrencyTest {
 
 	@Autowired
-	private PaymentApprovalAttemptService paymentApprovalAttemptService;
+	private PaymentApprovalRecordService paymentApprovalRecordService;
 
 	@Autowired
 	private PaymentPersistenceTestSupport paymentPersistence;
@@ -72,23 +72,23 @@ class PaymentApprovalAttemptServiceConcurrencyTest {
 		);
 	}
 
-	@DisplayName("동시에 같은 키로 멱등 재요청해도 사전 find 분기로 모두 같은 approve attempt를 반환한다")
+	@DisplayName("동시에 같은 키로 멱등 재요청해도 사전 find 분기로 모두 같은 approve payment를 반환한다")
 	@Test
-	void create_whenConcurrentIdempotentRequest_returnSameApproveAttempt() throws Exception {
-		// given: reservation 선행 생성 후 approve attempt 선행 생성
-		String merchantPayKey = "PAY-ATTEMPT-CON-1";
-		String pgPaymentId = "pg-attempt-con-1";
+	void create_whenConcurrentIdempotentRequest_returnSameApprovePayment() throws Exception {
+		// given: reservation 선행 생성 후 approve payment 선행 생성
+		String merchantPayKey = "PAY-RECORD-CON-1";
+		String pgPaymentId = "pg-record-con-1";
 		PaymentReservation reservation = reservationPersistence.save(
 			PaymentReservation.createReserved(1L, 1L, 1000, PaymentProvider.NAVERPAY, merchantPayKey,
 				LocalDateTime.now().plusMinutes(15))
 		);
-		paymentApprovalAttemptService.create(reservation, pgPaymentId);
+		paymentApprovalRecordService.create(reservation, pgPaymentId);
 		ConcurrentLinkedQueue<Throwable> errors = new ConcurrentLinkedQueue<>();
 
 		// when: 20개 스레드가 동일한 pgPaymentId로 동시 재요청
-		runConcurrent(20, () -> paymentApprovalAttemptService.create(reservation, pgPaymentId), errors);
+		runConcurrent(20, () -> paymentApprovalRecordService.create(reservation, pgPaymentId), errors);
 
-		// then: 사전 find 분기로 모두 흡수되어 attempt는 1건, 에러 없음
+		// then: 사전 find 분기로 모두 흡수되어 payment는 1건, 에러 없음
 		assertThat(paymentPersistence.countPayments(merchantPayKey, pgPaymentId, PaymentType.APPROVE))
 			.isEqualTo(1L);
 		assertThat(errors).isEmpty();

@@ -24,14 +24,14 @@ public class PaymentRepositoryAdapter implements PaymentRepository {
 	}
 
 	@Override
-	public Optional<Payment> findApproveAttempt(String merchantPayKey, PaymentProvider provider, String pgPaymentId) {
+	public Optional<Payment> findApprovePayment(String merchantPayKey, PaymentProvider provider, String pgPaymentId) {
 		return jpaPaymentRepository.findByMerchantPayKeyAndProviderAndPgPaymentIdAndType(
 			merchantPayKey, provider, pgPaymentId, PaymentType.APPROVE
 		);
 	}
 
 	@Override
-	public Optional<Payment> findCancelAttempt(String merchantPayKey, PaymentProvider provider, String pgPaymentId) {
+	public Optional<Payment> findCancelPayment(String merchantPayKey, PaymentProvider provider, String pgPaymentId) {
 		return jpaPaymentRepository.findByMerchantPayKeyAndProviderAndPgPaymentIdAndType(
 			merchantPayKey, provider, pgPaymentId, PaymentType.CANCEL
 		);

@@ -43,7 +43,7 @@ import com.commerce.payment.naverpay.application.port.result.NaverPayApproveResu
 import com.commerce.payment.naverpay.application.port.result.NaverPayCancelResult;
 import com.commerce.payment.naverpay.application.port.result.NaverPayHistoryResult;
 import com.commerce.payment.application.PaymentApprovalService;
-import com.commerce.payment.application.PaymentCancellationAttemptService;
+import com.commerce.payment.application.PaymentCancellationService;
 import com.commerce.payment.infrastructure.persistence.support.PaymentPersistenceTestSupport;
 import com.commerce.payment.infrastructure.persistence.support.PaymentReservationPersistenceTestSupport;
 import com.commerce.member.infrastructure.persistence.support.MemberPersistenceTestSupport;
@@ -83,16 +83,16 @@ class NaverPayServiceIntegrationTest {
 	private PaymentApprovalService paymentApprovalService;
 
 	// succeed / fail 강제 예외 주입 시나리오용 spy.
-	// find-first 리팩토링 이후 H2 우회용 getOrCreate*Attempt doReturn 스텁은 모두 제거됐다.
+	// find-first 리팩토링 이후 H2 우회용 getOrCreate* doReturn 스텁은 모두 제거됐다.
 	@MockitoSpyBean
-	private PaymentCancellationAttemptService paymentCancellationAttemptService;
+	private PaymentCancellationService paymentCancellationService;
 
 	@Autowired
 	private PersistenceCleanupTestSupport persistenceCleanup;
 
 	@AfterEach
 	void tearDown() {
-		Mockito.reset(naverPayGateway, paymentApprovalService, paymentCancellationAttemptService);
+		Mockito.reset(naverPayGateway, paymentApprovalService, paymentCancellationService);
 		persistenceCleanup.deleteAllInBatch(
 			paymentPersistence, reservationPersistence, memberPersistence, productPersistence, orderPersistence
 		);
@@ -103,9 +103,9 @@ class NaverPayServiceIntegrationTest {
 	 * 1. 정상 승인
 	 * ===================================================
 	 */
-	@DisplayName("승인이 성공하면 payment를 생성하고 order를 PAID로 변경하며 approve attempt를 SUCCEEDED로 저장한다")
+	@DisplayName("승인이 성공하면 payment를 생성하고 order를 PAID로 변경하며 approve payment를 SUCCEEDED로 저장한다")
 	@Test
-	void approve_whenSuccess_createPaymentAndMarkOrderPaidAndSucceedAttempt() {
+	void approve_whenSuccess_createPaymentAndMarkOrderPaidAndSucceedPayment() {
 		// given
 		Member member = memberPersistence.save(createMember());
 		Order order = persistOrder(member, "PAY-INT-1", 1000);
@@ -209,7 +209,7 @@ class NaverPayServiceIntegrationTest {
 				.isEqualTo(PaymentErrorCode.PAYMENT_NOT_FOUND));
 	}
 
-	@DisplayName("AlreadyComplete 응답 이후 history가 취소 완료 상태면 approve attempt를 ALREADY_CANCELED로 실패 처리하고 PAYMENT_ALREADY_CANCELED를 던진다")
+	@DisplayName("AlreadyComplete 응답 이후 history가 취소 완료 상태면 approve payment를 ALREADY_CANCELED로 실패 처리하고 PAYMENT_ALREADY_CANCELED를 던진다")
 	@Test
 	void approve_whenAlreadyCompleteAndHistoryCanceled_throwAlreadyCanceled() {
 		// given
@@ -254,9 +254,9 @@ class NaverPayServiceIntegrationTest {
 	 * 4. merchantPayKey 불일치
 	 * ===================================================
 	 */
-	@DisplayName("approve 응답 merchantPayKey가 다르면 approve attempt를 FAILED로 저장하고 취소는 요청하지 않는다")
+	@DisplayName("approve 응답 merchantPayKey가 다르면 approve payment를 FAILED로 저장하고 취소는 요청하지 않는다")
 	@Test
-	void approve_whenApproveMerchantPayKeyMismatch_failAttemptWithoutCancel() {
+	void approve_whenApproveMerchantPayKeyMismatch_failPaymentWithoutCancel() {
 		// given
 		Member member = memberPersistence.save(createMember());
 		persistOrder(member, "PAY-INT-4-1", 1000);
@@ -274,9 +274,9 @@ class NaverPayServiceIntegrationTest {
 		then(naverPayGateway).should(never()).cancel(any(), anyInt(), any());
 	}
 
-	@DisplayName("history 경로 merchantPayKey가 다르면 approve attempt를 FAILED로 저장하고 취소는 요청하지 않는다")
+	@DisplayName("history 경로 merchantPayKey가 다르면 approve payment를 FAILED로 저장하고 취소는 요청하지 않는다")
 	@Test
-	void approve_whenHistoryMerchantPayKeyMismatch_failAttemptWithoutCancel() {
+	void approve_whenHistoryMerchantPayKeyMismatch_failPaymentWithoutCancel() {
 		// given
 		Member member = memberPersistence.save(createMember());
 		persistOrder(member, "PAY-INT-4-2", 1000);
@@ -321,7 +321,7 @@ class NaverPayServiceIntegrationTest {
 			.isEqualTo(PaymentStatus.SUCCEEDED);
 	}
 
-	@DisplayName("금액 불일치에서 cancel 응답이 AlreadyCanceled면 cancel attempt를 SUCCEEDED로 저장한다")
+	@DisplayName("금액 불일치에서 cancel 응답이 AlreadyCanceled면 cancel payment를 SUCCEEDED로 저장한다")
 	@Test
 	void approve_whenAmountMismatchAndCancelAlreadyCanceled_markCancelSucceeded() {
 		// given
@@ -341,7 +341,7 @@ class NaverPayServiceIntegrationTest {
 			.isEqualTo(PaymentStatus.SUCCEEDED);
 	}
 
-	@DisplayName("금액 불일치에서 cancel 응답이 AlreadyOnGoing이면 cancel attempt를 REQUESTED로 유지한다")
+	@DisplayName("금액 불일치에서 cancel 응답이 AlreadyOnGoing이면 cancel payment를 REQUESTED로 유지한다")
 	@Test
 	void approve_whenAmountMismatchAndCancelAlreadyOnGoing_keepCancelRequested() {
 		// given
@@ -361,7 +361,7 @@ class NaverPayServiceIntegrationTest {
 			.isEqualTo(PaymentStatus.REQUESTED);
 	}
 
-	@DisplayName("금액 불일치에서 cancel 응답이 Fail이면 cancel attempt를 FAILED로 저장한다")
+	@DisplayName("금액 불일치에서 cancel 응답이 Fail이면 cancel payment를 FAILED로 저장한다")
 	@Test
 	void approve_whenAmountMismatchAndCancelFail_markCancelFailed() {
 		// given
@@ -394,7 +394,7 @@ class NaverPayServiceIntegrationTest {
 		persistOrder(member, "PAY-INT-6-1", 1000);
 		PaymentReservation reservation = reservationPersistence.findByMerchantPayKey("PAY-INT-6-1").orElseThrow();
 		// USED: 이미 한 번 approve 흐름을 통과한 상태 (같은 pgPaymentId로 redirect 중복 도착 시나리오)
-		reservation.markUsed();
+		reservation.use();
 		reservationPersistence.save(reservation);
 		Payment existingPayment = Payment.createRequested(reservation, PaymentType.APPROVE, "pg-int-6-1");
 		existingPayment.succeed(LocalDateTime.now());
@@ -442,11 +442,11 @@ class NaverPayServiceIntegrationTest {
 		// given
 		Member member = memberPersistence.save(createMember());
 		persistOrder(member, "PAY-INT-6-3", 1000);
-		Payment cancelAttempt = Payment.createCancelRequested(
+		Payment cancelPayment = Payment.createCancelRequested(
 			1L, "PAY-INT-6-3", "pg-int-6-3", 1000, PaymentProvider.NAVERPAY
 		);
-		cancelAttempt.succeed(LocalDateTime.now());
-		paymentPersistence.save(cancelAttempt);
+		cancelPayment.succeed(LocalDateTime.now());
+		paymentPersistence.save(cancelPayment);
 
 		given(naverPayGateway.approve("pg-int-6-3"))
 			.willReturn(NaverPayApproveResult.success("PAY-INT-6-3", 1000));
@@ -464,7 +464,7 @@ class NaverPayServiceIntegrationTest {
 		then(naverPayGateway).should(never()).cancel(any(), anyInt(), any());
 	}
 
-	@DisplayName("succeedApproval에서 PAYMENT_DUPLICATE가 발생하고 취소가 실패하면 cancel attempt를 FAILED로 저장한다")
+	@DisplayName("succeedApproval에서 PAYMENT_DUPLICATE가 발생하고 취소가 실패하면 cancel payment를 FAILED로 저장한다")
 	@Test
 	void approve_whenCompleteApproveThrowsDuplicateAndCancelFail_markCancelFailed() {
 		// given
@@ -491,7 +491,7 @@ class NaverPayServiceIntegrationTest {
 			.isEqualTo(PaymentStatus.FAILED);
 	}
 
-	@DisplayName("이미 취소 진행 중인 시도가 있으면 succeedApproval 중복 예외에서도 cancel attempt를 REQUESTED로 유지한다")
+	@DisplayName("이미 취소 진행 중인 시도가 있으면 succeedApproval 중복 예외에서도 cancel payment를 REQUESTED로 유지한다")
 	@Test
 	void approve_whenCompleteApproveThrowsDuplicateAndCancelAlreadyOnGoing_keepCancelRequested() {
 		// given
@@ -520,20 +520,20 @@ class NaverPayServiceIntegrationTest {
 
 	/**
 	 * ===================================================
-	 * 7. attempt 상태 분기
+	 * 7. payment 상태 분기
 	 * ===================================================
 	 */
-	@DisplayName("approve attempt가 FAILED면 PG 호출 없이 즉시 예외를 던진다")
+	@DisplayName("approve payment가 FAILED면 PG 호출 없이 즉시 예외를 던진다")
 	@Test
-	void approve_whenAttemptAlreadyFailed_throwImmediatelyWithoutPgCall() {
+	void approve_whenPaymentAlreadyFailed_throwImmediatelyWithoutPgCall() {
 		// given
 		Member member = memberPersistence.save(createMember());
 		persistOrder(member, "PAY-INT-7-1", 1000);
 
 		PaymentReservation reservation = reservationPersistence.findByMerchantPayKey("PAY-INT-7-1").orElseThrow();
-		Payment attempt = Payment.createRequested(reservation, PaymentType.APPROVE, "pg-int-7-1");
-		attempt.fail(PaymentFailCode.TIME_EXPIRED, "expired", LocalDateTime.now());
-		paymentPersistence.save(attempt);
+		Payment payment = Payment.createRequested(reservation, PaymentType.APPROVE, "pg-int-7-1");
+		payment.fail(PaymentFailCode.TIME_EXPIRED, "expired", LocalDateTime.now());
+		paymentPersistence.save(payment);
 
 		// when & then
 		assertThatThrownBy(() -> naverPayApprovalService.approve(member.getId(), "PAY-INT-7-1", "pg-int-7-1"))
@@ -550,7 +550,7 @@ class NaverPayServiceIntegrationTest {
 	 */
 	@DisplayName("approve 호출에서 네트워크 오류가 발생하면 PG_NETWORK_ERROR로 실패 처리한다")
 	@Test
-	void approve_whenNetworkError_markApproveAttemptFailed() {
+	void approve_whenNetworkError_markApprovePaymentFailed() {
 		// given
 		Member member = memberPersistence.save(createMember());
 		persistOrder(member, "PAY-INT-8-1", 1000);
@@ -569,7 +569,7 @@ class NaverPayServiceIntegrationTest {
 
 	@DisplayName("approve 호출에서 서버 오류가 발생하면 PG_SERVER_ERROR로 실패 처리한다")
 	@Test
-	void approve_whenServerError_markApproveAttemptFailed() {
+	void approve_whenServerError_markApprovePaymentFailed() {
 		// given
 		Member member = memberPersistence.save(createMember());
 		persistOrder(member, "PAY-INT-8-2", 1000);
@@ -682,7 +682,7 @@ class NaverPayServiceIntegrationTest {
 
 	@DisplayName("취소 API는 성공했지만 취소 성공 반영이 실패해도 원래 승인 실패 예외를 유지한다")
 	@Test
-	void approve_whenCancelSuccessButSucceedCancelAttemptFails_keepOriginalException() {
+	void approve_whenCancelSuccessButSucceedCancelPaymentFails_keepOriginalException() {
 		// given
 		Member member = memberPersistence.save(createMember());
 		persistOrder(member, "PAY-INT-9-2", 1000);
@@ -690,8 +690,8 @@ class NaverPayServiceIntegrationTest {
 			.willReturn(NaverPayApproveResult.success("PAY-INT-9-2", 2000));
 		given(naverPayGateway.cancel(any(), anyInt(), any()))
 			.willReturn(NaverPayCancelResult.success());
-		Mockito.doThrow(new PaymentException(PaymentErrorCode.PAYMENT_ATTEMPT_NOT_FOUND))
-			.when(paymentCancellationAttemptService)
+		Mockito.doThrow(new PaymentException(PaymentErrorCode.PAYMENT_RECORD_NOT_FOUND))
+			.when(paymentCancellationService)
 			.succeed(eq("PAY-INT-9-2"), eq(PaymentProvider.NAVERPAY), eq("pg-int-9-2"), any(LocalDateTime.class));
 
 		// when & then
@@ -704,7 +704,7 @@ class NaverPayServiceIntegrationTest {
 
 	@DisplayName("취소 API는 실패 응답을 줬지만 취소 실패 반영이 실패해도 원래 승인 실패 예외를 유지한다")
 	@Test
-	void approve_whenCancelFailAndFailCancelAttemptFails_keepOriginalException() {
+	void approve_whenCancelFailAndFailCancelPaymentFails_keepOriginalException() {
 		// given
 		Member member = memberPersistence.save(createMember());
 		persistOrder(member, "PAY-INT-9-3", 1000);
@@ -712,8 +712,8 @@ class NaverPayServiceIntegrationTest {
 			.willReturn(NaverPayApproveResult.success("PAY-INT-9-3", 2000));
 		given(naverPayGateway.cancel(any(), anyInt(), any()))
 			.willReturn(NaverPayCancelResult.failed(PaymentFailCode.PG_REQUEST_REJECTED, "기타 실패"));
-		Mockito.doThrow(new PaymentException(PaymentErrorCode.PAYMENT_ATTEMPT_NOT_FOUND))
-			.when(paymentCancellationAttemptService)
+		Mockito.doThrow(new PaymentException(PaymentErrorCode.PAYMENT_RECORD_NOT_FOUND))
+			.when(paymentCancellationService)
 			.fail(
 				eq("PAY-INT-9-3"),
 				eq(PaymentProvider.NAVERPAY),
@@ -753,7 +753,7 @@ class NaverPayServiceIntegrationTest {
 
 	@DisplayName("다른 사용자의 pgPaymentId로 승인 응답을 받아 merchantPayKey가 다르면 실패 처리하고 취소하지 않는다")
 	@Test
-	void approve_whenForeignPgPaymentIdReturnsDifferentMerchantPayKey_failAttemptWithoutCancel() {
+	void approve_whenForeignPgPaymentIdReturnsDifferentMerchantPayKey_failPaymentWithoutCancel() {
 		// given
 		Member member = memberPersistence.save(createMember());
 		persistOrder(member, "PAY-INT-10-2", 1000);
@@ -774,7 +774,7 @@ class NaverPayServiceIntegrationTest {
 
 	@DisplayName("다른 사용자의 pgPaymentId로 AlreadyComplete 응답을 받았고 history merchantPayKey가 다르면 실패 처리하고 취소하지 않는다")
 	@Test
-	void approve_whenForeignPgPaymentIdHistoryReturnsDifferentMerchantPayKey_failAttemptWithoutCancel() {
+	void approve_whenForeignPgPaymentIdHistoryReturnsDifferentMerchantPayKey_failPaymentWithoutCancel() {
 		// given
 		Member member = memberPersistence.save(createMember());
 		persistOrder(member, "PAY-INT-10-3", 1000);
@@ -807,16 +807,16 @@ class NaverPayServiceIntegrationTest {
 	 * 12. 운영 복구/배치
 	 * ===================================================
 	 */
-	@DisplayName("approve attempt가 이미 SUCCEEDED이면 PG 호출 없이 기존 결제를 바로 반환한다")
+	@DisplayName("approve payment가 이미 SUCCEEDED이면 PG 호출 없이 기존 결제를 바로 반환한다")
 	@Test
-	void approve_whenAttemptAlreadySucceeded_returnSuccessDirectly() {
+	void approve_whenPaymentAlreadySucceeded_returnSuccessDirectly() {
 		// given
 		Member member = memberPersistence.save(createMember());
 		persistOrder(member, "PAY-INT-12-1", 1000);
 		PaymentReservation reservation = reservationPersistence.findByMerchantPayKey("PAY-INT-12-1").orElseThrow();
-		Payment attempt = Payment.createRequested(reservation, PaymentType.APPROVE, "pg-int-12-1");
-		attempt.succeed(LocalDateTime.now());
-		paymentPersistence.save(attempt);
+		Payment payment = Payment.createRequested(reservation, PaymentType.APPROVE, "pg-int-12-1");
+		payment.succeed(LocalDateTime.now());
+		paymentPersistence.save(payment);
 
 		// when
 		NaverPayApproveResponse result = naverPayApprovalService.approve(member.getId(), "PAY-INT-12-1", "pg-int-12-1");

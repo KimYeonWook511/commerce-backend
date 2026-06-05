@@ -27,7 +27,7 @@ import com.commerce.order.domain.Order;
 import com.commerce.order.domain.repository.OrderRepository;
 import com.commerce.order.exception.OrderErrorCode;
 import com.commerce.order.exception.OrderException;
-import com.commerce.payment.application.PaymentApprovalAttemptService;
+import com.commerce.payment.application.PaymentApprovalRecordService;
 import com.commerce.payment.application.PaymentApprovalCompensationService;
 import com.commerce.payment.application.PaymentApprovalService;
 import com.commerce.payment.application.port.result.CancelOutcome;
@@ -58,7 +58,7 @@ class NaverPayApprovalServiceTest {
 	private PaymentApprovalService paymentApprovalService;
 
 	@Mock
-	private PaymentApprovalAttemptService paymentApprovalAttemptService;
+	private PaymentApprovalRecordService paymentApprovalRecordService;
 
 	@Mock
 	private PaymentApprovalCompensationService paymentApprovalCompensationService;
@@ -128,7 +128,7 @@ class NaverPayApprovalServiceTest {
 				assertThat(paymentException.getErrorCode()).isEqualTo(PaymentErrorCode.PAYMENT_RESULT_PENDING);
 			});
 		then(naverPayGateway).should(never()).approve(any());
-		then(paymentApprovalAttemptService).should(never()).create(any(), any());
+		then(paymentApprovalRecordService).should(never()).create(any(), any());
 	}
 
 	@DisplayName("USED Reservation에 같은 merchantPayKey redirect가 중복 도착하면 기존 결제 결과를 반환한다 (멱등 응답)")
@@ -138,56 +138,56 @@ class NaverPayApprovalServiceTest {
 		long memberId = 1L;
 		PaymentReservation reservation = createUsedReservation("PAY-1", memberId, 1000);
 		Order order = createOrder(1000);
-		Payment succeededAttempt = createAttempt("PAY-1", "pg-payment-id", 1000);
-		succeededAttempt.succeed(LocalDateTime.now());
+		Payment succeededPayment = createPayment("PAY-1", "pg-payment-id", 1000);
+		succeededPayment.succeed(LocalDateTime.now());
 
 		given(paymentReservationRepository.findByMerchantPayKey("PAY-1")).willReturn(Optional.of(reservation));
 		given(orderRepository.findByIdAndMemberId(reservation.getOrderId(), memberId)).willReturn(Optional.of(order));
 		given(paymentRepository.existsUnknownByOrderId(reservation.getOrderId())).willReturn(false);
-		given(paymentRepository.findApproveAttempt("PAY-1", PaymentProvider.NAVERPAY, "pg-payment-id"))
-			.willReturn(Optional.of(succeededAttempt));
+		given(paymentRepository.findApprovePayment("PAY-1", PaymentProvider.NAVERPAY, "pg-payment-id"))
+			.willReturn(Optional.of(succeededPayment));
 
 		// when
 		assertThatNoException().isThrownBy(() -> {
 			NaverPayApproveResponse result = naverPayApprovalService.approve(memberId, "PAY-1", "pg-payment-id");
 
-			// then: 멱등 200 응답 — PG 호출 0회, 새 attempt/reservation save 0회
+			// then: 멱등 200 응답 — PG 호출 0회, 새 payment/reservation save 0회
 			assertThat(result.getStatus()).isEqualTo(NaverPayApproveStatus.SUCCESS);
 			assertThat(result.getPgPaymentId()).isEqualTo("pg-payment-id");
 		});
 		then(naverPayGateway).should(never()).approve(any());
-		then(paymentApprovalAttemptService).should(never()).create(any(), any());
+		then(paymentApprovalRecordService).should(never()).create(any(), any());
 		then(paymentRepository).should(never()).save(any());
 		then(paymentReservationRepository).should(never()).save(any());
 	}
 
 	@DisplayName("USED Reservation이지만 기존 시도가 REQUESTED로 미완료면 PG를 재확인해 결제를 완료한다 (영구 차단 방지)")
 	@Test
-	void approve_whenReservationUsedAndAttemptRequested_reprocessesPgAndCompletes() {
-		// given: 첫 redirect에서 attempt 생성 후 PG PROCESSING/중단으로 REQUESTED 잔존, reservation은 USED
+	void approve_whenReservationUsedAndPaymentRequested_reprocessesPgAndCompletes() {
+		// given: 첫 redirect에서 payment 생성 후 PG PROCESSING/중단으로 REQUESTED 잔존, reservation은 USED
 		long memberId = 1L;
 		PaymentReservation reservation = createUsedReservation("PAY-1", memberId, 1000);
 		Order order = createOrder(1000);
-		Payment requestedAttempt = createAttempt("PAY-1", "pg-payment-id", 1000);
-		Payment completedAttempt = createAttempt("PAY-1", "pg-payment-id", 1000);
-		completedAttempt.succeed(LocalDateTime.now());
+		Payment requestedPayment = createPayment("PAY-1", "pg-payment-id", 1000);
+		Payment completedPayment = createPayment("PAY-1", "pg-payment-id", 1000);
+		completedPayment.succeed(LocalDateTime.now());
 
 		given(paymentReservationRepository.findByMerchantPayKey("PAY-1")).willReturn(Optional.of(reservation));
 		given(orderRepository.findByIdAndMemberId(reservation.getOrderId(), memberId)).willReturn(Optional.of(order));
 		given(paymentRepository.existsUnknownByOrderId(reservation.getOrderId())).willReturn(false);
-		given(paymentRepository.findApproveAttempt("PAY-1", PaymentProvider.NAVERPAY, "pg-payment-id"))
-			.willReturn(Optional.of(requestedAttempt));
+		given(paymentRepository.findApprovePayment("PAY-1", PaymentProvider.NAVERPAY, "pg-payment-id"))
+			.willReturn(Optional.of(requestedPayment));
 		given(naverPayGateway.approve("pg-payment-id"))
 			.willReturn(NaverPayApproveResult.success("PAY-1", 1000));
-		given(paymentApprovalService.succeedApproval(any(Payment.class), any())).willReturn(completedAttempt);
+		given(paymentApprovalService.succeedApproval(any(Payment.class), any())).willReturn(completedPayment);
 
 		// when
 		NaverPayApproveResponse result = naverPayApprovalService.approve(memberId, "PAY-1", "pg-payment-id");
 
-		// then: 새 attempt 생성 없이 기존 REQUESTED 시도를 재확인해 성공 완료
+		// then: 새 payment 생성 없이 기존 REQUESTED 시도를 재확인해 성공 완료
 		assertThat(result.getStatus()).isEqualTo(NaverPayApproveStatus.SUCCESS);
 		then(naverPayGateway).should().approve("pg-payment-id");
-		then(paymentApprovalAttemptService).should(never()).create(any(), any());
+		then(paymentApprovalRecordService).should(never()).create(any(), any());
 	}
 
 	@DisplayName("승인 응답 코드가 Success면 결제 완료를 반영하고 성공 결과를 반환한다")
@@ -197,17 +197,17 @@ class NaverPayApprovalServiceTest {
 		long memberId = 1L;
 		PaymentReservation reservation = createReservation("PAY-1", memberId, 1000);
 		Order order = createOrder(1000);
-		Payment attempt = createAttempt("PAY-1", "pg-payment-id", 1000);
-		Payment completedAttempt = createAttempt("PAY-1", "pg-payment-id", 1000);
-		completedAttempt.succeed(LocalDateTime.now());
+		Payment payment = createPayment("PAY-1", "pg-payment-id", 1000);
+		Payment completedPayment = createPayment("PAY-1", "pg-payment-id", 1000);
+		completedPayment.succeed(LocalDateTime.now());
 
 		given(paymentReservationRepository.findByMerchantPayKey("PAY-1")).willReturn(Optional.of(reservation));
 		given(orderRepository.findByIdAndMemberId(reservation.getOrderId(), memberId)).willReturn(Optional.of(order));
-		given(paymentApprovalAttemptService.create(any(PaymentReservation.class), eq("pg-payment-id")))
-			.willReturn(attempt);
+		given(paymentApprovalRecordService.create(any(PaymentReservation.class), eq("pg-payment-id")))
+			.willReturn(payment);
 		given(naverPayGateway.approve("pg-payment-id"))
 			.willReturn(NaverPayApproveResult.success("PAY-1", 1000));
-		given(paymentApprovalService.succeedApproval(any(Payment.class), any())).willReturn(completedAttempt);
+		given(paymentApprovalService.succeedApproval(any(Payment.class), any())).willReturn(completedPayment);
 
 		// when
 		NaverPayApproveResponse result = naverPayApprovalService.approve(memberId, "PAY-1", "pg-payment-id");
@@ -215,7 +215,7 @@ class NaverPayApprovalServiceTest {
 		// then
 		assertThat(result.getStatus()).isEqualTo(NaverPayApproveStatus.SUCCESS);
 		assertThat(result.getPgPaymentId()).isEqualTo("pg-payment-id");
-		then(paymentApprovalAttemptService).should()
+		then(paymentApprovalRecordService).should()
 			.create(any(PaymentReservation.class), eq("pg-payment-id"));
 		then(paymentApprovalService).should().succeedApproval(any(Payment.class), any());
 	}
@@ -227,12 +227,12 @@ class NaverPayApprovalServiceTest {
 		long memberId = 1L;
 		PaymentReservation reservation = createReservation("PAY-1", memberId, 1000);
 		Order order = createOrder(1000);
-		Payment attempt = createAttempt("PAY-1", "pg-payment-id", 1000);
+		Payment payment = createPayment("PAY-1", "pg-payment-id", 1000);
 
 		given(paymentReservationRepository.findByMerchantPayKey("PAY-1")).willReturn(Optional.of(reservation));
 		given(orderRepository.findByIdAndMemberId(reservation.getOrderId(), memberId)).willReturn(Optional.of(order));
-		given(paymentApprovalAttemptService.create(any(PaymentReservation.class), eq("pg-payment-id")))
-			.willReturn(attempt);
+		given(paymentApprovalRecordService.create(any(PaymentReservation.class), eq("pg-payment-id")))
+			.willReturn(payment);
 		given(naverPayGateway.approve("pg-payment-id")).willReturn(NaverPayApproveResult.processing());
 
 		// when
@@ -251,18 +251,18 @@ class NaverPayApprovalServiceTest {
 		long memberId = 1L;
 		PaymentReservation reservation = createReservation("PAY-1", memberId, 1000);
 		Order order = createOrder(1000);
-		Payment attempt = createAttempt("PAY-1", "pg-payment-id", 1000);
-		Payment completedAttempt = createAttempt("PAY-1", "pg-payment-id", 1000);
-		completedAttempt.succeed(LocalDateTime.now());
+		Payment payment = createPayment("PAY-1", "pg-payment-id", 1000);
+		Payment completedPayment = createPayment("PAY-1", "pg-payment-id", 1000);
+		completedPayment.succeed(LocalDateTime.now());
 
 		given(paymentReservationRepository.findByMerchantPayKey("PAY-1")).willReturn(Optional.of(reservation));
 		given(orderRepository.findByIdAndMemberId(reservation.getOrderId(), memberId)).willReturn(Optional.of(order));
-		given(paymentApprovalAttemptService.create(any(PaymentReservation.class), eq("pg-payment-id")))
-			.willReturn(attempt);
+		given(paymentApprovalRecordService.create(any(PaymentReservation.class), eq("pg-payment-id")))
+			.willReturn(payment);
 		given(naverPayGateway.approve("pg-payment-id")).willReturn(NaverPayApproveResult.alreadyComplete());
 		given(naverPayGateway.getApprovalHistory("pg-payment-id"))
 			.willReturn(NaverPayHistoryResult.approved("PAY-1", 1000));
-		given(paymentApprovalService.succeedApproval(any(Payment.class), any())).willReturn(completedAttempt);
+		given(paymentApprovalService.succeedApproval(any(Payment.class), any())).willReturn(completedPayment);
 
 		// when
 		NaverPayApproveResponse result = naverPayApprovalService.approve(memberId, "PAY-1", "pg-payment-id");
@@ -272,19 +272,19 @@ class NaverPayApprovalServiceTest {
 		then(paymentApprovalService).should().succeedApproval(any(Payment.class), any());
 	}
 
-	@DisplayName("AlreadyComplete 경로에서 history merchantPayKey가 다르면 approve attempt를 실패 처리하고 PAYMENT_NOT_FOUND를 던진다")
+	@DisplayName("AlreadyComplete 경로에서 history merchantPayKey가 다르면 approve payment를 실패 처리하고 PAYMENT_NOT_FOUND를 던진다")
 	@Test
 	void approve_whenAlreadyCompleteAndHistoryMerchantPayKeyMismatch_markFailedAndThrowException() {
 		// given
 		long memberId = 1L;
 		PaymentReservation reservation = createReservation("PAY-1", memberId, 1000);
 		Order order = createOrder(1000);
-		Payment attempt = createAttempt("PAY-1", "pg-payment-id", 1000);
+		Payment payment = createPayment("PAY-1", "pg-payment-id", 1000);
 
 		given(paymentReservationRepository.findByMerchantPayKey("PAY-1")).willReturn(Optional.of(reservation));
 		given(orderRepository.findByIdAndMemberId(reservation.getOrderId(), memberId)).willReturn(Optional.of(order));
-		given(paymentApprovalAttemptService.create(any(PaymentReservation.class), eq("pg-payment-id")))
-			.willReturn(attempt);
+		given(paymentApprovalRecordService.create(any(PaymentReservation.class), eq("pg-payment-id")))
+			.willReturn(payment);
 		given(naverPayGateway.approve("pg-payment-id")).willReturn(NaverPayApproveResult.alreadyComplete());
 		given(naverPayGateway.getApprovalHistory("pg-payment-id"))
 			.willReturn(NaverPayHistoryResult.approved("OTHER-PAY", 1000));
@@ -296,7 +296,7 @@ class NaverPayApprovalServiceTest {
 				PaymentException paymentException = (PaymentException)exception;
 				assertThat(paymentException.getErrorCode()).isEqualTo(PaymentErrorCode.PAYMENT_NOT_FOUND);
 			});
-		then(paymentApprovalAttemptService).should().failIfRequested(
+		then(paymentApprovalRecordService).should().failIfRequested(
 			eq("PAY-1"), eq(PaymentProvider.NAVERPAY), eq("pg-payment-id"),
 			eq(PaymentFailCode.MERCHANT_PAY_KEY_MISMATCH), eq("가맹점 결제 키 불일치"), any());
 		then(naverPayGateway).should(never()).cancel(any(), anyInt(), any());
@@ -309,12 +309,12 @@ class NaverPayApprovalServiceTest {
 		long memberId = 1L;
 		PaymentReservation reservation = createReservation("PAY-1", memberId, 1000);
 		Order order = createOrder(1000);
-		Payment attempt = createAttempt("PAY-1", "pg-payment-id", 1000);
+		Payment payment = createPayment("PAY-1", "pg-payment-id", 1000);
 
 		given(paymentReservationRepository.findByMerchantPayKey("PAY-1")).willReturn(Optional.of(reservation));
 		given(orderRepository.findByIdAndMemberId(reservation.getOrderId(), memberId)).willReturn(Optional.of(order));
-		given(paymentApprovalAttemptService.create(any(PaymentReservation.class), eq("pg-payment-id")))
-			.willReturn(attempt);
+		given(paymentApprovalRecordService.create(any(PaymentReservation.class), eq("pg-payment-id")))
+			.willReturn(payment);
 		given(naverPayGateway.approve("pg-payment-id")).willReturn(NaverPayApproveResult.alreadyComplete());
 		given(naverPayGateway.getApprovalHistory("pg-payment-id"))
 			.willReturn(NaverPayHistoryResult.failed(PaymentErrorCode.PAYMENT_INVALID_MERCHANT));
@@ -335,12 +335,12 @@ class NaverPayApprovalServiceTest {
 		long memberId = 1L;
 		PaymentReservation reservation = createReservation("PAY-1", memberId, 1000);
 		Order order = createOrder(1000);
-		Payment attempt = createAttempt("PAY-1", "pg-payment-id", 1000);
+		Payment payment = createPayment("PAY-1", "pg-payment-id", 1000);
 
 		given(paymentReservationRepository.findByMerchantPayKey("PAY-1")).willReturn(Optional.of(reservation));
 		given(orderRepository.findByIdAndMemberId(reservation.getOrderId(), memberId)).willReturn(Optional.of(order));
-		given(paymentApprovalAttemptService.create(any(PaymentReservation.class), eq("pg-payment-id")))
-			.willReturn(attempt);
+		given(paymentApprovalRecordService.create(any(PaymentReservation.class), eq("pg-payment-id")))
+			.willReturn(payment);
 		given(naverPayGateway.approve("pg-payment-id")).willReturn(NaverPayApproveResult.alreadyComplete());
 		given(naverPayGateway.getApprovalHistory("pg-payment-id"))
 			.willReturn(NaverPayHistoryResult.failed(PaymentErrorCode.PAYMENT_NOT_FOUND));
@@ -354,19 +354,19 @@ class NaverPayApprovalServiceTest {
 			});
 	}
 
-	@DisplayName("AlreadyComplete 경로에서 history가 취소 완료 상태면 approve attempt를 ALREADY_CANCELED로 실패 처리하고 PAYMENT_ALREADY_CANCELED를 던진다")
+	@DisplayName("AlreadyComplete 경로에서 history가 취소 완료 상태면 approve payment를 ALREADY_CANCELED로 실패 처리하고 PAYMENT_ALREADY_CANCELED를 던진다")
 	@Test
 	void approve_whenAlreadyCompleteAndHistoryCanceled_markAlreadyCanceledAndThrowAlreadyCanceled() {
 		// given
 		long memberId = 1L;
 		PaymentReservation reservation = createReservation("PAY-1", memberId, 1000);
 		Order order = createOrder(1000);
-		Payment attempt = createAttempt("PAY-1", "pg-payment-id", 1000);
+		Payment payment = createPayment("PAY-1", "pg-payment-id", 1000);
 
 		given(paymentReservationRepository.findByMerchantPayKey("PAY-1")).willReturn(Optional.of(reservation));
 		given(orderRepository.findByIdAndMemberId(reservation.getOrderId(), memberId)).willReturn(Optional.of(order));
-		given(paymentApprovalAttemptService.create(any(PaymentReservation.class), eq("pg-payment-id")))
-			.willReturn(attempt);
+		given(paymentApprovalRecordService.create(any(PaymentReservation.class), eq("pg-payment-id")))
+			.willReturn(payment);
 		given(naverPayGateway.approve("pg-payment-id")).willReturn(NaverPayApproveResult.alreadyComplete());
 		given(naverPayGateway.getApprovalHistory("pg-payment-id")).willReturn(NaverPayHistoryResult.canceled());
 
@@ -377,7 +377,7 @@ class NaverPayApprovalServiceTest {
 				PaymentException paymentException = (PaymentException)exception;
 				assertThat(paymentException.getErrorCode()).isEqualTo(PaymentErrorCode.PAYMENT_ALREADY_CANCELED);
 			});
-		then(paymentApprovalAttemptService).should().failIfRequested(
+		then(paymentApprovalRecordService).should().failIfRequested(
 			eq("PAY-1"), eq(PaymentProvider.NAVERPAY), eq("pg-payment-id"),
 			eq(PaymentFailCode.ALREADY_CANCELED), eq("이미 취소된 결제"), any());
 	}
@@ -389,12 +389,12 @@ class NaverPayApprovalServiceTest {
 		long memberId = 1L;
 		PaymentReservation reservation = createReservation("PAY-1", memberId, 1000);
 		Order order = createOrder(1000);
-		Payment attempt = createAttempt("PAY-1", "pg-payment-id", 1000);
+		Payment payment = createPayment("PAY-1", "pg-payment-id", 1000);
 
 		given(paymentReservationRepository.findByMerchantPayKey("PAY-1")).willReturn(Optional.of(reservation));
 		given(orderRepository.findByIdAndMemberId(reservation.getOrderId(), memberId)).willReturn(Optional.of(order));
-		given(paymentApprovalAttemptService.create(any(PaymentReservation.class), eq("pg-payment-id")))
-			.willReturn(attempt);
+		given(paymentApprovalRecordService.create(any(PaymentReservation.class), eq("pg-payment-id")))
+			.willReturn(payment);
 		given(naverPayGateway.approve("pg-payment-id")).willReturn(NaverPayApproveResult.alreadyComplete());
 		given(naverPayGateway.getApprovalHistory("pg-payment-id"))
 			.willReturn(NaverPayHistoryResult.failed(PaymentErrorCode.PAYMENT_NOT_FOUND));
@@ -410,17 +410,17 @@ class NaverPayApprovalServiceTest {
 
 	@DisplayName("네트워크 오류면 결제 시도를 실패로 기록하고 예외를 던진다")
 	@Test
-	void approve_whenNetworkException_markAttemptFailedAndThrowException() {
+	void approve_whenNetworkException_markPaymentFailedAndThrowException() {
 		// given
 		long memberId = 1L;
 		PaymentReservation reservation = createReservation("PAY-1", memberId, 1000);
 		Order order = createOrder(1000);
-		Payment attempt = createAttempt("PAY-1", "pg-payment-id", 1000);
+		Payment payment = createPayment("PAY-1", "pg-payment-id", 1000);
 
 		given(paymentReservationRepository.findByMerchantPayKey("PAY-1")).willReturn(Optional.of(reservation));
 		given(orderRepository.findByIdAndMemberId(reservation.getOrderId(), memberId)).willReturn(Optional.of(order));
-		given(paymentApprovalAttemptService.create(any(PaymentReservation.class), eq("pg-payment-id")))
-			.willReturn(attempt);
+		given(paymentApprovalRecordService.create(any(PaymentReservation.class), eq("pg-payment-id")))
+			.willReturn(payment);
 		given(naverPayGateway.approve("pg-payment-id"))
 			.willReturn(NaverPayApproveResult.failed(
 				PaymentFailCode.PG_NETWORK_ERROR, PaymentErrorCode.PAYMENT_PG_NETWORK_ERROR, "network error"));
@@ -432,23 +432,23 @@ class NaverPayApprovalServiceTest {
 				PaymentException paymentException = (PaymentException)exception;
 				assertThat(paymentException.getErrorCode()).isEqualTo(PaymentErrorCode.PAYMENT_PG_NETWORK_ERROR);
 			});
-		then(paymentApprovalAttemptService).should().failIfRequested(eq("PAY-1"), eq(PaymentProvider.NAVERPAY),
+		then(paymentApprovalRecordService).should().failIfRequested(eq("PAY-1"), eq(PaymentProvider.NAVERPAY),
 			eq("pg-payment-id"), eq(PaymentFailCode.PG_NETWORK_ERROR), eq("network error"), any());
 	}
 
 	@DisplayName("서버 오류면 결제 시도를 실패로 기록하고 예외를 던진다")
 	@Test
-	void approve_whenServerException_markAttemptFailedAndThrowException() {
+	void approve_whenServerException_markPaymentFailedAndThrowException() {
 		// given
 		long memberId = 1L;
 		PaymentReservation reservation = createReservation("PAY-1", memberId, 1000);
 		Order order = createOrder(1000);
-		Payment attempt = createAttempt("PAY-1", "pg-payment-id", 1000);
+		Payment payment = createPayment("PAY-1", "pg-payment-id", 1000);
 
 		given(paymentReservationRepository.findByMerchantPayKey("PAY-1")).willReturn(Optional.of(reservation));
 		given(orderRepository.findByIdAndMemberId(reservation.getOrderId(), memberId)).willReturn(Optional.of(order));
-		given(paymentApprovalAttemptService.create(any(PaymentReservation.class), eq("pg-payment-id")))
-			.willReturn(attempt);
+		given(paymentApprovalRecordService.create(any(PaymentReservation.class), eq("pg-payment-id")))
+			.willReturn(payment);
 		given(naverPayGateway.approve("pg-payment-id"))
 			.willReturn(NaverPayApproveResult.failed(
 				PaymentFailCode.PG_SERVER_ERROR, PaymentErrorCode.PAYMENT_PG_SERVER_ERROR, "server error"));
@@ -460,23 +460,23 @@ class NaverPayApprovalServiceTest {
 				PaymentException paymentException = (PaymentException)exception;
 				assertThat(paymentException.getErrorCode()).isEqualTo(PaymentErrorCode.PAYMENT_PG_SERVER_ERROR);
 			});
-		then(paymentApprovalAttemptService).should().failIfRequested(eq("PAY-1"), eq(PaymentProvider.NAVERPAY),
+		then(paymentApprovalRecordService).should().failIfRequested(eq("PAY-1"), eq(PaymentProvider.NAVERPAY),
 			eq("pg-payment-id"), eq(PaymentFailCode.PG_SERVER_ERROR), eq("server error"), any());
 	}
 
 	@DisplayName("응답 파싱 오류면 결제 시도만 실패로 기록하고 예외를 던진다")
 	@Test
-	void approve_whenInvalidResponse_markAttemptFailedAndThrowException() {
+	void approve_whenInvalidResponse_markPaymentFailedAndThrowException() {
 		// given
 		long memberId = 1L;
 		PaymentReservation reservation = createReservation("PAY-1", memberId, 1000);
 		Order order = createOrder(1000);
-		Payment attempt = createAttempt("PAY-1", "pg-payment-id", 1000);
+		Payment payment = createPayment("PAY-1", "pg-payment-id", 1000);
 
 		given(paymentReservationRepository.findByMerchantPayKey("PAY-1")).willReturn(Optional.of(reservation));
 		given(orderRepository.findByIdAndMemberId(reservation.getOrderId(), memberId)).willReturn(Optional.of(order));
-		given(paymentApprovalAttemptService.create(any(PaymentReservation.class), eq("pg-payment-id")))
-			.willReturn(attempt);
+		given(paymentApprovalRecordService.create(any(PaymentReservation.class), eq("pg-payment-id")))
+			.willReturn(payment);
 		given(naverPayGateway.approve("pg-payment-id"))
 			.willReturn(NaverPayApproveResult.failed(
 				PaymentFailCode.PG_INVALID_RESPONSE, PaymentErrorCode.PAYMENT_PG_INVALID_RESPONSE, "invalid response"));
@@ -488,24 +488,24 @@ class NaverPayApprovalServiceTest {
 				PaymentException paymentException = (PaymentException)exception;
 				assertThat(paymentException.getErrorCode()).isEqualTo(PaymentErrorCode.PAYMENT_PG_INVALID_RESPONSE);
 			});
-		then(paymentApprovalAttemptService).should().failIfRequested(eq("PAY-1"), eq(PaymentProvider.NAVERPAY), eq("pg-payment-id"),
+		then(paymentApprovalRecordService).should().failIfRequested(eq("PAY-1"), eq(PaymentProvider.NAVERPAY), eq("pg-payment-id"),
 			eq(PaymentFailCode.PG_INVALID_RESPONSE), eq("invalid response"), any());
 		then(paymentApprovalService).should(never()).succeedApproval(any(), any());
 	}
 
 	@DisplayName("승인 가능 시간이 초과되면 결제 시도를 실패로 기록하고 예외를 던진다")
 	@Test
-	void approve_whenTimeExpired_markAttemptFailedAndThrowException() {
+	void approve_whenTimeExpired_markPaymentFailedAndThrowException() {
 		// given
 		long memberId = 1L;
 		PaymentReservation reservation = createReservation("PAY-1", memberId, 1000);
 		Order order = createOrder(1000);
-		Payment attempt = createAttempt("PAY-1", "pg-payment-id", 1000);
+		Payment payment = createPayment("PAY-1", "pg-payment-id", 1000);
 
 		given(paymentReservationRepository.findByMerchantPayKey("PAY-1")).willReturn(Optional.of(reservation));
 		given(orderRepository.findByIdAndMemberId(reservation.getOrderId(), memberId)).willReturn(Optional.of(order));
-		given(paymentApprovalAttemptService.create(any(PaymentReservation.class), eq("pg-payment-id")))
-			.willReturn(attempt);
+		given(paymentApprovalRecordService.create(any(PaymentReservation.class), eq("pg-payment-id")))
+			.willReturn(payment);
 		given(naverPayGateway.approve("pg-payment-id"))
 			.willReturn(NaverPayApproveResult.failed(
 				PaymentFailCode.TIME_EXPIRED, PaymentErrorCode.PAYMENT_TIME_EXPIRED, "결제 승인 가능 시간 초과 시 (10분 초과시)"));
@@ -517,23 +517,23 @@ class NaverPayApprovalServiceTest {
 				PaymentException paymentException = (PaymentException)exception;
 				assertThat(paymentException.getErrorCode()).isEqualTo(PaymentErrorCode.PAYMENT_TIME_EXPIRED);
 			});
-		then(paymentApprovalAttemptService).should().failIfRequested(eq("PAY-1"), eq(PaymentProvider.NAVERPAY), eq("pg-payment-id"),
+		then(paymentApprovalRecordService).should().failIfRequested(eq("PAY-1"), eq(PaymentProvider.NAVERPAY), eq("pg-payment-id"),
 			eq(PaymentFailCode.TIME_EXPIRED), eq("결제 승인 가능 시간 초과 시 (10분 초과시)"), any());
 	}
 
 	@DisplayName("PG 점검 코드면 결제 시도를 점검 사유로 실패 기록하고 예외를 던진다")
 	@Test
-	void approve_whenMaintenanceCode_markAttemptFailedAndThrowMaintenanceException() {
+	void approve_whenMaintenanceCode_markPaymentFailedAndThrowMaintenanceException() {
 		// given
 		long memberId = 1L;
 		PaymentReservation reservation = createReservation("PAY-1", memberId, 1000);
 		Order order = createOrder(1000);
-		Payment attempt = createAttempt("PAY-1", "pg-payment-id", 1000);
+		Payment payment = createPayment("PAY-1", "pg-payment-id", 1000);
 
 		given(paymentReservationRepository.findByMerchantPayKey("PAY-1")).willReturn(Optional.of(reservation));
 		given(orderRepository.findByIdAndMemberId(reservation.getOrderId(), memberId)).willReturn(Optional.of(order));
-		given(paymentApprovalAttemptService.create(any(PaymentReservation.class), eq("pg-payment-id")))
-			.willReturn(attempt);
+		given(paymentApprovalRecordService.create(any(PaymentReservation.class), eq("pg-payment-id")))
+			.willReturn(payment);
 		given(naverPayGateway.approve("pg-payment-id"))
 			.willReturn(NaverPayApproveResult.failed(
 				PaymentFailCode.PG_MAINTENANCE, PaymentErrorCode.PAYMENT_PG_MAINTENANCE, "서비스 점검중"));
@@ -545,7 +545,7 @@ class NaverPayApprovalServiceTest {
 				PaymentException paymentException = (PaymentException)exception;
 				assertThat(paymentException.getErrorCode()).isEqualTo(PaymentErrorCode.PAYMENT_PG_MAINTENANCE);
 			});
-		then(paymentApprovalAttemptService).should().failIfRequested(eq("PAY-1"), eq(PaymentProvider.NAVERPAY), eq("pg-payment-id"),
+		then(paymentApprovalRecordService).should().failIfRequested(eq("PAY-1"), eq(PaymentProvider.NAVERPAY), eq("pg-payment-id"),
 			eq(PaymentFailCode.PG_MAINTENANCE), eq("서비스 점검중"), any());
 	}
 
@@ -556,12 +556,12 @@ class NaverPayApprovalServiceTest {
 		long memberId = 1L;
 		PaymentReservation reservation = createReservation("PAY-1", memberId, 1000);
 		Order order = createOrder(1000);
-		Payment attempt = createAttempt("PAY-1", "pg-payment-id", 1000);
+		Payment payment = createPayment("PAY-1", "pg-payment-id", 1000);
 
 		given(paymentReservationRepository.findByMerchantPayKey("PAY-1")).willReturn(Optional.of(reservation));
 		given(orderRepository.findByIdAndMemberId(reservation.getOrderId(), memberId)).willReturn(Optional.of(order));
-		given(paymentApprovalAttemptService.create(any(PaymentReservation.class), eq("pg-payment-id")))
-			.willReturn(attempt);
+		given(paymentApprovalRecordService.create(any(PaymentReservation.class), eq("pg-payment-id")))
+			.willReturn(payment);
 		given(naverPayGateway.approve("pg-payment-id"))
 			.willReturn(NaverPayApproveResult.unknown("승인 호출 중 네트워크 오류: timeout"));
 
@@ -572,7 +572,7 @@ class NaverPayApprovalServiceTest {
 				PaymentException paymentException = (PaymentException)exception;
 				assertThat(paymentException.getErrorCode()).isEqualTo(PaymentErrorCode.PAYMENT_RESULT_PENDING);
 			});
-		then(paymentApprovalAttemptService).should().markUnknownIfRequested(
+		then(paymentApprovalRecordService).should().markUnknownIfRequested(
 			eq("PAY-1"), eq(PaymentProvider.NAVERPAY), eq("pg-payment-id"), any(), any());
 		then(paymentApprovalService).should(never()).succeedApproval(any(), any());
 	}
@@ -584,12 +584,12 @@ class NaverPayApprovalServiceTest {
 		long memberId = 1L;
 		PaymentReservation reservation = createReservation("PAY-1", memberId, 1000);
 		Order order = createOrder(1000);
-		Payment attempt = createAttempt("PAY-1", "pg-payment-id", 1000);
+		Payment payment = createPayment("PAY-1", "pg-payment-id", 1000);
 
 		given(paymentReservationRepository.findByMerchantPayKey("PAY-1")).willReturn(Optional.of(reservation));
 		given(orderRepository.findByIdAndMemberId(reservation.getOrderId(), memberId)).willReturn(Optional.of(order));
-		given(paymentApprovalAttemptService.create(any(PaymentReservation.class), eq("pg-payment-id")))
-			.willReturn(attempt);
+		given(paymentApprovalRecordService.create(any(PaymentReservation.class), eq("pg-payment-id")))
+			.willReturn(payment);
 		given(naverPayGateway.approve("pg-payment-id"))
 			.willReturn(NaverPayApproveResult.success("OTHER-PAY", 1000));
 
@@ -610,12 +610,12 @@ class NaverPayApprovalServiceTest {
 		long memberId = 1L;
 		PaymentReservation reservation = createReservation("PAY-1", memberId, 1000);
 		Order order = createOrder(1000);
-		Payment attempt = createAttempt("PAY-1", "pg-payment-id", 1000);
+		Payment payment = createPayment("PAY-1", "pg-payment-id", 1000);
 
 		given(paymentReservationRepository.findByMerchantPayKey("PAY-1")).willReturn(Optional.of(reservation));
 		given(orderRepository.findByIdAndMemberId(reservation.getOrderId(), memberId)).willReturn(Optional.of(order));
-		given(paymentApprovalAttemptService.create(any(PaymentReservation.class), eq("pg-payment-id")))
-			.willReturn(attempt);
+		given(paymentApprovalRecordService.create(any(PaymentReservation.class), eq("pg-payment-id")))
+			.willReturn(payment);
 		given(naverPayGateway.approve("pg-payment-id")).willReturn(NaverPayApproveResult.success("PAY-1", 2000));
 
 		// when & then
@@ -635,12 +635,12 @@ class NaverPayApprovalServiceTest {
 		long memberId = 1L;
 		PaymentReservation reservation = createReservation("PAY-1", memberId, 1000);
 		Order order = createOrder(1000);
-		Payment attempt = createAttempt("PAY-1", "pg-payment-id", 1000);
+		Payment payment = createPayment("PAY-1", "pg-payment-id", 1000);
 
 		given(paymentReservationRepository.findByMerchantPayKey("PAY-1")).willReturn(Optional.of(reservation));
 		given(orderRepository.findByIdAndMemberId(reservation.getOrderId(), memberId)).willReturn(Optional.of(order));
-		given(paymentApprovalAttemptService.create(any(PaymentReservation.class), eq("pg-payment-id")))
-			.willReturn(attempt);
+		given(paymentApprovalRecordService.create(any(PaymentReservation.class), eq("pg-payment-id")))
+			.willReturn(payment);
 		given(naverPayGateway.approve("pg-payment-id")).willReturn(NaverPayApproveResult.success("PAY-1", 1000));
 		given(paymentApprovalService.succeedApproval(any(Payment.class), any()))
 			.willThrow(new DataIntegrityViolationException("uk_payment_approved_order_key violation"));
@@ -661,12 +661,12 @@ class NaverPayApprovalServiceTest {
 		long memberId = 1L;
 		PaymentReservation reservation = createReservation("PAY-1", memberId, 1000);
 		Order order = createOrder(1000);
-		Payment attempt = createAttempt("PAY-1", "pg-payment-id", 1000);
+		Payment payment = createPayment("PAY-1", "pg-payment-id", 1000);
 
 		given(paymentReservationRepository.findByMerchantPayKey("PAY-1")).willReturn(Optional.of(reservation));
 		given(orderRepository.findByIdAndMemberId(reservation.getOrderId(), memberId)).willReturn(Optional.of(order));
-		given(paymentApprovalAttemptService.create(any(PaymentReservation.class), eq("pg-payment-id")))
-			.willReturn(attempt);
+		given(paymentApprovalRecordService.create(any(PaymentReservation.class), eq("pg-payment-id")))
+			.willReturn(payment);
 		given(naverPayGateway.approve("pg-payment-id")).willReturn(NaverPayApproveResult.success("PAY-1", 1000));
 		given(paymentApprovalService.succeedApproval(any(Payment.class), any()))
 			.willThrow(new PaymentException(PaymentErrorCode.PAYMENT_DUPLICATE));
@@ -687,12 +687,12 @@ class NaverPayApprovalServiceTest {
 		long memberId = 1L;
 		PaymentReservation reservation = createReservation("PAY-1", memberId, 1000);
 		Order order = createOrder(1000);
-		Payment attempt = createAttempt("PAY-1", "pg-payment-id", 1000);
+		Payment payment = createPayment("PAY-1", "pg-payment-id", 1000);
 
 		given(paymentReservationRepository.findByMerchantPayKey("PAY-1")).willReturn(Optional.of(reservation));
 		given(orderRepository.findByIdAndMemberId(reservation.getOrderId(), memberId)).willReturn(Optional.of(order));
-		given(paymentApprovalAttemptService.create(any(PaymentReservation.class), eq("pg-payment-id")))
-			.willReturn(attempt);
+		given(paymentApprovalRecordService.create(any(PaymentReservation.class), eq("pg-payment-id")))
+			.willReturn(payment);
 		given(naverPayGateway.approve("pg-payment-id")).willReturn(NaverPayApproveResult.success("PAY-1", 1000));
 		given(paymentApprovalService.succeedApproval(any(Payment.class), any()))
 			.willThrow(new PaymentException(PaymentErrorCode.PAYMENT_MERCHANT_KEY_MISMATCH));
@@ -714,12 +714,12 @@ class NaverPayApprovalServiceTest {
 		long memberId = 1L;
 		PaymentReservation reservation = createReservation("PAY-1", memberId, 1000);
 		Order order = createOrder(1000);
-		Payment attempt = createAttempt("PAY-1", "pg-payment-id", 1000);
+		Payment payment = createPayment("PAY-1", "pg-payment-id", 1000);
 
 		given(paymentReservationRepository.findByMerchantPayKey("PAY-1")).willReturn(Optional.of(reservation));
 		given(orderRepository.findByIdAndMemberId(reservation.getOrderId(), memberId)).willReturn(Optional.of(order));
-		given(paymentApprovalAttemptService.create(any(PaymentReservation.class), eq("pg-payment-id")))
-			.willReturn(attempt);
+		given(paymentApprovalRecordService.create(any(PaymentReservation.class), eq("pg-payment-id")))
+			.willReturn(payment);
 		given(naverPayGateway.approve("pg-payment-id")).willReturn(NaverPayApproveResult.success("PAY-1", 1000));
 		given(paymentApprovalService.succeedApproval(any(Payment.class), any()))
 			.willThrow(new PaymentException(PaymentErrorCode.PAYMENT_AMOUNT_MISMATCH));
@@ -741,12 +741,12 @@ class NaverPayApprovalServiceTest {
 		long memberId = 1L;
 		PaymentReservation reservation = createReservation("PAY-1", memberId, 1000);
 		Order order = createOrder(1000);
-		Payment attempt = createAttempt("PAY-1", "pg-payment-id", 1000);
+		Payment payment = createPayment("PAY-1", "pg-payment-id", 1000);
 
 		given(paymentReservationRepository.findByMerchantPayKey("PAY-1")).willReturn(Optional.of(reservation));
 		given(orderRepository.findByIdAndMemberId(reservation.getOrderId(), memberId)).willReturn(Optional.of(order));
-		given(paymentApprovalAttemptService.create(any(PaymentReservation.class), eq("pg-payment-id")))
-			.willReturn(attempt);
+		given(paymentApprovalRecordService.create(any(PaymentReservation.class), eq("pg-payment-id")))
+			.willReturn(payment);
 		given(naverPayGateway.approve("pg-payment-id")).willReturn(NaverPayApproveResult.success("PAY-1", 1000));
 		given(paymentApprovalService.succeedApproval(any(Payment.class), any()))
 			.willThrow(new OrderException(OrderErrorCode.ORDER_PAYMENT_NOT_ALLOWED));
@@ -769,22 +769,22 @@ class NaverPayApprovalServiceTest {
 		long memberId = 1L;
 		PaymentReservation reservation = createReservation("PAY-1", memberId, 1000);
 		Order order = createOrder(1000);
-		Payment attempt = createAttempt("PAY-1", "pg-payment-id", 1000);
+		Payment payment = createPayment("PAY-1", "pg-payment-id", 1000);
 
 		given(paymentReservationRepository.findByMerchantPayKey("PAY-1")).willReturn(Optional.of(reservation));
 		given(orderRepository.findByIdAndMemberId(reservation.getOrderId(), memberId)).willReturn(Optional.of(order));
-		given(paymentApprovalAttemptService.create(any(PaymentReservation.class), eq("pg-payment-id")))
-			.willReturn(attempt);
+		given(paymentApprovalRecordService.create(any(PaymentReservation.class), eq("pg-payment-id")))
+			.willReturn(payment);
 		given(naverPayGateway.approve("pg-payment-id")).willReturn(NaverPayApproveResult.success("PAY-1", 1000));
 		given(paymentApprovalService.succeedApproval(any(Payment.class), any()))
-			.willThrow(new PaymentException(PaymentErrorCode.PAYMENT_ATTEMPT_STATUS_TRANSITION_NOT_ALLOWED));
+			.willThrow(new PaymentException(PaymentErrorCode.PAYMENT_STATUS_TRANSITION_NOT_ALLOWED));
 
 		// when & then
 		assertThatThrownBy(() -> naverPayApprovalService.approve(memberId, "PAY-1", "pg-payment-id"))
 			.isInstanceOf(PaymentException.class)
 			.satisfies(exception -> {
 				PaymentException paymentException = (PaymentException)exception;
-				assertThat(paymentException.getErrorCode()).isEqualTo(PaymentErrorCode.PAYMENT_ATTEMPT_STATUS_TRANSITION_NOT_ALLOWED);
+				assertThat(paymentException.getErrorCode()).isEqualTo(PaymentErrorCode.PAYMENT_STATUS_TRANSITION_NOT_ALLOWED);
 			});
 		then(paymentApprovalCompensationService).should().compensateUnexpected(
 			any(), any(), eq(PaymentFailCode.APPROVE_PROCESS_FAILED), any());
@@ -797,12 +797,12 @@ class NaverPayApprovalServiceTest {
 		long memberId = 1L;
 		PaymentReservation reservation = createReservation("PAY-1", memberId, 1000);
 		Order order = createOrder(1000);
-		Payment attempt = createAttempt("PAY-1", "pg-payment-id", 1000);
+		Payment payment = createPayment("PAY-1", "pg-payment-id", 1000);
 
 		given(paymentReservationRepository.findByMerchantPayKey("PAY-1")).willReturn(Optional.of(reservation));
 		given(orderRepository.findByIdAndMemberId(reservation.getOrderId(), memberId)).willReturn(Optional.of(order));
-		given(paymentApprovalAttemptService.create(any(PaymentReservation.class), eq("pg-payment-id")))
-			.willReturn(attempt);
+		given(paymentApprovalRecordService.create(any(PaymentReservation.class), eq("pg-payment-id")))
+			.willReturn(payment);
 		given(naverPayGateway.approve("pg-payment-id")).willReturn(NaverPayApproveResult.success("PAY-1", 1000));
 		given(paymentApprovalService.succeedApproval(any(Payment.class), any()))
 			.willThrow(new RuntimeException("db write failed"));
@@ -822,12 +822,12 @@ class NaverPayApprovalServiceTest {
 		long memberId = 1L;
 		PaymentReservation attackerReservation = createReservation("PAY-ATTACKER", memberId, 1000);
 		Order attackerOrder = createOrder(1000);
-		Payment attackerAttempt = createAttempt("PAY-ATTACKER", "pg-victim-payment-id", 1000);
+		Payment attackerPayment = createPayment("PAY-ATTACKER", "pg-victim-payment-id", 1000);
 
 		given(paymentReservationRepository.findByMerchantPayKey("PAY-ATTACKER")).willReturn(Optional.of(attackerReservation));
 		given(orderRepository.findByIdAndMemberId(attackerReservation.getOrderId(), memberId)).willReturn(Optional.of(attackerOrder));
-		given(paymentApprovalAttemptService.create(any(PaymentReservation.class), eq("pg-victim-payment-id")))
-			.willReturn(attackerAttempt);
+		given(paymentApprovalRecordService.create(any(PaymentReservation.class), eq("pg-victim-payment-id")))
+			.willReturn(attackerPayment);
 		given(naverPayGateway.approve("pg-victim-payment-id"))
 			.willReturn(NaverPayApproveResult.success("PAY-VICTIM", 1000));
 
@@ -848,12 +848,12 @@ class NaverPayApprovalServiceTest {
 		long memberId = 1L;
 		PaymentReservation attackerReservation = createReservation("PAY-ATTACKER", memberId, 1000);
 		Order attackerOrder = createOrder(1000);
-		Payment attackerAttempt = createAttempt("PAY-ATTACKER", "pg-victim-payment-id", 1000);
+		Payment attackerPayment = createPayment("PAY-ATTACKER", "pg-victim-payment-id", 1000);
 
 		given(paymentReservationRepository.findByMerchantPayKey("PAY-ATTACKER")).willReturn(Optional.of(attackerReservation));
 		given(orderRepository.findByIdAndMemberId(attackerReservation.getOrderId(), memberId)).willReturn(Optional.of(attackerOrder));
-		given(paymentApprovalAttemptService.create(any(PaymentReservation.class), eq("pg-victim-payment-id")))
-			.willReturn(attackerAttempt);
+		given(paymentApprovalRecordService.create(any(PaymentReservation.class), eq("pg-victim-payment-id")))
+			.willReturn(attackerPayment);
 		given(naverPayGateway.approve("pg-victim-payment-id")).willReturn(NaverPayApproveResult.alreadyComplete());
 		given(naverPayGateway.getApprovalHistory("pg-victim-payment-id"))
 			.willReturn(NaverPayHistoryResult.approved("PAY-VICTIM", 1000));
@@ -865,7 +865,7 @@ class NaverPayApprovalServiceTest {
 				PaymentException paymentException = (PaymentException)exception;
 				assertThat(paymentException.getErrorCode()).isEqualTo(PaymentErrorCode.PAYMENT_NOT_FOUND);
 			});
-		then(paymentApprovalAttemptService).should().failIfRequested(
+		then(paymentApprovalRecordService).should().failIfRequested(
 			eq("PAY-ATTACKER"), eq(PaymentProvider.NAVERPAY), eq("pg-victim-payment-id"),
 			eq(PaymentFailCode.MERCHANT_PAY_KEY_MISMATCH), eq("가맹점 결제 키 불일치"), any());
 		then(naverPayGateway).should(never()).cancel(any(), anyInt(), any());
@@ -873,18 +873,18 @@ class NaverPayApprovalServiceTest {
 
 	@DisplayName("같은 결제 시도 이력이 실패 상태면 예외를 던진다")
 	@Test
-	void approve_whenAttemptFailed_throwException() {
+	void approve_whenPaymentFailed_throwException() {
 		// given
 		long memberId = 1L;
 		PaymentReservation reservation = createReservation("PAY-1", memberId, 1000);
 		Order order = createOrder(1000);
-		Payment attempt = createAttempt("PAY-1", "pg-payment-id", 1000);
-		attempt.fail(PaymentFailCode.TIME_EXPIRED, "expired", LocalDateTime.now());
+		Payment payment = createPayment("PAY-1", "pg-payment-id", 1000);
+		payment.fail(PaymentFailCode.TIME_EXPIRED, "expired", LocalDateTime.now());
 
 		given(paymentReservationRepository.findByMerchantPayKey("PAY-1")).willReturn(Optional.of(reservation));
 		given(orderRepository.findByIdAndMemberId(reservation.getOrderId(), memberId)).willReturn(Optional.of(order));
-		given(paymentApprovalAttemptService.create(any(PaymentReservation.class), eq("pg-payment-id")))
-			.willReturn(attempt);
+		given(paymentApprovalRecordService.create(any(PaymentReservation.class), eq("pg-payment-id")))
+			.willReturn(payment);
 
 		// when & then
 		assertThatThrownBy(() -> naverPayApprovalService.approve(memberId, "PAY-1", "pg-payment-id"))
@@ -896,20 +896,20 @@ class NaverPayApprovalServiceTest {
 		then(naverPayGateway).should(never()).approve(any());
 	}
 
-	@DisplayName("attempt가 UNKNOWN 상태면 PAYMENT_RESULT_PENDING를 던진다")
+	@DisplayName("payment가 UNKNOWN 상태면 PAYMENT_RESULT_PENDING를 던진다")
 	@Test
-	void approve_whenAttemptIsUnknown_throwResultPending() {
+	void approve_whenPaymentIsUnknown_throwResultPending() {
 		// given
 		long memberId = 1L;
 		PaymentReservation reservation = createReservation("PAY-1", memberId, 1000);
 		Order order = createOrder(1000);
-		Payment attempt = createAttempt("PAY-1", "pg-payment-id", 1000);
-		attempt.markUnknown("PG 응답 불명확", LocalDateTime.now());
+		Payment payment = createPayment("PAY-1", "pg-payment-id", 1000);
+		payment.markUnknown("PG 응답 불명확", LocalDateTime.now());
 
 		given(paymentReservationRepository.findByMerchantPayKey("PAY-1")).willReturn(Optional.of(reservation));
 		given(orderRepository.findByIdAndMemberId(reservation.getOrderId(), memberId)).willReturn(Optional.of(order));
-		given(paymentApprovalAttemptService.create(any(PaymentReservation.class), eq("pg-payment-id")))
-			.willReturn(attempt);
+		given(paymentApprovalRecordService.create(any(PaymentReservation.class), eq("pg-payment-id")))
+			.willReturn(payment);
 
 		// when & then
 		assertThatThrownBy(() -> naverPayApprovalService.approve(memberId, "PAY-1", "pg-payment-id"))
@@ -921,20 +921,20 @@ class NaverPayApprovalServiceTest {
 		then(naverPayGateway).should(never()).approve(any());
 	}
 
-	@DisplayName("attempt가 이미 SUCCEEDED면 PG 호출 없이 즉시 성공 결과를 반환한다")
+	@DisplayName("payment가 이미 SUCCEEDED면 PG 호출 없이 즉시 성공 결과를 반환한다")
 	@Test
-	void approve_whenAttemptAlreadySucceeded_returnSuccessDirectly() {
+	void approve_whenPaymentAlreadySucceeded_returnSuccessDirectly() {
 		// given
 		long memberId = 1L;
 		PaymentReservation reservation = createReservation("PAY-1", memberId, 1000);
 		Order order = createOrder(1000);
-		Payment attempt = createAttempt("PAY-1", "pg-payment-id", 1000);
-		attempt.succeed(LocalDateTime.now());
+		Payment payment = createPayment("PAY-1", "pg-payment-id", 1000);
+		payment.succeed(LocalDateTime.now());
 
 		given(paymentReservationRepository.findByMerchantPayKey("PAY-1")).willReturn(Optional.of(reservation));
 		given(orderRepository.findByIdAndMemberId(reservation.getOrderId(), memberId)).willReturn(Optional.of(order));
-		given(paymentApprovalAttemptService.create(any(PaymentReservation.class), eq("pg-payment-id")))
-			.willReturn(attempt);
+		given(paymentApprovalRecordService.create(any(PaymentReservation.class), eq("pg-payment-id")))
+			.willReturn(payment);
 
 		// when
 		NaverPayApproveResponse result = naverPayApprovalService.approve(memberId, "PAY-1", "pg-payment-id");
@@ -948,10 +948,10 @@ class NaverPayApprovalServiceTest {
 	@DisplayName("pgCancel: NaverPayCancelResult.SUCCESS → CancelOutcome.SUCCESS")
 	@Test
 	void pgCancel_whenResultIsSuccess_returnSuccessOutcome() {
-		Payment cancelAttempt = Payment.createCancelRequested(1L, "PAY-1", "pg-id", 1000, PaymentProvider.NAVERPAY);
+		Payment cancelPayment = Payment.createCancelRequested(1L, "PAY-1", "pg-id", 1000, PaymentProvider.NAVERPAY);
 		given(naverPayGateway.cancel("pg-id", 1000, "취소 사유")).willReturn(NaverPayCancelResult.success());
 
-		CancelOutcome outcome = ReflectionTestUtils.invokeMethod(naverPayApprovalService, "pgCancel", cancelAttempt, "취소 사유");
+		CancelOutcome outcome = ReflectionTestUtils.invokeMethod(naverPayApprovalService, "pgCancel", cancelPayment, "취소 사유");
 
 		assertThat(outcome.status()).isEqualTo(CancelOutcome.Status.SUCCESS);
 	}
@@ -959,10 +959,10 @@ class NaverPayApprovalServiceTest {
 	@DisplayName("pgCancel: NaverPayCancelResult.ALREADY_CANCELED → CancelOutcome.SUCCESS")
 	@Test
 	void pgCancel_whenResultIsAlreadyCanceled_returnSuccessOutcome() {
-		Payment cancelAttempt = Payment.createCancelRequested(1L, "PAY-1", "pg-id", 1000, PaymentProvider.NAVERPAY);
+		Payment cancelPayment = Payment.createCancelRequested(1L, "PAY-1", "pg-id", 1000, PaymentProvider.NAVERPAY);
 		given(naverPayGateway.cancel("pg-id", 1000, "취소 사유")).willReturn(NaverPayCancelResult.alreadyCanceled());
 
-		CancelOutcome outcome = ReflectionTestUtils.invokeMethod(naverPayApprovalService, "pgCancel", cancelAttempt, "취소 사유");
+		CancelOutcome outcome = ReflectionTestUtils.invokeMethod(naverPayApprovalService, "pgCancel", cancelPayment, "취소 사유");
 
 		assertThat(outcome.status()).isEqualTo(CancelOutcome.Status.SUCCESS);
 	}
@@ -970,10 +970,10 @@ class NaverPayApprovalServiceTest {
 	@DisplayName("pgCancel: NaverPayCancelResult.PROCESSING → CancelOutcome.PROCESSING")
 	@Test
 	void pgCancel_whenResultIsProcessing_returnProcessingOutcome() {
-		Payment cancelAttempt = Payment.createCancelRequested(1L, "PAY-1", "pg-id", 1000, PaymentProvider.NAVERPAY);
+		Payment cancelPayment = Payment.createCancelRequested(1L, "PAY-1", "pg-id", 1000, PaymentProvider.NAVERPAY);
 		given(naverPayGateway.cancel("pg-id", 1000, "취소 사유")).willReturn(NaverPayCancelResult.processing());
 
-		CancelOutcome outcome = ReflectionTestUtils.invokeMethod(naverPayApprovalService, "pgCancel", cancelAttempt, "취소 사유");
+		CancelOutcome outcome = ReflectionTestUtils.invokeMethod(naverPayApprovalService, "pgCancel", cancelPayment, "취소 사유");
 
 		assertThat(outcome.status()).isEqualTo(CancelOutcome.Status.PROCESSING);
 	}
@@ -981,11 +981,11 @@ class NaverPayApprovalServiceTest {
 	@DisplayName("pgCancel: NaverPayCancelResult.FAILED → CancelOutcome.FAILED with failCode/failDetail")
 	@Test
 	void pgCancel_whenResultIsFailed_returnFailedOutcomeWithDetails() {
-		Payment cancelAttempt = Payment.createCancelRequested(1L, "PAY-1", "pg-id", 1000, PaymentProvider.NAVERPAY);
+		Payment cancelPayment = Payment.createCancelRequested(1L, "PAY-1", "pg-id", 1000, PaymentProvider.NAVERPAY);
 		given(naverPayGateway.cancel("pg-id", 1000, "취소 사유"))
 			.willReturn(NaverPayCancelResult.failed(PaymentFailCode.PG_REQUEST_REJECTED, "reject reason"));
 
-		CancelOutcome outcome = ReflectionTestUtils.invokeMethod(naverPayApprovalService, "pgCancel", cancelAttempt, "취소 사유");
+		CancelOutcome outcome = ReflectionTestUtils.invokeMethod(naverPayApprovalService, "pgCancel", cancelPayment, "취소 사유");
 
 		assertThat(outcome.status()).isEqualTo(CancelOutcome.Status.FAILED);
 		assertThat(outcome.failCode()).isEqualTo(PaymentFailCode.PG_REQUEST_REJECTED);
@@ -1004,12 +1004,12 @@ class NaverPayApprovalServiceTest {
 		PaymentReservation r = PaymentReservation.createReserved(
 			1L, memberId, amount, PaymentProvider.NAVERPAY, merchantPayKey,
 			LocalDateTime.now().plusMinutes(15));
-		r.markUsed();
+		r.use();
 		ReflectionTestUtils.setField(r, "id", 1L);
 		return r;
 	}
 
-	private Payment createAttempt(String merchantPayKey, String pgPaymentId, int amount) {
+	private Payment createPayment(String merchantPayKey, String pgPaymentId, int amount) {
 		PaymentReservation reservation = PaymentReservation.createReserved(
 			1L, 1L, amount, PaymentProvider.NAVERPAY, merchantPayKey, LocalDateTime.now().plusMinutes(15));
 		return Payment.createRequested(reservation, PaymentType.APPROVE, pgPaymentId);

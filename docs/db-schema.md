@@ -165,8 +165,8 @@ INDEX:
 - `idx_reservation_order (order_id)` — UNKNOWN 차단 검사 / 주문별 조회
 
 비고:
-- **NULL 트릭 캡슐화**: `reserved_key` 값 set 은 *반드시* `status=RESERVED` 와 같은 INSERT 안에서. status 가 USED/EXPIRED 로 가면 *같은 UPDATE* 에서 NULL 로 비움. 도메인 메서드 (`createReserved`, `markUsed`, `markExpired`) 안에 캡슐화. 우회 setter 금지
-- **상태 전이**: `RESERVED → USED` (승인 시작) 또는 `RESERVED → EXPIRED` (만료/무효 회수) 한 번 전이만 허용. 만료/무효 예약은 reserve 진입 시 `markExpired` 로 reservedKey 를 회수해 재예약 허용 (박제 자동 복구)
+- **NULL 트릭 캡슐화**: `reserved_key` 값 set 은 *반드시* `status=RESERVED` 와 같은 INSERT 안에서. status 가 USED/EXPIRED 로 가면 *같은 UPDATE* 에서 NULL 로 비움. 도메인 계층을 통해서만 변경하며 직접 UPDATE 금지
+- **상태 전이**: `RESERVED → USED` (승인 시작) 또는 `RESERVED → EXPIRED` (만료/무효 회수) 한 번 전이만 허용. 만료/무효 예약은 reserve 진입 시 `reserved_key` 를 NULL 로 회수해 재예약 허용 (박제 자동 복구)
 - **amount 불변**: 결제 예정 금액이 바뀌면 새 Reservation 발급. 기존 행 amount UPDATE 금지
 - **FK**: `order_id`, `member_id` 는 FK 제약 없음 (참조용 값)
 

@@ -82,7 +82,7 @@ Port 인터페이스 설계 원칙:
 | stock | `StockInventoryService`, `AdminStockService`, `StockConcurrencyService` |
 | order | `OrderCreateService`, `OrderCancelService`, `OrderQueryService`, `OrderExpirationService`, `OrderConcurrencyService` |
 | cart | `AddCartItemService`, `GetMyCartService`, `UpdateCartItemQuantityService`, `RemoveCartItemService` |
-| payment | `ReservePaymentService`, `PaymentApprovalService`, `PaymentApprovalAttemptService`, `PaymentCancellationAttemptService`, `PaymentApprovalCompensationService` |
+| payment | `ReservePaymentService`, `PaymentApprovalService`, `PaymentApprovalRecordService`, `PaymentCancellationService`, `PaymentApprovalCompensationService` |
 | naverpay | `NaverPayApprovalService` |
 | outbox/stock | `StockRestoreOutboxCreateService`, `StockRestoreOutboxRelayService`, `StockRestoreOutboxConsumeService` |
 
@@ -125,11 +125,11 @@ NaverPayController → NaverPayApprovalService
   → memberId 검증 (Reservation.memberId vs SecurityContext)
   → PaymentRepository (UNKNOWN 차단 검사)
   → USED Reservation 발견 시 멱등 응답 200 반환
-  → [트랜잭션 안] reservation.markUsed() + Payment(APPROVE, REQUESTED) INSERT
+  → [트랜잭션 안] reservation.use() + Payment(APPROVE, REQUESTED) INSERT
   → [트랜잭션 밖] NaverPayGateway (PG approve API 호출)
-  → PaymentApprovalAttemptService (승인 시도 상태 반영)
+  → PaymentApprovalRecordService (승인 시도 상태 반영)
   → PaymentApprovalService.hasCompletedPayment (보상 가능 여부 판단)
-  → PaymentCancellationAttemptService (취소 시도 이력 기록, 보상 흐름)
+  → PaymentCancellationService (취소 시도 이력 기록, 보상 흐름)
   → PaymentApprovalCompensationService (보상 dispatcher — compensateDuplicateApproval 포함, this::pgCancel 콜백 주입)
 
 # 주문 만료 배치

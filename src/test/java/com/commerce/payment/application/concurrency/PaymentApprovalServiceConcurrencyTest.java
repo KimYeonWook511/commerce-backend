@@ -97,11 +97,11 @@ class PaymentApprovalServiceConcurrencyTest {
 			PaymentReservation.createReserved(order.getId(), member.getId(), 1000, PaymentProvider.NAVERPAY,
 				merchantPayKey, LocalDateTime.now().plusMinutes(15))
 		);
-		Payment attempt = paymentPersistence.save(createApproveAttempt(reservation, pgPaymentId));
+		Payment payment = paymentPersistence.save(createApprovePayment(reservation, pgPaymentId));
 		ConcurrentLinkedQueue<Throwable> errors = new ConcurrentLinkedQueue<>();
 
 		// when
-		runConcurrent(20, () -> paymentApprovalService.succeedApproval(attempt, LocalDateTime.now()), errors);
+		runConcurrent(20, () -> paymentApprovalService.succeedApproval(payment, LocalDateTime.now()), errors);
 
 		// then
 		assertThat(paymentPersistence.countPaymentsByMerchantPayKey(merchantPayKey)).isEqualTo(1L);
@@ -111,14 +111,14 @@ class PaymentApprovalServiceConcurrencyTest {
 	}
 
 	private boolean isAllowedConcurrentException(Throwable throwable) {
-		// race window에서 attempt unique 위반 또는 payment unique 위반으로 발생
+		// race window에서 payment unique 위반으로 발생
 		if (throwable instanceof DataIntegrityViolationException) {
 			return true;
 		}
 		if (throwable instanceof PaymentException paymentException) {
 			return paymentException.getErrorCode() == PaymentErrorCode.PAYMENT_DUPLICATE
-				// Order FOR UPDATE 직렬화 후 두 번째 스레드가 이미 SUCCEEDED 상태인 attempt를 다시 mark할 때 발생
-				|| paymentException.getErrorCode() == PaymentErrorCode.PAYMENT_ATTEMPT_STATUS_TRANSITION_NOT_ALLOWED;
+				// Order FOR UPDATE 직렬화 후 두 번째 스레드가 이미 SUCCEEDED 상태인 payment를 다시 mark할 때 발생
+				|| paymentException.getErrorCode() == PaymentErrorCode.PAYMENT_STATUS_TRANSITION_NOT_ALLOWED;
 		}
 		if (throwable instanceof OrderException orderException) {
 			return orderException.getErrorCode() == OrderErrorCode.ORDER_PAID_NOT_ALLOWED;
@@ -173,7 +173,7 @@ class PaymentApprovalServiceConcurrencyTest {
 		return order;
 	}
 
-	private Payment createApproveAttempt(PaymentReservation reservation, String pgPaymentId) {
+	private Payment createApprovePayment(PaymentReservation reservation, String pgPaymentId) {
 		return Payment.createRequested(reservation, PaymentType.APPROVE, pgPaymentId);
 	}
 }

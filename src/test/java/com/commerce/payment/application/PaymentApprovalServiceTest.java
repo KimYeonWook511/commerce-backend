@@ -65,9 +65,9 @@ class PaymentApprovalServiceTest {
 		assertThat(result).isFalse();
 	}
 
-	@DisplayName("succeedApproval 호출 시 attempt가 SUCCEEDED가 되고 order가 PAID가 된다")
+	@DisplayName("succeedApproval 호출 시 payment가 SUCCEEDED가 되고 order가 PAID가 된다")
 	@Test
-	void succeedApproval_whenAttemptRequested_completeAndReturn() {
+	void succeedApproval_whenPaymentRequested_completeAndReturn() {
 		// given
 		long orderId = 1L;
 		long memberId = 1L;
@@ -78,24 +78,24 @@ class PaymentApprovalServiceTest {
 		PaymentReservation reservation = PaymentReservation.createReserved(
 			orderId, memberId, 1000, PaymentProvider.NAVERPAY, merchantPayKey, now.plusMinutes(15));
 		Order order = createOrder(orderId, 1000);
-		Payment attempt = Payment.createRequested(reservation, PaymentType.APPROVE, pgPaymentId);
+		Payment payment = Payment.createRequested(reservation, PaymentType.APPROVE, pgPaymentId);
 
-		given(paymentRepository.findApproveAttempt(eq(merchantPayKey), eq(PaymentProvider.NAVERPAY), eq(pgPaymentId)))
-			.willReturn(Optional.of(attempt));
+		given(paymentRepository.findApprovePayment(eq(merchantPayKey), eq(PaymentProvider.NAVERPAY), eq(pgPaymentId)))
+			.willReturn(Optional.of(payment));
 		given(orderRepository.findByIdForUpdate(orderId)).willReturn(Optional.of(order));
 
 		// when
-		Payment result = paymentApprovalService.succeedApproval(attempt, now);
+		Payment result = paymentApprovalService.succeedApproval(payment, now);
 
 		// then
-		assertThat(result).isSameAs(attempt);
-		assertThat(attempt.getStatus()).isEqualTo(PaymentStatus.SUCCEEDED);
+		assertThat(result).isSameAs(payment);
+		assertThat(payment.getStatus()).isEqualTo(PaymentStatus.SUCCEEDED);
 		assertThat(order.getStatus()).isEqualTo(OrderStatus.PAID);
 	}
 
-	@DisplayName("succeedApproval 호출 시 attempt가 이미 SUCCEEDED면 멱등으로 반환하고 order를 잠그지 않는다")
+	@DisplayName("succeedApproval 호출 시 payment가 이미 SUCCEEDED면 멱등으로 반환하고 order를 잠그지 않는다")
 	@Test
-	void succeedApproval_whenAttemptAlreadySucceeded_returnIdempotent() {
+	void succeedApproval_whenPaymentAlreadySucceeded_returnIdempotent() {
 		// given
 		long orderId = 1L;
 		long memberId = 1L;
@@ -105,18 +105,18 @@ class PaymentApprovalServiceTest {
 
 		PaymentReservation reservation = PaymentReservation.createReserved(
 			orderId, memberId, 1000, PaymentProvider.NAVERPAY, merchantPayKey, now.plusMinutes(15));
-		Payment attempt = Payment.createRequested(reservation, PaymentType.APPROVE, pgPaymentId);
-		attempt.succeed(now.minusMinutes(1));
+		Payment payment = Payment.createRequested(reservation, PaymentType.APPROVE, pgPaymentId);
+		payment.succeed(now.minusMinutes(1));
 
-		given(paymentRepository.findApproveAttempt(eq(merchantPayKey), eq(PaymentProvider.NAVERPAY), eq(pgPaymentId)))
-			.willReturn(Optional.of(attempt));
+		given(paymentRepository.findApprovePayment(eq(merchantPayKey), eq(PaymentProvider.NAVERPAY), eq(pgPaymentId)))
+			.willReturn(Optional.of(payment));
 
 		// when
-		Payment result = paymentApprovalService.succeedApproval(attempt, now);
+		Payment result = paymentApprovalService.succeedApproval(payment, now);
 
 		// then
-		assertThat(result).isSameAs(attempt);
-		assertThat(attempt.getStatus()).isEqualTo(PaymentStatus.SUCCEEDED);
+		assertThat(result).isSameAs(payment);
+		assertThat(payment.getStatus()).isEqualTo(PaymentStatus.SUCCEEDED);
 		then(orderRepository).should(never()).findByIdForUpdate(orderId);
 	}
 
