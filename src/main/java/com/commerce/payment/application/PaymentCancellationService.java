@@ -58,6 +58,7 @@ public class PaymentCancellationService {
 		Payment payment = paymentRepository.findCancelPayment(merchantPayKey, provider, pgPaymentId)
 			.orElseThrow(() -> new PaymentException(PaymentErrorCode.PAYMENT_RECORD_NOT_FOUND));
 		payment.succeed(respondedAt);
+		paymentRepository.save(payment);
 	}
 
 	@Transactional
