@@ -12,8 +12,11 @@ Usage:
 from __future__ import annotations
 
 import argparse
+import atexit
 import contextlib
 import json
+import os
+import signal
 import sys
 import threading
 import time
@@ -26,6 +29,7 @@ SCRIPT_DIR = Path(__file__).resolve().parent
 if str(SCRIPT_DIR) not in sys.path:
     sys.path.insert(0, str(SCRIPT_DIR))
 
+import agent_runner
 import commit_agent
 import developer_guardrails
 import developer_agent
@@ -154,6 +158,7 @@ class StepExecutor:
 
     def run(self):
         """실행 헤더 출력부터 전체 phase 완료 처리까지 오케스트레이션한다."""
+        self._install_signal_handlers()
         self.print_header()
         self._preflight_tools()
         self.validate_workflow_checklist()
@@ -165,13 +170,25 @@ class StepExecutor:
         self.execute_all_steps()
         self.finalize()
 
+    def _install_signal_handlers(self):
+        """SIGINT/SIGTERM에서 실행 중인 agent 자식 프로세스를 회수한다.
+
+        agent를 별도 프로세스 그룹으로 띄우므로(start_new_session) Ctrl+C가 claude에 직접
+        전달되지 않는다. execute.py가 죽을 때 고아 claude가 토큰을 계속 태우지 않도록 명시적으로 정리한다.
+        """
+        def handler(signum, frame):
+            agent_runner.terminate_current()
+            raise SystemExit(130)
+        for sig in (signal.SIGINT, signal.SIGTERM):
+            signal.signal(sig, handler)
+        atexit.register(agent_runner.terminate_current)
+
     def _preflight_tools(self):
-        """tmux와 claude CLI가 설치되어 있는지 확인한다."""
+        """claude CLI가 설치되어 있는지 확인한다. (tmux는 3-pane 로그 관찰용 선택 사항)"""
         import shutil
-        for tool in ("tmux", "claude"):
-            if not shutil.which(tool):
-                print(f"\n  ERROR: '{tool}'이 설치되어 있지 않습니다. execute.py 실행 전 설치하세요.")
-                raise SystemExit(1)
+        if not shutil.which("claude"):
+            print("\n  ERROR: 'claude'가 설치되어 있지 않습니다. execute.py 실행 전 설치하세요.")
+            raise SystemExit(1)
 
     def _read_current_branch(self) -> str:
         """현재 브랜치명을 git에서 읽어 반환한다."""
@@ -415,7 +432,7 @@ class StepExecutor:
             ac_output_path,
         )
 
-    def review_step_result(self, current: dict, step_text: str, changed_paths: list[str]) -> reviewer_agent.ReviewResult:
+    def review_step_result(self, current: dict, step_text: str, changed_paths: list[str], attempt: int = 1) -> reviewer_agent.ReviewResult:
         """developer agent 결과를 read-only review agent로 다시 확인한다."""
         output = self.read_json(self.step_output_path(current["step"]))
         ac_output_path = self.step_acceptance_output_path(current["step"])
@@ -431,6 +448,7 @@ class StepExecutor:
             ac_output=ac_output,
             guardrails_text=self.build_reviewer_guardrails(),
             model=self.reviewer_model,
+            attempt=attempt,
         )
 
     def run_acceptance_checks(self, current: dict, step_text: str) -> dict | None:
@@ -463,9 +481,9 @@ class StepExecutor:
 
     # --- agent 호출 ---
 
-    def run_developer_agent(self, step: dict, context_text: str, guardrails_text: str) -> dict:
+    def run_developer_agent(self, step: dict, context_text: str, guardrails_text: str, attempt: int = 1) -> dict:
         """developer agent를 실행한다."""
-        return developer_agent.run(self.root, self.phase_dir, self.write_json, step, context_text, guardrails_text, model=self.developer_model)
+        return developer_agent.run(self.root, self.phase_dir, self.write_json, step, context_text, guardrails_text, model=self.developer_model, attempt=attempt)
 
     # --- header & validation ---
 
@@ -575,7 +593,7 @@ class StepExecutor:
                 label += f" [retry {attempt}/{self.MAX_RETRIES}]"
 
             with progress_indicator(label) as info:
-                self.run_developer_agent(step, developer_context, developer_rules)
+                self.run_developer_agent(step, developer_context, developer_rules, attempt=attempt)
                 elapsed = int(info.elapsed)
 
             index = self.read_json(self.index_file)
@@ -626,7 +644,7 @@ class StepExecutor:
                     raise SystemExit(1)
 
                 review_paths = git_ops.list_worktree_paths(self)
-                review = self.review_step_result(current, step_text, review_paths)
+                review = self.review_step_result(current, step_text, review_paths, attempt=attempt)
                 if review.decision == "blocked":
                     self.mark_step_blocked_from_review(current, review.message)
                     current["blocked_at"] = timestamp
@@ -653,7 +671,7 @@ class StepExecutor:
 
                 current["completed_at"] = timestamp
                 try:
-                    commit_agent.run(self.root, self.phase_dir, current, model=self.commit_model)
+                    commit_agent.run(self.root, self.phase_dir, current, model=self.commit_model, attempt=attempt)
                 except Exception as e:
                     self.mark_step_error(current, str(e), timestamp)
                     self.write_json(self.index_file, index)

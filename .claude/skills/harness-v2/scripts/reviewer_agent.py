@@ -1,11 +1,10 @@
 from __future__ import annotations
 
 import re
-import subprocess
-import tempfile
-import uuid
 from dataclasses import dataclass
 from pathlib import Path
+
+import agent_runner
 
 
 @dataclass(frozen=True)
@@ -64,50 +63,6 @@ def output_path(phase_dir: Path, step_num: int) -> Path:
     return phase_dir / f"step{step_num}-review-output.json"
 
 
-def ensure_tmux_session(session: str):
-    """tmux 세션이 없으면 생성한다."""
-    result = subprocess.run(
-        ["tmux", "has-session", "-t", session],
-        capture_output=True,
-    )
-    if result.returncode != 0:
-        subprocess.run(
-            ["tmux", "new-session", "-d", "-s", session],
-            capture_output=True,
-        )
-
-
-def run_claude_in_pane(root: str, session: str, pane_name: str, prompt_path: Path, output_file: Path, cwd: str | None = None, model: str = "opus") -> int:
-    """tmux pane을 생성하고 claude -p (read-only 모드)를 실행한다."""
-    done_signal = f"{pane_name}-done-{uuid.uuid4().hex[:8]}"
-    # reviewer는 파일 수정 없이 read-only 검토만 수행한다
-    # --allowedTools Read,Grep,Glob 으로 write 도구를 제한한다
-    cd_prefix = f"cd {cwd} && " if cwd else ""
-    cmd = (
-        f"{cd_prefix}claude -p --dangerously-skip-permissions --model {model}"
-        f" --allowedTools 'Read,Grep,Glob,Bash'"
-        f" < {prompt_path}"
-        f" > {output_file}"
-        f" 2>&1"
-        f"; tmux wait-for -S {done_signal}"
-    )
-
-    subprocess.run(
-        ["tmux", "new-window", "-t", session, "-n", pane_name],
-        capture_output=True,
-    )
-    subprocess.run(
-        ["tmux", "send-keys", "-t", f"{session}:{pane_name}", cmd, "Enter"],
-    )
-    subprocess.run(["tmux", "wait-for", done_signal])
-
-    subprocess.run(
-        ["tmux", "kill-window", "-t", f"{session}:{pane_name}"],
-        capture_output=True,
-    )
-    return 0
-
-
 def run(
     root: str,
     phase_dir: Path,
@@ -119,32 +74,28 @@ def run(
     ac_output: dict | None,
     guardrails_text: str,
     model: str = "opus",
+    attempt: int = 1,
 ) -> ReviewResult:
-    """reviewer agent를 tmux pane에서 실행하고 review output 파일을 기록한다."""
+    """reviewer agent를 subprocess(read-only)로 실행하고 review output 파일을 기록한다."""
     prompt = build_prompt(guardrails_text, step, step_text, changed_paths, output, ac_output)
 
-    session = "harness"
-    pane_name = f"step{step['step']}-reviewer"
-    ensure_tmux_session(session)
-
-    with tempfile.NamedTemporaryFile(mode="w", suffix=".txt", delete=False, encoding="utf-8") as prompt_file:
-        prompt_file.write(prompt)
-        prompt_path = Path(prompt_file.name)
-
-    raw_output_path = phase_dir / f"step{step['step']}-review-raw.txt"
-
-    try:
-        run_claude_in_pane(root, session, pane_name, prompt_path, raw_output_path, cwd=root, model=model)
-        last_message = raw_output_path.read_text(encoding="utf-8") if raw_output_path.exists() else ""
-    finally:
-        prompt_path.unlink(missing_ok=True)
-        if raw_output_path.exists():
-            raw_output_path.unlink(missing_ok=True)
+    # reviewer는 파일 수정 없이 read-only 검토만 수행한다 (write 도구 제한).
+    result = agent_runner.run_agent(
+        prompt=prompt,
+        model=model,
+        cwd=root,
+        role="reviewer_agent",
+        logs_dir=phase_dir / "logs",
+        step_num=step["step"],
+        attempt=attempt,
+        allowed_tools="Read,Grep,Glob,Bash",
+    )
+    last_message = result.result_text
 
     raw_output = {
         "step": step["step"],
         "name": step["name"],
-        "exitCode": 0,
+        "exitCode": result.exit_code,
         "stdout": last_message,
         "stderr": "",
         "lastMessage": last_message,

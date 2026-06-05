@@ -1,9 +1,9 @@
 from __future__ import annotations
 
 import subprocess
-import tempfile
-import uuid
 from pathlib import Path
+
+import agent_runner
 
 
 def build_prompt(step_name: str, summary: str) -> str:
@@ -42,53 +42,25 @@ def _get_head(root: str) -> str:
     return result.stdout.strip() if result.returncode == 0 else ""
 
 
-def ensure_tmux_session(session: str):
-    result = subprocess.run(["tmux", "has-session", "-t", session], capture_output=True)
-    if result.returncode != 0:
-        subprocess.run(["tmux", "new-session", "-d", "-s", session], capture_output=True)
-
-
-def run(root: str, phase_dir: Path, step: dict, model: str = "haiku") -> None:
-    """commit agent를 tmux pane에서 실행한다."""
+def run(root: str, phase_dir: Path, step: dict, model: str = "haiku", attempt: int = 1) -> None:
+    """commit agent를 subprocess로 실행한다."""
     step_num = step["step"]
     step_name = step.get("name", f"step{step_num}")
     summary = str(step.get("summary", "")).strip()
 
     prompt = build_prompt(step_name, summary)
 
-    session = "harness"
-    pane_name = f"step{step_num}-commit"
-    ensure_tmux_session(session)
-
-    with tempfile.NamedTemporaryFile(mode="w", suffix=".txt", delete=False, encoding="utf-8") as f:
-        f.write(prompt)
-        prompt_path = Path(f.name)
-
-    output_path = phase_dir / f"step{step_num}-commit-output.txt"
-    done_signal = f"{pane_name}-done-{uuid.uuid4().hex[:8]}"
-
-    cmd = (
-        f"cd {root} && claude -p --dangerously-skip-permissions --model {model}"
-        f" --allowedTools 'Bash(git *) Read'"
-        f" < {prompt_path}"
-        f" > {output_path}"
-        f" 2>&1"
-        f"; tmux wait-for -S {done_signal}"
-    )
-
     before_head = _get_head(root)
-    try:
-        subprocess.run(["tmux", "new-window", "-t", session, "-n", pane_name], capture_output=True)
-        subprocess.run(["tmux", "send-keys", "-t", f"{session}:{pane_name}", cmd, "Enter"])
-        try:
-            subprocess.run(["tmux", "wait-for", done_signal], timeout=300)
-        except subprocess.TimeoutExpired:
-            raise RuntimeError(f"commit agent가 300초 내에 완료되지 않았습니다 (step {step_num})")
-        finally:
-            subprocess.run(["tmux", "kill-window", "-t", f"{session}:{pane_name}"], capture_output=True)
-    finally:
-        prompt_path.unlink(missing_ok=True)
-
+    agent_runner.run_agent(
+        prompt=prompt,
+        model=model,
+        cwd=root,
+        role="commit_agent",
+        logs_dir=phase_dir / "logs",
+        step_num=step_num,
+        attempt=attempt,
+        allowed_tools="Bash(git *) Read",
+    )
     after_head = _get_head(root)
     if before_head and before_head == after_head:
-        print(f"  ⚠ commit agent가 커밋을 생성하지 않았습니다. 로그: {output_path}")
+        print(f"  ⚠ commit agent가 커밋을 생성하지 않았습니다. 로그: {phase_dir / 'logs' / 'commit_agent.log'}")
