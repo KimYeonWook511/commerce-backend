@@ -42,8 +42,8 @@ phase 구조를 만들 때는 아래 파일도 반드시 생성한다.
 ```json
 {
   "phases": [
-    { "dir": "0-bootstrap", "status": "pending" },
-    { "dir": "1-domain", "status": "pending" }
+    { "dir": "0-bootstrap", "harness_version": "v2", "status": "pending" },
+    { "dir": "1-domain", "harness_version": "v2", "status": "pending" }
   ]
 }
 ```
@@ -51,6 +51,7 @@ phase 구조를 만들 때는 아래 파일도 반드시 생성한다.
 필드 규칙:
 
 - `dir`: Task 내부 phase 디렉토리명
+- `harness_version`: 항상 `v2`. 각 phase 항목이 harness-v2로 설계됐음을 나타내며 `execute.py`가 실행 전 확인한다 (그 phase의 `<dir>/index.json` harness_version과 일치)
 - `status`: `pending` | `completed` | `error` | `blocked`
 - 타임스탬프 필드는 생성 시 넣지 않는다
 - phase 이름은 `<순번>-<slug>` 형식을 사용한다
@@ -63,6 +64,7 @@ step 실행 상태 파일이다.
 {
   "project": "<project-name>",
   "phase": "<phase-name>",
+  "harness_version": "v2",
   "steps": [
     { "step": 1, "name": "project-setup", "status": "pending" },
     { "step": 2, "name": "core-types", "status": "pending" },
@@ -75,6 +77,7 @@ step 실행 상태 파일이다.
 
 - `project`: 프로젝트명
 - `phase`: phase 이름이며 디렉토리명과 일치해야 한다
+- `harness_version`: 항상 `v2`. task-level `phases/index.json`과 함께 이 phase가 harness-v2로 설계됐음을 나타내며 `execute.py`가 실행 전 확인한다
 - `steps[].step`: 1부터 시작하는 순번
 - `steps[].name`: kebab-case slug
 - `steps[].status`: 초기값은 모두 `pending`
@@ -113,7 +116,6 @@ step 실행 상태 파일이다.
 ```json
 {
   "workflow": "harness",
-  "version": "v2",
   "status": "drafting",
   "items": [
     { "order": 1, "title": "Explore", "status": "completed" },
@@ -132,7 +134,6 @@ step 실행 상태 파일이다.
 필드 규칙:
 
 - `workflow`: 항상 `harness`
-- `version`: 항상 `v2`
 - `status`: `drafting` | `in_progress` | `completed`
 - `items`: `SKILL.md`의 1~9번 Stage 순서와 제목을 그대로 사용한다.
 - `Execution`(6)은 `execute.py`가 시작할 때 `in_progress`로, phase 종료 시 `completed`로 갱신된다. 별도 `authorization` 객체는 사용하지 않는다.

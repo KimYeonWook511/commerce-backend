@@ -131,6 +131,10 @@ class StepExecutor:
         self.phase_name = index.get("phase", self.phase_dir_name)
         self.task_name = self.extract_task_name(index)
         self.total_steps = len(index["steps"])
+        # 이 phase가 harness-v2 워크플로우로 설계됐는지 확인한다 (task index와 함께 v1 혼선 방지).
+        if index.get("harness_version") != "v2":
+            print(f"\n  ERROR: {self.index_file} must declare harness_version='v2' (harness-v2로 설계된 phase여야 합니다).")
+            raise SystemExit(1)
         self.branch_name: str = ""  # _validate_worktree_context에서 실제 브랜치로 설정
         self._tmux = bool(os.environ.get("TMUX"))
         self.log_panes: list[str] = []
@@ -158,9 +162,14 @@ class StepExecutor:
             raise SystemExit(1)
 
         task_index = self.read_json(self.task_index_file)
-        if not any(phase.get("dir") == self.phase_dir_name for phase in task_index.get("phases", [])):
+        entry = next((phase for phase in task_index.get("phases", []) if phase.get("dir") == self.phase_dir_name), None)
+        if entry is None:
             print(f"ERROR: phase '{self.phase_dir_name}' is not registered in {self.task_index_file}")
             print("Fix the task phases/index.json entry and retry.")
+            raise SystemExit(1)
+        # 이 phase 항목이 harness-v2로 설계됐는지 확인한다 (v1 task로 v2 실행 방지).
+        if entry.get("harness_version") != "v2":
+            print(f"\n  ERROR: phase '{self.phase_dir_name}' entry in {self.task_index_file} must declare harness_version='v2'.")
             raise SystemExit(1)
 
     def run(self):
@@ -331,9 +340,6 @@ class StepExecutor:
         checklist = self.read_json(checklist_path)
         if checklist.get("workflow") != "harness":
             print("\n  ERROR: workflow-checklist.json must have workflow='harness'.")
-            raise SystemExit(1)
-        if checklist.get("version") != "v2":
-            print("\n  ERROR: workflow-checklist.json must have version='v2'.")
             raise SystemExit(1)
 
         items = checklist.get("items")
