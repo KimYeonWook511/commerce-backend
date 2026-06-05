@@ -22,7 +22,7 @@ DB find → 없으면 insert → 충돌 시 500
 1. **트랜잭션이 짧다** — race window 가 좁아 안전망 500 의 발생률이 무시 가능한 수준이다.
 2. **정상 흐름에서 동시 충돌 확률이 낮다** — 사용자 입력 식별자(email, merchantPayKey) 나 idempotency key 기반 unique.
 
-조건을 만족하는 현재 적용 대상은 `MemberRegistrationService`, `PaymentApprovalService`, `PaymentApprovalAttemptService`, `PaymentCancellationAttemptService`, `OrderCreateService`, `StockRestoreOutboxConsumeService` 6곳이다.
+조건을 만족하는 현재 적용 대상은 `MemberRegistrationService`, `PaymentApprovalService`, `PaymentApprovalRecordService`, `PaymentCancellationService`, `OrderCreateService`, `StockRestoreOutboxConsumeService` 6곳이다.
 
 **비적용 상황**: 충돌이 잦을 것으로 예상되는 시나리오(예: 캐시 미스 후 동시 다발 insert, 대규모 일괄 처리 race) 에는 본 정책을 적용하지 않고 **try-save-catch** 패턴이 더 적합하다. 향후 새 unique 제약을 도입할 때 위 두 조건으로 패턴을 선택하며, try-save-catch 를 선택하더라도 인프라 예외 타입(`DuplicateKeyException` 등) 에 직접 의존하지 않도록 처리한다.
 
@@ -115,13 +115,13 @@ catch 안에서 호출하는 메서드는 가급적 예외를 던지지 않게 �
 ### 적용 예
 
 - `NaverPayApprovalService.completeVerifiedApproval`의 상위 catch(`PaymentException`, `CustomException`, `Exception`)는 모두 진입 직후 1차 예외를 `log.error`로 남긴다.
-- `PaymentApprovalAttemptService.failIfRequested`는 보상 흐름에서 "현재 상태가 REQUESTED면 실패 처리, 아니면 skip" 의도를 캡슐화해 호출처(`PaymentApprovalCompensationService.runPgCancel`)가 try-catch 없이 평탄하게 보상을 진행하도록 한다. approve attempt가 race window에서 이미 SUCCEEDED 상태가 됐어도 PG cancel 자체는 멈추지 않으며, mark만 skip된다.
+- `PaymentApprovalRecordService.failIfRequested`는 보상 흐름에서 "현재 상태가 REQUESTED면 실패 처리, 아니면 skip" 의도를 캡슐화해 호출처(`PaymentApprovalCompensationService.runPgCancel`)가 try-catch 없이 평탄하게 보상을 진행하도록 한다. approve payment가 race window에서 이미 SUCCEEDED 상태가 됐어도 PG cancel 자체는 멈추지 않으며, mark만 skip된다.
 - `PaymentApprovalService.hasCompletedPayment`는 Payment 도메인의 사실 조회(완료된 Payment row 존재 여부)를 소유자에 박아 두고, 보상 service의 호출 코드(`if (hasCompletedPayment) skip`)가 그 사실을 보상 정책에 적용한다. 사실과 정책을 분리해 도메인 정의 변경 시 영향 범위를 한 곳에 가둔다. NaverPay adapter가 Payment 저장소에 직접 접근하지 않는 의도는 유지된다.
 - **`compensateDuplicateApproval` (payment-order-redesign 추가)**: `uk_payment_approved_order_key` UNIQUE 위반 (`DataIntegrityViolationException`) 은 find-first 원칙의 예외적 허용 케이스다. 이유: `approved_order_key` 는 APPROVE+SUCCEEDED 상태 전이 시 단 한 번 set 되는 NULL 트릭 컬럼이라 사전 `find` 로 레이스를 흡수하기 어렵고, 위반 발생 자체가 *이미 다른 결제가 성공했다* 는 신호이므로 즉시 PG cancel 보상이 필요하다. catch 하여 `compensateDuplicateApproval` 를 실행하고 원 예외를 전파한다.
 
 ### PG cancel 콜백 (PgCanceller)
 
-`PgCanceller.cancel(cancelAttempt, cancelReason) → CancelOutcome` 시그니처. PG-specific 응답(`NaverPayCancelResult.Status` 등)을 도메인 `CancelOutcome.Status`(SUCCESS/PROCESSING/FAILED)로 변환한 뒤 cancel attempt mark를 결정한다. `ALREADY_CANCELED`는 `SUCCESS`와 동일하게 매핑한다. `payment.application`이 `NaverPayCancelResult`를 직접 import하지 않아 레이어 의존 방향이 보존된다.
+`PgCanceller.cancel(cancelPayment, cancelReason) → CancelOutcome` 시그니처. PG-specific 응답(`NaverPayCancelResult.Status` 등)을 도메인 `CancelOutcome.Status`(SUCCESS/PROCESSING/FAILED)로 변환한 뒤 cancel payment mark를 결정한다. `ALREADY_CANCELED`는 `SUCCESS`와 동일하게 매핑한다. `payment.application`이 `NaverPayCancelResult`를 직접 import하지 않아 레이어 의존 방향이 보존된다.
 
 ## 결제 결과 UNKNOWN 처리
 
