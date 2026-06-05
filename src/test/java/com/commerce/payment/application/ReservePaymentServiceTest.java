@@ -203,7 +203,7 @@ class ReservePaymentServiceTest {
 	@DisplayName("금액이 변경되면 기존 RESERVED 예약을 만료 처리하고 새 예약을 발급한다")
 	@Test
 	void reserve_whenAmountChanged_expiresOldAndCreatesNew() {
-		// given: 기존 RESERVED는 1500, 현재 order.totalPrice=2000 → isReusableFor=false → markExpired 후 새 발급
+		// given: 기존 RESERVED는 1500, 현재 order.totalPrice=2000 → isReusableFor=false → expire 후 새 발급
 		Product product = createProduct(10L, "product", 2000);
 		Order order = createOrder(product);
 		setOrderId(order, 1L);
@@ -239,7 +239,7 @@ class ReservePaymentServiceTest {
 	@DisplayName("만료된 RESERVED 예약이 있으면 만료 처리해 reservedKey를 회수하고 새 예약을 발급한다")
 	@Test
 	void reserve_whenExpiredReservationExists_recyclesAndCreatesNew() {
-		// given: 기존 RESERVED는 expiresAt이 과거 → isReusableFor=false → markExpired로 reservedKey 회수 후 새 발급
+		// given: 기존 RESERVED는 expiresAt이 과거 → isReusableFor=false → expire로 reservedKey 회수 후 새 발급
 		Product product = createProduct(10L, "product", 1500);
 		Order order = createOrder(product);
 		setOrderId(order, 1L);

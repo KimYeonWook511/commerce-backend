@@ -62,7 +62,7 @@ class PaymentReservationRepositoryJpaAdapterTest {
 	@DisplayName("만료 시각이 지났어도 status가 RESERVED면 조회된다 (reservedKey 회수 대상)")
 	@Test
 	void findReserved_whenExpiredButStillReserved_returnsReservation() {
-		// given: expiresAt은 과거지만 아직 markExpired 전이라 status=RESERVED → reservedKey 점유 중
+		// given: expiresAt은 과거지만 아직 expire 전이라 status=RESERVED → reservedKey 점유 중
 		reservationRepository.save(
 			PaymentReservation.createReserved(1L, 1L, 1000, PaymentProvider.NAVERPAY, "PAY-2",
 				LocalDateTime.now().minusMinutes(1)));
@@ -100,7 +100,7 @@ class PaymentReservationRepositoryJpaAdapterTest {
 		// given
 		PaymentReservation reservation = PaymentReservation.createReserved(
 			1L, 1L, 1000, PaymentProvider.NAVERPAY, "PAY-4", LocalDateTime.now().plusMinutes(15));
-		reservation.markUsed();
+		reservation.use();
 		reservationRepository.save(reservation);
 		em.flush();
 		em.clear();
@@ -115,10 +115,10 @@ class PaymentReservationRepositoryJpaAdapterTest {
 	@DisplayName("EXPIRED 상태의 예약은 findReserved 결과에서 제외된다")
 	@Test
 	void findReserved_whenExpiredStatus_returnsEmpty() {
-		// given: markExpired로 회수된 행
+		// given: expire로 회수된 행
 		PaymentReservation reservation = PaymentReservation.createReserved(
 			1L, 1L, 1000, PaymentProvider.NAVERPAY, "PAY-5", LocalDateTime.now().plusMinutes(15));
-		reservation.markExpired();
+		reservation.expire();
 		reservationRepository.save(reservation);
 		em.flush();
 		em.clear();
@@ -130,7 +130,7 @@ class PaymentReservationRepositoryJpaAdapterTest {
 		assertThat(result).isEmpty();
 	}
 
-	@DisplayName("markExpired로 reservedKey를 회수하면 같은 (orderId, provider)로 새 예약을 저장할 수 있다")
+	@DisplayName("expire로 reservedKey를 회수하면 같은 (orderId, provider)로 새 예약을 저장할 수 있다")
 	@Test
 	void save_whenExpiredReleasedReservedKey_allowsNewReservationWithSameKey() {
 		// given: RESERVED 저장 (reservedKey="1:NAVERPAY" 점유)
@@ -140,7 +140,7 @@ class PaymentReservationRepositoryJpaAdapterTest {
 		em.flush();
 
 		// when: 만료 회수(reservedKey=null) 후 같은 (orderId, provider)로 새 예약 저장
-		first.markExpired();
+		first.expire();
 		reservationRepository.save(first);
 		em.flush();
 		PaymentReservation second = PaymentReservation.createReserved(
@@ -181,7 +181,7 @@ class PaymentReservationRepositoryJpaAdapterTest {
 		// given: RESERVED → USED 전이 후 저장
 		PaymentReservation reservation = PaymentReservation.createReserved(
 			1L, 1L, 1000, PaymentProvider.NAVERPAY, "PAY-U1", LocalDateTime.now().plusMinutes(15));
-		reservation.markUsed();
+		reservation.use();
 		reservationRepository.save(reservation);
 		em.flush();
 		em.clear();

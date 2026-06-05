@@ -36,7 +36,7 @@
 ```
 
 ```bash
-rg -n "markUsed|markExpired" src/main/java src/test/java
+! rg -q "markUsed|markExpired" src/main/java src/test/java
 ```
 
 ## 검증 절차

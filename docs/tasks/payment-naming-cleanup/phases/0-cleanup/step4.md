@@ -44,7 +44,7 @@
 ```
 
 ```bash
-rg -n "PaymentApprovalAttemptService|PaymentCancellationAttemptService" docs/architecture.md docs/exception-strategy.md docs/testing-conventions.md
+! rg -q "PaymentApprovalAttemptService|PaymentCancellationAttemptService" docs/architecture.md docs/exception-strategy.md docs/testing-conventions.md
 ```
 
 ## 검증 절차

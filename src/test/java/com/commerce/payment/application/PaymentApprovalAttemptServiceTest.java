@@ -40,7 +40,7 @@ class PaymentApprovalAttemptServiceTest {
 
 	@DisplayName("같은 결제 시도 이력이 없으면 reservation을 USED로 전이하고 승인 요청 이력을 생성하고 반환한다")
 	@Test
-	void create_whenAttemptNotExists_markUsedAndCreateAttempt() {
+	void create_whenAttemptNotExists_useAndCreateAttempt() {
 		// given
 		PaymentReservation reservation = PaymentReservation.createReserved(
 			1L, 1L, 1000, PaymentProvider.NAVERPAY, "PAY-1", LocalDateTime.now().plusMinutes(15));

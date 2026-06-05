@@ -28,15 +28,15 @@ public class PaymentApprovalAttemptService {
 	private final PaymentReservationRepository paymentReservationRepository;
 
 	/**
-	 * reservation.markUsed() + Payment 생성을 한 트랜잭션으로 묶어 원자성을 보장한다 (ADR-8).
-	 * 재시도 시 attempt가 이미 존재하면 markUsed를 건너뛰고 기존 attempt를 반환한다.
+	 * reservation.use() + Payment 생성을 한 트랜잭션으로 묶어 원자성을 보장한다 (ADR-8).
+	 * 재시도 시 attempt가 이미 존재하면 use를 건너뛰고 기존 attempt를 반환한다.
 	 */
 	@Transactional
 	public Payment create(PaymentReservation reservation, String pgPaymentId) {
 		return paymentRepository.findApproveAttempt(
 				reservation.getMerchantPayKey(), reservation.getProvider(), pgPaymentId)
 			.orElseGet(() -> {
-				reservation.markUsed();
+				reservation.use();
 				paymentReservationRepository.save(reservation);
 				return paymentRepository.save(
 					Payment.createRequested(reservation, PaymentType.APPROVE, pgPaymentId)

@@ -71,7 +71,7 @@ class PaymentRepositoryDuplicateAttemptTest {
 		PaymentReservation reservation = reservationPersistence.save(
 			PaymentReservation.createReserved(1L, 1L, 1000, PaymentProvider.NAVERPAY, merchantPayKey, expiresAt)
 		);
-		reservation.markUsed();
+		reservation.use();
 		reservationPersistence.save(reservation);
 
 		Payment first = Payment.createRequested(reservation, PaymentType.APPROVE, pgPaymentId);
@@ -81,7 +81,7 @@ class PaymentRepositoryDuplicateAttemptTest {
 		PaymentReservation reservation2 = reservationPersistence.save(
 			PaymentReservation.createReserved(1L, 1L, 1000, PaymentProvider.NAVERPAY, "PAY-OTHER", expiresAt)
 		);
-		reservation2.markUsed();
+		reservation2.use();
 		reservationPersistence.save(reservation2);
 
 		// 두 번째 Payment는 merchantPayKey가 다른 reservation에서 왔지만 동일한 pgPaymentId와 type

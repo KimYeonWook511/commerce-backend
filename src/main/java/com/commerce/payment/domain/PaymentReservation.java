@@ -117,7 +117,7 @@ public class PaymentReservation extends BaseTimeEntity {
 			&& this.amount == amount;
 	}
 
-	public void markUsed() {
+	public void use() {
 		if (this.status != PaymentReservationStatus.RESERVED) {
 			throw new PaymentException(PaymentErrorCode.PAYMENT_RESERVATION_STATUS_TRANSITION_NOT_ALLOWED);
 		}
@@ -127,7 +127,7 @@ public class PaymentReservation extends BaseTimeEntity {
 
 	// 만료/무효화된 예약을 회수한다. reservedKey를 비워 uk_payment_reservation_reserved_key 점유를 해제하므로
 	// 같은 (orderId, provider)로 새 예약을 발급할 수 있다 (ADR-5 박제 자동 복구).
-	public void markExpired() {
+	public void expire() {
 		if (this.status != PaymentReservationStatus.RESERVED) {
 			throw new PaymentException(PaymentErrorCode.PAYMENT_RESERVATION_STATUS_TRANSITION_NOT_ALLOWED);
 		}

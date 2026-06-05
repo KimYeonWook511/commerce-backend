@@ -1004,7 +1004,7 @@ class NaverPayApprovalServiceTest {
 		PaymentReservation r = PaymentReservation.createReserved(
 			1L, memberId, amount, PaymentProvider.NAVERPAY, merchantPayKey,
 			LocalDateTime.now().plusMinutes(15));
-		r.markUsed();
+		r.use();
 		ReflectionTestUtils.setField(r, "id", 1L);
 		return r;
 	}
