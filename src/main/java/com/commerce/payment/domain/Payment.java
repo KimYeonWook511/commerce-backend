@@ -143,8 +143,6 @@ public class Payment extends BaseTimeEntity {
 		if (this.type == PaymentType.APPROVE) {
 			this.approvedOrderKey = this.orderId;
 		}
-		this.failCode = null;
-		this.failDetail = null;
 		this.respondedAt = respondedAt;
 	}
 
