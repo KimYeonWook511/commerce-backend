@@ -1,10 +1,10 @@
 # Phase Files Reference
 
-이 문서는 `harness` skill이 태스크별 문서와 `phases` 구조를 설계하거나 초안을 만들 때 따르는 참조 문서다.
+이 문서는 `harness` skill이 Task별 문서와 `phases` 구조를 설계하거나 초안을 만들 때 따르는 참조 문서다.
 
-## 태스크 문서 기본 세트
+## Task 문서 기본 세트
 
-각 태스크는 `docs/tasks/<task-name>/` 아래에서 아래 문서를 기본 생성한다.
+각 Task는 `docs/tasks/<task-name>/` 아래에서 아래 문서를 기본 생성한다.
 
 - `prd.md`
 - `architecture.md`
@@ -13,6 +13,18 @@
 - `db-schema.md`
 
 각 문서는 `docs/tasks/_templates/` 템플릿을 복사해 시작한다.
+
+### 선택 생성 규칙
+
+모든 Task가 5개 문서를 다 만들 필요는 없다. 그 Task가 실제로 건드리는 관심사에 해당하는 문서만 생성한다.
+
+- `prd.md`: 거의 항상 생성한다. 기능/변경의 의도와 범위를 담는 정본이다.
+- `adr.md`: 항상 생성하되, 새로 채택된 설계 결정이 없으면 헤더만 둔 빈 staging으로 둔다.
+- `architecture.md`: 구조·레이어·책임 분리에 영향이 있을 때 생성한다. 순수 내부 리팩터링이라 구조 변화가 없으면 생략할 수 있다.
+- `api-spec.md`: 추가·변경되는 API가 있을 때만 생성한다. API를 건드리지 않는 Task는 생략한다.
+- `db-schema.md`: 추가·변경되는 테이블/컬럼이 있을 때만 생성한다. 스키마를 건드리지 않는 Task는 생략한다.
+
+생략한 문서는 step 문서의 `읽어야 할 파일` 목록과 `execute.py`가 주입하는 컨텍스트에서도 자연히 빠진다. `step_context`는 존재하는 문서만 읽으므로 생략해도 실행이 깨지지 않는다.
 
 phase 구조를 만들 때는 아래 파일도 반드시 생성한다.
 
@@ -25,7 +37,7 @@ phase 구조를 만들 때는 아래 파일도 반드시 생성한다.
 
 ## `docs/tasks/<task-name>/phases/index.json`
 
-해당 태스크 내부의 phase 목록을 관리하는 인덱스다.
+해당 Task 내부의 phase 목록을 관리하는 인덱스다.
 
 ```json
 {
@@ -38,7 +50,7 @@ phase 구조를 만들 때는 아래 파일도 반드시 생성한다.
 
 필드 규칙:
 
-- `dir`: 태스크 내부 phase 디렉토리명
+- `dir`: Task 내부 phase 디렉토리명
 - `status`: `pending` | `completed` | `error` | `blocked`
 - 타임스탬프 필드는 생성 시 넣지 않는다
 - phase 이름은 `<순번>-<slug>` 형식을 사용한다
@@ -100,7 +112,7 @@ step 실행 상태 파일이다.
 
 ```json
 {
-  "workflow": "dev-start",
+  "workflow": "harness",
   "status": "drafting",
   "items": [
     { "order": 1, "title": "Explore", "status": "completed" },
@@ -108,17 +120,21 @@ step 실행 상태 파일이다.
     { "order": 3, "title": "Step Design", "status": "completed" },
     { "order": 4, "title": "Worktree 생성 및 이동", "status": "completed" },
     { "order": 5, "title": "File Drafting", "status": "completed" },
-    { "order": 6, "title": "Execution", "status": "pending" }
+    { "order": 6, "title": "Execution", "status": "pending" },
+    { "order": 7, "title": "PR Review", "status": "pending" },
+    { "order": 8, "title": "Root Sync", "status": "pending" },
+    { "order": 9, "title": "Retrospective", "status": "pending" }
   ]
 }
 ```
 
 필드 규칙:
 
-- `workflow`: 항상 `dev-start`
+- `workflow`: 항상 `harness`
 - `status`: `drafting` | `in_progress` | `completed`
-- `items`: `SKILL.md`의 1~6번 Workflow 순서와 제목을 그대로 사용한다.
-- `Execution`은 `execute.py`가 시작할 때 `in_progress`로, phase 종료 시 `completed`로 갱신된다. 별도 `authorization` 객체는 사용하지 않는다.
+- `items`: `SKILL.md`의 1~9번 Stage 순서와 제목을 그대로 사용한다.
+- `Execution`(6)은 `execute.py`가 시작할 때 `in_progress`로, phase 종료 시 `completed`로 갱신된다. 별도 `authorization` 객체는 사용하지 않는다.
+- `PR Review`(7), `Root Sync`(8), `Retrospective`(9)는 `execute.py` 바깥에서 일어나며 agent가 진행하면서 수동으로 `completed`로 갱신한다. `execute.py`는 이 세 항목을 건드리지 않는다.
 
 ## `docs/tasks/<task-name>/phases/<phase-name>/step{N}.md`
 
@@ -138,7 +154,7 @@ step 실행 상태 파일이다.
 - `/docs/tasks/<task-name>/db-schema.md`
 - `{이전 step에서 생성/수정된 파일 경로}`
 
-태스크 문서만으로 부족한 공통 맥락이 있으면 아래처럼 루트 문서를 추가로 읽는다.
+Task 문서만으로 부족한 공통 맥락이 있으면 아래처럼 루트 문서를 추가로 읽는다.
 
 - `/docs/architecture.md`
 - `/docs/ADR.md`
@@ -178,7 +194,7 @@ step 실행 상태 파일이다.
 - command와 query는 데이터 흐름, 권한, 검증 기준이 다르면 별도 step으로 분리한다.
 - domain, repository, service, controller, request/response DTO, test는 같은 사용자 기능 완성에 필요하면 한 step에 함께 포함한다.
 - 레이어별 step은 공통 도메인 선행 작업, 독립 DB 마이그레이션, 대규모 공유 계약 변경처럼 분리 검증이 명확히 필요한 경우에만 사용한다.
-- phase 마지막 두 step은 `sync-root-docs`(루트 docs 동기화)와 `write-retrospective`(회고록 작성)로 표준화한다.
+- 루트 docs 동기화와 회고록 작성은 phase의 step으로 두지 않는다. 각각 Stage 8(Root Sync), Stage 9(Retrospective)에서 phase 바깥에서 수행한다. 따라서 phase의 마지막 step은 마지막 구현 step이다.
 - 신규 파일이 많거나 reviewer가 한 번에 판단하기 어렵다면 레이어가 아니라 사용자 기능/정책 경계를 기준으로 더 작게 나눈다.
 - “이전 대화에서 논의한 바와 같이” 같은 외부 참조를 쓰지 않는다.
 - 필요한 파일 경로와 배경은 문서 안에 직접 적는다.
@@ -215,14 +231,17 @@ step 실행 상태 파일이다.
 
 ## 실행
 
-태스크별 `phases` 구조가 준비되면 작업 브랜치 worktree 안에서 실행기를 순차 실행한다.
+Task별 `phases` 구조가 준비되면 작업 브랜치 worktree 안에서 실행기를 순차 실행한다.
 
 ```bash
 # worktrees/<type>-<task-name>/ 안에서
+# push는 기본 동작이다.
 python3 .claude/skills/harness/scripts/execute.py docs/tasks/<task-name>/phases/<phase-name>
-python3 .claude/skills/harness/scripts/execute.py docs/tasks/<task-name>/phases/<phase-name> --push
 
-# worker별 모델을 지정해서 실행
+# push를 생략하려면 --no-push
+python3 .claude/skills/harness/scripts/execute.py docs/tasks/<task-name>/phases/<phase-name> --no-push
+
+# agent별 모델을 지정해서 실행
 python3 .claude/skills/harness/scripts/execute.py docs/tasks/<task-name>/phases/<phase-name> \
   --developer-model sonnet --reviewer-model opus --commit-model haiku
 ```
@@ -243,10 +262,38 @@ python3 .claude/skills/harness/scripts/execute.py docs/tasks/<task-name>/phases/
 
 각 step은 실행기로 완료되어야 하며, 수동으로 `status = completed`만 기록하면 안 된다.
 
-- `stepN-output.json`: developer worker 실행 결과
+- `stepN-output.json`: developer agent 실행 결과
 - `stepN-ac-output.json`: Acceptance Criteria 재실행 결과
-- `stepN-review-output.json`: reviewer worker 검토 결과
+- `stepN-review-output.json`: reviewer agent 검토 결과
 
-위 output 파일과 `workflow-checklist.json`은 로컬 실행 추적용이며 커밋하지 않는다. phase index는 step 진행 기준으로 사용하고 phase 종료 시 커밋한다. task 문서 초안은 step 6(Execution Authorization) 완료 직후 `docs:` 커밋으로 등록한다.
+### `stepN-output.json` 구조
+
+재시도/재실행 시 과거 시도를 잃지 않도록 append 구조를 쓴다. 최상위 키는 항상 "가장 최근 시도"를 가리키며(step_verifier·reviewer agent가 최상위 키를 읽으므로 호환을 위해 유지), 과거 시도는 `attempts[]`에 누적한다.
+
+```json
+{
+  "step": 1,
+  "name": "core-types",
+  "exitCode": 0,
+  "stdout": "<가장 최근 시도 transcript>",
+  "stderr": "",
+  "lastMessage": "<가장 최근 시도 transcript>",
+  "attempts": [
+    { "attempt": 1, "exitCode": 1, "struggles": "A 방식 시도, 테스트 X 깨짐 → B로 전환", "lastMessage": "<1차 transcript>" },
+    { "attempt": 2, "exitCode": 0, "struggles": null, "lastMessage": "<2차 transcript>" }
+  ]
+}
+```
+
+`attempts[]` 각 레코드 필드:
+
+- `attempt`: 시도 순번. 재시도와 재실행을 가로질러 누적된다.
+- `exitCode`: 해당 시도의 종료 코드.
+- `struggles`: 해당 시도에서 developer agent가 남긴 시행착오. `<<<STRUGGLES>>>...<<<END STRUGGLES>>>` 블록에서 추출하며, 없거나 "없음"이면 `null`.
+- `lastMessage`: 해당 시도의 전체 transcript. 마커가 누락돼도 회고가 원문에서 시행착오를 읽을 수 있는 안전망이다.
+
+이 산출물은 Stage 9(Retrospective)에서 step별 시행착오를 종합하는 1차 자료로 쓰인다. reviewer agent의 지적은 다음 시도의 developer transcript에 반영되므로, 회고에 필요한 "왜 이 step이 막혔나"는 `attempts[]`만으로 재구성된다.
+
+위 output 파일과 `workflow-checklist.json`은 로컬 실행 추적용이며 커밋하지 않는다. phase index는 step 진행 기준으로 사용하고 phase 종료 시 커밋한다. task 문서 초안은 Stage 6 진입 직전(실행 승인 직후) `docs:` 커밋으로 등록한다.
 
 이미 `completed`인 step은 phase index의 `summary`와 `completed_at`으로 확인한다. output 파일 존재 여부는 이전 step 재개 조건으로 사용하지 않는다.
