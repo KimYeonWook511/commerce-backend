@@ -72,23 +72,15 @@ Port 인터페이스 설계 원칙:
 
 ---
 
-## 도메인별 주요 서비스
+## 도메인별 서비스
 
-| 도메인 | application 서비스 |
-|--------|--------------------|
-| auth | `AuthSignUpService`, `AuthLoginService`, `AuthTokenReissueService`, `AuthTokenIssueService`, `TokenAuthenticationService` |
-| member | `MemberRegistrationService`, `MemberQueryService` |
-| product | `ProductQueryService`, `AdminProductService` |
-| stock | `StockInventoryService`, `AdminStockService`, `StockConcurrencyService` |
-| order | `OrderCreateService`, `OrderCancelService`, `OrderQueryService`, `OrderExpirationService`, `OrderConcurrencyService` |
-| cart | `AddCartItemService`, `GetMyCartService`, `UpdateCartItemQuantityService`, `RemoveCartItemService` |
-| payment | `ReservePaymentService`, `PaymentApprovalService`, `PaymentApprovalRecordService`, `PaymentCancellationService`, `PaymentApprovalCompensationService` |
-| naverpay | `NaverPayApprovalService` |
-| outbox/stock | `StockRestoreOutboxCreateService`, `StockRestoreOutboxRelayService`, `StockRestoreOutboxConsumeService` |
+각 도메인의 application 계층은 위 "서비스 네이밍 원칙"에 따라 유스케이스 단위 Service로 구성된다. 도메인별 서비스의 정확한 전체 목록은 코드(`com.commerce.<domain>.application`)가 단일 출처이며, 특정 기능의 구현 맥락은 해당 task의 `docs/tasks/<task>/architecture.md`를 참조한다. 본 문서는 개별 서비스를 전수 나열하지 않는다.
 
 ---
 
 ## 데이터 흐름
+
+아래 흐름은 컴포넌트 간 협력과 순서, 트랜잭션 경계를 보여주는 개념도다. 등장하는 클래스·메서드명은 현재 구현 기준 예시이며, 정확한 시그니처는 코드가 단일 출처다. 흐름이 표현하려는 것은 "어떤 책임이 어떤 순서로, 어떤 경계 안팎에서 협력하는가"이다.
 
 ```
 # 상품 공개 조회
@@ -101,46 +93,44 @@ AdminProductController → AdminProductService → ProductRepository
 AdminStockController → AdminStockService → StockRepository, StockHistoryRepository
 
 # 장바구니 담기 / 조회 / 수량 변경 / 항목 삭제
-CartController → AddCartItemService → CartItemRepository (find → save / increaseQuantity)
-CartController → GetMyCartService → CartItemRepository, ProductRepository (최신 가격 조립, unavailable 마킹)
-CartController → UpdateCartItemQuantityService → CartItemRepository (find → changeQuantity)
-CartController → RemoveCartItemService → CartItemRepository (deleteByMemberIdAndProductId)
+CartController → AddCartItemService → CartItemRepository (UPSERT: 있으면 수량 합산, 없으면 생성)
+CartController → GetMyCartService → CartItemRepository, ProductRepository (최신 가격 재조립, 구매 불가 마킹)
+CartController → UpdateCartItemQuantityService → CartItemRepository (수량 절대값 변경)
+CartController → RemoveCartItemService → CartItemRepository (항목 삭제)
 
 # 주문 생성
 OrderController → OrderCreateService
   → StockInventoryService (재고 차감)
   → ReservePaymentService (결제 준비 — PaymentReservation 생성/재사용)
-  → CartItemRemover (cart.infrastructure.CartItemRemoverAdapter, 주문된 productId만 cart에서 제거)
+  → CartItemRemover port (주문된 productId만 cart에서 제거)
 
 # 결제 reserve (구 ready)
 ReservePaymentController → ReservePaymentService
-  → OrderRepository (주문 확인 + checkPayable)
+  → OrderRepository (주문 확인 + 결제 가능 상태 검증)
   → PaymentRepository (UNKNOWN 차단 검사)
   → PaymentReservationRepository (재사용 가능 Reservation 탐색 또는 신규 RESERVED INSERT)
-  → uk_payment_reservation_reserved_key 가 동시 따닥 차단
+  → uk_payment_reservation_reserved_key UNIQUE 가 동시 따닥 차단
 
 # 결제 승인 (네이버페이)
 NaverPayController → NaverPayApprovalService
   → PaymentReservationRepository (merchantPayKey 로 Reservation 역조회 — Order 안 거침)
-  → memberId 검증 (Reservation.memberId vs SecurityContext)
+  → memberId 검증 (Reservation.memberId vs 인증 컨텍스트)
   → PaymentRepository (UNKNOWN 차단 검사)
   → USED Reservation 발견 시 멱등 응답 200 반환
-  → [트랜잭션 안] reservation.use() + Payment(APPROVE, REQUESTED) INSERT
-  → [트랜잭션 밖] NaverPayGateway (PG approve API 호출)
+  → [트랜잭션 안] Reservation 사용 처리 + Payment(APPROVE, REQUESTED) INSERT
+  → [트랜잭션 밖] PG Gateway (approve API 호출)
   → PaymentApprovalRecordService (승인 시도 상태 반영)
-  → PaymentApprovalService.hasCompletedPayment (보상 가능 여부 판단)
+  → 완료 여부 판단 (성공 APPROVE 행 존재 기반, 보상 가능성 판단)
   → PaymentCancellationService (취소 시도 이력 기록, 보상 흐름)
-  → PaymentApprovalCompensationService (보상 dispatcher — compensateDuplicateApproval 포함, this::pgCancel 콜백 주입)
+  → PaymentApprovalCompensationService (보상 dispatcher — 중복 승인 보상 포함, PG 취소 콜백 주입)
 
 # 주문 만료 배치
-OrderExpirationBatchConfig (Spring Batch)
+Spring Batch (주문 만료)
   → OrderExpirationService (만료 대상 처리)
   → OrderCancelService (주문 취소)
   → StockRestoreOutboxCreateService (복구 이벤트 생성)
-  → StockRestoreOutboxScheduler
-  → StockRestoreOutboxRelayService → Kafka
-  → StockRestoreKafkaEventConsumer
-  → StockRestoreOutboxConsumeService (재고 복구)
+  → Outbox 스케줄러 → relay → Kafka
+  → Kafka consumer → StockRestoreOutboxConsumeService (재고 복구)
 ```
 
 ---
@@ -150,10 +140,10 @@ OrderExpirationBatchConfig (Spring Batch)
 - `auth`는 인증 유스케이스의 owner다. 비밀번호 검증, JWT 발급·검증, refresh token 저장 흐름을 담당한다. 회원 생성·조회는 `member.application`에 위임한다.
 - `security`는 HTTP 요청 인증/인가 adapter다. `JwtAuthenticationFilter`가 `TokenAuthenticationService`를 호출해 인증 결과를 `AuthenticationContext`에 저장하고, `AuthorizationInterceptor`와 `AuthenticatedMemberIdArgumentResolver`가 이를 사용한다.
 - `product` 도메인은 공개 상품 조회와 관리자 상품 등록·수정·soft delete를 제공한다. 상품 목록은 `ON_SALE` 또는 `SOLD_OUT` 상태, `deletedAt IS NULL`, `createdAt DESC` 기준으로 반환한다. 상품 상세는 상품 정보와 현재 재고 수량을 조합한다.
-- `stock` 도메인은 상품별 현재 재고, 주문 경로의 재고 차감·복구, 관리자 초기 재고 생성, 관리자 수동 조정, 재고 변경 이력을 담당한다. `Product : Stock = 1:1` 관계를 유지하며, `Stock` 은 `productId: Long` 으로 Product 를 ID 참조한다(ADR-020). `StockHistory` 는 Stock 과 별도 aggregate 로 `stockId: Long` 으로 Stock 을 ID 참조한다. 응답 조립 시 application 계층이 `StockHistoryResult.from(history, productId)` 로 path 컨텍스트를 외부 주입한다. 후속 트랙(`order-jpa-association-decouple`, `payment-jpa-association-decouple`)에서 Order·Payment aggregate 에도 동일 원칙이 적용됐다. DB FK 일괄 제거는 `cross-aggregate-fk-cleanup` 트랙에서 완료됐다.
-- `order` 도메인은 주문 생성·취소·만료를 담당한다. 주문 생성은 멱등 키로 중복 요청을 방어한다. 만료 처리는 Spring Batch로 스케줄링한다. 주문 생성 트랜잭션 내에서 `CartItemRemover` port를 통해 주문된 항목만 cart에서 제거한다. `Order` 는 `memberId: Long` 으로 Member 를, `OrderItem` 은 `productId: Long` 으로 Product 를 ID 참조한다(ADR-020). same-aggregate 관계(`Order.orderItems`, `OrderItem.order`)는 객체 참조를 유지한다. cross-aggregate fetch join 은 제거하고 사용처별로 batch composition(PaymentReady — `productRepository.findAllById` 1회) 또는 컬럼 직접 사용(cancel/expiration)으로 대체한다. 세부 결정은 `docs/tasks/order-jpa-association-decouple/adr.md` 참조. 후속 트랙: `payment-jpa-association-decouple`. DB FK 일괄 제거는 `cross-aggregate-fk-cleanup` 트랙에서 완료됐다.
-- `cart` 도메인은 회원의 장바구니 항목 추가(UPSERT)·조회(최신 가격 재조립, 구매 불가 마킹)·수량 변경·삭제를 담당한다. 다른 aggregate(Member, Product)는 `Long` ID로만 참조한다(ADR-020). 주문-cart 연동은 `order.application.port.CartItemRemover` 인터페이스를 `cart.infrastructure.CartItemRemoverAdapter`가 구현하는 방식으로 의존 방향을 보존한다.
-- `payment` core는 결제 예약(reserve)·승인·시도 이력 관리를 담당한다. `naverpay`는 provider 서브패키지로, PG 호출과 내부 결제 상태 반영을 분리한다. 도메인은 두 엔티티로 분리됐다 (ADR-026): `PaymentReservation` (결제창 준비물, `RESERVED → USED` 전이) + `Payment` (PG 사건 append-only, type ∈ `{APPROVE, CANCEL}`). Order 는 결제 식별자를 모른다 — merchantPayKey 발급·저장 책임이 `PaymentReservation` 으로 이동했다. `Payment` 는 `orderId: Long` 으로 Order 를, `merchantPayKey` 로 `PaymentReservation` 을 값 참조한다. `PaymentApprovalService.hasCompletedPayment` 는 *성공 APPROVE 행 존재 (EXISTS)* 기반 완료 판단이다 (ADR-014, ADR-026). `PaymentApprovalCompensationService` 는 `compensateDuplicateApproval` 포함 보상 정책을 소유한다 (ADR-015, ADR-026). UNKNOWN 마킹 — PG 호출 결과 불명 시 `Payment.markUnknown` 흔적 보존, UNKNOWN 행 있는 주문은 reserve/approve 차단 (`PAYMENT_RESULT_PENDING` 409). ADR-020 후속 트랙 series (Stock / Order / Payment / FK cleanup) 완전 종료. `cross-aggregate-fk-cleanup` 트랙에서 cross-aggregate FK 5건을 Flyway V4 migration 으로 일괄 제거해 코드 + DB schema 정합성이 회복됐다. 운영 DB 의 FK 제거 적용은 별도 결정. 결제 도메인 재설계 세부 결정은 `docs/tasks/payment-order-redesign/` 참조 (ADR-026).
+- `stock` 도메인은 상품별 현재 재고, 주문 경로의 재고 차감·복구, 관리자 초기 재고 생성, 관리자 수동 조정, 재고 변경 이력을 담당한다. `Product : Stock = 1:1` 관계를 유지하며, `Stock` 은 `productId: Long` 으로 Product 를 ID 참조한다(ADR-020). `StockHistory` 는 Stock 과 별도 aggregate 로 `stockId: Long` 으로 Stock 을 ID 참조한다. 응답 조립 시 Application 계층이 path 컨텍스트(productId)를 외부 주입한다. 후속 트랙(`order-jpa-association-decouple`, `payment-jpa-association-decouple`)에서 Order·Payment aggregate 에도 동일 원칙이 적용됐다. DB FK 일괄 제거는 `cross-aggregate-fk-cleanup` 트랙에서 완료됐다.
+- `order` 도메인은 주문 생성·취소·만료를 담당한다. 주문 생성은 멱등 키로 중복 요청을 방어한다. 만료 처리는 Spring Batch로 스케줄링한다. 주문 생성 트랜잭션 내에서 `CartItemRemover` port를 통해 주문된 항목만 cart에서 제거한다. `Order` 는 `memberId: Long` 으로 Member 를, `OrderItem` 은 `productId: Long` 으로 Product 를 ID 참조한다(ADR-020). same-aggregate 관계(`Order.orderItems`, `OrderItem.order`)는 객체 참조를 유지한다. cross-aggregate fetch join 은 제거하고 사용처별로 batch composition(필요한 Product를 ID 목록으로 한 번에 조회) 또는 컬럼 직접 사용(cancel/expiration)으로 대체한다. 세부 결정은 `docs/tasks/order-jpa-association-decouple/adr.md` 참조. 후속 트랙: `payment-jpa-association-decouple`. DB FK 일괄 제거는 `cross-aggregate-fk-cleanup` 트랙에서 완료됐다.
+- `cart` 도메인은 회원의 장바구니 항목 추가(UPSERT)·조회(최신 가격 재조립, 구매 불가 마킹)·수량 변경·삭제를 담당한다. 다른 aggregate(Member, Product)는 `Long` ID로만 참조한다(ADR-020). 주문-cart 연동은 `CartItemRemover` port(order 소유)를 cart 쪽 adapter가 구현하는 방식으로 의존 방향을 보존한다.
+- `payment` core는 결제 예약(reserve)·승인·시도 이력 관리를 담당한다. `naverpay`는 provider 서브패키지로, PG 호출과 내부 결제 상태 반영을 분리한다. 도메인은 두 엔티티로 분리됐다 (ADR-026): `PaymentReservation` (결제창 준비물, `RESERVED → USED` 전이) + `Payment` (PG 사건 append-only, type ∈ `{APPROVE, CANCEL}`). Order 는 결제 식별자를 모른다 — merchantPayKey 발급·저장 책임이 `PaymentReservation` 으로 이동했다. `Payment` 는 `orderId: Long` 으로 Order 를, `merchantPayKey` 로 `PaymentReservation` 을 값 참조한다. 결제 완료 판단은 *성공한 APPROVE 행 존재(EXISTS)* 기반이다 (ADR-014, ADR-026). 보상 정책(중복 승인 보상 포함)은 payment.application의 보상 서비스가 소유한다 (ADR-015, ADR-026). UNKNOWN 마킹 — PG 호출 결과 불명 시 흔적을 보존하고, UNKNOWN 행 있는 주문은 reserve/approve 를 차단한다 (`PAYMENT_RESULT_PENDING` 409). ADR-020 후속 트랙 series (Stock / Order / Payment / FK cleanup) 완전 종료. `cross-aggregate-fk-cleanup` 트랙에서 cross-aggregate FK 5건을 Flyway V4 migration 으로 일괄 제거해 코드 + DB schema 정합성이 회복됐다. 운영 DB 의 FK 제거 적용은 별도 결정. 결제 도메인 재설계 세부 결정은 `docs/tasks/payment-order-redesign/` 참조 (ADR-026).
 - `outbox` 도메인은 재고 복구 이벤트를 Outbox 패턴으로 처리한다. 이벤트 생성, Kafka 릴레이, 소비 책임을 별도 서비스로 분리한다.
 
 ---
@@ -175,120 +165,39 @@ log.info("결제 승인 완료 merchantPayKey={} provider={} pgPaymentId={} orde
 
 ### 도메인 이벤트 INFO 로그 적용 범위
 
-다음 8개 도메인의 17개 컴포넌트에 유스케이스 완료 시 INFO 로그가 추가되어 있다.
-
-| 도메인 | 컴포넌트 |
-|--------|---------|
-| Order | `OrderCreateService`, `OrderCreateProcessor`, `OrderCancelService`, `OrderConcurrencyService`, `OrderExpirationService` |
-| Cart | `AddCartItemService`, `UpdateCartItemQuantityService`, `RemoveCartItemService` |
-| Outbox | `StockRestoreOutboxCreateService` |
-| Payment | `PaymentApprovalService`, `ReservePaymentService` |
-| Stock | `StockInventoryService`, `AdminStockService` |
-| Auth | `AuthLoginService`, `AuthSignUpService` |
-| Member | `MemberRegistrationService` |
-| Product | `AdminProductService` |
-
-단순 조회·위임 서비스(`OrderQueryService`, `GetMyCartService`, `MemberQueryService`, `ProductQueryService`, `TokenAuthenticationService`, `OutboxService`)는 도메인 상태 전환이 없으므로 INFO 로그를 두지 않는다.
+도메인 상태를 전환하는 유스케이스 Service는 완료 시점에 INFO 로그를 남긴다. 단순 조회·위임 서비스(상태 전환 없음)는 INFO 로그를 두지 않는다. 어떤 컴포넌트에 적용돼 있는지의 정확한 목록은 코드가 단일 출처이며, 적용 기준·메시지 패턴의 단일 진실의 원천은 `docs/logging-conventions.md`다.
 
 ---
 
-## 응용 계층 트랜잭션·영속화 컨벤션
+## Application 계층 트랜잭션·영속화 컨벤션
 
-응용 Service의 트랜잭션 경계와 영속화 호출 방식은 ADR-021(method-level `@Transactional`)과 ADR-022(`repository.save(entity)` 명시 호출)를 따른다. 정책 본문·근거·트레이드오프는 ADR을 단일 출처로 한다.
+Application Service의 트랜잭션 경계와 영속화 호출 방식은 ADR-021(method-level `@Transactional`)과 ADR-022(`repository.save(entity)` 명시 호출)를 따른다. 정책 본문·근거·트레이드오프는 ADR을 단일 출처로 한다.
 
 ---
 
 ## HTTP 요청 처리 Filter
 
-### Filter 등록 정책
+application Filter는 `FilterRegistrationBean`으로 명시 등록하고 `Ordered` 기반 순서를 가진다. `@Component` 자동 등록은 쓰지 않는다(암묵적 등록 순서 의존과 `LOWEST_PRECEDENCE` 충돌 회피).
 
-모든 application Filter는 `FilterRegistrationBean`으로 명시 등록되며 `Ordered` 기반 order를 갖는다. `@Component` 자동 등록은 사용하지 않는다 — 미래 Filter 추가 시 `LOWEST_PRECEDENCE` 충돌과 암묵적 등록 순서 의존을 회피하기 위해.
+| 순서 | Filter | 역할 |
+|---|---|---|
+| 1 | `TraceIdFilter` | 모든 요청에 UUID traceId 발급 → MDC push, 응답 헤더 `X-Trace-Id` 부착 |
+| 2 | `AccessLogFilter` | 모든 요청에 시작/종료 접근 로그 |
+| 3 | `JwtAuthenticationFilter` | 인증 필요 경로의 Bearer 토큰 검증 → 인증 컨텍스트 저장 |
 
-| Filter | 클래스 | Order |
-|--------|--------|-------|
-| **TraceIdFilter** | `com.commerce.common.log.filter.TraceIdFilter` | `Ordered.HIGHEST_PRECEDENCE + 10` |
-| **AccessLogFilter** | `com.commerce.common.log.filter.AccessLogFilter` | `Ordered.HIGHEST_PRECEDENCE + 20` |
-| **JwtAuthenticationFilter** | `com.commerce.security.filter.JwtAuthenticationFilter` | `Ordered.HIGHEST_PRECEDENCE + 30` |
+순서가 구조적으로 중요하다: `TraceIdFilter`·`AccessLogFilter`가 `JwtAuthenticationFilter`보다 바깥(먼저)에 있어, 인증 실패(401) 요청에도 traceId와 접근 로그가 남는다.
 
-`TraceIdFilter`는 모든 요청(`/*`)에 UUID traceId를 발급해 MDC `traceId` 키에 push하고, 응답 헤더 `X-Trace-Id`에 추가한다. `JwtAuthenticationFilter`보다 먼저 실행되므로 인증 실패 로그에도 traceId가 포함된다.
+인증된 요청의 `memberId`는 MDC로 전파되어 이후 도메인 로그와 접근 로그에 자동 포함된다. 각 Filter는 자신이 push한 MDC 키만 제거한다(`MDC.clear()` 금지 — 다른 Filter의 키를 함께 날림). 구체 전파·정리 메커니즘은 `docs/logging-conventions.md`와 `docs/tasks/memberid-mdc-propagation/architecture.md`가 단일 출처다.
 
-`AccessLogFilter`는 모든 요청(`/*`)에 대해 요청 시작/종료 INFO 로그 2건(method, path, status, latency)을 남긴다. traceId/memberId는 직접 부착하지 않고 MDC를 통해 logback 패턴이 자동 부착한다. `JwtAuthenticationFilter` 이전에 실행되므로 미인증 요청에도 액세스 로그가 남으며, "요청 시작" 로그 시점에는 memberId가 빈 값이다.
+### 비동기 경계 traceId 전파
 
-`JwtAuthenticationFilter`(`JwtAuthenticationFilterConfig`)는 인증이 필요한 경로의 Bearer 토큰을 검증해 `AuthenticationContext`에 인증 결과를 저장한다.
+HTTP 요청 traceId는 스레드 로컬 MDC라 비동기 경계에서 자동 전파되지 않으므로, 경계마다 명시적으로 전달한다(ADR-017, ADR-019):
 
-### memberId MDC 전파
+- **Kafka**: producer가 traceId를 헤더 `X-Trace-Id`에 부착하고 consumer가 MDC로 복원한다.
+- **Outbox**: 원본 traceId를 `tbl_outbox_event.trace_id`에 저장한 뒤 relay 시 MDC로 복원해 Kafka 헤더로 전파한다.
+- **`@TransactionalEventListener`**: 이벤트 객체에 traceId를 동봉한다. 현재 사용처 0건(`order-idempotency-cache-simplification`에서 제거, 향후 도입 시 갱신).
 
-인증된 요청에서 `memberId`가 도메인 로그(Controller/Service/Repository)와 access log "요청 종료"에 모두 포함된다.
-
-- `JwtAuthenticationFilter`가 인증 성공 시 `MDC.put("memberId", ...)` — 이후 Controller/Service/Repository 로그에 자동 포함.
-- 동시에 `request.setAttribute(AccessLogFilter.MEMBER_ID_ATTRIBUTE, memberId)` — `AccessLogFilter` finally에 전달.
-- `AccessLogFilter` finally가 attribute에서 읽어 "요청 종료" 로그 출력 시점에만 MDC를 잠깐 채우고 출력 후 제거.
-
-이 방식을 쓰는 이유: `AccessLogFilter`는 인증 실패(401) 요청의 access log도 남겨야 하므로 `JwtAuthenticationFilter`보다 바깥 Filter여야 한다. `AccessLogFilter` finally 시점엔 `AuthenticationContext.clear()`가 이미 호출된 상태이므로, request attribute로 명시 전달이 필요하다. 상세 흐름은 `docs/tasks/memberid-mdc-propagation/architecture.md` 참조.
-
-비인증 요청·인증 실패 요청에는 모든 로그의 memberId가 빈 값으로 유지된다.
-
-### MDC 키 정리 규약
-
-각 Filter는 자신이 push한 MDC 키만 `MDC.remove(KEY)`로 제거한다. `MDC.clear()` 호출 금지 — 다른 Filter가 push한 키(traceId 등)를 함께 날리는 위험.
-
-### 비동기 경계와 traceId 전파
-
-HTTP 요청 단위 traceId는 `TraceIdFilter`가 MDC에 push하지만, 비동기 경계에서는 스레드 로컬인 MDC가 자동 전파되지 않는다. 각 경계마다 명시적 전파 메커니즘이 적용된다(ADR-017, ADR-019).
-
-#### Kafka 경계
-
-```
-HTTP 요청 → TraceIdFilter → MDC.put("traceId", uuid)
-   ↓
-StockRestoreKafkaEventProducer.send()
-   ↓
-TraceIdKafkaProducerInterceptor.onSend()
-  headers.add("X-Trace-Id", MDC.get("traceId") or 신규 UUID)
-   ↓
-[Kafka broker: stock-restore-events topic]
-   ↓
-TraceIdRecordInterceptor.intercept()
-  MDC.put("traceId", headers.get("X-Trace-Id"))
-   ↓
-StockRestoreKafkaEventConsumer.consume()
-  [동일 traceId로 로그 출력]
-   ↓
-TraceIdRecordInterceptor.afterRecord()
-  MDC.remove("traceId")  ← error handler·DLT 발행 완료 후 실행
-```
-
-#### `@TransactionalEventListener(AFTER_COMMIT)` 경계
-
-> **주의**: `OrderIdempotencyCacheEvent` 사례는 `order-idempotency-cache-simplification` 에서 제거됨. 현재 프로젝트 내 `@TransactionalEventListener` 사용처 0건. 향후 도입 시 본 절을 갱신.
-
-이벤트 객체에 traceId 필드를 동봉해 listener가 MDC에 복원하는 방식을 사용한다. 향후 `@TransactionalEventListener` 도입 시 아래 원칙을 따른다:
-- 이벤트 객체에 `traceId` 필드를 추가해 publisher 시점의 `LogContext.getTraceId()`를 전달한다.
-- listener 진입 시 MDC에 이미 유효한 traceId가 있으면 보존하고, 비어있을 때만 이벤트의 traceId를 push한다 (동기 실행 경로 MDC 유실 방지).
-- push한 경우에만 `finally`에서 `LogContext.removeTraceId()`로 정리한다.
-
-#### Outbox 경계
-
-원본 HTTP 요청의 traceId를 `tbl_outbox_event.trace_id` 컬럼에 저장한 뒤 relay 시 MDC로 복원해 Kafka 헤더로 자동 전파한다.
-
-```
-HTTP 요청 → TraceIdFilter → MDC.put("traceId", uuid)
-   ↓
-StockRestoreOutboxCreateService.createOutboxEvent(...)
-  OutboxEvent.createPending(..., traceId=LogContext.getTraceId())
-  → DB에 trace_id 저장 (유효하지 않으면 NULL)
-   ↓
-[스케줄러 실행 시점]
-   ↓
-StockRestoreOutboxRelayService.publishTarget(target, now)
-  LogContext.putTraceId(target.getTraceId())  ← NULL이면 MDC 조작 없음
-  try {
-    eventPublisher.publish(target)  ← Kafka producer interceptor가 헤더 부착
-    markSent(target)
-  } finally { LogContext.removeTraceId() }
-```
-
-Outbox 스케줄러 자체 로그는 traceId가 없다(독립 거래 배치 처리이므로 운영 통계 로그 성격). Spring Batch와 `@Async`는 정책상 적용 대상에서 제외된다. 상세 정책은 `docs/logging-conventions.md` §8 참조.
+각 경계의 의사코드 수준 흐름과 운영 정책(스케줄러 로그 제외 범위 등)은 `docs/logging-conventions.md`와 ADR-017/019, 관련 task architecture가 출처다.
 
 ---
 
