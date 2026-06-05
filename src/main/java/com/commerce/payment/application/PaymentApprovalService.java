@@ -32,17 +32,17 @@ public class PaymentApprovalService {
 	}
 
 	/**
-	 * PG 승인 응답 수신 후 attempt.succeed() + order.completePayment()를 한 트랜잭션으로 처리한다 (ADR-8).
+	 * PG 승인 응답 수신 후 payment.succeed() + order.completePayment()를 한 트랜잭션으로 처리한다 (ADR-8).
 	 * 주문 행을 PK로 잠가(findByIdForUpdate) 같은 주문의 동시 승인 반영을 직렬화한다.
 	 */
 	@Transactional
 	public Payment succeedApproval(
-		Payment attempt,
+		Payment approvePayment,
 		LocalDateTime now
 	) {
-		Payment current = paymentRepository.findApproveAttempt(
-				attempt.getMerchantPayKey(), attempt.getProvider(), attempt.getPgPaymentId())
-			.orElseThrow(() -> new PaymentException(PaymentErrorCode.PAYMENT_ATTEMPT_NOT_FOUND));
+		Payment current = paymentRepository.findApprovePayment(
+				approvePayment.getMerchantPayKey(), approvePayment.getProvider(), approvePayment.getPgPaymentId())
+			.orElseThrow(() -> new PaymentException(PaymentErrorCode.PAYMENT_RECORD_NOT_FOUND));
 
 		if (current.getStatus() == PaymentStatus.SUCCEEDED) {
 			log.info("결제 승인 멱등 흡수 merchantPayKey={} provider={} pgPaymentId={} orderId={}",

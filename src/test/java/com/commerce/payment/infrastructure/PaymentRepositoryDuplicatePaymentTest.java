@@ -36,7 +36,7 @@ import com.commerce.support.TestcontainersSupport;
 	PaymentRepositoryAdapter.class,
 	PaymentReservationRepositoryAdapter.class
 })
-class PaymentRepositoryDuplicateAttemptTest {
+class PaymentRepositoryDuplicatePaymentTest {
 
 	@Autowired
 	private PaymentRepository paymentRepository;
@@ -62,7 +62,7 @@ class PaymentRepositoryDuplicateAttemptTest {
 
 	@DisplayName("같은 (merchantPayKey, provider, pgPaymentId, type) 조합으로 두 번째 INSERT는 unique 위반으로 거부된다")
 	@Test
-	void savePayment_whenSameAttemptKeySetExists_throwsUniqueViolation() {
+	void savePayment_whenSamePaymentKeySetExists_throwsUniqueViolation() {
 		// given
 		String merchantPayKey = "PAY-DUPLICATE-TEST";
 		String pgPaymentId = "pg-dup-id";

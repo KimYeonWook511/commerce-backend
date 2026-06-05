@@ -9,9 +9,9 @@ public interface PaymentRepository {
 
 	Payment save(Payment payment);
 
-	Optional<Payment> findApproveAttempt(String merchantPayKey, PaymentProvider provider, String pgPaymentId);
+	Optional<Payment> findApprovePayment(String merchantPayKey, PaymentProvider provider, String pgPaymentId);
 
-	Optional<Payment> findCancelAttempt(String merchantPayKey, PaymentProvider provider, String pgPaymentId);
+	Optional<Payment> findCancelPayment(String merchantPayKey, PaymentProvider provider, String pgPaymentId);
 
 	Optional<Payment> findApproveSucceeded(String merchantPayKey);
 

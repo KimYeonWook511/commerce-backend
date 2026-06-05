@@ -22,18 +22,18 @@ import lombok.extern.slf4j.Slf4j;
 @Slf4j
 @Service
 @RequiredArgsConstructor
-public class PaymentApprovalAttemptService {
+public class PaymentApprovalRecordService {
 
 	private final PaymentRepository paymentRepository;
 	private final PaymentReservationRepository paymentReservationRepository;
 
 	/**
 	 * reservation.use() + Payment 생성을 한 트랜잭션으로 묶어 원자성을 보장한다 (ADR-8).
-	 * 재시도 시 attempt가 이미 존재하면 use를 건너뛰고 기존 attempt를 반환한다.
+	 * 재시도 시 payment가 이미 존재하면 use를 건너뛰고 기존 payment를 반환한다.
 	 */
 	@Transactional
 	public Payment create(PaymentReservation reservation, String pgPaymentId) {
-		return paymentRepository.findApproveAttempt(
+		return paymentRepository.findApprovePayment(
 				reservation.getMerchantPayKey(), reservation.getProvider(), pgPaymentId)
 			.orElseGet(() -> {
 				reservation.use();
@@ -53,9 +53,9 @@ public class PaymentApprovalAttemptService {
 		String failDetail,
 		LocalDateTime respondedAt
 	) {
-		Payment attempt = paymentRepository.findApproveAttempt(merchantPayKey, provider, pgPaymentId)
-			.orElseThrow(() -> new PaymentException(PaymentErrorCode.PAYMENT_ATTEMPT_NOT_FOUND));
-		attempt.fail(failCode, failDetail, respondedAt);
+		Payment payment = paymentRepository.findApprovePayment(merchantPayKey, provider, pgPaymentId)
+			.orElseThrow(() -> new PaymentException(PaymentErrorCode.PAYMENT_RECORD_NOT_FOUND));
+		payment.fail(failCode, failDetail, respondedAt);
 	}
 
 	/**
@@ -70,19 +70,19 @@ public class PaymentApprovalAttemptService {
 		String failDetail,
 		LocalDateTime respondedAt
 	) {
-		Payment attempt = paymentRepository.findApproveAttempt(merchantPayKey, provider, pgPaymentId).orElse(null);
-		if (attempt == null) {
+		Payment payment = paymentRepository.findApprovePayment(merchantPayKey, provider, pgPaymentId).orElse(null);
+		if (payment == null) {
 			log.warn("Payment not found, skipping unknown mark: merchantPayKey={}, pgPaymentId={}", merchantPayKey,
 				pgPaymentId);
 			return;
 		}
-		if (attempt.getStatus() != PaymentStatus.REQUESTED) {
+		if (payment.getStatus() != PaymentStatus.REQUESTED) {
 			log.warn("Payment not in REQUESTED state, skipping unknown mark: merchantPayKey={}, pgPaymentId={}, status={}",
-				merchantPayKey, pgPaymentId, attempt.getStatus());
+				merchantPayKey, pgPaymentId, payment.getStatus());
 			return;
 		}
-		attempt.markUnknown(failDetail, respondedAt);
-		paymentRepository.save(attempt);
+		payment.markUnknown(failDetail, respondedAt);
+		paymentRepository.save(payment);
 	}
 
 	/**
@@ -98,20 +98,20 @@ public class PaymentApprovalAttemptService {
 		String failDetail,
 		LocalDateTime respondedAt
 	) {
-		Payment attempt = paymentRepository.findApproveAttempt(merchantPayKey, provider, pgPaymentId)
+		Payment payment = paymentRepository.findApprovePayment(merchantPayKey, provider, pgPaymentId)
 			.orElse(null);
-		if (attempt == null) {
+		if (payment == null) {
 			log.warn(
 				"Payment not found, skipping fail mark: merchantPayKey={}, provider={}, pgPaymentId={}",
 				merchantPayKey, provider, pgPaymentId);
 			return;
 		}
-		if (attempt.getStatus() != PaymentStatus.REQUESTED) {
+		if (payment.getStatus() != PaymentStatus.REQUESTED) {
 			log.warn(
 				"Payment not in REQUESTED state, skipping fail mark: merchantPayKey={}, pgPaymentId={}, status={}",
-				merchantPayKey, pgPaymentId, attempt.getStatus());
+				merchantPayKey, pgPaymentId, payment.getStatus());
 			return;
 		}
-		attempt.fail(failCode, failDetail, respondedAt);
+		payment.fail(failCode, failDetail, respondedAt);
 	}
 }

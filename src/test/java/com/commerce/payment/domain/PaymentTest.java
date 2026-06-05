@@ -38,16 +38,16 @@ class PaymentTest {
 	@Test
 	void succeed_whenCancelType_updateStatusWithoutApprovedOrderKey() {
 		// given
-		Payment cancelAttempt = Payment.createCancelRequested(1L, "PAY-1", "pg-payment-id", 1000, PaymentProvider.NAVERPAY);
+		Payment cancelPayment = Payment.createCancelRequested(1L, "PAY-1", "pg-payment-id", 1000, PaymentProvider.NAVERPAY);
 		LocalDateTime respondedAt = LocalDateTime.of(2026, 3, 5, 20, 10);
 
 		// when
-		cancelAttempt.succeed(respondedAt);
+		cancelPayment.succeed(respondedAt);
 
 		// then
-		assertThat(cancelAttempt.getStatus()).isEqualTo(PaymentStatus.SUCCEEDED);
-		assertThat(cancelAttempt.getRespondedAt()).isEqualTo(respondedAt);
-		assertThat(cancelAttempt.getApprovedOrderKey()).isNull();
+		assertThat(cancelPayment.getStatus()).isEqualTo(PaymentStatus.SUCCEEDED);
+		assertThat(cancelPayment.getRespondedAt()).isEqualTo(respondedAt);
+		assertThat(cancelPayment.getApprovedOrderKey()).isNull();
 	}
 
 	@DisplayName("실패 처리 시 실패 사유와 응답 시간이 저장된다")
@@ -99,7 +99,7 @@ class PaymentTest {
 		assertThatThrownBy(() -> attempt.markUnknown("detail", LocalDateTime.now()))
 			.isInstanceOf(PaymentException.class)
 			.satisfies(e -> assertThat(((PaymentException)e).getErrorCode())
-				.isEqualTo(PaymentErrorCode.PAYMENT_ATTEMPT_STATUS_TRANSITION_NOT_ALLOWED));
+				.isEqualTo(PaymentErrorCode.PAYMENT_STATUS_TRANSITION_NOT_ALLOWED));
 	}
 
 	@DisplayName("이미 SUCCEEDED 상태인 payment에 succeed 호출 시 예외가 발생한다")
@@ -115,7 +115,7 @@ class PaymentTest {
 		assertThatThrownBy(() -> attempt.succeed(LocalDateTime.now()))
 			.isInstanceOf(PaymentException.class)
 			.satisfies(e -> assertThat(((PaymentException)e).getErrorCode())
-				.isEqualTo(PaymentErrorCode.PAYMENT_ATTEMPT_STATUS_TRANSITION_NOT_ALLOWED));
+				.isEqualTo(PaymentErrorCode.PAYMENT_STATUS_TRANSITION_NOT_ALLOWED));
 	}
 
 	@DisplayName("이미 FAILED 상태인 payment에 fail 호출 시 예외가 발생한다")
@@ -131,7 +131,7 @@ class PaymentTest {
 		assertThatThrownBy(() -> attempt.fail(PaymentFailCode.TIME_EXPIRED, "timeout", LocalDateTime.now()))
 			.isInstanceOf(PaymentException.class)
 			.satisfies(e -> assertThat(((PaymentException)e).getErrorCode())
-				.isEqualTo(PaymentErrorCode.PAYMENT_ATTEMPT_STATUS_TRANSITION_NOT_ALLOWED));
+				.isEqualTo(PaymentErrorCode.PAYMENT_STATUS_TRANSITION_NOT_ALLOWED));
 	}
 
 	@DisplayName("merchantPayKey와 금액이 모두 일치하면 verifyApprovedResponse에서 예외가 발생하지 않는다")

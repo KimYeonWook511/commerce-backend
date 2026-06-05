@@ -136,7 +136,7 @@ public class Payment extends BaseTimeEntity {
 
 	public void succeed(LocalDateTime respondedAt) {
 		if (this.status != PaymentStatus.REQUESTED) {
-			throw new PaymentException(PaymentErrorCode.PAYMENT_ATTEMPT_STATUS_TRANSITION_NOT_ALLOWED);
+			throw new PaymentException(PaymentErrorCode.PAYMENT_STATUS_TRANSITION_NOT_ALLOWED);
 		}
 		this.status = PaymentStatus.SUCCEEDED;
 		// APPROVE 타입은 approvedOrderKey 에 orderId 를 채워 uk_payment_approved_order_key 제약을 활성화
@@ -148,7 +148,7 @@ public class Payment extends BaseTimeEntity {
 
 	public void fail(PaymentFailCode failCode, String failDetail, LocalDateTime respondedAt) {
 		if (this.status != PaymentStatus.REQUESTED) {
-			throw new PaymentException(PaymentErrorCode.PAYMENT_ATTEMPT_STATUS_TRANSITION_NOT_ALLOWED);
+			throw new PaymentException(PaymentErrorCode.PAYMENT_STATUS_TRANSITION_NOT_ALLOWED);
 		}
 		this.status = PaymentStatus.FAILED;
 		this.failCode = failCode;
@@ -158,7 +158,7 @@ public class Payment extends BaseTimeEntity {
 
 	public void markUnknown(String failDetail, LocalDateTime respondedAt) {
 		if (this.status != PaymentStatus.REQUESTED) {
-			throw new PaymentException(PaymentErrorCode.PAYMENT_ATTEMPT_STATUS_TRANSITION_NOT_ALLOWED);
+			throw new PaymentException(PaymentErrorCode.PAYMENT_STATUS_TRANSITION_NOT_ALLOWED);
 		}
 		this.status = PaymentStatus.UNKNOWN;
 		this.failDetail = failDetail;

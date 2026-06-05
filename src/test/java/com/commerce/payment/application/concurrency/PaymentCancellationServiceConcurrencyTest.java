@@ -2,7 +2,6 @@ package com.commerce.payment.application.concurrency;
 
 import static org.assertj.core.api.Assertions.assertThat;
 
-import java.time.LocalDateTime;
 import java.util.concurrent.ConcurrentLinkedQueue;
 import java.util.concurrent.CountDownLatch;
 import java.util.concurrent.ExecutorService;
@@ -21,11 +20,11 @@ import org.springframework.test.context.DynamicPropertyRegistry;
 import org.springframework.test.context.DynamicPropertySource;
 
 import com.commerce.payment.domain.PaymentProvider;
-import com.commerce.payment.domain.PaymentReservation;
 import com.commerce.payment.domain.PaymentType;
-import com.commerce.payment.application.PaymentApprovalAttemptService;
+import com.commerce.payment.application.PaymentCancellationService;
+import com.commerce.payment.exception.PaymentErrorCode;
+import com.commerce.payment.exception.PaymentException;
 import com.commerce.payment.infrastructure.persistence.support.PaymentPersistenceTestSupport;
-import com.commerce.payment.infrastructure.persistence.support.PaymentReservationPersistenceTestSupport;
 import com.commerce.member.infrastructure.persistence.support.MemberPersistenceTestSupport;
 import com.commerce.order.infrastructure.persistence.support.OrderPersistenceTestSupport;
 import com.commerce.product.infrastructure.persistence.support.ProductPersistenceTestSupport;
@@ -36,17 +35,14 @@ import com.commerce.support.PersistenceCleanupTestSupport;
 @Tag("docker")
 @SpringBootTest
 @ActiveProfiles("test")
-@Import({PersistenceCleanupTestSupport.class, PaymentPersistenceTestSupport.class, PaymentReservationPersistenceTestSupport.class, MemberPersistenceTestSupport.class, ProductPersistenceTestSupport.class, OrderPersistenceTestSupport.class})
-class PaymentApprovalAttemptServiceConcurrencyTest {
+@Import({PersistenceCleanupTestSupport.class, PaymentPersistenceTestSupport.class, MemberPersistenceTestSupport.class, ProductPersistenceTestSupport.class, OrderPersistenceTestSupport.class})
+class PaymentCancellationServiceConcurrencyTest {
 
 	@Autowired
-	private PaymentApprovalAttemptService paymentApprovalAttemptService;
+	private PaymentCancellationService paymentCancellationService;
 
 	@Autowired
 	private PaymentPersistenceTestSupport paymentPersistence;
-
-	@Autowired
-	private PaymentReservationPersistenceTestSupport reservationPersistence;
 
 	@Autowired
 	private MemberPersistenceTestSupport memberPersistence;
@@ -68,30 +64,59 @@ class PaymentApprovalAttemptServiceConcurrencyTest {
 	@AfterEach
 	void tearDown() {
 		persistenceCleanup.deleteAllInBatch(
-			paymentPersistence, reservationPersistence, memberPersistence, productPersistence, orderPersistence
+			paymentPersistence, memberPersistence, productPersistence, orderPersistence
 		);
 	}
 
-	@DisplayName("동시에 같은 키로 멱등 재요청해도 사전 find 분기로 모두 같은 approve attempt를 반환한다")
+	@DisplayName("동시에 같은 키로 멱등 재요청해도 사전 find 분기로 모두 같은 cancel payment를 반환한다")
 	@Test
-	void create_whenConcurrentIdempotentRequest_returnSameApproveAttempt() throws Exception {
-		// given: reservation 선행 생성 후 approve attempt 선행 생성
-		String merchantPayKey = "PAY-ATTEMPT-CON-1";
-		String pgPaymentId = "pg-attempt-con-1";
-		PaymentReservation reservation = reservationPersistence.save(
-			PaymentReservation.createReserved(1L, 1L, 1000, PaymentProvider.NAVERPAY, merchantPayKey,
-				LocalDateTime.now().plusMinutes(15))
-		);
-		paymentApprovalAttemptService.create(reservation, pgPaymentId);
+	void getOrCreate_whenConcurrentIdempotentRequest_returnSameCancelPayment() throws Exception {
+		// given: amount=1000으로 cancel payment 선행 생성
+		String merchantPayKey = "PAY-ATTEMPT-CON-2";
+		String pgPaymentId = "pg-attempt-con-2";
+		paymentCancellationService.getOrCreate(
+			1L, merchantPayKey, PaymentProvider.NAVERPAY, pgPaymentId, 1000);
 		ConcurrentLinkedQueue<Throwable> errors = new ConcurrentLinkedQueue<>();
 
-		// when: 20개 스레드가 동일한 pgPaymentId로 동시 재요청
-		runConcurrent(20, () -> paymentApprovalAttemptService.create(reservation, pgPaymentId), errors);
+		// when: 20개 스레드가 동일한 amount로 동시 재요청
+		runConcurrent(20, () -> paymentCancellationService.getOrCreate(
+			1L,
+			merchantPayKey,
+			PaymentProvider.NAVERPAY,
+			pgPaymentId,
+			1000
+		), errors);
 
-		// then: 사전 find 분기로 모두 흡수되어 attempt는 1건, 에러 없음
-		assertThat(paymentPersistence.countPayments(merchantPayKey, pgPaymentId, PaymentType.APPROVE))
+		// then: 사전 find 분기로 모두 흡수되어 payment는 1건, 에러 없음
+		assertThat(paymentPersistence.countPayments(merchantPayKey, pgPaymentId, PaymentType.CANCEL))
 			.isEqualTo(1L);
 		assertThat(errors).isEmpty();
+	}
+
+	@DisplayName("기존 취소 payment와 다른 금액으로 동시 요청하면 모두 금액 불일치 예외가 발생한다")
+	@Test
+	void getOrCreate_whenConcurrentRequestWithDifferentAmount_allThrowAmountMismatch() throws Exception {
+		// given: amount=1000으로 cancel payment 선행 생성
+		String merchantPayKey = "PAY-ATTEMPT-MISMATCH-2";
+		String pgPaymentId = "pg-attempt-mismatch-2";
+		paymentCancellationService.getOrCreate(
+			1L, merchantPayKey, PaymentProvider.NAVERPAY, pgPaymentId, 1000);
+
+		ConcurrentLinkedQueue<Throwable> errors = new ConcurrentLinkedQueue<>();
+
+		// when: 20개 스레드가 amount=2000으로 동시 재요청 (mismatch)
+		runConcurrent(20, () -> paymentCancellationService.getOrCreate(
+			1L, merchantPayKey, PaymentProvider.NAVERPAY, pgPaymentId, 2000), errors);
+
+		// then: payment는 1건, 재요청 20개 모두 mismatch 예외
+		assertThat(paymentPersistence.countPayments(merchantPayKey, pgPaymentId, PaymentType.CANCEL))
+			.isEqualTo(1L);
+		assertThat(errors).hasSize(20);
+		errors.forEach(e -> {
+			assertThat(e).isInstanceOf(PaymentException.class);
+			assertThat(((PaymentException) e).getErrorCode())
+				.isEqualTo(PaymentErrorCode.PAYMENT_RECORD_AMOUNT_MISMATCH);
+		});
 	}
 
 	private void runConcurrent(int threadCount, Runnable task, ConcurrentLinkedQueue<Throwable> errors) throws Exception {

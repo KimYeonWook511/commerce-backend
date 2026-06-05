@@ -80,7 +80,7 @@ class PaymentApprovalServiceTest {
 		Order order = createOrder(orderId, 1000);
 		Payment attempt = Payment.createRequested(reservation, PaymentType.APPROVE, pgPaymentId);
 
-		given(paymentRepository.findApproveAttempt(eq(merchantPayKey), eq(PaymentProvider.NAVERPAY), eq(pgPaymentId)))
+		given(paymentRepository.findApprovePayment(eq(merchantPayKey), eq(PaymentProvider.NAVERPAY), eq(pgPaymentId)))
 			.willReturn(Optional.of(attempt));
 		given(orderRepository.findByIdForUpdate(orderId)).willReturn(Optional.of(order));
 
@@ -108,7 +108,7 @@ class PaymentApprovalServiceTest {
 		Payment attempt = Payment.createRequested(reservation, PaymentType.APPROVE, pgPaymentId);
 		attempt.succeed(now.minusMinutes(1));
 
-		given(paymentRepository.findApproveAttempt(eq(merchantPayKey), eq(PaymentProvider.NAVERPAY), eq(pgPaymentId)))
+		given(paymentRepository.findApprovePayment(eq(merchantPayKey), eq(PaymentProvider.NAVERPAY), eq(pgPaymentId)))
 			.willReturn(Optional.of(attempt));
 
 		// when
