@@ -25,7 +25,7 @@ this.failDetail = null;
 요구사항:
 
 1. `succeed()` 에서 위 2줄만 제거한다. 나머지 본문(`status = SUCCEEDED`, APPROVE 타입의 `approvedOrderKey = orderId` set, `respondedAt` set)은 그대로 둔다.
-2. `succeed()` 호출 후 `failCode`/`failDetail` 가 null 로 "리셋됨" 을 단언하는 테스트가 있는지 확인한다. 있다면 그 단언은 dead behavior를 검증하는 것이므로, 해당 단언을 제거하지 말고 **사용자에게 보고**한다(이 step을 `blocked` 로 두고 사유 기재). 임의로 테스트를 수정하지 않는다.
+2. `PaymentTest.java` 의 `succeed_whenApproveType_updateStatusAndSetApprovedOrderKey` 는 `succeed()` 후 `getFailCode()`/`getFailDetail()` 가 null 임을 단언한다(현 33-34행). 이 단언은 **검토 완료**됐다: REQUESTED 로 생성된 결제(failCode 미설정)가 성공 후에도 failCode 가 없다는 **불변식**을 검증하는 것이지 리셋 동작을 검증하는 게 아니다. dead code 제거 후에도 그대로 통과하므로 **이 단언은 그대로 유지**한다(수정·삭제 금지). 별도로, failCode 를 미리 set한 뒤 succeed() 가 그것을 리셋함을 단언하는 테스트가 *새로* 발견될 때만 `blocked` 로 보고한다(현재 그런 테스트는 없음).
 
 ## Acceptance Criteria
 
@@ -44,5 +44,5 @@ this.failDetail = null;
 
 - `fail()`/`markUnknown()` 의 `failCode`/`failDetail` set을 건드리지 마라. 이유: 그쪽은 실제 상태 기록이다.
 - `succeed()` 의 상태 전이 가드나 `approvedOrderKey` set을 건드리지 마라. 이유: NULL 트릭 방어선과 무관한 dead code 2줄만 제거 대상이다.
-- null 리셋을 검증하는 테스트가 있으면 임의로 고치지 말고 사용자에게 보고하라. 이유: 동작 의미를 사용자와 확인해야 한다.
+- `PaymentTest` 의 `succeed_whenApproveType_updateStatusAndSetApprovedOrderKey` 의 failCode/failDetail null 단언(33-34행)을 제거·수정하지 마라. 이유: 검토 완료된 유효 불변식이며 dead code 제거 후에도 통과한다.
 - 기존 테스트를 깨뜨리지 마라.
