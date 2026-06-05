@@ -7,7 +7,7 @@
 task adr(`docs/tasks/<task>/adr.md`)의 역할은 harness 도입을 기점으로 전환됐다.
 
 - **이전**: task adr가 그 task의 도메인-specific 결정을 누적 관리하고, cross-cutting 결정만 본 adr.md 본문에 두는 방식이었다. 아래 색인의 과거 task adr들은 이 방식으로 작성됐다.
-- **이후(harness)**: task adr는 그 task에서 **새로 채택된 결정의 staging**이다(임시 번호 L1·L2…). harness Stage 8(Root Sync)에서 루트 전역 번호(ADR-XXXX)로 본 adr.md에 append된다. task adr는 영구 보관소가 아니라 루트로 승격되기 전 대기 영역이며, 탐색만 하고 버린 안은 채택된 결정의 "고려한 대안"에 적고 별도 레코드로 만들지 않는다.
+- **이후(harness)**: task adr는 그 task에서 **새로 채택된 결정의 staging**이다(임시 번호 L1·L2…). harness Stage 8(Root Sync)에서 루트 전역 번호(ADR-XXXX)로 본 adr.md에 append된다. task adr는 영구 보관소가 아니라 루트로 승격되기 전 대기 영역이며, 탐색만 하고 채택하지 않은 안은 채택된 결정의 "고려한 대안"에 적고 별도 레코드로 만들지 않는다.
 
 분류가 모호한 cross-cutting 결정은 본 adr.md 본문으로 승격하고 task adr에 cross-reference를 남긴다.
 
