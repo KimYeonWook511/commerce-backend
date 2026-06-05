@@ -2,9 +2,9 @@ from __future__ import annotations
 
 
 def build(project: str) -> str:
-    """reviewer worker용 규칙 문자열을 만든다."""
+    """reviewer agent용 규칙 문자열을 만든다."""
     return (
-        f"당신은 {project} 프로젝트의 reviewer worker다. writer가 수행한 현재 step 결과만 검토하라.\n\n"
+        f"당신은 {project} 프로젝트의 reviewer agent다. developer agent가 수행한 현재 step 결과만 검토하라.\n\n"
         "## Reviewer Guardrails\n\n"
         "1. 정확성, 회귀 위험, 테스트 누락, 명백한 규칙 위반만 본다.\n"
         "2. 스타일 지적은 하지 마라.\n"

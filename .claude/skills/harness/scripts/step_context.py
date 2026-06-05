@@ -42,7 +42,7 @@ def list_agents_reference_docs(root_path: Path) -> list[Path]:
 
 
 def list_task_docs(task_dir: Path) -> list[Path]:
-    """태스크 폴더에서 기본 문서 5개 중 존재하는 문서만 순서대로 반환한다."""
+    """Task 폴더에서 기본 문서 5개 중 존재하는 문서만 순서대로 반환한다."""
     docs: list[Path] = []
     for filename in TASK_DOC_FILES:
         path = task_dir / filename
@@ -61,7 +61,7 @@ def load_step_documents(root_path: Path, task_dir: Path, step_text: str) -> str:
 
     for doc in list_task_docs(task_dir):
         rel_path = doc.relative_to(root_path).as_posix()
-        sections.append(f"## 태스크 문서 ({rel_path})\n\n{doc.read_text(encoding='utf-8')}")
+        sections.append(f"## Task 문서 ({rel_path})\n\n{doc.read_text(encoding='utf-8')}")
 
     referenced_docs: list[Path] = []
     for doc in list_agents_reference_docs(root_path):

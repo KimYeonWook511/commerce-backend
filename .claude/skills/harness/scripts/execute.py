@@ -6,7 +6,7 @@ Harness Step Executor
 필요하면 git 브랜치/커밋/푸시까지 자동으로 처리한다.
 
 Usage:
-    python3 .claude/skills/harness/scripts/execute.py docs/tasks/<task-name>/phases/<phase-name> [--push]
+    python3 .claude/skills/harness/scripts/execute.py docs/tasks/<task-name>/phases/<phase-name> [--no-push]
 """
 
 from __future__ import annotations
@@ -28,11 +28,11 @@ if str(SCRIPT_DIR) not in sys.path:
 
 import commit_agent
 import developer_guardrails
-import developer_worker
+import developer_agent
 import acceptance_runner
 import git_ops
 import reviewer_guardrails
-import reviewer_worker
+import reviewer_agent
 import step_context
 import step_verifier
 
@@ -80,13 +80,16 @@ class StepExecutor:
         (4, "Worktree 생성 및 이동"),
         (5, "File Drafting"),
         (6, "Execution"),
+        (7, "PR Review"),
+        (8, "Root Sync"),
+        (9, "Retrospective"),
     ]
 
     def __init__(
         self,
         phase_path: str,
         *,
-        auto_push: bool = False,
+        auto_push: bool = True,
         developer_model: str = "sonnet",
         reviewer_model: str = "opus",
         commit_model: str = "haiku",
@@ -213,13 +216,13 @@ class StepExecutor:
             raise SystemExit(1)
 
         checklist = self.read_json(checklist_path)
-        if checklist.get("workflow") != "dev-start":
-            print("\n  ERROR: workflow-checklist.json must have workflow='dev-start'.")
+        if checklist.get("workflow") != "harness":
+            print("\n  ERROR: workflow-checklist.json must have workflow='harness'.")
             raise SystemExit(1)
 
         items = checklist.get("items")
         if not isinstance(items, list) or len(items) != len(self.WORKFLOW_ITEMS):
-            print("\n  ERROR: workflow-checklist.json must contain the seven dev-start workflow items.")
+            print("\n  ERROR: workflow-checklist.json must contain the nine harness workflow items.")
             raise SystemExit(1)
 
         invalid_items: list[str] = []
@@ -242,7 +245,7 @@ class StepExecutor:
             print("\n  ERROR: workflow-checklist.json has invalid workflow items.")
             for item in invalid_items:
                 print(f"  - {item}")
-            print("  Keep order/title values identical to the dev-start Workflow section.")
+            print("  Keep order/title values identical to the harness Workflow section.")
             raise SystemExit(1)
 
         observed_orders = {item.get("order") for item in items if isinstance(item, dict)}
@@ -251,7 +254,7 @@ class StepExecutor:
             raise SystemExit(1)
 
         if incomplete_items:
-            print("\n  ERROR: dev-start workflow is not authorized for execution.")
+            print("\n  ERROR: harness workflow is not authorized for execution.")
             for title in incomplete_items:
                 print(f"  - {title}: not completed")
             print("  Complete document review and Execution Authorization before running execute.py.")
@@ -340,7 +343,7 @@ class StepExecutor:
         return git_ops.run_git(self, *args)
 
     def update_task_index(self, status: str):
-        """태스크 내부 phases index와 현재 phase 상태를 동기화한다."""
+        """Task 내부 phases index와 현재 phase 상태를 동기화한다."""
         if not self.task_index_file.exists():
             return
 
@@ -386,7 +389,7 @@ class StepExecutor:
         return step_context.build_previous_step_context(index)
 
     def build_developer_guardrails(self, prev_error: Optional[str] = None) -> str:
-        """developer worker용 규칙 문자열을 만든다."""
+        """developer agent용 규칙 문자열을 만든다."""
         return developer_guardrails.build(
             project=self.project,
             phase_name=self.phase_name,
@@ -396,7 +399,7 @@ class StepExecutor:
         )
 
     def build_reviewer_guardrails(self) -> str:
-        """reviewer worker용 규칙 문자열을 만든다."""
+        """reviewer agent용 규칙 문자열을 만든다."""
         return reviewer_guardrails.build(self.project)
 
     def verify_step_result(self, current: dict, step_text: str, *, require_acceptance: bool = False) -> step_verifier.VerificationResult:
@@ -409,12 +412,12 @@ class StepExecutor:
             ac_output_path,
         )
 
-    def review_step_result(self, current: dict, step_text: str, changed_paths: list[str]) -> reviewer_worker.ReviewResult:
-        """writer 결과를 read-only review worker로 다시 확인한다."""
+    def review_step_result(self, current: dict, step_text: str, changed_paths: list[str]) -> reviewer_agent.ReviewResult:
+        """developer agent 결과를 read-only review agent로 다시 확인한다."""
         output = self.read_json(self.step_output_path(current["step"]))
         ac_output_path = self.step_acceptance_output_path(current["step"])
         ac_output = self.read_json(ac_output_path) if ac_output_path.exists() else None
-        return reviewer_worker.run(
+        return reviewer_agent.run(
             root=self.root,
             phase_dir=self.phase_dir,
             write_json=self.write_json,
@@ -441,7 +444,7 @@ class StepExecutor:
 
     @staticmethod
     def mark_step_blocked_from_review(current: dict, reason: str):
-        """review worker 판단으로 step을 blocked 처리한다."""
+        """review agent 판단으로 step을 blocked 처리한다."""
         current["status"] = "blocked"
         current["blocked_reason"] = reason
         for key in ("summary", "error_message", "verification_error", "completed_at", "failed_at"):
@@ -455,11 +458,11 @@ class StepExecutor:
         for key in ("summary", "blocked_reason", "verification_error", "completed_at", "blocked_at"):
             current.pop(key, None)
 
-    # --- worker 호출 ---
+    # --- agent 호출 ---
 
-    def run_developer_worker(self, step: dict, context_text: str, guardrails_text: str) -> dict:
-        """developer worker를 실행한다."""
-        return developer_worker.run(self.root, self.phase_dir, self.write_json, step, context_text, guardrails_text, model=self.developer_model)
+    def run_developer_agent(self, step: dict, context_text: str, guardrails_text: str) -> dict:
+        """developer agent를 실행한다."""
+        return developer_agent.run(self.root, self.phase_dir, self.write_json, step, context_text, guardrails_text, model=self.developer_model)
 
     # --- header & validation ---
 
@@ -468,8 +471,7 @@ class StepExecutor:
         print("\n" + "=" * 60)
         print("  Harness Step Executor")
         print(f"  Task: {self.task_name} | Phase: {self.phase_name} | Steps: {self.total_steps}")
-        if self.auto_push:
-            print("  Auto-push: enabled")
+        print(f"  Push: {'enabled' if self.auto_push else 'disabled (--no-push)'}")
         print("=" * 60)
 
     def check_blockers(self):
@@ -570,7 +572,7 @@ class StepExecutor:
                 label += f" [retry {attempt}/{self.MAX_RETRIES}]"
 
             with progress_indicator(label) as info:
-                self.run_developer_worker(step, developer_context, developer_rules)
+                self.run_developer_agent(step, developer_context, developer_rules)
                 elapsed = int(info.elapsed)
 
             index = self.read_json(self.index_file)
@@ -731,6 +733,9 @@ class StepExecutor:
                 print(f"\n  ERROR: git push 실패: {result.stderr.strip()}")
                 raise SystemExit(1)
             print(f"  ✓ Pushed to origin/{self.branch_name}")
+            print("  → 다음: PR이 아직 없으면 'gh pr create'로 PR을 오픈한 뒤 Stage 7(PR Review)로 진행하세요.")
+        else:
+            print("  ⚠ push 생략됨(--no-push). PR을 열려면 먼저 원격에 push해야 합니다.")
 
         print("\n" + "=" * 60)
         print(f"  Phase '{self.phase_name}' completed!")
@@ -746,10 +751,10 @@ class StepExecutor:
         self.run_git("reset", "HEAD", "--", f"{self.task_phases_relpath}/index.json")
         self.run_git("reset", "HEAD", "--", f"{self.task_phases_relpath}/*/index.json")
         if self.run_git("diff", "--cached", "--quiet").returncode != 0:
-            message = f"docs: {self.task_name} 태스크 문서 변경분을 반영한다"
+            message = f"docs: {self.task_name} Task 문서 변경분을 반영한다"
             result = self.run_git("commit", "-m", message)
             if result.returncode != 0:
-                print(f"\n  ERROR: 태스크 문서 커밋 실패: {result.stderr.strip()}")
+                print(f"\n  ERROR: Task 문서 커밋 실패: {result.stderr.strip()}")
                 raise SystemExit(1)
             print(f"  ✓ {message}")
 
@@ -758,9 +763,15 @@ def main():
     """CLI 진입점. phase 디렉터리명을 받아 실행기를 시작한다."""
     parser = argparse.ArgumentParser(description="Harness Step Executor")
     parser.add_argument("phase_dir", help="Phase path (e.g. docs/tasks/<task-name>/phases/<phase-name>)")
-    parser.add_argument("--push", action="store_true", help="Push branch after completion")
-    parser.add_argument("--developer-model", default="sonnet", help="Developer worker 모델 alias 또는 full name (기본: sonnet)")
-    parser.add_argument("--reviewer-model", default="opus", help="Reviewer worker 모델 alias 또는 full name (기본: opus)")
+    parser.add_argument(
+        "--no-push",
+        dest="push",
+        action="store_false",
+        default=True,
+        help="phase 완료 후 원격 push를 생략한다 (기본: push 수행). PR 오픈은 push 이후 agent가 gh pr create로 수행한다.",
+    )
+    parser.add_argument("--developer-model", default="sonnet", help="Developer agent 모델 alias 또는 full name (기본: sonnet)")
+    parser.add_argument("--reviewer-model", default="opus", help="Reviewer agent 모델 alias 또는 full name (기본: opus)")
     parser.add_argument("--commit-model", default="haiku", help="Commit agent 모델 alias 또는 full name (기본: haiku)")
     args = parser.parse_args()
 
