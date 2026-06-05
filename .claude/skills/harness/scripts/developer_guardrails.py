@@ -8,7 +8,7 @@ def build(
     max_retries: int,
     prev_error: str | None = None,
 ) -> str:
-    """developer worker용 규칙 문자열을 만든다."""
+    """developer agent용 규칙 문자열을 만든다."""
     retry_section = ""
     if prev_error:
         retry_section = (
@@ -18,7 +18,7 @@ def build(
         )
 
     return (
-        f"당신은 {project} 프로젝트의 developer worker다. 현재 step 구현만 수행하라.\n\n"
+        f"당신은 {project} 프로젝트의 developer agent다. 현재 step 구현만 수행하라.\n\n"
         f"{retry_section}"
         "## Developer Guardrails\n\n"
         "1. 이전 step에서 작성된 코드를 확인하고 일관성을 유지하라.\n"
@@ -35,4 +35,9 @@ def build(
         "9. 현재 step 외의 step 상태를 수정하지 마라.\n"
         f"10. 최종 실패 복구를 위해 status를 `pending`으로 되돌리지 마라. 실행 중 재시도 reset은 execute.py가 처리한다. {max_retries}회 시도 후에도 실패하면 현재 step을 `error` 또는 `blocked`로 남기고 종료하라.\n"
         "11. 실행 output, Acceptance Criteria output, review output, workflow checklist는 로컬 실행 산출물이며 커밋하지 않는다.\n"
+        "12. 이번 시도에서 시도했다가 버린 접근, 막혔던 지점과 원인, 그것을 어떻게 해결했는지를 응답 맨 끝에 아래 형식으로 남겨라. "
+        "특별한 시행착오가 없었으면 본문에 '없음'만 적어라. 이 블록은 회고록 작성에 쓰인다.\n"
+        "    <<<STRUGGLES>>>\n"
+        "    - (시도했다 버린 접근 / 막힌 지점 / 해결 방법)\n"
+        "    <<<END STRUGGLES>>>\n"
     )

@@ -49,13 +49,13 @@ def build_prompt(
 
 def parse_review_result(raw: str) -> ReviewResult:
     decision_match = re.search(r"^DECISION:\s*(pass|retryable_error|blocked)\s*$", raw, re.MULTILINE)
-    message_match = re.search(r"^MESSAGE:\s*(.+)$", raw, re.MULTILINE)
+    message_match = re.search(r"^MESSAGE:\s*(.*)$", raw, re.MULTILINE)
     if not decision_match or not message_match:
-        return ReviewResult("retryable_error", "reviewer worker 출력 형식이 올바르지 않습니다.", raw)
+        return ReviewResult("retryable_error", "reviewer agent 출력 형식이 올바르지 않습니다.", raw)
 
     decision = decision_match.group(1)
     if decision not in VALID_DECISIONS:
-        return ReviewResult("retryable_error", "reviewer worker decision이 유효하지 않습니다.", raw)
+        return ReviewResult("retryable_error", "reviewer agent decision이 유효하지 않습니다.", raw)
 
     return ReviewResult(decision, message_match.group(1).strip(), raw)
 
@@ -120,7 +120,7 @@ def run(
     guardrails_text: str,
     model: str = "opus",
 ) -> ReviewResult:
-    """reviewer worker를 tmux pane에서 실행하고 review output 파일을 기록한다."""
+    """reviewer agent를 tmux pane에서 실행하고 review output 파일을 기록한다."""
     prompt = build_prompt(guardrails_text, step, step_text, changed_paths, output, ac_output)
 
     session = "harness"
