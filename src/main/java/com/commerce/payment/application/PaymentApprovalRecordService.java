@@ -56,6 +56,7 @@ public class PaymentApprovalRecordService {
 		Payment payment = paymentRepository.findApprovePayment(merchantPayKey, provider, pgPaymentId)
 			.orElseThrow(() -> new PaymentException(PaymentErrorCode.PAYMENT_RECORD_NOT_FOUND));
 		payment.fail(failCode, failDetail, respondedAt);
+		paymentRepository.save(payment);
 	}
 
 	/**
