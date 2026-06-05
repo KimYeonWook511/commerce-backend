@@ -262,7 +262,8 @@ python3 .claude/skills/harness-v2/scripts/execute.py docs/tasks/<task-name>/phas
 - 실행기는 `workflow-checklist.json`의 1~5번이 모두 `completed`인 상태에서 가장 앞의 `pending` step부터 순차 실행한다.
 - 성공한 step은 `completed`로 기록하고 다음 `pending` step으로 자동 진행한다.
 - 실행기는 developer agent, Acceptance Criteria 재검증, reviewer agent를 통해 step 완료 여부를 검증한다. 상세 산출물과 파일 포맷은 `references/phase-files.md`를 따른다.
-- 실행 상태 갱신은 자동화 범위다. phase index는 phase 종료 시 커밋하고, 실행 output, Acceptance Criteria output, review output, workflow checklist는 로컬 산출물로만 둔다.
+- `execute.py`는 각 agent를 subprocess로 직접 실행하고(`proc.wait()`로 완료 감지) stream-json 출력을 phase `logs/` 아래에 쌓는다. tmux 세션 안이면 오른쪽에 developer / reviewer / commit 로그를 3-pane으로 실시간 tail하고, tmux 밖이면 콘솔로 출력한다.
+- 실행 상태 갱신은 자동화 범위다. phase index는 phase 종료 시 커밋하고, 실행 output, Acceptance Criteria output, review output, workflow checklist, 실행 로그(`logs/`)는 로컬 산출물로만 둔다.
 - 실행 중 재시도를 위한 step `pending` reset은 `execute.py` 내부 동작으로만 허용된다.
 - `blocked` 또는 3회 재시도 후 최종 `error`가 발생하면 즉시 중단하고 사용자에게 실패 step, 실패 사유, 관련 output 파일 경로를 보고한다.
 - 최종 `error` 또는 `blocked` 이후 agent는 사용자 승인 없이 step 상태를 `pending`으로 되돌리지 않는다.

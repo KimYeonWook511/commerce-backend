@@ -254,7 +254,7 @@ python3 .claude/skills/harness-v2/scripts/execute.py docs/tasks/<task-name>/phas
 
 - 실행기는 checklist 승인 상태를 확인한 뒤 가장 앞의 `pending` step부터 순차 실행한다.
 - 각 step은 developer 실행, Acceptance Criteria 재검증, reviewer 검토를 모두 통과해야 `completed`로 인정된다.
-- 성공한 step은 phase index에 `completed`로 남긴다. 실행 output, AC output, review output, workflow checklist는 로컬 실행 산출물로만 둔다.
+- 성공한 step은 phase index에 `completed`로 남긴다. 실행 output, AC output, review output, workflow checklist, 실행 로그(`logs/`)는 로컬 실행 산출물로만 둔다.
 - 완료된 step의 기능 변경은 review 통과 후 commit agent가 커밋한다. step에서 코드와 task 문서를 모두 수정한 경우 commit agent가 목적별로 분리 commit한다(코드는 feat/fix/refactor 등, task 문서는 docs:). 예외: step의 메인 산출물이 task 문서이거나 코드와 문서 보정의 의도가 동일하면 한 commit으로 묶는다.
 - phase 종료 시 `execute.py finalize()`가 두 종류 커밋을 추가한다: step commit agent가 흡수하지 못한 task 문서 잔여 변경분은 `docs:` 커밋, phase index 두 개는 `chore:` 커밋.
 - 실행 중 retryable failure는 실행기가 같은 step을 재시도할 수 있다.
@@ -267,6 +267,7 @@ python3 .claude/skills/harness-v2/scripts/execute.py docs/tasks/<task-name>/phas
 - `stepN-output.json`: developer agent 실행 결과
 - `stepN-ac-output.json`: Acceptance Criteria 재실행 결과
 - `stepN-review-output.json`: reviewer agent 검토 결과
+- `logs/`: 각 agent의 stream-json 원본(`{agent}.raw.jsonl`)과 사람용 로그(`{agent}.log`). agent는 `developer_agent` / `reviewer_agent` / `commit_agent`이며, phase를 가로질러 append되고 tmux 3-pane이 tail한다.
 
 ### `stepN-output.json` 구조
 
@@ -292,10 +293,10 @@ python3 .claude/skills/harness-v2/scripts/execute.py docs/tasks/<task-name>/phas
 - `attempt`: 시도 순번. 재시도와 재실행을 가로질러 누적된다.
 - `exitCode`: 해당 시도의 종료 코드.
 - `struggles`: 해당 시도에서 developer agent가 남긴 시행착오. `<<<STRUGGLES>>>...<<<END STRUGGLES>>>` 블록에서 추출하며, 없거나 "없음"이면 `null`.
-- `lastMessage`: 해당 시도의 전체 transcript. 마커가 누락돼도 회고가 원문에서 시행착오를 읽을 수 있는 안전망이다.
+- `lastMessage`: 해당 시도의 최종 메시지(stream-json `result` 이벤트). 전체 작업 과정은 `logs/{agent}.raw.jsonl`에 있다. 마커가 누락돼도 회고가 최종 메시지·raw 로그에서 시행착오를 읽을 수 있는 안전망이다.
 
 이 산출물은 Stage 9(Retrospective)에서 step별 시행착오를 종합하는 1차 자료로 쓰인다. reviewer agent의 지적은 다음 시도의 developer transcript에 반영되므로, 회고에 필요한 "왜 이 step이 막혔나"는 `attempts[]`만으로 재구성된다.
 
-위 output 파일과 `workflow-checklist.json`은 로컬 실행 추적용이며 커밋하지 않는다. phase index는 step 진행 기준으로 사용하고 phase 종료 시 커밋한다. task 문서 초안은 Stage 6 진입 직전(실행 승인 직후) `docs:` 커밋으로 등록한다.
+위 output 파일과 `logs/`, `workflow-checklist.json`은 로컬 실행 추적용이며 커밋하지 않는다(`logs/`는 `.gitignore`로 제외). phase index는 step 진행 기준으로 사용하고 phase 종료 시 커밋한다. task 문서 초안은 Stage 6 진입 직전(실행 승인 직후) `docs:` 커밋으로 등록한다.
 
 이미 `completed`인 step은 phase index의 `summary`와 `completed_at`으로 확인한다. output 파일 존재 여부는 이전 step 재개 조건으로 사용하지 않는다.
