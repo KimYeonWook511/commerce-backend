@@ -2,7 +2,7 @@
 
 ## 1. 작업 요약
 
-본 태스크는 Spring Boot 3.x(Hibernate 6.x) 환경에서 `@Enumerated(EnumType.STRING)`이 MySQL ENUM 타입으로 매핑되며 발생하는 조용한 결함을 회피하기 위해, 8개 entity의 14개 enum 필드에 `@JdbcTypeCode(SqlTypes.VARCHAR)`를 부착하고 `@Column(length=N)`의 length 속성을 제거한 작업이다(`Member`, `Order`, `OutboxEvent`, `ProcessedEvent`, `Payment`, `PaymentAttempt`, `Product`, `StockHistory`). 동시에 `docs/ADR.md`에 ADR-018을 신설해 신규 entity에도 동일 패턴을 적용하도록 컨벤션을 남겼다.
+본 태스크는 Spring Boot 3.x(Hibernate 6.x) 환경에서 `@Enumerated(EnumType.STRING)`이 MySQL ENUM 타입으로 매핑되며 발생하는 조용한 결함을 회피하기 위해, 8개 entity의 14개 enum 필드에 `@JdbcTypeCode(SqlTypes.VARCHAR)`를 부착하고 `@Column(length=N)`의 length 속성을 제거한 작업이다(`Member`, `Order`, `OutboxEvent`, `ProcessedEvent`, `Payment`, `PaymentAttempt`, `Product`, `StockHistory`). 동시에 `docs/adr.md`에 ADR-018을 신설해 신규 entity에도 동일 패턴을 적용하도록 컨벤션을 남겼다.
 
 본 코드 변경은 신규 환경/test 환경에서 enum 컬럼이 MySQL ENUM이 아닌 VARCHAR(255)로 생성되도록 보장한다. 운영 DB의 기존 ENUM 컬럼 ALTER와 ENUM 시절에 조용히 삽입된 의심 row 점검은 본 태스크 범위 밖이며 Flyway 도입 시 후속 트랙으로 분리한다.
 
@@ -133,7 +133,7 @@ Hibernate가 ENUM 컬럼을 생성한 시점부터 본 fix 전까지, "첫 번�
 
 | 파일 | 변경 내용 |
 |---|---|
-| `docs/ADR.md` | ADR-018 (Hibernate 6.x ENUM 매핑 회피 결정) 추가 |
+| `docs/adr.md` | ADR-018 (Hibernate 6.x ENUM 매핑 회피 결정) 추가 |
 | `docs/tasks/hibernate-enum-jdbc-type-code/` | prd/architecture/adr/api-spec/db-schema/phases 신규 작성 |
 
 ---

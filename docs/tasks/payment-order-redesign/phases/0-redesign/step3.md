@@ -18,7 +18,7 @@
 - `src/main/java/com/commerce/payment/naverpay/application/NaverPayApprovalService.java`
 - `src/main/java/com/commerce/payment/exception/PaymentErrorCode.java`
 - `src/main/java/com/commerce/common/exception/GlobalExceptionHandler.java`
-- `docs/ADR.md` (ADR-013 보상 catch 2차 예외, ADR-014 보상 진행 판단, ADR-015 보상 정책 책임)
+- `docs/adr.md` (ADR-013 보상 catch 2차 예외, ADR-014 보상 진행 판단, ADR-015 보상 정책 책임)
 
 ## 작업
 

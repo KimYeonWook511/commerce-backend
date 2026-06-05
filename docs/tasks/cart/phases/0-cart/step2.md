@@ -11,7 +11,7 @@
 - `/docs/tasks/cart/db-schema.md`
 - `/docs/architecture.md` (Application 계층 로깅 정책)
 - `/docs/logging-conventions.md`
-- `/docs/ADR.md` (ADR-011)
+- `/docs/adr.md` (ADR-011)
 - `/docs/tasks/cart/phases/0-cart/step1.md` (이전 step)
 - `/src/main/java/com/commerce/cart/domain/CartItem.java` (Step 1 산출물)
 - `/src/main/java/com/commerce/cart/domain/repository/CartItemRepository.java` (Step 1)

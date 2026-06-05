@@ -56,7 +56,7 @@
       "status": "completed",
       "started_at": "2026-05-19T01:06:57+0900",
       "completed_at": "2026-05-19T01:10:37+0900",
-      "summary": "루트 docs 와 이전 태스크 폴더 anchor 를 일괄 갱신한다. docs/architecture.md 의 예외 처리 섹션을 find-first 본질 흐름과 정책 적용 조건(트랜잭션 짧음 + 충돌 확률 낮음) / 비적용 상황 / DataAccessException 부모 핸들러 / JpaConfig 빈 등록 목적 재기술로 교체한다. docs/ADR.md 에 ADR-011 (find-first 패턴 통일) 을 추가해 PR #106 정책 폐기 사실, 충돌 확률 낮음 결정 근거, race window 한정 행위 변경을 명시한다. CLAUDE.md 구현 규칙의 인프라 예외 변환 문구를 사전 find + 안전망 500 위임 + try-save-catch 비적용 조건으로 갱신한다. db-constraint-violation-handling 폴더의 prd / adr / api-spec / architecture 4 개 문서 상단에 후속 태스크 anchor 한 줄씩 추가한다 (retrospective 와 phases 는 미수정). ./gradlew test 통과."
+      "summary": "루트 docs 와 이전 태스크 폴더 anchor 를 일괄 갱신한다. docs/architecture.md 의 예외 처리 섹션을 find-first 본질 흐름과 정책 적용 조건(트랜잭션 짧음 + 충돌 확률 낮음) / 비적용 상황 / DataAccessException 부모 핸들러 / JpaConfig 빈 등록 목적 재기술로 교체한다. docs/adr.md 에 ADR-011 (find-first 패턴 통일) 을 추가해 PR #106 정책 폐기 사실, 충돌 확률 낮음 결정 근거, race window 한정 행위 변경을 명시한다. CLAUDE.md 구현 규칙의 인프라 예외 변환 문구를 사전 find + 안전망 500 위임 + try-save-catch 비적용 조건으로 갱신한다. db-constraint-violation-handling 폴더의 prd / adr / api-spec / architecture 4 개 문서 상단에 후속 태스크 anchor 한 줄씩 추가한다 (retrospective 와 phases 는 미수정). ./gradlew test 통과."
     },
     {
       "step": 8,

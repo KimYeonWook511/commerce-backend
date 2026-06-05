@@ -7,7 +7,7 @@
 - `/docs/tasks/payment-compensation-policy/prd.md`
 - `/docs/tasks/payment-compensation-policy/architecture.md`
 - `/docs/tasks/payment-compensation-policy/adr.md`
-- `/docs/ADR.md` — ADR-011, ADR-012, ADR-013 참조
+- `/docs/adr.md` — ADR-011, ADR-012, ADR-013 참조
 - `/docs/exception-strategy.md` — 보상 catch 2차 예외 처리 패턴
 - `src/main/java/com/commerce/payment/application/PaymentApprovalService.java`
 - `src/main/java/com/commerce/payment/application/PaymentAttemptService.java`

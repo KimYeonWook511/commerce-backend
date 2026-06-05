@@ -30,7 +30,7 @@
 - 신규 단위 테스트 `RedisRefreshTokenStoreTest`, `AuthExceptionHandlerTest`.
 - 기존 단위 테스트(`AuthTokenIssueServiceTest`, `AuthTokenReissueServiceTest`)의 인프라 장애 케이스를 *예외 그대로 propagate 검증*으로 갱신.
 - `docs/exception-strategy.md`의 *Redis 캐시 장애 처리* 섹션을 fallback 가능 여부와 무관한 공통 매핑 패턴으로 정리.
-- `docs/ADR.md` task 표에 `auth-refresh-token-store-unavailable` 행 추가.
+- `docs/adr.md` task 표에 `auth-refresh-token-store-unavailable` 행 추가.
 - 회고록 작성.
 
 ### 제외 범위

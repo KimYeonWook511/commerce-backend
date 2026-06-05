@@ -20,7 +20,7 @@
 - `src/test/java/com/commerce/order/application/OrderApplicationServiceIntegrationTest.java`
 
 루트 문서:
-- `docs/ADR.md` — ADR-005 AFTER_COMMIT 패턴 확인
+- `docs/adr.md` — ADR-005 AFTER_COMMIT 패턴 확인
 
 ## 작업
 

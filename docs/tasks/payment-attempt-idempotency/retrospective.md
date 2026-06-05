@@ -14,7 +14,7 @@
 - `succeedApproveAttempt` / `failApproveAttempt` 파라미터 명명을 `paymentId`로 통일 (엔티티 필드 기준)
 - 단위 테스트 2건 추가, 기존 테스트 1건 수정
 - 동시성 테스트 2건 추가
-- `docs/ADR.md`에 ADR-010 추가
+- `docs/adr.md`에 ADR-010 추가
 
 ### 왜 변경했는가
 

@@ -7,7 +7,7 @@
 - `/docs/tasks/flyway-introduction/prd.md`
 - `/docs/tasks/flyway-introduction/architecture.md`
 - `/docs/tasks/flyway-introduction/db-schema.md` ← dump 정리 체크리스트 10개 항목 포함
-- `/docs/ADR.md` ADR-018 (Hibernate ENUM → VARCHAR), ADR-023 (multi-column unique 컬럼 길이 명시)
+- `/docs/adr.md` ADR-018 (Hibernate ENUM → VARCHAR), ADR-023 (multi-column unique 컬럼 길이 명시)
 - `/docker-compose.local.yml`
 - `/build.gradle` (Step 1 결과 반영 확인)
 - `/src/main/resources/application-local.yml`

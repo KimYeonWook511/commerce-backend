@@ -14,7 +14,7 @@ JPA `ddl-auto: update` 기반 암묵적 스키마 관리를 명시적 마이그�
   - `src/main/resources/application-test.yml` — flyway.enabled: false 명시
 - **Test support**: `src/test/java/com/commerce/support/TestcontainersSupport.java` — `registerMySql()` 내 ddl-auto override 변경, flyway.enabled true override 추가
 - **Docs**:
-  - `docs/ADR.md` — ADR-024 신규 추가
+  - `docs/adr.md` — ADR-024 신규 추가
   - `docs/db-schema.md` — 마이그레이션 위치/네이밍 안내 추가
 
 ## 설계 방향

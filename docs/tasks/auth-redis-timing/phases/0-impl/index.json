@@ -39,7 +39,7 @@
       "name": "sync-root-docs",
       "status": "completed",
       "started_at": "2026-05-15T18:10:06+0900",
-      "summary": "docs/ADR.md에 ADR-007(인증 토큰 Redis 저장 실패 정책 strict), ADR-008(회원가입 트랜잭션 분리 NOT_SUPPORTED), ADR-009(RefreshTokenStore.delete() 제거) 세 결정을 추가한다. 전체 테스트 통과 확인.",
+      "summary": "docs/adr.md에 ADR-007(인증 토큰 Redis 저장 실패 정책 strict), ADR-008(회원가입 트랜잭션 분리 NOT_SUPPORTED), ADR-009(RefreshTokenStore.delete() 제거) 세 결정을 추가한다. 전체 테스트 통과 확인.",
       "completed_at": "2026-05-15T18:11:04+0900"
     }
   ],

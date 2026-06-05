@@ -33,7 +33,7 @@
 - 영향 받는 단위 테스트의 `DuplicateKeyException` mock 시나리오 갱신
 - Testcontainers 회귀 방어 통합 테스트 갱신 (안전망 500 도달 검증)
 - `NaverPayServiceIntegrationTest`의 `paymentAttemptService` spy 스텁 제거 검토
-- 루트 docs 갱신: `docs/architecture.md`, `docs/ADR.md`, `commerce-backend/CLAUDE.md`
+- 루트 docs 갱신: `docs/architecture.md`, `docs/adr.md`, `commerce-backend/CLAUDE.md`
 - 이전 태스크 폴더(`docs/tasks/db-constraint-violation-handling/`) 의 prd/adr/api-spec/architecture 에 정책 폐기 anchor 한 줄 추가 (retrospective 와 phases 는 immutable)
 
 ### 제외 범위

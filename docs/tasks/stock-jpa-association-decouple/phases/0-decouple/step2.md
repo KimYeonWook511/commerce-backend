@@ -13,14 +13,14 @@
 
 루트 docs 갱신 대상은 아래와 같다.
 
-- `/docs/ADR.md` — ADR-020 본문에 후속 트랙 적용 노트 추가 / task ADR 색인 갱신.
+- `/docs/adr.md` — ADR-020 본문에 후속 트랙 적용 노트 추가 / task ADR 색인 갱신.
 - `/docs/architecture.md` — Stock / StockHistory aggregate 의 cross-aggregate ID 참조 컨벤션 적용 반영.
 
 ## 작업
 
 이전 step 에서 만들어진 코드와 task 문서를 꼼꼼히 읽고, 본 sub-PR 의 결정 내용을 루트 docs 에 정확히 반영한다.
 
-### `/docs/ADR.md` 갱신
+### `/docs/adr.md` 갱신
 
 - **Task ADR 색인** 표에 본 태스크 한 줄 추가:
   - Task: `stock-jpa-association-decouple`
@@ -47,7 +47,7 @@
 
 ## 수정 가능 경로
 
-- `docs/ADR.md`
+- `docs/adr.md`
 - `docs/architecture.md`
 - `docs/tasks/stock-jpa-association-decouple/**`
 
@@ -63,8 +63,8 @@
 
 1. 위 Acceptance Criteria 커맨드를 실행한다.
 2. 아래를 확인한다.
-   - `docs/ADR.md` 의 Task ADR 색인에 `stock-jpa-association-decouple` 한 줄이 추가됐는가?
-   - `docs/ADR.md` 의 ADR-020 본문에 후속 노트가 본문 결정 사실을 침범하지 않고 짧게 부착됐는가?
+   - `docs/adr.md` 의 Task ADR 색인에 `stock-jpa-association-decouple` 한 줄이 추가됐는가?
+   - `docs/adr.md` 의 ADR-020 본문에 후속 노트가 본문 결정 사실을 침범하지 않고 짧게 부착됐는가?
    - `docs/architecture.md` 의 Stock / StockHistory 관련 섹션이 ID 참조 컨벤션을 반영하는가?
    - schema / api-spec 문서는 손대지 않았는가?
 3. 결과에 따라 step 상태를 갱신한다.

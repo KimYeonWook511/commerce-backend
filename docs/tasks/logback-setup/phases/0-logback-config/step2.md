@@ -39,7 +39,7 @@
 
 ### 변경하지 않을 것
 
-- `docs/ADR.md`에 신규 ADR 추가 금지 (본 태스크 ADR 결정)
+- `docs/adr.md`에 신규 ADR 추가 금지 (본 태스크 ADR 결정)
 - `docs/logging-conventions.md` 본문 수정 금지 (이미 머지된 정책 문서, 별도 PR 책임)
 - `docs/api-spec.md`, `docs/db-schema.md` 변경 없음 (해당 사항 없음)
 
@@ -66,5 +66,5 @@
 ## 금지사항
 
 - `docs/architecture.md`의 다른 섹션을 임의로 수정하지 마라. 이유: 본 step의 범위는 로깅 한 줄 보강.
-- `docs/ADR.md`에 새로운 ADR 항목을 추가하지 마라. 이유: 본 태스크 `adr.md`에서 명시적으로 추가하지 않기로 결정.
+- `docs/adr.md`에 새로운 ADR 항목을 추가하지 마라. 이유: 본 태스크 `adr.md`에서 명시적으로 추가하지 않기로 결정.
 - `docs/logging-conventions.md`를 수정하지 마라. 이유: 별도 PR 책임 영역.

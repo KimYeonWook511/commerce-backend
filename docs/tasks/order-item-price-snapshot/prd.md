@@ -30,7 +30,7 @@
 - `OrderItem.java` 의 미해결 주석 제거 + 결정 명문화
 - 단위 테스트 (`OrderTest`) 에 snapshot 보존 assertion 추가
 - 슬라이스 테스트 (`OrderRepositoryJpaAdapterTest`) round-trip 검증 보강
-- 본 task adr 신규 작성, `docs/ADR.md` Task ADR 색인 표 갱신, `docs/db-schema.md` 의 `tbl_order_item` 섹션 갱신
+- 본 task adr 신규 작성, `docs/adr.md` Task ADR 색인 표 갱신, `docs/db-schema.md` 의 `tbl_order_item` 섹션 갱신
 
 ### 제외 범위
 

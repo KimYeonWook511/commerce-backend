@@ -13,7 +13,7 @@
 태스크 문서만으로 부족한 공통 맥락이 있으면 아래를 추가로 읽는다.
 
 - `/docs/db-schema.md` (`tbl_order_item` 섹션, V4 비고)
-- `/docs/ADR.md` (Task ADR 색인 / ADR-024 Flyway / ADR-020 cross-aggregate)
+- `/docs/adr.md` (Task ADR 색인 / ADR-024 Flyway / ADR-020 cross-aggregate)
 - `/docs/tasks/order-jpa-association-decouple/retrospective.md` ("결제 시점 가격 snapshot 미해결" 항목, 직접 동기)
 - `/docs/tasks/order-jpa-association-decouple/adr.md` (시그니처 / schema 무변경 원칙)
 

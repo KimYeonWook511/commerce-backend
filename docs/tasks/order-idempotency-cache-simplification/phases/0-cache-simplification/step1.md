@@ -13,8 +13,8 @@
 기존 결정 맥락 (의미 비교용):
 
 - `/docs/tasks/order-idempotency/adr.md` (기존 ADR-001/002)
-- `/docs/ADR.md` ADR-005 (Redis 호출 commit 이후)
-- `/docs/ADR.md` ADR-011 (find-first 패턴)
+- `/docs/adr.md` ADR-005 (Redis 호출 commit 이후)
+- `/docs/adr.md` ADR-011 (find-first 패턴)
 
 수정 대상 코드 (현재 상태 파악):
 
@@ -262,6 +262,6 @@ ORDER_IDEMPOTENCY_IN_PROGRESS(HttpStatus.CONFLICT, "ORDER-409-2", "주문 생성
 - `attemptCreateOrder` 의 기존 try-catch (RuntimeException) 패턴을 try-finally 로 *단순 변환만* 하지 마라. 이유: 새 흐름은 사전 find 가 try 안으로 들어오고, catch → clear → rethrow 가 finally 단일 clear 로 *재구성됨*. 분기 자체 변경이므로 흐름 다이어그램을 보고 작성.
 - TTL 값을 코드에 하드코딩하지 마라. 이유: 기존 `@Value("${order.idempotency.ttl-seconds:600}")` 패턴 유지. 값만 60 으로 변경.
 - 회고 문서 (`docs/tasks/order-idempotency/retrospective.md` 등) 를 수정하지 마라. 이유: 회고는 시점 기록이며 사후 수정 금지 (사용자 메모리 규칙).
-- 루트 docs (`docs/ADR.md`, `docs/api-spec.md`, `docs/architecture.md` 등) 를 수정하지 마라. 이유: step 2 의 책임.
+- 루트 docs (`docs/adr.md`, `docs/api-spec.md`, `docs/architecture.md` 등) 를 수정하지 마라. 이유: step 2 의 책임.
 - `attemptCreateOrder` 의 기존 race window 단언을 유지하지 마라. 이유: 새 흐름은 race 가 reserve 단계에서 차단됨. 기존 안전망 500 단언은 새 흐름과 맞지 않음.
 - 기존 테스트를 깨뜨리지 마라.

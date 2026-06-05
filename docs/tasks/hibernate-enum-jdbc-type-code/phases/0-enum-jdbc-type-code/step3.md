@@ -7,7 +7,7 @@
 - `/docs/tasks/hibernate-enum-jdbc-type-code/prd.md`
 - `/docs/tasks/hibernate-enum-jdbc-type-code/adr.md`
 - `/docs/tasks/hibernate-enum-jdbc-type-code/db-schema.md`
-- `/docs/ADR.md` (이전 step에서 추가된 ADR-018)
+- `/docs/adr.md` (이전 step에서 추가된 ADR-018)
 
 이전 step에서 변경된 entity 파일도 확인해 회고의 사실관계를 일치시킨다.
 

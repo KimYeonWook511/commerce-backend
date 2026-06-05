@@ -49,7 +49,7 @@ ADR-017로 별도 기록했다. traceid-mdc-filter와 달리 기존 문서에 �
 |------|-----------|
 | `src/main/java/com/commerce/outbox/stock/infrastructure/StockRestoreKafkaConsumerConfig.java` | 생성자에 `TraceIdRecordInterceptor` 파라미터 추가 및 `stockRestoreKafkaListenerContainerFactory`에 `setRecordInterceptor` 호출 |
 | `src/test/java/com/commerce/outbox/stock/infrastructure/StockRestoreKafkaEventConsumerIntegrationTest.java` | `TraceIdKafkaConfig` `@Import` 추가 — `StockRestoreKafkaConsumerConfig`가 `TraceIdRecordInterceptor` Bean을 요구하게 되면서 누락된 import 복원 |
-| `docs/ADR.md` | ADR-017(Kafka traceId 전파 설계 결정) 항목 추가 |
+| `docs/adr.md` | ADR-017(Kafka traceId 전파 설계 결정) 항목 추가 |
 | `docs/logging-conventions.md` | §8 비동기·이벤트 경계 절을 Kafka 구현 완료 내용으로 갱신 |
 | `docs/architecture.md` | HTTP 요청 처리 Filter 절에 비동기 경계와 traceId 전파 서브섹션 신규 추가 |
 

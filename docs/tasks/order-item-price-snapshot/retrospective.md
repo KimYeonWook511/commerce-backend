@@ -4,7 +4,7 @@
 
 본 트랙은 ADR-020 후속 series (Stock #199 / Order #200 / Payment #202 / FK cleanup #203) 가 완전히 종료된 뒤 별도 후속 트랙으로 분리된 결제 시점 가격 snapshot 작업이다. series 메타 원칙이 "schema 변경 0건" 이었기 때문에 `OrderItem` 단가 컬럼 신설을 의도적으로 보류했고, series 종료 후 Issue #201 로 별도 트랙을 편성했다.
 
-변경 면적은 작다. `OrderItem.java` 에 `unitPrice` 필드와 `of(...)` 팩토리 메서드 파라미터 추가, `Order.addOrderItem` 내부 호출 1줄 수정, Flyway V5 migration 1개, 단위 / 슬라이스 테스트 assertion 보강이 전부다. 루트 docs 갱신 (`docs/ADR.md` 색인 표 1행, `docs/db-schema.md` 컬럼 비고) 은 별도 step으로 분리했다.
+변경 면적은 작다. `OrderItem.java` 에 `unitPrice` 필드와 `of(...)` 팩토리 메서드 파라미터 추가, `Order.addOrderItem` 내부 호출 1줄 수정, Flyway V5 migration 1개, 단위 / 슬라이스 테스트 assertion 보강이 전부다. 루트 docs 갱신 (`docs/adr.md` 색인 표 1행, `docs/db-schema.md` 컬럼 비고) 은 별도 step으로 분리했다.
 
 본 PR 머지 시점에 `OrderItem.unitPrice` 컬럼이 entity / schema 양쪽에 존재하게 됐다. `Product.price` 가 추후 변동되어도 기존 `OrderItem.unitPrice` 는 결제 시점 가격을 그대로 유지한다.
 
@@ -38,9 +38,9 @@
 
 ### 4. 본문 ADR 을 신규 작성하지 않고 task adr + 색인 표 한 줄로 관리한다
 
-`docs/ADR.md` 에 ADR-026 같은 본문 ADR 을 신규 작성하는 안도 검토했다. 그러나 `docs/ADR.md` 상단 정책이 "코드베이스 전반에 영향을 주는 cross-cutting 결정은 본 ADR.md 본문에, 특정 도메인 한정 결정은 task adr 에 둔다" 라고 명시한다.
+`docs/adr.md` 에 ADR-026 같은 본문 ADR 을 신규 작성하는 안도 검토했다. 그러나 `docs/adr.md` 상단 정책이 "코드베이스 전반에 영향을 주는 cross-cutting 결정은 본 adr.md 본문에, 특정 도메인 한정 결정은 task adr 에 둔다" 라고 명시한다.
 
-`OrderItem.unitPrice` 신설은 Order 도메인 한정 결정이다. task adr 3개 결정으로 분리했고, `docs/ADR.md` Task ADR 색인 표에 1행을 추가하는 것으로 충분하다.
+`OrderItem.unitPrice` 신설은 Order 도메인 한정 결정이다. task adr 3개 결정으로 분리했고, `docs/adr.md` Task ADR 색인 표에 1행을 추가하는 것으로 충분하다.
 
 ---
 
@@ -52,7 +52,7 @@
 | `unit_price` NULL 허용 유지 | NOT NULL 제약 추가 없이 schema 단순화 | "snapshot 보존" invariant 표현이 무력화됨. NOT NULL 이 도메인 결정을 schema 로 표현하는 유일한 수단 |
 | Money VO 도입 | 타입 정확성 향상 | `Order.totalPrice`, `Payment.amount` 까지 영향이 번져 별도 series 규모가 됨. 본 task 는 `int` 통일로 목적 달성 가능 |
 | 응답 DTO (`OrderCreateResult` 등) 에 `unitPrice` 노출 | 이슈 #201 원래 범위 | 현재 사용처 없음. 사용처 없는 필드 선제 추가는 피한다 |
-| `docs/ADR.md` 에 ADR-026 본문 ADR 신규 작성 | 결정 가시성 확보 | Order 도메인 한정 결정이라 task adr 범주. docs/ADR.md 상단 정책 준수 |
+| `docs/adr.md` 에 ADR-026 본문 ADR 신규 작성 | 결정 가시성 확보 | Order 도메인 한정 결정이라 task adr 범주. docs/adr.md 상단 정책 준수 |
 | `order-jpa-association-decouple` task 폴더 회고 보강 | series 추적 가시성 | 완료된 tasks 불변 원칙 위반. series 연계 사실은 본 회고와 루트 docs 에서만 표현 |
 
 ---

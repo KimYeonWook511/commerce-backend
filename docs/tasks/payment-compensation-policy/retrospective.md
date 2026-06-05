@@ -15,7 +15,7 @@
 - `NaverPayApprovalServiceTest`: 신규 테스트 2개(cancel skip 케이스) 추가, 기존 cancel 경로 테스트 14개에 `isCompensationRequired` mock 보강, catch(Exception) failDetail assertion 갱신
 - `PaymentApprovalServiceConcurrencyTest`: `DataIntegrityViolationException`·`PAYMENT_ATTEMPT_STATUS_TRANSITION_NOT_ALLOWED` 허용 예외 추가로 flaky 해소
 - `NaverPayServiceConcurrencyTest`: recovery 시나리오를 데이터 오염 상태(throw) 기대로 재정의, cancel skip 시나리오 신규 추가
-- `docs/ADR.md`: ADR-014 신설, ADR-012에 후속 노트 추가
+- `docs/adr.md`: ADR-014 신설, ADR-012에 후속 노트 추가
 - `docs/exception-strategy.md`: `isCompensationRequired` 캡슐화 패턴을 적용 예에 추가
 - `docs/architecture.md`: 결제 승인 흐름에 보상 가능 여부 판단 반영
 

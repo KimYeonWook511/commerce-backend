@@ -15,7 +15,7 @@
 - `src/main/java/com/commerce/payment/application/PaymentApprovalService.java`
 - `src/main/java/com/commerce/payment/naverpay/application/port/result/NaverPayCancelResult.java`
 - `src/test/java/com/commerce/payment/naverpay/application/NaverPayApprovalServiceTest.java`
-- `docs/ADR.md` (ADR-013, ADR-014 확인)
+- `docs/adr.md` (ADR-013, ADR-014 확인)
 - `docs/exception-strategy.md`
 
 ## 작업

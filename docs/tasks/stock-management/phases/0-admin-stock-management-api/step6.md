@@ -13,7 +13,7 @@
 - `docs/architecture.md`
 - `docs/api-spec.md`
 - `docs/db-schema.md`
-- `docs/ADR.md`
+- `docs/adr.md`
 - `docs/features/TEMP_TODO.md`
 
 ## 작업
@@ -22,7 +22,7 @@
   - `docs/architecture.md`: `stock` 도메인 책임과 관리자 재고 관리 흐름 추가
   - `docs/api-spec.md`: 관리자 재고 등록, 증가, 감소, 이력 조회 API 추가
   - `docs/db-schema.md`: `tbl_stock_history`와 인덱스, 주요 관계 추가
-  - `docs/ADR.md`: 필요하면 관리자 재고 관리와 이력 저장 결정 추가
+  - `docs/adr.md`: 필요하면 관리자 재고 관리와 이력 저장 결정 추가
 - `docs/features/TEMP_TODO.md`의 재고 관리 항목은 구현 완료 상태와 충돌하지 않도록 정리한다.
   - 단, 후속 기능인 pagination, 관리자 UI, 주문 취소 재고 복구 고도화는 완료 처리하지 않는다.
 - feature 문서와 루트 문서의 API 경로, enum 값, 응답 필드명이 서로 일치하는지 확인한다.
@@ -34,7 +34,7 @@
 - `docs/architecture.md`
 - `docs/api-spec.md`
 - `docs/db-schema.md`
-- `docs/ADR.md`
+- `docs/adr.md`
 
 ## Acceptance Criteria
 

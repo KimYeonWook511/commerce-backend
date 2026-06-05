@@ -31,7 +31,7 @@
 - local/prod/dockerTest 환경의 `ddl-auto: validate` 전환 및 Flyway 활성화
 - `test` 프로파일은 H2 + Flyway 비활성 유지
 - `TestcontainersSupport`의 dockerTest용 override 변경
-- `docs/ADR.md`에 ADR-024 추가
+- `docs/adr.md`에 ADR-024 추가
 - `docs/db-schema.md`에 마이그레이션 위치/네이밍 안내 추가
 
 **제외 범위**

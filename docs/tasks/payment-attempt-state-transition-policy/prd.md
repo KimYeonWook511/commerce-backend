@@ -29,7 +29,7 @@
 - `PaymentErrorCode`에 신규 에러 코드 2개 추가 (HTTP 500)
 - `NaverPayApprovalService.failApproveAndCancelApprovedPayment`의 `failApprove` 호출 try-catch 보호 (race window 회귀 방지)
 - `PaymentAttemptTest`에 전이 거부 / type 위반 테스트 케이스 9개 추가
-- `docs/ADR.md` ADR-012 추가
+- `docs/adr.md` ADR-012 추가
 
 ### 제외
 

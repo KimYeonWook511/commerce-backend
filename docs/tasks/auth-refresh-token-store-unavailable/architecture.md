@@ -20,7 +20,7 @@ Auth 도메인의 Redis 장애 처리 경로를 *application 직접 catch*에서
 | Test — infrastructure | `RedisRefreshTokenStoreTest` 신규 (Order adapter 테스트와 동일 구조) |
 | Test — exception | `AuthExceptionHandlerTest` 신규 (`GlobalExceptionHandlerTest`와 동일 패턴) |
 | Test — application | `AuthTokenIssueServiceTest`, `AuthTokenReissueServiceTest` 인프라 장애 케이스 *propagate 검증*으로 갱신 |
-| Docs | `docs/exception-strategy.md` 캐시 장애 처리 섹션 정리, `docs/ADR.md` task 표 행 추가 |
+| Docs | `docs/exception-strategy.md` 캐시 장애 처리 섹션 정리, `docs/adr.md` task 표 행 추가 |
 
 ## 설계 방향
 

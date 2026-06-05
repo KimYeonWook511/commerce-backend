@@ -115,7 +115,7 @@
 ### 결정 내용
 
 - `docs/tasks/stock-jpa-association-decouple/` / `docs/tasks/order-jpa-association-decouple/` / `docs/tasks/payment-jpa-association-decouple/` 의 ADR / 회고를 수정하지 않는다.
-- series 마무리 사실은 본 태스크의 `retrospective.md` 와 루트 `docs/ADR.md` 의 ADR-020 후속 노트로만 표현한다.
+- series 마무리 사실은 본 태스크의 `retrospective.md` 와 루트 `docs/adr.md` 의 ADR-020 후속 노트로만 표현한다.
 
 ### 근거
 

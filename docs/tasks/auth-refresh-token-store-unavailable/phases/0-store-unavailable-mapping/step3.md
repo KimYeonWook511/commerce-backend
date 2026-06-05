@@ -22,7 +22,7 @@ step 1, 2 결과 변경 사항:
 - `/src/test/java/com/commerce/auth/application/AuthTokenIssueServiceTest.java`
 - `/src/test/java/com/commerce/auth/application/AuthTokenReissueServiceTest.java`
 - `/docs/exception-strategy.md` (갱신 부분)
-- `/docs/ADR.md` (갱신 부분)
+- `/docs/adr.md` (갱신 부분)
 
 참고 (기존 결정 맥락):
 
@@ -63,7 +63,7 @@ step 1, 2 결과 변경 사항:
 
 - 신규: `RefreshTokenStoreUnavailableException`, `AuthExceptionHandler`, `RedisRefreshTokenStoreTest`, `AuthExceptionHandlerTest`.
 - 수정: `RedisRefreshTokenStore`, `AuthTokenIssueService`, `AuthTokenReissueService`, `AuthTokenIssueServiceTest`, `AuthTokenReissueServiceTest`.
-- 문서: `docs/exception-strategy.md` 캐시 장애 처리 섹션 정리, `docs/ADR.md` task 표 행 추가, 본 task 폴더 (`prd/architecture/adr/api-spec/db-schema/retrospective`) 신설.
+- 문서: `docs/exception-strategy.md` 캐시 장애 처리 섹션 정리, `docs/adr.md` task 표 행 추가, 본 task 폴더 (`prd/architecture/adr/api-spec/db-schema/retrospective`) 신설.
 
 ### 5. 부수 이슈 처리
 

@@ -11,7 +11,7 @@
 - `/docs/features/product-management/db-schema.md`
 - `/docs/features/product-management/phases/0-admin-product-management-api/step1.md`
 - `/docs/features/product-management/phases/0-admin-product-management-api/step2.md`
-- `/docs/PRD.md`
+- `/docs/prd.md`
 - `/docs/architecture.md`
 - `/docs/api-spec.md`
 - `/docs/db-schema.md`
@@ -27,12 +27,12 @@
 - `docs/api-spec.md`의 공개 상품 조회 설명에 `ON_SALE`, `SOLD_OUT`만 노출하고 `STOPPED`/삭제 상품은 제외한다는 정책을 반영하라.
 - `docs/db-schema.md`의 `tbl_product` 컬럼 목록에 `description`, `image_url`, `status`, `deleted_at`을 반영하라.
 - `docs/architecture.md`의 `product` 도메인 책임에 관리자 상품 관리와 공개 조회 노출 정책을 반영하라.
-- 필요하면 `docs/PRD.md`의 핵심 기능 설명을 현재 상태와 맞게 최소 수정하라.
+- 필요하면 `docs/prd.md`의 핵심 기능 설명을 현재 상태와 맞게 최소 수정하라.
 
 ## 수정 가능 경로
 
 - `docs/features/product-management/**`
-- `docs/PRD.md`
+- `docs/prd.md`
 - `docs/architecture.md`
 - `docs/api-spec.md`
 - `docs/db-schema.md`

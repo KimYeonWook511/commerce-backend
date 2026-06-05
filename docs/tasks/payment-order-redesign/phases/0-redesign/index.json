@@ -31,7 +31,7 @@
       "name": "sync-root-docs",
       "status": "completed",
       "started_at": "2026-06-04T19:36:15+0900",
-      "summary": "docs/ADR.md (ADR-010/014/015 후속 노트 + ADR-026 신규), docs/db-schema.md (tbl_order merchant_pay_key 제거, tbl_payment 전면 갱신, tbl_payment_reservation 신규, tbl_payment_attempt 섹션 삭제), docs/architecture.md (결제 흐름 갱신, ReservePaymentService 등장, 폐기 메서드명 0건), docs/api-spec.md (POST /payments/reserve rename, PAYMENT_RESULT_PENDING/PAYMENT_MEMBER_MISMATCH 추가), docs/exception-strategy.md (compensateDuplicateApproval 적용 예 추가, UNKNOWN 처리 섹션 신규, redirect 멱등 응답 섹션 신규)를 갱신했다. ./gradlew test 통과, 머지된 task 폴더 수정 없음.",
+      "summary": "docs/adr.md (ADR-010/014/015 후속 노트 + ADR-026 신규), docs/db-schema.md (tbl_order merchant_pay_key 제거, tbl_payment 전면 갱신, tbl_payment_reservation 신규, tbl_payment_attempt 섹션 삭제), docs/architecture.md (결제 흐름 갱신, ReservePaymentService 등장, 폐기 메서드명 0건), docs/api-spec.md (POST /payments/reserve rename, PAYMENT_RESULT_PENDING/PAYMENT_MEMBER_MISMATCH 추가), docs/exception-strategy.md (compensateDuplicateApproval 적용 예 추가, UNKNOWN 처리 섹션 신규, redirect 멱등 응답 섹션 신규)를 갱신했다. ./gradlew test 통과, 머지된 task 폴더 수정 없음.",
       "completed_at": "2026-06-04T19:42:38+0900"
     },
     {

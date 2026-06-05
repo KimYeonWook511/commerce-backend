@@ -21,7 +21,7 @@
 - `test/.../NaverPayApprovalServiceTest.java` — 보상 관련 케이스를 `paymentApprovalCompensationService.compensateXxx` 호출 검증으로 갱신, `pgCancel` 변환 케이스(NaverPayCancelResult.Status별 CancelOutcome 매핑) 독립 추가
 
 **갱신된 루트 docs:**
-- `docs/ADR.md` — ADR-015 신설(보상 정책 payment.application 이동), ADR-014에 후속 노트 추가
+- `docs/adr.md` — ADR-015 신설(보상 정책 payment.application 이동), ADR-014에 후속 노트 추가
 - `docs/architecture.md` — 서비스 테이블과 결제 승인 데이터 흐름에 PaymentApprovalCompensationService 추가
 - `docs/exception-strategy.md` — failIfRequested 호출처 명칭 갱신, PgCanceller 섹션 추가
 - `docs/testing-conventions.md` — Application Layer 섹션에 PgCanceller Mock 패턴 추가

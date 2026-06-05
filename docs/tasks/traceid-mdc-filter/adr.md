@@ -12,7 +12,7 @@
 
 ## 결정 내용
 
-- 루트 `docs/ADR.md`에 신규 ADR을 추가하지 않는다.
+- 루트 `docs/adr.md`에 신규 ADR을 추가하지 않는다.
 - 본 태스크 내부에서 내린 구현 차원의 결정은 `prd.md`와 `architecture.md`에 기록한다.
 
 ## 근거

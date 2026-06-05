@@ -23,7 +23,7 @@
       "name": "sync-root-docs",
       "status": "completed",
       "started_at": "2026-05-18T02:25:07+0900",
-      "summary": "docs/ADR.md에 ADR-010 추가 — PaymentAttempt 멱등 재요청 amount mismatch 명시적 예외 거부 정책 기록",
+      "summary": "docs/adr.md에 ADR-010 추가 — PaymentAttempt 멱등 재요청 amount mismatch 명시적 예외 거부 정책 기록",
       "completed_at": "2026-05-18T02:25:57+0900"
     },
     {

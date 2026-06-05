@@ -72,7 +72,7 @@ refresh token은 Redis가 저장소 자체이므로, Redis에 없는 refresh tok
 모든 phase의 마지막 두 step을 아래처럼 표준화한다.
 
 ```
-step(N-1): sync-root-docs    — docs/ADR.md 등 루트 문서 동기화
+step(N-1): sync-root-docs    — docs/adr.md 등 루트 문서 동기화
 step(N):   write-retrospective — 회고록 작성 + phase index.json + workflow-checklist.json 최종 상태를 한 커밋에 포함
 ```
 

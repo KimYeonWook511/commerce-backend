@@ -27,7 +27,7 @@
   - `tbl_order_item` → `fk_order_item_product_id`
   - `tbl_payment` → `fk_payment_order_id`
 - Hibernate `validate` 통과 확인 — `./gradlew integrationTest` (Testcontainers MySQL 에서 Flyway 적용 후 entity 매핑 검증).
-- 루트 docs 동기화 — `docs/ADR.md` ADR-020 후속 노트, `docs/db-schema.md` FK 표기 정비, `docs/architecture.md` series 마무리.
+- 루트 docs 동기화 — `docs/adr.md` ADR-020 후속 노트, `docs/db-schema.md` FK 표기 정비, `docs/architecture.md` series 마무리.
 - 회고록 작성 — series 전체 (Stock / Order / Payment / 본 FK cleanup) 4 트랙 마무리 시점의 baseline 기록.
 
 ### 제외 범위

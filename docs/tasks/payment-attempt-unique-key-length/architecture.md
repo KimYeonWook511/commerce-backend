@@ -12,7 +12,7 @@
 - **Build script**: `build.gradle` — `dockerTest` task에 `excludeTags "concurrency"` 추가.
 - **Test 코드**: `src/test/java/com/commerce/payment/naverpay/application/concurrency/NaverPayServiceConcurrencyTest.java` — `countAttempts == 1` 데이터 invariant 추가 + 클래스 단위 HikariCP 설정(`maximum-pool-size=30`, `minimum-idle=10`, `connection-timeout=30000`) 명시.
 - **Test support 재사용**: `PaymentPersistenceTestSupport.countAttempts(...)`, `countCancelAttempts(...)` (이미 존재).
-- **Root docs**: `docs/ADR.md`, `docs/db-schema.md`, `docs/testing-conventions.md` 일부 보강.
+- **Root docs**: `docs/adr.md`, `docs/db-schema.md`, `docs/testing-conventions.md` 일부 보강.
 
 ## 설계 방향
 

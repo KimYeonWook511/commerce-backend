@@ -137,7 +137,7 @@ race window 한정 행위 변경에 따라 동시성 통합 테스트의 단언�
 | 파일 | 변경 내용 |
 |---|---|
 | `docs/architecture.md` | 예외 처리 섹션 교체 (본질 흐름, 적용 조건/비적용 상황, `DataAccessException` 부모 핸들러, `JpaConfig` 빈 등록 목적 재기술) |
-| `docs/ADR.md` | ADR-011 (find-first 패턴 통일) 추가 |
+| `docs/adr.md` | ADR-011 (find-first 패턴 통일) 추가 |
 | `CLAUDE.md` | 구현 규칙 — 사전 find + 안전망 500 위임 + try-save-catch 비적용 조건 명시 |
 | `docs/tasks/db-constraint-violation-handling/{prd,adr,api-spec,architecture}.md` | 폐기 anchor 4건 추가 (본문 미수정) |
 | `docs/tasks/unique-find-first-policy/` | prd / architecture / adr / api-spec / db-schema / phases 전체 신규 작성 |

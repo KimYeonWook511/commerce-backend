@@ -6,13 +6,13 @@
 
 - `/docs/tasks/payment-compensation-policy/prd.md`
 - `/docs/tasks/payment-compensation-policy/adr.md`
-- `/docs/ADR.md` — 현재 ADR-012, ADR-013 내용 확인
+- `/docs/adr.md` — 현재 ADR-012, ADR-013 내용 확인
 - `/docs/exception-strategy.md` — 보상 catch 섹션 적용 예 확인
 - `/docs/architecture.md` — 결제 승인 흐름 섹션 확인
 
 ## 작업
 
-### 1. docs/ADR.md — ADR-014 신설
+### 1. docs/adr.md — ADR-014 신설
 
 ADR-014를 추가한다:
 
@@ -24,7 +24,7 @@ ADR-014를 추가한다:
 - **트레이드오프**: Payment 조회 1회 추가되나 인덱스 조회라 성능 영향 미미하다.
 ```
 
-### 2. docs/ADR.md — ADR-012 후속 노트 추가
+### 2. docs/adr.md — ADR-012 후속 노트 추가
 
 ADR-012 트레이드오프 섹션 또는 끝에 후속 노트를 추가한다:
 
@@ -52,7 +52,7 @@ NaverPayController → NaverPayApprovalService
   → PaymentAttemptService (시도 이력 기록)
 ```
 
-### 5. docs/ADR.md — PaymentAttempt mark 호출 정책 명시
+### 5. docs/adr.md — PaymentAttempt mark 호출 정책 명시
 
 ADR-014에 아래 항목을 추가한다:
 
@@ -62,7 +62,7 @@ ADR-014에 아래 항목을 추가한다:
 
 ## 수정 가능 경로
 
-- `docs/ADR.md`
+- `docs/adr.md`
 - `docs/exception-strategy.md`
 - `docs/architecture.md`
 

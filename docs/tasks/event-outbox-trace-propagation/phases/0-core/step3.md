@@ -8,7 +8,7 @@
 - `docs/tasks/event-outbox-trace-propagation/architecture.md`
 - `docs/tasks/event-outbox-trace-propagation/adr.md`
 - `docs/logging-conventions.md` — §8 비동기·이벤트 경계 절 갱신 대상
-- `docs/ADR.md` — 새 ADR 항목 추가 대상
+- `docs/adr.md` — 새 ADR 항목 추가 대상
 - `docs/architecture.md` — 비동기 경계 절 갱신 대상 (선택)
 - `docs/db-schema.md` — `tbl_outbox_event` 컬럼 변경 반영 대상
 
@@ -55,11 +55,11 @@
 - **여러 독립 거래를 묶는 배치성 작업인가?** → 미적용 (운영 통계 로그 성격)
 - **호출 스레드의 MDC가 자동 전파되는가?** → 자동 전파되면 별도 작업 불필요
 
-### 수정 파일 2: `docs/ADR.md`
+### 수정 파일 2: `docs/adr.md`
 
 새 ADR 항목을 **하나** 추가한다. 본 태스크의 4개 결정을 하나의 ADR로 묶는다 (Kafka traceId 전파 ADR-017의 패턴과 일관성 유지). 상세는 본 태스크 ADR 문서로 위임한다.
 
-다음 번호 확인: `rg "^### ADR-" docs/ADR.md | tail -n 1` (현재 마지막은 ADR-018이므로 ADR-019)
+다음 번호 확인: `rg "^### ADR-" docs/adr.md | tail -n 1` (현재 마지막은 ADR-018이므로 ADR-019)
 
 ADR 본문 구성:
 
@@ -91,7 +91,7 @@ ADR 본문 구성:
 1. 위 커맨드를 실행한다(문서만 수정해도 기존 테스트 회귀가 없는지 확인하기 위함).
 2. 아래를 확인한다.
    - `docs/logging-conventions.md` §8가 @TransactionalEventListener / Outbox 구현 완료를 반영하는가
-   - `docs/ADR.md`에 새 ADR 항목이 추가되고 본 태스크의 4개 결정이 요약되었는가
+   - `docs/adr.md`에 새 ADR 항목이 추가되고 본 태스크의 4개 결정이 요약되었는가
    - `docs/db-schema.md`의 `tbl_outbox_event`에 `trace_id` 컬럼이 반영되었는가
    - 기존 테스트가 모두 통과하는가
 3. 결과에 따라 step 상태를 갱신한다.

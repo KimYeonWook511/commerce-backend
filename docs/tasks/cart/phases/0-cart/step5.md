@@ -9,20 +9,20 @@
 - `/docs/tasks/cart/adr.md`
 - `/docs/tasks/cart/api-spec.md`
 - `/docs/tasks/cart/db-schema.md`
-- `/docs/PRD.md`
+- `/docs/prd.md`
 - `/docs/architecture.md`
 - `/docs/api-spec.md`
 - `/docs/db-schema.md`
-- `/docs/ADR.md`
+- `/docs/adr.md`
 - `/docs/tasks/cart/phases/0-cart/step1.md` ~ `/step4.md` (구현된 산출물)
 
 ## 작업
 
 루트 `docs/` 문서를 phase 산출물에 맞게 동기화한다.
 
-### `docs/PRD.md`
+### `docs/prd.md`
 
-- `MVP 제외 사항`(`docs/PRD.md:16` 근처)에서 `장바구니` 줄을 삭제한다.
+- `MVP 제외 사항`(`docs/prd.md:16` 근처)에서 `장바구니` 줄을 삭제한다.
 - 핵심 기능 섹션에 장바구니가 포함되어야 한다면 명시적으로 추가한다(필요 시).
 
 ### `docs/architecture.md`
@@ -56,7 +56,7 @@
 - 컬럼, UNIQUE 제약(`uk_cart_item_member_product`), 인덱스 정책 명시
 - FK 미사용 정책 명시(ADR-020 참조)
 
-### `docs/ADR.md`
+### `docs/adr.md`
 
 - 마지막(현재 ADR-019) 다음에 **ADR-020**을 추가한다.
 - 제목: `ADR-020: 신규 도메인의 cross-aggregate 참조는 ID로 한다`
@@ -69,11 +69,11 @@
 
 ## 수정 가능 경로
 
-- `docs/PRD.md`
+- `docs/prd.md`
 - `docs/architecture.md`
 - `docs/api-spec.md`
 - `docs/db-schema.md`
-- `docs/ADR.md`
+- `docs/adr.md`
 - `docs/tasks/cart/**`
 
 ## Acceptance Criteria
@@ -87,8 +87,8 @@
 추가 검증:
 
 ```bash
-rg -n "장바구니" docs/PRD.md
-rg -n "^### ADR-020" docs/ADR.md
+rg -n "장바구니" docs/prd.md
+rg -n "^### ADR-020" docs/adr.md
 rg -n "cart" docs/architecture.md docs/api-spec.md docs/db-schema.md
 ```
 
@@ -96,8 +96,8 @@ rg -n "cart" docs/architecture.md docs/api-spec.md docs/db-schema.md
 
 1. 위 Acceptance Criteria 커맨드를 실행한다.
 2. 아래를 확인한다.
-   - `docs/PRD.md` MVP 제외 사항에서 "장바구니"가 제거됐는가?
-   - `docs/ADR.md`에 ADR-020이 마지막 ADR-019 다음에 추가됐는가?
+   - `docs/prd.md` MVP 제외 사항에서 "장바구니"가 제거됐는가?
+   - `docs/adr.md`에 ADR-020이 마지막 ADR-019 다음에 추가됐는가?
    - `docs/architecture.md`, `docs/api-spec.md`, `docs/db-schema.md`가 cart 도입을 반영하는가?
    - workspace `docs/` 하위 문서(`api-contract.md`, `progress.md`)는 수정되지 않았는가? (backend 세션 범위 밖)
 3. 결과에 따라 step 상태를 갱신한다.

@@ -13,18 +13,18 @@
 
 루트 docs 갱신 대상은 아래와 같다.
 
-- `/docs/ADR.md` — Task ADR 색인에 본 태스크 한 줄 추가 / ADR-020 본문에 후속 적용 노트 추가 (series 완료).
+- `/docs/adr.md` — Task ADR 색인에 본 태스크 한 줄 추가 / ADR-020 본문에 후속 적용 노트 추가 (series 완료).
 - `/docs/architecture.md` — Payment 도메인의 cross-aggregate ID 참조 컨벤션 적용 반영.
 
 선행 sub-PR 의 sync-root-docs 결과도 참고한다.
 
-- 선행 stock / order sub-PR 머지 후 `/docs/ADR.md` 의 ADR-020 노트 / Task ADR 색인 형태를 그대로 따른다.
+- 선행 stock / order sub-PR 머지 후 `/docs/adr.md` 의 ADR-020 노트 / Task ADR 색인 형태를 그대로 따른다.
 
 ## 작업
 
 이전 step 에서 만들어진 코드와 task 문서를 꼼꼼히 읽고, 본 sub-PR 의 결정 내용을 루트 docs 에 정확히 반영한다. 본 sub-PR 은 series 의 마지막 sub-PR 이므로 ADR-020 후속 트랙 완료를 명시한다.
 
-### `/docs/ADR.md` 갱신
+### `/docs/adr.md` 갱신
 
 - **Task ADR 색인** 표에 본 태스크 한 줄 추가:
   - Task: `payment-jpa-association-decouple`
@@ -56,7 +56,7 @@
 
 ## 수정 가능 경로
 
-- `docs/ADR.md`
+- `docs/adr.md`
 - `docs/architecture.md`
 - `docs/tasks/payment-jpa-association-decouple/**`
 
@@ -72,8 +72,8 @@
 
 1. 위 Acceptance Criteria 커맨드를 실행한다.
 2. 아래를 확인한다.
-   - `docs/ADR.md` 의 Task ADR 색인에 `payment-jpa-association-decouple` 한 줄이 추가됐는가?
-   - `docs/ADR.md` 의 ADR-020 본문에 후속 노트 (series 완료) 가 본문 결정 사실을 침범하지 않고 짧게 부착됐는가?
+   - `docs/adr.md` 의 Task ADR 색인에 `payment-jpa-association-decouple` 한 줄이 추가됐는가?
+   - `docs/adr.md` 의 ADR-020 본문에 후속 노트 (series 완료) 가 본문 결정 사실을 침범하지 않고 짧게 부착됐는가?
    - `docs/architecture.md` 의 Payment 관련 섹션이 ID 참조 컨벤션을 반영하는가?
    - schema / api-spec 문서는 손대지 않았는가?
    - 머지 완료된 선행 task 문서 (`docs/tasks/stock-jpa-association-decouple/**`, `docs/tasks/order-jpa-association-decouple/**`) 는 손대지 않았는가? — `git status` 결과 확인.

@@ -10,7 +10,7 @@
 ## 결정 2: cart는 다른 aggregate를 ID(`Long`)로만 참조한다 (ADR-020 명문화)
 
 - **배경**: 기존 도메인은 `@ManyToOne` 객체 참조(Order.member, OrderItem.product, Stock.product 등)를 사용한다. 그러나 application 계층은 대부분 `memberId` 등 ID 기반으로 다루고 있어 도메인과 인터페이스 사이에 이중 표현이 발생하고, N+1 회피 및 fetch join 부담, 도메인 결합도 증가, DDD "다른 aggregate는 ID로만 참조" 원칙 위반 같은 단점이 있었다.
-- **결정 내용**: 본 phase에서 신규 도메인 `cart`는 `memberId: Long`, `productId: Long`만 저장한다. FK 관계(`@ManyToOne`, `@JoinColumn`)는 사용하지 않는다. 이 정책은 `docs/ADR.md`에 **ADR-020 "신규 도메인의 cross-aggregate 참조는 ID로 한다"**로 명문화한다.
+- **결정 내용**: 본 phase에서 신규 도메인 `cart`는 `memberId: Long`, `productId: Long`만 저장한다. FK 관계(`@ManyToOne`, `@JoinColumn`)는 사용하지 않는다. 이 정책은 `docs/adr.md`에 **ADR-020 "신규 도메인의 cross-aggregate 참조는 ID로 한다"**로 명문화한다.
 - **근거**: DDD 정통(Eric Evans) "Reference Other Aggregates Only By Identity" 원칙. 다른 aggregate와의 결합도 감소, 단위 테스트 단순, JPA lifecycle 함정 회피, 마이크로서비스 분리 친화적. 기존 Order/Stock 등 ManyToOne 마이그레이션은 별도 트랙으로 분리한다.
 - **결과**: cart 조회 시 `productRepository.findAllById(productIds)`로 명시적으로 Product를 조회해 응답을 조립한다. DB 참조 무결성은 application과 unique 제약·삭제 순서 정책으로 책임진다. 본 phase 이후 신규 도메인은 본 정책을 기본값으로 한다.
 
