@@ -125,13 +125,14 @@ catch 안에서 호출하는 메서드는 가급적 예외를 던지지 않게 �
 
 ## 결제 결과 UNKNOWN 처리
 
-PG 호출 결과가 확인되지 않아 결제 상태가 불명확한 경우의 처리 정책이다 (ADR-026 참조).
+PG 호출 결과가 확인되지 않아 결제 상태가 불명확한 경우의 처리 정책이다 (ADR-026, ADR-027 참조).
 
 ### 마킹 정책
 
 - PG approve API 호출 timeout 또는 IOException 발생 시 → `Payment.markUnknown(failDetail, respondedAt)` — `status=UNKNOWN` 흔적 보존
 - PG approve 응답 OK 후 DB 반영 실패 시에도 가능한 경우 UNKNOWN 흔적 보존
 - UNKNOWN 은 "결과를 알 수 없다" 는 사실을 DB 에 남기는 것이 목적이다. 사용자 재시도를 허용하면 이중결제 위험이 있으므로 차단한다
+- 어떤 예외를 UNKNOWN 으로 분류하는가의 경계는 *요청 전송 시점* 을 따른다 (ADR-027): 전송 전 버그는 전파(안전망 500), 전송 후/불명 예외는 UNKNOWN 보존, `Success` 응답인데 `detail` 누락 시 UNKNOWN 보존
 
 ### 차단 정책
 
