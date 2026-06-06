@@ -1,6 +1,7 @@
 package com.commerce.payment.naverpay.infrastructure;
 
 import static org.assertj.core.api.Assertions.assertThat;
+import static org.assertj.core.api.Assertions.assertThatThrownBy;
 import static org.mockito.ArgumentMatchers.any;
 import static org.mockito.BDDMockito.given;
 import static org.mockito.Mockito.mock;
@@ -161,6 +162,19 @@ class NaverPayGatewayImplTest {
 		// When & Then
 		assertThat(gateway.approve("PAY-AUTH").getStatus()).isEqualTo(NaverPayApproveResult.Status.FAILED);
 		assertThat(gateway.approve("PAY-CLIENT").getStatus()).isEqualTo(NaverPayApproveResult.Status.FAILED);
+	}
+
+	@Test
+	@DisplayName("approve 중 NaverPayException이 아닌 예외(프로그래밍 버그)는 UNKNOWN으로 흡수하지 않고 그대로 전파한다")
+	void approve_nonNaverPayException_propagates() {
+		// Given: NPE 같은 프로그래밍 버그가 UNKNOWN으로 흡수되면 해당 주문이 영구 차단(brick)되므로,
+		// 안전망(500)에 위임되도록 그대로 전파돼야 한다.
+		given(naverPayClient.approve("PAY-BUG"))
+			.willThrow(new NullPointerException("프로그래밍 버그"));
+
+		// When & Then
+		assertThatThrownBy(() -> gateway.approve("PAY-BUG"))
+			.isInstanceOf(NullPointerException.class);
 	}
 
 	@Test
