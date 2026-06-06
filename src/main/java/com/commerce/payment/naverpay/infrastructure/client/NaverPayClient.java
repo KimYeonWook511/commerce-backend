@@ -12,6 +12,7 @@ import org.springframework.stereotype.Component;
 import org.springframework.util.LinkedMultiValueMap;
 import org.springframework.util.MultiValueMap;
 import org.springframework.web.client.ResourceAccessException;
+import org.springframework.web.client.RestClientException;
 import org.springframework.web.client.RestClientResponseException;
 import org.springframework.web.client.RestTemplate;
 
@@ -115,10 +116,14 @@ public class NaverPayClient {
 			throw new NaverPayException(NaverPayErrorCode.NETWORK, "네이버페이 요청 중 네트워크 오류가 발생했습니다", ex);
 		} catch (RestClientResponseException ex) {
 			throw mapHttpException(ex);
+		} catch (RestClientException ex) {
+			// ResourceAccessException/RestClientResponseException 외의 RestTemplate 통신 계열 예외
+			// (응답 해석 불가 등). PG 통신 중 발생한 사실이므로 INVALID_RESPONSE 로 분류한다.
+			// NPE 등 프로그래밍 버그는 RestClientException 이 아니므로 여기 걸리지 않고 그대로 전파돼
+			// 안전망(500)에 위임된다 (UNKNOWN 흡수로 인한 주문 brick 방지).
+			throw new NaverPayException(NaverPayErrorCode.INVALID_RESPONSE, "네이버페이 응답 처리에 실패했습니다", ex);
 		} catch (JsonProcessingException ex) {
 			throw new NaverPayException(NaverPayErrorCode.INVALID_RESPONSE, "네이버페이 응답 파싱에 실패했습니다", ex);
-		} catch (Exception ex) {
-			throw new NaverPayException(NaverPayErrorCode.INVALID_RESPONSE, "네이버페이 응답 처리에 실패했습니다", ex);
 		}
 	}
 

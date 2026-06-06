@@ -143,6 +143,25 @@ class NaverPayClientTest {
 			});
 	}
 
+	@DisplayName("RestClientException이 아닌 런타임 예외(프로그래밍 버그)는 NaverPayException으로 래핑하지 않고 그대로 전파한다")
+	@Test
+	void approve_whenNonRestClientRuntimeException_propagates() {
+		// Given: NPE/IllegalState 같은 프로그래밍 버그가 NaverPayException(INVALID_RESPONSE)으로 래핑되면
+		// 상위에서 UNKNOWN으로 분류돼 주문이 brick된다. RestClientException이 아닌 런타임 예외는
+		// 래핑하지 않고 그대로 전파해 안전망(500)에 위임돼야 한다.
+		RestTemplate failingRestTemplate = mock(RestTemplate.class);
+		when(failingRestTemplate.postForEntity(
+			eq(APPROVAL_URL),
+			any(),
+			eq(String.class)))
+			.thenThrow(new IllegalStateException("프로그래밍 버그"));
+
+		ReflectionTestUtils.setField(client, "naverPayRestTemplate", failingRestTemplate);
+
+		assertThatThrownBy(() -> client.approve("pg-payment-id"))
+			.isInstanceOf(IllegalStateException.class);
+	}
+
 	@DisplayName("취소 요청이 성공하면 응답이 매핑된다")
 	@Test
 	void cancel_whenSuccess_mapResponse() {
