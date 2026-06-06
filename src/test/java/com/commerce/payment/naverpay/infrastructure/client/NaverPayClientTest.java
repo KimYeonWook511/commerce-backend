@@ -143,23 +143,24 @@ class NaverPayClientTest {
 			});
 	}
 
-	@DisplayName("RestClientException이 아닌 런타임 예외(프로그래밍 버그)는 NaverPayException으로 래핑하지 않고 그대로 전파한다")
+	@DisplayName("전송 단계에서 발생한 런타임 예외는 전송 여부가 불명하므로 INVALID_RESPONSE로 보존한다")
 	@Test
-	void approve_whenNonRestClientRuntimeException_propagates() {
-		// Given: NPE/IllegalState 같은 프로그래밍 버그가 NaverPayException(INVALID_RESPONSE)으로 래핑되면
-		// 상위에서 UNKNOWN으로 분류돼 주문이 brick된다. RestClientException이 아닌 런타임 예외는
-		// 래핑하지 않고 그대로 전파해 안전망(500)에 위임돼야 한다.
+	void approve_whenSendStageRuntimeException_preservedAsInvalidResponse() {
+		// Given: postForEntity 단계의 예외는 요청이 PG에 전송됐는지 불명하다. 전파해 500으로 두면
+		// UNKNOWN 흔적이 남지 않아 재결제가 허용되고, PG가 이미 처리했다면 이중결제가 발생한다.
+		// 따라서 INVALID_RESPONSE로 보존해 상위에서 UNKNOWN으로 분류되게 해야 한다.
 		RestTemplate failingRestTemplate = mock(RestTemplate.class);
 		when(failingRestTemplate.postForEntity(
 			eq(APPROVAL_URL),
 			any(),
 			eq(String.class)))
-			.thenThrow(new IllegalStateException("프로그래밍 버그"));
+			.thenThrow(new IllegalStateException("전송 단계 오류"));
 
 		ReflectionTestUtils.setField(client, "naverPayRestTemplate", failingRestTemplate);
 
 		assertThatThrownBy(() -> client.approve("pg-payment-id"))
-			.isInstanceOf(IllegalStateException.class);
+			.isInstanceOfSatisfying(NaverPayException.class, ex ->
+				assertThat(ex.getErrorCode()).isEqualTo(NaverPayErrorCode.INVALID_RESPONSE));
 	}
 
 	@DisplayName("취소 요청이 성공하면 응답이 매핑된다")

@@ -12,7 +12,6 @@ import org.springframework.stereotype.Component;
 import org.springframework.util.LinkedMultiValueMap;
 import org.springframework.util.MultiValueMap;
 import org.springframework.web.client.ResourceAccessException;
-import org.springframework.web.client.RestClientException;
 import org.springframework.web.client.RestClientResponseException;
 import org.springframework.web.client.RestTemplate;
 
@@ -26,7 +25,6 @@ import com.commerce.payment.naverpay.infrastructure.client.response.NaverPayResp
 import com.commerce.payment.naverpay.infrastructure.client.response.body.NaverPayHistoryBody;
 import com.commerce.payment.naverpay.exception.NaverPayErrorCode;
 import com.commerce.payment.naverpay.exception.NaverPayException;
-import com.fasterxml.jackson.core.JsonProcessingException;
 import com.fasterxml.jackson.core.type.TypeReference;
 import com.fasterxml.jackson.databind.ObjectMapper;
 
@@ -104,26 +102,32 @@ public class NaverPayClient {
 	}
 
 	private <B, T> T post(String url, HttpHeaders headers, B body, TypeReference<T> typeReference) {
+		// 전송 전: 요청 빌드. 여기서 발생하는 예외(프로그래밍 버그 등)는 PG 에 아무것도 보내지 않은
+		// 상태이므로 잡지 않고 그대로 전파해 안전망(500)에 위임한다 (이중결제 위험 없음).
 		HttpEntity<B> request = new HttpEntity<>(body, headers);
+
+		ResponseEntity<String> response;
 		try {
-			ResponseEntity<String> response = naverPayRestTemplate.postForEntity(url, request,
-				String.class);
-			if (response.getBody() == null) {
-				throw new NaverPayException(NaverPayErrorCode.INVALID_RESPONSE, "네이버페이 응답이 비어있습니다");
-			}
-			return objectMapper.readValue(response.getBody(), typeReference);
+			response = naverPayRestTemplate.postForEntity(url, request, String.class);
 		} catch (ResourceAccessException ex) {
 			throw new NaverPayException(NaverPayErrorCode.NETWORK, "네이버페이 요청 중 네트워크 오류가 발생했습니다", ex);
 		} catch (RestClientResponseException ex) {
 			throw mapHttpException(ex);
-		} catch (RestClientException ex) {
-			// ResourceAccessException/RestClientResponseException 외의 RestTemplate 통신 계열 예외
-			// (응답 해석 불가 등). PG 통신 중 발생한 사실이므로 INVALID_RESPONSE 로 분류한다.
-			// NPE 등 프로그래밍 버그는 RestClientException 이 아니므로 여기 걸리지 않고 그대로 전파돼
-			// 안전망(500)에 위임된다 (UNKNOWN 흡수로 인한 주문 brick 방지).
+		} catch (Exception ex) {
+			// 전송 단계의 그 외 예외. 요청 전송 여부가 불명할 수 있으므로 INVALID_RESPONSE 로 보존한다.
 			throw new NaverPayException(NaverPayErrorCode.INVALID_RESPONSE, "네이버페이 응답 처리에 실패했습니다", ex);
-		} catch (JsonProcessingException ex) {
-			throw new NaverPayException(NaverPayErrorCode.INVALID_RESPONSE, "네이버페이 응답 파싱에 실패했습니다", ex);
+		}
+
+		// 전송 완료(PG 가 이미 처리했을 수 있는 상태). 아래 응답 해석 단계의 모든 예외(프로그래밍 버그 포함)는
+		// INVALID_RESPONSE 로 보존해 상위에서 UNKNOWN 으로 분류되게 한다. 전파해 500 으로 두면 UNKNOWN 흔적이
+		// 남지 않아 재결제가 허용되고, PG 가 이미 승인했다면 이중결제가 발생하기 때문이다.
+		if (response.getBody() == null) {
+			throw new NaverPayException(NaverPayErrorCode.INVALID_RESPONSE, "네이버페이 응답이 비어있습니다");
+		}
+		try {
+			return objectMapper.readValue(response.getBody(), typeReference);
+		} catch (Exception ex) {
+			throw new NaverPayException(NaverPayErrorCode.INVALID_RESPONSE, "네이버페이 응답 해석에 실패했습니다", ex);
 		}
 	}
 
