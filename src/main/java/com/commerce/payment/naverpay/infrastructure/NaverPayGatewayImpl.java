@@ -58,17 +58,16 @@ public class NaverPayGatewayImpl implements NaverPayGateway {
 		NaverPayApproveCode code = NaverPayApproveCode.from(response.getCode());
 		log.info("네이버페이 승인 응답 pgPaymentId={} code={}", pgPaymentId, response.getCode());
 		if (code.isSuccess()) {
-			try {
-				NaverPayApproveBody.Detail detail = response.getBody().getDetail();
-				return NaverPayApproveResult.success(detail.getMerchantPayKey(), detail.getTotalPayAmount());
-			} catch (NullPointerException ex) {
-				log.warn("네이버페이 승인 응답 파싱 실패 pgPaymentId={}", pgPaymentId);
-				return NaverPayApproveResult.failed(
-					PaymentFailCode.PG_INVALID_RESPONSE,
-					PaymentErrorCode.PAYMENT_PG_INVALID_RESPONSE,
-					"네이버페이 응답 처리에 실패했습니다"
-				);
+			NaverPayApproveBody body = response.getBody();
+			NaverPayApproveBody.Detail detail = (body == null) ? null : body.getDetail();
+			if (detail == null) {
+				// PG 가 Success 로 응답해 승인이 처리된 것이 확실한데 응답 본문(detail)이 비어 있는 경우다.
+				// 외부 응답 이상(우리 코드 버그가 아님)이므로 결과 불명(UNKNOWN)으로 보존해 재시도를 차단한다.
+				// FAILED 로 두면 재결제가 허용되어 이중결제가 발생한다.
+				log.warn("네이버페이 승인 응답 본문 누락 pgPaymentId={}", pgPaymentId);
+				return NaverPayApproveResult.unknown("승인 응답 처리 실패: 결과 확인 필요");
 			}
+			return NaverPayApproveResult.success(detail.getMerchantPayKey(), detail.getTotalPayAmount());
 		}
 		if (code.isAlreadyOnGoing()) {
 			return NaverPayApproveResult.processing();
