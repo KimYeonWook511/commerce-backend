@@ -178,6 +178,27 @@ class NaverPayGatewayImplTest {
 	}
 
 	@Test
+	@DisplayName("approve 응답이 Success인데 detail 파싱에 실패하면 PG가 승인했을 수 있으므로 UNKNOWN으로 분류한다")
+	void approve_successButDetailParsingFails_returnsUnknown() {
+		// Given: PG가 Success로 응답(승인 확정)했으나 detail이 null이면, FAILED로 두면 재결제가 허용돼
+		// 이중결제 위험이 있다. 결과 불명(UNKNOWN)으로 보존해 재시도를 차단해야 한다.
+		NaverPayApproveBody body = mock(NaverPayApproveBody.class);
+		given(body.getDetail()).willReturn(null);
+
+		@SuppressWarnings("unchecked")
+		NaverPayResponse<NaverPayApproveBody> response = mock(NaverPayResponse.class);
+		given(response.getCode()).willReturn("Success");
+		given(response.getBody()).willReturn(body);
+		given(naverPayClient.approve("PAY-DETAIL")).willReturn(response);
+
+		// When
+		NaverPayApproveResult result = gateway.approve("PAY-DETAIL");
+
+		// Then
+		assertThat(result.getStatus()).isEqualTo(NaverPayApproveResult.Status.UNKNOWN);
+	}
+
+	@Test
 	@DisplayName("cancel 정상 응답 시 요청 INFO + 응답 INFO 2건이 남는다")
 	void cancel_success_twoInfoLogs() {
 		// Given
