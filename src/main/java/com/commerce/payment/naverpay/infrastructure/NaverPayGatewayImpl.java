@@ -50,11 +50,10 @@ public class NaverPayGatewayImpl implements NaverPayGateway {
 			log.warn("네이버페이 승인 호출 실패 pgPaymentId={} errorCode={} message={}",
 				pgPaymentId, ex.getErrorCode(), ex.getMessage());
 			return NaverPayApproveResult.failed(toFailCode(ex), toPaymentErrorCode(ex), ex.getMessage());
-		} catch (Exception ex) {
-			// 예상치 못한 오류: PG 처리 여부 불명 → UNKNOWN (이중결제 방지)
-			log.warn("네이버페이 승인 중 예상치 못한 오류 pgPaymentId={} message={}", pgPaymentId, ex.getMessage());
-			return NaverPayApproveResult.unknown("승인 호출 중 예상치 못한 오류: " + ex.getMessage());
 		}
+		// NaverPayException 이 아닌 예외(우리 코드의 NPE 등 프로그래밍 버그)는 UNKNOWN 으로 흡수하지 않고
+		// 그대로 전파해 안전망(500)에 위임한다. timeout/네트워크 단절은 NaverPayClient 가 이미
+		// NaverPayException(NETWORK 등)으로 변환하므로 위 catch 에서 UNKNOWN 으로 분류된다.
 
 		NaverPayApproveCode code = NaverPayApproveCode.from(response.getCode());
 		log.info("네이버페이 승인 응답 pgPaymentId={} code={}", pgPaymentId, response.getCode());
