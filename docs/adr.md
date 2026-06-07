@@ -321,3 +321,16 @@ task adr(`docs/tasks/<task>/adr.md`)의 역할은 harness 도입을 기점으로
 - **트레이드오프**: 전송 후 발생하는 *예상 못 한* 버그는 `UNKNOWN`/`INVALID_RESPONSE` 로 보존되어 즉시 500 가시화를 일부 양보한다. 단 원본 예외를 `cause` 로 보존해 로그(stack trace)와 `INVALID_RESPONSE` 모니터링으로 추적 가능하다. 알려진 외부 이상을 모두 명시 처리하므로 이 회색지대에 남는 케이스는 극히 드물다. `postForEntity` 진입 후 발생한 예외는 실제 소켓 write 여부를 코드로 구분할 수 없어 *전송 여부 불명* 으로 보고 보존한다(전송 전 빌드 단계만 `try` 밖으로 빼 전파). 인프라 예외를 common 베이스로 통합하는 후속(#198)과 *PG 부작용 축의 일급 모델링* 은 본 ADR 범위 밖이다.
 - **적용 범위**: 본 ADR 은 approve **직접 승인 경로**에 적용된다. PG 가 `AlreadyComplete` 로 응답한 뒤 `getApprovalHistory` 로 결과를 재확인하는 경로(history 조회 실패 시 UNKNOWN 보존)와 `cancel` 경로의 동일 일관화는 후속(#219)으로 분리한다.
 - **연계**: ADR-026 (UNKNOWN 마킹/차단 정책 — 본 ADR 이 그 마킹 *경계* 를 정교화), ADR-008 (PG 호출 트랜잭션 경계), `docs/exception-strategy.md` "결제 결과 UNKNOWN 처리".
+- **후속**: 본 ADR 의 *적용 범위* 에서 미뤄둔 `AlreadyComplete` history 재확인 경로와 `cancel` 경로의 동일 일관화는 ADR-028(#219)에서 해소한다.
+
+### ADR-028: ADR-027의 "결과 불명 → UNKNOWN 보존"을 AlreadyComplete history 재확인·cancel 경로로 확장한다
+
+- **결정**:
+  - ADR-027 이 approve **직접 승인 경로**에만 적용했던 *결과 불명(NETWORK/SERVER_ERROR/INVALID_RESPONSE) → UNKNOWN 보존* 원칙을 다음 두 경로로 동일하게 확장한다.
+    - **AlreadyComplete history 재확인**: PG 가 `AlreadyComplete` 로 응답해 `getApprovalHistory` 로 결과를 재확인하는 경로에서, 이력조회가 결과 불명류 예외나 응답 본문 해석 불가(NPE)로 실패하면 `FAILED` 가 아니라 `NaverPayHistoryResult.UNKNOWN` 으로 반환한다. application 은 이를 받아 `markUnknownIfRequested` 로 흔적을 남기고 `PAYMENT_RESULT_PENDING`(409) 을 던진다(approve 직접 경로의 `case UNKNOWN` 과 동일).
+    - **cancel(보상 취소)**: `NaverPayGatewayImpl.cancel` 이 결과 불명류 예외를 만나면 `NaverPayCancelResult.UNKNOWN` → `CancelOutcome.UNKNOWN` 으로 전달하고, 보상 흐름은 cancel 기록을 `markUnknownIfRequested`(CANCEL 타입) 로 UNKNOWN 보존한다.
+  - 명시적 실패(InvalidMerchant 등 PG 가 요청을 거절), 이력 없음(빈 목록), 인증 실패/잘못된 요청(CLIENT_ERROR/AUTHENTICATION)은 결과가 확정적이므로 기존대로 `FAILED` 를 유지한다.
+- **배경**: #219. ADR-027(#206)은 *적용 범위* 에서 AlreadyComplete history 경로와 cancel 경로를 후속으로 분리해 뒀다. 그 사이 `getApprovalHistory` 는 결과 불명 예외까지 전부 `FAILED` 로 떨어뜨려, AlreadyComplete(=PG 가 이미 처리한 상태) 후 이력조회가 네트워크 오류로 실패하면 Payment 가 REQUESTED 로 남아 UNKNOWN 흔적이 안 남았다 → `existsUnknownByOrderId` 차단을 우회하고 "결제됐는데 미결제 박제 + 결과 불명 미보존" 이 됐다. cancel 도 결과 불명을 `FAILED` 로 박제해, PG 가 실제로 취소했어도 cancel 기록이 FAILED 로 남아 대사에서 누락될 수 있었다.
+- **이유**: AlreadyComplete 는 PG 가 멱등하게 "이미 됨" 을 반환하는 상태라 ADR-027 의 "전송 후/불명 → UNKNOWN 보존" 원칙이 가장 강하게 적용돼야 하는 지점이다. 결과 불명을 FAILED 로 두면 ADR-026 의 UNKNOWN 차단 안전망이 무력화된다. 분류축은 ADR-027 과 동일하게 *재시도 안전성(PG 처리 가능성)* 이다.
+- **트레이드오프**: cancel 의 UNKNOWN 자동 해소(보상 취소 재시도)는 본 ADR 범위 밖이며 결제 도메인 배치/스케줄러(Epic #208) 로 분리한다. CANCEL 타입 UNKNOWN 행은 `existsUnknownByOrderId`(APPROVE 한정) 에 잡히지 않으므로 주문의 재결제를 brick 하지 않는다(대사 흔적만 남김).
+- **연계**: ADR-027 (본 ADR 이 그 *적용 범위* 를 확장), ADR-026 (UNKNOWN 마킹/차단 정책), Epic #208 (cancel UNKNOWN·보상 취소 실패 재처리), `docs/exception-strategy.md` "결제 결과 UNKNOWN 처리".
