@@ -1,6 +1,6 @@
 package com.commerce.payment.naverpay.infrastructure;
 
-import java.util.NoSuchElementException;
+import java.util.List;
 
 import org.springframework.stereotype.Component;
 
@@ -107,14 +107,24 @@ public class NaverPayGatewayImpl implements NaverPayGateway {
 		}
 		log.info("네이버페이 이력조회 응답 pgPaymentId={} code={}", pgPaymentId, response.getCode());
 
-		NaverPayHistoryBody.History history;
-		try {
-			history = response.getBody().getList().getLast();
-		} catch (NullPointerException ex) {
-			// 응답은 왔으나 본문 구조가 비정상(해석 불가) → 결과 불명. 재시도 차단을 위해 UNKNOWN 보존.
-			return NaverPayHistoryResult.unknown("이력조회 응답 해석 불가");
-		} catch (NoSuchElementException ex) {
+		// 우리 객체(파싱된 응답)를 다루는 영역은 명시적 null 체크로 처리하고, 그 외 예상 못 한 NPE 는
+		// catch 하지 않고 전파해 안전망(500)에 위임한다 (ADR-027, #218 일관화).
+		NaverPayHistoryBody body = response.getBody();
+		List<NaverPayHistoryBody.History> historyList = (body == null) ? null : body.getList();
+		if (historyList == null) {
+			// 응답은 왔으나 이력 목록 자체가 누락(해석 불가) → 결과 불명. 재시도 차단을 위해 UNKNOWN 보존.
+			log.warn("네이버페이 이력조회 응답 목록 누락 pgPaymentId={}", pgPaymentId);
+			return NaverPayHistoryResult.unknown("이력조회 응답 해석 불가: 이력 목록 누락");
+		}
+		if (historyList.isEmpty()) {
+			// 이력이 존재하지 않음 = 결과가 확정적으로 없음 → FAILED.
 			return NaverPayHistoryResult.failed(PaymentErrorCode.PAYMENT_NOT_FOUND);
+		}
+		NaverPayHistoryBody.History history = historyList.getLast();
+		if (history == null) {
+			// 마지막 이력 원소가 null = 외부 응답 이상(해석 불가) → 결과 불명. 재시도 차단을 위해 UNKNOWN 보존.
+			log.warn("네이버페이 이력조회 응답 상세 누락 pgPaymentId={}", pgPaymentId);
+			return NaverPayHistoryResult.unknown("이력조회 응답 해석 불가: 이력 상세 누락");
 		}
 
 		if (history.isCompletedApproval()) {

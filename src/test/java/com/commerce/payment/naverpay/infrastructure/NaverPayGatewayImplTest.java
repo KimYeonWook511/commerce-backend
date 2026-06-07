@@ -349,6 +349,27 @@ class NaverPayGatewayImplTest {
 	}
 
 	@Test
+	@DisplayName("getApprovalHistory 응답이 Success인데 마지막 이력 원소가 null이면 결과 불명이므로 UNKNOWN으로 분류한다")
+	void getApprovalHistory_nullHistoryElement_returnsUnknown() {
+		// Given: 이력 목록의 마지막 원소가 null이면 외부 응답 이상(해석 불가)이므로 UNKNOWN 보존.
+		// 명시적 null 체크로 안전망(500) 우회를 막는다 (#218 일관화).
+		NaverPayHistoryBody body = mock(NaverPayHistoryBody.class);
+		given(body.getList()).willReturn(java.util.Arrays.asList((NaverPayHistoryBody.History) null));
+
+		@SuppressWarnings("unchecked")
+		NaverPayResponse<NaverPayHistoryBody> response = mock(NaverPayResponse.class);
+		given(response.getCode()).willReturn("Success");
+		given(response.getBody()).willReturn(body);
+		given(naverPayClient.getAllHistory("PAY-NULLELEM")).willReturn(response);
+
+		// When
+		NaverPayHistoryResult result = gateway.getApprovalHistory("PAY-NULLELEM");
+
+		// Then
+		assertThat(result.getStatus()).isEqualTo(NaverPayHistoryResult.Status.UNKNOWN);
+	}
+
+	@Test
 	@DisplayName("getApprovalHistory 응답 코드가 명시적 실패(InvalidMerchant 등)면 FAILED로 분류한다")
 	void getApprovalHistory_explicitFailureCode_returnsFailed() {
 		// Given: PG가 이력조회 요청 자체를 명시적으로 거절한 경우는 기존대로 FAILED
