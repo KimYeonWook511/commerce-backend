@@ -114,6 +114,16 @@ public class NaverPayApprovalService {
 	private NaverPayApproveResponse processAlreadyComplete(Payment payment) {
 		NaverPayHistoryResult result = naverPayGateway.getApprovalHistory(payment.getPgPaymentId());
 
+		// AlreadyComplete 는 PG 가 이미 처리한 상태이므로 이력조회가 결과 불명이면 UNKNOWN 보존이 가장 강하게 적용된다.
+		// approve 직접 경로의 case UNKNOWN 과 동일하게 흔적을 남기고 재시도를 차단한다 (ADR-027, #219).
+		if (result.getStatus() == NaverPayHistoryResult.Status.UNKNOWN) {
+			paymentApprovalRecordService.markUnknownIfRequested(
+				payment.getMerchantPayKey(), payment.getProvider(), payment.getPgPaymentId(),
+				result.getFailDetail(), LocalDateTime.now()
+			);
+			throw new PaymentException(PaymentErrorCode.PAYMENT_RESULT_PENDING);
+		}
+
 		if (result.getStatus() == NaverPayHistoryResult.Status.FAILED) {
 			throw new PaymentException(result.getErrorCode());
 		}
@@ -207,6 +217,7 @@ public class NaverPayApprovalService {
 			case SUCCESS, ALREADY_CANCELED -> CancelOutcome.success();
 			case PROCESSING -> CancelOutcome.processing();
 			case FAILED -> CancelOutcome.failed(result.getFailCode(), result.getFailDetail());
+			case UNKNOWN -> CancelOutcome.unknown(result.getFailDetail());
 		};
 	}
 

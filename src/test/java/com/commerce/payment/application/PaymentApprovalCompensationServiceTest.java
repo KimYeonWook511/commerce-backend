@@ -113,6 +113,27 @@ class PaymentApprovalCompensationServiceTest {
 		);
 	}
 
+	@DisplayName("amountMismatch 보상: hasCompletedPayment=false, outcome=UNKNOWN → markUnknownIfRequested 호출")
+	@Test
+	void compensateAmountMismatch_whenCompensationRequiredAndUnknown_callsMarkUnknown() {
+		// PG 취소 결과 불명 시 cancel 기록을 FAILED로 박제하지 않고 UNKNOWN으로 보존해 대사 대상으로 남긴다 (#219)
+		Payment approvePayment = createApprovePayment("PAY-1", "pg-id", 1000);
+		Payment cancelPayment = Payment.createCancelRequested(1L, "PAY-1", "pg-id", 2000, PaymentProvider.NAVERPAY);
+
+		given(paymentApprovalService.hasCompletedPayment("PAY-1")).willReturn(false);
+		given(paymentCancellationService.getOrCreate(eq(1L), eq("PAY-1"), eq(PaymentProvider.NAVERPAY), eq("pg-id"), eq(2000)))
+			.willReturn(cancelPayment);
+		given(pgCanceller.cancel(eq(cancelPayment), any()))
+			.willReturn(CancelOutcome.unknown("취소 결과 불명: 네트워크 오류"));
+
+		compensationService.compensateAmountMismatch(approvePayment, 2000, pgCanceller);
+
+		then(paymentCancellationService).should().markUnknownIfRequested(
+			eq("PAY-1"), eq(PaymentProvider.NAVERPAY), eq("pg-id"), any(), any()
+		);
+		then(paymentCancellationService).should(never()).fail(any(), any(), any(), any(), any(), any());
+	}
+
 	@DisplayName("amountMismatch 보상: hasCompletedPayment=true → pgCanceller.cancel 미호출")
 	@Test
 	void compensateAmountMismatch_whenCompensationNotRequired_skipPgCancel() {
@@ -321,6 +342,30 @@ class PaymentApprovalCompensationServiceTest {
 			eq("PAY-1"), eq(PaymentProvider.NAVERPAY), eq("pg-id"),
 			eq(PaymentFailCode.CANCEL_PROCESS_FAILED), eq("취소 실패"), any()
 		);
+		then(paymentApprovalRecordService).should().failIfRequested(
+			eq("PAY-1"), eq(PaymentProvider.NAVERPAY), eq("pg-id"),
+			eq(PaymentFailCode.DUPLICATE_PAYMENT), any(), any()
+		);
+	}
+
+	@DisplayName("compensateDuplicateApproval: pgCanceller.cancel 결과 불명(UNKNOWN) 시 markUnknownIfRequested 호출 + approve payment failIfRequested")
+	@Test
+	void compensateDuplicateApproval_whenPgCancelUnknown_callsMarkUnknownAndFailIfRequested() {
+		// PG 취소 결과 불명 시 cancel 기록을 FAILED로 박제하지 않고 UNKNOWN으로 보존해 대사 대상으로 남긴다 (#219)
+		Payment approvePayment = createApprovePayment("PAY-1", "pg-id", 1000);
+		Payment cancelPayment = Payment.createCancelRequested(1L, "PAY-1", "pg-id", 1000, PaymentProvider.NAVERPAY);
+
+		given(paymentCancellationService.getOrCreate(eq(1L), eq("PAY-1"), eq(PaymentProvider.NAVERPAY), eq("pg-id"), eq(1000)))
+			.willReturn(cancelPayment);
+		given(pgCanceller.cancel(eq(cancelPayment), any()))
+			.willReturn(CancelOutcome.unknown("취소 결과 불명: 네트워크 오류"));
+
+		compensationService.compensateDuplicateApproval(approvePayment, pgCanceller);
+
+		then(paymentCancellationService).should().markUnknownIfRequested(
+			eq("PAY-1"), eq(PaymentProvider.NAVERPAY), eq("pg-id"), any(), any()
+		);
+		then(paymentCancellationService).should(never()).fail(any(), any(), any(), any(), any(), any());
 		then(paymentApprovalRecordService).should().failIfRequested(
 			eq("PAY-1"), eq(PaymentProvider.NAVERPAY), eq("pg-id"),
 			eq(PaymentFailCode.DUPLICATE_PAYMENT), any(), any()

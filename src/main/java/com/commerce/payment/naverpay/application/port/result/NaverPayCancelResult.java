@@ -11,7 +11,9 @@ public class NaverPayCancelResult {
 		SUCCESS,
 		PROCESSING,
 		ALREADY_CANCELED,
-		FAILED
+		FAILED,
+		// PG 가 취소를 처리했는지 불명(네트워크/서버오류/응답 해석 불가). FAILED 와 달리 UNKNOWN 보존 대상이다.
+		UNKNOWN
 	}
 
 	private final Status status;
@@ -38,5 +40,9 @@ public class NaverPayCancelResult {
 
 	public static NaverPayCancelResult failed(PaymentFailCode failCode, String failDetail) {
 		return new NaverPayCancelResult(Status.FAILED, failCode, failDetail);
+	}
+
+	public static NaverPayCancelResult unknown(String failDetail) {
+		return new NaverPayCancelResult(Status.UNKNOWN, null, failDetail);
 	}
 }
