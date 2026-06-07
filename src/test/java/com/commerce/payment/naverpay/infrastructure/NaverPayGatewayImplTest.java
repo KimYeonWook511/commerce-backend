@@ -1,6 +1,7 @@
 package com.commerce.payment.naverpay.infrastructure;
 
 import static org.assertj.core.api.Assertions.assertThat;
+import static org.assertj.core.api.Assertions.assertThatThrownBy;
 import static org.mockito.ArgumentMatchers.any;
 import static org.mockito.BDDMockito.given;
 import static org.mockito.Mockito.mock;
@@ -161,6 +162,63 @@ class NaverPayGatewayImplTest {
 		// When & Then
 		assertThat(gateway.approve("PAY-AUTH").getStatus()).isEqualTo(NaverPayApproveResult.Status.FAILED);
 		assertThat(gateway.approve("PAY-CLIENT").getStatus()).isEqualTo(NaverPayApproveResult.Status.FAILED);
+	}
+
+	@Test
+	@DisplayName("approve 중 NaverPayException이 아닌 예외(프로그래밍 버그)는 UNKNOWN으로 흡수하지 않고 그대로 전파한다")
+	void approve_nonNaverPayException_propagates() {
+		// Given: NPE 같은 프로그래밍 버그가 UNKNOWN으로 흡수되면 해당 주문이 영구 차단(brick)되므로,
+		// 안전망(500)에 위임되도록 그대로 전파돼야 한다.
+		given(naverPayClient.approve("PAY-BUG"))
+			.willThrow(new NullPointerException("프로그래밍 버그"));
+
+		// When & Then
+		assertThatThrownBy(() -> gateway.approve("PAY-BUG"))
+			.isInstanceOf(NullPointerException.class);
+	}
+
+	@Test
+	@DisplayName("approve 응답이 Success인데 detail 파싱에 실패하면 PG가 승인했을 수 있으므로 UNKNOWN으로 분류한다")
+	void approve_successButDetailParsingFails_returnsUnknown() {
+		// Given: PG가 Success로 응답(승인 확정)했으나 detail이 null이면, FAILED로 두면 재결제가 허용돼
+		// 이중결제 위험이 있다. 결과 불명(UNKNOWN)으로 보존해 재시도를 차단해야 한다.
+		NaverPayApproveBody body = mock(NaverPayApproveBody.class);
+		given(body.getDetail()).willReturn(null);
+
+		@SuppressWarnings("unchecked")
+		NaverPayResponse<NaverPayApproveBody> response = mock(NaverPayResponse.class);
+		given(response.getCode()).willReturn("Success");
+		given(response.getBody()).willReturn(body);
+		given(naverPayClient.approve("PAY-DETAIL")).willReturn(response);
+
+		// When
+		NaverPayApproveResult result = gateway.approve("PAY-DETAIL");
+
+		// Then
+		assertThat(result.getStatus()).isEqualTo(NaverPayApproveResult.Status.UNKNOWN);
+	}
+
+	@Test
+	@DisplayName("approve 응답이 Success인데 detail은 있으나 merchantPayKey가 없으면 UNKNOWN으로 분류한다")
+	void approve_successButMerchantPayKeyNull_returnsUnknown() {
+		// Given: detail 객체는 있지만 merchantPayKey가 null인 경우도 외부 응답 이상이므로 UNKNOWN으로 보존한다.
+		NaverPayApproveBody.Detail detail = mock(NaverPayApproveBody.Detail.class);
+		given(detail.getMerchantPayKey()).willReturn(null);
+
+		NaverPayApproveBody body = mock(NaverPayApproveBody.class);
+		given(body.getDetail()).willReturn(detail);
+
+		@SuppressWarnings("unchecked")
+		NaverPayResponse<NaverPayApproveBody> response = mock(NaverPayResponse.class);
+		given(response.getCode()).willReturn("Success");
+		given(response.getBody()).willReturn(body);
+		given(naverPayClient.approve("PAY-KEY")).willReturn(response);
+
+		// When
+		NaverPayApproveResult result = gateway.approve("PAY-KEY");
+
+		// Then
+		assertThat(result.getStatus()).isEqualTo(NaverPayApproveResult.Status.UNKNOWN);
 	}
 
 	@Test
