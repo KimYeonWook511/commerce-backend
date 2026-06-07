@@ -114,8 +114,9 @@ public class NaverPayClient {
 		} catch (RestClientResponseException ex) {
 			throw mapHttpException(ex);
 		} catch (Exception ex) {
-			// 전송 단계의 그 외 예외. 요청 전송 여부가 불명할 수 있으므로 INVALID_RESPONSE 로 보존한다.
-			throw new NaverPayException(NaverPayErrorCode.INVALID_RESPONSE, "네이버페이 응답 처리에 실패했습니다", ex);
+			// 전송 단계의 그 외 예외. postForEntity 진입 후에는 요청 전송 여부를 코드로 구분할 수 없어
+			// 불명으로 보고 INVALID_RESPONSE 로 보존한다 (상위에서 UNKNOWN 분류 → 이중결제 방어).
+			throw new NaverPayException(NaverPayErrorCode.INVALID_RESPONSE, "네이버페이 요청 처리에 실패했습니다", ex);
 		}
 
 		// 전송 완료(PG 가 이미 처리했을 수 있는 상태). 아래 응답 해석 단계의 모든 예외(프로그래밍 버그 포함)는
