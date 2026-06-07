@@ -7,7 +7,9 @@ public record CancelOutcome(Status status, PaymentFailCode failCode, String fail
 	public enum Status {
 		SUCCESS,
 		PROCESSING,
-		FAILED
+		FAILED,
+		// PG 가 취소를 처리했는지 불명. cancel 기록을 UNKNOWN 으로 보존해 대사 대상으로 남긴다.
+		UNKNOWN
 	}
 
 	public static CancelOutcome success() {
@@ -20,5 +22,9 @@ public record CancelOutcome(Status status, PaymentFailCode failCode, String fail
 
 	public static CancelOutcome failed(PaymentFailCode failCode, String failDetail) {
 		return new CancelOutcome(Status.FAILED, failCode, failDetail);
+	}
+
+	public static CancelOutcome unknown(String failDetail) {
+		return new CancelOutcome(Status.UNKNOWN, null, failDetail);
 	}
 }

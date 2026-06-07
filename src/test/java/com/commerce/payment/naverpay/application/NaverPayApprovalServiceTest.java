@@ -272,6 +272,36 @@ class NaverPayApprovalServiceTest {
 		then(paymentApprovalService).should().succeedApproval(any(Payment.class), any());
 	}
 
+	@DisplayName("AlreadyComplete 경로에서 history 조회가 결과 불명(UNKNOWN)이면 markUnknownIfRequested를 호출하고 PAYMENT_RESULT_PENDING을 던진다")
+	@Test
+	void approve_whenAlreadyCompleteAndHistoryUnknown_callsMarkUnknownAndThrowsResultPending() {
+		// given: AlreadyComplete는 PG가 이미 처리한 상태이므로 이력조회가 결과 불명이면
+		// UNKNOWN 흔적을 남겨 재시도를 차단해야 한다 ("결제됐는데 미결제 박제" 방지, #219)
+		long memberId = 1L;
+		PaymentReservation reservation = createReservation("PAY-1", memberId, 1000);
+		Order order = createOrder(1000);
+		Payment payment = createPayment("PAY-1", "pg-payment-id", 1000);
+
+		given(paymentReservationRepository.findByMerchantPayKey("PAY-1")).willReturn(Optional.of(reservation));
+		given(orderRepository.findByIdAndMemberId(reservation.getOrderId(), memberId)).willReturn(Optional.of(order));
+		given(paymentApprovalRecordService.create(any(PaymentReservation.class), eq("pg-payment-id")))
+			.willReturn(payment);
+		given(naverPayGateway.approve("pg-payment-id")).willReturn(NaverPayApproveResult.alreadyComplete());
+		given(naverPayGateway.getApprovalHistory("pg-payment-id"))
+			.willReturn(NaverPayHistoryResult.unknown("이력조회 결과 불명: 네트워크 오류"));
+
+		// when & then
+		assertThatThrownBy(() -> naverPayApprovalService.approve(memberId, "PAY-1", "pg-payment-id"))
+			.isInstanceOf(PaymentException.class)
+			.satisfies(exception -> {
+				PaymentException paymentException = (PaymentException)exception;
+				assertThat(paymentException.getErrorCode()).isEqualTo(PaymentErrorCode.PAYMENT_RESULT_PENDING);
+			});
+		then(paymentApprovalRecordService).should().markUnknownIfRequested(
+			eq("PAY-1"), eq(PaymentProvider.NAVERPAY), eq("pg-payment-id"), any(), any());
+		then(paymentApprovalService).should(never()).succeedApproval(any(), any());
+	}
+
 	@DisplayName("AlreadyComplete 경로에서 history merchantPayKey가 다르면 approve payment를 실패 처리하고 PAYMENT_NOT_FOUND를 던진다")
 	@Test
 	void approve_whenAlreadyCompleteAndHistoryMerchantPayKeyMismatch_markFailedAndThrowException() {

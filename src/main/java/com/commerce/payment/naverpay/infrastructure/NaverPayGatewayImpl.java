@@ -88,6 +88,14 @@ public class NaverPayGatewayImpl implements NaverPayGateway {
 			log.info("네이버페이 이력조회 요청 pgPaymentId={}", pgPaymentId);
 			response = naverPayClient.getAllHistory(pgPaymentId);
 		} catch (NaverPayException ex) {
+			if (isResultUnknown(ex.getErrorCode())) {
+				// 네트워크/서버 오류/응답 해석 불가: 이력조회로 승인 결과를 확정하지 못함 → UNKNOWN.
+				// FAILED 로 두면 UNKNOWN 흔적이 안 남아 "결제됐는데 미결제 박제" 가 된다 (ADR-027, #219).
+				log.warn("네이버페이 이력조회 결과 불명 pgPaymentId={} errorCode={} message={}",
+					pgPaymentId, ex.getErrorCode(), ex.getMessage());
+				return NaverPayHistoryResult.unknown("이력조회 결과 불명: " + ex.getMessage());
+			}
+			// 인증 실패 / 잘못된 요청: PG 가 이력조회 요청을 거절했음이 확실 → FAILED
 			log.warn("네이버페이 이력조회 호출 실패 pgPaymentId={} message={}", pgPaymentId, ex.getMessage());
 			return NaverPayHistoryResult.failed(toPaymentErrorCode(ex));
 		}
@@ -103,7 +111,8 @@ public class NaverPayGatewayImpl implements NaverPayGateway {
 		try {
 			history = response.getBody().getList().getLast();
 		} catch (NullPointerException ex) {
-			return NaverPayHistoryResult.failed(PaymentErrorCode.PAYMENT_PG_INVALID_RESPONSE);
+			// 응답은 왔으나 본문 구조가 비정상(해석 불가) → 결과 불명. 재시도 차단을 위해 UNKNOWN 보존.
+			return NaverPayHistoryResult.unknown("이력조회 응답 해석 불가");
 		} catch (NoSuchElementException ex) {
 			return NaverPayHistoryResult.failed(PaymentErrorCode.PAYMENT_NOT_FOUND);
 		}
@@ -133,6 +142,13 @@ public class NaverPayGatewayImpl implements NaverPayGateway {
 					.build()
 			);
 		} catch (NaverPayException ex) {
+			if (isResultUnknown(ex.getErrorCode())) {
+				// 네트워크/서버 오류/응답 해석 불가: PG 가 취소를 처리했는지 불명 → UNKNOWN.
+				// FAILED 로 두면 PG 가 실제로 취소했어도 cancel 기록이 FAILED 로 박제돼 대사에서 누락된다 (#219).
+				log.warn("네이버페이 취소 결과 불명 pgPaymentId={} errorCode={} message={}",
+					pgPaymentId, ex.getErrorCode(), ex.getMessage());
+				return NaverPayCancelResult.unknown("취소 결과 불명: " + ex.getMessage());
+			}
 			log.warn("네이버페이 취소 호출 실패 pgPaymentId={} message={}", pgPaymentId, ex.getMessage());
 			return NaverPayCancelResult.failed(toFailCode(ex), ex.getMessage());
 		}

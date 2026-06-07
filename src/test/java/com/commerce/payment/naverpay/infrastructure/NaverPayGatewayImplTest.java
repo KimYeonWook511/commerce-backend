@@ -273,4 +273,122 @@ class NaverPayGatewayImplTest {
 		assertThat(logs.get(1).getLevel()).isEqualTo(Level.INFO);
 		assertThat(logs.get(1).getFormattedMessage()).contains("네이버페이 이력조회 응답").contains("PAY005");
 	}
+
+	@Test
+	@DisplayName("getApprovalHistory 호출 시 결과 불명류(NETWORK/SERVER_ERROR/INVALID_RESPONSE)는 UNKNOWN으로 분류한다")
+	void getApprovalHistory_resultUnknownException_returnsUnknown() {
+		// Given: AlreadyComplete 후 이력조회가 결과 불명으로 실패하면 PG가 이미 승인했을 수 있으므로
+		// FAILED가 아닌 UNKNOWN으로 보존해야 "결제됐는데 미결제 박제"를 막을 수 있다 (#219)
+		given(naverPayClient.getAllHistory("PAY-NET"))
+			.willThrow(new NaverPayException(NaverPayErrorCode.NETWORK, "네트워크 오류"));
+		given(naverPayClient.getAllHistory("PAY-SVR"))
+			.willThrow(new NaverPayException(NaverPayErrorCode.SERVER_ERROR, "PG 서버 오류"));
+		given(naverPayClient.getAllHistory("PAY-INV"))
+			.willThrow(new NaverPayException(NaverPayErrorCode.INVALID_RESPONSE, "응답 해석 불가"));
+
+		// When & Then
+		assertThat(gateway.getApprovalHistory("PAY-NET").getStatus())
+			.isEqualTo(NaverPayHistoryResult.Status.UNKNOWN);
+		assertThat(gateway.getApprovalHistory("PAY-SVR").getStatus())
+			.isEqualTo(NaverPayHistoryResult.Status.UNKNOWN);
+		assertThat(gateway.getApprovalHistory("PAY-INV").getStatus())
+			.isEqualTo(NaverPayHistoryResult.Status.UNKNOWN);
+	}
+
+	@Test
+	@DisplayName("getApprovalHistory 호출 시 인증 실패/잘못된 요청은 처리되지 않았음이 확실하므로 FAILED로 분류한다")
+	void getApprovalHistory_definiteFailureException_returnsFailed() {
+		// Given: 요청이 거절돼 PG가 처리하지 않았음이 확실한 예외는 기존대로 FAILED 유지
+		given(naverPayClient.getAllHistory("PAY-AUTH"))
+			.willThrow(new NaverPayException(NaverPayErrorCode.AUTHENTICATION, "인증 실패"));
+		given(naverPayClient.getAllHistory("PAY-CLI"))
+			.willThrow(new NaverPayException(NaverPayErrorCode.CLIENT_ERROR, "잘못된 요청"));
+
+		// When & Then
+		assertThat(gateway.getApprovalHistory("PAY-AUTH").getStatus())
+			.isEqualTo(NaverPayHistoryResult.Status.FAILED);
+		assertThat(gateway.getApprovalHistory("PAY-CLI").getStatus())
+			.isEqualTo(NaverPayHistoryResult.Status.FAILED);
+	}
+
+	@Test
+	@DisplayName("getApprovalHistory 응답이 Success인데 본문 구조가 비정상이면 결과 불명이므로 UNKNOWN으로 분류한다")
+	void getApprovalHistory_malformedBody_returnsUnknown() {
+		// Given: 응답은 왔으나 body가 null이면 해석 불가(결과 불명) → UNKNOWN 보존
+		@SuppressWarnings("unchecked")
+		NaverPayResponse<NaverPayHistoryBody> response = mock(NaverPayResponse.class);
+		given(response.getCode()).willReturn("Success");
+		given(response.getBody()).willReturn(null);
+		given(naverPayClient.getAllHistory("PAY-NPE")).willReturn(response);
+
+		// When
+		NaverPayHistoryResult result = gateway.getApprovalHistory("PAY-NPE");
+
+		// Then
+		assertThat(result.getStatus()).isEqualTo(NaverPayHistoryResult.Status.UNKNOWN);
+	}
+
+	@Test
+	@DisplayName("getApprovalHistory 이력 목록이 비어 있으면 처리 기록 없음이 확실하므로 FAILED로 분류한다")
+	void getApprovalHistory_emptyList_returnsFailed() {
+		// Given: 이력이 비어 있으면(PG에 기록 없음) 결과가 확정적이므로 FAILED 유지
+		NaverPayHistoryBody body = mock(NaverPayHistoryBody.class);
+		given(body.getList()).willReturn(List.of());
+
+		@SuppressWarnings("unchecked")
+		NaverPayResponse<NaverPayHistoryBody> response = mock(NaverPayResponse.class);
+		given(response.getCode()).willReturn("Success");
+		given(response.getBody()).willReturn(body);
+		given(naverPayClient.getAllHistory("PAY-EMPTY")).willReturn(response);
+
+		// When
+		NaverPayHistoryResult result = gateway.getApprovalHistory("PAY-EMPTY");
+
+		// Then
+		assertThat(result.getStatus()).isEqualTo(NaverPayHistoryResult.Status.FAILED);
+	}
+
+	@Test
+	@DisplayName("getApprovalHistory 응답 코드가 명시적 실패(InvalidMerchant 등)면 FAILED로 분류한다")
+	void getApprovalHistory_explicitFailureCode_returnsFailed() {
+		// Given: PG가 이력조회 요청 자체를 명시적으로 거절한 경우는 기존대로 FAILED
+		@SuppressWarnings("unchecked")
+		NaverPayResponse<NaverPayHistoryBody> response = mock(NaverPayResponse.class);
+		given(response.getCode()).willReturn("InvalidMerchant");
+		given(naverPayClient.getAllHistory("PAY-IM")).willReturn(response);
+
+		// When
+		NaverPayHistoryResult result = gateway.getApprovalHistory("PAY-IM");
+
+		// Then
+		assertThat(result.getStatus()).isEqualTo(NaverPayHistoryResult.Status.FAILED);
+	}
+
+	@Test
+	@DisplayName("cancel 호출 시 결과 불명류(NETWORK/SERVER_ERROR/INVALID_RESPONSE)는 UNKNOWN으로 분류한다")
+	void cancel_resultUnknownException_returnsUnknown() {
+		// Given: PG가 취소를 처리했는지 불명이면 FAILED로 박제하지 않고 UNKNOWN으로 보존해 대사 대상으로 남긴다 (#219)
+		given(naverPayClient.cancel(any(NaverPayCancelRequest.class)))
+			.willThrow(new NaverPayException(NaverPayErrorCode.NETWORK, "네트워크 오류"));
+
+		// When
+		NaverPayCancelResult result = gateway.cancel("PAY-CNET", 10000, "고객 요청");
+
+		// Then
+		assertThat(result.getStatus()).isEqualTo(NaverPayCancelResult.Status.UNKNOWN);
+	}
+
+	@Test
+	@DisplayName("cancel 호출 시 인증 실패/잘못된 요청은 처리되지 않았음이 확실하므로 FAILED로 분류한다")
+	void cancel_definiteFailureException_returnsFailed() {
+		// Given: 요청이 거절돼 PG가 취소를 처리하지 않았음이 확실한 예외는 기존대로 FAILED 유지
+		given(naverPayClient.cancel(any(NaverPayCancelRequest.class)))
+			.willThrow(new NaverPayException(NaverPayErrorCode.CLIENT_ERROR, "잘못된 요청"));
+
+		// When
+		NaverPayCancelResult result = gateway.cancel("PAY-CCLI", 10000, "고객 요청");
+
+		// Then
+		assertThat(result.getStatus()).isEqualTo(NaverPayCancelResult.Status.FAILED);
+	}
 }

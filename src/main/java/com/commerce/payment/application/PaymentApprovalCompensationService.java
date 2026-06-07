@@ -72,6 +72,11 @@ public class PaymentApprovalCompensationService {
 						cancelPayment.getMerchantPayKey(), cancelPayment.getProvider(),
 						cancelPayment.getPgPaymentId(), outcome.failCode(), outcome.failDetail(), now
 					);
+					// PG 취소 결과 불명: cancel 기록을 UNKNOWN 보존해 대사 대상으로 남긴다 (#219)
+					case UNKNOWN -> paymentCancellationService.markUnknownIfRequested(
+						cancelPayment.getMerchantPayKey(), cancelPayment.getProvider(),
+						cancelPayment.getPgPaymentId(), outcome.failDetail(), now
+					);
 				}
 			} catch (PaymentException ex) {
 				log.warn("이중 결제 보상 취소 실패 merchantPayKey={} pgPaymentId={} errorCode={}",
@@ -150,6 +155,11 @@ public class PaymentApprovalCompensationService {
 				case FAILED -> paymentCancellationService.fail(
 					cancelPayment.getMerchantPayKey(), cancelPayment.getProvider(),
 					cancelPayment.getPgPaymentId(), outcome.failCode(), outcome.failDetail(), now
+				);
+				// PG 취소 결과 불명: cancel 기록을 UNKNOWN 보존해 대사 대상으로 남긴다 (#219)
+				case UNKNOWN -> paymentCancellationService.markUnknownIfRequested(
+					cancelPayment.getMerchantPayKey(), cancelPayment.getProvider(),
+					cancelPayment.getPgPaymentId(), outcome.failDetail(), now
 				);
 			}
 		} catch (PaymentException ex) {
