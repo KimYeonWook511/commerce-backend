@@ -370,6 +370,31 @@ class NaverPayGatewayImplTest {
 	}
 
 	@Test
+	@DisplayName("getApprovalHistory 승인 이력이지만 merchantPayKey가 null이면 결과 불명이므로 UNKNOWN으로 분류한다")
+	void getApprovalHistory_approvedButNullMerchantPayKey_returnsUnknown() {
+		// Given: PG가 승인됨 이력을 주면서 merchantPayKey를 누락하면 외부 응답 이상(해석 불가)이므로 UNKNOWN 보존.
+		// approve 직접 경로의 merchantPayKey 누락 처리와 일관. 값이 존재하나 다른 경우(진짜 불일치)는 FAILED로 갈린다.
+		NaverPayHistoryBody.History history = mock(NaverPayHistoryBody.History.class);
+		given(history.isCompletedApproval()).willReturn(true);
+		given(history.getMerchantPayKey()).willReturn(null);
+
+		NaverPayHistoryBody body = mock(NaverPayHistoryBody.class);
+		given(body.getList()).willReturn(List.of(history));
+
+		@SuppressWarnings("unchecked")
+		NaverPayResponse<NaverPayHistoryBody> response = mock(NaverPayResponse.class);
+		given(response.getCode()).willReturn("Success");
+		given(response.getBody()).willReturn(body);
+		given(naverPayClient.getAllHistory("PAY-NOKEY")).willReturn(response);
+
+		// When
+		NaverPayHistoryResult result = gateway.getApprovalHistory("PAY-NOKEY");
+
+		// Then
+		assertThat(result.getStatus()).isEqualTo(NaverPayHistoryResult.Status.UNKNOWN);
+	}
+
+	@Test
 	@DisplayName("getApprovalHistory 응답 코드가 명시적 실패(InvalidMerchant 등)면 FAILED로 분류한다")
 	void getApprovalHistory_explicitFailureCode_returnsFailed() {
 		// Given: PG가 이력조회 요청 자체를 명시적으로 거절한 경우는 기존대로 FAILED

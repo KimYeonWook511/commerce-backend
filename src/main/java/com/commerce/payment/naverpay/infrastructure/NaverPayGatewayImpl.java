@@ -128,6 +128,13 @@ public class NaverPayGatewayImpl implements NaverPayGateway {
 		}
 
 		if (history.isCompletedApproval()) {
+			if (history.getMerchantPayKey() == null) {
+				// 승인 이력이나 merchantPayKey 누락 = 외부 응답 이상(해석 불가) → 결과 불명. 재시도 차단을 위해 UNKNOWN 보존.
+				// approve 직접 경로의 detail/merchantPayKey 누락 처리와 일관 (ADR-027). 값이 존재하나 다른 경우는
+				// 호출처(processAlreadyComplete)에서 진짜 키 불일치(FAILED)로 가른다.
+				log.warn("네이버페이 이력조회 승인 이력 merchantPayKey 누락 pgPaymentId={}", pgPaymentId);
+				return NaverPayHistoryResult.unknown("이력조회 응답 해석 불가: 승인 이력 merchantPayKey 누락");
+			}
 			return NaverPayHistoryResult.approved(history.getMerchantPayKey(), history.getTotalPayAmount());
 		}
 		if (history.isCanceledApproval()) {
