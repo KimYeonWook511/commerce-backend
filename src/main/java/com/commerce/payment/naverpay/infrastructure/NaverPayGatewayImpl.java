@@ -60,8 +60,8 @@ public class NaverPayGatewayImpl implements NaverPayGateway {
 		if (code.isSuccess()) {
 			NaverPayApproveBody body = response.getBody();
 			NaverPayApproveBody.Detail detail = (body == null) ? null : body.getDetail();
-			if (detail == null) {
-				// PG 가 Success 로 응답해 승인이 처리된 것이 확실한데 응답 본문(detail)이 비어 있는 경우다.
+			if (detail == null || detail.getMerchantPayKey() == null) {
+				// PG 가 Success 로 응답해 승인이 처리된 것이 확실한데 응답 본문(detail / merchantPayKey)이 비어 있는 경우다.
 				// 외부 응답 이상(우리 코드 버그가 아님)이므로 결과 불명(UNKNOWN)으로 보존해 재시도를 차단한다.
 				// FAILED 로 두면 재결제가 허용되어 이중결제가 발생한다.
 				log.warn("네이버페이 승인 응답 본문 누락 pgPaymentId={}", pgPaymentId);
