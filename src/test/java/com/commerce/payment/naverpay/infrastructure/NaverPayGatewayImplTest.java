@@ -199,6 +199,29 @@ class NaverPayGatewayImplTest {
 	}
 
 	@Test
+	@DisplayName("approve 응답이 Success인데 detail은 있으나 merchantPayKey가 없으면 UNKNOWN으로 분류한다")
+	void approve_successButMerchantPayKeyNull_returnsUnknown() {
+		// Given: detail 객체는 있지만 merchantPayKey가 null인 경우도 외부 응답 이상이므로 UNKNOWN으로 보존한다.
+		NaverPayApproveBody.Detail detail = mock(NaverPayApproveBody.Detail.class);
+		given(detail.getMerchantPayKey()).willReturn(null);
+
+		NaverPayApproveBody body = mock(NaverPayApproveBody.class);
+		given(body.getDetail()).willReturn(detail);
+
+		@SuppressWarnings("unchecked")
+		NaverPayResponse<NaverPayApproveBody> response = mock(NaverPayResponse.class);
+		given(response.getCode()).willReturn("Success");
+		given(response.getBody()).willReturn(body);
+		given(naverPayClient.approve("PAY-KEY")).willReturn(response);
+
+		// When
+		NaverPayApproveResult result = gateway.approve("PAY-KEY");
+
+		// Then
+		assertThat(result.getStatus()).isEqualTo(NaverPayApproveResult.Status.UNKNOWN);
+	}
+
+	@Test
 	@DisplayName("cancel 정상 응답 시 요청 INFO + 응답 INFO 2건이 남는다")
 	void cancel_success_twoInfoLogs() {
 		// Given
