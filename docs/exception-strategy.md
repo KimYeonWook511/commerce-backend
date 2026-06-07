@@ -133,7 +133,7 @@ PG 호출 결과가 확인되지 않아 결제 상태가 불명확한 경우의 
 - PG approve 응답 OK 후 DB 반영 실패 시에도 가능한 경우 UNKNOWN 흔적 보존
 - UNKNOWN 은 "결과를 알 수 없다" 는 사실을 DB 에 남기는 것이 목적이다. 사용자 재시도를 허용하면 이중결제 위험이 있으므로 차단한다
 - 어떤 예외를 UNKNOWN 으로 분류하는가의 경계는 *요청 전송 시점* 을 따른다 (ADR-027): 전송 전 버그는 전파(안전망 500), 전송 후/불명 예외는 UNKNOWN 보존, `Success` 응답인데 `detail` 누락 시 UNKNOWN 보존
-- `AlreadyComplete` 응답 후 이력조회(`getApprovalHistory`)로 결과를 재확인하는 경로도 동일하다 (ADR-028): 이력조회가 결과 불명류(NETWORK/SERVER_ERROR/INVALID_RESPONSE)나 응답 본문 해석 불가로 실패하면 `FAILED` 가 아니라 UNKNOWN 으로 보존하고 `PAYMENT_RESULT_PENDING`(409) 으로 응답한다. 명시적 실패(InvalidMerchant 등)·이력 없음은 결과가 확정적이므로 FAILED 유지
+- `AlreadyComplete` 응답 후 이력조회(`getApprovalHistory`)로 결과를 재확인하는 경로도 동일하다 (ADR-028): 이력조회가 결과 불명류(NETWORK/SERVER_ERROR/INVALID_RESPONSE)나 외부 응답 이상(이력 목록·상세 누락, 승인 이력인데 `merchantPayKey` 누락)으로 결과를 확정하지 못하면 `FAILED` 가 아니라 UNKNOWN 으로 보존하고 `PAYMENT_RESULT_PENDING`(409) 으로 응답한다. 외부 응답 이상은 명시적 null 체크로 가르고 예상 못 한 NPE 는 안전망(500)으로 전파한다(#218 일관화). 명시적 실패(InvalidMerchant 등)·이력 없음(빈 목록)은 결과가 확정적이므로 FAILED 유지하며, `merchantPayKey` 가 누락이 아니라 존재하나 우리 키와 다르면 확정적 키 불일치이므로 FAILED 로 가른다
 - cancel(보상 취소) 호출이 결과 불명류 예외로 실패하면 cancel 기록(CANCEL 타입)을 UNKNOWN 으로 보존한다 (ADR-028). CANCEL 타입 UNKNOWN 은 차단 정책(`existsUnknownByOrderId`, APPROVE 한정)에 잡히지 않아 주문 재결제를 차단하지 않으며, 대사 대상으로만 남는다 (자동 해소는 Epic #208)
 
 ### 차단 정책
