@@ -93,7 +93,7 @@ worktree 안에서 Task 문서와 phase 구조를 작성한다. Task 문서는 �
 
 ### 5. Execution 진입 룰
 
-`execute.py` 실행 전 사용자 진행 확인을 가벼운 확인으로 받는다(별도 Plan Mode·`ExitPlanMode` 의식은 거치지 않는다). 승인 전에는 파일을 수정하지 않는다. 승인이 확정되면 `execute.py` 실행 전에 File Drafting 결과물(Task 문서 + phase 초안)을 `docs:` 커밋으로 등록하고, `AskUserQuestion`으로 agent별 실행 모델(developer / reviewer / commit)을 수집한 뒤 `--developer-model` · `--reviewer-model` · `--commit-model` 인자로 `execute.py`에 전달한다. 자세한 절차는 SKILL.md Stage 6 참고.
+`execute.py` 실행 전 사용자 진행 확인을 가벼운 확인으로 받는다(별도 Plan Mode·`ExitPlanMode` 절차는 거치지 않는다). 승인 전에는 파일을 수정하지 않는다. 승인이 확정되면 `execute.py` 실행 전에 File Drafting 결과물(Task 문서 + phase 초안)을 `docs:` 커밋으로 등록하고, `AskUserQuestion`으로 agent별 실행 모델(developer / reviewer / commit)을 수집한 뒤 `--developer-model` · `--reviewer-model` · `--commit-model` 인자로 `execute.py`에 전달한다. 자세한 절차는 SKILL.md Stage 6 참고.
 
 ### 6. Execution (내부 파이프라인)
 
