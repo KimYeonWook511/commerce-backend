@@ -2,7 +2,6 @@ package com.commerce.payment.postprocess.target;
 
 import java.time.Duration;
 import java.time.LocalDateTime;
-import java.util.EnumSet;
 
 import com.commerce.payment.domain.Payment;
 import com.commerce.payment.domain.PaymentFailCode;
@@ -10,58 +9,73 @@ import com.commerce.payment.domain.PaymentStatus;
 
 public class PaymentPostProcessTargetPolicy {
 
-	private static final Duration APPROVE_REQUEST_DELAY = Duration.ofMinutes(5);
-	private static final Duration CANCEL_REQUEST_DELAY = Duration.ofMinutes(5);
-	private static final Duration CANCEL_FAILED_DELAY = Duration.ofMinutes(5);
+	// NaverPay 승인 가능 시간(10분)에서 파생. #208 운영 config 승격 전제.
 
-	private static final EnumSet<PaymentFailCode> FAILED_APPROVE_RESULT_CODES = EnumSet.of(
-		PaymentFailCode.APPROVE_PROCESS_FAILED,
-		PaymentFailCode.PG_INVALID_RESPONSE,
-		PaymentFailCode.PG_NETWORK_ERROR,
-		PaymentFailCode.PG_SERVER_ERROR
-	);
+	// UNKNOWN은 빨리 폴링 — capture 후 ack 유실인 경우 PG 조회가 즉시 APPROVED를 반환해 빠른 복구·차단 해제 가능
+	private static final Duration UNKNOWN_RECONCILE_DELAY = Duration.ofMinutes(1);
 
-	public PaymentPostProcessTarget resolvePostProcessTarget(Payment approveAttempt, Payment cancelAttempt, LocalDateTime now) {
-		if (approveAttempt != null) {
-			if (approveAttempt.getStatus() == PaymentStatus.REQUESTED
-				&& hasElapsed(approveAttempt, APPROVE_REQUEST_DELAY, now)) {
-				return PaymentPostProcessTarget.APPROVE_REQUESTED_TARGET;
+	// 승인 가능 시간(10분) + 마진(5분) — 윈도우가 닫힌 뒤에 reconcile해 AlreadyOnGoing 오판 방지
+	private static final Duration REQUESTED_STALE_DELAY = Duration.ofMinutes(15);
+
+	// reconcile 대상이 이 시간을 넘도록 PG가 결론을 못 내면 MANUAL 승급. 운영 config로 확정 예정
+	private static final Duration ESCALATION_DELAY = Duration.ofHours(6);
+
+	public PaymentPostProcessTarget resolvePostProcessTarget(Payment approvePayment, Payment cancelPayment, LocalDateTime now) {
+		if (approvePayment != null) {
+			if (approvePayment.getStatus() == PaymentStatus.UNKNOWN) {
+				if (hasElapsed(approvePayment.getRespondedAt(), ESCALATION_DELAY, now)) {
+					return PaymentPostProcessTarget.MANUAL_REVIEW;
+				}
+				if (hasElapsed(approvePayment.getRespondedAt(), UNKNOWN_RECONCILE_DELAY, now)) {
+					return PaymentPostProcessTarget.APPROVE_RECONCILE;
+				}
 			}
-			if (approveAttempt.getStatus() == PaymentStatus.FAILED
-				&& hasElapsed(approveAttempt, APPROVE_REQUEST_DELAY, now)
-				&& cancelAttempt == null
-				&& approveAttempt.getFailCode() == PaymentFailCode.MERCHANT_PAY_KEY_MISMATCH) {
-				return PaymentPostProcessTarget.MERCHANT_PAY_KEY_MISMATCH_TARGET;
+			if (approvePayment.getStatus() == PaymentStatus.REQUESTED) {
+				if (hasElapsed(approvePayment.getCreatedAt(), ESCALATION_DELAY, now)) {
+					return PaymentPostProcessTarget.MANUAL_REVIEW;
+				}
+				if (hasElapsed(approvePayment.getCreatedAt(), REQUESTED_STALE_DELAY, now)) {
+					return PaymentPostProcessTarget.APPROVE_RECONCILE;
+				}
 			}
-			if (approveAttempt.getStatus() == PaymentStatus.FAILED
-				&& hasElapsed(approveAttempt, APPROVE_REQUEST_DELAY, now)
-				&& cancelAttempt == null
-				&& FAILED_APPROVE_RESULT_CODES.contains(approveAttempt.getFailCode())) {
-				return PaymentPostProcessTarget.FAILED_APPROVE_RESULT_TARGET;
-			}
-			if (approveAttempt.getStatus() == PaymentStatus.FAILED
-				&& hasElapsed(approveAttempt, APPROVE_REQUEST_DELAY, now)
-				&& cancelAttempt == null
-				&& isCancelCompensationRequired(approveAttempt.getFailCode())) {
-				return PaymentPostProcessTarget.APPROVED_PAYMENT_CANCEL_ACTION;
+			if (approvePayment.getStatus() == PaymentStatus.FAILED) {
+				if (approvePayment.getFailCode() == PaymentFailCode.MERCHANT_PAY_KEY_MISMATCH) {
+					return PaymentPostProcessTarget.MANUAL_REVIEW;
+				}
+				if (isCancelCompensationRequired(approvePayment.getFailCode()) && cancelPayment == null) {
+					return PaymentPostProcessTarget.APPROVED_CANCEL_COMPENSATION;
+				}
 			}
 		}
 
-		if (cancelAttempt != null) {
-			if (cancelAttempt.getStatus() == PaymentStatus.REQUESTED
-				&& hasElapsed(cancelAttempt, CANCEL_REQUEST_DELAY, now)) {
-				return PaymentPostProcessTarget.CANCEL_REQUESTED_TARGET;
+		if (cancelPayment != null) {
+			if (cancelPayment.getStatus() == PaymentStatus.UNKNOWN) {
+				if (hasElapsed(cancelPayment.getRespondedAt(), ESCALATION_DELAY, now)) {
+					return PaymentPostProcessTarget.MANUAL_REVIEW;
+				}
+				if (hasElapsed(cancelPayment.getRespondedAt(), UNKNOWN_RECONCILE_DELAY, now)) {
+					return PaymentPostProcessTarget.CANCEL_RECONCILE;
+				}
 			}
-			if (cancelAttempt.getStatus() == PaymentStatus.FAILED
-				&& hasElapsed(cancelAttempt, CANCEL_FAILED_DELAY, now)
-				&& (cancelAttempt.getFailCode() == PaymentFailCode.PG_INVALID_RESPONSE
-				|| cancelAttempt.getFailCode() == PaymentFailCode.CANCEL_PROCESS_FAILED)) {
-				return PaymentPostProcessTarget.CANCEL_REQUESTED_TARGET;
+			if (cancelPayment.getStatus() == PaymentStatus.REQUESTED) {
+				if (hasElapsed(cancelPayment.getCreatedAt(), ESCALATION_DELAY, now)) {
+					return PaymentPostProcessTarget.MANUAL_REVIEW;
+				}
+				if (hasElapsed(cancelPayment.getCreatedAt(), REQUESTED_STALE_DELAY, now)) {
+					return PaymentPostProcessTarget.CANCEL_RECONCILE;
+				}
 			}
-			if (cancelAttempt.getStatus() == PaymentStatus.FAILED
-				&& hasElapsed(cancelAttempt, CANCEL_FAILED_DELAY, now)
-				&& cancelAttempt.getFailCode() == PaymentFailCode.PG_REQUEST_REJECTED) {
-				return PaymentPostProcessTarget.MANUAL_REVIEW_TARGET;
+			if (cancelPayment.getStatus() == PaymentStatus.FAILED) {
+				if (cancelPayment.getFailCode() == PaymentFailCode.PG_REQUEST_REJECTED) {
+					return PaymentPostProcessTarget.MANUAL_REVIEW;
+				}
+				if (cancelPayment.getFailCode() == PaymentFailCode.CANCEL_PROCESS_FAILED
+					|| cancelPayment.getFailCode() == PaymentFailCode.PG_INVALID_RESPONSE) {
+					if (hasElapsed(cancelPayment.getRespondedAt(), ESCALATION_DELAY, now)) {
+						return PaymentPostProcessTarget.MANUAL_REVIEW;
+					}
+					return PaymentPostProcessTarget.CANCEL_RECONCILE;
+				}
 			}
 		}
 
@@ -73,8 +87,7 @@ public class PaymentPostProcessTargetPolicy {
 			|| failCode == PaymentFailCode.DUPLICATE_PAYMENT;
 	}
 
-	private boolean hasElapsed(Payment attempt, Duration delay, LocalDateTime now) {
-		return !attempt.getCreatedAt().plus(delay).isAfter(now);
+	private boolean hasElapsed(LocalDateTime base, Duration delay, LocalDateTime now) {
+		return !base.plus(delay).isAfter(now);
 	}
-
 }
