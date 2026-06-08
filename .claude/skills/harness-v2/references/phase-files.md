@@ -138,6 +138,7 @@ step 실행 상태 파일이다.
 - `items`: `SKILL.md`의 1~9번 Stage 순서와 제목을 그대로 사용한다.
 - `Execution`(6)은 `execute.py`가 시작할 때 `in_progress`로, phase 종료 시 `completed`로 갱신된다. 별도 `authorization` 객체는 사용하지 않는다.
 - `PR Review`(7), `Root Sync`(8), `Retrospective`(9)는 `execute.py` 바깥에서 일어나며 agent가 진행하면서 수동으로 `completed`로 갱신한다. `execute.py`는 이 세 항목을 건드리지 않는다.
+- 단, `Root Sync`(8)·`Retrospective`(9)는 `PR Review`(7)가 `completed`로 갱신된 뒤에만 `completed`로 만든다. 리뷰 코멘트가 없다는 이유로 7을 건너뛰고 8/9를 앞당기지 않는다.
 
 ## `docs/tasks/<task-name>/phases/<phase-name>/step{N}.md`
 
