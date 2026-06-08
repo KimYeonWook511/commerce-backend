@@ -1,0 +1,9 @@
+{
+  "project": "compensation-completed-guard-removal",
+  "phase": "0-main",
+  "harness_version": "v2",
+  "steps": [
+    { "step": 1, "name": "remove-completed-guard", "status": "pending" },
+    { "step": 2, "name": "duplicate-pg-cancel-test", "status": "pending" }
+  ]
+}
