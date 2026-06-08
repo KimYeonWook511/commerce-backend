@@ -1,0 +1,9 @@
+{
+  "project": "postprocess-unknown-redesign",
+  "phase": "0-main",
+  "harness_version": "v2",
+  "steps": [
+    { "step": 1, "name": "redesign-target-policy", "status": "pending" },
+    { "step": 2, "name": "redesign-flow-policy", "status": "pending" }
+  ]
+}
