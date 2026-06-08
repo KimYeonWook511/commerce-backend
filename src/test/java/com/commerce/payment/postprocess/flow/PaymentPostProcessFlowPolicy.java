@@ -18,9 +18,14 @@ public class PaymentPostProcessFlowPolicy {
 		PaymentVerificationStatus verificationStatus
 	) {
 		return switch (target) {
-			case APPROVE_RECONCILE, CANCEL_RECONCILE -> switch (verificationStatus) {
+			case APPROVE_RECONCILE -> switch (verificationStatus) {
 				case PG_APPROVED -> PaymentPostProcessFlow.APPROVED_PAYMENT_PROCESS;
 				case PG_CANCELED -> PaymentPostProcessFlow.ALREADY_CANCELED_PAYMENT_PROCESS;
+				case PENDING, HISTORY_NOT_FOUND -> PaymentPostProcessFlow.KEEP_WAITING;
+			};
+			case CANCEL_RECONCILE -> switch (verificationStatus) {
+				case PG_CANCELED -> PaymentPostProcessFlow.ALREADY_CANCELED_PAYMENT_PROCESS;
+				case PG_APPROVED -> PaymentPostProcessFlow.CANCEL_RETRY_PROCESS;
 				case PENDING, HISTORY_NOT_FOUND -> PaymentPostProcessFlow.KEEP_WAITING;
 			};
 			default -> throw new IllegalArgumentException("Verification status is not supported for target: " + target);
