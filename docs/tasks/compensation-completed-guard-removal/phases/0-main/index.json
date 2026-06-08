@@ -3,7 +3,28 @@
   "phase": "0-main",
   "harness_version": "v2",
   "steps": [
-    { "step": 1, "name": "remove-completed-guard", "status": "pending" },
-    { "step": 2, "name": "duplicate-pg-cancel-test", "status": "pending" }
-  ]
+    {
+      "step": 1,
+      "name": "remove-completed-guard",
+      "status": "completed",
+      "started_at": "2026-06-09T02:26:47+0900",
+      "summary": "runPgCancel의 hasCompletedPayment 완료 가드를 제거하고, 사용처가 사라진 hasCompletedPayment/existsApproveSucceeded/existsByMerchantPayKeyAndTypeAndStatus 메서드 체인을 정리한다. paymentApprovalService 의존도 CompensationService에서 제거한다. 관련 단위 테스트(hasCompletedPayment=true skip 케이스, hasCompletedPayment 관련 테스트)를 제거하고, cancelPayment 상태 가드(REQUESTED skip)는 유지한다.",
+      "completed_at": "2026-06-09T02:30:47+0900"
+    },
+    {
+      "step": 2,
+      "name": "duplicate-pg-cancel-test",
+      "status": "completed",
+      "started_at": "2026-06-09T02:32:07+0900",
+      "summary": "NaverPayServiceIntegrationTest에 형제 pgPaymentId(pgA) SUCCEEDED 상태에서 pgB의 PAYMENT_DUPLICATE 보상 시 PG 취소가 실행되는 통합 테스트를 추가한다. hasCompletedPayment 가드 제거(ADR-L1)로 형제 결제 성공이 중복 pgPaymentId 취소를 막지 않음을 검증한다.",
+      "completed_at": "2026-06-09T02:39:27+0900"
+    }
+  ],
+  "created_at": "2026-06-09T02:26:47+0900",
+  "execution": {
+    "developer_model": "sonnet",
+    "reviewer_model": "opus",
+    "commit_model": "haiku"
+  },
+  "completed_at": "2026-06-09T02:40:36+0900"
 }
