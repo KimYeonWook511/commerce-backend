@@ -17,7 +17,6 @@ import org.junit.jupiter.api.Test;
 import org.springframework.beans.factory.annotation.Autowired;
 import org.springframework.boot.test.context.SpringBootTest;
 import org.springframework.context.annotation.Import;
-import org.springframework.dao.DataIntegrityViolationException;
 import org.springframework.test.context.ActiveProfiles;
 import org.springframework.test.context.DynamicPropertyRegistry;
 import org.springframework.test.context.DynamicPropertySource;
@@ -111,11 +110,8 @@ class PaymentApprovalServiceConcurrencyTest {
 	}
 
 	private boolean isAllowedConcurrentException(Throwable throwable) {
-		// race window에서 payment unique 위반으로 발생
-		if (throwable instanceof DataIntegrityViolationException) {
-			return true;
-		}
 		if (throwable instanceof PaymentException paymentException) {
+			// saveApproved가 uk_payment_approved_order_key 위반을 PAYMENT_DUPLICATE로 매핑
 			return paymentException.getErrorCode() == PaymentErrorCode.PAYMENT_DUPLICATE
 				// Order FOR UPDATE 직렬화 후 두 번째 스레드가 이미 SUCCEEDED 상태인 payment를 다시 mark할 때 발생
 				|| paymentException.getErrorCode() == PaymentErrorCode.PAYMENT_STATUS_TRANSITION_NOT_ALLOWED;

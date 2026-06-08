@@ -358,3 +358,20 @@ task adr(`docs/tasks/<task>/adr.md`)의 역할은 harness 도입을 기점으로
 - **이유**: mismatch 는 자동 대사/재시도로 풀리지 않는 사람-개입 신호이므로 조용한 종결보다 명시 격리가 안전하다(돈/보안은 저확률 엣지도 사람 앞에 도달해야 한다). "SUCCEEDED 확정인데 관련 주문이 이미 CANCELED" 같은 order 상태 결합 판단은 #222 로 분리되어, 이번 정책에서 `RelatedOrderStatus` 는 사용처가 없다(CLAUDE.md "사용처 없는 코드 안 남김").
 - **트레이드오프**: mismatch 의 자동 회수가 수동으로 바뀐다. #222 도입 전까지 그 사이 발생분은 MANUAL 큐에 쌓인다.
 - **연계**: ADR-028, #222(order 상태 결합 도입 시 재설계), Epic #208.
+
+### ADR-032: 정상 승인 후 transient 기록 실패는 환불하지 않고 REQUESTED 로 두어 reconcile 이 완료시킨다(완료 우선)
+
+- **결정**: `completeVerifiedApproval`(PG SUCCESS + 키·금액 검증 통과 후 호출)의 unmapped 예외 보상을 제거한다. unmapped `PaymentException`(default)·`CustomException`·일반 `Exception` 은 보상 없이 **전파(500)**하고 approve 를 `REQUESTED` 로 남긴다. 명시적 비정상(`MERCHANT_KEY_MISMATCH`·`AMOUNT_MISMATCH`)은 *틀린 결제*라 현행 보상(환불)을 유지한다. 사용처가 사라진 `compensateUnexpected` 를 제거한다.
+- **배경**: #225, PR #224 리뷰 #1. 기존 `compensateUnexpected` 가 PG SUCCESS + verify 통과한 *맞는 결제* 의 transient 기록 실패(DB 데드락 등)를 `FAILED(APPROVE_PROCESS_FAILED)` + PG 환불로 박제했고, "완료가 맞음 / FAILED 가 맞음 / 버그" 를 한 status 로 싸잡았다.
+- **이유**: 금전 정합 — 정상 매출을 transient 로 취소하지 않는다(저확률 경합도 안전 우선). 실시간 경로는 "완료 또는 흔적(REQUESTED) 남김" 까지만 책임지고, 결과 확정·복구는 배치 reconcile(`APPROVE_RECONCILE` + PG `PG_APPROVED` → 완료)이 self-heal 한다(ADR-029/030 과 같은 방향). 진짜 버그도 500 으로 가시화한다(예상 못 한 예외 전파).
+- **트레이드오프**: `REQUESTED` 잔여 회수는 reconcile 구현(#221/#208)에 의존한다 — 그 구현 전까지는 코드 레벨 self-heal 안전망이 없다.
+- **연계**: ADR-027/029/030, #221, Epic #208, PR #224 리뷰 #1.
+
+### ADR-033: 이중결제 탐지를 application raw DAO catch 에서 adapter 도메인 예외 매핑으로 전환한다(ADR-011 carve-out)
+
+- **결정**: application(`NaverPayApprovalService`)의 raw `catch(DataIntegrityViolationException)` 을 제거한다. `PaymentRepositoryAdapter` 의 succeed-approve 전용 저장 경로(`saveApproved`)가 `saveAndFlush` 위반을 `uk_payment_approved_order_key` 인 경우에만 `PaymentException(PAYMENT_DUPLICATE)` 로 매핑하고, 그 외 무결성 위반은 원 예외를 그대로 전파한다. application 은 도메인 예외 `case PAYMENT_DUPLICATE` 로 반응해 fail-first 단일 보상(`compensateDuplicatePayment`)을 수행하고, cancel-first 경로(`compensateDuplicateApproval`)는 제거한다.
+- **배경**: #225, PR #224 리뷰 #3. 이중결제 보상이 두 갈래였다 — live(`catch(DataIntegrityViolationException)` → cancel-first, ADR-011 위반 raw DAO 의존)와 호출 불가능한 dead(`case PAYMENT_DUPLICATE` → fail-first). cancel-first 는 크래시 시 "approve REQUESTED + cancel" 잔여를 만들었다.
+- **이유**: ADR-011 의 try-save-catch carve-out(adapter 에서 인프라 예외를 도메인 예외로 번역) 에 해당한다. 보상이 필요한 case 라 find-first+500 보다 adapter 매핑이 적합하다. `saveAndFlush` 의 조기 flush 가 위반을 adapter 호출 안에서 확정하는 load-bearing 의존성이다. 매핑을 succeed-approve 전용 메서드 + 제약명 일치로 한정해 다른 무결성 위반의 오매핑을 막는다.
+- **제약명 식별**: `JpaConfig` 의 `SQLErrorCodeSQLExceptionTranslator` 때문에 unique 위반은 `DuplicateKeyException`(cause=JDBC `SQLException`)으로 변환되어 cause 체인에 Hibernate `ConstraintViolationException` 이 남지 않는다. 따라서 제약명은 `getConstraintName()` 이 아니라 `SQLException` 메시지의 단어 경계 매칭(`\b...\b`, 대소문자 무시 — prefix 공유 오탐 방지)으로 식별한다. translator 를 제거해 `getConstraintName()` 경로를 되살리는 근본 단순화는 전역 예외 분류·로깅에 영향을 주는 별도 사안으로 #227 에 분리했다.
+- **트레이드오프**: 이중결제 보상이 fail-first 단일 경로로 통일되어 "approve REQUESTED + cancel" 잔여가 사라진다(fail-first 잔여는 `APPROVED_CANCEL_COMPENSATION` 정책이 처리). 제약명 식별이 메시지 문자열에 의존한다(translator 유지 하).
+- **연계**: ADR-011, ADR-014/015/026, #225, #227, PR #224 리뷰 #3.

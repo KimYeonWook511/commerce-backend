@@ -20,7 +20,6 @@ import org.junit.jupiter.api.extension.ExtendWith;
 import org.mockito.InjectMocks;
 import org.mockito.Mock;
 import org.mockito.junit.jupiter.MockitoExtension;
-import org.springframework.dao.DataIntegrityViolationException;
 import org.springframework.test.util.ReflectionTestUtils;
 
 import com.commerce.order.domain.Order;
@@ -658,36 +657,10 @@ class NaverPayApprovalServiceTest {
 		then(paymentApprovalCompensationService).should().compensateAmountMismatch(any(), eq(2000), any());
 	}
 
-	@DisplayName("uk_payment_approved_order_key 위반 시 compensateDuplicateApproval을 호출하고 PAYMENT_DUPLICATE를 던진다")
+	@DisplayName("succeedApproval이 PAYMENT_DUPLICATE를 던지면 compensateDuplicatePayment를 호출하고 PAYMENT_DUPLICATE를 전파한다")
 	@Test
-	void approve_whenUkPaymentApprovedOrderKeyViolation_callsCompensateDuplicateApproval() {
-		// given
-		long memberId = 1L;
-		PaymentReservation reservation = createReservation("PAY-1", memberId, 1000);
-		Order order = createOrder(1000);
-		Payment payment = createPayment("PAY-1", "pg-payment-id", 1000);
-
-		given(paymentReservationRepository.findByMerchantPayKey("PAY-1")).willReturn(Optional.of(reservation));
-		given(orderRepository.findByIdAndMemberId(reservation.getOrderId(), memberId)).willReturn(Optional.of(order));
-		given(paymentApprovalRecordService.create(any(PaymentReservation.class), eq("pg-payment-id")))
-			.willReturn(payment);
-		given(naverPayGateway.approve("pg-payment-id")).willReturn(NaverPayApproveResult.success("PAY-1", 1000));
-		given(paymentApprovalService.succeedApproval(any(Payment.class), any()))
-			.willThrow(new DataIntegrityViolationException("uk_payment_approved_order_key violation"));
-
-		// when & then
-		assertThatThrownBy(() -> naverPayApprovalService.approve(memberId, "PAY-1", "pg-payment-id"))
-			.isInstanceOf(PaymentException.class)
-			.satisfies(exception -> {
-				PaymentException paymentException = (PaymentException)exception;
-				assertThat(paymentException.getErrorCode()).isEqualTo(PaymentErrorCode.PAYMENT_DUPLICATE);
-			});
-		then(paymentApprovalCompensationService).should().compensateDuplicateApproval(any(), any());
-	}
-
-	@DisplayName("이미 다른 결제가 완료된 주문이면 compensateDuplicatePayment를 호출하고 예외를 던진다")
-	@Test
-	void approve_whenDuplicateApproval_callsCompensateAndThrowException() {
+	void approve_whenSucceedApprovalThrowsPaymentDuplicate_callsCompensateDuplicatePayment() {
+		// given: adapter가 uk_payment_approved_order_key 위반을 PAYMENT_DUPLICATE로 매핑해 전달하는 시나리오
 		long memberId = 1L;
 		PaymentReservation reservation = createReservation("PAY-1", memberId, 1000);
 		Order order = createOrder(1000);
@@ -701,6 +674,7 @@ class NaverPayApprovalServiceTest {
 		given(paymentApprovalService.succeedApproval(any(Payment.class), any()))
 			.willThrow(new PaymentException(PaymentErrorCode.PAYMENT_DUPLICATE));
 
+		// when & then
 		assertThatThrownBy(() -> naverPayApprovalService.approve(memberId, "PAY-1", "pg-payment-id"))
 			.isInstanceOf(PaymentException.class)
 			.satisfies(exception -> {
@@ -764,10 +738,11 @@ class NaverPayApprovalServiceTest {
 		then(paymentApprovalCompensationService).should().compensateAmountMismatch(any(), eq(1000), any());
 	}
 
-	@DisplayName("결제 완료 반영 중 주문 예외가 발생하면 compensateUnexpected를 호출하고 예외를 던진다")
+	@DisplayName("결제 완료 반영 중 CustomException(주문 예외)이 발생하면 보상 없이 예외를 전파하고 approve는 REQUESTED로 남는다")
 	@Test
-	void approve_whenCompleteApproveThrowsOrderException_callsCompensateAndThrowException() {
-		// given
+	void approve_whenCompleteApproveThrowsOrderException_propagatesWithoutCompensation() {
+		// given: PG SUCCESS + verify 통과 후 DB 기록 실패(CustomException 계열)
+		// → 정상 매출을 취소하지 않고 예외 전파, approve REQUESTED 유지 → reconcile self-heal (ADR-L1)
 		long memberId = 1L;
 		PaymentReservation reservation = createReservation("PAY-1", memberId, 1000);
 		Order order = createOrder(1000);
@@ -788,14 +763,17 @@ class NaverPayApprovalServiceTest {
 				OrderException orderException = (OrderException)exception;
 				assertThat(orderException.getErrorCode()).isEqualTo(OrderErrorCode.ORDER_PAYMENT_NOT_ALLOWED);
 			});
-		then(paymentApprovalCompensationService).should().compensateUnexpected(
-			any(), any(), eq(PaymentFailCode.APPROVE_PROCESS_FAILED), any());
+		// 보상(PG cancel, failIfRequested)이 발생하지 않는다 — REQUESTED 유지로 reconcile self-heal
+		then(paymentApprovalCompensationService).should(never()).compensateMerchantKeyMismatch(any());
+		then(paymentApprovalCompensationService).should(never()).compensateAmountMismatch(any(), anyInt(), any());
+		then(paymentApprovalCompensationService).should(never()).compensateDuplicatePayment(any(), any(), any());
 	}
 
-	@DisplayName("결제 완료 반영 중 기타 결제 예외가 발생하면 APPROVE_PROCESS_FAILED로 compensateUnexpected를 호출하고 예외를 던진다")
+	@DisplayName("결제 완료 반영 중 unmapped PaymentException이 발생하면 보상 없이 예외를 전파하고 approve는 REQUESTED로 남는다")
 	@Test
-	void approve_whenCompleteApproveThrowsUnhandledPaymentException_callsCompensateAndThrowException() {
-		// given
+	void approve_whenCompleteApproveThrowsUnhandledPaymentException_propagatesWithoutCompensation() {
+		// given: PG SUCCESS + verify 통과 후 DB 기록 실패(unmapped PaymentException)
+		// → 버그 또는 transient 실패를 환불·FAILED로 박제하지 않고 전파(500), approve REQUESTED 유지 (ADR-L1)
 		long memberId = 1L;
 		PaymentReservation reservation = createReservation("PAY-1", memberId, 1000);
 		Order order = createOrder(1000);
@@ -816,14 +794,17 @@ class NaverPayApprovalServiceTest {
 				PaymentException paymentException = (PaymentException)exception;
 				assertThat(paymentException.getErrorCode()).isEqualTo(PaymentErrorCode.PAYMENT_STATUS_TRANSITION_NOT_ALLOWED);
 			});
-		then(paymentApprovalCompensationService).should().compensateUnexpected(
-			any(), any(), eq(PaymentFailCode.APPROVE_PROCESS_FAILED), any());
+		// 보상(PG cancel, failIfRequested)이 발생하지 않는다 — REQUESTED 유지로 reconcile self-heal
+		then(paymentApprovalCompensationService).should(never()).compensateMerchantKeyMismatch(any());
+		then(paymentApprovalCompensationService).should(never()).compensateAmountMismatch(any(), anyInt(), any());
+		then(paymentApprovalCompensationService).should(never()).compensateDuplicatePayment(any(), any(), any());
 	}
 
-	@DisplayName("결제 완료 반영 중 예상하지 못한 예외가 발생하면 APPROVE_PROCESS_FAILED로 compensateUnexpected를 호출하고 예외를 던진다")
+	@DisplayName("결제 완료 반영 중 예상하지 못한 예외(RuntimeException)가 발생하면 보상 없이 예외를 전파하고 approve는 REQUESTED로 남는다")
 	@Test
-	void approve_whenCompleteApproveThrowsUnexpectedException_callsCompensateAndThrowException() {
-		// given
+	void approve_whenCompleteApproveThrowsUnexpectedException_propagatesWithoutCompensation() {
+		// given: PG SUCCESS + verify 통과 후 DB 기록 실패(일반 Exception — transient 또는 버그)
+		// → UNKNOWN/FAILED 둔갑 없이 전파(500), approve REQUESTED 유지 → reconcile self-heal (ADR-L1)
 		long memberId = 1L;
 		PaymentReservation reservation = createReservation("PAY-1", memberId, 1000);
 		Order order = createOrder(1000);
@@ -841,8 +822,10 @@ class NaverPayApprovalServiceTest {
 		assertThatThrownBy(() -> naverPayApprovalService.approve(memberId, "PAY-1", "pg-payment-id"))
 			.isInstanceOf(RuntimeException.class)
 			.hasMessage("db write failed");
-		then(paymentApprovalCompensationService).should().compensateUnexpected(
-			any(), any(), eq(PaymentFailCode.APPROVE_PROCESS_FAILED), any());
+		// 보상(PG cancel, failIfRequested)이 발생하지 않는다 — REQUESTED 유지로 reconcile self-heal
+		then(paymentApprovalCompensationService).should(never()).compensateMerchantKeyMismatch(any());
+		then(paymentApprovalCompensationService).should(never()).compensateAmountMismatch(any(), anyInt(), any());
+		then(paymentApprovalCompensationService).should(never()).compensateDuplicatePayment(any(), any(), any());
 	}
 
 	@DisplayName("다른 사용자의 pgPaymentId로 승인 응답을 받으면 compensateMerchantKeyMismatch를 호출하고 예외를 던진다")

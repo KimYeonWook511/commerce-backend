@@ -26,6 +26,8 @@ import com.commerce.payment.domain.PaymentProvider;
 import com.commerce.payment.domain.PaymentReservation;
 import com.commerce.payment.domain.PaymentType;
 import com.commerce.payment.domain.repository.PaymentRepository;
+import com.commerce.payment.exception.PaymentErrorCode;
+import com.commerce.payment.exception.PaymentException;
 import com.commerce.payment.infrastructure.persistence.support.PaymentPersistenceTestSupport;
 import com.commerce.payment.infrastructure.persistence.support.PaymentReservationPersistenceTestSupport;
 import com.commerce.support.PersistenceCleanupTestSupport;
@@ -66,9 +68,9 @@ class PaymentRepositoryApprovedConcurrencyTest {
 		persistenceCleanup.deleteAllInBatch(paymentPersistence, reservationPersistence);
 	}
 
-	@DisplayName("같은 주문에 APPROVE가 동시에 SUCCEEDED로 전이되어도 정확히 1개만 살아남는다")
+	@DisplayName("같은 주문에 APPROVE가 동시에 SUCCEEDED로 전이되면 saveApproved를 통해 정확히 1개만 살아남고 나머지는 PAYMENT_DUPLICATE로 매핑된다")
 	@Test
-	void succeedApprovePayment_whenConcurrent_onlyOneSucceedsAndOthersFailUniqueViolation() throws Exception {
+	void succeedApprovePayment_whenConcurrentViaSaveApproved_onlyOneSucceedsAndOthersThrowPaymentDuplicate() throws Exception {
 		// given: N개의 서로 다른 Reservation과 Payment(REQUESTED) 준비
 		long orderId = 1L;
 		int threadCount = 8;
@@ -88,7 +90,7 @@ class PaymentRepositoryApprovedConcurrencyTest {
 			);
 		}
 
-		// when: N 스레드가 동시에 같은 orderId로 succeed 시도
+		// when: N 스레드가 동시에 같은 orderId로 succeed 시도 — 전용 경로 saveApproved 사용
 		ConcurrentLinkedQueue<Throwable> errors = new ConcurrentLinkedQueue<>();
 		ExecutorService executor = Executors.newFixedThreadPool(threadCount);
 		CountDownLatch startLatch = new CountDownLatch(1);
@@ -99,7 +101,7 @@ class PaymentRepositoryApprovedConcurrencyTest {
 				try {
 					startLatch.await();
 					payment.succeed(respondedAt);
-					paymentRepository.save(payment);
+					paymentRepository.saveApproved(payment);
 				} catch (Throwable ex) {
 					errors.add(ex);
 				} finally {
@@ -112,11 +114,6 @@ class PaymentRepositoryApprovedConcurrencyTest {
 		executor.shutdownNow();
 
 		// then: SUCCEEDED APPROVE 행은 정확히 1개 (uk_payment_approved_order_key 보장)
-		long succeededCount = paymentPersistence.findApproveSucceeded(
-			payments[0].getMerchantPayKey()
-		).isPresent() ? 1 : 0;
-
-		// 하나라도 succeededCount를 세야 하므로, 전체 APPROVE 행 중 SUCCEEDED 수를 직접 확인
 		long totalSucceeded = 0;
 		for (Payment payment : payments) {
 			if (paymentPersistence.findApproveSucceeded(payment.getMerchantPayKey()).isPresent()) {
@@ -125,6 +122,12 @@ class PaymentRepositoryApprovedConcurrencyTest {
 		}
 
 		assertThat(totalSucceeded).isEqualTo(1L);
+		// 전용 경로에서 uk_payment_approved_order_key 위반은 PaymentException(PAYMENT_DUPLICATE)로 매핑된다
 		assertThat(errors).isNotEmpty();
+		assertThat(errors).allSatisfy(error ->
+			assertThat(error).isInstanceOf(PaymentException.class)
+				.satisfies(ex -> assertThat(((PaymentException) ex).getErrorCode())
+					.isEqualTo(PaymentErrorCode.PAYMENT_DUPLICATE))
+		);
 	}
 }
