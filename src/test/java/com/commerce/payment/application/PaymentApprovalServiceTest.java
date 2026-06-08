@@ -39,32 +39,6 @@ class PaymentApprovalServiceTest {
 	@InjectMocks
 	private PaymentApprovalService paymentApprovalService;
 
-	@DisplayName("승인 완료된 결제가 있으면 true를 반환한다")
-	@Test
-	void hasCompletedPayment_whenSucceededExists_returnTrue() {
-		// given
-		given(paymentRepository.existsApproveSucceeded("PAY-1")).willReturn(true);
-
-		// when
-		boolean result = paymentApprovalService.hasCompletedPayment("PAY-1");
-
-		// then
-		assertThat(result).isTrue();
-	}
-
-	@DisplayName("승인 완료된 결제가 없으면 false를 반환한다")
-	@Test
-	void hasCompletedPayment_whenSucceededNotExists_returnFalse() {
-		// given
-		given(paymentRepository.existsApproveSucceeded("PAY-1")).willReturn(false);
-
-		// when
-		boolean result = paymentApprovalService.hasCompletedPayment("PAY-1");
-
-		// then
-		assertThat(result).isFalse();
-	}
-
 	@DisplayName("succeedApproval 호출 시 payment가 SUCCEEDED가 되고 order가 PAID가 된다")
 	@Test
 	void succeedApproval_whenPaymentRequested_completeAndReturn() {
