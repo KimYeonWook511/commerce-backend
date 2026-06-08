@@ -334,3 +334,27 @@ task adr(`docs/tasks/<task>/adr.md`)의 역할은 harness 도입을 기점으로
 - **이유**: AlreadyComplete 는 PG 가 멱등하게 "이미 됨" 을 반환하는 상태라 ADR-027 의 "전송 후/불명 → UNKNOWN 보존" 원칙이 가장 강하게 적용돼야 하는 지점이다. 결과 불명을 FAILED 로 두면 ADR-026 의 UNKNOWN 차단 안전망이 무력화된다. 분류축은 ADR-027 과 동일하게 *재시도 안전성(PG 처리 가능성)* 이다.
 - **트레이드오프**: cancel 의 UNKNOWN 자동 해소(보상 취소 재시도)는 본 ADR 범위 밖이며 결제 도메인 배치/스케줄러(Epic #208) 로 분리한다. CANCEL 타입 UNKNOWN 행은 `existsUnknownByOrderId`(APPROVE 한정) 에 잡히지 않으므로 주문의 재결제를 brick 하지 않는다(대사 흔적만 남김).
 - **연계**: ADR-027 (본 ADR 이 그 *적용 범위* 를 확장), ADR-026 (UNKNOWN 마킹/차단 정책), Epic #208 (cancel UNKNOWN·보상 취소 실패 재처리), `docs/exception-strategy.md` "결제 결과 UNKNOWN 처리".
+
+### ADR-029: 결제 후처리 대상 식별을 failCode 열거에서 status(UNKNOWN/stale REQUESTED) 중심으로 전환한다
+
+- **결정**: 후처리(대사/재시도) 결정 정책의 대상 식별 키를 status 중심으로 둔다. `APPROVE UNKNOWN ∨ stale REQUESTED` → 승인 대사, `CANCEL UNKNOWN ∨ stale REQUESTED ∨ 재시도 가능 FAILED(CANCEL_PROCESS_FAILED·PG_INVALID_RESPONSE)` → 취소 대사, `approve FAILED(AMOUNT_MISMATCH·DUPLICATE_PAYMENT) ∧ cancel 기록 없음` → 취소 보상, `SUCCEEDED·확정 FAILED(TIME_EXPIRED 등)` → 없음. 동시 UNKNOWN(approve+cancel)은 approve 를 먼저 확정한다(검사 순서로 인코딩).
+- **배경**: #221, PR #224. 기존 후처리 정책(test-side `postprocess` 패키지)은 approve 결과 불명을 `FAILED` + failCode 열거(PG_NETWORK_ERROR 등)로 식별했다. ADR-027/028 이후 결과 불명은 `FAILED` 가 아니라 `status=UNKNOWN` 으로 보존되어, 그 failCode 열거가 실제 상태와 매칭되지 않는 죽은 분기가 됐다.
+- **이유**: 식별 키가 현재 도메인 모델(UNKNOWN 일급)과 일치해야 정책이 실제 상태를 정확히 분류한다. ADR-027/028 의 분류축(*재시도 안전성 = PG 처리 가능성*)을 후처리에서도 계승한다 — UNKNOWN/stale=대사, 확정 FAILED=없음.
+- **트레이드오프**: approve 결과 불명 failCode 분기는 제거되고, failCode 식별은 cancel 재시도 분류와 mismatch 격리에만 축소되어 남는다.
+- **연계**: ADR-026/027/028, Epic #208 (batch #1 UNKNOWN 대사·#2 stale REQUESTED). 운영 전달 메커니즘(배치/스케줄러/이벤트)·만료↔대사 타이밍(#222)은 범위 밖.
+
+### ADR-030: 대사 시작 임계를 NaverPay 승인 가능 시간(10분)에서 파생하고 UNKNOWN/REQUESTED 를 분리하며 장기 미해소는 MANUAL 로 승급한다
+
+- **결정**: 임계를 둘로 분리하고 NaverPay 시간에서 파생한다 — `UNKNOWN_RECONCILE_DELAY`≈1분(UNKNOWN 은 빠른 폴링), `REQUESTED_STALE_DELAY`≈15분(승인 가능 시간 10분 + 마진 5분). reconcile 대상이 `ESCALATION_DELAY`(시간 단위) 를 넘도록 PG 가 결론을 못 내면 `MANUAL_REVIEW` 로 승급한다. 경과 기준 시각은 REQUESTED=`createdAt`, UNKNOWN/FAILED=`respondedAt`. cancel 은 시간 임계가 아니라 응답 코드로 가른다(`CancelDeadlineExpired`→MANUAL, `CancelNotComplete`/`AlreadyOnGoing`→폴링).
+- **배경**: 기존 정책은 approve/cancel 공통 5분 단일 임계였다. NaverPay 는 인증 후 **10분** 안에 승인(capture)해야 하며 초과 시 `TimeExpired`(`NaverPayApproveCode`)다. 5분은 이 승인 윈도우 한가운데라 정상 진행 중(AlreadyOnGoing)인 REQUESTED 를 stale 로 오판한다.
+- **이유**: stale 판단 시간 = "PG 처리 시간 + 마진"(Epic #208). UNKNOWN 은 `existsUnknownByOrderId` 로 재결제를 차단하므로 빠른 복구 가치가 크다(capture 후 ack 유실이면 `getApprovalHistory` 가 즉시 APPROVED 를 줘 unblock). REQUESTED 는 차단이 아니고 일찍 물어도 진행 중만 나오므로 윈도우가 닫힌 뒤 대사한다.
+- **트레이드오프**: UNKNOWN 을 빨리 폴링해 PG 조회 부하가 약간 늘지만 배치 주기가 실효 간격을 지배한다. escalation 은 poll-count 가 아닌 age 기반 근사다. 임계 상수는 정책 내 `Duration` 으로 두되 #208 운영 config 승격을 전제한다.
+- **연계**: `NaverPayApproveCode.TIME_EXPIRED`(10분), ADR-027/028(분류축 계승), Epic #208.
+
+### ADR-031: mismatch·자동 포기·대사 장기 미해소를 MANUAL_REVIEW 로 격리하고 RelatedOrderStatus 를 제거한다
+
+- **결정**: `approve FAILED(MERCHANT_PAY_KEY_MISMATCH)`, `cancel FAILED(PG_REQUEST_REJECTED)`, reconcile escalation 초과를 단일 `MANUAL_REVIEW` 로 격리한다(사유는 Payment 상태에서 도출, enum 을 쪼개지 않음). 사용처가 사라진 `RelatedOrderStatus` 와 FlowPolicy 의 3-arg `resolveFlow` 를 제거한다.
+- **배경**: ADR-028 이 merchantPayKey 가 *존재하나 우리 키와 다른* mismatch 를 `FAILED`(MERCHANT_PAY_KEY_MISMATCH)로 확정했다. 이는 정상 사용자에게 발생하지 않는 신호(공격 시도 또는 데이터 정합성 위반)다.
+- **이유**: mismatch 는 자동 대사/재시도로 풀리지 않는 사람-개입 신호이므로 조용한 종결보다 명시 격리가 안전하다(돈/보안은 저확률 엣지도 사람 앞에 도달해야 한다). "SUCCEEDED 확정인데 관련 주문이 이미 CANCELED" 같은 order 상태 결합 판단은 #222 로 분리되어, 이번 정책에서 `RelatedOrderStatus` 는 사용처가 없다(CLAUDE.md "사용처 없는 코드 안 남김").
+- **트레이드오프**: mismatch 의 자동 회수가 수동으로 바뀐다. #222 도입 전까지 그 사이 발생분은 MANUAL 큐에 쌓인다.
+- **연계**: ADR-028, #222(order 상태 결합 도입 시 재설계), Epic #208.

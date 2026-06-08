@@ -20,342 +20,435 @@ class PaymentPostProcessTargetPolicyTest {
 
 	private final PaymentPostProcessTargetPolicy targetPolicy = new PaymentPostProcessTargetPolicy();
 
-	@DisplayName("후처리 기준 시간이 지나지 않으면 후처리 대상이 아니다")
+	// --- APPROVE UNKNOWN ---
+
+	@DisplayName("APPROVE UNKNOWN이 1분 임계를 경과하지 않으면 후처리 대상이 아니다")
 	@Test
-	void resolvePostProcessTarget_whenThresholdNotElapsed_returnNone() {
+	void resolvePostProcessTarget_approveUnknownThresholdNotElapsed_returnsNone() {
 		LocalDateTime now = LocalDateTime.now();
+		Payment approvePayment = createApproveRequested("PAY-1", "pg-1", 1000);
+		approvePayment.markUnknown("timeout", now.minusSeconds(30));
 
-		Payment approveRequestedAttempt = createApproveRequested("PAY-1", "pg-1", 1000);
-		setCreatedAt(approveRequestedAttempt, now.minusMinutes(4));
+		assertThat(targetPolicy.resolvePostProcessTarget(approvePayment, null, now))
+			.isEqualTo(PaymentPostProcessTarget.NONE);
+	}
 
-		Payment cancelRequestedAttempt = Payment.createCancelRequested(
-			1L, "PAY-1", "pg-1", 1000, PaymentProvider.NAVERPAY
-		);
-		setCreatedAt(cancelRequestedAttempt, now.minusMinutes(4));
+	@DisplayName("APPROVE UNKNOWN이 1분 임계를 경과하면 승인 대사 대상이다")
+	@Test
+	void resolvePostProcessTarget_approveUnknownThresholdElapsed_returnsApproveReconcile() {
+		LocalDateTime now = LocalDateTime.now();
+		Payment approvePayment = createApproveRequested("PAY-1", "pg-1", 1000);
+		approvePayment.markUnknown("timeout", now.minusMinutes(2));
 
-		Payment failedCancelAttempt = Payment.createCancelRequested(
-			1L, "PAY-1", "pg-1", 1000, PaymentProvider.NAVERPAY
-		);
-		failedCancelAttempt.fail(PaymentFailCode.CANCEL_PROCESS_FAILED, "PRE_CANCEL_NOT_COMPLETE",
+		assertThat(targetPolicy.resolvePostProcessTarget(approvePayment, null, now))
+			.isEqualTo(PaymentPostProcessTarget.APPROVE_RECONCILE);
+	}
+
+	@DisplayName("APPROVE UNKNOWN이 6시간 escalation 임계를 경과하면 수동 검토 대상이다")
+	@Test
+	void resolvePostProcessTarget_approveUnknownEscalated_returnsManualReview() {
+		LocalDateTime now = LocalDateTime.now();
+		Payment approvePayment = createApproveRequested("PAY-1", "pg-1", 1000);
+		approvePayment.markUnknown("timeout", now.minusHours(7));
+
+		assertThat(targetPolicy.resolvePostProcessTarget(approvePayment, null, now))
+			.isEqualTo(PaymentPostProcessTarget.MANUAL_REVIEW);
+	}
+
+	// --- APPROVE REQUESTED (stale) ---
+
+	@DisplayName("APPROVE REQUESTED가 15분 임계를 경과하지 않으면 후처리 대상이 아니다")
+	@Test
+	void resolvePostProcessTarget_approveRequestedNotStale_returnsNone() {
+		LocalDateTime now = LocalDateTime.now();
+		Payment approvePayment = createApproveRequested("PAY-1", "pg-1", 1000);
+		setCreatedAt(approvePayment, now.minusMinutes(10));
+
+		assertThat(targetPolicy.resolvePostProcessTarget(approvePayment, null, now))
+			.isEqualTo(PaymentPostProcessTarget.NONE);
+	}
+
+	@DisplayName("APPROVE REQUESTED가 15분 임계를 경과하면 승인 대사 대상이다")
+	@Test
+	void resolvePostProcessTarget_approveRequestedStale_returnsApproveReconcile() {
+		LocalDateTime now = LocalDateTime.now();
+		Payment approvePayment = createApproveRequested("PAY-1", "pg-1", 1000);
+		setCreatedAt(approvePayment, now.minusMinutes(16));
+
+		assertThat(targetPolicy.resolvePostProcessTarget(approvePayment, null, now))
+			.isEqualTo(PaymentPostProcessTarget.APPROVE_RECONCILE);
+	}
+
+	@DisplayName("APPROVE REQUESTED가 6시간 escalation 임계를 경과하면 수동 검토 대상이다")
+	@Test
+	void resolvePostProcessTarget_approveRequestedEscalated_returnsManualReview() {
+		LocalDateTime now = LocalDateTime.now();
+		Payment approvePayment = createApproveRequested("PAY-1", "pg-1", 1000);
+		setCreatedAt(approvePayment, now.minusHours(7));
+
+		assertThat(targetPolicy.resolvePostProcessTarget(approvePayment, null, now))
+			.isEqualTo(PaymentPostProcessTarget.MANUAL_REVIEW);
+	}
+
+	// --- APPROVE FAILED ---
+
+	@DisplayName("approve FAILED + MERCHANT_PAY_KEY_MISMATCH면 수동 검토 대상이다")
+	@Test
+	void resolvePostProcessTarget_approveFailedMerchantPayKeyMismatch_returnsManualReview() {
+		Payment approvePayment = failedApprovePayment(PaymentFailCode.MERCHANT_PAY_KEY_MISMATCH, "MISMATCH");
+
+		assertThat(targetPolicy.resolvePostProcessTarget(approvePayment, null, LocalDateTime.now()))
+			.isEqualTo(PaymentPostProcessTarget.MANUAL_REVIEW);
+	}
+
+	@DisplayName("approve FAILED + AMOUNT_MISMATCH이고 cancel 기록이 없으면 취소 보상 대상이다")
+	@Test
+	void resolvePostProcessTarget_approveFailedAmountMismatchNoCancelRecord_returnsApprovedCancelCompensation() {
+		Payment approvePayment = failedApprovePayment(PaymentFailCode.AMOUNT_MISMATCH, "AMOUNT_NOT_MATCH");
+
+		assertThat(targetPolicy.resolvePostProcessTarget(approvePayment, null, LocalDateTime.now()))
+			.isEqualTo(PaymentPostProcessTarget.APPROVED_CANCEL_COMPENSATION);
+	}
+
+	@DisplayName("approve FAILED + DUPLICATE_PAYMENT이고 cancel 기록이 없으면 취소 보상 대상이다")
+	@Test
+	void resolvePostProcessTarget_approveFailedDuplicatePaymentNoCancelRecord_returnsApprovedCancelCompensation() {
+		Payment approvePayment = failedApprovePayment(PaymentFailCode.DUPLICATE_PAYMENT, "DUPLICATE");
+
+		assertThat(targetPolicy.resolvePostProcessTarget(approvePayment, null, LocalDateTime.now()))
+			.isEqualTo(PaymentPostProcessTarget.APPROVED_CANCEL_COMPENSATION);
+	}
+
+	@DisplayName("approve FAILED + AMOUNT_MISMATCH이고 cancel 기록이 있으면 취소 보상 대상으로 다시 잡지 않는다")
+	@Test
+	void resolvePostProcessTarget_approveFailedAmountMismatchWithCancelRecord_doesNotReturnApprovedCancelCompensation() {
+		LocalDateTime now = LocalDateTime.now();
+		Payment approvePayment = failedApprovePayment(PaymentFailCode.AMOUNT_MISMATCH, "AMOUNT_NOT_MATCH");
+		Payment cancelPayment = Payment.createCancelRequested(1L, "PAY-1", "pg-1", 1000, PaymentProvider.NAVERPAY);
+		setCreatedAt(cancelPayment, now.minusMinutes(16));
+
+		PaymentPostProcessTarget target = targetPolicy.resolvePostProcessTarget(approvePayment, cancelPayment, now);
+
+		assertThat(target).isNotEqualTo(PaymentPostProcessTarget.APPROVED_CANCEL_COMPENSATION);
+		assertThat(target).isEqualTo(PaymentPostProcessTarget.CANCEL_RECONCILE);
+	}
+
+	@DisplayName("approve SUCCEEDED면 후처리 대상이 아니다")
+	@Test
+	void resolvePostProcessTarget_approveSucceeded_returnsNone() {
+		LocalDateTime now = LocalDateTime.now();
+		Payment approvePayment = createApproveRequested("PAY-1", "pg-1", 1000);
+		approvePayment.succeed(now.minusMinutes(1));
+		setCreatedAt(approvePayment, now.minusMinutes(30));
+
+		assertThat(targetPolicy.resolvePostProcessTarget(approvePayment, null, now))
+			.isEqualTo(PaymentPostProcessTarget.NONE);
+	}
+
+	@DisplayName("approve FAILED TIME_EXPIRED는 확정 실패로 후처리 대상이 아니다")
+	@Test
+	void resolvePostProcessTarget_approveFailedTimeExpired_returnsNone() {
+		Payment approvePayment = failedApprovePayment(PaymentFailCode.TIME_EXPIRED, "TIME_EXPIRED");
+
+		assertThat(targetPolicy.resolvePostProcessTarget(approvePayment, null, LocalDateTime.now()))
+			.isEqualTo(PaymentPostProcessTarget.NONE);
+	}
+
+	@DisplayName("approve FAILED INVALID_MERCHANT는 확정 실패로 후처리 대상이 아니다")
+	@Test
+	void resolvePostProcessTarget_approveFailedInvalidMerchant_returnsNone() {
+		Payment approvePayment = failedApprovePayment(PaymentFailCode.INVALID_MERCHANT, "INVALID_MERCHANT");
+
+		assertThat(targetPolicy.resolvePostProcessTarget(approvePayment, null, LocalDateTime.now()))
+			.isEqualTo(PaymentPostProcessTarget.NONE);
+	}
+
+	@DisplayName("approve FAILED OWNER_AUTH_FAILED는 확정 실패로 후처리 대상이 아니다")
+	@Test
+	void resolvePostProcessTarget_approveFailedOwnerAuthFailed_returnsNone() {
+		Payment approvePayment = failedApprovePayment(PaymentFailCode.OWNER_AUTH_FAILED, "OWNER_AUTH_FAIL");
+
+		assertThat(targetPolicy.resolvePostProcessTarget(approvePayment, null, LocalDateTime.now()))
+			.isEqualTo(PaymentPostProcessTarget.NONE);
+	}
+
+	@DisplayName("approve FAILED NOT_ENOUGH_ACCOUNT_BALANCE는 확정 실패로 후처리 대상이 아니다")
+	@Test
+	void resolvePostProcessTarget_approveFailedNotEnoughAccountBalance_returnsNone() {
+		Payment approvePayment = failedApprovePayment(PaymentFailCode.NOT_ENOUGH_ACCOUNT_BALANCE, "NOT_ENOUGH");
+
+		assertThat(targetPolicy.resolvePostProcessTarget(approvePayment, null, LocalDateTime.now()))
+			.isEqualTo(PaymentPostProcessTarget.NONE);
+	}
+
+	// --- CANCEL UNKNOWN ---
+
+	@DisplayName("CANCEL UNKNOWN이 1분 임계를 경과하면 취소 대사 대상이다")
+	@Test
+	void resolvePostProcessTarget_cancelUnknownThresholdElapsed_returnsCancelReconcile() {
+		LocalDateTime now = LocalDateTime.now();
+		Payment cancelPayment = Payment.createCancelRequested(1L, "PAY-1", "pg-1", 1000, PaymentProvider.NAVERPAY);
+		cancelPayment.markUnknown("timeout", now.minusMinutes(2));
+
+		assertThat(targetPolicy.resolvePostProcessTarget(null, cancelPayment, now))
+			.isEqualTo(PaymentPostProcessTarget.CANCEL_RECONCILE);
+	}
+
+	@DisplayName("CANCEL UNKNOWN이 6시간 escalation 임계를 경과하면 수동 검토 대상이다")
+	@Test
+	void resolvePostProcessTarget_cancelUnknownEscalated_returnsManualReview() {
+		LocalDateTime now = LocalDateTime.now();
+		Payment cancelPayment = Payment.createCancelRequested(1L, "PAY-1", "pg-1", 1000, PaymentProvider.NAVERPAY);
+		cancelPayment.markUnknown("timeout", now.minusHours(7));
+
+		assertThat(targetPolicy.resolvePostProcessTarget(null, cancelPayment, now))
+			.isEqualTo(PaymentPostProcessTarget.MANUAL_REVIEW);
+	}
+
+	// --- CANCEL REQUESTED ---
+
+	@DisplayName("CANCEL REQUESTED가 15분 임계를 경과하면 취소 대사 대상이다")
+	@Test
+	void resolvePostProcessTarget_cancelRequestedStale_returnsCancelReconcile() {
+		LocalDateTime now = LocalDateTime.now();
+		Payment cancelPayment = Payment.createCancelRequested(1L, "PAY-1", "pg-1", 1000, PaymentProvider.NAVERPAY);
+		setCreatedAt(cancelPayment, now.minusMinutes(16));
+
+		assertThat(targetPolicy.resolvePostProcessTarget(null, cancelPayment, now))
+			.isEqualTo(PaymentPostProcessTarget.CANCEL_RECONCILE);
+	}
+
+	@DisplayName("CANCEL REQUESTED가 6시간 escalation 임계를 경과하면 수동 검토 대상이다")
+	@Test
+	void resolvePostProcessTarget_cancelRequestedEscalated_returnsManualReview() {
+		LocalDateTime now = LocalDateTime.now();
+		Payment cancelPayment = Payment.createCancelRequested(1L, "PAY-1", "pg-1", 1000, PaymentProvider.NAVERPAY);
+		setCreatedAt(cancelPayment, now.minusHours(7));
+
+		assertThat(targetPolicy.resolvePostProcessTarget(null, cancelPayment, now))
+			.isEqualTo(PaymentPostProcessTarget.MANUAL_REVIEW);
+	}
+
+	// --- CANCEL FAILED ---
+
+	@DisplayName("CANCEL FAILED CANCEL_PROCESS_FAILED면 취소 대사 대상이다")
+	@Test
+	void resolvePostProcessTarget_cancelFailedCancelProcessFailed_returnsCancelReconcile() {
+		LocalDateTime now = LocalDateTime.now();
+		Payment cancelPayment = failedCancelPayment(PaymentFailCode.CANCEL_PROCESS_FAILED, "PRE_CANCEL_NOT_COMPLETE",
 			now.minusMinutes(1));
-		setCreatedAt(failedCancelAttempt, now.minusMinutes(4));
 
-		Payment amountMismatchAttempt = createApproveRequested("PAY-1", "pg-1", 1000);
-		amountMismatchAttempt.fail(PaymentFailCode.AMOUNT_MISMATCH, "AMOUNT_NOT_MATCH",
+		assertThat(targetPolicy.resolvePostProcessTarget(null, cancelPayment, now))
+			.isEqualTo(PaymentPostProcessTarget.CANCEL_RECONCILE);
+	}
+
+	@DisplayName("CANCEL FAILED PG_INVALID_RESPONSE면 취소 대사 대상이다")
+	@Test
+	void resolvePostProcessTarget_cancelFailedPgInvalidResponse_returnsCancelReconcile() {
+		LocalDateTime now = LocalDateTime.now();
+		Payment cancelPayment = failedCancelPayment(PaymentFailCode.PG_INVALID_RESPONSE, "INVALID_RESPONSE",
 			now.minusMinutes(1));
-		setCreatedAt(amountMismatchAttempt, now.minusMinutes(4));
 
-		assertThat(targetPolicy.resolvePostProcessTarget(approveRequestedAttempt, null, now))
-			.isEqualTo(PaymentPostProcessTarget.NONE);
-		assertThat(targetPolicy.resolvePostProcessTarget(null, cancelRequestedAttempt, now))
-			.isEqualTo(PaymentPostProcessTarget.NONE);
-		assertThat(targetPolicy.resolvePostProcessTarget(null, failedCancelAttempt, now))
-			.isEqualTo(PaymentPostProcessTarget.NONE);
-		assertThat(targetPolicy.resolvePostProcessTarget(amountMismatchAttempt, null, now))
-			.isEqualTo(PaymentPostProcessTarget.NONE);
+		assertThat(targetPolicy.resolvePostProcessTarget(null, cancelPayment, now))
+			.isEqualTo(PaymentPostProcessTarget.CANCEL_RECONCILE);
 	}
 
-	@DisplayName("approve attempt가 SUCCEEDED면 후처리 대상이 아니다")
+	@DisplayName("CANCEL FAILED CANCEL_PROCESS_FAILED가 6시간 escalation 임계를 경과하면 수동 검토 대상이다")
 	@Test
-	void resolvePostProcessTarget_whenApproveAttemptSucceeded_returnNone() {
+	void resolvePostProcessTarget_cancelFailedCancelProcessFailedEscalated_returnsManualReview() {
 		LocalDateTime now = LocalDateTime.now();
-		Payment approveAttempt = createApproveRequested("PAY-1", "pg-1", 1000);
-		approveAttempt.succeed(now.minusMinutes(1));
-		setCreatedAt(approveAttempt, now.minusMinutes(10));
+		Payment cancelPayment = failedCancelPayment(PaymentFailCode.CANCEL_PROCESS_FAILED, "PRE_CANCEL_NOT_COMPLETE",
+			now.minusHours(7));
 
-		assertThat(targetPolicy.resolvePostProcessTarget(approveAttempt, null, now))
-			.isEqualTo(PaymentPostProcessTarget.NONE);
+		assertThat(targetPolicy.resolvePostProcessTarget(null, cancelPayment, now))
+			.isEqualTo(PaymentPostProcessTarget.MANUAL_REVIEW);
 	}
 
-	@DisplayName("approve attempt가 TIME_EXPIRED로 실패하면 후처리 대상이 아니다")
+	@DisplayName("CANCEL FAILED PG_REQUEST_REJECTED면 시간 무관 수동 검토 대상이다")
 	@Test
-	void resolvePostProcessTarget_whenApproveAttemptFailedByTimeExpired_returnNone() {
-		Payment approveAttempt = failedApproveAttempt(PaymentFailCode.TIME_EXPIRED, "TIME_EXPIRED");
-
-		assertThat(targetPolicy.resolvePostProcessTarget(approveAttempt, null, LocalDateTime.now()))
-			.isEqualTo(PaymentPostProcessTarget.NONE);
-	}
-
-	@DisplayName("approve attempt가 PG_REQUEST_REJECTED로 실패하면 후처리 대상이 아니다")
-	@Test
-	void resolvePostProcessTarget_whenApproveAttemptFailedByPgRequestRejected_returnNone() {
-		Payment approveAttempt = failedApproveAttempt(PaymentFailCode.PG_REQUEST_REJECTED, "FAIL");
-
-		assertThat(targetPolicy.resolvePostProcessTarget(approveAttempt, null, LocalDateTime.now()))
-			.isEqualTo(PaymentPostProcessTarget.NONE);
-	}
-
-	@DisplayName("approve attempt가 INVALID_MERCHANT로 실패하면 후처리 대상이 아니다")
-	@Test
-	void resolvePostProcessTarget_whenApproveAttemptFailedByInvalidMerchant_returnNone() {
-		Payment approveAttempt = failedApproveAttempt(PaymentFailCode.INVALID_MERCHANT, "INVALID_MERCHANT");
-
-		assertThat(targetPolicy.resolvePostProcessTarget(approveAttempt, null, LocalDateTime.now()))
-			.isEqualTo(PaymentPostProcessTarget.NONE);
-	}
-
-	@DisplayName("approve attempt가 OWNER_AUTH_FAILED로 실패하면 후처리 대상이 아니다")
-	@Test
-	void resolvePostProcessTarget_whenApproveAttemptFailedByOwnerAuthFailed_returnNone() {
-		Payment approveAttempt = failedApproveAttempt(PaymentFailCode.OWNER_AUTH_FAILED, "OWNER_AUTH_FAIL");
-
-		assertThat(targetPolicy.resolvePostProcessTarget(approveAttempt, null, LocalDateTime.now()))
-			.isEqualTo(PaymentPostProcessTarget.NONE);
-	}
-
-	@DisplayName("approve attempt가 NOT_ENOUGH_ACCOUNT_BALANCE로 실패하면 후처리 대상이 아니다")
-	@Test
-	void resolvePostProcessTarget_whenApproveAttemptFailedByNotEnoughAccountBalance_returnNone() {
-		Payment approveAttempt = failedApproveAttempt(PaymentFailCode.NOT_ENOUGH_ACCOUNT_BALANCE,
-			"NOT_ENOUGH_ACCOUNT_BALANCE");
-
-		assertThat(targetPolicy.resolvePostProcessTarget(approveAttempt, null, LocalDateTime.now()))
-			.isEqualTo(PaymentPostProcessTarget.NONE);
-	}
-
-	@DisplayName("approve attempt가 REQUESTED이고 기준 시간이 지나면 상태 확인 대상이다")
-	@Test
-	void resolvePostProcessTarget_whenApproveAttemptRequested_returnApproveRequestedTarget() {
+	void resolvePostProcessTarget_cancelFailedPgRequestRejected_returnsManualReview() {
 		LocalDateTime now = LocalDateTime.now();
-		Payment approveAttempt = createApproveRequested("PAY-1", "pg-1", 1000);
-		setCreatedAt(approveAttempt, now.minusMinutes(5));
+		Payment cancelPayment = failedCancelPayment(PaymentFailCode.PG_REQUEST_REJECTED, "REJECTED",
+			now.minusMinutes(1));
 
-		assertThat(targetPolicy.resolvePostProcessTarget(approveAttempt, null, now))
-			.isEqualTo(PaymentPostProcessTarget.APPROVE_REQUESTED_TARGET);
+		assertThat(targetPolicy.resolvePostProcessTarget(null, cancelPayment, now))
+			.isEqualTo(PaymentPostProcessTarget.MANUAL_REVIEW);
 	}
 
-	@DisplayName("approve attempt가 MERCHANT_PAY_KEY_MISMATCH로 실패하면 관련 주문 상태 확인 대상이다")
+	@DisplayName("CANCEL SUCCEEDED면 후처리 대상이 아니다")
 	@Test
-	void resolvePostProcessTarget_whenApproveAttemptFailedByMerchantPayKeyMismatch_returnMerchantPayKeyMismatchTarget() {
-		Payment approveAttempt = failedApproveAttempt(
-			PaymentFailCode.MERCHANT_PAY_KEY_MISMATCH,
-			"MERCHANT_PAY_KEY_MISMATCH"
-		);
-
-		assertThat(targetPolicy.resolvePostProcessTarget(approveAttempt, null, LocalDateTime.now()))
-			.isEqualTo(PaymentPostProcessTarget.MERCHANT_PAY_KEY_MISMATCH_TARGET);
-	}
-
-	@DisplayName("approve attempt가 APPROVE_PROCESS_FAILED로 실패하면 승인 결과 확인 대상이다")
-	@Test
-	void resolvePostProcessTarget_whenApproveAttemptFailedByApproveProcessFailed_returnFailedApproveResultTarget() {
-		Payment approveAttempt = failedApproveAttempt(
-			PaymentFailCode.APPROVE_PROCESS_FAILED,
-			"APPROVE_PROCESS_FAILED"
-		);
-
-		assertThat(targetPolicy.resolvePostProcessTarget(approveAttempt, null, LocalDateTime.now()))
-			.isEqualTo(PaymentPostProcessTarget.FAILED_APPROVE_RESULT_TARGET);
-	}
-
-	@DisplayName("approve attempt가 PG_INVALID_RESPONSE로 실패하면 승인 결과 확인 대상이다")
-	@Test
-	void resolvePostProcessTarget_whenApproveAttemptFailedByPgInvalidResponse_returnFailedApproveResultTarget() {
-		Payment approveAttempt = failedApproveAttempt(
-			PaymentFailCode.PG_INVALID_RESPONSE,
-			"INVALID_RESPONSE"
-		);
-
-		assertThat(targetPolicy.resolvePostProcessTarget(approveAttempt, null, LocalDateTime.now()))
-			.isEqualTo(PaymentPostProcessTarget.FAILED_APPROVE_RESULT_TARGET);
-	}
-
-	@DisplayName("approve attempt가 PG_NETWORK_ERROR로 실패하면 승인 결과 확인 대상이다")
-	@Test
-	void resolvePostProcessTarget_whenApproveAttemptFailedByPgNetworkError_returnFailedApproveResultTarget() {
-		Payment approveAttempt = failedApproveAttempt(
-			PaymentFailCode.PG_NETWORK_ERROR,
-			"NETWORK_ERROR"
-		);
-
-		assertThat(targetPolicy.resolvePostProcessTarget(approveAttempt, null, LocalDateTime.now()))
-			.isEqualTo(PaymentPostProcessTarget.FAILED_APPROVE_RESULT_TARGET);
-	}
-
-	@DisplayName("approve attempt가 PG_SERVER_ERROR로 실패하면 승인 결과 확인 대상이다")
-	@Test
-	void resolvePostProcessTarget_whenApproveAttemptFailedByPgServerError_returnFailedApproveResultTarget() {
-		Payment approveAttempt = failedApproveAttempt(
-			PaymentFailCode.PG_SERVER_ERROR,
-			"SERVER_ERROR"
-		);
-
-		assertThat(targetPolicy.resolvePostProcessTarget(approveAttempt, null, LocalDateTime.now()))
-			.isEqualTo(PaymentPostProcessTarget.FAILED_APPROVE_RESULT_TARGET);
-	}
-
-	@DisplayName("approve attempt가 AMOUNT_MISMATCH로 실패하고 cancel attempt가 없으면 취소 보상 대상이다")
-	@Test
-	void resolvePostProcessTarget_whenApproveAttemptFailedByAmountMismatchWithoutCancelAttempt_returnApprovedPaymentCancelAction() {
-		Payment approveAttempt = failedApproveAttempt(PaymentFailCode.AMOUNT_MISMATCH, "AMOUNT_NOT_MATCH");
-
-		assertThat(targetPolicy.resolvePostProcessTarget(approveAttempt, null, LocalDateTime.now()))
-			.isEqualTo(PaymentPostProcessTarget.APPROVED_PAYMENT_CANCEL_ACTION);
-	}
-
-	@DisplayName("approve attempt가 DUPLICATE_PAYMENT로 실패하고 cancel attempt가 없으면 취소 보상 대상이다")
-	@Test
-	void resolvePostProcessTarget_whenApproveAttemptFailedByDuplicatePaymentWithoutCancelAttempt_returnApprovedPaymentCancelAction() {
-		Payment approveAttempt = failedApproveAttempt(PaymentFailCode.DUPLICATE_PAYMENT, "DUPLICATE_PAYMENT");
-
-		assertThat(targetPolicy.resolvePostProcessTarget(approveAttempt, null, LocalDateTime.now()))
-			.isEqualTo(PaymentPostProcessTarget.APPROVED_PAYMENT_CANCEL_ACTION);
-	}
-
-	@DisplayName("cancel attempt가 SUCCEEDED면 후처리 대상이 아니다")
-	@Test
-	void resolvePostProcessTarget_whenCancelAttemptSucceeded_returnNone() {
+	void resolvePostProcessTarget_cancelSucceeded_returnsNone() {
 		LocalDateTime now = LocalDateTime.now();
-		Payment cancelAttempt = Payment.createCancelRequested(
-			1L, "PAY-1", "pg-1", 1000, PaymentProvider.NAVERPAY
-		);
-		cancelAttempt.succeed(now.minusMinutes(1));
-		setCreatedAt(cancelAttempt, now.minusMinutes(10));
+		Payment cancelPayment = Payment.createCancelRequested(1L, "PAY-1", "pg-1", 1000, PaymentProvider.NAVERPAY);
+		cancelPayment.succeed(now.minusMinutes(1));
+		setCreatedAt(cancelPayment, now.minusMinutes(30));
 
-		assertThat(targetPolicy.resolvePostProcessTarget(null, cancelAttempt, now))
+		assertThat(targetPolicy.resolvePostProcessTarget(null, cancelPayment, now))
 			.isEqualTo(PaymentPostProcessTarget.NONE);
 	}
 
-	@DisplayName("cancel attempt가 INVALID_PG_PAYMENT_ID로 실패하면 후처리 대상이 아니다")
+	@DisplayName("CANCEL FAILED INVALID_PG_PAYMENT_ID는 확정 실패로 후처리 대상이 아니다")
 	@Test
-	void resolvePostProcessTarget_whenCancelAttemptFailedByInvalidPgPaymentId_returnNone() {
-		Payment cancelAttempt = failedCancelAttempt(PaymentFailCode.INVALID_PG_PAYMENT_ID, "INVALID_PG_PAYMENT_ID");
+	void resolvePostProcessTarget_cancelFailedInvalidPgPaymentId_returnsNone() {
+		LocalDateTime now = LocalDateTime.now();
+		Payment cancelPayment = failedCancelPayment(PaymentFailCode.INVALID_PG_PAYMENT_ID, "INVALID_ID",
+			now.minusMinutes(1));
 
-		assertThat(targetPolicy.resolvePostProcessTarget(null, cancelAttempt, LocalDateTime.now()))
+		assertThat(targetPolicy.resolvePostProcessTarget(null, cancelPayment, now))
 			.isEqualTo(PaymentPostProcessTarget.NONE);
 	}
 
-	@DisplayName("cancel attempt가 INVALID_MERCHANT로 실패하면 후처리 대상이 아니다")
+	@DisplayName("CANCEL FAILED INVALID_MERCHANT는 확정 실패로 후처리 대상이 아니다")
 	@Test
-	void resolvePostProcessTarget_whenCancelAttemptFailedByInvalidMerchant_returnNone() {
-		Payment cancelAttempt = failedCancelAttempt(PaymentFailCode.INVALID_MERCHANT, "INVALID_MERCHANT");
+	void resolvePostProcessTarget_cancelFailedInvalidMerchant_returnsNone() {
+		LocalDateTime now = LocalDateTime.now();
+		Payment cancelPayment = failedCancelPayment(PaymentFailCode.INVALID_MERCHANT, "INVALID_MERCHANT",
+			now.minusMinutes(1));
 
-		assertThat(targetPolicy.resolvePostProcessTarget(null, cancelAttempt, LocalDateTime.now()))
+		assertThat(targetPolicy.resolvePostProcessTarget(null, cancelPayment, now))
 			.isEqualTo(PaymentPostProcessTarget.NONE);
 	}
 
-	@DisplayName("cancel attempt가 REQUESTED이고 기준 시간이 지나면 상태 확인 대상이다")
+	// --- 동시 UNKNOWN 시 approve 우선 ---
+
+	@DisplayName("approve와 cancel이 동시에 UNKNOWN이면 approve를 먼저 확정하는 APPROVE_RECONCILE 대상이다")
 	@Test
-	void resolvePostProcessTarget_whenCancelAttemptRequested_returnCancelRequestedTarget() {
+	void resolvePostProcessTarget_bothApproveAndCancelUnknown_returnsApproveReconcileFirst() {
 		LocalDateTime now = LocalDateTime.now();
-		Payment cancelAttempt = Payment.createCancelRequested(
-			1L, "PAY-1", "pg-1", 1000, PaymentProvider.NAVERPAY
-		);
-		setCreatedAt(cancelAttempt, now.minusMinutes(5));
+		Payment approvePayment = createApproveRequested("PAY-1", "pg-1", 1000);
+		approvePayment.markUnknown("timeout", now.minusMinutes(2));
 
-		assertThat(targetPolicy.resolvePostProcessTarget(null, cancelAttempt, now))
-			.isEqualTo(PaymentPostProcessTarget.CANCEL_REQUESTED_TARGET);
+		Payment cancelPayment = Payment.createCancelRequested(1L, "PAY-1", "pg-1", 1000, PaymentProvider.NAVERPAY);
+		cancelPayment.markUnknown("timeout", now.minusMinutes(2));
+
+		assertThat(targetPolicy.resolvePostProcessTarget(approvePayment, cancelPayment, now))
+			.isEqualTo(PaymentPostProcessTarget.APPROVE_RECONCILE);
 	}
 
-	@DisplayName("approve attempt가 AMOUNT_MISMATCH로 실패하고 cancel attempt가 REQUESTED면 취소 상태 확인 대상이다")
+	// --- 시각 기준 검증 ---
+
+	@DisplayName("REQUESTED의 경과 시간은 createdAt을 기준으로 계산한다")
 	@Test
-	void resolvePostProcessTarget_whenAmountMismatchAndCancelAttemptRequested_returnCancelRequestedTarget() {
+	void resolvePostProcessTarget_requestedElapsedMeasuredFromCreatedAt() {
 		LocalDateTime now = LocalDateTime.now();
-		Payment approveAttempt = failedApproveAttempt(PaymentFailCode.AMOUNT_MISMATCH, "AMOUNT_NOT_MATCH");
-		Payment cancelAttempt = Payment.createCancelRequested(
-			1L, "PAY-1", "pg-1", 1000, PaymentProvider.NAVERPAY
-		);
-		setCreatedAt(cancelAttempt, now.minusMinutes(10));
+		Payment approvePayment = createApproveRequested("PAY-1", "pg-1", 1000);
 
-		assertThat(targetPolicy.resolvePostProcessTarget(approveAttempt, cancelAttempt, now))
-			.isEqualTo(PaymentPostProcessTarget.CANCEL_REQUESTED_TARGET);
+		setCreatedAt(approvePayment, now.minusMinutes(14));
+		assertThat(targetPolicy.resolvePostProcessTarget(approvePayment, null, now))
+			.isEqualTo(PaymentPostProcessTarget.NONE);
+
+		setCreatedAt(approvePayment, now.minusMinutes(16));
+		assertThat(targetPolicy.resolvePostProcessTarget(approvePayment, null, now))
+			.isEqualTo(PaymentPostProcessTarget.APPROVE_RECONCILE);
 	}
 
-	@DisplayName("approve attempt가 AMOUNT_MISMATCH로 실패한 뒤 cancel attempt가 생기면 같은 취소 보상 대상으로 다시 잡지 않는다")
+	@DisplayName("UNKNOWN의 경과 시간은 respondedAt을 기준으로 계산한다")
 	@Test
-	void resolvePostProcessTarget_whenAmountMismatchAlreadyProcessedWithCancelAttempt_doNotReturnApprovedPaymentCancelAction() {
+	void resolvePostProcessTarget_unknownElapsedMeasuredFromRespondedAt() {
 		LocalDateTime now = LocalDateTime.now();
-		Payment approveAttempt = failedApproveAttempt(PaymentFailCode.AMOUNT_MISMATCH, "AMOUNT_NOT_MATCH");
-		Payment cancelAttempt = Payment.createCancelRequested(
-			1L, "PAY-1", "pg-1", 1000, PaymentProvider.NAVERPAY
-		);
-		setCreatedAt(cancelAttempt, now.minusMinutes(10));
 
-		PaymentPostProcessTarget target = targetPolicy.resolvePostProcessTarget(approveAttempt, cancelAttempt, now);
+		Payment approvePayment1 = createApproveRequested("PAY-1", "pg-1", 1000);
+		approvePayment1.markUnknown("timeout", now.minusSeconds(30));
+		assertThat(targetPolicy.resolvePostProcessTarget(approvePayment1, null, now))
+			.isEqualTo(PaymentPostProcessTarget.NONE);
 
-		assertThat(target).isEqualTo(PaymentPostProcessTarget.CANCEL_REQUESTED_TARGET);
-		assertThat(target).isNotEqualTo(PaymentPostProcessTarget.APPROVED_PAYMENT_CANCEL_ACTION);
+		Payment approvePayment2 = createApproveRequested("PAY-2", "pg-2", 1000);
+		approvePayment2.markUnknown("timeout", now.minusMinutes(2));
+		assertThat(targetPolicy.resolvePostProcessTarget(approvePayment2, null, now))
+			.isEqualTo(PaymentPostProcessTarget.APPROVE_RECONCILE);
 	}
 
-	@DisplayName("approve attempt가 DUPLICATE_PAYMENT로 실패하고 cancel attempt가 REQUESTED면 취소 상태 확인 대상이다")
+	// --- 경계·중간 구간 검증 ---
+
+	@DisplayName("APPROVE UNKNOWN이 정확히 1분 임계면 승인 대사 대상이다 (경계 포함)")
 	@Test
-	void resolvePostProcessTarget_whenDuplicatePaymentAndCancelAttemptRequested_returnCancelRequestedTarget() {
+	void resolvePostProcessTarget_approveUnknownExactlyAtThreshold_returnsApproveReconcile() {
 		LocalDateTime now = LocalDateTime.now();
-		Payment approveAttempt = failedApproveAttempt(PaymentFailCode.DUPLICATE_PAYMENT, "DUPLICATE_PAYMENT");
-		Payment cancelAttempt = Payment.createCancelRequested(
-			1L, "PAY-1", "pg-1", 1000, PaymentProvider.NAVERPAY
-		);
-		setCreatedAt(cancelAttempt, now.minusMinutes(10));
+		Payment approvePayment = createApproveRequested("PAY-1", "pg-1", 1000);
+		approvePayment.markUnknown("timeout", now.minusMinutes(1));
 
-		assertThat(targetPolicy.resolvePostProcessTarget(approveAttempt, cancelAttempt, now))
-			.isEqualTo(PaymentPostProcessTarget.CANCEL_REQUESTED_TARGET);
+		assertThat(targetPolicy.resolvePostProcessTarget(approvePayment, null, now))
+			.isEqualTo(PaymentPostProcessTarget.APPROVE_RECONCILE);
 	}
 
-	@DisplayName("approve attempt가 MERCHANT_PAY_KEY_MISMATCH로 실패한 뒤 cancel attempt가 생기면 같은 mismatch 확인 대상으로 다시 잡지 않는다")
+	@DisplayName("APPROVE UNKNOWN이 1분 직전(59초)이면 후처리 대상이 아니다 (경계 미만)")
 	@Test
-	void resolvePostProcessTarget_whenMerchantPayKeyMismatchAlreadyProcessedWithCancelAttempt_doNotReturnMerchantPayKeyMismatchTarget() {
+	void resolvePostProcessTarget_approveUnknownJustBeforeThreshold_returnsNone() {
 		LocalDateTime now = LocalDateTime.now();
-		Payment approveAttempt = failedApproveAttempt(
-			PaymentFailCode.MERCHANT_PAY_KEY_MISMATCH,
-			"MERCHANT_PAY_KEY_MISMATCH"
-		);
-		Payment cancelAttempt = Payment.createCancelRequested(
-			1L, "PAY-1", "pg-1", 1000, PaymentProvider.NAVERPAY
-		);
-		setCreatedAt(cancelAttempt, now.minusMinutes(10));
+		Payment approvePayment = createApproveRequested("PAY-1", "pg-1", 1000);
+		approvePayment.markUnknown("timeout", now.minusSeconds(59));
 
-		PaymentPostProcessTarget target = targetPolicy.resolvePostProcessTarget(approveAttempt, cancelAttempt, now);
-
-		assertThat(target).isEqualTo(PaymentPostProcessTarget.CANCEL_REQUESTED_TARGET);
-		assertThat(target).isNotEqualTo(PaymentPostProcessTarget.MERCHANT_PAY_KEY_MISMATCH_TARGET);
+		assertThat(targetPolicy.resolvePostProcessTarget(approvePayment, null, now))
+			.isEqualTo(PaymentPostProcessTarget.NONE);
 	}
 
-	@DisplayName("cancel attempt가 PG_INVALID_RESPONSE로 실패하면 취소 상태 확인 대상이다")
+	@DisplayName("APPROVE REQUESTED가 정확히 15분 임계면 승인 대사 대상이다 (경계 포함)")
 	@Test
-	void resolvePostProcessTarget_whenCancelAttemptFailedByPgInvalidResponse_returnCancelRequestedTarget() {
-		Payment cancelAttempt = failedCancelAttempt(PaymentFailCode.PG_INVALID_RESPONSE, "INVALID_RESPONSE");
+	void resolvePostProcessTarget_approveRequestedExactlyAtStaleThreshold_returnsApproveReconcile() {
+		LocalDateTime now = LocalDateTime.now();
+		Payment approvePayment = createApproveRequested("PAY-1", "pg-1", 1000);
+		setCreatedAt(approvePayment, now.minusMinutes(15));
 
-		assertThat(targetPolicy.resolvePostProcessTarget(null, cancelAttempt, LocalDateTime.now()))
-			.isEqualTo(PaymentPostProcessTarget.CANCEL_REQUESTED_TARGET);
+		assertThat(targetPolicy.resolvePostProcessTarget(approvePayment, null, now))
+			.isEqualTo(PaymentPostProcessTarget.APPROVE_RECONCILE);
 	}
 
-	@DisplayName("cancel attempt가 CANCEL_PROCESS_FAILED로 실패하면 취소 상태 확인 대상이다")
+	@DisplayName("APPROVE UNKNOWN이 정확히 6시간 escalation 임계면 수동 검토 대상이다 (경계 포함)")
 	@Test
-	void resolvePostProcessTarget_whenCancelAttemptFailedByCancelProcessFailed_returnCancelRequestedTarget() {
-		Payment cancelAttempt = failedCancelAttempt(PaymentFailCode.CANCEL_PROCESS_FAILED, "CANCEL_NOT_COMPLETE");
+	void resolvePostProcessTarget_approveUnknownExactlyAtEscalation_returnsManualReview() {
+		LocalDateTime now = LocalDateTime.now();
+		Payment approvePayment = createApproveRequested("PAY-1", "pg-1", 1000);
+		approvePayment.markUnknown("timeout", now.minusHours(6));
 
-		assertThat(targetPolicy.resolvePostProcessTarget(null, cancelAttempt, LocalDateTime.now()))
-			.isEqualTo(PaymentPostProcessTarget.CANCEL_REQUESTED_TARGET);
+		assertThat(targetPolicy.resolvePostProcessTarget(approvePayment, null, now))
+			.isEqualTo(PaymentPostProcessTarget.MANUAL_REVIEW);
 	}
 
-	@DisplayName("cancel attempt가 PG_REQUEST_REJECTED로 실패하면 수동 확인 대상이다")
+	@DisplayName("APPROVE UNKNOWN이 reconcile 구간(1분~6시간) 안이면 escalation 전까지 승인 대사 대상이다")
 	@Test
-	void resolvePostProcessTarget_whenCancelAttemptFailedByPgRequestRejected_returnManualReviewTarget() {
-		Payment cancelAttempt = failedCancelAttempt(PaymentFailCode.PG_REQUEST_REJECTED, "FAIL");
+	void resolvePostProcessTarget_approveUnknownWithinReconcileBand_returnsApproveReconcile() {
+		LocalDateTime now = LocalDateTime.now();
+		Payment approvePayment = createApproveRequested("PAY-1", "pg-1", 1000);
+		approvePayment.markUnknown("timeout", now.minusHours(3));
 
-		assertThat(targetPolicy.resolvePostProcessTarget(null, cancelAttempt, LocalDateTime.now()))
-			.isEqualTo(PaymentPostProcessTarget.MANUAL_REVIEW_TARGET);
+		assertThat(targetPolicy.resolvePostProcessTarget(approvePayment, null, now))
+			.isEqualTo(PaymentPostProcessTarget.APPROVE_RECONCILE);
 	}
 
-	@DisplayName("approve attempt가 AMOUNT_MISMATCH로 실패하고 cancel attempt가 PG_REQUEST_REJECTED로 실패하면 수동 확인 대상이다")
+	@DisplayName("APPROVE REQUESTED가 escalation 직전(5시간 59분)이면 아직 승인 대사 대상이다")
 	@Test
-	void resolvePostProcessTarget_whenAmountMismatchAndCancelAttemptFailedByPgRequestRejected_returnManualReviewTarget() {
-		Payment approveAttempt = failedApproveAttempt(PaymentFailCode.AMOUNT_MISMATCH, "AMOUNT_NOT_MATCH");
-		Payment cancelAttempt = failedCancelAttempt(PaymentFailCode.PG_REQUEST_REJECTED, "FAIL");
+	void resolvePostProcessTarget_approveRequestedJustBeforeEscalation_returnsApproveReconcile() {
+		LocalDateTime now = LocalDateTime.now();
+		Payment approvePayment = createApproveRequested("PAY-1", "pg-1", 1000);
+		setCreatedAt(approvePayment, now.minusHours(5).minusMinutes(59));
 
-		assertThat(targetPolicy.resolvePostProcessTarget(approveAttempt, cancelAttempt, LocalDateTime.now()))
-			.isEqualTo(PaymentPostProcessTarget.MANUAL_REVIEW_TARGET);
+		assertThat(targetPolicy.resolvePostProcessTarget(approvePayment, null, now))
+			.isEqualTo(PaymentPostProcessTarget.APPROVE_RECONCILE);
 	}
 
-	@DisplayName("approve attempt가 DUPLICATE_PAYMENT로 실패하고 cancel attempt가 PG_REQUEST_REJECTED로 실패하면 수동 확인 대상이다")
+	@DisplayName("CANCEL UNKNOWN이 reconcile 구간 안이면 escalation 전까지 취소 대사 대상이다")
 	@Test
-	void resolvePostProcessTarget_whenDuplicatePaymentAndCancelAttemptFailedByPgRequestRejected_returnManualReviewTarget() {
-		Payment approveAttempt = failedApproveAttempt(PaymentFailCode.DUPLICATE_PAYMENT, "DUPLICATE_PAYMENT");
-		Payment cancelAttempt = failedCancelAttempt(PaymentFailCode.PG_REQUEST_REJECTED, "FAIL");
+	void resolvePostProcessTarget_cancelUnknownWithinReconcileBand_returnsCancelReconcile() {
+		LocalDateTime now = LocalDateTime.now();
+		Payment cancelPayment = Payment.createCancelRequested(1L, "PAY-1", "pg-1", 1000, PaymentProvider.NAVERPAY);
+		cancelPayment.markUnknown("timeout", now.minusHours(3));
 
-		assertThat(targetPolicy.resolvePostProcessTarget(approveAttempt, cancelAttempt, LocalDateTime.now()))
-			.isEqualTo(PaymentPostProcessTarget.MANUAL_REVIEW_TARGET);
+		assertThat(targetPolicy.resolvePostProcessTarget(null, cancelPayment, now))
+			.isEqualTo(PaymentPostProcessTarget.CANCEL_RECONCILE);
 	}
+
+	@DisplayName("CANCEL FAILED 재시도 대상이 escalation 구간 안이면 아직 취소 대사 대상이다")
+	@Test
+	void resolvePostProcessTarget_cancelFailedWithinReconcileBand_returnsCancelReconcile() {
+		LocalDateTime now = LocalDateTime.now();
+		Payment cancelPayment = failedCancelPayment(PaymentFailCode.CANCEL_PROCESS_FAILED, "PRE_CANCEL_NOT_COMPLETE",
+			now.minusHours(3));
+
+		assertThat(targetPolicy.resolvePostProcessTarget(null, cancelPayment, now))
+			.isEqualTo(PaymentPostProcessTarget.CANCEL_RECONCILE);
+	}
+
+	// --- helpers ---
 
 	private Payment createApproveRequested(String merchantPayKey, String pgPaymentId, int amount) {
 		PaymentReservation reservation = PaymentReservation.createReserved(
@@ -363,25 +456,21 @@ class PaymentPostProcessTargetPolicyTest {
 		return Payment.createRequested(reservation, PaymentType.APPROVE, pgPaymentId);
 	}
 
-	private Payment failedApproveAttempt(PaymentFailCode failCode, String failDetail) {
+	private Payment failedApprovePayment(PaymentFailCode failCode, String failDetail) {
 		LocalDateTime now = LocalDateTime.now();
-		Payment attempt = createApproveRequested("PAY-1", "pg-1", 1000);
-		attempt.fail(failCode, failDetail, now.minusMinutes(1));
-		setCreatedAt(attempt, now.minusMinutes(30));
-		return attempt;
+		Payment payment = createApproveRequested("PAY-1", "pg-1", 1000);
+		payment.fail(failCode, failDetail, now.minusMinutes(1));
+		setCreatedAt(payment, now.minusMinutes(30));
+		return payment;
 	}
 
-	private Payment failedCancelAttempt(PaymentFailCode failCode, String failDetail) {
-		LocalDateTime now = LocalDateTime.now();
-		Payment attempt = Payment.createCancelRequested(
-			1L, "PAY-1", "pg-1", 1000, PaymentProvider.NAVERPAY
-		);
-		attempt.fail(failCode, failDetail, now.minusMinutes(1));
-		setCreatedAt(attempt, now.minusMinutes(10));
-		return attempt;
+	private Payment failedCancelPayment(PaymentFailCode failCode, String failDetail, LocalDateTime respondedAt) {
+		Payment payment = Payment.createCancelRequested(1L, "PAY-1", "pg-1", 1000, PaymentProvider.NAVERPAY);
+		payment.fail(failCode, failDetail, respondedAt);
+		return payment;
 	}
 
-	private void setCreatedAt(Payment attempt, LocalDateTime createdAt) {
-		ReflectionTestUtils.setField(attempt, "createdAt", createdAt);
+	private void setCreatedAt(Payment payment, LocalDateTime createdAt) {
+		ReflectionTestUtils.setField(payment, "createdAt", createdAt);
 	}
 }
