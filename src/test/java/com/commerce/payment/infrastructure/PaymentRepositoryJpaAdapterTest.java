@@ -106,33 +106,4 @@ class PaymentRepositoryJpaAdapterTest {
 		assertThat(result.get().getMerchantPayKey()).isEqualTo("PAY-3");
 	}
 
-	@DisplayName("승인 완료된 결제가 있으면 existsApproveSucceeded가 true를 반환한다")
-	@Test
-	void existsApproveSucceeded_whenSucceededExists_returnTrue() {
-		// given
-		PaymentReservation reservation = reservationPersistence.save(
-			PaymentReservation.createReserved(2L, 1L, 1000, PaymentProvider.NAVERPAY, "PAY-4",
-				LocalDateTime.now().plusMinutes(15)));
-		Payment payment = Payment.createRequested(reservation, PaymentType.APPROVE, "pg-payment-id-4");
-		payment.succeed(LocalDateTime.now());
-		paymentRepository.save(payment);
-		em.flush();
-		em.clear();
-
-		// when
-		boolean result = paymentRepository.existsApproveSucceeded("PAY-4");
-
-		// then
-		assertThat(result).isTrue();
-	}
-
-	@DisplayName("승인 완료된 결제가 없으면 existsApproveSucceeded가 false를 반환한다")
-	@Test
-	void existsApproveSucceeded_whenSucceededNotExists_returnFalse() {
-		// when
-		boolean result = paymentRepository.existsApproveSucceeded("PAY-NOT-FOUND");
-
-		// then
-		assertThat(result).isFalse();
-	}
 }

@@ -24,11 +24,5 @@ public interface JpaPaymentRepository extends JpaRepository<Payment, Long> {
 		PaymentStatus status
 	);
 
-	boolean existsByMerchantPayKeyAndTypeAndStatus(
-		String merchantPayKey,
-		PaymentType type,
-		PaymentStatus status
-	);
-
 	boolean existsByOrderIdAndTypeAndStatus(Long orderId, PaymentType type, PaymentStatus status);
 }

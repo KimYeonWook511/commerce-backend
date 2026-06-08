@@ -89,13 +89,6 @@ public class PaymentRepositoryAdapter implements PaymentRepository {
 	}
 
 	@Override
-	public boolean existsApproveSucceeded(String merchantPayKey) {
-		return jpaPaymentRepository.existsByMerchantPayKeyAndTypeAndStatus(
-			merchantPayKey, PaymentType.APPROVE, PaymentStatus.SUCCEEDED
-		);
-	}
-
-	@Override
 	public boolean existsUnknownByOrderId(Long orderId) {
 		return jpaPaymentRepository.existsByOrderIdAndTypeAndStatus(
 			orderId, PaymentType.APPROVE, PaymentStatus.UNKNOWN

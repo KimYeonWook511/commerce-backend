@@ -518,6 +518,45 @@ class NaverPayServiceIntegrationTest {
 			.isEqualTo(PaymentStatus.REQUESTED);
 	}
 
+	@DisplayName("형제 pgPaymentId(pgA)가 이미 SUCCEEDED인 상태에서 pgB의 PAYMENT_DUPLICATE 보상이 발생해도 pgB의 PG 취소가 실행된다")
+	@Test
+	void approve_whenDuplicatePaymentWithSucceededSibling_cancelDuplicatePgPaymentId() {
+		// given: 동일 merchantPayKey로 pgA가 먼저 SUCCEEDED — 형제 결제 성공 상태
+		Member member = memberPersistence.save(createMember());
+		persistOrder(member, "PAY-INT-6-6", 1000);
+		PaymentReservation reservation = reservationPersistence.findByMerchantPayKey("PAY-INT-6-6").orElseThrow();
+		Payment pgA = Payment.createRequested(reservation, PaymentType.APPROVE, "pg-int-6-6-a");
+		pgA.succeed(LocalDateTime.now());
+		paymentPersistence.save(pgA);
+
+		// pgB: 동일 merchantPayKey·다른 pgPaymentId로 승인 시도 → succeedApproval에서 uk_payment_approved_order_key 위반 시뮬레이션
+		given(naverPayGateway.approve("pg-int-6-6-b"))
+			.willReturn(NaverPayApproveResult.success("PAY-INT-6-6", 1000));
+		given(naverPayGateway.cancel(any(), anyInt(), any()))
+			.willReturn(NaverPayCancelResult.success());
+		Mockito.doThrow(new PaymentException(PaymentErrorCode.PAYMENT_DUPLICATE))
+			.when(paymentApprovalService)
+			.succeedApproval(any(Payment.class), any(LocalDateTime.class));
+
+		// when & then
+		assertThatThrownBy(() -> naverPayApprovalService.approve(member.getId(), "PAY-INT-6-6", "pg-int-6-6-b"))
+			.isInstanceOfSatisfying(PaymentException.class, exception ->
+				assertThat(exception.getErrorCode()).isEqualTo(PaymentErrorCode.PAYMENT_DUPLICATE));
+
+		// pgB approve: FAILED(DUPLICATE_PAYMENT)
+		Payment pgBApprove = getPayment("PAY-INT-6-6", "pg-int-6-6-b", PaymentType.APPROVE);
+		assertThat(pgBApprove.getStatus()).isEqualTo(PaymentStatus.FAILED);
+		assertThat(pgBApprove.getFailCode()).isEqualTo(PaymentFailCode.DUPLICATE_PAYMENT);
+
+		// pgB cancel: SUCCEEDED — 형제 pgA 성공과 무관하게 PG 취소 실행 (hasCompletedPayment 가드 제거 검증)
+		assertThat(getPayment("PAY-INT-6-6", "pg-int-6-6-b", PaymentType.CANCEL).getStatus())
+			.isEqualTo(PaymentStatus.SUCCEEDED);
+
+		// pgA: SUCCEEDED 보존 — 보상이 형제 결제를 건드리지 않음
+		assertThat(getPayment("PAY-INT-6-6", "pg-int-6-6-a", PaymentType.APPROVE).getStatus())
+			.isEqualTo(PaymentStatus.SUCCEEDED);
+	}
+
 	/**
 	 * ===================================================
 	 * 7. payment 상태 분기

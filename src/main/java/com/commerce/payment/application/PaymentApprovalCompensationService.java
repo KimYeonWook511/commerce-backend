@@ -22,7 +22,6 @@ import lombok.extern.slf4j.Slf4j;
 public class PaymentApprovalCompensationService {
 
 	private final PaymentApprovalRecordService paymentApprovalRecordService;
-	private final PaymentApprovalService paymentApprovalService;
 	private final PaymentCancellationService paymentCancellationService;
 
 	public void compensateMerchantKeyMismatch(Payment approvePayment) {
@@ -67,14 +66,6 @@ public class PaymentApprovalCompensationService {
 			approvePayment.getMerchantPayKey(), approvePayment.getProvider(), approvePayment.getPgPaymentId(),
 			failCode, failDetail, now
 		);
-
-		if (paymentApprovalService.hasCompletedPayment(approvePayment.getMerchantPayKey())) {
-			log.warn(
-				"Payment already completed, skipping PG cancel: merchantPayKey={}, pgPaymentId={}",
-				approvePayment.getMerchantPayKey(), approvePayment.getPgPaymentId()
-			);
-			return;
-		}
 
 		Payment cancelPayment = paymentCancellationService.getOrCreate(
 			approvePayment.getOrderId(),
