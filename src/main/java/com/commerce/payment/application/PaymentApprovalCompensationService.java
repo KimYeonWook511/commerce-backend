@@ -43,54 +43,6 @@ public class PaymentApprovalCompensationService {
 		);
 	}
 
-	/**
-	 * uk_payment_approved_order_key 위반 시 보상 — 이중 결제 감지.
-	 * PG 에서 돈이 빠진 payment 를 cancel + FAILED 마킹한다 (ADR-14, ADR-015).
-	 * hasCompletedPayment 검사 없음: uk 위반이 이미 "다른 행이 SUCCEEDED" 임을 보장.
-	 */
-	public void compensateDuplicateApproval(Payment approvePayment, PgCanceller pgCanceller) {
-		log.error("이중 결제 감지 — 이미 결제된 주문 orderId={} merchantPayKey={}",
-			approvePayment.getOrderId(), approvePayment.getMerchantPayKey());
-
-		LocalDateTime now = LocalDateTime.now();
-		Payment cancelPayment = paymentCancellationService.getOrCreate(
-			approvePayment.getOrderId(),
-			approvePayment.getMerchantPayKey(), approvePayment.getProvider(),
-			approvePayment.getPgPaymentId(), approvePayment.getAmount()
-		);
-
-		if (cancelPayment.getStatus() == PaymentStatus.REQUESTED) {
-			try {
-				CancelOutcome outcome = pgCanceller.cancel(cancelPayment, "이중 결제로 인한 보상 취소");
-				switch (outcome.status()) {
-					case SUCCESS -> paymentCancellationService.succeed(
-						cancelPayment.getMerchantPayKey(), cancelPayment.getProvider(),
-						cancelPayment.getPgPaymentId(), now
-					);
-					case PROCESSING -> {} // no-op
-					case FAILED -> paymentCancellationService.fail(
-						cancelPayment.getMerchantPayKey(), cancelPayment.getProvider(),
-						cancelPayment.getPgPaymentId(), outcome.failCode(), outcome.failDetail(), now
-					);
-					// PG 취소 결과 불명: cancel 기록을 UNKNOWN 보존해 대사 대상으로 남긴다 (#219)
-					case UNKNOWN -> paymentCancellationService.markUnknownIfRequested(
-						cancelPayment.getMerchantPayKey(), cancelPayment.getProvider(),
-						cancelPayment.getPgPaymentId(), outcome.failDetail(), now
-					);
-				}
-			} catch (PaymentException ex) {
-				log.warn("이중 결제 보상 취소 실패 merchantPayKey={} pgPaymentId={} errorCode={}",
-					cancelPayment.getMerchantPayKey(), cancelPayment.getPgPaymentId(), ex.getErrorCode());
-			}
-		}
-
-		// 원 approve payment 를 FAILED 마킹 (보상 cancel 이후)
-		paymentApprovalRecordService.failIfRequested(
-			approvePayment.getMerchantPayKey(), approvePayment.getProvider(), approvePayment.getPgPaymentId(),
-			PaymentFailCode.DUPLICATE_PAYMENT, "이중 결제 감지로 인한 실패 처리", now
-		);
-	}
-
 	public void compensateDuplicatePayment(Payment approvePayment, Exception ex, PgCanceller pgCanceller) {
 		runPgCancel(approvePayment,
 			PaymentFailCode.DUPLICATE_PAYMENT,

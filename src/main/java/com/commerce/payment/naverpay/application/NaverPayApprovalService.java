@@ -2,7 +2,6 @@ package com.commerce.payment.naverpay.application;
 
 import java.time.LocalDateTime;
 
-import org.springframework.dao.DataIntegrityViolationException;
 import org.springframework.stereotype.Service;
 
 import com.commerce.common.exception.CustomException;
@@ -160,12 +159,6 @@ public class NaverPayApprovalService {
 
 			Payment completed = paymentApprovalService.succeedApproval(payment, LocalDateTime.now());
 			return toResponse(completed);
-		} catch (DataIntegrityViolationException ex) {
-			// uk_payment_approved_order_key 위반: 같은 orderId에 이미 SUCCEEDED APPROVE 행 존재 → 이중 결제
-			log.error("uk_payment_approved_order_key 위반 — 이중 결제: orderId={} merchantPayKey={}",
-				payment.getOrderId(), payment.getMerchantPayKey(), ex);
-			paymentApprovalCompensationService.compensateDuplicateApproval(payment, this::pgCancel);
-			throw new PaymentException(PaymentErrorCode.PAYMENT_DUPLICATE);
 		} catch (PaymentException ex) {
 			log.error(
 				"NaverPay approve complete failed by payment error: merchantPayKey={}, pgPaymentId={}, responseMerchantPayKey={}, responseTotalAmount={}, errorCode={}",

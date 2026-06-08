@@ -20,7 +20,6 @@ import org.junit.jupiter.api.extension.ExtendWith;
 import org.mockito.InjectMocks;
 import org.mockito.Mock;
 import org.mockito.junit.jupiter.MockitoExtension;
-import org.springframework.dao.DataIntegrityViolationException;
 import org.springframework.test.util.ReflectionTestUtils;
 
 import com.commerce.order.domain.Order;
@@ -658,36 +657,10 @@ class NaverPayApprovalServiceTest {
 		then(paymentApprovalCompensationService).should().compensateAmountMismatch(any(), eq(2000), any());
 	}
 
-	@DisplayName("uk_payment_approved_order_key 위반 시 compensateDuplicateApproval을 호출하고 PAYMENT_DUPLICATE를 던진다")
+	@DisplayName("succeedApproval이 PAYMENT_DUPLICATE를 던지면 compensateDuplicatePayment를 호출하고 PAYMENT_DUPLICATE를 전파한다")
 	@Test
-	void approve_whenUkPaymentApprovedOrderKeyViolation_callsCompensateDuplicateApproval() {
-		// given
-		long memberId = 1L;
-		PaymentReservation reservation = createReservation("PAY-1", memberId, 1000);
-		Order order = createOrder(1000);
-		Payment payment = createPayment("PAY-1", "pg-payment-id", 1000);
-
-		given(paymentReservationRepository.findByMerchantPayKey("PAY-1")).willReturn(Optional.of(reservation));
-		given(orderRepository.findByIdAndMemberId(reservation.getOrderId(), memberId)).willReturn(Optional.of(order));
-		given(paymentApprovalRecordService.create(any(PaymentReservation.class), eq("pg-payment-id")))
-			.willReturn(payment);
-		given(naverPayGateway.approve("pg-payment-id")).willReturn(NaverPayApproveResult.success("PAY-1", 1000));
-		given(paymentApprovalService.succeedApproval(any(Payment.class), any()))
-			.willThrow(new DataIntegrityViolationException("uk_payment_approved_order_key violation"));
-
-		// when & then
-		assertThatThrownBy(() -> naverPayApprovalService.approve(memberId, "PAY-1", "pg-payment-id"))
-			.isInstanceOf(PaymentException.class)
-			.satisfies(exception -> {
-				PaymentException paymentException = (PaymentException)exception;
-				assertThat(paymentException.getErrorCode()).isEqualTo(PaymentErrorCode.PAYMENT_DUPLICATE);
-			});
-		then(paymentApprovalCompensationService).should().compensateDuplicateApproval(any(), any());
-	}
-
-	@DisplayName("이미 다른 결제가 완료된 주문이면 compensateDuplicatePayment를 호출하고 예외를 던진다")
-	@Test
-	void approve_whenDuplicateApproval_callsCompensateAndThrowException() {
+	void approve_whenSucceedApprovalThrowsPaymentDuplicate_callsCompensateDuplicatePayment() {
+		// given: adapter가 uk_payment_approved_order_key 위반을 PAYMENT_DUPLICATE로 매핑해 전달하는 시나리오
 		long memberId = 1L;
 		PaymentReservation reservation = createReservation("PAY-1", memberId, 1000);
 		Order order = createOrder(1000);
@@ -701,6 +674,7 @@ class NaverPayApprovalServiceTest {
 		given(paymentApprovalService.succeedApproval(any(Payment.class), any()))
 			.willThrow(new PaymentException(PaymentErrorCode.PAYMENT_DUPLICATE));
 
+		// when & then
 		assertThatThrownBy(() -> naverPayApprovalService.approve(memberId, "PAY-1", "pg-payment-id"))
 			.isInstanceOf(PaymentException.class)
 			.satisfies(exception -> {

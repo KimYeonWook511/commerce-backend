@@ -55,7 +55,7 @@ public class PaymentApprovalService {
 			.orElseThrow(() -> new OrderException(OrderErrorCode.ORDER_NOT_FOUND));
 
 		current.succeed(now);
-		paymentRepository.save(current);
+		paymentRepository.saveApproved(current);
 		order.completePayment();
 		orderRepository.save(order);
 
