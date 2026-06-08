@@ -1,6 +1,7 @@
 package com.commerce.payment.infrastructure;
 
 import java.util.Optional;
+import java.util.regex.Pattern;
 
 import org.springframework.dao.DataIntegrityViolationException;
 import org.springframework.stereotype.Repository;
@@ -18,6 +19,11 @@ import lombok.RequiredArgsConstructor;
 @Repository
 @RequiredArgsConstructor
 public class PaymentRepositoryAdapter implements PaymentRepository {
+
+	// uk_payment_approved_order_key 위반을 SQLException 메시지에서 식별한다.
+	// \b 단어 경계로 uk_payment_approved_order_key_v2 같은 prefix 공유 이름의 오탐을 막는다.
+	private static final Pattern APPROVED_ORDER_KEY_CONSTRAINT =
+		Pattern.compile("\\buk_payment_approved_order_key\\b", Pattern.CASE_INSENSITIVE);
 
 	private final JpaPaymentRepository jpaPaymentRepository;
 
@@ -45,23 +51,21 @@ public class PaymentRepositoryAdapter implements PaymentRepository {
 	}
 
 	/**
-	 * cause 체인에서 uk_payment_approved_order_key 위반 여부를 확인한다.
-	 * 1) Hibernate ConstraintViolationException의 getConstraintName()으로 정확히 확인 (우선)
-	 * 2) Spring이 Hibernate 예외를 DuplicateKeyException으로 변환할 때 cause가 JDBC SQLException이 되므로,
-	 *    JDBC 예외 메시지에서 constraint name을 보조 확인한다.
-	 * 어느 쪽으로도 확정할 수 없으면 false를 반환해 원 예외를 전파한다(보수적 원칙).
+	 * cause 체인의 JDBC SQLException 메시지에서 uk_payment_approved_order_key 위반 여부를 확인한다.
+	 * 일치하는 제약을 찾지 못하면 false를 반환해 원 예외를 그대로 전파한다(보수적 원칙).
+	 *
+	 * JpaConfig의 SQLErrorCodeSQLExceptionTranslator 설정에서 unique 위반은 DuplicateKeyException(cause=SQLException)으로
+	 * 변환되어 Hibernate ConstraintViolationException이 cause 체인에 남지 않으므로, 제약명은 SQLException 메시지에서만
+	 * 얻을 수 있다. (translator 재검토는 후속 과제) 단어 경계 매칭으로 대소문자·prefix 공유 제약명의 오탐을 함께 막는다.
 	 */
 	private static boolean isApprovedOrderKeyViolation(DataIntegrityViolationException ex) {
 		Throwable cause = ex;
 		while (cause != null) {
-			if (cause instanceof org.hibernate.exception.ConstraintViolationException hce) {
-				String name = hce.getConstraintName();
-				return name != null && "uk_payment_approved_order_key".equalsIgnoreCase(name);
-			}
 			if (cause instanceof java.sql.SQLException sqlEx) {
 				String msg = sqlEx.getMessage();
-				// constraint name이 대문자(H2·일부 MySQL 설정)로 와도 매핑되도록 대소문자 비구분 비교한다.
-				return msg != null && msg.toLowerCase().contains("uk_payment_approved_order_key");
+				if (msg != null && APPROVED_ORDER_KEY_CONSTRAINT.matcher(msg).find()) {
+					return true;
+				}
 			}
 			cause = cause.getCause();
 		}
