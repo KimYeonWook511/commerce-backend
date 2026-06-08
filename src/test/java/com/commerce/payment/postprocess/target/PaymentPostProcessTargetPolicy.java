@@ -74,6 +74,8 @@ public class PaymentPostProcessTargetPolicy {
 					if (hasElapsed(cancelPayment.getRespondedAt(), ESCALATION_DELAY, now)) {
 						return PaymentPostProcessTarget.MANUAL_REVIEW;
 					}
+					// FAILED는 PG 결과를 받은 상태라 하한 지연 없이 즉시 재조회한다 (UNKNOWN/REQUESTED의 진입 지연과 다름).
+					// NaverPay 자동 재처리(CancelNotComplete)가 아직이면 대사가 PENDING → KEEP_WAITING으로 흡수한다.
 					return PaymentPostProcessTarget.CANCEL_RECONCILE;
 				}
 			}
