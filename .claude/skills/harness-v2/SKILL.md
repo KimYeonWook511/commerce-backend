@@ -36,6 +36,7 @@ description: 개발 시작 전 문서 탐색, 논의, step 설계, phases 초안
 - `harness` 진행 상태를 사용자에게 보고할 때는 1~9번 Workflow 상태 표를 함께 보여준다.
 - `File Drafting` 완료 후에는 반드시 멈추고 작성된 문서 경로를 사용자에게 보고한 뒤 검토 응답을 기다린다. 바로 `execute.py` 실행 요청으로 넘어가지 않는다.
 - `execute.py` 실행 전 반드시 사용자에게 진행 의사를 확인하고, 사용자가 진행을 승인한 뒤에만 실행한다(가벼운 확인 — 별도 Plan Mode·`ExitPlanMode` 절차는 거치지 않는다). 자동 코드 검증은 없으므로 이 룰은 agent가 직접 지킨다.
+- Stage 6에서 PR을 연 뒤 agent는 멈추고 사용자의 Stage 7(PR Review) 검토 완료 신호를 기다린다. "리뷰 코멘트가 아직 없음"은 Stage 7 완료가 아니다. Stage 7 완료가 확인되기 전에는 Stage 8(Root Sync)·Stage 9(Retrospective)에 착수하지 않는다.
 - Stage 8(Root Sync)에서 루트 문서를 갱신할 때는 ADR=append, 스냅샷(architecture/db-schema/api-spec)=overwrite, 루트 PRD=목록 갱신으로 동작이 다르다. 한 지시로 뭉치지 않는다.
 
 ---
@@ -287,12 +288,23 @@ push는 기본 동작이다. 모든 step이 완료되면 현재 feature 브랜�
 - PR 오픈(`gh pr create`)은 agent가 Stage 6 직후 수행한다. `execute.py`는 구현·검증·커밋·push까지 책임지고, PR 오픈은 그 바깥이다.
 - 루트 docs 동기화와 회고록 작성은 Stage 6에 포함하지 않는다. 각각 Stage 8(Root Sync), Stage 9(Retrospective)에서 수행한다.
 - PR은 Stage 6에서 한 번만 오픈한다. Stage 7~9는 같은 브랜치/같은 PR에 커밋·push를 더 쌓을 뿐 PR을 새로 열지 않는다.
+- PR을 오픈한 뒤 agent는 Stage 7로 자동 진행하지 않고 멈춰, 사용자의 Stage 7(PR Review) 검토 완료 신호를 기다린다. 이 시점에 리뷰 코멘트가 아직 없다는 것은 Stage 7 완료가 아니므로, Stage 8/9를 앞당기지 않는다.
 
 ---
 
 ### 7. PR Review
 
 Stage 6에서 오픈한 PR에 달린 review를 처리한다.
+
+Stage 7은 기본적으로 **사용자가 PR을 검토하는 단계**다. agent는 Stage 6에서 PR을 연 뒤 멈추고 사용자의 검토 완료 신호를 기다린다(요청 시 agent가 검토·반영을 위임받을 수 있으나, 대부분 사용자 검토로 본다).
+
+**Stage 8/9 진입 게이트** — 아래를 분명히 구분한다.
+
+- **리뷰 코멘트 부재 ≠ Stage 7 완료.** PR을 연 직후 코멘트가 아직 없다는 것만으로 Stage 7을 완료로 보지 않는다. 코멘트가 없어도 사용자의 검토는 아직 끝나지 않았을 수 있고, 리뷰가 뒤늦게 코드를 바꾸면 미리 만든 Root Sync/Retrospective 산출물이 stale해져 재작업이 발생한다.
+- **Stage 7 완료**는 다음 둘 중 하나다. (1) 사용자가 검토를 종료했다고 알린 경우(코멘트 처리 완료 포함), (2) 사용자가 명시적으로 agent에 검토를 위임했고 그에 따른 반영이 끝난 경우.
+- Stage 7 완료가 확인되기 **전에는** Stage 8(Root Sync)·Stage 9(Retrospective)에 착수하지 않는다. 완료가 확인된 뒤에야 Stage 8 → 9를 순서대로 진행하며, 이 두 단계는 agent가 자동으로 처리해도 된다.
+
+review 처리 방식:
 
 - 사람이 review 코멘트(예: Gemini Code Assist)를 보고 항목별 처리 방향(accept / reject / modify)을 **결정**한다. 코드 수정은 사람이 직접 하지 않는다.
 - 결정에 따른 코드 수정·답변·resolve는 `/pr-review-resolve <PR번호>` 스킬로 수행한다. 해당 스킬이 review 항목별 커밋·push·thread resolve까지 자체 처리한다.
@@ -303,7 +315,7 @@ Stage 6에서 오픈한 PR에 달린 review를 처리한다.
 
 ### 8. Root Sync
 
-PR review까지 코드가 확정된 시점에 루트 문서를 현재 상태로 동기화한다. merge 직전 1회 수행을 기본으로 하며, 코드가 또 바뀌면 다시 실행할 수 있는 멱등 연산으로 본다.
+이 Stage는 Stage 7(PR Review) 완료가 확인된 뒤에만 착수한다. PR review까지 코드가 확정된 시점에 루트 문서를 현재 상태로 동기화한다. merge 직전 1회 수행을 기본으로 하며, 코드가 또 바뀌면 다시 실행할 수 있는 멱등 연산으로 본다.
 
 문서 종류별로 동작이 다르다. 한 지시로 뭉치지 않는다.
 
