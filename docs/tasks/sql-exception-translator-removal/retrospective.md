@@ -30,6 +30,10 @@
 
 이슈가 지목한 유일한 정당화("운영 로그에서 unique 위반을 `DuplicateKeyException` 타입으로 구분")를 검증한 결과, 빈 유무와 무관하게 (1) 같은 핸들러(`handleDataIntegrityViolationException`)·같은 error code(`COMMON-500-1`) 로 분류되고, (2) `Duplicate entry ... for key 'tbl_payment.uk_...'` `SQLException` 메시지가 cause 체인에 동일하게 남는다. 빈이 더하는 것은 최상위 wrapper 클래스명 하나뿐이며 error code 로 필터 불가하다.
 
+### PR review 로 식별 비교 방식을 dot-세그먼트 → 전체 제약명으로 변경
+
+초안 구현은 `getConstraintName()` 의 마지막 dot-세그먼트를 `uk_payment_approved_order_key` 와 `equals` 비교했다. Gemini review 가 (1) `equalsIgnoreCase` 로 대소문자 비구분, (2) cause 체인 끝까지 순회를 제안했다. 논의 결과 `tbl_payment.uk_payment_approved_order_key` 전체 이름을 `equalsIgnoreCase` 로 비교하고 체인을 끝까지 순회하는 형태로 단순화했다. trade-off: 식별이 MySQL 반환 형태(테이블 prefix 포함)에 결합된다. 형식이 바뀌면 통합 테스트(`PaymentRepositoryDuplicatePaymentTest`)가 회귀를 잡는다는 점이 안전망이다. dot-세그먼트 추출이 prefix/bare 양형에 더 견고했으나, 현재 단일 환경(MySQL)에서는 전체 비교의 단순함을 택했다.
+
 ### blast radius 가 좁았다
 
 프로덕션 코드는 `DuplicateKeyException` 을 catch/사용하지 않았다(ADR-011 로 이미 제거). 실제로 `DuplicateKeyException` 을 단언하는 테스트는 1개(`DuplicateKeyExceptionMappingTest`)뿐이었고 나머지 2곳은 주석이었다. `saveApproved` 의 `catch (DataIntegrityViolationException ex)` 는 빈 유무와 무관하게 유효(하위 타입 흡수).
