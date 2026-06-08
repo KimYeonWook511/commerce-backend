@@ -358,6 +358,96 @@ class PaymentPostProcessTargetPolicyTest {
 			.isEqualTo(PaymentPostProcessTarget.APPROVE_RECONCILE);
 	}
 
+	// --- 경계·중간 구간 검증 ---
+
+	@DisplayName("APPROVE UNKNOWN이 정확히 1분 임계면 승인 대사 대상이다 (경계 포함)")
+	@Test
+	void resolvePostProcessTarget_approveUnknownExactlyAtThreshold_returnsApproveReconcile() {
+		LocalDateTime now = LocalDateTime.now();
+		Payment approvePayment = createApproveRequested("PAY-1", "pg-1", 1000);
+		approvePayment.markUnknown("timeout", now.minusMinutes(1));
+
+		assertThat(targetPolicy.resolvePostProcessTarget(approvePayment, null, now))
+			.isEqualTo(PaymentPostProcessTarget.APPROVE_RECONCILE);
+	}
+
+	@DisplayName("APPROVE UNKNOWN이 1분 직전(59초)이면 후처리 대상이 아니다 (경계 미만)")
+	@Test
+	void resolvePostProcessTarget_approveUnknownJustBeforeThreshold_returnsNone() {
+		LocalDateTime now = LocalDateTime.now();
+		Payment approvePayment = createApproveRequested("PAY-1", "pg-1", 1000);
+		approvePayment.markUnknown("timeout", now.minusSeconds(59));
+
+		assertThat(targetPolicy.resolvePostProcessTarget(approvePayment, null, now))
+			.isEqualTo(PaymentPostProcessTarget.NONE);
+	}
+
+	@DisplayName("APPROVE REQUESTED가 정확히 15분 임계면 승인 대사 대상이다 (경계 포함)")
+	@Test
+	void resolvePostProcessTarget_approveRequestedExactlyAtStaleThreshold_returnsApproveReconcile() {
+		LocalDateTime now = LocalDateTime.now();
+		Payment approvePayment = createApproveRequested("PAY-1", "pg-1", 1000);
+		setCreatedAt(approvePayment, now.minusMinutes(15));
+
+		assertThat(targetPolicy.resolvePostProcessTarget(approvePayment, null, now))
+			.isEqualTo(PaymentPostProcessTarget.APPROVE_RECONCILE);
+	}
+
+	@DisplayName("APPROVE UNKNOWN이 정확히 6시간 escalation 임계면 수동 검토 대상이다 (경계 포함)")
+	@Test
+	void resolvePostProcessTarget_approveUnknownExactlyAtEscalation_returnsManualReview() {
+		LocalDateTime now = LocalDateTime.now();
+		Payment approvePayment = createApproveRequested("PAY-1", "pg-1", 1000);
+		approvePayment.markUnknown("timeout", now.minusHours(6));
+
+		assertThat(targetPolicy.resolvePostProcessTarget(approvePayment, null, now))
+			.isEqualTo(PaymentPostProcessTarget.MANUAL_REVIEW);
+	}
+
+	@DisplayName("APPROVE UNKNOWN이 reconcile 구간(1분~6시간) 안이면 escalation 전까지 승인 대사 대상이다")
+	@Test
+	void resolvePostProcessTarget_approveUnknownWithinReconcileBand_returnsApproveReconcile() {
+		LocalDateTime now = LocalDateTime.now();
+		Payment approvePayment = createApproveRequested("PAY-1", "pg-1", 1000);
+		approvePayment.markUnknown("timeout", now.minusHours(3));
+
+		assertThat(targetPolicy.resolvePostProcessTarget(approvePayment, null, now))
+			.isEqualTo(PaymentPostProcessTarget.APPROVE_RECONCILE);
+	}
+
+	@DisplayName("APPROVE REQUESTED가 escalation 직전(5시간 59분)이면 아직 승인 대사 대상이다")
+	@Test
+	void resolvePostProcessTarget_approveRequestedJustBeforeEscalation_returnsApproveReconcile() {
+		LocalDateTime now = LocalDateTime.now();
+		Payment approvePayment = createApproveRequested("PAY-1", "pg-1", 1000);
+		setCreatedAt(approvePayment, now.minusHours(5).minusMinutes(59));
+
+		assertThat(targetPolicy.resolvePostProcessTarget(approvePayment, null, now))
+			.isEqualTo(PaymentPostProcessTarget.APPROVE_RECONCILE);
+	}
+
+	@DisplayName("CANCEL UNKNOWN이 reconcile 구간 안이면 escalation 전까지 취소 대사 대상이다")
+	@Test
+	void resolvePostProcessTarget_cancelUnknownWithinReconcileBand_returnsCancelReconcile() {
+		LocalDateTime now = LocalDateTime.now();
+		Payment cancelPayment = Payment.createCancelRequested(1L, "PAY-1", "pg-1", 1000, PaymentProvider.NAVERPAY);
+		cancelPayment.markUnknown("timeout", now.minusHours(3));
+
+		assertThat(targetPolicy.resolvePostProcessTarget(null, cancelPayment, now))
+			.isEqualTo(PaymentPostProcessTarget.CANCEL_RECONCILE);
+	}
+
+	@DisplayName("CANCEL FAILED 재시도 대상이 escalation 구간 안이면 아직 취소 대사 대상이다")
+	@Test
+	void resolvePostProcessTarget_cancelFailedWithinReconcileBand_returnsCancelReconcile() {
+		LocalDateTime now = LocalDateTime.now();
+		Payment cancelPayment = failedCancelPayment(PaymentFailCode.CANCEL_PROCESS_FAILED, "PRE_CANCEL_NOT_COMPLETE",
+			now.minusHours(3));
+
+		assertThat(targetPolicy.resolvePostProcessTarget(null, cancelPayment, now))
+			.isEqualTo(PaymentPostProcessTarget.CANCEL_RECONCILE);
+	}
+
 	// --- helpers ---
 
 	private Payment createApproveRequested(String merchantPayKey, String pgPaymentId, int amount) {
