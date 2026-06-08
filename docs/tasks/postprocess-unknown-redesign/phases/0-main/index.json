@@ -3,7 +3,23 @@
   "phase": "0-main",
   "harness_version": "v2",
   "steps": [
-    { "step": 1, "name": "redesign-target-policy", "status": "pending" },
-    { "step": 2, "name": "redesign-flow-policy", "status": "pending" }
-  ]
+    {
+      "step": 1,
+      "name": "redesign-target-policy",
+      "status": "completed",
+      "started_at": "2026-06-08T11:49:39+0900",
+      "summary": "PaymentPostProcessTarget enum을 5개 값(APPROVE_RECONCILE·CANCEL_RECONCILE·APPROVED_CANCEL_COMPENSATION·MANUAL_REVIEW·NONE)으로 재정의하고, PaymentPostProcessTargetPolicy를 status 중심(UNKNOWN/stale REQUESTED)으로 재작성한다. 임계를 NaverPay 승인 가능 시간(10분)에서 파생해 UNKNOWN=1분·REQUESTED=15분·ESCALATION=6시간으로 분리하고, approve 결과 불명 failCode 열거 분기를 제거한다. 29개 테스트 전부 통과."
+    },
+    {
+      "step": 2,
+      "name": "redesign-flow-policy",
+      "status": "pending"
+    }
+  ],
+  "created_at": "2026-06-08T11:49:39+0900",
+  "execution": {
+    "developer_model": "sonnet",
+    "reviewer_model": "opus",
+    "commit_model": "haiku"
+  }
 }
