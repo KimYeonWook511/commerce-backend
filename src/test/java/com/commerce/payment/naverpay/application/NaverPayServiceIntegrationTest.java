@@ -540,15 +540,13 @@ class NaverPayServiceIntegrationTest {
 
 		// when & then
 		assertThatThrownBy(() -> naverPayApprovalService.approve(member.getId(), "PAY-INT-6-6", "pg-int-6-6-b"))
-			.isInstanceOf(PaymentException.class)
-			.satisfies(exception -> assertThat(((PaymentException)exception).getErrorCode())
-				.isEqualTo(PaymentErrorCode.PAYMENT_DUPLICATE));
+			.isInstanceOfSatisfying(PaymentException.class, exception ->
+				assertThat(exception.getErrorCode()).isEqualTo(PaymentErrorCode.PAYMENT_DUPLICATE));
 
 		// pgB approve: FAILED(DUPLICATE_PAYMENT)
-		assertThat(getPayment("PAY-INT-6-6", "pg-int-6-6-b", PaymentType.APPROVE).getStatus())
-			.isEqualTo(PaymentStatus.FAILED);
-		assertThat(getPayment("PAY-INT-6-6", "pg-int-6-6-b", PaymentType.APPROVE).getFailCode())
-			.isEqualTo(PaymentFailCode.DUPLICATE_PAYMENT);
+		Payment pgBApprove = getPayment("PAY-INT-6-6", "pg-int-6-6-b", PaymentType.APPROVE);
+		assertThat(pgBApprove.getStatus()).isEqualTo(PaymentStatus.FAILED);
+		assertThat(pgBApprove.getFailCode()).isEqualTo(PaymentFailCode.DUPLICATE_PAYMENT);
 
 		// pgB cancel: SUCCEEDED — 형제 pgA 성공과 무관하게 PG 취소 실행 (hasCompletedPayment 가드 제거 검증)
 		assertThat(getPayment("PAY-INT-6-6", "pg-int-6-6-b", PaymentType.CANCEL).getStatus())
