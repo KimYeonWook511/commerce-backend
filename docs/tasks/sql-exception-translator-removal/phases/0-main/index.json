@@ -1,0 +1,9 @@
+{
+  "project": "sql-exception-translator-removal",
+  "phase": "0-main",
+  "harness_version": "v2",
+  "steps": [
+    { "step": 1, "name": "remove-translator-bean", "status": "pending" },
+    { "step": 2, "name": "simplify-constraint-identification", "status": "pending" }
+  ]
+}
