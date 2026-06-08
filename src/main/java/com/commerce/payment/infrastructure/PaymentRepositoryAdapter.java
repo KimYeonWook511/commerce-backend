@@ -60,7 +60,8 @@ public class PaymentRepositoryAdapter implements PaymentRepository {
 			}
 			if (cause instanceof java.sql.SQLException sqlEx) {
 				String msg = sqlEx.getMessage();
-				return msg != null && msg.contains("uk_payment_approved_order_key");
+				// constraint name이 대문자(H2·일부 MySQL 설정)로 와도 매핑되도록 대소문자 비구분 비교한다.
+				return msg != null && msg.toLowerCase().contains("uk_payment_approved_order_key");
 			}
 			cause = cause.getCause();
 		}
