@@ -20,11 +20,6 @@ import lombok.RequiredArgsConstructor;
 @RequiredArgsConstructor
 public class PaymentRepositoryAdapter implements PaymentRepository {
 
-	// JpaConfig에서 SQLErrorCodeSQLExceptionTranslator 빈이 제거된 후 unique 위반은
-	// DataIntegrityViolationException(cause=Hibernate ConstraintViolationException(cause=SQLException))으로 올라온다.
-	// getConstraintName()이 테이블 prefix를 포함한 형태(tbl_payment.uk_...)를 반환하므로 마지막 dot-세그먼트로 비교한다.
-	private static final String APPROVED_ORDER_KEY_CONSTRAINT = "uk_payment_approved_order_key";
-
 	private final JpaPaymentRepository jpaPaymentRepository;
 
 	@Override
@@ -56,20 +51,16 @@ public class PaymentRepositoryAdapter implements PaymentRepository {
 	 *
 	 * SQLErrorCodeSQLExceptionTranslator 빈 제거 후 unique 위반은 DataIntegrityViolationException
 	 * (cause=Hibernate ConstraintViolationException(cause=SQLException))으로 올라온다.
-	 * getConstraintName() 값이 테이블 prefix를 포함할 수 있으므로(tbl_payment.uk_...) 마지막 dot-세그먼트를 추출해
-	 * prefix 있는 형태와 bare 형태 양쪽을 흡수한다.
+	 * getConstraintName()이 MySQL에서 테이블 prefix를 포함한 형태(tbl_payment.uk_...)를 반환하므로 전체 이름으로 비교한다.
+	 * 대소문자는 환경에 따라 달라질 수 있어 무시하고, cause 체인을 끝까지 순회한다.
 	 */
 	private static boolean isApprovedOrderKeyViolation(DataIntegrityViolationException ex) {
 		Throwable cause = ex;
 		while (cause != null) {
 			if (cause instanceof ConstraintViolationException constraintEx) {
-				String constraintName = constraintEx.getConstraintName();
-				if (constraintName == null) {
-					return false;
+				if ("tbl_payment.uk_payment_approved_order_key".equalsIgnoreCase(constraintEx.getConstraintName())) {
+					return true;
 				}
-				int dotIndex = constraintName.lastIndexOf('.');
-				String simpleName = dotIndex >= 0 ? constraintName.substring(dotIndex + 1) : constraintName;
-				return APPROVED_ORDER_KEY_CONSTRAINT.equals(simpleName);
 			}
 			cause = cause.getCause();
 		}
