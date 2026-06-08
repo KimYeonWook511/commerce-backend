@@ -631,10 +631,11 @@ class NaverPayServiceIntegrationTest {
 	 * 9. DB/서버 장애
 	 * ===================================================
 	 */
-	@DisplayName("succeedApproval 중 주문 상태 예외가 발생하면 승인 취소를 요청한다")
+	@DisplayName("succeedApproval 중 CustomException(주문 상태 예외)이 발생하면 보상 없이 예외를 전파하고 approve는 REQUESTED로 남는다")
 	@Test
-	void approve_whenOrderAlreadyPaid_cancelApprovedPaymentAndThrowException() {
-		// given
+	void approve_whenOrderAlreadyPaid_propagatesWithoutCompensation() {
+		// given: PG SUCCESS 후 order 상태 예외(CustomException) — transient/정상 반영 실패
+		// 정상 매출을 취소하지 않고 예외 전파, approve REQUESTED 유지 → reconcile self-heal (ADR-L1)
 		Member member = memberPersistence.save(createMember());
 		Order order = persistOrder(member, "PAY-INT-9-1", 1000);
 		order.completePayment();
@@ -642,28 +643,29 @@ class NaverPayServiceIntegrationTest {
 
 		given(naverPayGateway.approve("pg-int-9-1"))
 			.willReturn(NaverPayApproveResult.success("PAY-INT-9-1", 1000));
-		given(naverPayGateway.cancel(any(), anyInt(), any()))
-			.willReturn(NaverPayCancelResult.success());
 
 		// when & then
 		assertThatThrownBy(() -> naverPayApprovalService.approve(member.getId(), "PAY-INT-9-1", "pg-int-9-1"))
 			.isInstanceOf(OrderException.class)
 			.satisfies(exception -> assertThat(((OrderException)exception).getErrorCode())
 				.isEqualTo(OrderErrorCode.ORDER_PAID_NOT_ALLOWED));
-		assertThat(getPayment("PAY-INT-9-1", "pg-int-9-1", PaymentType.CANCEL).getStatus())
-			.isEqualTo(PaymentStatus.SUCCEEDED);
+		// 보상(PG cancel)이 없으므로 CANCEL payment는 생성되지 않는다
+		assertCancelPaymentEmpty("PAY-INT-9-1", "pg-int-9-1");
+		// approve payment는 REQUESTED로 남아 reconcile self-heal 대상이 된다
+		assertThat(getPayment("PAY-INT-9-1", "pg-int-9-1", PaymentType.APPROVE).getStatus())
+			.isEqualTo(PaymentStatus.REQUESTED);
+		then(naverPayGateway).should(never()).cancel(any(), anyInt(), any());
 	}
 
-	@DisplayName("succeedApproval에서 예상치 못한 예외가 발생하면 승인 취소를 요청하고 예외를 그대로 던진다")
+	@DisplayName("succeedApproval에서 예상치 못한 예외(RuntimeException)가 발생하면 보상 없이 예외를 전파하고 approve는 REQUESTED로 남는다")
 	@Test
-	void approve_whenCompleteApproveThrowsUnexpectedException_cancelApprovedPaymentAndThrowException() {
-		// given
+	void approve_whenCompleteApproveThrowsUnexpectedException_propagatesWithoutCompensation() {
+		// given: PG SUCCESS 후 DB 기록 실패(transient 또는 버그) — UNKNOWN/FAILED 둔갑 없이 전파(500)
+		// approve REQUESTED 유지 → reconcile self-heal (ADR-L1)
 		Member member = memberPersistence.save(createMember());
 		persistOrder(member, "PAY-INT-9-2", 1000);
 		given(naverPayGateway.approve("pg-int-9-2"))
 			.willReturn(NaverPayApproveResult.success("PAY-INT-9-2", 1000));
-		given(naverPayGateway.cancel(any(), anyInt(), any()))
-			.willReturn(NaverPayCancelResult.success());
 		Mockito.doThrow(new RuntimeException("db write failed"))
 			.when(paymentApprovalService)
 			.succeedApproval(any(Payment.class), any(LocalDateTime.class));
@@ -672,12 +674,12 @@ class NaverPayServiceIntegrationTest {
 		assertThatThrownBy(() -> naverPayApprovalService.approve(member.getId(), "PAY-INT-9-2", "pg-int-9-2"))
 			.isInstanceOf(RuntimeException.class)
 			.hasMessage("db write failed");
+		// 보상(PG cancel)이 없으므로 CANCEL payment는 생성되지 않는다
+		assertCancelPaymentEmpty("PAY-INT-9-2", "pg-int-9-2");
+		// approve payment는 REQUESTED로 남아 reconcile self-heal 대상이 된다 (FAILED/APPROVE_PROCESS_FAILED 박제 없음)
 		assertThat(getPayment("PAY-INT-9-2", "pg-int-9-2", PaymentType.APPROVE).getStatus())
-			.isEqualTo(PaymentStatus.FAILED);
-		assertThat(getPayment("PAY-INT-9-2", "pg-int-9-2", PaymentType.APPROVE).getFailCode())
-			.isEqualTo(PaymentFailCode.APPROVE_PROCESS_FAILED);
-		assertThat(getPayment("PAY-INT-9-2", "pg-int-9-2", PaymentType.CANCEL).getStatus())
-			.isEqualTo(PaymentStatus.SUCCEEDED);
+			.isEqualTo(PaymentStatus.REQUESTED);
+		then(naverPayGateway).should(never()).cancel(any(), anyInt(), any());
 	}
 
 	@DisplayName("취소 API는 성공했지만 취소 성공 반영이 실패해도 원래 승인 실패 예외를 유지한다")

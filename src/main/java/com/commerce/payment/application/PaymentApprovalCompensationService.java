@@ -53,16 +53,6 @@ public class PaymentApprovalCompensationService {
 		);
 	}
 
-	public void compensateUnexpected(Payment approvePayment, Exception ex, PaymentFailCode failCode, PgCanceller pgCanceller) {
-		runPgCancel(approvePayment,
-			failCode,
-			Objects.toString(ex.getMessage(), "예상치 못한 오류 발생"),
-			approvePayment.getAmount(),
-			"결제 완료 반영 실패로 인한 취소",
-			pgCanceller
-		);
-	}
-
 	private void runPgCancel(
 		Payment approvePayment,
 		PaymentFailCode failCode,

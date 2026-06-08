@@ -176,8 +176,8 @@ public class NaverPayApprovalService {
 					paymentApprovalCompensationService.compensateAmountMismatch(payment, responseTotalAmount, this::pgCancel);
 				case PAYMENT_DUPLICATE ->
 					paymentApprovalCompensationService.compensateDuplicatePayment(payment, ex, this::pgCancel);
-				default ->
-					paymentApprovalCompensationService.compensateUnexpected(payment, ex, PaymentFailCode.APPROVE_PROCESS_FAILED, this::pgCancel);
+				// 정상 승인 후 기록 실패는 보상 없이 전파. approve REQUESTED 유지 → reconcile self-heal (ADR-L1)
+				default -> {}
 			}
 			throw ex;
 		} catch (CustomException ex) {
@@ -188,7 +188,6 @@ public class NaverPayApprovalService {
 				ex.getErrorCode(),
 				ex
 			);
-			paymentApprovalCompensationService.compensateUnexpected(payment, ex, PaymentFailCode.APPROVE_PROCESS_FAILED, this::pgCancel);
 			throw ex;
 		} catch (Exception ex) {
 			log.error(
@@ -197,7 +196,6 @@ public class NaverPayApprovalService {
 				payment.getPgPaymentId(),
 				ex
 			);
-			paymentApprovalCompensationService.compensateUnexpected(payment, ex, PaymentFailCode.APPROVE_PROCESS_FAILED, this::pgCancel);
 			throw ex;
 		}
 	}
