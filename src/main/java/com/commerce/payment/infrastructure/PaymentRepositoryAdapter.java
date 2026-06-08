@@ -1,8 +1,8 @@
 package com.commerce.payment.infrastructure;
 
 import java.util.Optional;
-import java.util.regex.Pattern;
 
+import org.hibernate.exception.ConstraintViolationException;
 import org.springframework.dao.DataIntegrityViolationException;
 import org.springframework.stereotype.Repository;
 
@@ -20,10 +20,10 @@ import lombok.RequiredArgsConstructor;
 @RequiredArgsConstructor
 public class PaymentRepositoryAdapter implements PaymentRepository {
 
-	// uk_payment_approved_order_key 위반을 SQLException 메시지에서 식별한다.
-	// \b 단어 경계로 uk_payment_approved_order_key_v2 같은 prefix 공유 이름의 오탐을 막는다.
-	private static final Pattern APPROVED_ORDER_KEY_CONSTRAINT =
-		Pattern.compile("\\buk_payment_approved_order_key\\b", Pattern.CASE_INSENSITIVE);
+	// JpaConfig에서 SQLErrorCodeSQLExceptionTranslator 빈이 제거된 후 unique 위반은
+	// DataIntegrityViolationException(cause=Hibernate ConstraintViolationException(cause=SQLException))으로 올라온다.
+	// getConstraintName()이 테이블 prefix를 포함한 형태(tbl_payment.uk_...)를 반환하므로 마지막 dot-세그먼트로 비교한다.
+	private static final String APPROVED_ORDER_KEY_CONSTRAINT = "uk_payment_approved_order_key";
 
 	private final JpaPaymentRepository jpaPaymentRepository;
 
@@ -51,21 +51,25 @@ public class PaymentRepositoryAdapter implements PaymentRepository {
 	}
 
 	/**
-	 * cause 체인의 JDBC SQLException 메시지에서 uk_payment_approved_order_key 위반 여부를 확인한다.
+	 * cause 체인의 Hibernate ConstraintViolationException에서 uk_payment_approved_order_key 위반 여부를 확인한다.
 	 * 일치하는 제약을 찾지 못하면 false를 반환해 원 예외를 그대로 전파한다(보수적 원칙).
 	 *
-	 * JpaConfig의 SQLErrorCodeSQLExceptionTranslator 설정에서 unique 위반은 DuplicateKeyException(cause=SQLException)으로
-	 * 변환되어 Hibernate ConstraintViolationException이 cause 체인에 남지 않으므로, 제약명은 SQLException 메시지에서만
-	 * 얻을 수 있다. (translator 재검토는 후속 과제) 단어 경계 매칭으로 대소문자·prefix 공유 제약명의 오탐을 함께 막는다.
+	 * SQLErrorCodeSQLExceptionTranslator 빈 제거 후 unique 위반은 DataIntegrityViolationException
+	 * (cause=Hibernate ConstraintViolationException(cause=SQLException))으로 올라온다.
+	 * getConstraintName() 값이 테이블 prefix를 포함할 수 있으므로(tbl_payment.uk_...) 마지막 dot-세그먼트를 추출해
+	 * prefix 있는 형태와 bare 형태 양쪽을 흡수한다.
 	 */
 	private static boolean isApprovedOrderKeyViolation(DataIntegrityViolationException ex) {
 		Throwable cause = ex;
 		while (cause != null) {
-			if (cause instanceof java.sql.SQLException sqlEx) {
-				String msg = sqlEx.getMessage();
-				if (msg != null && APPROVED_ORDER_KEY_CONSTRAINT.matcher(msg).find()) {
-					return true;
+			if (cause instanceof ConstraintViolationException constraintEx) {
+				String constraintName = constraintEx.getConstraintName();
+				if (constraintName == null) {
+					return false;
 				}
+				int dotIndex = constraintName.lastIndexOf('.');
+				String simpleName = dotIndex >= 0 ? constraintName.substring(dotIndex + 1) : constraintName;
+				return APPROVED_ORDER_KEY_CONSTRAINT.equals(simpleName);
 			}
 			cause = cause.getCause();
 		}
