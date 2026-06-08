@@ -1,0 +1,9 @@
+{
+  "project": "approval-compensation-cleanup",
+  "phase": "0-main",
+  "harness_version": "v2",
+  "steps": [
+    { "step": 1, "name": "duplicate-detection-adapter-mapping", "status": "pending" },
+    { "step": 2, "name": "transient-failure-keep-requested", "status": "pending" }
+  ]
+}
