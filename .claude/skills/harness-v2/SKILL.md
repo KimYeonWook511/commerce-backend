@@ -35,7 +35,7 @@ description: 개발 시작 전 문서 탐색, 논의, step 설계, phases 초안
 - Workflow는 phase별 `workflow-checklist.json`으로 추적하며, 다음 Stage로 넘어가기 전 이전 Stage가 모두 `completed`여야 한다.
 - `harness` 진행 상태를 사용자에게 보고할 때는 1~9번 Workflow 상태 표를 함께 보여준다.
 - `File Drafting` 완료 후에는 반드시 멈추고 작성된 문서 경로를 사용자에게 보고한 뒤 검토 응답을 기다린다. 바로 `execute.py` 실행 요청으로 넘어가지 않는다.
-- `execute.py` 실행 전 반드시 사용자에게 진행 의사를 확인하고, Plan Mode + `ExitPlanMode` 승인이 떨어진 뒤에만 실행한다. 자동 코드 검증은 없으므로 이 룰은 agent가 직접 지킨다.
+- `execute.py` 실행 전 반드시 사용자에게 진행 의사를 확인하고, 사용자가 진행을 승인한 뒤에만 실행한다(가벼운 확인 — 별도 Plan Mode·`ExitPlanMode` 절차는 거치지 않는다). 자동 코드 검증은 없으므로 이 룰은 agent가 직접 지킨다.
 - Stage 8(Root Sync)에서 루트 문서를 갱신할 때는 ADR=append, 스냅샷(architecture/db-schema/api-spec)=overwrite, 루트 PRD=목록 갱신으로 동작이 다르다. 한 지시로 뭉치지 않는다.
 
 ---
@@ -197,11 +197,10 @@ File Drafting 완료 후 필수 중단:
 
 `execute.py` 실행 전 아래 순서를 반드시 거친다. 자동 검증 게이트는 없으므로 이 룰은 agent가 직접 지킨다.
 
-1. Plan Mode로 구현 계획을 사용자에게 제시한다.
-2. `ExitPlanMode`로 사용자 승인을 받는다.
-3. 승인이 확정되면 File Drafting에서 작성한 task 문서를 한 커밋으로 묶어 `docs:` 타입으로 커밋한다. (대상 파일은 아래 목록 참고)
-4. `AskUserQuestion`으로 agent별 실행 모델을 수집한다. (아래 "실행 옵션 수집" 절 참고)
-5. 수집한 선택값을 `--developer-model`, `--reviewer-model`, `--commit-model` 인자로 변환해 `execute.py`를 실행한다.
+1. File Drafting 결과(작성한 task 문서·phase 경로)와 실행 계획을 사용자에게 보고하고, 실행 진행 의사를 가볍게 확인받는다. 별도 Plan Mode·`ExitPlanMode` 절차는 거치지 않는다.
+2. 사용자가 진행을 승인하면 File Drafting에서 작성한 task 문서를 한 커밋으로 묶어 `docs:` 타입으로 커밋한다. (대상 파일은 아래 목록 참고)
+3. `AskUserQuestion`으로 agent별 실행 모델을 수집한다. (아래 "실행 옵션 수집" 절 참고)
+4. 수집한 선택값을 `--developer-model`, `--reviewer-model`, `--commit-model` 인자로 변환해 `execute.py`를 실행한다.
 
 - `execute.py`는 worktree 안에서 실행하며, commit agent를 통해 커밋을 수행한다.
 - 이 Stage에 들어가기 전 checklist의 `Explore`, `Discuss`, `Step Design`, `Worktree 생성 및 이동`, `File Drafting`은 모두 `completed`여야 한다.

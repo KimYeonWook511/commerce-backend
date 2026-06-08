@@ -29,7 +29,7 @@ flowchart TD
     S2 --> S3["3. Step Design<br>phase / step 분해"]
     S3 --> S4["4. Worktree 생성 및 이동<br>작업 브랜치 격리"]
     S4 --> S5["5. File Drafting<br>task 문서/phases 작성"]
-    S5 --> O["Plan Mode + ExitPlanMode<br>사용자 진행 확인"]
+    S5 --> O["진행 확인<br>사용자 승인 (가벼운 확인)"]
     O --> S6["6. Execution<br>execute.py 순차 실행 + push + PR 오픈"]
     S6 --> S7["7. PR Review<br>사람 결정 + /pr-review-resolve 수정"]
     S7 --> S8["8. Root Sync<br>루트 문서 갱신 (merge 직전)"]
@@ -93,7 +93,7 @@ worktree 안에서 Task 문서와 phase 구조를 작성한다. Task 문서는 �
 
 ### 5. Execution 진입 룰
 
-`execute.py` 실행 전 사용자 진행 확인을 Plan Mode + `ExitPlanMode`로 받는다. 승인 전에는 파일을 수정하지 않는다. 승인이 확정되면 `execute.py` 실행 전에 File Drafting 결과물(Task 문서 + phase 초안)을 `docs:` 커밋으로 등록하고, `AskUserQuestion`으로 agent별 실행 모델(developer / reviewer / commit)을 수집한 뒤 `--developer-model` · `--reviewer-model` · `--commit-model` 인자로 `execute.py`에 전달한다. 자세한 절차는 SKILL.md Stage 6 참고.
+`execute.py` 실행 전 사용자 진행 확인을 가벼운 확인으로 받는다(별도 Plan Mode·`ExitPlanMode` 절차는 거치지 않는다). 승인 전에는 파일을 수정하지 않는다. 승인이 확정되면 `execute.py` 실행 전에 File Drafting 결과물(Task 문서 + phase 초안)을 `docs:` 커밋으로 등록하고, `AskUserQuestion`으로 agent별 실행 모델(developer / reviewer / commit)을 수집한 뒤 `--developer-model` · `--reviewer-model` · `--commit-model` 인자로 `execute.py`에 전달한다. 자세한 절차는 SKILL.md Stage 6 참고.
 
 ### 6. Execution (내부 파이프라인)
 
