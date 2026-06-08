@@ -1,0 +1,30 @@
+{
+  "project": "sql-exception-translator-removal",
+  "phase": "0-main",
+  "harness_version": "v2",
+  "steps": [
+    {
+      "step": 1,
+      "name": "remove-translator-bean",
+      "status": "completed",
+      "started_at": "2026-06-09T00:15:27+0900",
+      "summary": "JpaConfig에서 SQLErrorCodeSQLExceptionTranslator 빈과 관련 import를 제거한다. DuplicateKeyExceptionMappingTest를 UniqueViolationExceptionShapeTest로 rename하고 DataIntegrityViolationException + cause=ConstraintViolationException 계약을 단언한다. MemberRepositoryJpaAdapterTest, JpaProcessedEventRepositoryTest의 주석을 새 MySQL 동작(DataIntegrityViolationException)에 맞게 갱신한다.",
+      "completed_at": "2026-06-09T00:18:49+0900"
+    },
+    {
+      "step": 2,
+      "name": "simplify-constraint-identification",
+      "status": "completed",
+      "started_at": "2026-06-09T00:19:59+0900",
+      "summary": "PaymentRepositoryAdapter.isApprovedOrderKeyViolation을 SQLException 메시지 정규식에서 Hibernate ConstraintViolationException.getConstraintName() 기반으로 전환한다. 마지막 dot-세그먼트 비교로 테이블 prefix 있는 형태(tbl_payment.uk_...)와 bare 형태 양쪽을 흡수한다. Pattern 필드와 java.util.regex.Pattern import를 제거하고 APPROVED_ORDER_KEY_CONSTRAINT를 String 상수로 전환한다. Javadoc을 새 식별 방식에 맞게 갱신한다.",
+      "completed_at": "2026-06-09T00:22:36+0900"
+    }
+  ],
+  "created_at": "2026-06-09T00:15:27+0900",
+  "execution": {
+    "developer_model": "sonnet",
+    "reviewer_model": "opus",
+    "commit_model": "haiku"
+  },
+  "completed_at": "2026-06-09T00:23:47+0900"
+}

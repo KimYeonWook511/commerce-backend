@@ -1,8 +1,8 @@
 package com.commerce.payment.infrastructure;
 
 import java.util.Optional;
-import java.util.regex.Pattern;
 
+import org.hibernate.exception.ConstraintViolationException;
 import org.springframework.dao.DataIntegrityViolationException;
 import org.springframework.stereotype.Repository;
 
@@ -19,11 +19,6 @@ import lombok.RequiredArgsConstructor;
 @Repository
 @RequiredArgsConstructor
 public class PaymentRepositoryAdapter implements PaymentRepository {
-
-	// uk_payment_approved_order_key 위반을 SQLException 메시지에서 식별한다.
-	// \b 단어 경계로 uk_payment_approved_order_key_v2 같은 prefix 공유 이름의 오탐을 막는다.
-	private static final Pattern APPROVED_ORDER_KEY_CONSTRAINT =
-		Pattern.compile("\\buk_payment_approved_order_key\\b", Pattern.CASE_INSENSITIVE);
 
 	private final JpaPaymentRepository jpaPaymentRepository;
 
@@ -51,19 +46,19 @@ public class PaymentRepositoryAdapter implements PaymentRepository {
 	}
 
 	/**
-	 * cause 체인의 JDBC SQLException 메시지에서 uk_payment_approved_order_key 위반 여부를 확인한다.
+	 * cause 체인의 Hibernate ConstraintViolationException에서 uk_payment_approved_order_key 위반 여부를 확인한다.
 	 * 일치하는 제약을 찾지 못하면 false를 반환해 원 예외를 그대로 전파한다(보수적 원칙).
 	 *
-	 * JpaConfig의 SQLErrorCodeSQLExceptionTranslator 설정에서 unique 위반은 DuplicateKeyException(cause=SQLException)으로
-	 * 변환되어 Hibernate ConstraintViolationException이 cause 체인에 남지 않으므로, 제약명은 SQLException 메시지에서만
-	 * 얻을 수 있다. (translator 재검토는 후속 과제) 단어 경계 매칭으로 대소문자·prefix 공유 제약명의 오탐을 함께 막는다.
+	 * SQLErrorCodeSQLExceptionTranslator 빈 제거 후 unique 위반은 DataIntegrityViolationException
+	 * (cause=Hibernate ConstraintViolationException(cause=SQLException))으로 올라온다.
+	 * getConstraintName()이 MySQL에서 테이블 prefix를 포함한 형태(tbl_payment.uk_...)를 반환하므로 전체 이름으로 비교한다.
+	 * 대소문자는 환경에 따라 달라질 수 있어 무시하고, cause 체인을 끝까지 순회한다.
 	 */
 	private static boolean isApprovedOrderKeyViolation(DataIntegrityViolationException ex) {
 		Throwable cause = ex;
 		while (cause != null) {
-			if (cause instanceof java.sql.SQLException sqlEx) {
-				String msg = sqlEx.getMessage();
-				if (msg != null && APPROVED_ORDER_KEY_CONSTRAINT.matcher(msg).find()) {
+			if (cause instanceof ConstraintViolationException constraintEx) {
+				if ("tbl_payment.uk_payment_approved_order_key".equalsIgnoreCase(constraintEx.getConstraintName())) {
 					return true;
 				}
 			}
