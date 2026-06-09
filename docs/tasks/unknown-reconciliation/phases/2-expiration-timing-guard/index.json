@@ -3,7 +3,28 @@
   "phase": "2-expiration-timing-guard",
   "harness_version": "v2",
   "steps": [
-    { "step": 1, "name": "expiration-unknown-guard", "status": "pending" },
-    { "step": 2, "name": "reconciliation-canceled-compensation", "status": "pending" }
-  ]
+    {
+      "step": 1,
+      "name": "expiration-unknown-guard",
+      "status": "completed",
+      "started_at": "2026-06-09T18:12:18+0900",
+      "summary": "BlockingPaymentChecker port를 order.application.port에 신설하고, payment.infrastructure에 BlockingPaymentCheckerAdapter를 구현한다. JpaPaymentRepository에 orderId IN 배치 조회 쿼리(APPROVE + UNKNOWN/MANUAL_REVIEW)를 추가하고, OrderExpirationBatchConfig.expiredOrderReader가 port를 주입받아 차단 결제 걸린 주문을 만료 대상에서 제외한다. 커서 lastId는 필터 여부와 무관하게 원본 페이지 마지막 id로 유지한다. 배치 테스트 2건(UNKNOWN 결제 주문 제외, 혼합 주문 부분 처리) 추가.",
+      "completed_at": "2026-06-09T18:18:49+0900"
+    },
+    {
+      "step": 2,
+      "name": "reconciliation-canceled-compensation",
+      "status": "completed",
+      "started_at": "2026-06-09T18:20:02+0900",
+      "summary": "NotificationPort(알림 추상화) 인터페이스와 LogNotificationAdapter(no-op 로그) 구현을 추가한다. PaymentApprovalCompensationService에 compensateCanceledOrderApproval 메서드를 추가해 CANCELED 주문의 UNKNOWN 결제가 대사 SUCCEEDED 확정 시 PG 보상 취소 + MANUAL_REVIEW 승급 + 통지(best-effort)를 수행한다. PaymentReconciliationService의 executeApprove 내 ORDER_PAID_NOT_ALLOWED skip 자리를 보상 경로로 교체하고, CANCELED 주문이면 보상, PAID 등 비-INIT이면 멱등 흡수한다. escalateToManualReview에 NotificationPort 통지를 연결한다. pgCancelForReconciliation은 NaverPayGateway.cancel을 재사용한다. 테스트 11건 모두 통과.",
+      "completed_at": "2026-06-09T18:27:49+0900"
+    }
+  ],
+  "created_at": "2026-06-09T18:12:17+0900",
+  "execution": {
+    "developer_model": "sonnet",
+    "reviewer_model": "opus",
+    "commit_model": "haiku"
+  },
+  "completed_at": "2026-06-09T18:30:12+0900"
 }
