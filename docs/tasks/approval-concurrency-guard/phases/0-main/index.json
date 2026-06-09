@@ -3,8 +3,36 @@
   "phase": "0-main",
   "harness_version": "v2",
   "steps": [
-    { "step": 1, "name": "reservation-version-guard", "status": "pending" },
-    { "step": 2, "name": "approved-order-entry-guard", "status": "pending" },
-    { "step": 3, "name": "reservation-lookup-unification", "status": "pending" }
-  ]
+    {
+      "step": 1,
+      "name": "reservation-version-guard",
+      "status": "completed",
+      "started_at": "2026-06-09T13:18:14+0900",
+      "summary": "PaymentReservation에 @Version을 추가하고, saveUsed() 전용 저장 경로에서 ObjectOptimisticLockingFailureException을 PAYMENT_RESERVATION_ALREADY_USED로 변환한다. PaymentApprovalRecordService.create()가 saveUsed()를 호출하여 PG 호출 전 동시 이중 use를 차단한다. Flyway V7 마이그레이션으로 version 컬럼을 추가하고, 동시성 테스트 2건(NaverPayServiceConcurrencyTest, PaymentApprovalRecordServiceConcurrencyTest)으로 한쪽만 payment 생성·PG 호출되고 나머지는 차단됨을 검증한다.",
+      "completed_at": "2026-06-09T13:30:57+0900"
+    },
+    {
+      "step": 2,
+      "name": "approved-order-entry-guard",
+      "status": "completed",
+      "started_at": "2026-06-09T13:32:41+0900",
+      "summary": "PaymentRepository에 existsApprovedByOrderId를 추가하고 PaymentRepositoryAdapter에서 existsByOrderIdAndTypeAndStatus(APPROVE, SUCCEEDED)로 구현한다. NaverPayApprovalService.approve()의 USED 분기 이후·create() 호출 전에 진입 차단을 추가해 이미 APPROVE·SUCCEEDED 결제가 있는 주문의 새 승인을 PG 호출 전 PAYMENT_DUPLICATE로 차단한다. 통합 테스트(test 13)로 차단 동작을 검증하고, 가드 도입으로 시나리오가 변경된 test 6-6(형제 결제 SUCCEEDED 시 진입 가드 차단)과 test 12(USED 예약 멱등 redirect)를 함께 수정한다.",
+      "completed_at": "2026-06-09T13:41:57+0900"
+    },
+    {
+      "step": 3,
+      "name": "reservation-lookup-unification",
+      "status": "completed",
+      "started_at": "2026-06-09T13:43:56+0900",
+      "summary": "PaymentReservationRepository에 findByMemberIdAndMerchantPayKey를 추가하고 어댑터·JPA 레포지토리에 구현한다. NaverPayApprovalService.approve()에서 기존 findByMerchantPayKey + memberId 불일치 분기(PAYMENT_MEMBER_MISMATCH)를 findByMemberIdAndMerchantPayKey 단일 조회로 대체해 남의/없는 키를 PAYMENT_NOT_FOUND로 응답한다. PaymentErrorCode에서 PAYMENT_MEMBER_MISMATCH를 제거하고, 단위 테스트(MISMATCH → NOT_FOUND 변경)와 통합 테스트(10번 시나리오 갱신)를 함께 수정한다.",
+      "completed_at": "2026-06-09T13:48:27+0900"
+    }
+  ],
+  "created_at": "2026-06-09T13:18:14+0900",
+  "execution": {
+    "developer_model": "sonnet",
+    "reviewer_model": "opus",
+    "commit_model": "haiku"
+  },
+  "completed_at": "2026-06-09T13:50:25+0900"
 }
