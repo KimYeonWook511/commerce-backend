@@ -9,6 +9,9 @@ public interface PaymentReservationRepository {
 
 	PaymentReservation save(PaymentReservation reservation);
 
+	// 예약 소비(use) 전용 저장 경로. @Version 낙관적 락 충돌 시 PaymentException(PAYMENT_RESERVATION_ALREADY_USED)로 매핑.
+	PaymentReservation saveUsed(PaymentReservation reservation);
+
 	Optional<PaymentReservation> findByMerchantPayKey(String merchantPayKey);
 
 	// 같은 (orderId, provider)의 RESERVED 예약을 만료 여부와 무관하게 조회한다.
