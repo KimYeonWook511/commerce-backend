@@ -1,0 +1,8 @@
+{
+  "project": "commerce-backend",
+  "phase": "3-reconciliation-integration-tests",
+  "harness_version": "v2",
+  "steps": [
+    { "step": 1, "name": "reconciliation-integration-tests", "status": "pending" }
+  ]
+}
