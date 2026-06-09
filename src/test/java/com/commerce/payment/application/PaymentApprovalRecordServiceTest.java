@@ -47,7 +47,7 @@ class PaymentApprovalRecordServiceTest {
 		given(paymentRepository.findApprovePayment(
 			eq("PAY-1"), eq(PaymentProvider.NAVERPAY), eq("payment-id-1")))
 			.willReturn(Optional.empty());
-		given(paymentReservationRepository.save(any(PaymentReservation.class)))
+		given(paymentReservationRepository.saveUsed(any(PaymentReservation.class)))
 			.willAnswer(invocation -> invocation.getArgument(0, PaymentReservation.class));
 		given(paymentRepository.save(any(Payment.class)))
 			.willAnswer(invocation -> invocation.getArgument(0, Payment.class));
@@ -61,7 +61,7 @@ class PaymentApprovalRecordServiceTest {
 		assertThat(result.getAmount()).isEqualTo(1000);
 		assertThat(reservation.getStatus()).isEqualTo(com.commerce.payment.domain.PaymentReservationStatus.USED);
 		assertThat(reservation.getReservedKey()).isNull();
-		then(paymentReservationRepository).should().save(reservation);
+		then(paymentReservationRepository).should().saveUsed(reservation);
 	}
 
 	@DisplayName("승인 시도 이력이 이미 존재하면 기존 이력을 반환한다")

@@ -287,6 +287,68 @@ class NaverPayServiceConcurrencyTest {
 		assertThat(paymentPersistence.findApproveSucceeded(merchantPayKey)).isPresent();
 	}
 
+	@DisplayName("같은 예약에 다른 pgPaymentId 승인 2건이 동시에 들어오면 한쪽만 payment를 생성하고 PG를 호출하며 나머지는 PG 호출 전에 차단된다")
+	@Test
+	void approve_whenConcurrentDifferentPgPaymentId_onlyOnePaymentCreatedAndOtherBlockedBeforePg() throws Exception {
+		// given
+		String merchantPayKey = "PAY-NAVER-CON-8";
+		String pgPaymentIdA = "pg-naver-con-8-a";
+		String pgPaymentIdB = "pg-naver-con-8-b";
+		Member member = memberPersistence.save(createMember());
+		persistOrder(member, merchantPayKey, 1000);
+
+		ConcurrentLinkedQueue<Throwable> errors = new ConcurrentLinkedQueue<>();
+		ConcurrentLinkedQueue<NaverPayApproveResponse> results = new ConcurrentLinkedQueue<>();
+
+		given(naverPayGateway.approve(any()))
+			.willReturn(NaverPayApproveResult.success(merchantPayKey, 1000));
+
+		// when: 2개 스레드가 같은 예약에 다른 pgPaymentId로 동시 승인
+		CountDownLatch startLatch = new CountDownLatch(1);
+		CountDownLatch doneLatch = new CountDownLatch(2);
+		ExecutorService executor = Executors.newFixedThreadPool(2);
+		try {
+			executor.submit(() -> {
+				try {
+					startLatch.await();
+					results.add(naverPayApprovalService.approve(member.getId(), merchantPayKey, pgPaymentIdA));
+				} catch (Throwable ex) {
+					errors.add(ex);
+				} finally {
+					doneLatch.countDown();
+				}
+			});
+			executor.submit(() -> {
+				try {
+					startLatch.await();
+					results.add(naverPayApprovalService.approve(member.getId(), merchantPayKey, pgPaymentIdB));
+				} catch (Throwable ex) {
+					errors.add(ex);
+				} finally {
+					doneLatch.countDown();
+				}
+			});
+			startLatch.countDown();
+			doneLatch.await(10, TimeUnit.SECONDS);
+		} finally {
+			executor.shutdownNow();
+		}
+
+		// then: payment는 정확히 1건만 생성됨 (진 쪽 reservation·payment 트랜잭션 롤백)
+		assertThat(paymentPersistence.countPaymentsByMerchantPayKey(merchantPayKey)).isEqualTo(1L);
+		// 이긴 쪽(winner)은 SUCCESS 응답
+		assertThat(results).hasSize(1);
+		assertThat(results.stream().map(NaverPayApproveResponse::getStatus))
+			.allMatch(status -> status == NaverPayApproveStatus.SUCCESS);
+		// 진 쪽(loser)은 에러로 차단됨 (concurrent: PAYMENT_RESERVATION_ALREADY_USED, sequential: PAYMENT_NOT_FOUND)
+		assertThat(errors).hasSize(1);
+		assertThat(errors.stream().findFirst().get()).isInstanceOf(PaymentException.class);
+		assertThat(((PaymentException) errors.stream().findFirst().get()).getErrorCode())
+			.isIn(PaymentErrorCode.PAYMENT_RESERVATION_ALREADY_USED, PaymentErrorCode.PAYMENT_NOT_FOUND);
+		// PG approve는 정확히 1번 호출됨 (진 쪽은 PG 호출 전에 차단됨)
+		then(naverPayGateway).should(Mockito.times(1)).approve(any());
+	}
+
 	@DisplayName("approve mismatch와 history mismatch가 섞여 동시에 들어와도 외부에는 PAYMENT_MERCHANT_KEY_MISMATCH 또는 PAYMENT_NOT_FOUND만 노출되고 approve payment는 MERCHANT_PAY_KEY_MISMATCH로 FAILED가 된다")
 	@Test
 	void approve_whenConcurrentApproveAndHistoryMismatch_failApproveConsistently() throws Exception {
@@ -334,6 +396,7 @@ class NaverPayServiceConcurrencyTest {
 	/**
 	 * find-first 정책에서 race window 에 빠진 요청은 unique 위반(DataIntegrityViolationException)
 	 * 으로 안전망 500 에 도달하거나, 사전 find 분기에 진입해 도메인 예외(PaymentException) 가 발생한다.
+	 * @Version 낙관적 락 충돌 시 PAYMENT_RESERVATION_ALREADY_USED 는 항상 유효한 race 에러로 허용한다.
 	 * 두 형태 모두 허용한다.
 	 */
 	private static void assertRaceOrPaymentError(Throwable error, PaymentErrorCode... allowedDomainCodes) {
@@ -341,7 +404,11 @@ class NaverPayServiceConcurrencyTest {
 			return;
 		}
 		assertThat(error).isInstanceOf(PaymentException.class);
-		assertThat(((PaymentException) error).getErrorCode()).isIn((Object[]) allowedDomainCodes);
+		PaymentErrorCode errorCode = (PaymentErrorCode) ((PaymentException) error).getErrorCode();
+		if (errorCode == PaymentErrorCode.PAYMENT_RESERVATION_ALREADY_USED) {
+			return;
+		}
+		assertThat(errorCode).isIn((Object[]) allowedDomainCodes);
 	}
 
 	private void runConcurrent(
