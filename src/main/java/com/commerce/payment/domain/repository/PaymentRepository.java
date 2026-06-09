@@ -18,7 +18,8 @@ public interface PaymentRepository {
 
 	Optional<Payment> findApproveSucceeded(String merchantPayKey);
 
-	boolean existsUnknownByOrderId(Long orderId);
+	// APPROVE 타입 중 reserve/approve를 차단하는 상태(UNKNOWN, MANUAL_REVIEW)가 존재하는지 확인 (ADR-L5)
+	boolean existsBlockingApproveByOrderId(Long orderId);
 
 	boolean existsApprovedByOrderId(Long orderId);
 }

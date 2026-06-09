@@ -1,5 +1,6 @@
 package com.commerce.payment.infrastructure;
 
+import java.util.List;
 import java.util.Optional;
 
 import org.hibernate.exception.ConstraintViolationException;
@@ -89,9 +90,9 @@ public class PaymentRepositoryAdapter implements PaymentRepository {
 	}
 
 	@Override
-	public boolean existsUnknownByOrderId(Long orderId) {
-		return jpaPaymentRepository.existsByOrderIdAndTypeAndStatus(
-			orderId, PaymentType.APPROVE, PaymentStatus.UNKNOWN
+	public boolean existsBlockingApproveByOrderId(Long orderId) {
+		return jpaPaymentRepository.existsByOrderIdAndTypeAndStatusIn(
+			orderId, PaymentType.APPROVE, List.of(PaymentStatus.UNKNOWN, PaymentStatus.MANUAL_REVIEW)
 		);
 	}
 

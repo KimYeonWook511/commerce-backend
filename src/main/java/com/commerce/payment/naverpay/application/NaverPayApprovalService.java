@@ -53,8 +53,8 @@ public class NaverPayApprovalService {
 		Order order = orderRepository.findByIdAndMemberId(reservation.getOrderId(), memberId)
 			.orElseThrow(() -> new OrderException(OrderErrorCode.ORDER_NOT_FOUND));
 
-		// UNKNOWN 행이 있는 주문은 추가 결제 시도 차단 (ADR-6)
-		if (paymentRepository.existsUnknownByOrderId(reservation.getOrderId())) {
+		// UNKNOWN/MANUAL_REVIEW 행이 있는 주문은 추가 결제 시도 차단 (ADR-6, ADR-L5)
+		if (paymentRepository.existsBlockingApproveByOrderId(reservation.getOrderId())) {
 			throw new PaymentException(PaymentErrorCode.PAYMENT_RESULT_PENDING);
 		}
 
@@ -84,7 +84,7 @@ public class NaverPayApprovalService {
 			case REQUESTED -> processApproveRequest(payment);
 			case SUCCEEDED -> toResponse(payment);
 			case FAILED -> throw new PaymentException(toPaymentErrorCode(payment.getFailCode()));
-			case UNKNOWN -> throw new PaymentException(PaymentErrorCode.PAYMENT_RESULT_PENDING);
+			case UNKNOWN, MANUAL_REVIEW -> throw new PaymentException(PaymentErrorCode.PAYMENT_RESULT_PENDING);
 		};
 	}
 

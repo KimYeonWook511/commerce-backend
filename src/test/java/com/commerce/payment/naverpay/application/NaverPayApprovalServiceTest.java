@@ -117,7 +117,7 @@ class NaverPayApprovalServiceTest {
 
 		given(paymentReservationRepository.findByMemberIdAndMerchantPayKey(memberId, "PAY-1")).willReturn(Optional.of(reservation));
 		given(orderRepository.findByIdAndMemberId(reservation.getOrderId(), memberId)).willReturn(Optional.of(order));
-		given(paymentRepository.existsUnknownByOrderId(reservation.getOrderId())).willReturn(true);
+		given(paymentRepository.existsBlockingApproveByOrderId(reservation.getOrderId())).willReturn(true);
 
 		// when & then
 		assertThatThrownBy(() -> naverPayApprovalService.approve(memberId, "PAY-1", "pg-payment-id"))
@@ -142,7 +142,7 @@ class NaverPayApprovalServiceTest {
 
 		given(paymentReservationRepository.findByMemberIdAndMerchantPayKey(memberId, "PAY-1")).willReturn(Optional.of(reservation));
 		given(orderRepository.findByIdAndMemberId(reservation.getOrderId(), memberId)).willReturn(Optional.of(order));
-		given(paymentRepository.existsUnknownByOrderId(reservation.getOrderId())).willReturn(false);
+		given(paymentRepository.existsBlockingApproveByOrderId(reservation.getOrderId())).willReturn(false);
 		given(paymentRepository.findApprovePayment("PAY-1", PaymentProvider.NAVERPAY, "pg-payment-id"))
 			.willReturn(Optional.of(succeededPayment));
 
@@ -173,7 +173,7 @@ class NaverPayApprovalServiceTest {
 
 		given(paymentReservationRepository.findByMemberIdAndMerchantPayKey(memberId, "PAY-1")).willReturn(Optional.of(reservation));
 		given(orderRepository.findByIdAndMemberId(reservation.getOrderId(), memberId)).willReturn(Optional.of(order));
-		given(paymentRepository.existsUnknownByOrderId(reservation.getOrderId())).willReturn(false);
+		given(paymentRepository.existsBlockingApproveByOrderId(reservation.getOrderId())).willReturn(false);
 		given(paymentRepository.findApprovePayment("PAY-1", PaymentProvider.NAVERPAY, "pg-payment-id"))
 			.willReturn(Optional.of(requestedPayment));
 		given(naverPayGateway.approve("pg-payment-id"))

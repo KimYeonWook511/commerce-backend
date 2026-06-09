@@ -312,7 +312,7 @@ class ReservePaymentServiceTest {
 		Order order = createOrder(product);
 		setOrderId(order, 1L);
 		given(orderRepository.findByIdAndMemberIdWithItems(1L, 1L)).willReturn(Optional.of(order));
-		given(paymentRepository.existsUnknownByOrderId(1L)).willReturn(true);
+		given(paymentRepository.existsBlockingApproveByOrderId(1L)).willReturn(true);
 
 		ReservePaymentCommand command = ReservePaymentCommand.builder()
 			.memberId(1L)

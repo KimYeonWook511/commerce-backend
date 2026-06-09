@@ -1,5 +1,6 @@
 package com.commerce.payment.infrastructure;
 
+import java.util.Collection;
 import java.util.Optional;
 
 import org.springframework.data.jpa.repository.JpaRepository;
@@ -25,4 +26,6 @@ public interface JpaPaymentRepository extends JpaRepository<Payment, Long> {
 	);
 
 	boolean existsByOrderIdAndTypeAndStatus(Long orderId, PaymentType type, PaymentStatus status);
+
+	boolean existsByOrderIdAndTypeAndStatusIn(Long orderId, PaymentType type, Collection<PaymentStatus> statuses);
 }

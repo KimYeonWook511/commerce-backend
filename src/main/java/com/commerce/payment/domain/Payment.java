@@ -135,7 +135,7 @@ public class Payment extends BaseTimeEntity {
 	}
 
 	public void succeed(LocalDateTime respondedAt) {
-		if (this.status != PaymentStatus.REQUESTED) {
+		if (this.status != PaymentStatus.REQUESTED && this.status != PaymentStatus.UNKNOWN) {
 			throw new PaymentException(PaymentErrorCode.PAYMENT_STATUS_TRANSITION_NOT_ALLOWED);
 		}
 		this.status = PaymentStatus.SUCCEEDED;
@@ -147,7 +147,7 @@ public class Payment extends BaseTimeEntity {
 	}
 
 	public void fail(PaymentFailCode failCode, String failDetail, LocalDateTime respondedAt) {
-		if (this.status != PaymentStatus.REQUESTED) {
+		if (this.status != PaymentStatus.REQUESTED && this.status != PaymentStatus.UNKNOWN) {
 			throw new PaymentException(PaymentErrorCode.PAYMENT_STATUS_TRANSITION_NOT_ALLOWED);
 		}
 		this.status = PaymentStatus.FAILED;
@@ -163,6 +163,18 @@ public class Payment extends BaseTimeEntity {
 		this.status = PaymentStatus.UNKNOWN;
 		this.failDetail = failDetail;
 		this.respondedAt = respondedAt;
+	}
+
+	public void markManualReview(String failDetail, LocalDateTime now) {
+		if (this.status == PaymentStatus.MANUAL_REVIEW) {
+			return;
+		}
+		if (this.status != PaymentStatus.REQUESTED && this.status != PaymentStatus.UNKNOWN) {
+			throw new PaymentException(PaymentErrorCode.PAYMENT_STATUS_TRANSITION_NOT_ALLOWED);
+		}
+		this.status = PaymentStatus.MANUAL_REVIEW;
+		this.failDetail = failDetail;
+		this.respondedAt = now;
 	}
 
 	public void verifyApprovedResponse(String responseMerchantPayKey, int responseTotalAmount) {

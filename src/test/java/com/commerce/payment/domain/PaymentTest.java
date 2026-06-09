@@ -134,6 +134,116 @@ class PaymentTest {
 				.isEqualTo(PaymentErrorCode.PAYMENT_STATUS_TRANSITION_NOT_ALLOWED));
 	}
 
+	@DisplayName("UNKNOWN 상태에서 succeed 호출 시 SUCCEEDED로 전이된다")
+	@Test
+	void succeed_whenStatusUnknown_updateStatusToSucceeded() {
+		// given
+		PaymentReservation reservation = PaymentReservation.createReserved(
+			1L, 1L, 1000, PaymentProvider.NAVERPAY, "PAY-1", LocalDateTime.now().plusMinutes(15));
+		Payment payment = Payment.createRequested(reservation, PaymentType.APPROVE, "pg-payment-id");
+		payment.markUnknown("PG 응답 타임아웃", LocalDateTime.now());
+		LocalDateTime respondedAt = LocalDateTime.of(2026, 3, 5, 20, 10);
+
+		// when
+		payment.succeed(respondedAt);
+
+		// then
+		assertThat(payment.getStatus()).isEqualTo(PaymentStatus.SUCCEEDED);
+		assertThat(payment.getRespondedAt()).isEqualTo(respondedAt);
+		assertThat(payment.getApprovedOrderKey()).isEqualTo(1L);
+	}
+
+	@DisplayName("UNKNOWN 상태에서 fail 호출 시 FAILED로 전이된다")
+	@Test
+	void fail_whenStatusUnknown_updateStatusToFailed() {
+		// given
+		PaymentReservation reservation = PaymentReservation.createReserved(
+			1L, 1L, 1000, PaymentProvider.NAVERPAY, "PAY-1", LocalDateTime.now().plusMinutes(15));
+		Payment payment = Payment.createRequested(reservation, PaymentType.APPROVE, "pg-payment-id");
+		payment.markUnknown("PG 응답 타임아웃", LocalDateTime.now());
+		LocalDateTime respondedAt = LocalDateTime.of(2026, 3, 5, 20, 20);
+
+		// when
+		payment.fail(PaymentFailCode.PG_REQUEST_REJECTED, "PG 확정 실패", respondedAt);
+
+		// then
+		assertThat(payment.getStatus()).isEqualTo(PaymentStatus.FAILED);
+		assertThat(payment.getFailCode()).isEqualTo(PaymentFailCode.PG_REQUEST_REJECTED);
+		assertThat(payment.getRespondedAt()).isEqualTo(respondedAt);
+	}
+
+	@DisplayName("REQUESTED 상태에서 markManualReview 호출 시 MANUAL_REVIEW로 전이된다")
+	@Test
+	void markManualReview_whenStatusRequested_updateStatusToManualReview() {
+		// given
+		PaymentReservation reservation = PaymentReservation.createReserved(
+			1L, 1L, 1000, PaymentProvider.NAVERPAY, "PAY-1", LocalDateTime.now().plusMinutes(15));
+		Payment payment = Payment.createRequested(reservation, PaymentType.APPROVE, "pg-payment-id");
+		LocalDateTime now = LocalDateTime.of(2026, 3, 5, 20, 30);
+
+		// when
+		payment.markManualReview("자동 처리 상한 초과", now);
+
+		// then
+		assertThat(payment.getStatus()).isEqualTo(PaymentStatus.MANUAL_REVIEW);
+		assertThat(payment.getFailDetail()).isEqualTo("자동 처리 상한 초과");
+		assertThat(payment.getRespondedAt()).isEqualTo(now);
+	}
+
+	@DisplayName("UNKNOWN 상태에서 markManualReview 호출 시 MANUAL_REVIEW로 전이된다")
+	@Test
+	void markManualReview_whenStatusUnknown_updateStatusToManualReview() {
+		// given
+		PaymentReservation reservation = PaymentReservation.createReserved(
+			1L, 1L, 1000, PaymentProvider.NAVERPAY, "PAY-1", LocalDateTime.now().plusMinutes(15));
+		Payment payment = Payment.createRequested(reservation, PaymentType.APPROVE, "pg-payment-id");
+		payment.markUnknown("PG 응답 타임아웃", LocalDateTime.now());
+		LocalDateTime now = LocalDateTime.of(2026, 3, 5, 20, 40);
+
+		// when
+		payment.markManualReview("6시간 초과", now);
+
+		// then
+		assertThat(payment.getStatus()).isEqualTo(PaymentStatus.MANUAL_REVIEW);
+		assertThat(payment.getFailDetail()).isEqualTo("6시간 초과");
+		assertThat(payment.getRespondedAt()).isEqualTo(now);
+	}
+
+	@DisplayName("이미 MANUAL_REVIEW 상태에서 markManualReview 호출 시 멱등으로 예외가 발생하지 않는다")
+	@Test
+	void markManualReview_whenAlreadyManualReview_isIdempotent() {
+		// given
+		PaymentReservation reservation = PaymentReservation.createReserved(
+			1L, 1L, 1000, PaymentProvider.NAVERPAY, "PAY-1", LocalDateTime.now().plusMinutes(15));
+		Payment payment = Payment.createRequested(reservation, PaymentType.APPROVE, "pg-payment-id");
+		LocalDateTime first = LocalDateTime.of(2026, 3, 5, 20, 30);
+		payment.markManualReview("1차 승급", first);
+
+		// when & then
+		assertThatCode(() -> payment.markManualReview("2차 시도", LocalDateTime.of(2026, 3, 5, 21, 0)))
+			.doesNotThrowAnyException();
+		assertThat(payment.getStatus()).isEqualTo(PaymentStatus.MANUAL_REVIEW);
+		// 첫 번째 호출 값 보존
+		assertThat(payment.getFailDetail()).isEqualTo("1차 승급");
+		assertThat(payment.getRespondedAt()).isEqualTo(first);
+	}
+
+	@DisplayName("SUCCEEDED 상태에서 markManualReview 호출 시 예외가 발생한다")
+	@Test
+	void markManualReview_whenStatusSucceeded_throwException() {
+		// given
+		PaymentReservation reservation = PaymentReservation.createReserved(
+			1L, 1L, 1000, PaymentProvider.NAVERPAY, "PAY-1", LocalDateTime.now().plusMinutes(15));
+		Payment payment = Payment.createRequested(reservation, PaymentType.APPROVE, "pg-payment-id");
+		payment.succeed(LocalDateTime.now());
+
+		// when & then
+		assertThatThrownBy(() -> payment.markManualReview("이미 성공", LocalDateTime.now()))
+			.isInstanceOf(PaymentException.class)
+			.satisfies(e -> assertThat(((PaymentException)e).getErrorCode())
+				.isEqualTo(PaymentErrorCode.PAYMENT_STATUS_TRANSITION_NOT_ALLOWED));
+	}
+
 	@DisplayName("merchantPayKey와 금액이 모두 일치하면 verifyApprovedResponse에서 예외가 발생하지 않는다")
 	@Test
 	void verifyApprovedResponse_whenBothMatch_noException() {
