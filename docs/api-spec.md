@@ -801,9 +801,11 @@
 
 설명:
 - PG redirect 후 승인 처리. `PaymentReservation.merchantPayKey` 기반으로 역조회하여 승인을 진행합니다. Order 를 거치지 않습니다.
-- **멱등 응답**: 같은 `merchantPayKey` 의 redirect 가 중복 도착하고 `status=USED` Reservation 이 발견되면, 차단이 아닌 *기존 결제 결과 200 응답* 으로 흡수합니다.
+- **조회 단일화**: Reservation 은 `(memberId, merchantPayKey)` 로 역조회합니다. 다른 회원의/없는 `merchantPayKey` 는 모두 `PAYMENT_NOT_FOUND` (404) 가 되어 키 존재 여부를 노출하지 않습니다 (ADR-038).
+- **멱등 응답**: 같은 `merchantPayKey`·**같은 `pgPaymentId`** 의 redirect 가 중복 도착하고 `status=USED` Reservation 이 발견되면, 차단이 아닌 *기존 결제 결과 200 응답* 으로 흡수합니다. USED 예약에 **다른 `pgPaymentId`** 로 들어오면 이미 소비된 예약 재사용이므로 `PAYMENT_RESERVATION_ALREADY_USED` (409) 로 차단합니다.
 - UNKNOWN 행 있는 주문 요청은 `PAYMENT_RESULT_PENDING` (409) 으로 차단합니다.
-- Reservation 의 `memberId` 와 SecurityContext `memberId` 가 불일치하면 `PAYMENT_MEMBER_MISMATCH` (403) 으로 거부합니다.
+- 이미 성공(APPROVE·SUCCEEDED)한 결제가 있는 주문에 새 승인이 진입하면 PG 호출 전에 `PAYMENT_DUPLICATE` (409) 로 차단합니다 (ADR-037).
+- 같은 예약에 다른 `pgPaymentId` 승인이 동시에 들어오면 한쪽만 진행하고 진 쪽은 PG 호출 전에 `PAYMENT_RESERVATION_ALREADY_USED` (409) 로 차단됩니다 (ADR-036).
 
 요청:
 - Body
@@ -837,12 +839,14 @@
 
 실패 응답:
 - `PAYMENT_RESULT_PENDING` (409): 해당 주문에 UNKNOWN 상태의 Payment 시도가 있어 차단
-- `PAYMENT_MEMBER_MISMATCH` (403): Reservation.memberId 와 요청 회원 불일치
-- `PAYMENT-404`: merchantPayKey 로 Reservation 미발견
+- `PAYMENT_NOT_FOUND` (404): `(memberId, merchantPayKey)` 로 Reservation 미발견 — 없는 키 또는 다른 회원의 키 (키 존재 비노출)
+- `PAYMENT_DUPLICATE` (409): 이미 성공한 결제가 있는 주문에 새 승인 진입 — PG 호출 전 차단
+- `PAYMENT_RESERVATION_ALREADY_USED` (409): 같은 예약을 다른 pgPaymentId 로 동시/순차 재사용 — PG 호출 전 차단
 
 ### 새 응답 코드 (payment-order-redesign 추가)
 
 | 코드 | HTTP | 의미 |
 |---|---|---|
 | `PAYMENT_RESULT_PENDING` | 409 | 해당 주문에 UNKNOWN 상태의 Payment 시도가 있어 reserve/approve 차단. 사용자에게 "결제 결과 확인 중" 안내 |
-| `PAYMENT_MEMBER_MISMATCH` | 403 | Reservation.memberId 와 SecurityContext memberId 불일치 — 다른 회원이 결제 승인을 시도한 경우 |
+| `PAYMENT_DUPLICATE` | 409 | 이미 성공(APPROVE·SUCCEEDED)한 결제가 있는 주문에 새 승인 진입 — PG 호출 전 진입 가드 차단(ADR-037) 또는 `uk_payment_approved_order_key` 위반(최종 보루) |
+| `PAYMENT_RESERVATION_ALREADY_USED` | 409 | 같은 예약(merchantPayKey)을 다른 pgPaymentId 로 동시/순차 재사용 — PG 호출 전 차단 (ADR-036) |

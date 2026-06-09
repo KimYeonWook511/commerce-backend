@@ -396,3 +396,30 @@ task adr(`docs/tasks/<task>/adr.md`)의 역할은 harness 도입을 기점으로
 - **이유**: 보상이 생성·조회하는 cancel payment 는 항상 보상 대상 pgPaymentId(실패한 결제)로 만들어지므로 그 취소는 항상 올바르다. 형제 성공(`pgA`)은 별도 Payment row 이고 보상이 건드리지 않아, 완료 가드 없이도 ADR-014 의 원래 위험("성공한 결제를 잘못 취소")은 발생하지 않는다.
 - **결과**: 같은 reservation·다른 pgPaymentId 경합으로 발생한 `PAYMENT_DUPLICATE` 에서 중복 pgPaymentId 의 PG 취소가 실제 수행되어 이중청구가 해소된다. 보상 멱등성은 `cancelPayment` 상태 가드와 cancel payment 단위 멱등 처리에 의존한다. 형제 SUCCEEDED 상태에서 중복 pgPaymentId 취소가 수행됨을 `NaverPayServiceIntegrationTest` 통합 테스트로 검증한다.
 - **연계**: ADR-014/015, ADR-033, #205, #226, #227, #230, PR #233.
+
+### ADR-036: reservation 동시 이중 use 가드를 `@Version` 낙관적 락으로 구현한다
+
+- **결정**: `PaymentReservation` 에 `version`(`@Version`) 을 추가한다. 도메인 `use()` 의 read-modify-write(status·reserved_key 동시 set, ADR-026 NULL 트릭 캡슐화)는 유지한다. 승인 기록 경로는 예약 소비 전용 저장 메서드 `saveUsed` 를 통해 `saveAndFlush` 하고, 진 쪽의 `ObjectOptimisticLockingFailureException` 을 adapter 가 `PAYMENT_RESERVATION_ALREADY_USED` 도메인 예외로 번역한다(`saveApproved` 와 같은 "조기 flush 로 충돌을 메서드 안에서 확정" 패턴). `create()` 가 PG approve 호출보다 앞이라 진 쪽은 PG 청구 전에 차단된다. USED 예약에 다른 pgPaymentId 가 순차로 도착한 경우(승인 진입의 USED 분기)도 같은 `PAYMENT_RESERVATION_ALREADY_USED` 로 일관 차단한다(과거 `PAYMENT_NOT_FOUND` 에서 변경).
+- **배경**: #231. `create()` 의 `reservation.use()` 는 메모리 상태 검사만 하여, 같은 예약(merchantPayKey)에 다른 pgPaymentId 승인 2건이 USE 커밋 전 경합하면 둘 다 RESERVED 로 읽고 통과 → REQUESTED payment 2건 → PG 청구 2건. `uk_payment_reservation_reserved_key` 는 "한 주문 RESERVED 2개"만, `uk_payment_merchant_pay_key_provider_pg_payment_id_type` 는 pgPaymentId 가 다르면 둘 다 통과시켜 이 경합을 못 막는다. #230(`uk_payment_approved_order_key` 최종 보루)이 정합성을 보장하지만, PG 청구 도달 전 차단으로 보상 빈도를 낮추는 앞단 가드가 필요했다.
+- **고려한 대안**: (A) 조건부 CAS(`UPDATE ... WHERE status='RESERVED'` 영향 행 수) — 락·버전 컬럼 없이 단일 원자 UPDATE 로 가볍지만, 도메인 `use()` 의 두 필드 동시 set 캡슐화(ADR-026)가 SQL 로 빠지고 "RESERVED 일 때만" 전이 규칙이 도메인에서 사라져 단위 테스트 회귀 방어가 약해진다. (B) 비관적 락(FOR UPDATE) — 읽기부터 잠가 대기 구간이 길고 단순 단일조건 전이에 과하다.
+- **이유**: 낙관적 락과 CAS 는 lock 동작(UPDATE 시 행 X-lock 직렬화, 진 쪽 0 rows)과 정확성이 동등하다. 동등하다면 도메인 표현력·캡슐화를 보존하는 `@Version` 을 택한다. reservation 은 단방향 상태 머신이라 `status` 가 사실상 자연 version 이라 CAS 도 가능하지만, 도메인 `use()` 를 그대로 살리는 쪽이 ADR-026 캡슐화·테스트와 정합적이다.
+- **결과**: 같은 예약·다른 pgPaymentId 동시 승인 시 한쪽만 진행하고 진 쪽은 PG 호출 전 `PAYMENT_RESERVATION_ALREADY_USED` 로 차단된다. `tbl_payment_reservation.version` 컬럼이 추가된다(V7). cart 의 낙관적 락이 retry 로 흡수하는 것과 달리, 여기서는 진 쪽이 별개 결제(다른 pgPaymentId)이므로 재시도 없이 차단한다. 정합성 최종 보루는 #230 이 그대로 담당하고 본 가드는 청구 도달 빈도를 낮추는 심층 방어다. 동시/순차 차단을 `NaverPayServiceConcurrencyTest` 로 검증한다.
+- **연계**: ADR-026(payment-order-redesign), ADR-035, #205, #230, #231, PR #235.
+
+### ADR-037: 승인 진입에 주문 기준 성공결제 사전 차단을 추가한다
+
+- **결정**: `PaymentRepository.existsApprovedByOrderId(orderId)`(= APPROVE·SUCCEEDED 존재 EXISTS)를 추가하고, `NaverPayApprovalService.approve()` 의 USED 분기 이후·`create()` 전에서 호출해 이미 성공 결제가 있는 주문의 새 승인을 `PAYMENT_DUPLICATE` 로 차단한다. 기존 UNKNOWN 차단(`existsUnknownByOrderId`)과 동형이다.
+- **배경**: #231. 진입에서 UNKNOWN 만 차단하고 "이미 성공한 APPROVE 결제가 있는 주문"은 차단하지 않아, 한 주문을 다른 reservation(merchantPayKey)으로 재결제하는 새 승인이 PG 호출까지 가서 최종 보루(`uk_payment_approved_order_key`)에서 보상으로 처리됐다.
+- **고려한 대안**: 진입 차단 없이 최종 보루에만 의존 — 불필요한 PG 청구→취소 보상이 발생한다.
+- **이유**: 첫 결제 성공 이후 들어온 새 승인을 PG 호출 전에 막아 보상 발생 빈도를 낮춘다. 진입 차단 위치는 USED 분기 이후로 두어, USED 예약의 같은 키 redirect 멱등 응답(ADR-026)을 가로채지 않는다(진입 차단은 RESERVED 신규 승인에만 적용).
+- **결과**: 이미 성공 결제가 있는 주문의 새 승인이 진입 단계에서 차단된다. `PAYMENT_DUPLICATE` 는 진입 가드(앞단)와 `uk_payment_approved_order_key` 위반(최종 보루)이 같은 "주문 이중 결제" 사실을 공유하는 코드다. 정합성 자체는 #230 이 최종 보장한다.
+- **연계**: ADR-026, ADR-035, #230, #231, PR #235.
+
+### ADR-038: reservation 조회를 `(memberId, merchantPayKey)` 로 단일화하고 남의 키를 `PAYMENT_NOT_FOUND` 로 응답한다
+
+- **결정**: 승인 진입의 Reservation 역조회를 `findByMemberIdAndMerchantPayKey(memberId, merchantPayKey)` 로 단일화한다. 기존 "merchantPayKey 조회 후 memberId 불일치 시 `PAYMENT_MEMBER_MISMATCH`(403)" 분기를 제거하고, 남의/없는 키는 모두 `PAYMENT_NOT_FOUND`(404) 로 응답한다. `PAYMENT_MEMBER_MISMATCH` 에러코드를 제거한다.
+- **배경**: #231. 조회가 merchantPayKey 단독이라 member 검증이 별도 분기로 남았고, 남의 키 존재 시 403 이 반환되어 키 존재 여부가 노출됐다.
+- **고려한 대안**: 현행 유지(키 조회 후 memberId 분기) — 403 이 키 존재를 노출하고 분기가 흩어진다.
+- **이유**: 조회 조건에 member 검증을 흡수해 분기를 정리하고, 남의 키를 NOT_FOUND 로 흡수해 키 존재를 비노출(보안)한다. 응답 의미 변화(403→404)는 의도된 것이다.
+- **결과**: 남의/없는 키 승인 요청이 `PAYMENT_NOT_FOUND` 가 된다. `PAYMENT_MEMBER_MISMATCH`(403) 가 응답 표면에서 사라진다.
+- **연계**: ADR-026, #231, PR #235.

@@ -156,6 +156,7 @@ COLUMNS:
 - `status VARCHAR(32) NOT NULL` — `RESERVED` / `USED` / `EXPIRED`
 - `expires_at DATETIME(6) NOT NULL` — 만료 시각 (재사용/박제 판단용)
 - `reserved_key VARCHAR(96) NULL` — RESERVED 일 때만 `"{order_id}:{provider}"`, USED/EXPIRED 면 NULL (NULL 트릭)
+- `version BIGINT NOT NULL DEFAULT 0` — `@Version` 낙관적 락 (V7). 같은 예약의 동시 이중 use 차단용
 - `created_at DATETIME(6) NOT NULL`
 - `updated_at DATETIME(6) NOT NULL`
 
@@ -167,6 +168,7 @@ INDEX:
 비고:
 - **NULL 트릭 캡슐화**: `reserved_key` 값 set 은 *반드시* `status=RESERVED` 와 같은 INSERT 안에서. status 가 USED/EXPIRED 로 가면 *같은 UPDATE* 에서 NULL 로 비움. 도메인 계층을 통해서만 변경하며 직접 UPDATE 금지
 - **상태 전이**: `RESERVED → USED` (승인 시작) 또는 `RESERVED → EXPIRED` (만료/무효 회수) 한 번 전이만 허용. 만료/무효 예약은 reserve 진입 시 `reserved_key` 를 NULL 로 회수해 재예약 허용 (박제 자동 복구)
+- **동시 이중 use 차단**: `version` `@Version` 낙관적 락이 같은 예약을 다른 pgPaymentId 로 동시에 `USED` 전이하려는 경합에서 진 쪽을 차단한다. 승인 기록 전용 저장 경로(`saveUsed`)가 `saveAndFlush` 조기 flush 로 충돌을 PG 호출 전에 확정해 `PAYMENT_RESERVATION_ALREADY_USED` 도메인 예외로 번역한다. cart 의 retry 흡수와 달리 진 쪽은 재시도 없이 차단된다 (다른 pgPaymentId 는 별개 결제이므로). 세부 결정은 ADR-036
 - **amount 불변**: 결제 예정 금액이 바뀌면 새 Reservation 발급. 기존 행 amount UPDATE 금지
 - **FK**: `order_id`, `member_id` 는 FK 제약 없음 (참조용 값)
 
