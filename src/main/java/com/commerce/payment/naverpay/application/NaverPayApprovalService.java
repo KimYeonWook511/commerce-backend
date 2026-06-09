@@ -53,8 +53,8 @@ public class NaverPayApprovalService {
 		Order order = orderRepository.findByIdAndMemberId(reservation.getOrderId(), memberId)
 			.orElseThrow(() -> new OrderException(OrderErrorCode.ORDER_NOT_FOUND));
 
-		// UNKNOWN/MANUAL_REVIEW 행이 있는 주문은 추가 결제 시도 차단 (ADR-6, ADR-L5)
-		if (paymentRepository.existsBlockingApproveByOrderId(reservation.getOrderId())) {
+		// UNKNOWN 행이 있는 주문은 추가 결제 시도 차단 (ADR-6)
+		if (paymentRepository.existsUnknownByOrderId(reservation.getOrderId())) {
 			throw new PaymentException(PaymentErrorCode.PAYMENT_RESULT_PENDING);
 		}
 
@@ -84,7 +84,7 @@ public class NaverPayApprovalService {
 			case REQUESTED -> processApproveRequest(payment);
 			case SUCCEEDED -> toResponse(payment);
 			case FAILED -> throw new PaymentException(toPaymentErrorCode(payment.getFailCode()));
-			case UNKNOWN, MANUAL_REVIEW -> throw new PaymentException(PaymentErrorCode.PAYMENT_RESULT_PENDING);
+			case UNKNOWN -> throw new PaymentException(PaymentErrorCode.PAYMENT_RESULT_PENDING);
 		};
 	}
 
@@ -233,6 +233,7 @@ public class NaverPayApprovalService {
 	private PaymentErrorCode toPaymentErrorCode(PaymentFailCode failCode) {
 		return switch (failCode) {
 			case TIME_EXPIRED -> PaymentErrorCode.PAYMENT_TIME_EXPIRED;
+			case ORDER_CANCELED -> PaymentErrorCode.PAYMENT_ALREADY_CANCELED;
 			case ALREADY_CANCELED -> PaymentErrorCode.PAYMENT_ALREADY_CANCELED;
 			case INVALID_PG_PAYMENT_ID -> PaymentErrorCode.PAYMENT_NOT_FOUND;
 			case INVALID_MERCHANT -> PaymentErrorCode.PAYMENT_INVALID_MERCHANT;

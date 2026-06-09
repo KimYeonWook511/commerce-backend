@@ -92,9 +92,9 @@ public class PaymentRepositoryAdapter implements PaymentRepository {
 	}
 
 	@Override
-	public boolean existsBlockingApproveByOrderId(Long orderId) {
-		return jpaPaymentRepository.existsByOrderIdAndTypeAndStatusIn(
-			orderId, PaymentType.APPROVE, List.of(PaymentStatus.UNKNOWN, PaymentStatus.MANUAL_REVIEW)
+	public boolean existsUnknownByOrderId(Long orderId) {
+		return jpaPaymentRepository.existsByOrderIdAndTypeAndStatus(
+			orderId, PaymentType.APPROVE, PaymentStatus.UNKNOWN
 		);
 	}
 
@@ -106,7 +106,7 @@ public class PaymentRepositoryAdapter implements PaymentRepository {
 	}
 
 	@Override
-	public List<Payment> findStaleApprovePaymentsForReconciliation(LocalDateTime cutoff, Pageable pageable) {
-		return jpaPaymentRepository.findStaleApprovePaymentsForReconciliation(cutoff, pageable);
+	public List<Payment> findStaleApprovePaymentsForReconciliation(LocalDateTime staleCutoff, LocalDateTime escalationCutoff, Pageable pageable) {
+		return jpaPaymentRepository.findStaleApprovePaymentsForReconciliation(staleCutoff, escalationCutoff, pageable);
 	}
 }

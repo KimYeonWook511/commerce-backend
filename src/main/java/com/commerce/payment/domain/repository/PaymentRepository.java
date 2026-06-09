@@ -22,11 +22,11 @@ public interface PaymentRepository {
 
 	Optional<Payment> findApproveSucceeded(String merchantPayKey);
 
-	// APPROVE 타입 중 reserve/approve를 차단하는 상태(UNKNOWN, MANUAL_REVIEW)가 존재하는지 확인 (ADR-L5)
-	boolean existsBlockingApproveByOrderId(Long orderId);
+	// APPROVE 타입 UNKNOWN 결제가 있는 주문은 reserve/approve 차단 (ADR-6)
+	boolean existsUnknownByOrderId(Long orderId);
 
 	boolean existsApprovedByOrderId(Long orderId);
 
-	// APPROVE 대사 후보: UNKNOWN(respondedAt < cutoff) + REQUESTED(createdAt < cutoff). 정밀 분기는 정책이 담당.
-	List<Payment> findStaleApprovePaymentsForReconciliation(LocalDateTime cutoff, Pageable pageable);
+	// APPROVE 대사 후보: UNKNOWN/REQUESTED 중 staleCutoff보다 오래됐고 escalationCutoff보다 최근인 건. 1분~6시간 윈도우.
+	List<Payment> findStaleApprovePaymentsForReconciliation(LocalDateTime staleCutoff, LocalDateTime escalationCutoff, Pageable pageable);
 }

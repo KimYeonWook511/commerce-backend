@@ -80,7 +80,7 @@ public class PaymentCancellationService {
 	/**
 	 * REQUESTED 상태일 때만 CANCEL 기록을 UNKNOWN 마킹. 그 외 상태이거나 이력이 없으면 조용히 skip한다.
 	 * PG 취소 결과 불명(네트워크/서버오류/응답 해석 불가) 시 흔적을 보존해 대사 대상으로 남긴다 (#219).
-	 * CANCEL 타입 UNKNOWN 은 existsBlockingApproveByOrderId(APPROVE 한정) 에 잡히지 않아 주문 재결제를 차단하지 않는다.
+	 * CANCEL 타입 UNKNOWN 은 existsUnknownByOrderId(APPROVE 한정) 에 잡히지 않아 주문 재결제를 차단하지 않는다.
 	 */
 	@Transactional
 	public void markUnknownIfRequested(

@@ -24,7 +24,6 @@ import com.commerce.order.domain.Order;
 import com.commerce.order.domain.repository.OrderRepository;
 import com.commerce.order.exception.OrderErrorCode;
 import com.commerce.order.exception.OrderException;
-import com.commerce.payment.application.port.NotificationPort;
 import com.commerce.payment.application.port.PgCanceller;
 import com.commerce.payment.domain.Payment;
 import com.commerce.payment.domain.PaymentFailCode;
@@ -59,9 +58,6 @@ class PaymentReconciliationServiceTest {
 	@Mock
 	private NaverPayGateway naverPayGateway;
 
-	@Mock
-	private NotificationPort notificationPort;
-
 	@InjectMocks
 	private PaymentReconciliationService reconciliationService;
 
@@ -83,7 +79,7 @@ class PaymentReconciliationServiceTest {
 		LocalDateTime now = LocalDateTime.now();
 		Payment payment = unknownApprovePayment("PAY-1", "pg-1", now.minusMinutes(2));
 
-		given(paymentRepository.findStaleApprovePaymentsForReconciliation(any(), any(Pageable.class)))
+		given(paymentRepository.findStaleApprovePaymentsForReconciliation(any(), any(), any(Pageable.class)))
 			.willReturn(List.of(payment));
 		given(naverPayGateway.getApprovalHistory("pg-1"))
 			.willReturn(NaverPayHistoryResult.approved("PAY-1", 1000));
@@ -102,7 +98,7 @@ class PaymentReconciliationServiceTest {
 		LocalDateTime now = LocalDateTime.now();
 		Payment payment = unknownApprovePayment("PAY-1", "pg-1", now.minusMinutes(2));
 
-		given(paymentRepository.findStaleApprovePaymentsForReconciliation(any(), any(Pageable.class)))
+		given(paymentRepository.findStaleApprovePaymentsForReconciliation(any(), any(), any(Pageable.class)))
 			.willReturn(List.of(payment));
 		given(naverPayGateway.getApprovalHistory("pg-1"))
 			.willReturn(NaverPayHistoryResult.canceled());
@@ -125,7 +121,7 @@ class PaymentReconciliationServiceTest {
 		LocalDateTime now = LocalDateTime.now();
 		Payment payment = unknownApprovePayment("PAY-1", "pg-1", now.minusMinutes(2));
 
-		given(paymentRepository.findStaleApprovePaymentsForReconciliation(any(), any(Pageable.class)))
+		given(paymentRepository.findStaleApprovePaymentsForReconciliation(any(), any(), any(Pageable.class)))
 			.willReturn(List.of(payment));
 		given(naverPayGateway.getApprovalHistory("pg-1"))
 			.willReturn(NaverPayHistoryResult.unknown("timeout"));
@@ -134,7 +130,6 @@ class PaymentReconciliationServiceTest {
 
 		then(paymentApprovalService).should(never()).succeedApproval(any(), any());
 		then(paymentApprovalRecordService).should(never()).fail(any(), any(), any(), any(), any(), any());
-		then(paymentApprovalRecordService).should(never()).markManualReview(any(), any(), any(), any(), any());
 	}
 
 	@DisplayName("PG 이력조회 결과가 FAILED(이력 없음)이면 아무 상태 전이도 하지 않는다")
@@ -144,7 +139,7 @@ class PaymentReconciliationServiceTest {
 		LocalDateTime now = LocalDateTime.now();
 		Payment payment = unknownApprovePayment("PAY-1", "pg-1", now.minusMinutes(2));
 
-		given(paymentRepository.findStaleApprovePaymentsForReconciliation(any(), any(Pageable.class)))
+		given(paymentRepository.findStaleApprovePaymentsForReconciliation(any(), any(), any(Pageable.class)))
 			.willReturn(List.of(payment));
 		given(naverPayGateway.getApprovalHistory("pg-1"))
 			.willReturn(NaverPayHistoryResult.failed(com.commerce.payment.exception.PaymentErrorCode.PAYMENT_NOT_FOUND));
@@ -153,48 +148,38 @@ class PaymentReconciliationServiceTest {
 
 		then(paymentApprovalService).should(never()).succeedApproval(any(), any());
 		then(paymentApprovalRecordService).should(never()).fail(any(), any(), any(), any(), any(), any());
-		then(paymentApprovalRecordService).should(never()).markManualReview(any(), any(), any(), any(), any());
 	}
 
-	// --- MANUAL_REVIEW escalation ---
+	// --- escalation: 6시간 초과는 로그만 남기고 상태 변경 없음 (ADR-L5, 후속 #238) ---
 
-	@DisplayName("UNKNOWN 결제가 6시간 escalation 임계를 넘으면 markManualReview와 통지를 호출한다")
+	@DisplayName("UNKNOWN 결제가 6시간 escalation 임계를 넘으면 상태 변경 없이 PG 조회도 하지 않는다")
 	@Test
-	void reconcile_unknownEscalated_callsMarkManualReviewAndNotify() {
+	void reconcile_unknownEscalated_doesNotChangeState() {
 		injectPolicies();
 		LocalDateTime now = LocalDateTime.now();
 		Payment payment = unknownApprovePayment("PAY-1", "pg-1", now.minusHours(7));
 
-		given(paymentRepository.findStaleApprovePaymentsForReconciliation(any(), any(Pageable.class)))
+		given(paymentRepository.findStaleApprovePaymentsForReconciliation(any(), any(), any(Pageable.class)))
 			.willReturn(List.of(payment));
 
 		reconciliationService.reconcile();
 
-		then(paymentApprovalRecordService).should().markManualReview(
-			eq("PAY-1"), eq(PaymentProvider.NAVERPAY), eq("pg-1"),
-			any(String.class), any(LocalDateTime.class)
-		);
-		then(notificationPort).should().notifyManualReviewRequired(any(), eq("PAY-1"), any(String.class));
 		then(naverPayGateway).should(never()).getApprovalHistory(any());
 		then(paymentApprovalService).should(never()).succeedApproval(any(), any());
 	}
 
-	@DisplayName("stale REQUESTED 결제가 6시간 escalation 임계를 넘으면 markManualReview를 호출한다")
+	@DisplayName("stale REQUESTED 결제가 6시간 escalation 임계를 넘으면 상태 변경 없이 PG 조회도 하지 않는다")
 	@Test
-	void reconcile_requestedEscalated_callsMarkManualReview() {
+	void reconcile_requestedEscalated_doesNotChangeState() {
 		injectPolicies();
 		LocalDateTime now = LocalDateTime.now();
 		Payment payment = requestedApprovePayment("PAY-1", "pg-1", now.minusHours(7));
 
-		given(paymentRepository.findStaleApprovePaymentsForReconciliation(any(), any(Pageable.class)))
+		given(paymentRepository.findStaleApprovePaymentsForReconciliation(any(), any(), any(Pageable.class)))
 			.willReturn(List.of(payment));
 
 		reconciliationService.reconcile();
 
-		then(paymentApprovalRecordService).should().markManualReview(
-			eq("PAY-1"), eq(PaymentProvider.NAVERPAY), eq("pg-1"),
-			any(String.class), any(LocalDateTime.class)
-		);
 		then(naverPayGateway).should(never()).getApprovalHistory(any());
 	}
 
@@ -207,14 +192,13 @@ class PaymentReconciliationServiceTest {
 		LocalDateTime now = LocalDateTime.now();
 		Payment payment = unknownApprovePayment("PAY-1", "pg-1", now.minusSeconds(30));
 
-		given(paymentRepository.findStaleApprovePaymentsForReconciliation(any(), any(Pageable.class)))
+		given(paymentRepository.findStaleApprovePaymentsForReconciliation(any(), any(), any(Pageable.class)))
 			.willReturn(List.of(payment));
 
 		reconciliationService.reconcile();
 
 		then(naverPayGateway).should(never()).getApprovalHistory(any());
 		then(paymentApprovalService).should(never()).succeedApproval(any(), any());
-		then(paymentApprovalRecordService).should(never()).markManualReview(any(), any(), any(), any(), any());
 	}
 
 	// --- 주문 CANCELED → 보상 취소 (C) ---
@@ -227,7 +211,7 @@ class PaymentReconciliationServiceTest {
 		Payment payment = unknownApprovePayment("PAY-1", "pg-1", now.minusMinutes(2));
 		Order canceledOrder = canceledOrder();
 
-		given(paymentRepository.findStaleApprovePaymentsForReconciliation(any(), any(Pageable.class)))
+		given(paymentRepository.findStaleApprovePaymentsForReconciliation(any(), any(), any(Pageable.class)))
 			.willReturn(List.of(payment));
 		given(naverPayGateway.getApprovalHistory("pg-1"))
 			.willReturn(NaverPayHistoryResult.approved("PAY-1", 1000));
@@ -249,7 +233,7 @@ class PaymentReconciliationServiceTest {
 		Payment payment = unknownApprovePayment("PAY-1", "pg-1", now.minusMinutes(2));
 		Order paidOrder = paidOrder();
 
-		given(paymentRepository.findStaleApprovePaymentsForReconciliation(any(), any(Pageable.class)))
+		given(paymentRepository.findStaleApprovePaymentsForReconciliation(any(), any(), any(Pageable.class)))
 			.willReturn(List.of(payment));
 		given(naverPayGateway.getApprovalHistory("pg-1"))
 			.willReturn(NaverPayHistoryResult.approved("PAY-1", 1000));
@@ -273,7 +257,7 @@ class PaymentReconciliationServiceTest {
 		Payment payment1 = unknownApprovePayment("PAY-1", "pg-1", now.minusMinutes(2));
 		Payment payment2 = unknownApprovePayment("PAY-2", "pg-2", now.minusMinutes(2));
 
-		given(paymentRepository.findStaleApprovePaymentsForReconciliation(any(), any(Pageable.class)))
+		given(paymentRepository.findStaleApprovePaymentsForReconciliation(any(), any(), any(Pageable.class)))
 			.willReturn(List.of(payment1, payment2));
 		given(naverPayGateway.getApprovalHistory("pg-1"))
 			.willThrow(new RuntimeException("PG 장애"));
@@ -293,7 +277,7 @@ class PaymentReconciliationServiceTest {
 	void reconcile_noCandidates_doesNothing() {
 		injectPolicies();
 
-		given(paymentRepository.findStaleApprovePaymentsForReconciliation(any(), any(Pageable.class)))
+		given(paymentRepository.findStaleApprovePaymentsForReconciliation(any(), any(), any(Pageable.class)))
 			.willReturn(List.of());
 
 		reconciliationService.reconcile();

@@ -135,16 +135,16 @@ class PaymentReconciliationIntegrationTest {
 		// then: order PAID
 		assertThat(orderPersistence.getOrderStatusById(order.getId())).isEqualTo(OrderStatus.PAID);
 
-		// then: 차단 가드 해제 (UNKNOWN/MANUAL_REVIEW approve payment 없음)
-		assertThat(paymentRepository.existsBlockingApproveByOrderId(order.getId())).isFalse();
+		// then: 차단 가드 해제 (UNKNOWN approve payment 없음)
+		assertThat(paymentRepository.existsUnknownByOrderId(order.getId())).isFalse();
 	}
 
 	/**
 	 * 테스트 3: C — 만료-취소-후-지연-승인 정합성 (#222 검증 기준).
-	 * CANCELED 주문의 UNKNOWN 결제가 PG에서 승인 확인될 때 보상 취소 + MANUAL_REVIEW + 통지가 수행되고,
+	 * CANCELED 주문의 UNKNOWN 결제가 PG에서 승인 확인될 때 보상 취소 + 통지가 수행되고,
 	 * 2회 호출 후에도 이중 환불(중복 cancel)이 발생하지 않음을 확인한다.
 	 */
-	@DisplayName("CANCELED 주문의 UNKNOWN 결제가 PG 승인이면 보상 취소·MANUAL_REVIEW·통지가 수행되고 2회 호출해도 이중 환불이 없다")
+	@DisplayName("CANCELED 주문의 UNKNOWN 결제가 PG 승인이면 보상 취소·통지가 수행되고 2회 호출해도 이중 환불이 없다")
 	@Test
 	void reconcile_canceledOrderWithPgApproved_compensatesAndIdempotent() {
 		// given: INIT order → CANCELED + APPROVE UNKNOWN payment
@@ -174,10 +174,10 @@ class PaymentReconciliationIntegrationTest {
 		// when: 1회 reconcile
 		reconciliationService.reconcile();
 
-		// then: approve payment → MANUAL_REVIEW
+		// then: approve payment → FAILED (보상 취소로 인한 ORDER_CANCELED, ADR-039 + ADR-L4)
 		Payment approvePayment = paymentPersistence.getPayment(
 			"PAY-RECN-3", PaymentProvider.NAVERPAY, "pg-recn-3", PaymentType.APPROVE);
-		assertThat(approvePayment.getStatus()).isEqualTo(PaymentStatus.MANUAL_REVIEW);
+		assertThat(approvePayment.getStatus()).isEqualTo(PaymentStatus.FAILED);
 
 		// then: PG 보상 취소 cancel payment → SUCCEEDED
 		Payment cancelPayment = paymentPersistence.getPayment(

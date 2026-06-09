@@ -87,37 +87,6 @@ public class PaymentApprovalRecordService {
 	}
 
 	/**
-	 * UNKNOWN/REQUESTED → MANUAL_REVIEW 종착 전이. 이미 MANUAL_REVIEW면 멱등 흡수한다.
-	 * REQUESTED/UNKNOWN 외 상태이거나 이력이 없으면 조용히 skip한다.
-	 */
-	@Transactional
-	public void markManualReview(
-		String merchantPayKey,
-		PaymentProvider provider,
-		String pgPaymentId,
-		String failDetail,
-		LocalDateTime now
-	) {
-		Payment payment = paymentRepository.findApprovePayment(merchantPayKey, provider, pgPaymentId).orElse(null);
-		if (payment == null) {
-			log.warn("Payment not found, skipping manual review mark: merchantPayKey={}, pgPaymentId={}", merchantPayKey,
-				pgPaymentId);
-			return;
-		}
-		if (payment.getStatus() == PaymentStatus.MANUAL_REVIEW) {
-			return;
-		}
-		if (payment.getStatus() != PaymentStatus.REQUESTED && payment.getStatus() != PaymentStatus.UNKNOWN) {
-			log.warn(
-				"Payment not in REQUESTED/UNKNOWN state, skipping manual review mark: merchantPayKey={}, pgPaymentId={}, status={}",
-				merchantPayKey, pgPaymentId, payment.getStatus());
-			return;
-		}
-		payment.markManualReview(failDetail, now);
-		paymentRepository.save(payment);
-	}
-
-	/**
 	 * 보상 흐름 전용: REQUESTED 상태일 때만 실패 처리하고, 그 외 상태이거나 이력이 없으면 조용히 skip한다.
 	 * 호출처(catch 블록)가 상태를 확인하거나 try-catch로 mark 예외를 잡지 않도록 의도를 캡슐화한다.
 	 */

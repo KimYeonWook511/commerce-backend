@@ -11,7 +11,6 @@ import com.commerce.order.domain.OrderStatus;
 import com.commerce.order.domain.repository.OrderRepository;
 import com.commerce.order.exception.OrderErrorCode;
 import com.commerce.order.exception.OrderException;
-import com.commerce.payment.application.port.NotificationPort;
 import com.commerce.payment.application.port.result.CancelOutcome;
 import com.commerce.payment.domain.Payment;
 import com.commerce.payment.domain.PaymentFailCode;
@@ -36,8 +35,11 @@ public class PaymentReconciliationService {
 	// 한 주기 처리 상한. 운영 config 승격 전제.
 	private static final int RECONCILE_BATCH_SIZE = 100;
 
-	// 정책 최단 진입 지연(UNKNOWN_RECONCILE_DELAY = 1분)과 동일. 후보를 넓게 긁고 정밀 분기는 정책이 담당.
+	// 정책 최단 진입 지연(UNKNOWN_RECONCILE_DELAY = 1분). 1분 미만은 대사 대상 제외.
 	private static final int STALE_CUTOFF_MINUTES = 1;
+
+	// 자동 대사 스캔 상한(ESCALATION_DELAY = 6시간). 6시간 초과는 스캔에서 제외해 무한 재시도를 방지한다 (ADR-L8).
+	private static final int ESCALATION_DELAY_HOURS = 6;
 
 	private final PaymentRepository paymentRepository;
 	private final OrderRepository orderRepository;
@@ -45,7 +47,6 @@ public class PaymentReconciliationService {
 	private final PaymentApprovalRecordService paymentApprovalRecordService;
 	private final PaymentApprovalCompensationService paymentApprovalCompensationService;
 	private final NaverPayGateway naverPayGateway;
-	private final NotificationPort notificationPort;
 	private final PaymentPostProcessTargetPolicy targetPolicy;
 	private final PaymentPostProcessFlowPolicy flowPolicy;
 
@@ -55,25 +56,25 @@ public class PaymentReconciliationService {
 	 */
 	public void reconcile() {
 		LocalDateTime now = LocalDateTime.now();
-		LocalDateTime cutoff = now.minusMinutes(STALE_CUTOFF_MINUTES);
+		LocalDateTime staleCutoff = now.minusMinutes(STALE_CUTOFF_MINUTES);
+		LocalDateTime escalationCutoff = now.minusHours(ESCALATION_DELAY_HOURS);
 
 		List<Payment> candidates = paymentRepository.findStaleApprovePaymentsForReconciliation(
-			cutoff, PageRequest.of(0, RECONCILE_BATCH_SIZE));
+			staleCutoff, escalationCutoff, PageRequest.of(0, RECONCILE_BATCH_SIZE));
 
 		if (candidates.isEmpty()) {
 			return;
 		}
 
-		log.info("대사 시작 candidates={} cutoff={}", candidates.size(), cutoff);
+		log.info("대사 시작 candidates={} staleCutoff={} escalationCutoff={}", candidates.size(), staleCutoff, escalationCutoff);
 
-		int succeeded = 0, failed = 0, manualReview = 0, skipped = 0, errors = 0;
+		int succeeded = 0, failed = 0, skipped = 0, errors = 0;
 		for (Payment payment : candidates) {
 			try {
 				PaymentReconcileOutcome outcome = processOne(payment, now);
 				switch (outcome) {
 					case SUCCEEDED -> succeeded++;
 					case FAILED -> failed++;
-					case MANUAL_REVIEW -> manualReview++;
 					case SKIPPED -> skipped++;
 				}
 			} catch (Exception ex) {
@@ -83,8 +84,8 @@ public class PaymentReconciliationService {
 			}
 		}
 
-		log.info("대사 완료 succeeded={} failed={} manualReview={} skipped={} errors={}",
-			succeeded, failed, manualReview, skipped, errors);
+		log.info("대사 완료 succeeded={} failed={} skipped={} errors={}",
+			succeeded, failed, skipped, errors);
 	}
 
 	private PaymentReconcileOutcome processOne(Payment payment, LocalDateTime now) {
@@ -93,8 +94,10 @@ public class PaymentReconciliationService {
 		return switch (target) {
 			case APPROVE_RECONCILE -> processApproveReconcile(payment, now);
 			case MANUAL_REVIEW -> {
-				escalateToManualReview(payment, now);
-				yield PaymentReconcileOutcome.MANUAL_REVIEW;
+				// escalation(6시간 초과)은 step 2 스캔 윈도우 상한으로 처리. 상태 변경 없이 로그만 남긴다 (ADR-L5, 후속 #238).
+				log.warn("대사 escalation 임계 초과 - 상태 변경 없이 건너뜀 paymentId={} orderId={} merchantPayKey={}",
+					payment.getId(), payment.getOrderId(), payment.getMerchantPayKey());
+				yield PaymentReconcileOutcome.SKIPPED;
 			}
 			case NONE -> PaymentReconcileOutcome.SKIPPED;
 			case CANCEL_RECONCILE, APPROVED_CANCEL_COMPENSATION -> {
@@ -151,7 +154,7 @@ public class PaymentReconciliationService {
 			paymentApprovalCompensationService.compensateCanceledOrderApproval(payment, this::pgCancelForReconciliation);
 			log.error("대사 보상 취소 실행 paymentId={} orderId={} merchantPayKey={}",
 				payment.getId(), payment.getOrderId(), payment.getMerchantPayKey());
-			return PaymentReconcileOutcome.MANUAL_REVIEW;
+			return PaymentReconcileOutcome.FAILED;
 		}
 		// PAID 등 비-INIT 상태: 정상 완료 건이므로 멱등 흡수
 		log.warn("대사 승인 확정 - 주문 비-INIT 상태, 건너뜀 paymentId={} orderId={} orderStatus={}",
@@ -180,23 +183,6 @@ public class PaymentReconciliationService {
 			payment.getId(), payment.getOrderId(), payment.getMerchantPayKey());
 	}
 
-	private void escalateToManualReview(Payment payment, LocalDateTime now) {
-		paymentApprovalRecordService.markManualReview(
-			payment.getMerchantPayKey(), payment.getProvider(), payment.getPgPaymentId(),
-			"대사 자동 처리 상한 초과", now
-		);
-		log.error("대사 수동 검토 승급 paymentId={} orderId={} merchantPayKey={}",
-			payment.getId(), payment.getOrderId(), payment.getMerchantPayKey());
-		try {
-			notificationPort.notifyManualReviewRequired(
-				payment.getOrderId(), payment.getMerchantPayKey(), "대사 자동 처리 상한 초과"
-			);
-		} catch (Exception ex) {
-			log.warn("MANUAL_REVIEW 승급 통지 실패 orderId={} merchantPayKey={}",
-				payment.getOrderId(), payment.getMerchantPayKey(), ex);
-		}
-	}
-
 	private PaymentVerificationStatus toVerificationStatus(NaverPayHistoryResult result) {
 		return switch (result.getStatus()) {
 			case APPROVED -> PaymentVerificationStatus.PG_APPROVED;
@@ -209,6 +195,6 @@ public class PaymentReconciliationService {
 	}
 
 	private enum PaymentReconcileOutcome {
-		SUCCEEDED, FAILED, MANUAL_REVIEW, SKIPPED
+		SUCCEEDED, FAILED, SKIPPED
 	}
 }

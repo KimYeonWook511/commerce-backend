@@ -165,18 +165,6 @@ public class Payment extends BaseTimeEntity {
 		this.respondedAt = respondedAt;
 	}
 
-	public void markManualReview(String failDetail, LocalDateTime now) {
-		if (this.status == PaymentStatus.MANUAL_REVIEW) {
-			return;
-		}
-		if (this.status != PaymentStatus.REQUESTED && this.status != PaymentStatus.UNKNOWN) {
-			throw new PaymentException(PaymentErrorCode.PAYMENT_STATUS_TRANSITION_NOT_ALLOWED);
-		}
-		this.status = PaymentStatus.MANUAL_REVIEW;
-		this.failDetail = failDetail;
-		this.respondedAt = now;
-	}
-
 	public void verifyApprovedResponse(String responseMerchantPayKey, int responseTotalAmount) {
 		if (!this.merchantPayKey.equals(responseMerchantPayKey)) {
 			throw new PaymentException(PaymentErrorCode.PAYMENT_MERCHANT_KEY_MISMATCH);

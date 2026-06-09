@@ -55,49 +55,57 @@ class ReconciliationScanQueryIntegrationTest {
 			LocalDateTime.now().plusMinutes(15));
 	}
 
-	@DisplayName("APPROVE UNKNOWN 결제 중 respondedAt이 cutoff보다 과거인 건이 대사 후보로 반환된다")
+	@DisplayName("APPROVE UNKNOWN 결제 중 respondedAt이 staleCutoff보다 과거이고 escalationCutoff보다 최근인 건이 대사 후보로 반환된다")
 	@Test
 	void findStaleApprovePayments_unknownBeforeCutoff_returned() {
-		LocalDateTime cutoff = LocalDateTime.now();
+		LocalDateTime now = LocalDateTime.now();
+		LocalDateTime staleCutoff = now.minusMinutes(1);
+		LocalDateTime escalationCutoff = now.minusHours(6);
+
 		Payment payment = Payment.createRequested(reservation("PAY-SQ-1"), PaymentType.APPROVE, "pg-sq-1");
-		payment.markUnknown("timeout", cutoff.minusMinutes(2));
+		payment.markUnknown("timeout", now.minusMinutes(2));
 		paymentRepository.save(payment);
 
 		List<Payment> result = paymentRepository.findStaleApprovePaymentsForReconciliation(
-			cutoff.minusMinutes(1), PageRequest.of(0, 10));
+			staleCutoff, escalationCutoff, PageRequest.of(0, 10));
 
 		assertThat(result).hasSize(1);
 		assertThat(result.get(0).getMerchantPayKey()).isEqualTo("PAY-SQ-1");
 		assertThat(result.get(0).getStatus()).isEqualTo(PaymentStatus.UNKNOWN);
 	}
 
-	@DisplayName("APPROVE REQUESTED 결제 중 createdAt이 cutoff보다 과거인 건이 대사 후보로 반환된다")
+	@DisplayName("APPROVE REQUESTED 결제 중 createdAt이 staleCutoff보다 과거이고 escalationCutoff보다 최근인 건이 대사 후보로 반환된다")
 	@Test
 	void findStaleApprovePayments_requestedBeforeCutoff_returned() {
-		LocalDateTime cutoff = LocalDateTime.now();
+		LocalDateTime now = LocalDateTime.now();
+		LocalDateTime staleCutoff = now.minusMinutes(1);
+		LocalDateTime escalationCutoff = now.minusHours(6);
+
 		Payment payment = Payment.createRequested(reservation("PAY-SQ-2"), PaymentType.APPROVE, "pg-sq-2");
 		Payment saved = paymentRepository.save(payment);
 
 		// @CreatedDate/@LastModifiedDate Auditing을 우회하여 created_at을 과거 시점으로 설정한다
 		em.createNativeQuery("UPDATE tbl_payment SET created_at = :createdAt WHERE id = :id")
-			.setParameter("createdAt", cutoff.minusMinutes(2))
+			.setParameter("createdAt", now.minusMinutes(2))
 			.setParameter("id", saved.getId())
 			.executeUpdate();
 		em.clear();
 
 		List<Payment> result = paymentRepository.findStaleApprovePaymentsForReconciliation(
-			cutoff.minusMinutes(1), PageRequest.of(0, 10));
+			staleCutoff, escalationCutoff, PageRequest.of(0, 10));
 
 		assertThat(result).hasSize(1);
 		assertThat(result.get(0).getMerchantPayKey()).isEqualTo("PAY-SQ-2");
 		assertThat(result.get(0).getStatus()).isEqualTo(PaymentStatus.REQUESTED);
 	}
 
-	@DisplayName("SUCCEEDED, FAILED, MANUAL_REVIEW 상태 결제는 대사 후보에서 제외된다")
+	@DisplayName("SUCCEEDED, FAILED 상태 결제는 대사 후보에서 제외된다")
 	@Test
 	void findStaleApprovePayments_terminalStatuses_excluded() {
-		LocalDateTime past = LocalDateTime.now().minusMinutes(3);
-		LocalDateTime cutoff = LocalDateTime.now().minusMinutes(1);
+		LocalDateTime now = LocalDateTime.now();
+		LocalDateTime past = now.minusMinutes(3);
+		LocalDateTime staleCutoff = now.minusMinutes(1);
+		LocalDateTime escalationCutoff = now.minusHours(6);
 
 		Payment succeeded = Payment.createRequested(reservation("PAY-SQ-3-S"), PaymentType.APPROVE, "pg-sq-3-s");
 		succeeded.succeed(past);
@@ -107,13 +115,8 @@ class ReconciliationScanQueryIntegrationTest {
 		failed.fail(PaymentFailCode.PG_REQUEST_REJECTED, "rejected", past);
 		paymentRepository.save(failed);
 
-		Payment manualReview = Payment.createRequested(reservation("PAY-SQ-3-M"), PaymentType.APPROVE, "pg-sq-3-m");
-		manualReview.markUnknown("timeout", past);
-		manualReview.markManualReview("escalated", past);
-		paymentRepository.save(manualReview);
-
 		List<Payment> result = paymentRepository.findStaleApprovePaymentsForReconciliation(
-			cutoff, PageRequest.of(0, 10));
+			staleCutoff, escalationCutoff, PageRequest.of(0, 10));
 
 		assertThat(result).isEmpty();
 	}
@@ -121,29 +124,74 @@ class ReconciliationScanQueryIntegrationTest {
 	@DisplayName("CANCEL 타입 결제는 type 필터에 의해 대사 후보에서 제외된다")
 	@Test
 	void findStaleApprovePayments_cancelType_excluded() {
-		LocalDateTime cutoff = LocalDateTime.now().minusMinutes(1);
+		LocalDateTime now = LocalDateTime.now();
+		LocalDateTime staleCutoff = now.minusMinutes(1);
+		LocalDateTime escalationCutoff = now.minusHours(6);
 
 		Payment cancelPayment = Payment.createCancelRequested(
 			++nextOrderId, "PAY-SQ-4", "pg-sq-4", 1000, PaymentProvider.NAVERPAY);
 		paymentRepository.save(cancelPayment);
 
 		List<Payment> result = paymentRepository.findStaleApprovePaymentsForReconciliation(
-			cutoff, PageRequest.of(0, 10));
+			staleCutoff, escalationCutoff, PageRequest.of(0, 10));
 
 		assertThat(result).isEmpty();
 	}
 
-	@DisplayName("cutoff 이후에 응답된 UNKNOWN 결제는 대사 후보에서 제외된다")
+	@DisplayName("staleCutoff 이후에 응답된 UNKNOWN 결제는 대사 후보에서 제외된다")
 	@Test
 	void findStaleApprovePayments_recentUnknown_excluded() {
-		LocalDateTime cutoff = LocalDateTime.now().minusMinutes(1);
+		LocalDateTime now = LocalDateTime.now();
+		LocalDateTime staleCutoff = now.minusMinutes(1);
+		LocalDateTime escalationCutoff = now.minusHours(6);
 
 		Payment recentUnknown = Payment.createRequested(reservation("PAY-SQ-5"), PaymentType.APPROVE, "pg-sq-5");
-		recentUnknown.markUnknown("timeout", LocalDateTime.now()); // respondedAt = now > cutoff
+		recentUnknown.markUnknown("timeout", now); // respondedAt = now > staleCutoff
 		paymentRepository.save(recentUnknown);
 
 		List<Payment> result = paymentRepository.findStaleApprovePaymentsForReconciliation(
-			cutoff, PageRequest.of(0, 10));
+			staleCutoff, escalationCutoff, PageRequest.of(0, 10));
+
+		assertThat(result).isEmpty();
+	}
+
+	@DisplayName("escalationCutoff보다 오래된 UNKNOWN 결제는 스캔 윈도우 상한 초과로 대사 후보에서 제외된다 (ADR-L8)")
+	@Test
+	void findStaleApprovePayments_escalatedUnknown_excluded() {
+		LocalDateTime now = LocalDateTime.now();
+		LocalDateTime staleCutoff = now.minusMinutes(1);
+		LocalDateTime escalationCutoff = now.minusHours(6);
+
+		Payment escalatedUnknown = Payment.createRequested(reservation("PAY-SQ-ESC-1"), PaymentType.APPROVE, "pg-sq-esc-1");
+		// respondedAt이 6시간 초과 → escalationCutoff보다 과거 → 스캔 제외
+		escalatedUnknown.markUnknown("timeout", now.minusHours(7));
+		paymentRepository.save(escalatedUnknown);
+
+		List<Payment> result = paymentRepository.findStaleApprovePaymentsForReconciliation(
+			staleCutoff, escalationCutoff, PageRequest.of(0, 10));
+
+		assertThat(result).isEmpty();
+	}
+
+	@DisplayName("escalationCutoff보다 오래된 stale REQUESTED 결제는 스캔 윈도우 상한 초과로 대사 후보에서 제외된다 (ADR-L8)")
+	@Test
+	void findStaleApprovePayments_escalatedRequested_excluded() {
+		LocalDateTime now = LocalDateTime.now();
+		LocalDateTime staleCutoff = now.minusMinutes(1);
+		LocalDateTime escalationCutoff = now.minusHours(6);
+
+		Payment escalatedRequested = Payment.createRequested(reservation("PAY-SQ-ESC-2"), PaymentType.APPROVE, "pg-sq-esc-2");
+		Payment saved = paymentRepository.save(escalatedRequested);
+
+		// createdAt을 7시간 전으로 설정 → escalationCutoff(6시간 전)보다 과거 → 스캔 제외
+		em.createNativeQuery("UPDATE tbl_payment SET created_at = :createdAt WHERE id = :id")
+			.setParameter("createdAt", now.minusHours(7))
+			.setParameter("id", saved.getId())
+			.executeUpdate();
+		em.clear();
+
+		List<Payment> result = paymentRepository.findStaleApprovePaymentsForReconciliation(
+			staleCutoff, escalationCutoff, PageRequest.of(0, 10));
 
 		assertThat(result).isEmpty();
 	}
@@ -151,8 +199,10 @@ class ReconciliationScanQueryIntegrationTest {
 	@DisplayName("Pageable limit이 적용되어 지정한 수만큼만 반환된다")
 	@Test
 	void findStaleApprovePayments_pageableLimit_limitedResults() {
-		LocalDateTime cutoff = LocalDateTime.now();
-		LocalDateTime past = cutoff.minusMinutes(2);
+		LocalDateTime now = LocalDateTime.now();
+		LocalDateTime staleCutoff = now.minusMinutes(1);
+		LocalDateTime escalationCutoff = now.minusHours(6);
+		LocalDateTime past = now.minusMinutes(2);
 
 		for (int i = 1; i <= 3; i++) {
 			Payment p = Payment.createRequested(reservation("PAY-SQ-6-" + i), PaymentType.APPROVE, "pg-sq-6-" + i);
@@ -161,7 +211,7 @@ class ReconciliationScanQueryIntegrationTest {
 		}
 
 		List<Payment> result = paymentRepository.findStaleApprovePaymentsForReconciliation(
-			cutoff.minusMinutes(1), PageRequest.of(0, 2));
+			staleCutoff, escalationCutoff, PageRequest.of(0, 2));
 
 		assertThat(result).hasSize(2);
 	}

@@ -28,21 +28,16 @@ public class PaymentApprovalCompensationService {
 
 	/**
 	 * CANCELED 주문의 UNKNOWN 결제가 대사에서 SUCCEEDED 확정을 시도한 경우 보상 취소(환불)를 수행한다 (ADR-L4, C).
-	 * PG 보상 취소 → approve MANUAL_REVIEW 승급 → 통지(best-effort). 보상 취소 실패 시에도 MANUAL_REVIEW + 통지로 위임.
-	 * 이중 환불은 runPgCancel 내부의 getOrCreate + REQUESTED 가드가 차단한다.
+	 * PG 보상 취소 → 통지(best-effort). 이중 환불은 runPgCancel 내부의 getOrCreate + REQUESTED 가드가 차단한다.
 	 */
 	public void compensateCanceledOrderApproval(Payment approvePayment, PgCanceller pgCanceller) {
 		runPgCancel(
 			approvePayment,
-			PaymentFailCode.CANCEL_PROCESS_FAILED,
+			PaymentFailCode.ORDER_CANCELED,
 			"취소된 주문으로 인한 보상 환불",
 			approvePayment.getAmount(),
 			"취소된 주문의 결제 환불",
 			pgCanceller
-		);
-		paymentApprovalRecordService.markManualReview(
-			approvePayment.getMerchantPayKey(), approvePayment.getProvider(), approvePayment.getPgPaymentId(),
-			"CANCELED 주문 결제 보상 취소", LocalDateTime.now()
 		);
 		try {
 			notificationPort.notifyManualReviewRequired(
