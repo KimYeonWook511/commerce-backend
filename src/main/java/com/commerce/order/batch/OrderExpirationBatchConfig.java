@@ -4,6 +4,7 @@ import java.time.LocalDateTime;
 import java.util.Collections;
 import java.util.Iterator;
 import java.util.List;
+import java.util.Set;
 
 import org.springframework.batch.core.Job;
 import org.springframework.batch.core.Step;
@@ -20,12 +21,13 @@ import org.springframework.dao.OptimisticLockingFailureException;
 import org.springframework.transaction.PlatformTransactionManager;
 
 import com.commerce.common.exception.CustomException;
+import com.commerce.order.application.OrderExpirationService;
+import com.commerce.order.application.port.BlockingPaymentChecker;
 import com.commerce.order.batch.listener.OrderExpirationJobListener;
 import com.commerce.order.batch.listener.OrderExpirationItemReadListener;
 import com.commerce.order.batch.listener.OrderExpirationItemWriteListener;
 import com.commerce.order.batch.listener.OrderExpirationRetryListener;
 import com.commerce.order.batch.listener.OrderExpirationSkipListener;
-import com.commerce.order.application.OrderExpirationService;
 import com.commerce.order.domain.Order;
 import com.commerce.order.domain.OrderStatus;
 import com.commerce.order.domain.repository.OrderRepository;
@@ -80,6 +82,7 @@ public class OrderExpirationBatchConfig {
 	@StepScope
 	public ItemReader<Order> expiredOrderReader(
 		OrderRepository orderRepository,
+		BlockingPaymentChecker blockingPaymentChecker,
 		@Value("#{jobParameters['cutoff']}") String cutoff
 	) {
 		return new ItemReader<>() {
@@ -89,19 +92,26 @@ public class OrderExpirationBatchConfig {
 
 			@Override
 			public Order read() {
-				if (!iterator.hasNext()) {
+				while (!iterator.hasNext()) {
 					List<Order> orders = orderRepository.findExpiredOrdersAfterId(
 						OrderStatus.INIT,
 						cutoffTime,
 						lastId,
 						chunkSize
 					);
-					if (!orders.isEmpty()) {
-						lastId = orders.getLast().getId();
-						iterator = orders.iterator();
+					if (orders.isEmpty()) {
+						return null;
 					}
+					lastId = orders.getLast().getId();
+					Set<Long> blocked = blockingPaymentChecker.findOrderIdsWithBlockingPayment(
+						orders.stream().map(Order::getId).toList()
+					);
+					iterator = orders.stream()
+						.filter(o -> !blocked.contains(o.getId()))
+						.toList()
+						.iterator();
 				}
-				return iterator.hasNext() ? iterator.next() : null;
+				return iterator.next();
 			}
 		};
 	}

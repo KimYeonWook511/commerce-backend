@@ -4,6 +4,7 @@ import java.time.LocalDateTime;
 import java.util.Collection;
 import java.util.List;
 import java.util.Optional;
+import java.util.Set;
 
 import org.springframework.data.domain.Pageable;
 import org.springframework.data.jpa.repository.JpaRepository;
@@ -48,4 +49,12 @@ public interface JpaPaymentRepository extends JpaRepository<Payment, Long> {
 		@Param("cutoff") LocalDateTime cutoff,
 		Pageable pageable
 	);
+
+	@Query("""
+		SELECT DISTINCT p.orderId FROM Payment p
+		WHERE p.type = 'APPROVE'
+		  AND p.status IN ('UNKNOWN', 'MANUAL_REVIEW')
+		  AND p.orderId IN :orderIds
+		""")
+	List<Long> findOrderIdsWithBlockingPaymentIn(@Param("orderIds") Collection<Long> orderIds);
 }
