@@ -9,6 +9,7 @@ import static org.mockito.Mockito.never;
 
 import java.time.LocalDateTime;
 import java.util.List;
+import java.util.Optional;
 
 import org.junit.jupiter.api.DisplayName;
 import org.junit.jupiter.api.Test;
@@ -19,8 +20,12 @@ import org.mockito.junit.jupiter.MockitoExtension;
 import org.springframework.data.domain.Pageable;
 import org.springframework.test.util.ReflectionTestUtils;
 
+import com.commerce.order.domain.Order;
+import com.commerce.order.domain.repository.OrderRepository;
 import com.commerce.order.exception.OrderErrorCode;
 import com.commerce.order.exception.OrderException;
+import com.commerce.payment.application.port.NotificationPort;
+import com.commerce.payment.application.port.PgCanceller;
 import com.commerce.payment.domain.Payment;
 import com.commerce.payment.domain.PaymentFailCode;
 import com.commerce.payment.domain.PaymentProvider;
@@ -40,13 +45,22 @@ class PaymentReconciliationServiceTest {
 	private PaymentRepository paymentRepository;
 
 	@Mock
+	private OrderRepository orderRepository;
+
+	@Mock
 	private PaymentApprovalService paymentApprovalService;
 
 	@Mock
 	private PaymentApprovalRecordService paymentApprovalRecordService;
 
 	@Mock
+	private PaymentApprovalCompensationService paymentApprovalCompensationService;
+
+	@Mock
 	private NaverPayGateway naverPayGateway;
+
+	@Mock
+	private NotificationPort notificationPort;
 
 	@InjectMocks
 	private PaymentReconciliationService reconciliationService;
@@ -144,9 +158,9 @@ class PaymentReconciliationServiceTest {
 
 	// --- MANUAL_REVIEW escalation ---
 
-	@DisplayName("UNKNOWN 결제가 6시간 escalation 임계를 넘으면 markManualReview를 호출한다")
+	@DisplayName("UNKNOWN 결제가 6시간 escalation 임계를 넘으면 markManualReview와 통지를 호출한다")
 	@Test
-	void reconcile_unknownEscalated_callsMarkManualReview() {
+	void reconcile_unknownEscalated_callsMarkManualReviewAndNotify() {
 		injectPolicies();
 		LocalDateTime now = LocalDateTime.now();
 		Payment payment = unknownApprovePayment("PAY-1", "pg-1", now.minusHours(7));
@@ -160,6 +174,7 @@ class PaymentReconciliationServiceTest {
 			eq("PAY-1"), eq(PaymentProvider.NAVERPAY), eq("pg-1"),
 			any(String.class), any(LocalDateTime.class)
 		);
+		then(notificationPort).should().notifyManualReviewRequired(any(), eq("PAY-1"), any(String.class));
 		then(naverPayGateway).should(never()).getApprovalHistory(any());
 		then(paymentApprovalService).should(never()).succeedApproval(any(), any());
 	}
@@ -202,14 +217,15 @@ class PaymentReconciliationServiceTest {
 		then(paymentApprovalRecordService).should(never()).markManualReview(any(), any(), any(), any(), any());
 	}
 
-	// --- 주문 CANCELED로 completePayment 거부 시 건너뜀 ---
+	// --- 주문 CANCELED → 보상 취소 (C) ---
 
-	@DisplayName("succeedApproval 호출 시 ORDER_PAID_NOT_ALLOWED이면 건을 건너뛴다 (phase 2에서 보상 추가 예정)")
+	@DisplayName("succeedApproval이 ORDER_PAID_NOT_ALLOWED이고 주문이 CANCELED이면 compensateCanceledOrderApproval을 호출한다")
 	@Test
-	void reconcile_orderAlreadyCanceled_skipsWithoutCompensation() {
+	void reconcile_orderCanceled_callsCompensation() {
 		injectPolicies();
 		LocalDateTime now = LocalDateTime.now();
 		Payment payment = unknownApprovePayment("PAY-1", "pg-1", now.minusMinutes(2));
+		Order canceledOrder = canceledOrder();
 
 		given(paymentRepository.findStaleApprovePaymentsForReconciliation(any(), any(Pageable.class)))
 			.willReturn(List.of(payment));
@@ -217,12 +233,34 @@ class PaymentReconciliationServiceTest {
 			.willReturn(NaverPayHistoryResult.approved("PAY-1", 1000));
 		willThrow(new OrderException(OrderErrorCode.ORDER_PAID_NOT_ALLOWED))
 			.given(paymentApprovalService).succeedApproval(any(), any());
+		given(orderRepository.findById(payment.getOrderId())).willReturn(Optional.of(canceledOrder));
 
 		reconciliationService.reconcile();
 
-		then(paymentApprovalService).should().succeedApproval(eq(payment), any(LocalDateTime.class));
-		// 보상 취소 없이 건너뜀
-		then(paymentApprovalRecordService).should(never()).fail(any(), any(), any(), any(), any(), any());
+		then(paymentApprovalCompensationService).should()
+			.compensateCanceledOrderApproval(eq(payment), any(PgCanceller.class));
+	}
+
+	@DisplayName("succeedApproval이 ORDER_PAID_NOT_ALLOWED이고 주문이 PAID이면 보상 없이 건너뛴다")
+	@Test
+	void reconcile_orderAlreadyPaid_skipsIdempotent() {
+		injectPolicies();
+		LocalDateTime now = LocalDateTime.now();
+		Payment payment = unknownApprovePayment("PAY-1", "pg-1", now.minusMinutes(2));
+		Order paidOrder = paidOrder();
+
+		given(paymentRepository.findStaleApprovePaymentsForReconciliation(any(), any(Pageable.class)))
+			.willReturn(List.of(payment));
+		given(naverPayGateway.getApprovalHistory("pg-1"))
+			.willReturn(NaverPayHistoryResult.approved("PAY-1", 1000));
+		willThrow(new OrderException(OrderErrorCode.ORDER_PAID_NOT_ALLOWED))
+			.given(paymentApprovalService).succeedApproval(any(), any());
+		given(orderRepository.findById(payment.getOrderId())).willReturn(Optional.of(paidOrder));
+
+		reconciliationService.reconcile();
+
+		then(paymentApprovalCompensationService).should(never())
+			.compensateCanceledOrderApproval(any(), any());
 	}
 
 	// --- 건별 예외 격리 ---
@@ -280,5 +318,17 @@ class PaymentReconciliationServiceTest {
 		Payment payment = Payment.createRequested(reservation, PaymentType.APPROVE, pgPaymentId);
 		ReflectionTestUtils.setField(payment, "createdAt", createdAt);
 		return payment;
+	}
+
+	private Order canceledOrder() {
+		Order order = Order.create(1L);
+		order.cancel();
+		return order;
+	}
+
+	private Order paidOrder() {
+		Order order = Order.create(1L);
+		order.completePayment();
+		return order;
 	}
 }

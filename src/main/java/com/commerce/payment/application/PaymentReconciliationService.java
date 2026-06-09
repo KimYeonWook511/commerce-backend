@@ -6,12 +6,18 @@ import java.util.List;
 import org.springframework.data.domain.PageRequest;
 import org.springframework.stereotype.Service;
 
+import com.commerce.order.domain.Order;
+import com.commerce.order.domain.OrderStatus;
+import com.commerce.order.domain.repository.OrderRepository;
 import com.commerce.order.exception.OrderErrorCode;
 import com.commerce.order.exception.OrderException;
+import com.commerce.payment.application.port.NotificationPort;
+import com.commerce.payment.application.port.result.CancelOutcome;
 import com.commerce.payment.domain.Payment;
 import com.commerce.payment.domain.PaymentFailCode;
 import com.commerce.payment.domain.repository.PaymentRepository;
 import com.commerce.payment.naverpay.application.port.NaverPayGateway;
+import com.commerce.payment.naverpay.application.port.result.NaverPayCancelResult;
 import com.commerce.payment.naverpay.application.port.result.NaverPayHistoryResult;
 import com.commerce.payment.postprocess.flow.PaymentPostProcessFlow;
 import com.commerce.payment.postprocess.flow.PaymentPostProcessFlowPolicy;
@@ -34,9 +40,12 @@ public class PaymentReconciliationService {
 	private static final int STALE_CUTOFF_MINUTES = 1;
 
 	private final PaymentRepository paymentRepository;
+	private final OrderRepository orderRepository;
 	private final PaymentApprovalService paymentApprovalService;
 	private final PaymentApprovalRecordService paymentApprovalRecordService;
+	private final PaymentApprovalCompensationService paymentApprovalCompensationService;
 	private final NaverPayGateway naverPayGateway;
+	private final NotificationPort notificationPort;
 	private final PaymentPostProcessTargetPolicy targetPolicy;
 	private final PaymentPostProcessFlowPolicy flowPolicy;
 
@@ -129,13 +138,37 @@ public class PaymentReconciliationService {
 			return PaymentReconcileOutcome.SUCCEEDED;
 		} catch (OrderException ex) {
 			if (ex.getErrorCode() == OrderErrorCode.ORDER_PAID_NOT_ALLOWED) {
-				// 주문이 이미 CANCELED → 보상 취소는 phase 2 step 2(C)에서 추가 예정
-				log.warn("대사 승인 확정 - 주문 이미 취소됨, 건너뜀 paymentId={} orderId={}",
-					payment.getId(), payment.getOrderId());
-				return PaymentReconcileOutcome.SKIPPED;
+				return handleOrderNotCompletable(payment);
 			}
 			throw ex;
 		}
+	}
+
+	// succeedApproval이 ORDER_PAID_NOT_ALLOWED로 거부된 경우: 주문 상태를 재조회해 분기한다 (ADR-L4).
+	private PaymentReconcileOutcome handleOrderNotCompletable(Payment payment) {
+		Order order = orderRepository.findById(payment.getOrderId()).orElse(null);
+		if (order != null && order.getStatus() == OrderStatus.CANCELED) {
+			paymentApprovalCompensationService.compensateCanceledOrderApproval(payment, this::pgCancelForReconciliation);
+			log.error("대사 보상 취소 실행 paymentId={} orderId={} merchantPayKey={}",
+				payment.getId(), payment.getOrderId(), payment.getMerchantPayKey());
+			return PaymentReconcileOutcome.MANUAL_REVIEW;
+		}
+		// PAID 등 비-INIT 상태: 정상 완료 건이므로 멱등 흡수
+		log.warn("대사 승인 확정 - 주문 비-INIT 상태, 건너뜀 paymentId={} orderId={} orderStatus={}",
+			payment.getId(), payment.getOrderId(), order != null ? order.getStatus() : "not found");
+		return PaymentReconcileOutcome.SKIPPED;
+	}
+
+	private CancelOutcome pgCancelForReconciliation(Payment cancelPayment, String cancelReason) {
+		NaverPayCancelResult result = naverPayGateway.cancel(
+			cancelPayment.getPgPaymentId(), cancelPayment.getAmount(), cancelReason
+		);
+		return switch (result.getStatus()) {
+			case SUCCESS, ALREADY_CANCELED -> CancelOutcome.success();
+			case PROCESSING -> CancelOutcome.processing();
+			case FAILED -> CancelOutcome.failed(result.getFailCode(), result.getFailDetail());
+			case UNKNOWN -> CancelOutcome.unknown(result.getFailDetail());
+		};
 	}
 
 	private void executeAlreadyCanceled(Payment payment, LocalDateTime now) {
@@ -154,6 +187,14 @@ public class PaymentReconciliationService {
 		);
 		log.error("대사 수동 검토 승급 paymentId={} orderId={} merchantPayKey={}",
 			payment.getId(), payment.getOrderId(), payment.getMerchantPayKey());
+		try {
+			notificationPort.notifyManualReviewRequired(
+				payment.getOrderId(), payment.getMerchantPayKey(), "대사 자동 처리 상한 초과"
+			);
+		} catch (Exception ex) {
+			log.warn("MANUAL_REVIEW 승급 통지 실패 orderId={} merchantPayKey={}",
+				payment.getOrderId(), payment.getMerchantPayKey(), ex);
+		}
 	}
 
 	private PaymentVerificationStatus toVerificationStatus(NaverPayHistoryResult result) {
