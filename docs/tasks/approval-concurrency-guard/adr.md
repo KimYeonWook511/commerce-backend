@@ -69,7 +69,7 @@
 
 ---
 
-## ADR-L3: reservation 조회를 (memberId, merchantPayKey)로 단일화하고 남의 키를 NOT_FOUND로 응답한다
+## ADR-L3: reservation 조회를 (memberId, merchantPayKey)로 단일화하고 예약 미발견을 PAYMENT_RESERVATION_NOT_FOUND로 응답한다
 
 - 상태: accepted
 - supersedes: 없음
@@ -85,7 +85,7 @@
 
 ### 결정 내용
 
-- `findByMemberIdAndMerchantPayKey(memberId, merchantPayKey)`로 조회를 단일화한다. 남의/없는 키 모두 `PAYMENT_NOT_FOUND`로 응답하고 `PAYMENT_MEMBER_MISMATCH`를 제거한다.
+- `findByMemberIdAndMerchantPayKey(memberId, merchantPayKey)`로 조회를 단일화한다. 남의/없는 키 모두 예약 미발견으로 보아 전용 코드 `PAYMENT_RESERVATION_NOT_FOUND`로 응답하고 `PAYMENT_MEMBER_MISMATCH`를 제거한다. 예약 미발견을 결제(Payment) 미발견(`PAYMENT_NOT_FOUND`, PG/history 경로)과 분리하고 `PAYMENT_RESERVATION_ALREADY_USED`와 대칭을 이룬다.
 
 ### 근거
 
@@ -93,4 +93,4 @@
 
 ### 결과
 
-- 남의 키 승인 요청이 `PAYMENT_NOT_FOUND`가 된다. `PAYMENT_MEMBER_MISMATCH` 에러코드가 제거된다. api-spec을 갱신한다.
+- 남의/없는 키 승인 요청이 `PAYMENT_RESERVATION_NOT_FOUND`(404, "결제 예약을 찾을 수 없습니다")가 된다. `PAYMENT_MEMBER_MISMATCH` 에러코드가 제거된다. PG/history 경로의 `PAYMENT_NOT_FOUND`는 그대로 둔다. api-spec을 갱신한다.

@@ -55,6 +55,10 @@ step 문서는 진입 차단을 "USED/RESERVED 분기 **전**"에 두라고 명�
 
 Gemini 리뷰가 "USED 예약에 다른 pgPaymentId로 온 요청은 `PAYMENT_NOT_FOUND`가 아니라 이미 소비된 예약 재사용"이라고 지적했다. 타당했다 — 같은 race(다른 pgPaymentId 재사용)가 concurrent(`saveUsed` 낙관적 락) 경로에서는 `PAYMENT_RESERVATION_ALREADY_USED`, sequential(USED 분기) 경로에서는 `PAYMENT_NOT_FOUND`로 갈리고 있었다. USED 분기의 `orElseThrow`를 `PAYMENT_RESERVATION_ALREADY_USED`로 바꿔 두 경로를 일관화했다(ADR-036에 반영).
 
+### 예약 미발견 전용 코드 분리 (PR 리뷰 후속)
+
+리뷰 마무리 단계에서 "예약(Reservation) 미발견이 결제(Payment) 미발견과 같은 `PAYMENT_NOT_FOUND`('결제를 찾을 수 없습니다')를 쓰는 게 어색하다"는 지적이 나왔다. 조회 단일화로 남의 키까지 `PAYMENT_NOT_FOUND`로 흡수하면서 그 사용이 더 두드러졌고, 이번에 도입한 예약 전용 `PAYMENT_RESERVATION_ALREADY_USED`와도 비대칭이었다. 예약 미발견 전용 코드 `PAYMENT_RESERVATION_NOT_FOUND`(404, "결제 예약을 찾을 수 없습니다")를 신설해 승인 진입 역조회 실패만 교체하고, PG/history 경로의 `PAYMENT_NOT_FOUND`는 그대로 뒀다(ADR-038에 반영). 도메인 엔티티(Reservation vs Payment)가 다르면 미발견 코드도 분리하는 게 의미상 옳다는 사례다.
+
 ---
 
 ## 4. 한 줄 요약

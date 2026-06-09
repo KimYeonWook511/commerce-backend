@@ -113,7 +113,7 @@ ReservePaymentController → ReservePaymentService
 
 # 결제 승인 (네이버페이)
 NaverPayController → NaverPayApprovalService
-  → PaymentReservationRepository ((memberId, merchantPayKey) 로 Reservation 역조회 — Order 안 거침; 남의/없는 키는 PAYMENT_NOT_FOUND 로 존재 비노출, ADR-038)
+  → PaymentReservationRepository ((memberId, merchantPayKey) 로 Reservation 역조회 — Order 안 거침; 남의/없는 키는 PAYMENT_RESERVATION_NOT_FOUND 로 존재 비노출, ADR-038)
   → PaymentRepository (UNKNOWN 차단 검사)
   → USED Reservation 발견 시: 같은 pgPaymentId 는 멱등 응답 200, 다른 pgPaymentId 는 PAYMENT_RESERVATION_ALREADY_USED 차단
   → 이미 성공(APPROVE·SUCCEEDED) 결제 있는 주문 진입 차단 — PG 호출 전 PAYMENT_DUPLICATE (approved_order_key 존재 검사, ADR-037)

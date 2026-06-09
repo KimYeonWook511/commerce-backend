@@ -24,7 +24,7 @@
 - 성공 응답: 변경 없음.
 - 실패 응답 변경분:
   - **제거**: `PAYMENT_MEMBER_MISMATCH`(403). 더 이상 반환하지 않는다.
-  - **변경**: 다른 회원의 merchantPayKey 또는 존재하지 않는 키로 승인 요청 시 `PAYMENT_NOT_FOUND`(404)로 응답한다(키 존재 비노출). (ADR-L3)
+  - **변경**: 다른 회원의 merchantPayKey 또는 존재하지 않는 키로 승인 요청 시 예약 미발견 전용 코드 `PAYMENT_RESERVATION_NOT_FOUND`(404)로 응답한다(키 존재 비노출). (ADR-L3)
   - **추가**: 이미 성공한 APPROVE 결제가 있는 주문에 새 승인 진입 시 진입 단계에서 차단 실패 응답을 반환한다(`PAYMENT_DUPLICATE` 제안). (ADR-L2)
   - **추가**: 같은 예약의 동시 이중 use 경합에서 진 쪽은 PG 호출 전 차단 실패 응답을 반환한다(신규 `PAYMENT_RESERVATION_ALREADY_USED` 제안). (ADR-L1)
 
