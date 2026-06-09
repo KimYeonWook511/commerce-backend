@@ -47,7 +47,7 @@ public class NaverPayApprovalService {
 
 	public NaverPayApproveResponse approve(Long memberId, String merchantPayKey, String pgPaymentId) {
 		PaymentReservation reservation = paymentReservationRepository.findByMemberIdAndMerchantPayKey(memberId, merchantPayKey)
-			.orElseThrow(() -> new PaymentException(PaymentErrorCode.PAYMENT_NOT_FOUND));
+			.orElseThrow(() -> new PaymentException(PaymentErrorCode.PAYMENT_RESERVATION_NOT_FOUND));
 
 		// 주문 존재 여부 사전 검증
 		Order order = orderRepository.findByIdAndMemberId(reservation.getOrderId(), memberId)

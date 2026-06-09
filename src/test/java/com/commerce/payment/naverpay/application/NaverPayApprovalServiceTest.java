@@ -74,9 +74,9 @@ class NaverPayApprovalServiceTest {
 	@InjectMocks
 	private NaverPayApprovalService naverPayApprovalService;
 
-	@DisplayName("예약 정보가 없으면 PAYMENT_NOT_FOUND를 던진다")
+	@DisplayName("예약 정보가 없으면 PAYMENT_RESERVATION_NOT_FOUND를 던진다")
 	@Test
-	void approve_whenReservationNotFound_throwPaymentNotFound() {
+	void approve_whenReservationNotFound_throwPaymentReservationNotFound() {
 		// given
 		long memberId = 1L;
 		given(paymentReservationRepository.findByMemberIdAndMerchantPayKey(memberId, "PAY-1")).willReturn(Optional.empty());
@@ -86,13 +86,13 @@ class NaverPayApprovalServiceTest {
 			.isInstanceOf(PaymentException.class)
 			.satisfies(exception -> {
 				PaymentException paymentException = (PaymentException)exception;
-				assertThat(paymentException.getErrorCode()).isEqualTo(PaymentErrorCode.PAYMENT_NOT_FOUND);
+				assertThat(paymentException.getErrorCode()).isEqualTo(PaymentErrorCode.PAYMENT_RESERVATION_NOT_FOUND);
 			});
 	}
 
-	@DisplayName("남의 merchantPayKey로 승인 요청하면 PAYMENT_NOT_FOUND를 던진다 (키 존재 비노출)")
+	@DisplayName("남의 merchantPayKey로 승인 요청하면 PAYMENT_RESERVATION_NOT_FOUND를 던진다 (키 존재 비노출)")
 	@Test
-	void approve_whenMemberDoesNotOwnKey_throwPaymentNotFound() {
+	void approve_whenMemberDoesNotOwnKey_throwPaymentReservationNotFound() {
 		// given: attacker(memberId=2)가 owner(memberId=1)의 merchantPayKey로 요청
 		long attackerMemberId = 2L;
 		given(paymentReservationRepository.findByMemberIdAndMerchantPayKey(attackerMemberId, "PAY-1"))
@@ -103,7 +103,7 @@ class NaverPayApprovalServiceTest {
 			.isInstanceOf(PaymentException.class)
 			.satisfies(exception -> {
 				PaymentException paymentException = (PaymentException)exception;
-				assertThat(paymentException.getErrorCode()).isEqualTo(PaymentErrorCode.PAYMENT_NOT_FOUND);
+				assertThat(paymentException.getErrorCode()).isEqualTo(PaymentErrorCode.PAYMENT_RESERVATION_NOT_FOUND);
 			});
 	}
 
