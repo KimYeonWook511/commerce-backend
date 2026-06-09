@@ -1,0 +1,10 @@
+{
+  "project": "commerce-backend",
+  "phase": "4-adr039-alignment",
+  "harness_version": "v2",
+  "steps": [
+    { "step": 1, "name": "revert-manual-review-status", "status": "pending" },
+    { "step": 2, "name": "scan-window-and-compensation-failed", "status": "pending" },
+    { "step": 3, "name": "terminal-order-not-completable", "status": "pending" }
+  ]
+}

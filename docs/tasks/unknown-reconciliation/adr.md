@@ -107,7 +107,7 @@
 
 ### 결정 내용
 
-- 대사가 UNKNOWN→SUCCEEDED 확정 후 `Order.completePayment()`가 CANCELED 상태로 거부되면, 보상 취소(환불)를 실행하고 MANUAL_REVIEW로 마킹한 뒤 통지한다. 보상 취소는 기존 `PaymentApprovalCompensationService`/`pgCancel` 경로를 재사용한다.
+- 대사가 UNKNOWN→SUCCEEDED 확정 후 `Order.completePayment()`가 CANCELED 상태로 거부되면, 보상 취소(환불)를 실행하고 approve 결제를 `FAILED` + failCode(`ORDER_CANCELED`) + CANCEL row로 종착시킨 뒤 통지한다(ADR-039 준수 — 보상된 APPROVE는 새 상태가 아니라 FAILED+failCode로 표현). 보상 취소는 기존 `PaymentApprovalCompensationService`/`pgCancel` 경로를 재사용한다.
 
 ### 근거
 
@@ -115,11 +115,11 @@
 
 ### 결과
 
-- 사후 환불 경로가 대사 flow에 추가된다. 보상 취소 자체가 실패하면 MANUAL_REVIEW + 통지로 운영 개입에 위임한다.
+- 사후 환불 경로가 대사 flow에 추가된다. 보상 취소 자체가 실패하면 cancel row를 UNKNOWN 보존(재처리 #208 batch #3) + 통지로 운영 개입에 위임한다.
 
 ---
 
-## ADR-L5: 대사 자동 처리 상한 초과 상태를 PaymentStatus.MANUAL_REVIEW로 일급 표현한다
+## ADR-L5: 대사 종착에 새 상태(MANUAL_REVIEW)를 도입하지 않고 ADR-039를 따른다
 
 - 상태: accepted
 - supersedes: 없음
@@ -127,23 +127,25 @@
 
 ### 배경
 
-- 대사 대상이 상한(6시간)을 넘도록 PG가 결론을 못 내면 자동 재시도를 멈추고 운영자 확인 대상으로 승급해야 한다(정책의 MANUAL_REVIEW target). 그러나 `PaymentStatus`에는 해당 상태가 없었다.
+- 초기 설계에서 escalation(6시간 초과)·보상 종착을 표현하려 `PaymentStatus.MANUAL_REVIEW`를 도입했다. 그러나 루트 ADR-039(보상된 APPROVE는 `FAILED`+failCode로 유지, "과금됨+보상대상" 표현용 새 상태 도입 기각 — YAGNI·정보 무손실)와 정면 충돌함을 확인하고 **철회**한다.
 
 ### 고려한 대안
 
-- 상태는 UNKNOWN 유지 + 로그/통지만: enum/스키마 불변이나, "자동 처리 포기" 상태가 데이터에 남지 않아 운영 조회가 어렵고 매 대사 주기마다 재방문·중복 통지 위험이 있다.
+- `MANUAL_REVIEW` status 유지: 보상 종착(결론 남)과 escalation 종착(결론 미상)을 한 상태로 뭉쳐, ADR-039가 경계한 "한 상태가 두 현실을 뭉갬"을 반복한다. 운영 대시보드 등 그 상태를 구분 소비하는 곳도 아직 없어 사용처 없는 상태가 된다(과한 설계).
 
 ### 결정 내용
 
-- `PaymentStatus`에 `MANUAL_REVIEW`를 추가한다. UNKNOWN/REQUESTED → MANUAL_REVIEW 종착 전이를 두고, reserve/approve 차단 가드에 MANUAL_REVIEW도 포함한다. `@Enumerated(STRING)` + 길이 32 컬럼이라 DDL 변경 없이 값만 추가된다.
+- `PaymentStatus.MANUAL_REVIEW`를 도입하지 않는다(철회). status는 `REQUESTED`/`SUCCEEDED`/`FAILED`/`UNKNOWN`만 유지한다.
+  - **보상된 APPROVE(C 포함)** → `FAILED` + failCode + CANCEL row (ADR-039, ADR-L4).
+  - **escalation(6시간 초과 UNKNOWN)** → 새 상태 없이 스캔 윈도우 상한(ADR-L8)으로 자동 대사에서 제외하고 `UNKNOWN`으로 둔다. 운영 통지·종착 표시와 status 분리(직교 축)는 그 구분을 소비하는 기능이 생기는 후속 #238에서 재검토한다(ADR-039 재검토 trigger).
 
 ### 근거
 
-- 종착 상태를 일급으로 두면 운영 조회·중복 통지 방지·차단 일관성이 명확해진다. 정책 enum도 이미 MANUAL_REVIEW를 1급으로 다룬다.
+- `status`는 "결제에 일어난 사실"만 담고, "후처리 대상 분류"(reconcile/보상/수동/없음)는 정책이 `(status + failCode + 시간 + CANCEL row)` 조합으로 매번 계산한다. 분류 결과를 status에 박으면 사실과 파생이 섞여 의미가 흐려진다(ADR-039 정신). `PaymentPostProcessTarget.MANUAL_REVIEW`(정책 분류값)는 status가 아니므로 유지한다.
 
 ### 결과
 
-- 차단 가드와 상태 전이 검증이 MANUAL_REVIEW를 함께 고려해야 한다. 컬럼 스키마 변경은 없고 허용 값만 늘어난다.
+- 상태 enum이 4개로 유지돼 모델이 단순해진다. escalation의 운영 가시성(통지·종착)은 #238로 미뤄지고, 이번엔 무한 재시도만 스캔 윈도우 상한으로 막는다.
 
 ---
 
@@ -155,7 +157,7 @@
 
 ### 배경
 
-- C(보상 취소)·MANUAL_REVIEW 승급 시 운영자 통지가 필요하다. 실제 채널(디스코드 웹훅 등)을 이번에 붙일지 결정해야 했다.
+- C(보상 취소)·escalation 시 운영자 통지가 필요하다. 실제 채널(디스코드 웹훅 등)을 이번에 붙일지 결정해야 했다.
 
 ### 고려한 대안
 
@@ -168,7 +170,7 @@
 
 ### 근거
 
-- 진실 원천은 MANUAL_REVIEW 상태 + ERROR 로그이고 알림은 부가 push다. port로 hook만 확보해두면 채널 교체가 adapter 교체로 끝난다.
+- 진실 원천은 `FAILED`+failCode(보상)·`UNKNOWN`+ERROR 로그이고 알림은 부가 push다. port로 hook만 확보해두면 채널 교체가 adapter 교체로 끝난다.
 
 ### 결과
 
@@ -201,3 +203,59 @@
 ### 결과
 
 - 정책이 main 코드의 일부가 되어 대사 서비스가 의존한다. 정책 테스트 위치/import가 갱신된다.
+
+---
+
+## ADR-L8: escalation은 새 상태 대신 대사 스캔 윈도우(1분~6시간) 상한으로 자동 제외한다
+
+- 상태: accepted
+- supersedes: 없음
+- superseded-by: 없음
+
+### 배경
+
+- `MANUAL_REVIEW` status 철회(ADR-L5) 후, 6시간 초과 UNKNOWN을 자동 대사에서 빼는 종착 수단이 없어졌다. 스캔이 `status IN (UNKNOWN, REQUESTED)`로 긁으므로, 그냥 두면 6시간 초과 건이 매 주기 재조회돼 무한 재시도·PG 호출 낭비가 된다.
+
+### 고려한 대안
+
+- 종착 status(MANUAL_REVIEW)로 승급해 스캔에서 제외: ADR-L5에서 철회한 방향이다.
+
+### 결정 내용
+
+- 대사 스캔(`findStaleApprovePaymentsForReconciliation`)을 `1분 < age < 6시간` 윈도우로 제한한다(하한 `UNKNOWN_RECONCILE_DELAY`, 상한 `ESCALATION_DELAY`). 6시간 초과는 스캔 대상에서 빠지고 `UNKNOWN`으로 남는다. "자동 대사 대상이냐"를 status가 아니라 **시간 윈도우**가 정의한다.
+
+### 근거
+
+- 정책이 시간으로 하던 escalation 분류를 스캔 쿼리가 윈도우로 흡수한다. 새 상태 없이 무한 재시도를 막고, ADR-039의 "status는 사실만" 정신과 일치한다.
+
+### 결과
+
+- 6시간 초과 UNKNOWN은 자동 대사에서 제외되지만 운영 가시성(통지·조회)은 이번 범위 밖이다. 운영 종착·통지는 후속 #238. starvation/backoff(윈도우 내 누적)는 후속 #239.
+
+---
+
+## ADR-L9: 대사 중 주문이 비-INIT이면 SKIPPED 대신 종착 상태로 전이한다
+
+- 상태: accepted
+- supersedes: 없음
+- superseded-by: 없음
+
+### 배경
+
+- 대사가 `succeedApproval`로 승인 확정을 시도할 때 `Order.completePayment()`가 INIT이 아니어서 거부될 수 있다. 기존엔 이를 `SKIPPED`로 흘려 결제가 `UNKNOWN`으로 남아 매 주기 무한 재시도됐다(PR #237 review [3]).
+
+### 고려한 대안
+
+- 모든 비-INIT을 SKIPPED 유지: 무한 재시도·로그 도배·PG 호출 낭비가 지속된다.
+
+### 결정 내용
+
+- `handleOrderNotCompletable`에서 주문 상태별로 **종착**시킨다: `CANCELED`→보상(FAILED+failCode, ADR-L4), `PAID`→`existsApprovedByOrderId`로 판별(다른 SUCCEEDED 있으면 중복→보상, 없으면 성공 주체→`SUCCEEDED` 맞춤), `order==null`→ERROR 로그 + `FAILED`. 어떤 경로든 다음 주기에 재스캔되지 않게 한다.
+
+### 근거
+
+- 종착 상태(`SUCCEEDED`/`FAILED`)로 전이해야 스캔 대상에서 빠진다. `PAID` 중복 여부 판별로 정당한 결제 오환불을 막는다. 새 상태 없이 기존 상태+failCode로 표현한다(ADR-039).
+
+### 결과
+
+- 비-INIT 경합 건이 무한 재시도되지 않고 결정적으로 종착된다. `PAID` 분기는 `existsApprovedByOrderId` 조회를 추가로 수행한다.

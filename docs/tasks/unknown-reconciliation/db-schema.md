@@ -7,7 +7,8 @@
 
 ## 개요
 
-- `tbl_payment.status`의 허용 값에 `MANUAL_REVIEW`를 추가한다. 컬럼 자체(타입·길이·제약)는 변경하지 않는다.
+- 이 Task는 DB 스키마(테이블·컬럼·인덱스·제약)를 **변경하지 않는다.**
+- 초기 설계에서 `tbl_payment.status`에 `MANUAL_REVIEW` enum 값 추가를 검토했으나, ADR-039(보상된 APPROVE는 `FAILED`+failCode로 유지, 새 상태 도입 기각)와 충돌해 **철회**했다(ADR-L5). `PaymentStatus`는 `REQUESTED`/`SUCCEEDED`/`FAILED`/`UNKNOWN` 4값을 그대로 유지한다.
 
 ## 신규 테이블
 
@@ -15,14 +16,11 @@
 
 ## 변경 테이블
 
-- `tbl_payment`
-  - 변경 대상: `status` 컬럼의 애플리케이션 허용 값 (`PaymentStatus` enum)
-  - 변경 이유: 대사 자동 처리 상한 초과 건을 운영자 확인 대상으로 승급하는 종착 상태(`MANUAL_REVIEW`)를 일급 표현 (ADR-L5)
-  - `status`는 `@Enumerated(STRING)` + `VARCHAR(32)`이므로 **DDL 변경 없이** 저장 가능한 값만 늘어난다(`MANUAL_REVIEW` = 13자).
+- 없음
 
 ## 인덱스
 
-- 변경 없음. stale 스캔은 기존 `status` + 시각 컬럼(`responded_at`/`created_at`) 기반 조회를 사용한다. 운영 데이터량 증가 시 대사 스캔용 인덱스는 후속에서 검토한다(이번 범위 밖).
+- 변경 없음. 대사 스캔(`1분~6시간` 윈도우)은 기존 `status` + 시각 컬럼(`responded_at`/`created_at`) 기반 조회를 사용한다. 운영 데이터량 증가 시 대사 스캔용 인덱스는 후속(#239)에서 검토한다.
 
 ## 데이터 무결성
 
@@ -30,5 +28,5 @@
 
 ## 마이그레이션 고려사항
 
-- enum 값 추가는 컬럼 DDL을 바꾸지 않으므로 별도 Flyway 스크립트가 필요 없다(저장 값만 확장).
-- 기존 데이터는 영향 없음. 롤백 시 `MANUAL_REVIEW` 값을 쓰는 행이 생기기 전이라면 코드 되돌림만으로 충분하다.
+- 스키마 변경이 없으므로 Flyway 스크립트가 필요 없다.
+- `PaymentFailCode`에 보상용 코드(`ORDER_CANCELED` 등)를 추가하지만, failCode는 `@Enumerated(STRING)` + 기존 컬럼에 저장되는 애플리케이션 enum이라 DDL 변경이 없다(저장 값만 확장).

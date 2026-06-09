@@ -29,16 +29,18 @@
 - 포함 범위
   - 후처리 정책(`PaymentPostProcessTargetPolicy`/`PaymentPostProcessFlowPolicy`/관련 enum)을 `src/test`에서 `src/main`으로 승격.
   - stale UNKNOWN/REQUESTED 스캔 쿼리 + `PaymentReconciliationService`(PG 조회 → 상태 확정 → Order PAID 반영, 자동 처리 상한 초과 시 MANUAL_REVIEW 승급).
-  - `@Scheduled` 기반 대사 스케줄러.
-  - `PaymentStatus.MANUAL_REVIEW` 상태 신설 + UNKNOWN/REQUESTED → 확정/승급 도메인 전이.
+  - `@Scheduled` 기반 대사 스케줄러. 자동 대사는 `1분~6시간` 윈도우만 대상으로 하고 6시간 초과는 제외(무한 재시도 방지, ADR-L8).
+  - UNKNOWN/REQUESTED → SUCCEEDED/FAILED 확정 도메인 전이. (escalation 종착용 `MANUAL_REVIEW` 상태는 ADR-039 준수로 도입하지 않음 — ADR-L5)
   - (A) 주문 만료 배치가 UNKNOWN 결제 걸린 주문을 만료 대상에서 제외 (order 소유 query port + payment adapter 의존 역전, reader chunk 배치 필터).
-  - (C) 대사가 SUCCEEDED 확정 시 주문이 이미 CANCELED면 보상 취소(환불) + MANUAL_REVIEW + 통지.
+  - (C) 대사가 SUCCEEDED 확정 시 주문이 이미 CANCELED면 보상 취소(환불, `FAILED`+failCode) + 통지 (ADR-039 준수, ADR-L4).
   - `NotificationPort`(알림 추상화) 인터페이스 + no-op(로그) 구현.
 - 제외 범위
   - 디스코드/슬랙/메일 등 실제 알림 채널 adapter 구현 (후속 이슈). 이번엔 `NotificationPort` + no-op까지만.
   - 분산 락(ShedLock) 도입 (다중 인스턴스 운영 진입 시 후속).
   - Epic #208의 나머지 batch(보상 취소 실패 재처리 #3, 만료 RESERVED 청소 #4, 정기 대사 #5).
   - 정기 결제 대사·과거 데이터 마이그레이션.
+  - escalation(6시간 초과 UNKNOWN의 운영 종착·통지)과 결제 상태 분리 검토 — 후속 #238.
+  - 대사 스캔 starvation 방지·backoff — 후속 #239.
 
 ## 주요 시나리오
 

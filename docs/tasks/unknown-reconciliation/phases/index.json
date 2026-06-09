@@ -20,6 +20,7 @@
       "status": "completed",
       "started_at": "2026-06-09T20:05:37+0900",
       "completed_at": "2026-06-09T20:40:02+0900"
-    }
+    },
+    { "dir": "4-adr039-alignment", "harness_version": "v2", "status": "pending" }
   ]
 }
