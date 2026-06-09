@@ -1,0 +1,168 @@
+package com.commerce.payment.infrastructure;
+
+import static org.assertj.core.api.Assertions.assertThat;
+
+import java.time.LocalDateTime;
+import java.util.List;
+
+import jakarta.persistence.EntityManager;
+
+import org.junit.jupiter.api.DisplayName;
+import org.junit.jupiter.api.Tag;
+import org.junit.jupiter.api.Test;
+import org.springframework.beans.factory.annotation.Autowired;
+import org.springframework.boot.test.autoconfigure.jdbc.AutoConfigureTestDatabase;
+import org.springframework.boot.test.autoconfigure.orm.jpa.DataJpaTest;
+import org.springframework.context.annotation.Import;
+import org.springframework.data.domain.PageRequest;
+import org.springframework.test.context.ActiveProfiles;
+import org.springframework.test.context.DynamicPropertyRegistry;
+import org.springframework.test.context.DynamicPropertySource;
+import com.commerce.common.jpa.JpaConfig;
+import com.commerce.payment.domain.Payment;
+import com.commerce.payment.domain.PaymentFailCode;
+import com.commerce.payment.domain.PaymentProvider;
+import com.commerce.payment.domain.PaymentReservation;
+import com.commerce.payment.domain.PaymentStatus;
+import com.commerce.payment.domain.PaymentType;
+import com.commerce.payment.domain.repository.PaymentRepository;
+import com.commerce.support.TestcontainersSupport;
+
+@Tag("docker")
+@DataJpaTest
+@AutoConfigureTestDatabase(replace = AutoConfigureTestDatabase.Replace.NONE)
+@ActiveProfiles("test")
+@Import({JpaConfig.class, PaymentRepositoryAdapter.class})
+class ReconciliationScanQueryIntegrationTest {
+
+	@DynamicPropertySource
+	static void registerProperties(DynamicPropertyRegistry registry) {
+		TestcontainersSupport.registerMySql(registry);
+	}
+
+	@Autowired
+	private PaymentRepository paymentRepository;
+
+	@Autowired
+	private EntityManager em;
+
+	// tbl_payment.order_id 는 FK 없는 단순 컬럼이므로 실제 주문 없이 가상 ID를 사용한다 (ADR-020).
+	private static long nextOrderId = 9000L;
+
+	private PaymentReservation reservation(String merchantPayKey) {
+		return PaymentReservation.createReserved(
+			++nextOrderId, 1L, 1000, PaymentProvider.NAVERPAY, merchantPayKey,
+			LocalDateTime.now().plusMinutes(15));
+	}
+
+	@DisplayName("APPROVE UNKNOWN 결제 중 respondedAt이 cutoff보다 과거인 건이 대사 후보로 반환된다")
+	@Test
+	void findStaleApprovePayments_unknownBeforeCutoff_returned() {
+		LocalDateTime cutoff = LocalDateTime.now();
+		Payment payment = Payment.createRequested(reservation("PAY-SQ-1"), PaymentType.APPROVE, "pg-sq-1");
+		payment.markUnknown("timeout", cutoff.minusMinutes(2));
+		paymentRepository.save(payment);
+
+		List<Payment> result = paymentRepository.findStaleApprovePaymentsForReconciliation(
+			cutoff.minusMinutes(1), PageRequest.of(0, 10));
+
+		assertThat(result).hasSize(1);
+		assertThat(result.get(0).getMerchantPayKey()).isEqualTo("PAY-SQ-1");
+		assertThat(result.get(0).getStatus()).isEqualTo(PaymentStatus.UNKNOWN);
+	}
+
+	@DisplayName("APPROVE REQUESTED 결제 중 createdAt이 cutoff보다 과거인 건이 대사 후보로 반환된다")
+	@Test
+	void findStaleApprovePayments_requestedBeforeCutoff_returned() {
+		LocalDateTime cutoff = LocalDateTime.now();
+		Payment payment = Payment.createRequested(reservation("PAY-SQ-2"), PaymentType.APPROVE, "pg-sq-2");
+		Payment saved = paymentRepository.save(payment);
+
+		// @CreatedDate/@LastModifiedDate Auditing을 우회하여 created_at을 과거 시점으로 설정한다
+		em.createNativeQuery("UPDATE tbl_payment SET created_at = :createdAt WHERE id = :id")
+			.setParameter("createdAt", cutoff.minusMinutes(2))
+			.setParameter("id", saved.getId())
+			.executeUpdate();
+		em.clear();
+
+		List<Payment> result = paymentRepository.findStaleApprovePaymentsForReconciliation(
+			cutoff.minusMinutes(1), PageRequest.of(0, 10));
+
+		assertThat(result).hasSize(1);
+		assertThat(result.get(0).getMerchantPayKey()).isEqualTo("PAY-SQ-2");
+		assertThat(result.get(0).getStatus()).isEqualTo(PaymentStatus.REQUESTED);
+	}
+
+	@DisplayName("SUCCEEDED, FAILED, MANUAL_REVIEW 상태 결제는 대사 후보에서 제외된다")
+	@Test
+	void findStaleApprovePayments_terminalStatuses_excluded() {
+		LocalDateTime past = LocalDateTime.now().minusMinutes(3);
+		LocalDateTime cutoff = LocalDateTime.now().minusMinutes(1);
+
+		Payment succeeded = Payment.createRequested(reservation("PAY-SQ-3-S"), PaymentType.APPROVE, "pg-sq-3-s");
+		succeeded.succeed(past);
+		paymentRepository.save(succeeded);
+
+		Payment failed = Payment.createRequested(reservation("PAY-SQ-3-F"), PaymentType.APPROVE, "pg-sq-3-f");
+		failed.fail(PaymentFailCode.PG_REQUEST_REJECTED, "rejected", past);
+		paymentRepository.save(failed);
+
+		Payment manualReview = Payment.createRequested(reservation("PAY-SQ-3-M"), PaymentType.APPROVE, "pg-sq-3-m");
+		manualReview.markUnknown("timeout", past);
+		manualReview.markManualReview("escalated", past);
+		paymentRepository.save(manualReview);
+
+		List<Payment> result = paymentRepository.findStaleApprovePaymentsForReconciliation(
+			cutoff, PageRequest.of(0, 10));
+
+		assertThat(result).isEmpty();
+	}
+
+	@DisplayName("CANCEL 타입 결제는 type 필터에 의해 대사 후보에서 제외된다")
+	@Test
+	void findStaleApprovePayments_cancelType_excluded() {
+		LocalDateTime cutoff = LocalDateTime.now().minusMinutes(1);
+
+		Payment cancelPayment = Payment.createCancelRequested(
+			++nextOrderId, "PAY-SQ-4", "pg-sq-4", 1000, PaymentProvider.NAVERPAY);
+		paymentRepository.save(cancelPayment);
+
+		List<Payment> result = paymentRepository.findStaleApprovePaymentsForReconciliation(
+			cutoff, PageRequest.of(0, 10));
+
+		assertThat(result).isEmpty();
+	}
+
+	@DisplayName("cutoff 이후에 응답된 UNKNOWN 결제는 대사 후보에서 제외된다")
+	@Test
+	void findStaleApprovePayments_recentUnknown_excluded() {
+		LocalDateTime cutoff = LocalDateTime.now().minusMinutes(1);
+
+		Payment recentUnknown = Payment.createRequested(reservation("PAY-SQ-5"), PaymentType.APPROVE, "pg-sq-5");
+		recentUnknown.markUnknown("timeout", LocalDateTime.now()); // respondedAt = now > cutoff
+		paymentRepository.save(recentUnknown);
+
+		List<Payment> result = paymentRepository.findStaleApprovePaymentsForReconciliation(
+			cutoff, PageRequest.of(0, 10));
+
+		assertThat(result).isEmpty();
+	}
+
+	@DisplayName("Pageable limit이 적용되어 지정한 수만큼만 반환된다")
+	@Test
+	void findStaleApprovePayments_pageableLimit_limitedResults() {
+		LocalDateTime cutoff = LocalDateTime.now();
+		LocalDateTime past = cutoff.minusMinutes(2);
+
+		for (int i = 1; i <= 3; i++) {
+			Payment p = Payment.createRequested(reservation("PAY-SQ-6-" + i), PaymentType.APPROVE, "pg-sq-6-" + i);
+			p.markUnknown("timeout", past);
+			paymentRepository.save(p);
+		}
+
+		List<Payment> result = paymentRepository.findStaleApprovePaymentsForReconciliation(
+			cutoff.minusMinutes(1), PageRequest.of(0, 2));
+
+		assertThat(result).hasSize(2);
+	}
+}
