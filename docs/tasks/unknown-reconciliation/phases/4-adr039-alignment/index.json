@@ -3,8 +3,36 @@
   "phase": "4-adr039-alignment",
   "harness_version": "v2",
   "steps": [
-    { "step": 1, "name": "revert-manual-review-status", "status": "pending" },
-    { "step": 2, "name": "scan-window-and-compensation-failed", "status": "pending" },
-    { "step": 3, "name": "terminal-order-not-completable", "status": "pending" }
-  ]
+    {
+      "step": 1,
+      "name": "revert-manual-review-status",
+      "status": "completed",
+      "started_at": "2026-06-10T02:04:39+0900",
+      "completed_at": "2026-06-10T02:18:06+0900",
+      "summary": "PaymentStatus.MANUAL_REVIEW 제거. existsBlockingApproveByOrderId → existsUnknownByOrderId. escalateToManualReview + NotificationPort 주입 제거. PaymentReconcileOutcome.MANUAL_REVIEW 제거. 영향 테스트 전수 수정. ./gradlew test 통과."
+    },
+    {
+      "step": 2,
+      "name": "scan-window-and-compensation-failed",
+      "status": "completed",
+      "started_at": "2026-06-10T02:19:00+0900",
+      "completed_at": "2026-06-10T02:24:44+0900",
+      "summary": "findStaleApprovePaymentsForReconciliation에 escalationCutoff(6시간) 상한 파라미터 추가 — 스캔 윈도우를 1분~6시간으로 제한. compensateCanceledOrderApproval failCode를 CANCEL_PROCESS_FAILED에서 신규 ORDER_CANCELED로 교체(ADR-039 준수). NaverPayApprovalService.toPaymentErrorCode에 ORDER_CANCELED 매핑 추가. 통합 테스트 상한 검증 케이스 2개 추가. ./gradlew test 통과."
+    },
+    {
+      "step": 3,
+      "name": "terminal-order-not-completable",
+      "status": "completed",
+      "started_at": "2026-06-10T02:26:41+0900",
+      "completed_at": "2026-06-10T02:35:21+0900",
+      "summary": "PaymentApprovalService에 succeedApprovalRecordOnly 추가(주문 미갱신 결제 기록만 SUCCEEDED). handleOrderNotCompletable을 4개 분기로 확장 — order==null: FAILED+APPROVE_PROCESS_FAILED 종착, CANCELED: 기존 보상, PAID+중복: compensateDuplicatePayment 종착, PAID+성공주체: succeedApprovalRecordOnly 종착, 그 외 비-INIT: FAILED 종착. executeApprove에 now 전달. 단위 테스트 4개 추가/수정. ./gradlew test 통과."
+    }
+  ],
+  "created_at": "2026-06-10T02:04:39+0900",
+  "execution": {
+    "developer_model": "sonnet",
+    "reviewer_model": "opus",
+    "commit_model": "haiku"
+  },
+  "completed_at": "2026-06-10T02:37:01+0900"
 }
