@@ -128,9 +128,9 @@ class NaverPayServiceConcurrencyTest {
 		runConcurrent(20, () -> results.add(naverPayApprovalService.approve(member.getId(), merchantPayKey, pgPaymentId)), errors);
 
 		// then
-		// race window 발생 시 일부 요청은 unique 위반(DataIntegrityViolationException) 또는
-		// USED 예약 후 미결제 구간 PAYMENT_NOT_FOUND(PaymentException) 에 도달한다.
-		errors.forEach(e -> assertRaceOrPaymentError(e, PaymentErrorCode.PAYMENT_NOT_FOUND));
+		// race window 발생 시 일부 요청은 unique 위반(DataIntegrityViolationException),
+		// USED 예약 후 미결제 구간 PAYMENT_NOT_FOUND, 또는 winner 성공 후 진입 가드 PAYMENT_DUPLICATE 에 도달한다.
+		errors.forEach(e -> assertRaceOrPaymentError(e, PaymentErrorCode.PAYMENT_NOT_FOUND, PaymentErrorCode.PAYMENT_DUPLICATE));
 		assertThat(paymentPersistence.countPaymentsByMerchantPayKey(merchantPayKey)).isEqualTo(1L);
 		assertThat(orderPersistence.getOrderStatusById(order.getId()))
 			.isEqualTo(OrderStatus.PAID);
@@ -175,9 +175,9 @@ class NaverPayServiceConcurrencyTest {
 		runConcurrent(20, () -> results.add(naverPayApprovalService.approve(member.getId(), merchantPayKey, pgPaymentId)), errors);
 
 		// then
-		// race window 발생 시 일부 요청은 unique 위반(DataIntegrityViolationException) 또는
-		// USED 예약 후 미결제 구간 PAYMENT_NOT_FOUND(PaymentException) 에 도달한다.
-		errors.forEach(e -> assertRaceOrPaymentError(e, PaymentErrorCode.PAYMENT_NOT_FOUND));
+		// race window 발생 시 일부 요청은 unique 위반(DataIntegrityViolationException),
+		// USED 예약 후 미결제 구간 PAYMENT_NOT_FOUND, 또는 winner 성공 후 진입 가드 PAYMENT_DUPLICATE 에 도달한다.
+		errors.forEach(e -> assertRaceOrPaymentError(e, PaymentErrorCode.PAYMENT_NOT_FOUND, PaymentErrorCode.PAYMENT_DUPLICATE));
 		assertThat(paymentPersistence.countPaymentsByMerchantPayKey(merchantPayKey)).isEqualTo(1L);
 		assertThat(orderPersistence.getOrderStatusById(order.getId()))
 			.isEqualTo(OrderStatus.PAID);
@@ -264,13 +264,16 @@ class NaverPayServiceConcurrencyTest {
 	@DisplayName("SUCCEEDED Payment가 이미 있으면 동시 요청도 모두 멱등 응답을 반환한다")
 	@Test
 	void approve_whenConcurrentPaymentAlreadySucceeded_returnIdempotent() throws Exception {
-		// given: SUCCEEDED Payment가 이미 DB에 있는 상태
-		// SUCCEEDED Payment = findApproveSucceeded 로 발견 → 멱등 응답 경로
+		// given: 결제가 이미 완료된 상태 (reservation USED + SUCCEEDED payment) — 실제 결제 완료 상태와 동일
+		// create()가 use()+payment를 원자적으로 처리하므로 SUCCEEDED payment가 있으면 reservation은 항상 USED다.
+		// 동시 재진입은 USED 분기에서 같은 pgPaymentId payment를 찾아 멱등 응답으로 흡수한다.
 		String merchantPayKey = "PAY-NAVER-CON-5";
 		String pgPaymentId = "pg-naver-con-5";
 		Member member = memberPersistence.save(createMember());
 		persistOrder(member, merchantPayKey, 1000);
 		PaymentReservation reservation = reservationPersistence.findByMerchantPayKey(merchantPayKey).orElseThrow();
+		reservation.use();
+		reservationPersistence.save(reservation);
 		Payment payment = Payment.createRequested(reservation, PaymentType.APPROVE, pgPaymentId);
 		payment.succeed(LocalDateTime.now());
 		paymentPersistence.save(payment);
@@ -340,11 +343,11 @@ class NaverPayServiceConcurrencyTest {
 		assertThat(results).hasSize(1);
 		assertThat(results.stream().map(NaverPayApproveResponse::getStatus))
 			.allMatch(status -> status == NaverPayApproveStatus.SUCCESS);
-		// 진 쪽(loser)은 에러로 차단됨 (concurrent: PAYMENT_RESERVATION_ALREADY_USED, sequential: PAYMENT_NOT_FOUND)
+		// 진 쪽(loser)은 에러로 차단됨 (concurrent·sequential 모두 PAYMENT_RESERVATION_ALREADY_USED로 일관)
 		assertThat(errors).hasSize(1);
 		assertThat(errors.stream().findFirst().get()).isInstanceOf(PaymentException.class);
 		assertThat(((PaymentException) errors.stream().findFirst().get()).getErrorCode())
-			.isIn(PaymentErrorCode.PAYMENT_RESERVATION_ALREADY_USED, PaymentErrorCode.PAYMENT_NOT_FOUND);
+			.isEqualTo(PaymentErrorCode.PAYMENT_RESERVATION_ALREADY_USED);
 		// PG approve는 정확히 1번 호출됨 (진 쪽은 PG 호출 전에 차단됨)
 		then(naverPayGateway).should(Mockito.times(1)).approve(any());
 	}
