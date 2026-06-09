@@ -61,9 +61,12 @@ public class NaverPayApprovalService {
 		// USED Reservation: 같은 merchantPayKey로 redirect가 두 번째로 도착한 경우 (ADR-5)
 		// 기존 APPROVE payment를 상태별로 재처리한다. SUCCEEDED면 멱등 응답, REQUESTED면 PG 재확인
 		// (PROCESSING/중단으로 미완료된 시도가 영구 차단되지 않도록), FAILED/UNKNOWN이면 해당 사유로 응답.
+		// 요청 pgPaymentId의 payment가 없으면 이미 소비된 예약을 다른 pgPaymentId로 재사용하려는 중복 요청이므로
+		// PAYMENT_RESERVATION_ALREADY_USED로 차단한다. 이로써 동시 이중 use의 진 쪽이 concurrent(saveUsed 낙관적 락)·
+		// sequential(이 분기) 경로에서 같은 에러코드로 일관되게 차단된다.
 		if (reservation.getStatus() == PaymentReservationStatus.USED) {
 			Payment payment = paymentRepository.findApprovePayment(merchantPayKey, reservation.getProvider(), pgPaymentId)
-				.orElseThrow(() -> new PaymentException(PaymentErrorCode.PAYMENT_NOT_FOUND));
+				.orElseThrow(() -> new PaymentException(PaymentErrorCode.PAYMENT_RESERVATION_ALREADY_USED));
 			return processApprovePayment(payment);
 		}
 
