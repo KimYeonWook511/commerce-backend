@@ -1,0 +1,6 @@
+{
+  "phases": [
+    { "dir": "1-reconciliation", "harness_version": "v2", "status": "pending" },
+    { "dir": "2-expiration-timing-guard", "harness_version": "v2", "status": "pending" }
+  ]
+}

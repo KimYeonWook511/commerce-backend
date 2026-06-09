@@ -1,0 +1,9 @@
+{
+  "project": "commerce-backend",
+  "phase": "2-expiration-timing-guard",
+  "harness_version": "v2",
+  "steps": [
+    { "step": 1, "name": "expiration-unknown-guard", "status": "pending" },
+    { "step": 2, "name": "reconciliation-canceled-compensation", "status": "pending" }
+  ]
+}

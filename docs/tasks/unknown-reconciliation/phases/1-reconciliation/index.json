@@ -1,0 +1,11 @@
+{
+  "project": "commerce-backend",
+  "phase": "1-reconciliation",
+  "harness_version": "v2",
+  "steps": [
+    { "step": 1, "name": "promote-postprocess-policy", "status": "pending" },
+    { "step": 2, "name": "payment-status-and-blocking-guard", "status": "pending" },
+    { "step": 3, "name": "reconciliation-service", "status": "pending" },
+    { "step": 4, "name": "reconciliation-scheduler", "status": "pending" }
+  ]
+}
