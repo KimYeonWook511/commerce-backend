@@ -766,19 +766,19 @@ class NaverPayServiceIntegrationTest {
 	 * 10. 보안/악의적 시도
 	 * ===================================================
 	 */
-	@DisplayName("다른 회원이 merchantPayKey로 승인 요청하면 PAYMENT_MEMBER_MISMATCH가 발생한다")
+	@DisplayName("다른 회원이 merchantPayKey로 승인 요청하면 PAYMENT_NOT_FOUND가 발생한다 (키 존재 비노출)")
 	@Test
-	void approve_whenMemberDoesNotOwnReservation_throwPaymentMemberMismatch() {
+	void approve_whenMemberDoesNotOwnReservation_throwPaymentNotFound() {
 		// given
 		Member owner = memberPersistence.save(createMember());
 		Member attacker = memberPersistence.save(createMember());
 		persistOrder(owner, "PAY-INT-10-1", 1000);
 
-		// when & then
+		// when & then: (attacker.id, "PAY-INT-10-1") 조합이 없으므로 NOT_FOUND (ADR-L3)
 		assertThatThrownBy(() -> naverPayApprovalService.approve(attacker.getId(), "PAY-INT-10-1", "pg-int-10-1"))
 			.isInstanceOf(PaymentException.class)
 			.satisfies(exception -> assertThat(((PaymentException)exception).getErrorCode())
-				.isEqualTo(PaymentErrorCode.PAYMENT_MEMBER_MISMATCH));
+				.isEqualTo(PaymentErrorCode.PAYMENT_NOT_FOUND));
 	}
 
 	@DisplayName("다른 사용자의 pgPaymentId로 승인 응답을 받아 merchantPayKey가 다르면 실패 처리하고 취소하지 않는다")

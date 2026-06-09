@@ -46,12 +46,8 @@ public class NaverPayApprovalService {
 	private final PaymentApprovalCompensationService paymentApprovalCompensationService;
 
 	public NaverPayApproveResponse approve(Long memberId, String merchantPayKey, String pgPaymentId) {
-		PaymentReservation reservation = paymentReservationRepository.findByMerchantPayKey(merchantPayKey)
+		PaymentReservation reservation = paymentReservationRepository.findByMemberIdAndMerchantPayKey(memberId, merchantPayKey)
 			.orElseThrow(() -> new PaymentException(PaymentErrorCode.PAYMENT_NOT_FOUND));
-
-		if (!reservation.getMemberId().equals(memberId)) {
-			throw new PaymentException(PaymentErrorCode.PAYMENT_MEMBER_MISMATCH);
-		}
 
 		// 주문 존재 여부 사전 검증
 		Order order = orderRepository.findByIdAndMemberId(reservation.getOrderId(), memberId)

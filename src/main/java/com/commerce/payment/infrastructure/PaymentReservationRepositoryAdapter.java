@@ -45,6 +45,11 @@ public class PaymentReservationRepositoryAdapter implements PaymentReservationRe
 	}
 
 	@Override
+	public Optional<PaymentReservation> findByMemberIdAndMerchantPayKey(Long memberId, String merchantPayKey) {
+		return jpaPaymentReservationRepository.findByMemberIdAndMerchantPayKey(memberId, merchantPayKey);
+	}
+
+	@Override
 	public Optional<PaymentReservation> findReserved(Long orderId, PaymentProvider provider) {
 		return jpaPaymentReservationRepository.findReserved(orderId, provider);
 	}
