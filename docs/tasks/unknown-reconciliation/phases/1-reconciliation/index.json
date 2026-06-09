@@ -3,9 +3,44 @@
   "phase": "1-reconciliation",
   "harness_version": "v2",
   "steps": [
-    { "step": 1, "name": "promote-postprocess-policy", "status": "pending" },
-    { "step": 2, "name": "payment-status-and-blocking-guard", "status": "pending" },
-    { "step": 3, "name": "reconciliation-service", "status": "pending" },
-    { "step": 4, "name": "reconciliation-scheduler", "status": "pending" }
-  ]
+    {
+      "step": 1,
+      "name": "promote-postprocess-policy",
+      "status": "completed",
+      "started_at": "2026-06-09T17:39:19+0900",
+      "summary": "Target/Flow Policy 5개 클래스를 src/test에서 src/main/java/com/commerce/payment/postprocess/로 이전하고 src/test의 정책 클래스 파일을 삭제한다. 정책 테스트 2개는 src/test에 유지하며 패키지 해석이 main으로 자동 전환된다. 로직·상수 변경 없이 순수 위치 이전이며 ./gradlew test 전체 통과.",
+      "completed_at": "2026-06-09T17:41:17+0900"
+    },
+    {
+      "step": 2,
+      "name": "payment-status-and-blocking-guard",
+      "status": "completed",
+      "started_at": "2026-06-09T17:42:27+0900",
+      "summary": "PaymentStatus에 MANUAL_REVIEW를 추가하고, succeed/fail 전이를 REQUESTED|UNKNOWN으로 확장한다. markManualReview(REQUESTED|UNKNOWN→MANUAL_REVIEW, 이미 MANUAL_REVIEW면 멱등) 전이 메서드를 신설한다. existsUnknownByOrderId를 existsBlockingApproveByOrderId로 재명명하고 IN(UNKNOWN, MANUAL_REVIEW) 조회로 확장한다. ReservePaymentService·NaverPayApprovalService 차단 가드 및 switch 분기를 갱신하고 모든 테스트 통과.",
+      "completed_at": "2026-06-09T17:46:17+0900"
+    },
+    {
+      "step": 3,
+      "name": "reconciliation-service",
+      "status": "completed",
+      "started_at": "2026-06-09T17:47:46+0900",
+      "summary": "PaymentRepository에 findStaleApprovePaymentsForReconciliation 스캔 메서드를 추가하고, PaymentApprovalRecordService에 markManualReview를 추가한다. PaymentReconciliationService를 신설해 stale APPROVE 후보 조회 → target 결정 → PG 조회(트랜잭션 밖) → flow 실행(SUCCEEDED 확정/FAILED 확정/KEEP_WAITING/MANUAL_REVIEW 승급) 흐름을 구현한다. 주문 CANCELED 경합 케이스는 WARN 로그 후 건너뛰고(phase 2 예정), 건별 예외를 격리해 전체 루프가 중단되지 않는다. PaymentPostProcessTargetPolicy/FlowPolicy에 @Component를 추가해 Spring Bean으로 등록한다. 신규 테스트 10개 포함 전체 테스트 통과.",
+      "completed_at": "2026-06-09T17:58:06+0900"
+    },
+    {
+      "step": 4,
+      "name": "reconciliation-scheduler",
+      "status": "completed",
+      "started_at": "2026-06-09T18:00:49+0900",
+      "summary": "PaymentReconciliationScheduler를 com.commerce.payment.scheduler 패키지에 신설한다. @Profile(\"!test\")로 테스트 프로파일 자동 기동을 차단하고, cron은 ${payment.reconciliation.cron:0 */1 * * * *}으로 외부화한다(기본 1분 주기). 스케줄러는 paymentReconciliationService.reconcile() 위임만 담당하며 비즈니스 로직을 포함하지 않는다. 전체 테스트 통과.",
+      "completed_at": "2026-06-09T18:02:04+0900"
+    }
+  ],
+  "created_at": "2026-06-09T17:39:19+0900",
+  "execution": {
+    "developer_model": "sonnet",
+    "reviewer_model": "opus",
+    "commit_model": "haiku"
+  },
+  "completed_at": "2026-06-09T18:03:01+0900"
 }
