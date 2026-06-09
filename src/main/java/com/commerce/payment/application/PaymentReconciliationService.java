@@ -141,25 +141,65 @@ public class PaymentReconciliationService {
 			return PaymentReconcileOutcome.SUCCEEDED;
 		} catch (OrderException ex) {
 			if (ex.getErrorCode() == OrderErrorCode.ORDER_PAID_NOT_ALLOWED) {
-				return handleOrderNotCompletable(payment);
+				return handleOrderNotCompletable(payment, now);
 			}
 			throw ex;
 		}
 	}
 
-	// succeedApproval이 ORDER_PAID_NOT_ALLOWED로 거부된 경우: 주문 상태를 재조회해 분기한다 (ADR-L4).
-	private PaymentReconcileOutcome handleOrderNotCompletable(Payment payment) {
+	// succeedApproval이 ORDER_PAID_NOT_ALLOWED로 거부된 경우: 주문 상태를 재조회해 분기한다 (ADR-L4, ADR-L9).
+	// 어떤 경로든 종착 상태(SUCCEEDED/FAILED)로 전이해 다음 주기에 재스캔되지 않도록 한다.
+	private PaymentReconcileOutcome handleOrderNotCompletable(Payment payment, LocalDateTime now) {
 		Order order = orderRepository.findById(payment.getOrderId()).orElse(null);
-		if (order != null && order.getStatus() == OrderStatus.CANCELED) {
+
+		if (order == null) {
+			// 주문 자체가 없음 — 정합성 깨짐. 재시도해도 복구 불가이므로 종착시킨다.
+			log.error("대사 - 주문 없음(정합성 오류) paymentId={} orderId={} merchantPayKey={}",
+				payment.getId(), payment.getOrderId(), payment.getMerchantPayKey());
+			paymentApprovalRecordService.fail(
+				payment.getMerchantPayKey(), payment.getProvider(), payment.getPgPaymentId(),
+				PaymentFailCode.APPROVE_PROCESS_FAILED, "주문 없음 - 정합성 오류", now
+			);
+			return PaymentReconcileOutcome.FAILED;
+		}
+
+		if (order.getStatus() == OrderStatus.CANCELED) {
+			// C: CANCELED 주문 — 보상 취소(환불) + 통지 (ADR-L4)
 			paymentApprovalCompensationService.compensateCanceledOrderApproval(payment, this::pgCancelForReconciliation);
 			log.error("대사 보상 취소 실행 paymentId={} orderId={} merchantPayKey={}",
 				payment.getId(), payment.getOrderId(), payment.getMerchantPayKey());
 			return PaymentReconcileOutcome.FAILED;
 		}
-		// PAID 등 비-INIT 상태: 정상 완료 건이므로 멱등 흡수
-		log.warn("대사 승인 확정 - 주문 비-INIT 상태, 건너뜀 paymentId={} orderId={} orderStatus={}",
-			payment.getId(), payment.getOrderId(), order != null ? order.getStatus() : "not found");
-		return PaymentReconcileOutcome.SKIPPED;
+
+		if (order.getStatus() == OrderStatus.PAID) {
+			// PAID: 이 결제가 성공 주체인지 vs 중복 결제인지 판별한다 (ADR-L9).
+			boolean hasDuplicateSucceeded = paymentRepository.existsApprovedByOrderId(payment.getOrderId());
+			if (hasDuplicateSucceeded) {
+				// 다른 SUCCEEDED APPROVE가 이미 있음 — 이 건은 중복 결제, 보상(환불)한다.
+				log.error("대사 PAID 주문 중복 결제 - 보상 paymentId={} orderId={} merchantPayKey={}",
+					payment.getId(), payment.getOrderId(), payment.getMerchantPayKey());
+				paymentApprovalCompensationService.compensateDuplicatePayment(
+					payment,
+					new RuntimeException("PAID 주문에 중복 결제 확인"),
+					this::pgCancelForReconciliation
+				);
+				return PaymentReconcileOutcome.FAILED;
+			}
+			// 이 건이 성공 주체 — 주문은 이미 PAID이므로 결제 기록만 SUCCEEDED로 맞춘다.
+			paymentApprovalService.succeedApprovalRecordOnly(payment, now);
+			log.info("대사 PAID 주문 성공 주체 - 결제 기록 SUCCEEDED 확정 paymentId={} orderId={} merchantPayKey={}",
+				payment.getId(), payment.getOrderId(), payment.getMerchantPayKey());
+			return PaymentReconcileOutcome.SUCCEEDED;
+		}
+
+		// 그 외 비-INIT 상태(RECEIVED/COMPLETED 등) — 자동 대사로 해소 불가, 종착시킨다.
+		log.error("대사 - 비-INIT 주문 상태로 종착 paymentId={} orderId={} orderStatus={} merchantPayKey={}",
+			payment.getId(), payment.getOrderId(), order.getStatus(), payment.getMerchantPayKey());
+		paymentApprovalRecordService.fail(
+			payment.getMerchantPayKey(), payment.getProvider(), payment.getPgPaymentId(),
+			PaymentFailCode.APPROVE_PROCESS_FAILED, "비-INIT 주문 상태: " + order.getStatus(), now
+		);
+		return PaymentReconcileOutcome.FAILED;
 	}
 
 	private CancelOutcome pgCancelForReconciliation(Payment cancelPayment, String cancelReason) {
