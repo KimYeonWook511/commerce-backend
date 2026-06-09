@@ -1,6 +1,10 @@
 package com.commerce.payment.domain.repository;
 
+import java.time.LocalDateTime;
+import java.util.List;
 import java.util.Optional;
+
+import org.springframework.data.domain.Pageable;
 
 import com.commerce.payment.domain.Payment;
 import com.commerce.payment.domain.PaymentProvider;
@@ -22,4 +26,7 @@ public interface PaymentRepository {
 	boolean existsBlockingApproveByOrderId(Long orderId);
 
 	boolean existsApprovedByOrderId(Long orderId);
+
+	// APPROVE 대사 후보: UNKNOWN(respondedAt < cutoff) + REQUESTED(createdAt < cutoff). 정밀 분기는 정책이 담당.
+	List<Payment> findStaleApprovePaymentsForReconciliation(LocalDateTime cutoff, Pageable pageable);
 }
