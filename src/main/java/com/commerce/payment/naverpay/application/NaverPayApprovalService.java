@@ -71,6 +71,11 @@ public class NaverPayApprovalService {
 			return processApprovePayment(payment);
 		}
 
+		// 이미 APPROVE·SUCCEEDED 결제가 있는 주문은 새 승인 진입 차단 (ADR-L2)
+		if (paymentRepository.existsApprovedByOrderId(reservation.getOrderId())) {
+			throw new PaymentException(PaymentErrorCode.PAYMENT_DUPLICATE);
+		}
+
 		Payment payment = paymentApprovalRecordService.create(reservation, pgPaymentId);
 		return processApprovePayment(payment);
 	}

@@ -518,9 +518,9 @@ class NaverPayServiceIntegrationTest {
 			.isEqualTo(PaymentStatus.REQUESTED);
 	}
 
-	@DisplayName("형제 pgPaymentId(pgA)가 이미 SUCCEEDED인 상태에서 pgB의 PAYMENT_DUPLICATE 보상이 발생해도 pgB의 PG 취소가 실행된다")
+	@DisplayName("형제 pgPaymentId(pgA)가 이미 SUCCEEDED인 상태에서 pgB 승인 시도는 진입 가드에서 PG 호출 전 차단된다")
 	@Test
-	void approve_whenDuplicatePaymentWithSucceededSibling_cancelDuplicatePgPaymentId() {
+	void approve_whenDuplicatePaymentWithSucceededSibling_blockedByEntryGuardBeforePgCall() {
 		// given: 동일 merchantPayKey로 pgA가 먼저 SUCCEEDED — 형제 결제 성공 상태
 		Member member = memberPersistence.save(createMember());
 		persistOrder(member, "PAY-INT-6-6", 1000);
@@ -529,30 +529,19 @@ class NaverPayServiceIntegrationTest {
 		pgA.succeed(LocalDateTime.now());
 		paymentPersistence.save(pgA);
 
-		// pgB: 동일 merchantPayKey·다른 pgPaymentId로 승인 시도 → succeedApproval에서 uk_payment_approved_order_key 위반 시뮬레이션
-		given(naverPayGateway.approve("pg-int-6-6-b"))
-			.willReturn(NaverPayApproveResult.success("PAY-INT-6-6", 1000));
-		given(naverPayGateway.cancel(any(), anyInt(), any()))
-			.willReturn(NaverPayCancelResult.success());
-		Mockito.doThrow(new PaymentException(PaymentErrorCode.PAYMENT_DUPLICATE))
-			.when(paymentApprovalService)
-			.succeedApproval(any(Payment.class), any(LocalDateTime.class));
-
-		// when & then
+		// when & then: pgB는 existsApprovedByOrderId 가드에서 PG 호출 전 차단된다 (ADR-L2)
 		assertThatThrownBy(() -> naverPayApprovalService.approve(member.getId(), "PAY-INT-6-6", "pg-int-6-6-b"))
 			.isInstanceOfSatisfying(PaymentException.class, exception ->
 				assertThat(exception.getErrorCode()).isEqualTo(PaymentErrorCode.PAYMENT_DUPLICATE));
 
-		// pgB approve: FAILED(DUPLICATE_PAYMENT)
-		Payment pgBApprove = getPayment("PAY-INT-6-6", "pg-int-6-6-b", PaymentType.APPROVE);
-		assertThat(pgBApprove.getStatus()).isEqualTo(PaymentStatus.FAILED);
-		assertThat(pgBApprove.getFailCode()).isEqualTo(PaymentFailCode.DUPLICATE_PAYMENT);
+		// pgB: PG 호출 전 차단 — approve/cancel 모두 호출되지 않음
+		then(naverPayGateway).should(never()).approve(any());
+		then(naverPayGateway).should(never()).cancel(any(), anyInt(), any());
 
-		// pgB cancel: SUCCEEDED — 형제 pgA 성공과 무관하게 PG 취소 실행 (hasCompletedPayment 가드 제거 검증)
-		assertThat(getPayment("PAY-INT-6-6", "pg-int-6-6-b", PaymentType.CANCEL).getStatus())
-			.isEqualTo(PaymentStatus.SUCCEEDED);
+		// pgB payment: 생성되지 않음 (create() 호출 전 차단)
+		assertCancelPaymentEmpty("PAY-INT-6-6", "pg-int-6-6-b");
 
-		// pgA: SUCCEEDED 보존 — 보상이 형제 결제를 건드리지 않음
+		// pgA: SUCCEEDED 보존 — 가드가 형제 결제를 건드리지 않음
 		assertThat(getPayment("PAY-INT-6-6", "pg-int-6-6-a", PaymentType.APPROVE).getStatus())
 			.isEqualTo(PaymentStatus.SUCCEEDED);
 	}
@@ -848,7 +837,7 @@ class NaverPayServiceIntegrationTest {
 	 * 12. 운영 복구/배치
 	 * ===================================================
 	 */
-	@DisplayName("approve payment가 이미 SUCCEEDED이면 PG 호출 없이 기존 결제를 바로 반환한다")
+	@DisplayName("USED 예약에 같은 pgPaymentId로 재진입 시 이미 SUCCEEDED인 결제를 PG 호출 없이 반환한다")
 	@Test
 	void approve_whenPaymentAlreadySucceeded_returnSuccessDirectly() {
 		// given
@@ -858,6 +847,9 @@ class NaverPayServiceIntegrationTest {
 		Payment payment = Payment.createRequested(reservation, PaymentType.APPROVE, "pg-int-12-1");
 		payment.succeed(LocalDateTime.now());
 		paymentPersistence.save(payment);
+		// USED: 실제 흐름에서 create()가 reservation.use()·saveUsed()를 완료한 상태 (redirect 재진입 시나리오)
+		reservation.use();
+		reservationPersistence.save(reservation);
 
 		// when
 		NaverPayApproveResponse result = naverPayApprovalService.approve(member.getId(), "PAY-INT-12-1", "pg-int-12-1");
@@ -867,6 +859,33 @@ class NaverPayServiceIntegrationTest {
 		assertThat(result.getPgPaymentId()).isEqualTo("pg-int-12-1");
 		then(naverPayGateway).should(never()).approve(any());
 		then(naverPayGateway).should(never()).getApprovalHistory(any());
+	}
+
+	/**
+	 * ===================================================
+	 * 13. 진입 차단 (ADR-L2)
+	 * ===================================================
+	 */
+	@DisplayName("이미 APPROVE·SUCCEEDED 결제가 있는 주문에 새 승인 요청이 진입 단계에서 차단되고 PG 호출이 발생하지 않는다")
+	@Test
+	void approve_whenApprovedPaymentAlreadyExists_throwPaymentDuplicateBeforePgCall() {
+		// given
+		Member member = memberPersistence.save(createMember());
+		persistOrder(member, "PAY-INT-13-1", 1000);
+		PaymentReservation reservation = reservationPersistence.findByMerchantPayKey("PAY-INT-13-1").orElseThrow();
+
+		// 동일 주문에 이미 APPROVE·SUCCEEDED payment 존재
+		Payment existingPayment = Payment.createRequested(reservation, PaymentType.APPROVE, "pg-int-13-1-old");
+		existingPayment.succeed(LocalDateTime.now());
+		paymentPersistence.save(existingPayment);
+
+		// when & then: 새 pgPaymentId로 승인 시도 → 진입 단계에서 PAYMENT_DUPLICATE 차단
+		assertThatThrownBy(
+			() -> naverPayApprovalService.approve(member.getId(), "PAY-INT-13-1", "pg-int-13-1-new"))
+			.isInstanceOf(PaymentException.class)
+			.satisfies(exception -> assertThat(((PaymentException)exception).getErrorCode())
+				.isEqualTo(PaymentErrorCode.PAYMENT_DUPLICATE));
+		then(naverPayGateway).should(never()).approve(any());
 	}
 
 	private Member createMember() {

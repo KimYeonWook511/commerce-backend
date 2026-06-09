@@ -19,4 +19,6 @@ public interface PaymentRepository {
 	Optional<Payment> findApproveSucceeded(String merchantPayKey);
 
 	boolean existsUnknownByOrderId(Long orderId);
+
+	boolean existsApprovedByOrderId(Long orderId);
 }
