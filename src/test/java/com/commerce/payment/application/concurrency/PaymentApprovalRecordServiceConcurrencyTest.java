@@ -24,6 +24,8 @@ import com.commerce.payment.domain.PaymentProvider;
 import com.commerce.payment.domain.PaymentReservation;
 import com.commerce.payment.domain.PaymentType;
 import com.commerce.payment.application.PaymentApprovalRecordService;
+import com.commerce.payment.exception.PaymentErrorCode;
+import com.commerce.payment.exception.PaymentException;
 import com.commerce.payment.infrastructure.persistence.support.PaymentPersistenceTestSupport;
 import com.commerce.payment.infrastructure.persistence.support.PaymentReservationPersistenceTestSupport;
 import com.commerce.member.infrastructure.persistence.support.MemberPersistenceTestSupport;
@@ -70,6 +72,67 @@ class PaymentApprovalRecordServiceConcurrencyTest {
 		persistenceCleanup.deleteAllInBatch(
 			paymentPersistence, reservationPersistence, memberPersistence, productPersistence, orderPersistence
 		);
+	}
+
+	@DisplayName("같은 예약에 다른 pgPaymentId 승인이 동시에 들어오면 한쪽만 payment를 생성하고 나머지는 PAYMENT_RESERVATION_ALREADY_USED로 차단된다")
+	@Test
+	void create_whenConcurrentDifferentPgPaymentId_onlyOnePaymentCreatedAndOtherBlocked() throws Exception {
+		// given: reservation 선행 생성
+		String merchantPayKey = "PAY-RECORD-CON-2";
+		String pgPaymentIdA = "pg-record-con-2-a";
+		String pgPaymentIdB = "pg-record-con-2-b";
+		reservationPersistence.save(
+			PaymentReservation.createReserved(1L, 1L, 1000, PaymentProvider.NAVERPAY, merchantPayKey,
+				LocalDateTime.now().plusMinutes(15))
+		);
+		ConcurrentLinkedQueue<Throwable> errors = new ConcurrentLinkedQueue<>();
+
+		// when: 2개 스레드가 각자 fresh reservation을 로드해 다른 pgPaymentId로 동시 create
+		CountDownLatch startLatch = new CountDownLatch(1);
+		CountDownLatch doneLatch = new CountDownLatch(2);
+		ExecutorService executor = Executors.newFixedThreadPool(2);
+		try {
+			executor.submit(() -> {
+				try {
+					startLatch.await();
+					PaymentReservation r = reservationPersistence.findByMerchantPayKey(merchantPayKey).orElseThrow();
+					paymentApprovalRecordService.create(r, pgPaymentIdA);
+				} catch (Throwable ex) {
+					errors.add(ex);
+				} finally {
+					doneLatch.countDown();
+				}
+			});
+			executor.submit(() -> {
+				try {
+					startLatch.await();
+					PaymentReservation r = reservationPersistence.findByMerchantPayKey(merchantPayKey).orElseThrow();
+					paymentApprovalRecordService.create(r, pgPaymentIdB);
+				} catch (Throwable ex) {
+					errors.add(ex);
+				} finally {
+					doneLatch.countDown();
+				}
+			});
+			startLatch.countDown();
+			doneLatch.await(10, TimeUnit.SECONDS);
+		} finally {
+			executor.shutdownNow();
+		}
+
+		// then: payment는 정확히 1건만 생성됨 (진 쪽 트랜잭션 롤백)
+		long totalPayments = paymentPersistence.countPayments(merchantPayKey, pgPaymentIdA, PaymentType.APPROVE)
+			+ paymentPersistence.countPayments(merchantPayKey, pgPaymentIdB, PaymentType.APPROVE);
+		assertThat(totalPayments).isEqualTo(1L);
+		// 진 쪽은 PAYMENT_RESERVATION_ALREADY_USED로 차단됨 (concurrent case)
+		// 또는 PAYMENT_RESERVATION_STATUS_TRANSITION_NOT_ALLOWED (sequential case: USED 상태 reservation에 use() 호출)
+		assertThat(errors).hasSize(1);
+		errors.forEach(e -> {
+			assertThat(e).isInstanceOf(PaymentException.class);
+			assertThat(((PaymentException) e).getErrorCode())
+				.isIn(PaymentErrorCode.PAYMENT_RESERVATION_ALREADY_USED,
+					PaymentErrorCode.PAYMENT_RESERVATION_STATUS_TRANSITION_NOT_ALLOWED);
+		});
 	}
 
 	@DisplayName("동시에 같은 키로 멱등 재요청해도 사전 find 분기로 모두 같은 approve payment를 반환한다")

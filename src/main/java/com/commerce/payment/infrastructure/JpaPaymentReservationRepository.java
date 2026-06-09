@@ -13,6 +13,8 @@ public interface JpaPaymentReservationRepository extends JpaRepository<PaymentRe
 
 	Optional<PaymentReservation> findByMerchantPayKey(String merchantPayKey);
 
+	Optional<PaymentReservation> findByMemberIdAndMerchantPayKey(Long memberId, String merchantPayKey);
+
 	@Query("""
 		select pr from PaymentReservation pr
 		where pr.orderId = :orderId

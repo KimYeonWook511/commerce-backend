@@ -7,6 +7,7 @@ import com.commerce.common.exception.ErrorCode;
 public enum PaymentErrorCode implements ErrorCode {
 	PAYMENT_NOT_FOUND(HttpStatus.NOT_FOUND, "PAYMENT-404-1", "결제를 찾을 수 없습니다"),
 	PAYMENT_RECORD_NOT_FOUND(HttpStatus.NOT_FOUND, "PAYMENT-404-2", "결제 시도 이력을 찾을 수 없습니다"),
+	PAYMENT_RESERVATION_NOT_FOUND(HttpStatus.NOT_FOUND, "PAYMENT-404-3", "결제 예약을 찾을 수 없습니다"),
 	PAYMENT_PROVIDER_NOT_SUPPORTED(HttpStatus.BAD_REQUEST, "PAYMENT-400-1", "지원하지 않는 결제 수단입니다"),
 	PAYMENT_APPROVE_FAILED(HttpStatus.BAD_REQUEST, "PAYMENT-400-2", "결제 승인 처리에 실패했습니다"),
 	PAYMENT_MERCHANT_KEY_MISMATCH(HttpStatus.BAD_REQUEST, "PAYMENT-400-3", "merchantPayKey가 일치하지 않습니다"),
@@ -30,8 +31,8 @@ public enum PaymentErrorCode implements ErrorCode {
 		"결제 시도 상태 전이가 허용되지 않습니다"),
 	PAYMENT_RESERVATION_STATUS_TRANSITION_NOT_ALLOWED(HttpStatus.INTERNAL_SERVER_ERROR, "PAYMENT-500-3",
 		"결제 예약 상태 전이가 허용되지 않습니다"),
-	PAYMENT_MEMBER_MISMATCH(HttpStatus.FORBIDDEN, "PAYMENT-403-1", "결제 예약의 회원 정보가 일치하지 않습니다"),
-	PAYMENT_RESULT_PENDING(HttpStatus.CONFLICT, "PAYMENT-409-5", "결제 결과 확인 중입니다. 잠시 후 주문 내역에서 확인해 주세요.");
+	PAYMENT_RESULT_PENDING(HttpStatus.CONFLICT, "PAYMENT-409-5", "결제 결과 확인 중입니다. 잠시 후 주문 내역에서 확인해 주세요."),
+	PAYMENT_RESERVATION_ALREADY_USED(HttpStatus.CONFLICT, "PAYMENT-409-4", "이미 다른 승인이 예약을 소비했습니다");
 
 	private final HttpStatus status;
 	private final String code;

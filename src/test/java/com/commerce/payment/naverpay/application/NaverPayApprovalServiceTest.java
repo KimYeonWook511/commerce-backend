@@ -74,36 +74,36 @@ class NaverPayApprovalServiceTest {
 	@InjectMocks
 	private NaverPayApprovalService naverPayApprovalService;
 
-	@DisplayName("예약 정보가 없으면 PAYMENT_NOT_FOUND를 던진다")
+	@DisplayName("예약 정보가 없으면 PAYMENT_RESERVATION_NOT_FOUND를 던진다")
 	@Test
-	void approve_whenReservationNotFound_throwPaymentNotFound() {
+	void approve_whenReservationNotFound_throwPaymentReservationNotFound() {
 		// given
 		long memberId = 1L;
-		given(paymentReservationRepository.findByMerchantPayKey("PAY-1")).willReturn(Optional.empty());
+		given(paymentReservationRepository.findByMemberIdAndMerchantPayKey(memberId, "PAY-1")).willReturn(Optional.empty());
 
 		// when & then
 		assertThatThrownBy(() -> naverPayApprovalService.approve(memberId, "PAY-1", "pg-payment-id"))
 			.isInstanceOf(PaymentException.class)
 			.satisfies(exception -> {
 				PaymentException paymentException = (PaymentException)exception;
-				assertThat(paymentException.getErrorCode()).isEqualTo(PaymentErrorCode.PAYMENT_NOT_FOUND);
+				assertThat(paymentException.getErrorCode()).isEqualTo(PaymentErrorCode.PAYMENT_RESERVATION_NOT_FOUND);
 			});
 	}
 
-	@DisplayName("예약의 회원 ID가 다르면 PAYMENT_MEMBER_MISMATCH를 던진다")
+	@DisplayName("남의 merchantPayKey로 승인 요청하면 PAYMENT_RESERVATION_NOT_FOUND를 던진다 (키 존재 비노출)")
 	@Test
-	void approve_whenMemberMismatch_throwPaymentMemberMismatch() {
-		// given
-		long memberId = 2L;
-		PaymentReservation reservation = createReservation("PAY-1", 1L, 1000);
-		given(paymentReservationRepository.findByMerchantPayKey("PAY-1")).willReturn(Optional.of(reservation));
+	void approve_whenMemberDoesNotOwnKey_throwPaymentReservationNotFound() {
+		// given: attacker(memberId=2)가 owner(memberId=1)의 merchantPayKey로 요청
+		long attackerMemberId = 2L;
+		given(paymentReservationRepository.findByMemberIdAndMerchantPayKey(attackerMemberId, "PAY-1"))
+			.willReturn(Optional.empty());
 
 		// when & then
-		assertThatThrownBy(() -> naverPayApprovalService.approve(memberId, "PAY-1", "pg-payment-id"))
+		assertThatThrownBy(() -> naverPayApprovalService.approve(attackerMemberId, "PAY-1", "pg-payment-id"))
 			.isInstanceOf(PaymentException.class)
 			.satisfies(exception -> {
 				PaymentException paymentException = (PaymentException)exception;
-				assertThat(paymentException.getErrorCode()).isEqualTo(PaymentErrorCode.PAYMENT_MEMBER_MISMATCH);
+				assertThat(paymentException.getErrorCode()).isEqualTo(PaymentErrorCode.PAYMENT_RESERVATION_NOT_FOUND);
 			});
 	}
 
@@ -115,7 +115,7 @@ class NaverPayApprovalServiceTest {
 		PaymentReservation reservation = createReservation("PAY-1", memberId, 1000);
 		Order order = createOrder(1000);
 
-		given(paymentReservationRepository.findByMerchantPayKey("PAY-1")).willReturn(Optional.of(reservation));
+		given(paymentReservationRepository.findByMemberIdAndMerchantPayKey(memberId, "PAY-1")).willReturn(Optional.of(reservation));
 		given(orderRepository.findByIdAndMemberId(reservation.getOrderId(), memberId)).willReturn(Optional.of(order));
 		given(paymentRepository.existsUnknownByOrderId(reservation.getOrderId())).willReturn(true);
 
@@ -140,7 +140,7 @@ class NaverPayApprovalServiceTest {
 		Payment succeededPayment = createPayment("PAY-1", "pg-payment-id", 1000);
 		succeededPayment.succeed(LocalDateTime.now());
 
-		given(paymentReservationRepository.findByMerchantPayKey("PAY-1")).willReturn(Optional.of(reservation));
+		given(paymentReservationRepository.findByMemberIdAndMerchantPayKey(memberId, "PAY-1")).willReturn(Optional.of(reservation));
 		given(orderRepository.findByIdAndMemberId(reservation.getOrderId(), memberId)).willReturn(Optional.of(order));
 		given(paymentRepository.existsUnknownByOrderId(reservation.getOrderId())).willReturn(false);
 		given(paymentRepository.findApprovePayment("PAY-1", PaymentProvider.NAVERPAY, "pg-payment-id"))
@@ -171,7 +171,7 @@ class NaverPayApprovalServiceTest {
 		Payment completedPayment = createPayment("PAY-1", "pg-payment-id", 1000);
 		completedPayment.succeed(LocalDateTime.now());
 
-		given(paymentReservationRepository.findByMerchantPayKey("PAY-1")).willReturn(Optional.of(reservation));
+		given(paymentReservationRepository.findByMemberIdAndMerchantPayKey(memberId, "PAY-1")).willReturn(Optional.of(reservation));
 		given(orderRepository.findByIdAndMemberId(reservation.getOrderId(), memberId)).willReturn(Optional.of(order));
 		given(paymentRepository.existsUnknownByOrderId(reservation.getOrderId())).willReturn(false);
 		given(paymentRepository.findApprovePayment("PAY-1", PaymentProvider.NAVERPAY, "pg-payment-id"))
@@ -200,7 +200,7 @@ class NaverPayApprovalServiceTest {
 		Payment completedPayment = createPayment("PAY-1", "pg-payment-id", 1000);
 		completedPayment.succeed(LocalDateTime.now());
 
-		given(paymentReservationRepository.findByMerchantPayKey("PAY-1")).willReturn(Optional.of(reservation));
+		given(paymentReservationRepository.findByMemberIdAndMerchantPayKey(memberId, "PAY-1")).willReturn(Optional.of(reservation));
 		given(orderRepository.findByIdAndMemberId(reservation.getOrderId(), memberId)).willReturn(Optional.of(order));
 		given(paymentApprovalRecordService.create(any(PaymentReservation.class), eq("pg-payment-id")))
 			.willReturn(payment);
@@ -228,7 +228,7 @@ class NaverPayApprovalServiceTest {
 		Order order = createOrder(1000);
 		Payment payment = createPayment("PAY-1", "pg-payment-id", 1000);
 
-		given(paymentReservationRepository.findByMerchantPayKey("PAY-1")).willReturn(Optional.of(reservation));
+		given(paymentReservationRepository.findByMemberIdAndMerchantPayKey(memberId, "PAY-1")).willReturn(Optional.of(reservation));
 		given(orderRepository.findByIdAndMemberId(reservation.getOrderId(), memberId)).willReturn(Optional.of(order));
 		given(paymentApprovalRecordService.create(any(PaymentReservation.class), eq("pg-payment-id")))
 			.willReturn(payment);
@@ -254,7 +254,7 @@ class NaverPayApprovalServiceTest {
 		Payment completedPayment = createPayment("PAY-1", "pg-payment-id", 1000);
 		completedPayment.succeed(LocalDateTime.now());
 
-		given(paymentReservationRepository.findByMerchantPayKey("PAY-1")).willReturn(Optional.of(reservation));
+		given(paymentReservationRepository.findByMemberIdAndMerchantPayKey(memberId, "PAY-1")).willReturn(Optional.of(reservation));
 		given(orderRepository.findByIdAndMemberId(reservation.getOrderId(), memberId)).willReturn(Optional.of(order));
 		given(paymentApprovalRecordService.create(any(PaymentReservation.class), eq("pg-payment-id")))
 			.willReturn(payment);
@@ -281,7 +281,7 @@ class NaverPayApprovalServiceTest {
 		Order order = createOrder(1000);
 		Payment payment = createPayment("PAY-1", "pg-payment-id", 1000);
 
-		given(paymentReservationRepository.findByMerchantPayKey("PAY-1")).willReturn(Optional.of(reservation));
+		given(paymentReservationRepository.findByMemberIdAndMerchantPayKey(memberId, "PAY-1")).willReturn(Optional.of(reservation));
 		given(orderRepository.findByIdAndMemberId(reservation.getOrderId(), memberId)).willReturn(Optional.of(order));
 		given(paymentApprovalRecordService.create(any(PaymentReservation.class), eq("pg-payment-id")))
 			.willReturn(payment);
@@ -310,7 +310,7 @@ class NaverPayApprovalServiceTest {
 		Order order = createOrder(1000);
 		Payment payment = createPayment("PAY-1", "pg-payment-id", 1000);
 
-		given(paymentReservationRepository.findByMerchantPayKey("PAY-1")).willReturn(Optional.of(reservation));
+		given(paymentReservationRepository.findByMemberIdAndMerchantPayKey(memberId, "PAY-1")).willReturn(Optional.of(reservation));
 		given(orderRepository.findByIdAndMemberId(reservation.getOrderId(), memberId)).willReturn(Optional.of(order));
 		given(paymentApprovalRecordService.create(any(PaymentReservation.class), eq("pg-payment-id")))
 			.willReturn(payment);
@@ -340,7 +340,7 @@ class NaverPayApprovalServiceTest {
 		Order order = createOrder(1000);
 		Payment payment = createPayment("PAY-1", "pg-payment-id", 1000);
 
-		given(paymentReservationRepository.findByMerchantPayKey("PAY-1")).willReturn(Optional.of(reservation));
+		given(paymentReservationRepository.findByMemberIdAndMerchantPayKey(memberId, "PAY-1")).willReturn(Optional.of(reservation));
 		given(orderRepository.findByIdAndMemberId(reservation.getOrderId(), memberId)).willReturn(Optional.of(order));
 		given(paymentApprovalRecordService.create(any(PaymentReservation.class), eq("pg-payment-id")))
 			.willReturn(payment);
@@ -366,7 +366,7 @@ class NaverPayApprovalServiceTest {
 		Order order = createOrder(1000);
 		Payment payment = createPayment("PAY-1", "pg-payment-id", 1000);
 
-		given(paymentReservationRepository.findByMerchantPayKey("PAY-1")).willReturn(Optional.of(reservation));
+		given(paymentReservationRepository.findByMemberIdAndMerchantPayKey(memberId, "PAY-1")).willReturn(Optional.of(reservation));
 		given(orderRepository.findByIdAndMemberId(reservation.getOrderId(), memberId)).willReturn(Optional.of(order));
 		given(paymentApprovalRecordService.create(any(PaymentReservation.class), eq("pg-payment-id")))
 			.willReturn(payment);
@@ -392,7 +392,7 @@ class NaverPayApprovalServiceTest {
 		Order order = createOrder(1000);
 		Payment payment = createPayment("PAY-1", "pg-payment-id", 1000);
 
-		given(paymentReservationRepository.findByMerchantPayKey("PAY-1")).willReturn(Optional.of(reservation));
+		given(paymentReservationRepository.findByMemberIdAndMerchantPayKey(memberId, "PAY-1")).willReturn(Optional.of(reservation));
 		given(orderRepository.findByIdAndMemberId(reservation.getOrderId(), memberId)).willReturn(Optional.of(order));
 		given(paymentApprovalRecordService.create(any(PaymentReservation.class), eq("pg-payment-id")))
 			.willReturn(payment);
@@ -420,7 +420,7 @@ class NaverPayApprovalServiceTest {
 		Order order = createOrder(1000);
 		Payment payment = createPayment("PAY-1", "pg-payment-id", 1000);
 
-		given(paymentReservationRepository.findByMerchantPayKey("PAY-1")).willReturn(Optional.of(reservation));
+		given(paymentReservationRepository.findByMemberIdAndMerchantPayKey(memberId, "PAY-1")).willReturn(Optional.of(reservation));
 		given(orderRepository.findByIdAndMemberId(reservation.getOrderId(), memberId)).willReturn(Optional.of(order));
 		given(paymentApprovalRecordService.create(any(PaymentReservation.class), eq("pg-payment-id")))
 			.willReturn(payment);
@@ -446,7 +446,7 @@ class NaverPayApprovalServiceTest {
 		Order order = createOrder(1000);
 		Payment payment = createPayment("PAY-1", "pg-payment-id", 1000);
 
-		given(paymentReservationRepository.findByMerchantPayKey("PAY-1")).willReturn(Optional.of(reservation));
+		given(paymentReservationRepository.findByMemberIdAndMerchantPayKey(memberId, "PAY-1")).willReturn(Optional.of(reservation));
 		given(orderRepository.findByIdAndMemberId(reservation.getOrderId(), memberId)).willReturn(Optional.of(order));
 		given(paymentApprovalRecordService.create(any(PaymentReservation.class), eq("pg-payment-id")))
 			.willReturn(payment);
@@ -474,7 +474,7 @@ class NaverPayApprovalServiceTest {
 		Order order = createOrder(1000);
 		Payment payment = createPayment("PAY-1", "pg-payment-id", 1000);
 
-		given(paymentReservationRepository.findByMerchantPayKey("PAY-1")).willReturn(Optional.of(reservation));
+		given(paymentReservationRepository.findByMemberIdAndMerchantPayKey(memberId, "PAY-1")).willReturn(Optional.of(reservation));
 		given(orderRepository.findByIdAndMemberId(reservation.getOrderId(), memberId)).willReturn(Optional.of(order));
 		given(paymentApprovalRecordService.create(any(PaymentReservation.class), eq("pg-payment-id")))
 			.willReturn(payment);
@@ -502,7 +502,7 @@ class NaverPayApprovalServiceTest {
 		Order order = createOrder(1000);
 		Payment payment = createPayment("PAY-1", "pg-payment-id", 1000);
 
-		given(paymentReservationRepository.findByMerchantPayKey("PAY-1")).willReturn(Optional.of(reservation));
+		given(paymentReservationRepository.findByMemberIdAndMerchantPayKey(memberId, "PAY-1")).willReturn(Optional.of(reservation));
 		given(orderRepository.findByIdAndMemberId(reservation.getOrderId(), memberId)).willReturn(Optional.of(order));
 		given(paymentApprovalRecordService.create(any(PaymentReservation.class), eq("pg-payment-id")))
 			.willReturn(payment);
@@ -531,7 +531,7 @@ class NaverPayApprovalServiceTest {
 		Order order = createOrder(1000);
 		Payment payment = createPayment("PAY-1", "pg-payment-id", 1000);
 
-		given(paymentReservationRepository.findByMerchantPayKey("PAY-1")).willReturn(Optional.of(reservation));
+		given(paymentReservationRepository.findByMemberIdAndMerchantPayKey(memberId, "PAY-1")).willReturn(Optional.of(reservation));
 		given(orderRepository.findByIdAndMemberId(reservation.getOrderId(), memberId)).willReturn(Optional.of(order));
 		given(paymentApprovalRecordService.create(any(PaymentReservation.class), eq("pg-payment-id")))
 			.willReturn(payment);
@@ -559,7 +559,7 @@ class NaverPayApprovalServiceTest {
 		Order order = createOrder(1000);
 		Payment payment = createPayment("PAY-1", "pg-payment-id", 1000);
 
-		given(paymentReservationRepository.findByMerchantPayKey("PAY-1")).willReturn(Optional.of(reservation));
+		given(paymentReservationRepository.findByMemberIdAndMerchantPayKey(memberId, "PAY-1")).willReturn(Optional.of(reservation));
 		given(orderRepository.findByIdAndMemberId(reservation.getOrderId(), memberId)).willReturn(Optional.of(order));
 		given(paymentApprovalRecordService.create(any(PaymentReservation.class), eq("pg-payment-id")))
 			.willReturn(payment);
@@ -587,7 +587,7 @@ class NaverPayApprovalServiceTest {
 		Order order = createOrder(1000);
 		Payment payment = createPayment("PAY-1", "pg-payment-id", 1000);
 
-		given(paymentReservationRepository.findByMerchantPayKey("PAY-1")).willReturn(Optional.of(reservation));
+		given(paymentReservationRepository.findByMemberIdAndMerchantPayKey(memberId, "PAY-1")).willReturn(Optional.of(reservation));
 		given(orderRepository.findByIdAndMemberId(reservation.getOrderId(), memberId)).willReturn(Optional.of(order));
 		given(paymentApprovalRecordService.create(any(PaymentReservation.class), eq("pg-payment-id")))
 			.willReturn(payment);
@@ -615,7 +615,7 @@ class NaverPayApprovalServiceTest {
 		Order order = createOrder(1000);
 		Payment payment = createPayment("PAY-1", "pg-payment-id", 1000);
 
-		given(paymentReservationRepository.findByMerchantPayKey("PAY-1")).willReturn(Optional.of(reservation));
+		given(paymentReservationRepository.findByMemberIdAndMerchantPayKey(memberId, "PAY-1")).willReturn(Optional.of(reservation));
 		given(orderRepository.findByIdAndMemberId(reservation.getOrderId(), memberId)).willReturn(Optional.of(order));
 		given(paymentApprovalRecordService.create(any(PaymentReservation.class), eq("pg-payment-id")))
 			.willReturn(payment);
@@ -641,7 +641,7 @@ class NaverPayApprovalServiceTest {
 		Order order = createOrder(1000);
 		Payment payment = createPayment("PAY-1", "pg-payment-id", 1000);
 
-		given(paymentReservationRepository.findByMerchantPayKey("PAY-1")).willReturn(Optional.of(reservation));
+		given(paymentReservationRepository.findByMemberIdAndMerchantPayKey(memberId, "PAY-1")).willReturn(Optional.of(reservation));
 		given(orderRepository.findByIdAndMemberId(reservation.getOrderId(), memberId)).willReturn(Optional.of(order));
 		given(paymentApprovalRecordService.create(any(PaymentReservation.class), eq("pg-payment-id")))
 			.willReturn(payment);
@@ -666,7 +666,7 @@ class NaverPayApprovalServiceTest {
 		Order order = createOrder(1000);
 		Payment payment = createPayment("PAY-1", "pg-payment-id", 1000);
 
-		given(paymentReservationRepository.findByMerchantPayKey("PAY-1")).willReturn(Optional.of(reservation));
+		given(paymentReservationRepository.findByMemberIdAndMerchantPayKey(memberId, "PAY-1")).willReturn(Optional.of(reservation));
 		given(orderRepository.findByIdAndMemberId(reservation.getOrderId(), memberId)).willReturn(Optional.of(order));
 		given(paymentApprovalRecordService.create(any(PaymentReservation.class), eq("pg-payment-id")))
 			.willReturn(payment);
@@ -693,7 +693,7 @@ class NaverPayApprovalServiceTest {
 		Order order = createOrder(1000);
 		Payment payment = createPayment("PAY-1", "pg-payment-id", 1000);
 
-		given(paymentReservationRepository.findByMerchantPayKey("PAY-1")).willReturn(Optional.of(reservation));
+		given(paymentReservationRepository.findByMemberIdAndMerchantPayKey(memberId, "PAY-1")).willReturn(Optional.of(reservation));
 		given(orderRepository.findByIdAndMemberId(reservation.getOrderId(), memberId)).willReturn(Optional.of(order));
 		given(paymentApprovalRecordService.create(any(PaymentReservation.class), eq("pg-payment-id")))
 			.willReturn(payment);
@@ -720,7 +720,7 @@ class NaverPayApprovalServiceTest {
 		Order order = createOrder(1000);
 		Payment payment = createPayment("PAY-1", "pg-payment-id", 1000);
 
-		given(paymentReservationRepository.findByMerchantPayKey("PAY-1")).willReturn(Optional.of(reservation));
+		given(paymentReservationRepository.findByMemberIdAndMerchantPayKey(memberId, "PAY-1")).willReturn(Optional.of(reservation));
 		given(orderRepository.findByIdAndMemberId(reservation.getOrderId(), memberId)).willReturn(Optional.of(order));
 		given(paymentApprovalRecordService.create(any(PaymentReservation.class), eq("pg-payment-id")))
 			.willReturn(payment);
@@ -748,7 +748,7 @@ class NaverPayApprovalServiceTest {
 		Order order = createOrder(1000);
 		Payment payment = createPayment("PAY-1", "pg-payment-id", 1000);
 
-		given(paymentReservationRepository.findByMerchantPayKey("PAY-1")).willReturn(Optional.of(reservation));
+		given(paymentReservationRepository.findByMemberIdAndMerchantPayKey(memberId, "PAY-1")).willReturn(Optional.of(reservation));
 		given(orderRepository.findByIdAndMemberId(reservation.getOrderId(), memberId)).willReturn(Optional.of(order));
 		given(paymentApprovalRecordService.create(any(PaymentReservation.class), eq("pg-payment-id")))
 			.willReturn(payment);
@@ -779,7 +779,7 @@ class NaverPayApprovalServiceTest {
 		Order order = createOrder(1000);
 		Payment payment = createPayment("PAY-1", "pg-payment-id", 1000);
 
-		given(paymentReservationRepository.findByMerchantPayKey("PAY-1")).willReturn(Optional.of(reservation));
+		given(paymentReservationRepository.findByMemberIdAndMerchantPayKey(memberId, "PAY-1")).willReturn(Optional.of(reservation));
 		given(orderRepository.findByIdAndMemberId(reservation.getOrderId(), memberId)).willReturn(Optional.of(order));
 		given(paymentApprovalRecordService.create(any(PaymentReservation.class), eq("pg-payment-id")))
 			.willReturn(payment);
@@ -810,7 +810,7 @@ class NaverPayApprovalServiceTest {
 		Order order = createOrder(1000);
 		Payment payment = createPayment("PAY-1", "pg-payment-id", 1000);
 
-		given(paymentReservationRepository.findByMerchantPayKey("PAY-1")).willReturn(Optional.of(reservation));
+		given(paymentReservationRepository.findByMemberIdAndMerchantPayKey(memberId, "PAY-1")).willReturn(Optional.of(reservation));
 		given(orderRepository.findByIdAndMemberId(reservation.getOrderId(), memberId)).willReturn(Optional.of(order));
 		given(paymentApprovalRecordService.create(any(PaymentReservation.class), eq("pg-payment-id")))
 			.willReturn(payment);
@@ -837,7 +837,7 @@ class NaverPayApprovalServiceTest {
 		Order attackerOrder = createOrder(1000);
 		Payment attackerPayment = createPayment("PAY-ATTACKER", "pg-victim-payment-id", 1000);
 
-		given(paymentReservationRepository.findByMerchantPayKey("PAY-ATTACKER")).willReturn(Optional.of(attackerReservation));
+		given(paymentReservationRepository.findByMemberIdAndMerchantPayKey(memberId, "PAY-ATTACKER")).willReturn(Optional.of(attackerReservation));
 		given(orderRepository.findByIdAndMemberId(attackerReservation.getOrderId(), memberId)).willReturn(Optional.of(attackerOrder));
 		given(paymentApprovalRecordService.create(any(PaymentReservation.class), eq("pg-victim-payment-id")))
 			.willReturn(attackerPayment);
@@ -863,7 +863,7 @@ class NaverPayApprovalServiceTest {
 		Order attackerOrder = createOrder(1000);
 		Payment attackerPayment = createPayment("PAY-ATTACKER", "pg-victim-payment-id", 1000);
 
-		given(paymentReservationRepository.findByMerchantPayKey("PAY-ATTACKER")).willReturn(Optional.of(attackerReservation));
+		given(paymentReservationRepository.findByMemberIdAndMerchantPayKey(memberId, "PAY-ATTACKER")).willReturn(Optional.of(attackerReservation));
 		given(orderRepository.findByIdAndMemberId(attackerReservation.getOrderId(), memberId)).willReturn(Optional.of(attackerOrder));
 		given(paymentApprovalRecordService.create(any(PaymentReservation.class), eq("pg-victim-payment-id")))
 			.willReturn(attackerPayment);
@@ -894,7 +894,7 @@ class NaverPayApprovalServiceTest {
 		Payment payment = createPayment("PAY-1", "pg-payment-id", 1000);
 		payment.fail(PaymentFailCode.TIME_EXPIRED, "expired", LocalDateTime.now());
 
-		given(paymentReservationRepository.findByMerchantPayKey("PAY-1")).willReturn(Optional.of(reservation));
+		given(paymentReservationRepository.findByMemberIdAndMerchantPayKey(memberId, "PAY-1")).willReturn(Optional.of(reservation));
 		given(orderRepository.findByIdAndMemberId(reservation.getOrderId(), memberId)).willReturn(Optional.of(order));
 		given(paymentApprovalRecordService.create(any(PaymentReservation.class), eq("pg-payment-id")))
 			.willReturn(payment);
@@ -919,7 +919,7 @@ class NaverPayApprovalServiceTest {
 		Payment payment = createPayment("PAY-1", "pg-payment-id", 1000);
 		payment.markUnknown("PG 응답 불명확", LocalDateTime.now());
 
-		given(paymentReservationRepository.findByMerchantPayKey("PAY-1")).willReturn(Optional.of(reservation));
+		given(paymentReservationRepository.findByMemberIdAndMerchantPayKey(memberId, "PAY-1")).willReturn(Optional.of(reservation));
 		given(orderRepository.findByIdAndMemberId(reservation.getOrderId(), memberId)).willReturn(Optional.of(order));
 		given(paymentApprovalRecordService.create(any(PaymentReservation.class), eq("pg-payment-id")))
 			.willReturn(payment);
@@ -944,7 +944,7 @@ class NaverPayApprovalServiceTest {
 		Payment payment = createPayment("PAY-1", "pg-payment-id", 1000);
 		payment.succeed(LocalDateTime.now());
 
-		given(paymentReservationRepository.findByMerchantPayKey("PAY-1")).willReturn(Optional.of(reservation));
+		given(paymentReservationRepository.findByMemberIdAndMerchantPayKey(memberId, "PAY-1")).willReturn(Optional.of(reservation));
 		given(orderRepository.findByIdAndMemberId(reservation.getOrderId(), memberId)).willReturn(Optional.of(order));
 		given(paymentApprovalRecordService.create(any(PaymentReservation.class), eq("pg-payment-id")))
 			.willReturn(payment);

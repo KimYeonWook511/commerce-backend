@@ -15,6 +15,7 @@ import jakarta.persistence.GenerationType;
 import jakarta.persistence.Id;
 import jakarta.persistence.Table;
 import jakarta.persistence.UniqueConstraint;
+import jakarta.persistence.Version;
 import lombok.AccessLevel;
 import lombok.Builder;
 import lombok.Getter;
@@ -38,6 +39,9 @@ public class PaymentReservation extends BaseTimeEntity {
 	@Id
 	@GeneratedValue(strategy = GenerationType.IDENTITY)
 	private Long id;
+
+	@Version
+	private Long version;
 
 	@Column(name = "order_id", nullable = false)
 	private Long orderId;

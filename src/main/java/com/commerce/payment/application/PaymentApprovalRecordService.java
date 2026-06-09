@@ -37,7 +37,7 @@ public class PaymentApprovalRecordService {
 				reservation.getMerchantPayKey(), reservation.getProvider(), pgPaymentId)
 			.orElseGet(() -> {
 				reservation.use();
-				paymentReservationRepository.save(reservation);
+				paymentReservationRepository.saveUsed(reservation);
 				return paymentRepository.save(
 					Payment.createRequested(reservation, PaymentType.APPROVE, pgPaymentId)
 				);
