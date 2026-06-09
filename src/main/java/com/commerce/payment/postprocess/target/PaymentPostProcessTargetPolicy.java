@@ -3,10 +3,13 @@ package com.commerce.payment.postprocess.target;
 import java.time.Duration;
 import java.time.LocalDateTime;
 
+import org.springframework.stereotype.Component;
+
 import com.commerce.payment.domain.Payment;
 import com.commerce.payment.domain.PaymentFailCode;
 import com.commerce.payment.domain.PaymentStatus;
 
+@Component
 public class PaymentPostProcessTargetPolicy {
 
 	// NaverPay 승인 가능 시간(10분)에서 파생. #208 운영 config 승격 전제.
