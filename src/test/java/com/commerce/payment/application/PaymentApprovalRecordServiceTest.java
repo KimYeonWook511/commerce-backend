@@ -111,7 +111,7 @@ class PaymentApprovalRecordServiceTest {
 
 	@DisplayName("보상 흐름 실패 처리 시 REQUESTED 상태이면 실패로 전이한다")
 	@Test
-	void failIfRequested_whenRequested_updatePayment() {
+	void failIfPending_whenRequested_updatePayment() {
 		// given
 		LocalDateTime respondedAt = LocalDateTime.of(2026, 3, 3, 16, 21);
 		PaymentReservation reservation = PaymentReservation.createReserved(
@@ -122,7 +122,7 @@ class PaymentApprovalRecordServiceTest {
 			.willReturn(Optional.of(payment));
 
 		// when
-		paymentApprovalRecordService.failIfRequested("PAY-1", PaymentProvider.NAVERPAY, "payment-id-1",
+		paymentApprovalRecordService.failIfPending("PAY-1", PaymentProvider.NAVERPAY, "payment-id-1",
 			PaymentFailCode.APPROVE_PROCESS_FAILED,
 			"compensation",
 			respondedAt
@@ -137,7 +137,7 @@ class PaymentApprovalRecordServiceTest {
 
 	@DisplayName("보상 흐름 실패 처리 시 UNKNOWN 상태이면 실패로 전이한다 (대사 경로 보상)")
 	@Test
-	void failIfRequested_whenUnknown_updatePayment() {
+	void failIfPending_whenUnknown_updatePayment() {
 		// given
 		LocalDateTime respondedAt = LocalDateTime.of(2026, 3, 3, 16, 21);
 		PaymentReservation reservation = PaymentReservation.createReserved(
@@ -149,7 +149,7 @@ class PaymentApprovalRecordServiceTest {
 			.willReturn(Optional.of(payment));
 
 		// when
-		paymentApprovalRecordService.failIfRequested("PAY-1", PaymentProvider.NAVERPAY, "payment-id-1",
+		paymentApprovalRecordService.failIfPending("PAY-1", PaymentProvider.NAVERPAY, "payment-id-1",
 			PaymentFailCode.ORDER_CANCELED,
 			"취소된 주문 보상",
 			respondedAt
@@ -163,7 +163,7 @@ class PaymentApprovalRecordServiceTest {
 
 	@DisplayName("보상 흐름 실패 처리 시 REQUESTED가 아니면 상태를 갱신하지 않고 종료한다")
 	@Test
-	void failIfRequested_whenNotRequested_skipMark() {
+	void failIfPending_whenNotRequested_skipMark() {
 		// given
 		LocalDateTime succeededAt = LocalDateTime.of(2026, 3, 3, 16, 21);
 		PaymentReservation reservation = PaymentReservation.createReserved(
@@ -175,7 +175,7 @@ class PaymentApprovalRecordServiceTest {
 			.willReturn(Optional.of(payment));
 
 		// when
-		paymentApprovalRecordService.failIfRequested("PAY-1", PaymentProvider.NAVERPAY, "payment-id-1",
+		paymentApprovalRecordService.failIfPending("PAY-1", PaymentProvider.NAVERPAY, "payment-id-1",
 			PaymentFailCode.APPROVE_PROCESS_FAILED,
 			"compensation",
 			LocalDateTime.of(2026, 3, 3, 16, 22)
@@ -189,14 +189,14 @@ class PaymentApprovalRecordServiceTest {
 
 	@DisplayName("보상 흐름 실패 처리 시 이력이 없으면 상태를 갱신하지 않고 종료한다")
 	@Test
-	void failIfRequested_whenPaymentNotFound_skipMark() {
+	void failIfPending_whenPaymentNotFound_skipMark() {
 		// given
 		given(paymentRepository.findApprovePayment(
 			eq("PAY-1"), eq(PaymentProvider.NAVERPAY), eq("payment-id-1")))
 			.willReturn(Optional.empty());
 
 		// when
-		paymentApprovalRecordService.failIfRequested(
+		paymentApprovalRecordService.failIfPending(
 			"PAY-1", PaymentProvider.NAVERPAY, "payment-id-1",
 			PaymentFailCode.APPROVE_PROCESS_FAILED,
 			"compensation",

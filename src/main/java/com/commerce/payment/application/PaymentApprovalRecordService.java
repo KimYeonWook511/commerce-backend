@@ -92,7 +92,7 @@ public class PaymentApprovalRecordService {
 	 * 호출처(catch 블록)가 상태를 확인하거나 try-catch로 mark 예외를 잡지 않도록 의도를 캡슐화한다.
 	 */
 	@Transactional
-	public void failIfRequested(
+	public void failIfPending(
 		String merchantPayKey,
 		PaymentProvider provider,
 		String pgPaymentId,

@@ -50,8 +50,8 @@ public class PaymentApprovalCompensationService {
 	}
 
 	public void compensateMerchantKeyMismatch(Payment approvePayment) {
-		// PG 결제 자체가 없으므로 cancel 없이 failIfRequested만.
-		paymentApprovalRecordService.failIfRequested(
+		// PG 결제 자체가 없으므로 cancel 없이 failIfPending만.
+		paymentApprovalRecordService.failIfPending(
 			approvePayment.getMerchantPayKey(), approvePayment.getProvider(), approvePayment.getPgPaymentId(),
 			PaymentFailCode.MERCHANT_PAY_KEY_MISMATCH, "가맹점 결제 키 불일치", LocalDateTime.now()
 		);
@@ -87,7 +87,7 @@ public class PaymentApprovalCompensationService {
 	) {
 		LocalDateTime now = LocalDateTime.now();
 		// approve payment가 race window에서 이미 SUCCEEDED 상태가 됐어도 PG cancel은 멈추지 않는다. REQUESTED가 아니면 mark만 skip한다.
-		paymentApprovalRecordService.failIfRequested(
+		paymentApprovalRecordService.failIfPending(
 			approvePayment.getMerchantPayKey(), approvePayment.getProvider(), approvePayment.getPgPaymentId(),
 			failCode, failDetail, now
 		);
