@@ -1,0 +1,32 @@
+{
+  "phases": [
+    {
+      "dir": "1-reconciliation",
+      "harness_version": "v2",
+      "status": "completed",
+      "started_at": "2026-06-09T17:39:19+0900",
+      "completed_at": "2026-06-09T18:03:01+0900"
+    },
+    {
+      "dir": "2-expiration-timing-guard",
+      "harness_version": "v2",
+      "status": "completed",
+      "started_at": "2026-06-09T18:12:18+0900",
+      "completed_at": "2026-06-09T18:30:12+0900"
+    },
+    {
+      "dir": "3-reconciliation-integration-tests",
+      "harness_version": "v2",
+      "status": "completed",
+      "started_at": "2026-06-09T20:05:37+0900",
+      "completed_at": "2026-06-09T20:40:02+0900"
+    },
+    {
+      "dir": "4-adr039-alignment",
+      "harness_version": "v2",
+      "status": "completed",
+      "started_at": "2026-06-10T02:04:39+0900",
+      "completed_at": "2026-06-10T02:37:01+0900"
+    }
+  ]
+}

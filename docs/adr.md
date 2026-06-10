@@ -43,6 +43,7 @@ task adr(`docs/tasks/<task>/adr.md`)의 역할은 harness 도입을 기점으로
 | stock-management | [`docs/tasks/stock-management/adr.md`](tasks/stock-management/adr.md) | 관리자 재고 변경 이력 (ADR-004 연계) |
 | traceid-mdc-filter | [`docs/tasks/traceid-mdc-filter/adr.md`](tasks/traceid-mdc-filter/adr.md) | `TraceIdFilter` MDC 전파 |
 | unique-find-first-policy | [`docs/tasks/unique-find-first-policy/adr.md`](tasks/unique-find-first-policy/adr.md) | find-first 패턴 (ADR-011 연계) |
+| unknown-reconciliation | [`docs/tasks/unknown-reconciliation/adr.md`](tasks/unknown-reconciliation/adr.md) | UNKNOWN/stale REQUESTED 대사를 `@Scheduled` 서비스 루프로 구현(ADR-040~048), 만료 배치가 미확정 결제 주문 제외(order 소유 port 의존 역전), 대사 SUCCEEDED·주문 CANCELED 시 보상 환불, `PaymentStatus.MANUAL_REVIEW` 미도입(ADR-039 준수), escalation을 스캔 시간 윈도우 상한으로 제외, 비-INIT 주문 종착 전이 (ADR-029/030/039 연계) |
 
 향후 task 추가 시 본 표에 한 줄을 갱신한다. task adr 위치는 모두 `docs/tasks/<task>/adr.md`로 고정한다.
 
@@ -439,3 +440,74 @@ task adr(`docs/tasks/<task>/adr.md`)의 역할은 harness 도입을 기점으로
 - **결과**: APPROVE row 상태 의미는 변경 없이 유지된다. FAILED 의 의미론적 부정확성(과금된 거부 건을 실패로 표기)은 알려진·수용된 한계로 명시한다.
 - **재검토 trigger**: 실제 reconciliation/분쟁 자동화 기능이 도입되어 APPROVE row 단독으로 "과금-후-보상"을 구분해야 하는 소비처가 생기면, 그 요구에 맞춰 새 상태 도입을 재검토한다.
 - **연계**: #227, PR #228, #230(PR #233), #231(PR #235), #232, ADR-014/035(보상 완료 가드), ADR-037(진입 차단).
+
+### ADR-040: UNKNOWN/stale REQUESTED 대사를 `@Scheduled` 서비스 루프로 구현한다
+
+- **결정**: 결과 불명(UNKNOWN)·응답 저장 전 끊긴(stale REQUESTED) APPROVE 결제를 PG 이력 조회로 확정하는 대사를, Spring Batch가 아니라 `@Scheduled` 트리거 + 서비스 루프로 구현한다. stale 후보를 한 번 조회한 뒤 건별 단건 트랜잭션으로 처리하고, PG 외부 호출은 트랜잭션 경계 밖에서 수행한다.
+- **배경**: 실행 메커니즘 후보로 Spring Batch(주문 만료 배치 선례)와 단순 스케줄러(outbox 선례)가 있었다. 대사는 건별 PG 외부 호출 + 실패 격리가 핵심이라 chunk 트랜잭션과 외부 호출 경계를 분리하는 처리가 별도로 필요하다.
+- **이유**: 건별로 트랜잭션 경계를 좁히고 PG 호출을 경계 밖에 두는 편이 안전하며, outbox 스케줄러와 동일 패턴이라 운영 일관성도 확보된다.
+- **트레이드오프**: 대량 처리·정교한 재시도 정책이 필요해지면 후속에서 Batch로 승격할 수 있다. 한 주기 처리량은 배치 size 상한으로 제한된다.
+- **연계**: ADR-029(후처리 대상 status 식별), ADR-030(대사 임계), Epic #208(batch #1), #222.
+
+### ADR-041: 대사 배치에 분산 락을 이번엔 도입하지 않는다
+
+- **결정**: 다중 인스턴스 중복 실행 방지용 분산 락(ShedLock)을 도입하지 않는다. 이중 처리는 멱등성으로 방어한다(`uk_payment_approved_order_key`가 이중 성공 확정을 차단, 상태 전이는 멱등 가드). 다중 인스턴스 운영 진입 시 도입을 후속 과제로 남긴다.
+- **배경**: 현재 모든 스케줄러(outbox·만료)가 분산 락 없이 단일 인스턴스 전제로 동작한다.
+- **이유**: 돈 정합성의 1차 안전장치는 분산 락이 아니라 멱등성이며, 멱등성은 분산 락 없이도 이중 처리를 안전하게 만든다. 즉시 도입은 의존성·설정 부담을 더하고 기존 패턴과 어긋난다.
+- **트레이드오프**: 구성이 가볍고 일관되나, 다중 인스턴스 전환 시점에 ShedLock 추가가 필요하다(후속 과제 명시).
+- **연계**: ADR-040, #230(`uk_payment_approved_order_key`), Epic #208.
+
+### ADR-042: 주문 만료 배치는 미확정 결제가 걸린 주문을 만료 대상에서 제외한다
+
+- **결정**: 미확정(UNKNOWN, 그리고 응답 저장 전 끊긴 stale REQUESTED) APPROVE 결제가 걸린 INIT 주문을 만료 배치가 만료 대상에서 제외한다(원천 차단). 결제 상태 조회는 order가 소유한 query port를 payment adapter가 구현하는 **의존 역전**으로 풀고(`CartItemRemover` 선례), 만료 reader가 chunk의 orderId들을 IN으로 한 번에 조회해 N+1을 피한다.
+- **배경**: 미확정 결제가 걸린 주문이 만료 취소·재고복구된 뒤 대사에서 그 결제가 SUCCEEDED로 확정되면, 돈은 받고 주문은 취소된 상태로 정합성이 붕괴한다(#222). 만료 배치는 본래 `status=INIT`만 본다.
+- **이유**: 충돌을 사후가 아니라 원천에서 막는 편이 견고하다. 의존 역전은 order→payment 직접 의존을 만들지 않고 기존 경계·의존 방향을 보존한다. cross-aggregate FK·직접 join은 ADR-020(ID 참조)을 위반하므로 배제한다.
+- **트레이드오프**: 만료 조회에 결제 상태 결합 비용(chunk당 1쿼리)이 추가된다. 미확정이 풀리기 전엔 주문이 만료되지 않으므로, 대사가 결국 그 결제를 종결시켜 차단을 풀어줘야 정상 만료된다(대사와 짝).
+- **연계**: ADR-020(ID 참조), ADR-040(대사), #222, Epic #208.
+
+### ADR-043: 대사가 승인 확정한 결제의 주문이 이미 취소됐으면 보상 환불한다
+
+- **결정**: 대사가 UNKNOWN→SUCCEEDED로 확정한 뒤 주문 완료가 CANCELED 상태로 거부되면, 보상 취소(PG 환불)를 실행하고 APPROVE 결제를 `FAILED` + failCode(`ORDER_CANCELED`) + CANCEL row로 종착시킨 뒤 통지한다. 보상된 APPROVE는 새 상태가 아니라 FAILED+failCode로 표현한다(ADR-039 준수). 보상 경로는 기존 보상 서비스/PG 취소를 재사용한다.
+- **배경**: 원천 차단(ADR-042)이 뚫리는 극단 경합에서, 이미 취소된 주문의 미확정 결제가 대사에서 성공으로 확정될 수 있다. 그냥 종결하면 돈은 받고 주문은 취소된 채 박제된다.
+- **이유**: 원천 차단(A)으로 막고 사후 보상(C)으로 받치는 belt-and-suspenders가 돈 정합성에 가장 견고하다(희박해도 안전장치). 보상은 검증된 기존 경로를 재사용해 신규 위험을 줄인다.
+- **트레이드오프**: 사후 환불 경로가 대사 flow에 추가된다. 보상 취소 자체가 실패하면 CANCEL row를 UNKNOWN 보존(재처리 후속) + 통지로 운영 개입에 위임한다.
+- **연계**: ADR-039, ADR-042, #222, Epic #208(batch #3).
+
+### ADR-044: 대사 종착에 새 결제 상태(MANUAL_REVIEW)를 도입하지 않고 ADR-039를 따른다
+
+- **결정**: escalation·보상 종착을 표현하려 초기 설계에 넣었던 `PaymentStatus.MANUAL_REVIEW`를 철회한다. `PaymentStatus`는 `REQUESTED/SUCCEEDED/FAILED/UNKNOWN` 4개만 유지한다. 보상된 APPROVE는 `FAILED`+failCode+CANCEL row(ADR-039, ADR-043)로, escalation은 새 상태 없이 스캔 윈도우 상한(ADR-047)으로 자동 제외하고 `UNKNOWN`으로 둔다.
+- **배경**: 새 상태는 보상 종착(결론 남)과 escalation 종착(결론 미상)을 한 값에 뭉쳐, ADR-039가 경계한 "한 상태가 두 현실을 뭉갬"을 반복한다. 그 구분을 소비하는 운영 기능도 아직 없다.
+- **이유**: `status`는 "결제에 일어난 사실"만 담고, 후처리 대상 분류(대사/보상/수동/없음)는 정책이 `(status + failCode + 시간 + CANCEL row)`로 매번 계산한다(ADR-039 정신). 분류 결과를 status에 박으면 사실과 파생이 섞인다.
+- **트레이드오프**: 상태 enum이 단순하게 유지된다. 정책 분류값 `PaymentPostProcessTarget.MANUAL_REVIEW`(ADR-030/031)는 status가 아니라 정책의 후처리 분류값이므로 그대로 유지된다 — 본 결정은 그 분류를 status로 승격하지 않는다는 것이다. escalation의 운영 가시성(통지·종착)과 "결론 났나/과금됐나" 축 분리는 그 구분을 소비하는 기능이 생기는 후속 #238에서 재검토한다(ADR-039 재검토 trigger).
+- **연계**: ADR-039, ADR-030/031(MANUAL_REVIEW 정책 분류값 — 유지), ADR-047, #238.
+
+### ADR-045: 대사·보상 통지는 NotificationPort 추상화로 두고 채널 adapter는 후속으로 분리한다
+
+- **결정**: 보상 취소·escalation 시 운영자 통지를 위해 `NotificationPort`(알림 추상화) + no-op(로그) 구현만 둔다. 통지 hook 지점을 대사/보상 flow에 미리 박고, 실제 채널 adapter(디스코드 웹훅 등)는 별도 후속으로 분리한다. 통지는 commit 이후 best-effort이며 전송 실패가 트랜잭션을 막지 않는다.
+- **배경**: 실제 채널까지 이번에 붙이면 운영 웹훅 URL·환경별 설정·전송 실패 처리가 본 task 범위를 넓힌다. 반대로 port 자체를 안 두면 후속에서 hook 지점을 다시 찾아야 한다.
+- **이유**: 진실 원천은 `FAILED`+failCode(보상)·`UNKNOWN`+로그이고 알림은 부가 push다. port로 hook만 확보하면 채널 교체가 adapter 교체로 끝난다.
+- **트레이드오프**: 이번엔 통지가 로그로만 남는다. 실제 채널은 후속에서 adapter만 추가하면 된다.
+- **연계**: ADR-043(보상 통지), ADR-044/047(escalation), #238.
+
+### ADR-046: 후처리 결정 정책을 테스트 코드에서 main 코드로 승격한다
+
+- **결정**: 후처리 결정 정책(대상 식별·flow 결정 + 관련 enum)을 `src/test`에서 `src/main`의 payment 도메인으로 이전하고, 기존 정책 테스트는 main 클래스를 가리키도록 정리한다.
+- **배경**: 정책 로직이 앞선 작업(#221)에서 현재 모델 기준으로 재설계됐으나 테스트 코드에만 존재했다. 실제 대사 배치가 이 정책을 사용하려면 main 코드여야 한다.
+- **이유**: 결정 로직의 단일 출처를 main에 두고 대사 서비스가 이를 의존해야 정책과 실행이 어긋나지 않는다. test에 둔 채 별도 재구현하면 정책이 중복·표류한다.
+- **연계**: ADR-029(후처리 대상 식별), ADR-040, #221.
+
+### ADR-047: escalation은 새 상태 대신 대사 스캔 시간 윈도우 상한으로 자동 제외한다
+
+- **결정**: 자동 대사 스캔을 시간 윈도우로 제한한다 — 하한은 진입 지연(UNKNOWN ≈1분, REQUESTED ≈15분), 상한은 escalation(≈6시간). 상한을 넘긴 미확정 건은 스캔 대상에서 빠지고 `UNKNOWN`/`REQUESTED`로 남는다. "자동 대사 대상이냐"를 status가 아니라 **시간 윈도우**가 정의한다.
+- **배경**: `MANUAL_REVIEW` 상태 철회(ADR-044) 후, 상한 초과 건을 자동 대사에서 빼는 수단이 없으면 스캔이 매 주기 같은 건을 재조회해 무한 재시도·PG 호출 낭비가 된다. 또한 스캔 하한을 UNKNOWN/REQUESTED 공통으로 두면 진입 지연(15분) 전 REQUESTED가 정렬 앞단을 차지해 뒤 후보가 고사한다.
+- **이유**: 정책이 시간으로 하던 escalation 분류와 진입 지연을 스캔 쿼리가 윈도우로 흡수한다. 하한을 정책(ADR-030)의 UNKNOWN/REQUESTED 분리와 일치시켜 고사를 막고, 새 상태 없이 무한 재시도를 막아 ADR-039의 "status는 사실만" 정신과 일치한다.
+- **트레이드오프**: 상한 초과 건은 자동 대사에서 제외되나 운영 가시성(통지·조회)은 이번 범위 밖이다(후속 #238). 윈도우 내 누적으로 인한 starvation/backoff와 스캔 인덱스·승인/취소 테이블 분리는 후속 #239.
+- **연계**: ADR-030(임계 분리), ADR-044, #238, #239.
+
+### ADR-048: 대사 중 주문이 비-INIT이면 건너뛰지 않고 종착 상태로 전이한다
+
+- **결정**: 대사가 승인 확정을 시도할 때 주문 완료가 비-INIT 상태로 거부되면, 건너뛰지(미확정 유지) 않고 주문 상태별로 종착시킨다 — `CANCELED`→보상 환불(FAILED+failCode, ADR-043), `PAID`→이미 다른 성공 결제 존재 여부로 판별(있으면 중복 결제→보상, 없으면 이 건이 성공 주체→SUCCEEDED 맞춤), 주문 없음→ERROR 로그 + FAILED. 어떤 경로든 다음 주기에 재스캔되지 않게 한다.
+- **배경**: 비-INIT 거부를 그냥 건너뛰면 결제가 `UNKNOWN`으로 남아 매 주기 무한 재시도된다(PR #237 리뷰).
+- **이유**: 종착 상태(SUCCEEDED/FAILED)로 전이해야 스캔 대상에서 빠진다. `PAID`에서 중복 여부를 판별해 정당한 결제의 오환불을 막는다. 새 상태 없이 기존 상태+failCode로 표현한다(ADR-039).
+- **트레이드오프**: 비-INIT 경합 건이 결정적으로 종착된다. `PAID` 분기는 주문 기준 성공 결제 존재 조회를 추가로 수행한다.
+- **연계**: ADR-039, ADR-043, ADR-047, #237.

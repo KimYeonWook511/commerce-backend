@@ -40,14 +40,14 @@ class PaymentApprovalCompensationServiceTest {
 	@InjectMocks
 	private PaymentApprovalCompensationService compensationService;
 
-	@DisplayName("merchantKeyMismatch 보상: failIfRequested 호출, pgCanceller.cancel 미호출")
+	@DisplayName("merchantKeyMismatch 보상: failIfPending 호출, pgCanceller.cancel 미호출")
 	@Test
 	void compensateMerchantKeyMismatch_callsFailIfRequestedOnly() {
 		Payment approvePayment = createApprovePayment("PAY-1", "pg-id", 1000);
 
 		compensationService.compensateMerchantKeyMismatch(approvePayment);
 
-		then(paymentApprovalRecordService).should().failIfRequested(
+		then(paymentApprovalRecordService).should().failIfPending(
 			eq("PAY-1"), eq(PaymentProvider.NAVERPAY), eq("pg-id"),
 			eq(PaymentFailCode.MERCHANT_PAY_KEY_MISMATCH), any(), any()
 		);

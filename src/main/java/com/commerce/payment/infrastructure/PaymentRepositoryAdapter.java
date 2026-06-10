@@ -1,9 +1,12 @@
 package com.commerce.payment.infrastructure;
 
+import java.time.LocalDateTime;
+import java.util.List;
 import java.util.Optional;
 
 import org.hibernate.exception.ConstraintViolationException;
 import org.springframework.dao.DataIntegrityViolationException;
+import org.springframework.data.domain.Pageable;
 import org.springframework.stereotype.Repository;
 
 import com.commerce.payment.domain.Payment;
@@ -100,5 +103,10 @@ public class PaymentRepositoryAdapter implements PaymentRepository {
 		return jpaPaymentRepository.existsByOrderIdAndTypeAndStatus(
 			orderId, PaymentType.APPROVE, PaymentStatus.SUCCEEDED
 		);
+	}
+
+	@Override
+	public List<Payment> findStaleApprovePaymentsForReconciliation(LocalDateTime staleCutoff, LocalDateTime requestedStaleCutoff, LocalDateTime escalationCutoff, Pageable pageable) {
+		return jpaPaymentRepository.findStaleApprovePaymentsForReconciliation(staleCutoff, requestedStaleCutoff, escalationCutoff, pageable);
 	}
 }

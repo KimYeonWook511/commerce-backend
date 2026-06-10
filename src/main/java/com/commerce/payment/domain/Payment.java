@@ -135,7 +135,7 @@ public class Payment extends BaseTimeEntity {
 	}
 
 	public void succeed(LocalDateTime respondedAt) {
-		if (this.status != PaymentStatus.REQUESTED) {
+		if (this.status != PaymentStatus.REQUESTED && this.status != PaymentStatus.UNKNOWN) {
 			throw new PaymentException(PaymentErrorCode.PAYMENT_STATUS_TRANSITION_NOT_ALLOWED);
 		}
 		this.status = PaymentStatus.SUCCEEDED;
@@ -147,7 +147,7 @@ public class Payment extends BaseTimeEntity {
 	}
 
 	public void fail(PaymentFailCode failCode, String failDetail, LocalDateTime respondedAt) {
-		if (this.status != PaymentStatus.REQUESTED) {
+		if (this.status != PaymentStatus.REQUESTED && this.status != PaymentStatus.UNKNOWN) {
 			throw new PaymentException(PaymentErrorCode.PAYMENT_STATUS_TRANSITION_NOT_ALLOWED);
 		}
 		this.status = PaymentStatus.FAILED;

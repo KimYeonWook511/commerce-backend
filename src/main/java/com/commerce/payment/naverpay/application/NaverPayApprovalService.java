@@ -95,7 +95,7 @@ public class NaverPayApprovalService {
 			case PROCESSING -> toResponse(payment.getPgPaymentId(), NaverPayApproveStatus.PROCESSING);
 			case ALREADY_COMPLETE -> processAlreadyComplete(payment);
 			case FAILED -> {
-				paymentApprovalRecordService.failIfRequested(
+				paymentApprovalRecordService.failIfPending(
 					payment.getMerchantPayKey(), payment.getProvider(), payment.getPgPaymentId(),
 					result.getFailCode(), result.getFailDetail(), LocalDateTime.now()
 				);
@@ -133,7 +133,7 @@ public class NaverPayApprovalService {
 
 		if (result.getStatus() == NaverPayHistoryResult.Status.APPROVED) {
 			if (!payment.getMerchantPayKey().equals(result.getMerchantPayKey())) {
-				paymentApprovalRecordService.failIfRequested(
+				paymentApprovalRecordService.failIfPending(
 					payment.getMerchantPayKey(), payment.getProvider(), payment.getPgPaymentId(),
 					PaymentFailCode.MERCHANT_PAY_KEY_MISMATCH, "가맹점 결제 키 불일치", LocalDateTime.now()
 				);
@@ -143,7 +143,7 @@ public class NaverPayApprovalService {
 		}
 
 		if (result.getStatus() == NaverPayHistoryResult.Status.CANCELED) {
-			paymentApprovalRecordService.failIfRequested(
+			paymentApprovalRecordService.failIfPending(
 				payment.getMerchantPayKey(), payment.getProvider(), payment.getPgPaymentId(),
 				PaymentFailCode.ALREADY_CANCELED, "이미 취소된 결제", LocalDateTime.now()
 			);
@@ -233,6 +233,7 @@ public class NaverPayApprovalService {
 	private PaymentErrorCode toPaymentErrorCode(PaymentFailCode failCode) {
 		return switch (failCode) {
 			case TIME_EXPIRED -> PaymentErrorCode.PAYMENT_TIME_EXPIRED;
+			case ORDER_CANCELED -> PaymentErrorCode.PAYMENT_ALREADY_CANCELED;
 			case ALREADY_CANCELED -> PaymentErrorCode.PAYMENT_ALREADY_CANCELED;
 			case INVALID_PG_PAYMENT_ID -> PaymentErrorCode.PAYMENT_NOT_FOUND;
 			case INVALID_MERCHANT -> PaymentErrorCode.PAYMENT_INVALID_MERCHANT;

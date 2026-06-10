@@ -1,7 +1,10 @@
 package com.commerce.payment.postprocess.flow;
 
+import org.springframework.stereotype.Component;
+
 import com.commerce.payment.postprocess.target.PaymentPostProcessTarget;
 
+@Component
 public class PaymentPostProcessFlowPolicy {
 
 	public PaymentPostProcessFlow resolveFlow(PaymentPostProcessTarget target) {

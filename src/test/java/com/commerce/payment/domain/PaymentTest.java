@@ -134,6 +134,44 @@ class PaymentTest {
 				.isEqualTo(PaymentErrorCode.PAYMENT_STATUS_TRANSITION_NOT_ALLOWED));
 	}
 
+	@DisplayName("UNKNOWN 상태에서 succeed 호출 시 SUCCEEDED로 전이된다")
+	@Test
+	void succeed_whenStatusUnknown_updateStatusToSucceeded() {
+		// given
+		PaymentReservation reservation = PaymentReservation.createReserved(
+			1L, 1L, 1000, PaymentProvider.NAVERPAY, "PAY-1", LocalDateTime.now().plusMinutes(15));
+		Payment payment = Payment.createRequested(reservation, PaymentType.APPROVE, "pg-payment-id");
+		payment.markUnknown("PG 응답 타임아웃", LocalDateTime.now());
+		LocalDateTime respondedAt = LocalDateTime.of(2026, 3, 5, 20, 10);
+
+		// when
+		payment.succeed(respondedAt);
+
+		// then
+		assertThat(payment.getStatus()).isEqualTo(PaymentStatus.SUCCEEDED);
+		assertThat(payment.getRespondedAt()).isEqualTo(respondedAt);
+		assertThat(payment.getApprovedOrderKey()).isEqualTo(1L);
+	}
+
+	@DisplayName("UNKNOWN 상태에서 fail 호출 시 FAILED로 전이된다")
+	@Test
+	void fail_whenStatusUnknown_updateStatusToFailed() {
+		// given
+		PaymentReservation reservation = PaymentReservation.createReserved(
+			1L, 1L, 1000, PaymentProvider.NAVERPAY, "PAY-1", LocalDateTime.now().plusMinutes(15));
+		Payment payment = Payment.createRequested(reservation, PaymentType.APPROVE, "pg-payment-id");
+		payment.markUnknown("PG 응답 타임아웃", LocalDateTime.now());
+		LocalDateTime respondedAt = LocalDateTime.of(2026, 3, 5, 20, 20);
+
+		// when
+		payment.fail(PaymentFailCode.PG_REQUEST_REJECTED, "PG 확정 실패", respondedAt);
+
+		// then
+		assertThat(payment.getStatus()).isEqualTo(PaymentStatus.FAILED);
+		assertThat(payment.getFailCode()).isEqualTo(PaymentFailCode.PG_REQUEST_REJECTED);
+		assertThat(payment.getRespondedAt()).isEqualTo(respondedAt);
+	}
+
 	@DisplayName("merchantPayKey와 금액이 모두 일치하면 verifyApprovedResponse에서 예외가 발생하지 않는다")
 	@Test
 	void verifyApprovedResponse_whenBothMatch_noException() {

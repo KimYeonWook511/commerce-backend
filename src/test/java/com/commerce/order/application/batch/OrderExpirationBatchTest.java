@@ -31,6 +31,13 @@ import org.springframework.context.annotation.Import;
 import org.springframework.test.context.ActiveProfiles;
 import org.springframework.test.context.bean.override.mockito.MockitoBean;
 
+import com.commerce.payment.domain.Payment;
+import com.commerce.payment.domain.PaymentProvider;
+import com.commerce.payment.domain.PaymentReservation;
+import com.commerce.payment.domain.PaymentType;
+import com.commerce.payment.infrastructure.persistence.support.PaymentPersistenceTestSupport;
+import com.commerce.payment.infrastructure.persistence.support.PaymentReservationPersistenceTestSupport;
+
 import com.commerce.order.exception.OrderErrorCode;
 import com.commerce.order.exception.OrderException;
 import com.commerce.member.domain.Member;
@@ -49,7 +56,7 @@ import com.commerce.support.PersistenceCleanupTestSupport;
 @SpringBatchTest
 @SpringBootTest
 @ActiveProfiles("test")
-@Import({PersistenceCleanupTestSupport.class, MemberPersistenceTestSupport.class, ProductPersistenceTestSupport.class, OrderPersistenceTestSupport.class})
+@Import({PersistenceCleanupTestSupport.class, MemberPersistenceTestSupport.class, ProductPersistenceTestSupport.class, OrderPersistenceTestSupport.class, PaymentPersistenceTestSupport.class, PaymentReservationPersistenceTestSupport.class})
 class OrderExpirationBatchTest {
 
 	@SuppressWarnings("SpringJavaInjectionPointsAutowiringInspection")
@@ -71,6 +78,12 @@ class OrderExpirationBatchTest {
 	@Autowired
 	private OrderPersistenceTestSupport orderPersistence;
 
+	@Autowired
+	private PaymentPersistenceTestSupport paymentPersistence;
+
+	@Autowired
+	private PaymentReservationPersistenceTestSupport reservationPersistence;
+
 	@MockitoBean
 	private OutboxService outboxService;
 
@@ -82,7 +95,7 @@ class OrderExpirationBatchTest {
 	@AfterEach
 	void tearDown() {
 		persistenceCleanup.deleteAllInBatch(
-			memberPersistence, productPersistence, orderPersistence
+			paymentPersistence, reservationPersistence, memberPersistence, productPersistence, orderPersistence
 		);
 	}
 
@@ -234,6 +247,69 @@ class OrderExpirationBatchTest {
 		assertThat(stepExecution.getRollbackCount()).isGreaterThan(0);
 		Order result = orderPersistence.findById(order.getId()).orElseThrow();
 		assertThat(result.getStatus()).isEqualTo(OrderStatus.INIT);
+	}
+
+	@DisplayName("UNKNOWN 결제가 걸린 INIT 주문은 만료 배치에서 제외된다")
+	@Test
+	void orderExpirationJob_whenOrderHasUnknownPayment_skipExpiration() throws Exception {
+		// given
+		LocalDateTime now = LocalDateTime.now();
+		Member member = memberPersistence.save(createMember());
+		Product product = productPersistence.save(createProduct());
+		Order order = orderPersistence.save(createOrder(member, product));
+
+		PaymentReservation reservation = reservationPersistence.save(
+			PaymentReservation.createReserved(order.getId(), member.getId(), 1000,
+				PaymentProvider.NAVERPAY, "PAY-" + order.getId(), now.plusMinutes(15)));
+		Payment payment = Payment.createRequested(reservation, PaymentType.APPROVE, "pg-unknown-1");
+		payment.markUnknown("timeout", now);
+		paymentPersistence.save(payment);
+
+		JobParameters parameters = jobParameters(now.plusMinutes(10));
+
+		// when
+		JobExecution execution = jobLauncherTestUtils.launchJob(parameters);
+
+		// then
+		assertThat(execution.getStatus()).isEqualTo(BatchStatus.COMPLETED);
+		StepExecution stepExecution = execution.getStepExecutions().iterator().next();
+		assertThat(stepExecution.getReadCount()).isEqualTo(0);
+		assertThat(stepExecution.getWriteCount()).isEqualTo(0);
+		Order result = orderPersistence.findById(order.getId()).orElseThrow();
+		assertThat(result.getStatus()).isEqualTo(OrderStatus.INIT);
+		then(outboxService).should(never()).createStockRestoreOutboxEvent(any());
+	}
+
+	@DisplayName("UNKNOWN 결제 주문은 제외되고 일반 만료 주문은 정상 처리된다")
+	@Test
+	void orderExpirationJob_whenMixedOrders_processOnlyNonBlockedOrders() throws Exception {
+		// given
+		LocalDateTime now = LocalDateTime.now();
+		Member member = memberPersistence.save(createMember());
+		Product product = productPersistence.save(createProduct());
+
+		Order blockedOrder = orderPersistence.save(createOrder(member, product));
+		Order normalOrder = orderPersistence.save(createOrder(member, product));
+
+		PaymentReservation reservation = reservationPersistence.save(
+			PaymentReservation.createReserved(blockedOrder.getId(), member.getId(), 1000,
+				PaymentProvider.NAVERPAY, "PAY-" + blockedOrder.getId(), now.plusMinutes(15)));
+		Payment payment = Payment.createRequested(reservation, PaymentType.APPROVE, "pg-unknown-2");
+		payment.markUnknown("timeout", now);
+		paymentPersistence.save(payment);
+
+		JobParameters parameters = jobParameters(now.plusMinutes(10));
+
+		// when
+		JobExecution execution = jobLauncherTestUtils.launchJob(parameters);
+
+		// then
+		assertThat(execution.getStatus()).isEqualTo(BatchStatus.COMPLETED);
+		StepExecution stepExecution = execution.getStepExecutions().iterator().next();
+		assertThat(stepExecution.getReadCount()).isEqualTo(1);
+		assertThat(stepExecution.getWriteCount()).isEqualTo(1);
+		assertThat(orderPersistence.getOrderStatusById(blockedOrder.getId())).isEqualTo(OrderStatus.INIT);
+		assertThat(orderPersistence.getOrderStatusById(normalOrder.getId())).isEqualTo(OrderStatus.CANCELED);
 	}
 
 	@DisplayName("cutoff 파라미터가 없으면 배치 실행이 실패한다")

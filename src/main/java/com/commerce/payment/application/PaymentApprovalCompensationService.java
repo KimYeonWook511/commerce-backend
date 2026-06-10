@@ -5,6 +5,7 @@ import java.util.Objects;
 
 import org.springframework.stereotype.Service;
 
+import com.commerce.payment.application.port.NotificationPort;
 import com.commerce.payment.application.port.PgCanceller;
 import com.commerce.payment.application.port.result.CancelOutcome;
 import com.commerce.payment.domain.Payment;
@@ -23,10 +24,34 @@ public class PaymentApprovalCompensationService {
 
 	private final PaymentApprovalRecordService paymentApprovalRecordService;
 	private final PaymentCancellationService paymentCancellationService;
+	private final NotificationPort notificationPort;
+
+	/**
+	 * CANCELED 주문의 UNKNOWN 결제가 대사에서 SUCCEEDED 확정을 시도한 경우 보상 취소(환불)를 수행한다 (ADR-L4, C).
+	 * PG 보상 취소 → 통지(best-effort). 이중 환불은 runPgCancel 내부의 getOrCreate + REQUESTED 가드가 차단한다.
+	 */
+	public void compensateCanceledOrderApproval(Payment approvePayment, PgCanceller pgCanceller) {
+		runPgCancel(
+			approvePayment,
+			PaymentFailCode.ORDER_CANCELED,
+			"취소된 주문으로 인한 보상 환불",
+			approvePayment.getAmount(),
+			"취소된 주문의 결제 환불",
+			pgCanceller
+		);
+		try {
+			notificationPort.notifyManualReviewRequired(
+				approvePayment.getOrderId(), approvePayment.getMerchantPayKey(), "CANCELED 주문 결제 보상 취소"
+			);
+		} catch (Exception ex) {
+			log.warn("보상 취소 후 통지 실패 orderId={} merchantPayKey={}",
+				approvePayment.getOrderId(), approvePayment.getMerchantPayKey(), ex);
+		}
+	}
 
 	public void compensateMerchantKeyMismatch(Payment approvePayment) {
-		// PG 결제 자체가 없으므로 cancel 없이 failIfRequested만.
-		paymentApprovalRecordService.failIfRequested(
+		// PG 결제 자체가 없으므로 cancel 없이 failIfPending만.
+		paymentApprovalRecordService.failIfPending(
 			approvePayment.getMerchantPayKey(), approvePayment.getProvider(), approvePayment.getPgPaymentId(),
 			PaymentFailCode.MERCHANT_PAY_KEY_MISMATCH, "가맹점 결제 키 불일치", LocalDateTime.now()
 		);
@@ -62,7 +87,7 @@ public class PaymentApprovalCompensationService {
 	) {
 		LocalDateTime now = LocalDateTime.now();
 		// approve payment가 race window에서 이미 SUCCEEDED 상태가 됐어도 PG cancel은 멈추지 않는다. REQUESTED가 아니면 mark만 skip한다.
-		paymentApprovalRecordService.failIfRequested(
+		paymentApprovalRecordService.failIfPending(
 			approvePayment.getMerchantPayKey(), approvePayment.getProvider(), approvePayment.getPgPaymentId(),
 			failCode, failDetail, now
 		);

@@ -1,0 +1,22 @@
+{
+  "project": "commerce-backend",
+  "phase": "3-reconciliation-integration-tests",
+  "harness_version": "v2",
+  "steps": [
+    {
+      "step": 1,
+      "name": "reconciliation-integration-tests",
+      "status": "completed",
+      "started_at": "2026-06-09T20:05:37+0900",
+      "summary": "ReconciliationScanQueryIntegrationTest(@DataJpaTest + Testcontainers MySQL)와 PaymentReconciliationIntegrationTest(@SpringBootTest + Testcontainers MySQL)를 추가해 스캔 쿼리 후보 선별·대사 정상 흐름·C 시나리오(보상 취소·MANUAL_REVIEW·통지·멱등) 경로를 통합 테스트로 검증했다. 두 클래스 모두 @Tag(\"docker\")로 integrationTest 태스크에 수집되며 BUILD SUCCESSFUL 확인.",
+      "completed_at": "2026-06-09T20:38:17+0900"
+    }
+  ],
+  "created_at": "2026-06-09T20:05:37+0900",
+  "execution": {
+    "developer_model": "sonnet",
+    "reviewer_model": "opus",
+    "commit_model": "haiku"
+  },
+  "completed_at": "2026-06-09T20:40:02+0900"
+}

@@ -127,11 +127,21 @@ NaverPayController → NaverPayApprovalService
 
 # 주문 만료 배치
 Spring Batch (주문 만료)
+  → BlockingPaymentChecker port (미확정 APPROVE 결제(UNKNOWN/stale REQUESTED) 걸린 주문을 만료 대상에서 제외 — order 소유 port·payment adapter 구현, chunk orderId 일괄 조회로 N+1 회피, ADR-042)
   → OrderExpirationService (만료 대상 처리)
   → OrderCancelService (주문 취소)
   → StockRestoreOutboxCreateService (복구 이벤트 생성)
   → Outbox 스케줄러 → relay → Kafka
   → Kafka consumer → StockRestoreOutboxConsumeService (재고 복구)
+
+# 결제 대사 (reconciliation)
+@Scheduled PaymentReconciliationService (ADR-040)
+  → 스캔: stale APPROVE 미확정 결제 후보 (시간 윈도우 — UNKNOWN ≈1분 / REQUESTED ≈15분 하한, ≈6시간 상한 초과는 escalation 제외, ADR-047)
+  → [건별, 트랜잭션 밖] PG Gateway 이력 조회 (getApprovalHistory — 승인 재요청이 아니라 이미 일어난 결과 확인. 이중과금 방지)
+  → 후처리 정책 (PaymentPostProcessTargetPolicy/FlowPolicy — src/main 단일 출처, ADR-046) 으로 확정/보상/대기 결정
+  → 승인 확정: PG 재호출 없이 우리 상태만 SUCCEEDED + Order PAID 반영
+  → 주문이 이미 CANCELED / 중복 결제: 보상 취소(PG cancel) + FAILED+failCode 종착 + NotificationPort 통지 (ADR-043)
+  → 비-INIT 주문은 건너뛰지 않고 종착 상태로 전이해 무한 재시도 차단 (ADR-048)
 ```
 
 ---
@@ -142,9 +152,9 @@ Spring Batch (주문 만료)
 - `security`는 HTTP 요청 인증/인가 adapter다. `JwtAuthenticationFilter`가 `TokenAuthenticationService`를 호출해 인증 결과를 `AuthenticationContext`에 저장하고, `AuthorizationInterceptor`와 `AuthenticatedMemberIdArgumentResolver`가 이를 사용한다.
 - `product` 도메인은 공개 상품 조회와 관리자 상품 등록·수정·soft delete를 제공한다. 상품 목록은 `ON_SALE` 또는 `SOLD_OUT` 상태, `deletedAt IS NULL`, `createdAt DESC` 기준으로 반환한다. 상품 상세는 상품 정보와 현재 재고 수량을 조합한다.
 - `stock` 도메인은 상품별 현재 재고, 주문 경로의 재고 차감·복구, 관리자 초기 재고 생성, 관리자 수동 조정, 재고 변경 이력을 담당한다. `Product : Stock = 1:1` 관계를 유지하며, `Stock` 은 `productId: Long` 으로 Product 를 ID 참조한다(ADR-020). `StockHistory` 는 Stock 과 별도 aggregate 로 `stockId: Long` 으로 Stock 을 ID 참조한다. 응답 조립 시 Application 계층이 path 컨텍스트(productId)를 외부 주입한다. 후속 트랙(`order-jpa-association-decouple`, `payment-jpa-association-decouple`)에서 Order·Payment aggregate 에도 동일 원칙이 적용됐다. DB FK 일괄 제거는 `cross-aggregate-fk-cleanup` 트랙에서 완료됐다.
-- `order` 도메인은 주문 생성·취소·만료를 담당한다. 주문 생성은 멱등 키로 중복 요청을 방어한다. 만료 처리는 Spring Batch로 스케줄링한다. 주문 생성 트랜잭션 내에서 `CartItemRemover` port를 통해 주문된 항목만 cart에서 제거한다. `Order` 는 `memberId: Long` 으로 Member 를, `OrderItem` 은 `productId: Long` 으로 Product 를 ID 참조한다(ADR-020). same-aggregate 관계(`Order.orderItems`, `OrderItem.order`)는 객체 참조를 유지한다. cross-aggregate fetch join 은 제거하고 사용처별로 batch composition(필요한 Product를 ID 목록으로 한 번에 조회) 또는 컬럼 직접 사용(cancel/expiration)으로 대체한다. 세부 결정은 `docs/tasks/order-jpa-association-decouple/adr.md` 참조. 후속 트랙: `payment-jpa-association-decouple`. DB FK 일괄 제거는 `cross-aggregate-fk-cleanup` 트랙에서 완료됐다.
+- `order` 도메인은 주문 생성·취소·만료를 담당한다. 주문 생성은 멱등 키로 중복 요청을 방어한다. 만료 처리는 Spring Batch로 스케줄링하며, 미확정 APPROVE 결제(UNKNOWN/stale REQUESTED)가 걸린 주문은 `BlockingPaymentChecker` port로 만료 대상에서 제외해 만료-대사 경합(돈은 빠졌는데 주문 취소)을 막는다(ADR-042). 주문 생성 트랜잭션 내에서 `CartItemRemover` port를 통해 주문된 항목만 cart에서 제거한다. `Order` 는 `memberId: Long` 으로 Member 를, `OrderItem` 은 `productId: Long` 으로 Product 를 ID 참조한다(ADR-020). same-aggregate 관계(`Order.orderItems`, `OrderItem.order`)는 객체 참조를 유지한다. cross-aggregate fetch join 은 제거하고 사용처별로 batch composition(필요한 Product를 ID 목록으로 한 번에 조회) 또는 컬럼 직접 사용(cancel/expiration)으로 대체한다. 세부 결정은 `docs/tasks/order-jpa-association-decouple/adr.md` 참조. 후속 트랙: `payment-jpa-association-decouple`. DB FK 일괄 제거는 `cross-aggregate-fk-cleanup` 트랙에서 완료됐다.
 - `cart` 도메인은 회원의 장바구니 항목 추가(UPSERT)·조회(최신 가격 재조립, 구매 불가 마킹)·수량 변경·삭제를 담당한다. 다른 aggregate(Member, Product)는 `Long` ID로만 참조한다(ADR-020). 주문-cart 연동은 `CartItemRemover` port(order 소유)를 cart 쪽 adapter가 구현하는 방식으로 의존 방향을 보존한다.
-- `payment` core는 결제 예약(reserve)·승인·시도 이력 관리를 담당한다. `naverpay`는 provider 서브패키지로, PG 호출과 내부 결제 상태 반영을 분리한다. 도메인은 두 엔티티로 분리됐다 (ADR-026): `PaymentReservation` (결제창 준비물, `RESERVED → USED` 전이) + `Payment` (PG 사건 append-only, type ∈ `{APPROVE, CANCEL}`). Order 는 결제 식별자를 모른다 — merchantPayKey 발급·저장 책임이 `PaymentReservation` 으로 이동했다. `Payment` 는 `orderId: Long` 으로 Order 를, `merchantPayKey` 로 `PaymentReservation` 을 값 참조한다. 결제 완료 판단은 *성공한 APPROVE 행 존재(EXISTS)* 기반이다 (ADR-014, ADR-026). 보상 정책(중복 승인 보상 포함)은 payment.application의 보상 서비스가 소유하며, 이중결제(uk 위반) 탐지는 adapter 가 도메인 예외(PAYMENT_DUPLICATE)로 번역하고 application 이 fail-first 로 보상한다 (ADR-015, ADR-026, ADR-033). 정상 승인 후 transient 기록 실패는 보상 없이 전파하고 approve 를 REQUESTED 로 두어 reconcile 에 위임한다 (완료 우선, ADR-032). UNKNOWN 마킹 — PG 호출 결과 불명 시 흔적을 보존하고, UNKNOWN 행 있는 주문은 reserve/approve 를 차단한다 (`PAYMENT_RESULT_PENDING` 409). ADR-020 후속 트랙 series (Stock / Order / Payment / FK cleanup) 완전 종료. `cross-aggregate-fk-cleanup` 트랙에서 cross-aggregate FK 5건을 Flyway V4 migration 으로 일괄 제거해 코드 + DB schema 정합성이 회복됐다. 운영 DB 의 FK 제거 적용은 별도 결정. 결제 도메인 재설계 세부 결정은 `docs/tasks/payment-order-redesign/` 참조 (ADR-026).
+- `payment` core는 결제 예약(reserve)·승인·시도 이력 관리를 담당한다. `naverpay`는 provider 서브패키지로, PG 호출과 내부 결제 상태 반영을 분리한다. 도메인은 두 엔티티로 분리됐다 (ADR-026): `PaymentReservation` (결제창 준비물, `RESERVED → USED` 전이) + `Payment` (PG 사건 append-only, type ∈ `{APPROVE, CANCEL}`). Order 는 결제 식별자를 모른다 — merchantPayKey 발급·저장 책임이 `PaymentReservation` 으로 이동했다. `Payment` 는 `orderId: Long` 으로 Order 를, `merchantPayKey` 로 `PaymentReservation` 을 값 참조한다. 결제 완료 판단은 *성공한 APPROVE 행 존재(EXISTS)* 기반이다 (ADR-014, ADR-026). 보상 정책(중복 승인 보상 포함)은 payment.application의 보상 서비스가 소유하며, 이중결제(uk 위반) 탐지는 adapter 가 도메인 예외(PAYMENT_DUPLICATE)로 번역하고 application 이 fail-first 로 보상한다 (ADR-015, ADR-026, ADR-033). 정상 승인 후 transient 기록 실패는 보상 없이 전파하고 approve 를 REQUESTED 로 두어 reconcile 에 위임한다 (완료 우선, ADR-032). UNKNOWN 마킹 — PG 호출 결과 불명 시 흔적을 보존하고, UNKNOWN 행 있는 주문은 reserve/approve 를 차단한다 (`PAYMENT_RESULT_PENDING` 409). ADR-020 후속 트랙 series (Stock / Order / Payment / FK cleanup) 완전 종료. `cross-aggregate-fk-cleanup` 트랙에서 cross-aggregate FK 5건을 Flyway V4 migration 으로 일괄 제거해 코드 + DB schema 정합성이 회복됐다. 운영 DB 의 FK 제거 적용은 별도 결정. 결제 도메인 재설계 세부 결정은 `docs/tasks/payment-order-redesign/` 참조 (ADR-026). 대사(reconciliation) 후처리 — `@Scheduled` 기반 대사 서비스가 stale 미확정 결제를 PG 이력 조회로 확정하며, 결정 정책(대상 식별·flow 결정, src/main 단일 출처)에 따라 확정·보상·escalation 제외를 수행한다 (ADR-040/046/047). 승인 확정은 PG 재요청 없이 이력 조회로만 하고(이중과금 방지), 주문이 이미 취소됐거나 중복이면 보상 취소(PG cancel)로 정합성을 복구한다 (ADR-043/048). 운영자 통지는 `NotificationPort`(현재 no-op 로그, 실제 채널 adapter는 후속)로 hook 지점만 확보한다 (ADR-045). 결제 상태(`status`)는 일어난 사실(REQUESTED/SUCCEEDED/FAILED/UNKNOWN)만 담고 후처리 분류는 정책이 계산하므로, 보상·escalation 종착에 새 상태를 도입하지 않는다 (ADR-039/044).
 - `outbox` 도메인은 재고 복구 이벤트를 Outbox 패턴으로 처리한다. 이벤트 생성, Kafka 릴레이, 소비 책임을 별도 서비스로 분리한다.
 
 ---
