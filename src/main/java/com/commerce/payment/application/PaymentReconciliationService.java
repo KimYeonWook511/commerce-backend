@@ -130,6 +130,16 @@ public class PaymentReconciliationService {
 		}
 	}
 
+	private void notifyOrderNullInconsistency(Payment payment) {
+		try {
+			notificationPort.notifyManualReviewRequired(
+				payment.getOrderId(), payment.getMerchantPayKey(), "주문 없음 - 정합성 오류");
+		} catch (Exception ex) {
+			log.warn("정합성 오류 통지 전송 실패 paymentId={} orderId={} merchantPayKey={}",
+				payment.getId(), payment.getOrderId(), payment.getMerchantPayKey(), ex);
+		}
+	}
+
 	private PaymentReconcileOutcome processOne(Payment payment, LocalDateTime now) {
 		PaymentPostProcessTarget target = targetPolicy.resolvePostProcessTarget(payment, null, now);
 
@@ -225,6 +235,7 @@ public class PaymentReconciliationService {
 				payment.getMerchantPayKey(), payment.getProvider(), payment.getPgPaymentId(),
 				PaymentFailCode.APPROVE_PROCESS_FAILED, "주문 없음 - 정합성 오류", now
 			);
+			notifyOrderNullInconsistency(payment);
 			return PaymentReconcileOutcome.FAILED;
 		}
 
