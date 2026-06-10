@@ -104,13 +104,13 @@ public class PaymentApprovalRecordService {
 			.orElse(null);
 		if (payment == null) {
 			log.warn(
-				"Payment not found, skipping fail mark: merchantPayKey={}, provider={}, pgPaymentId={}",
+				"보상 실패 마킹 skip - 결제 이력 없음 merchantPayKey={} provider={} pgPaymentId={}",
 				merchantPayKey, provider, pgPaymentId);
 			return;
 		}
 		if (payment.getStatus() != PaymentStatus.REQUESTED && payment.getStatus() != PaymentStatus.UNKNOWN) {
 			log.warn(
-				"Payment not in REQUESTED/UNKNOWN state, skipping fail mark: merchantPayKey={}, pgPaymentId={}, status={}",
+				"보상 실패 마킹 skip - REQUESTED/UNKNOWN 아님 merchantPayKey={} pgPaymentId={} status={}",
 				merchantPayKey, pgPaymentId, payment.getStatus());
 			return;
 		}
