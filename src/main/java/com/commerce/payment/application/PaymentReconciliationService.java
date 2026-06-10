@@ -117,7 +117,7 @@ public class PaymentReconciliationService {
 
 		switch (flow) {
 			case APPROVED_PAYMENT_PROCESS -> {
-				return executeApprove(payment, now);
+				return executeApprove(payment, now, historyResult);
 			}
 			case ALREADY_CANCELED_PAYMENT_PROCESS -> {
 				executeAlreadyCanceled(payment, now);
@@ -135,8 +135,10 @@ public class PaymentReconciliationService {
 		}
 	}
 
-	private PaymentReconcileOutcome executeApprove(Payment payment, LocalDateTime now) {
+	private PaymentReconcileOutcome executeApprove(Payment payment, LocalDateTime now, NaverPayHistoryResult historyResult) {
 		try {
+			// 대사도 실시간 승인과 동일하게 PG history의 merchantPayKey/금액을 검증한다 (M1, 비대칭 제거)
+			payment.verifyApprovedResponse(historyResult.getMerchantPayKey(), historyResult.getTotalPayAmount());
 			paymentApprovalService.succeedApproval(payment, now);
 			log.info("대사 승인 확정 paymentId={} orderId={} merchantPayKey={}",
 				payment.getId(), payment.getOrderId(), payment.getMerchantPayKey());
@@ -151,6 +153,20 @@ public class PaymentReconciliationService {
 			// uk_payment_approved_order_key 위반으로 PAYMENT_DUPLICATE를 던진다(order는 다른 결제로 이미 PAID).
 			if (ex.getErrorCode() == PaymentErrorCode.PAYMENT_DUPLICATE) {
 				return handleOrderNotCompletable(payment, now);
+			}
+			// M1: PG history와 merchantPayKey/금액 불일치 → 실시간과 동일하게 보상하고 FAILED로 종착
+			if (ex.getErrorCode() == PaymentErrorCode.PAYMENT_MERCHANT_KEY_MISMATCH) {
+				paymentApprovalCompensationService.compensateMerchantKeyMismatch(payment);
+				log.warn("대사 승인 - merchantPayKey 불일치 보상 paymentId={} orderId={} merchantPayKey={}",
+					payment.getId(), payment.getOrderId(), payment.getMerchantPayKey());
+				return PaymentReconcileOutcome.FAILED;
+			}
+			if (ex.getErrorCode() == PaymentErrorCode.PAYMENT_AMOUNT_MISMATCH) {
+				paymentApprovalCompensationService.compensateAmountMismatch(
+					payment, historyResult.getTotalPayAmount(), this::pgCancelForReconciliation);
+				log.warn("대사 승인 - 금액 불일치 보상 paymentId={} orderId={} merchantPayKey={}",
+					payment.getId(), payment.getOrderId(), payment.getMerchantPayKey());
+				return PaymentReconcileOutcome.FAILED;
 			}
 			throw ex;
 		}

@@ -279,6 +279,43 @@ class PaymentReconciliationServiceTest {
 		then(paymentApprovalService).should(never()).succeedApprovalRecordOnly(any(), any());
 	}
 
+	@DisplayName("대사 APPROVED인데 merchantPayKey가 불일치하면 보상하고 승인 확정하지 않는다")
+	@Test
+	void reconcile_approvedKeyMismatch_compensatesMerchantKey() {
+		injectPolicies();
+		LocalDateTime now = LocalDateTime.now();
+		Payment payment = unknownApprovePayment("PAY-1", "pg-1", now.minusMinutes(2));
+
+		given(paymentRepository.findStaleApprovePaymentsForReconciliation(any(), any(), any(Pageable.class)))
+			.willReturn(List.of(payment));
+		given(naverPayGateway.getApprovalHistory("pg-1"))
+			.willReturn(NaverPayHistoryResult.approved("PAY-OTHER", 1000));
+
+		reconciliationService.reconcile();
+
+		then(paymentApprovalCompensationService).should().compensateMerchantKeyMismatch(eq(payment));
+		then(paymentApprovalService).should(never()).succeedApproval(any(), any());
+	}
+
+	@DisplayName("대사 APPROVED인데 금액이 불일치하면 보상하고 승인 확정하지 않는다")
+	@Test
+	void reconcile_approvedAmountMismatch_compensatesAmount() {
+		injectPolicies();
+		LocalDateTime now = LocalDateTime.now();
+		Payment payment = unknownApprovePayment("PAY-1", "pg-1", now.minusMinutes(2));
+
+		given(paymentRepository.findStaleApprovePaymentsForReconciliation(any(), any(), any(Pageable.class)))
+			.willReturn(List.of(payment));
+		given(naverPayGateway.getApprovalHistory("pg-1"))
+			.willReturn(NaverPayHistoryResult.approved("PAY-1", 2000));
+
+		reconciliationService.reconcile();
+
+		then(paymentApprovalCompensationService).should()
+			.compensateAmountMismatch(eq(payment), eq(2000), any(PgCanceller.class));
+		then(paymentApprovalService).should(never()).succeedApproval(any(), any());
+	}
+
 	@DisplayName("succeedApproval이 ORDER_PAID_NOT_ALLOWED이고 주문이 null이면 FAILED로 종착하고 재시도하지 않는다")
 	@Test
 	void reconcile_orderNull_terminatesAsFailed() {
