@@ -70,6 +70,9 @@ public class Payment extends BaseTimeEntity {
 
 	private LocalDateTime respondedAt;
 
+	@Column(name = "escalated_at")
+	private LocalDateTime escalatedAt;
+
 	@Column(name = "order_id", nullable = false)
 	private Long orderId;
 

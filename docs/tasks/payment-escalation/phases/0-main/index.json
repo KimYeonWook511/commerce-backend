@@ -1,0 +1,30 @@
+{
+  "project": "commerce-backend",
+  "phase": "0-main",
+  "harness_version": "v2",
+  "steps": [
+    {
+      "step": 1,
+      "name": "escalation-terminate-notify",
+      "status": "completed",
+      "started_at": "2026-06-10T21:29:59+0900",
+      "summary": "Flyway V8 마이그레이션으로 escalated_at 컬럼을 추가하고, JpaPaymentRepository에 findEscalationCandidates·escalateIfPending 쿼리를 추가한다. PaymentReconciliationService.reconcile() 말미에 processEscalations()를 호출하며, DB 조건부 UPDATE 영향 행 수로 멱등성을 보장하고 affected=1인 경우에만 NotificationPort로 운영자 통지를 전송한다.",
+      "completed_at": "2026-06-10T21:43:40+0900"
+    },
+    {
+      "step": 2,
+      "name": "order-null-notify",
+      "status": "completed",
+      "started_at": "2026-06-10T21:45:24+0900",
+      "summary": "handleOrderNotCompletable의 order == null 분기에 fail 종착 이후 notifyOrderNullInconsistency를 추가한다. 통지는 best-effort try/catch로 감싸 전송 실패가 트랜잭션을 막지 않으며 log.warn만 남긴다. PaymentReconciliationServiceTest에 @Mock NotificationPort를 추가하고 order == null 시 notifyManualReviewRequired 호출을 검증하는 테스트를 추가한다.",
+      "completed_at": "2026-06-10T21:48:00+0900"
+    }
+  ],
+  "created_at": "2026-06-10T21:29:59+0900",
+  "execution": {
+    "developer_model": "sonnet",
+    "reviewer_model": "opus",
+    "commit_model": "haiku"
+  },
+  "completed_at": "2026-06-10T21:49:18+0900"
+}

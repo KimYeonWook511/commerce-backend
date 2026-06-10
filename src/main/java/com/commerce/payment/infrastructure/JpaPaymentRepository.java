@@ -7,8 +7,10 @@ import java.util.Optional;
 
 import org.springframework.data.domain.Pageable;
 import org.springframework.data.jpa.repository.JpaRepository;
+import org.springframework.data.jpa.repository.Modifying;
 import org.springframework.data.jpa.repository.Query;
 import org.springframework.data.repository.query.Param;
+import org.springframework.transaction.annotation.Transactional;
 
 import com.commerce.payment.domain.Payment;
 import com.commerce.payment.domain.PaymentProvider;
@@ -60,4 +62,34 @@ public interface JpaPaymentRepository extends JpaRepository<Payment, Long> {
 		  AND p.orderId IN :orderIds
 		""")
 	List<Long> findOrderIdsWithBlockingPaymentIn(@Param("orderIds") Collection<Long> orderIds);
+
+	// escalation 후보: 대사 스캔 윈도우(1분~6시간) 밖에 있고 escalatedAt IS NULL인 6시간 초과 UNKNOWN/REQUESTED APPROVE.
+	@Query("""
+		SELECT p FROM Payment p
+		WHERE p.type = 'APPROVE'
+		  AND p.escalatedAt IS NULL
+		  AND (
+		    (p.status = 'UNKNOWN'    AND p.respondedAt < :escalationCutoff)
+		    OR
+		    (p.status = 'REQUESTED' AND p.createdAt   < :escalationCutoff)
+		  )
+		ORDER BY p.id ASC
+		""")
+	List<Payment> findEscalationCandidates(
+		@Param("escalationCutoff") LocalDateTime escalationCutoff,
+		Pageable pageable
+	);
+
+	// 조건부 UPDATE: escalatedAt IS NULL AND status IN (UNKNOWN,REQUESTED)인 경우에만 escalatedAt 기록.
+	// @Transactional로 트랜잭션이 없는 호출 컨텍스트(PaymentReconciliationService)에서도 독립 커밋된다.
+	// 반환값(영향 행 수)이 1이면 이 호출이 escalation 주체, 0이면 이미 다른 주체가 처리(중복 통지 차단).
+	@Transactional
+	@Modifying
+	@Query("""
+		UPDATE Payment p SET p.escalatedAt = :now
+		WHERE p.id = :id
+		  AND p.escalatedAt IS NULL
+		  AND p.status IN ('UNKNOWN', 'REQUESTED')
+		""")
+	int escalateIfPending(@Param("id") Long id, @Param("now") LocalDateTime now);
 }

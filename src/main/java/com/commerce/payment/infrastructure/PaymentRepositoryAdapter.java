@@ -109,4 +109,14 @@ public class PaymentRepositoryAdapter implements PaymentRepository {
 	public List<Payment> findStaleApprovePaymentsForReconciliation(LocalDateTime staleCutoff, LocalDateTime requestedStaleCutoff, LocalDateTime escalationCutoff, Pageable pageable) {
 		return jpaPaymentRepository.findStaleApprovePaymentsForReconciliation(staleCutoff, requestedStaleCutoff, escalationCutoff, pageable);
 	}
+
+	@Override
+	public List<Payment> findEscalationCandidates(LocalDateTime escalationCutoff, Pageable pageable) {
+		return jpaPaymentRepository.findEscalationCandidates(escalationCutoff, pageable);
+	}
+
+	@Override
+	public int escalateIfPending(Long id, LocalDateTime now) {
+		return jpaPaymentRepository.escalateIfPending(id, now);
+	}
 }

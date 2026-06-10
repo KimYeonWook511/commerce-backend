@@ -44,6 +44,7 @@ task adr(`docs/tasks/<task>/adr.md`)의 역할은 harness 도입을 기점으로
 | traceid-mdc-filter | [`docs/tasks/traceid-mdc-filter/adr.md`](tasks/traceid-mdc-filter/adr.md) | `TraceIdFilter` MDC 전파 |
 | unique-find-first-policy | [`docs/tasks/unique-find-first-policy/adr.md`](tasks/unique-find-first-policy/adr.md) | find-first 패턴 (ADR-011 연계) |
 | unknown-reconciliation | [`docs/tasks/unknown-reconciliation/adr.md`](tasks/unknown-reconciliation/adr.md) | UNKNOWN/stale REQUESTED 대사를 `@Scheduled` 서비스 루프로 구현(ADR-040~048), 만료 배치가 미확정 결제 주문 제외(order 소유 port 의존 역전), 대사 SUCCEEDED·주문 CANCELED 시 보상 환불, `PaymentStatus.MANUAL_REVIEW` 미도입(ADR-039 준수), escalation을 스캔 시간 윈도우 상한으로 제외, 비-INIT 주문 종착 전이 (ADR-029/030/039 연계) |
+| payment-escalation | [`docs/tasks/payment-escalation/adr.md`](tasks/payment-escalation/adr.md) | 6시간 초과 미확정 APPROVE escalation 통지·종착을 새 상태 대신 `escalatedAt` 직교 필드로 표현, 조건부 UPDATE 영향 행 수로 중복 통지 차단, order==null 정합성 오류 통지 (ADR-049, ADR-039/044/047 연계) |
 
 향후 task 추가 시 본 표에 한 줄을 갱신한다. task adr 위치는 모두 `docs/tasks/<task>/adr.md`로 고정한다.
 
@@ -511,3 +512,11 @@ task adr(`docs/tasks/<task>/adr.md`)의 역할은 harness 도입을 기점으로
 - **이유**: 종착 상태(SUCCEEDED/FAILED)로 전이해야 스캔 대상에서 빠진다. `PAID`에서 중복 여부를 판별해 정당한 결제의 오환불을 막는다. 새 상태 없이 기존 상태+failCode로 표현한다(ADR-039).
 - **트레이드오프**: 비-INIT 경합 건이 결정적으로 종착된다. `PAID` 분기는 주문 기준 성공 결제 존재 조회를 추가로 수행한다.
 - **연계**: ADR-039, ADR-043, ADR-047, #237.
+
+### ADR-049: escalation 종착·통지를 새 상태 대신 escalatedAt 직교 필드로 표현한다
+
+- **결정**: 6시간 초과 미확정 APPROVE 결제(UNKNOWN/REQUESTED)를 운영자에게 통지하고 종착 표시할 때, 새 status를 만들지 않고 `Payment.escalatedAt`(nullable timestamp) 직교 필드에 escalation 시각을 기록한다. status는 그대로 유지한다. 중복 통지는 조건부 UPDATE(`SET escalated_at=:now WHERE escalated_at IS NULL AND status IN (UNKNOWN,REQUESTED)`)의 영향 행 수로 막아, 영향 행 1인 호출만 통지한다. 대사 중 주문 없음(order==null) 정합성 오류도 FAILED 종착 후 운영자에게 통지한다.
+- **배경**: ADR-047이 escalation을 스캔 윈도우 상한으로 자동 제외만 하고 운영 가시성(통지·종착)은 #238로 미뤘다(ADR-039 재검토 trigger). 6시간 초과 건이 통지 없이 `UNKNOWN`으로 묻혀 운영자가 능동 조회해야만 인지 가능했다.
+- **이유**: status는 "결제에 일어난 사실"만 담고(ADR-039), "운영자에게 위임됐나"는 직교 축이라 별 컬럼으로 분리한다. 새 status(ESCALATED)는 ADR-044가 같은 이유로 철회한 방향이고 "결론 났나/처리됐나"를 한 값에 뭉갠다. 별도 테이블은 한 번 통지·종착뿐이라 과하다(YAGNI). 멱등을 조건부 UPDATE 영향 행 수로 보장하는 것은 `uk_payment_approved_order_key` unique가 이중 SUCCEEDED를 막는 것과 같은 DB 레벨 멱등 방식이다.
+- **트레이드오프**: status enum이 4개로 유지돼 단순하다. `escalatedAt` 기록(커밋) 후 통지가 best-effort라 전송 유실 시 재통지되지 않는다(진실 원천은 `escalatedAt` — ADR-045 정신). escalation 이력·단계가 필요해지면 별도 테이블로 승격할 여지를 남긴다. CANCEL escalation은 CANCEL 대사 미구현으로 범위 밖(별도 이슈).
+- **연계**: ADR-039, ADR-044, ADR-045, ADR-047, #238.

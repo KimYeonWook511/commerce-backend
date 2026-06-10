@@ -191,6 +191,7 @@ COLUMNS:
 - `fail_detail VARCHAR(255) NULL`
 - `approved_order_key BIGINT NULL` — APPROVE+SUCCEEDED 일 때만 `order_id`, 그 외 NULL (NULL 트릭)
 - `responded_at DATETIME(6) NULL`
+- `escalated_at DATETIME(6) NULL` — escalation(운영 위임) 시각. NULL 이면 미escalation. `status` 와 무관한 직교 필드 (V8, ADR-049)
 - `created_at DATETIME(6) NOT NULL`
 - `updated_at DATETIME(6) NOT NULL`
 
@@ -204,6 +205,7 @@ INDEX:
 - **FK**: `order_id` 는 FK 제약 없음 (참조용 값)
 - **append-only**: Payment 행은 한번 INSERT 후 상태 전이 (UPDATE) 만 일어남. 행 삭제 금지
 - unique key 대상 컬럼(`merchant_pay_key` 64, `provider` 32, `pg_payment_id` 64, `type` 32)은 `@Column(length=...)`을 명시한다. utf8mb4 + InnoDB unique key 한도 3072 bytes 안에 들어오도록 산정 (ADR-023 참조)
+- **escalation 멱등**: `escalated_at` set 은 조건부 UPDATE (`WHERE escalated_at IS NULL AND status IN (UNKNOWN,REQUESTED)`) 로만 수행. 영향 행 1 이 escalation 통지 주체를 결정한다 (동시 race 에서도 1회 보장, ADR-049)
 
 ### `tbl_outbox_event`
 

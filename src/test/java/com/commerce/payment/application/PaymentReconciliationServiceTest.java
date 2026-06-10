@@ -25,6 +25,7 @@ import com.commerce.order.domain.OrderStatus;
 import com.commerce.order.domain.repository.OrderRepository;
 import com.commerce.order.exception.OrderErrorCode;
 import com.commerce.order.exception.OrderException;
+import com.commerce.payment.application.port.NotificationPort;
 import com.commerce.payment.application.port.PgCanceller;
 import com.commerce.payment.domain.Payment;
 import com.commerce.payment.domain.PaymentFailCode;
@@ -60,6 +61,9 @@ class PaymentReconciliationServiceTest {
 
 	@Mock
 	private NaverPayGateway naverPayGateway;
+
+	@Mock
+	private NotificationPort notificationPort;
 
 	@InjectMocks
 	private PaymentReconciliationService reconciliationService;
@@ -338,6 +342,32 @@ class PaymentReconciliationServiceTest {
 			eq(PaymentFailCode.APPROVE_PROCESS_FAILED), any(String.class), any(LocalDateTime.class)
 		);
 		then(paymentApprovalCompensationService).should(never()).compensateCanceledOrderApproval(any(), any());
+	}
+
+	@DisplayName("succeedApproval이 ORDER_PAID_NOT_ALLOWED이고 주문이 null이면 fail 종착 후 운영자에게 통지한다")
+	@Test
+	void reconcile_orderNull_notifiesManualReview() {
+		injectPolicies();
+		LocalDateTime now = LocalDateTime.now();
+		Payment payment = unknownApprovePayment("PAY-1", "pg-1", now.minusMinutes(2));
+
+		given(paymentRepository.findStaleApprovePaymentsForReconciliation(any(), any(), any(), any(Pageable.class)))
+			.willReturn(List.of(payment));
+		given(naverPayGateway.getApprovalHistory("pg-1"))
+			.willReturn(NaverPayHistoryResult.approved("PAY-1", 1000));
+		willThrow(new OrderException(OrderErrorCode.ORDER_PAID_NOT_ALLOWED))
+			.given(paymentApprovalService).succeedApproval(any(), any());
+		given(orderRepository.findById(payment.getOrderId())).willReturn(Optional.empty());
+
+		reconciliationService.reconcile();
+
+		then(paymentApprovalRecordService).should().fail(
+			eq("PAY-1"), eq(PaymentProvider.NAVERPAY), eq("pg-1"),
+			eq(PaymentFailCode.APPROVE_PROCESS_FAILED), any(String.class), any(LocalDateTime.class)
+		);
+		then(notificationPort).should().notifyManualReviewRequired(
+			eq(payment.getOrderId()), eq("PAY-1"), any(String.class)
+		);
 	}
 
 	@DisplayName("succeedApproval이 ORDER_PAID_NOT_ALLOWED이고 주문이 비-INIT(RECEIVED 등)이면 FAILED로 종착한다")
