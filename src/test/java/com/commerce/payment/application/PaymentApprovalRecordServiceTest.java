@@ -135,6 +135,32 @@ class PaymentApprovalRecordServiceTest {
 		assertThat(payment.getRespondedAt()).isEqualTo(respondedAt);
 	}
 
+	@DisplayName("보상 흐름 실패 처리 시 UNKNOWN 상태이면 실패로 전이한다 (대사 경로 보상)")
+	@Test
+	void failIfRequested_whenUnknown_updatePayment() {
+		// given
+		LocalDateTime respondedAt = LocalDateTime.of(2026, 3, 3, 16, 21);
+		PaymentReservation reservation = PaymentReservation.createReserved(
+			1L, 1L, 1000, PaymentProvider.NAVERPAY, "PAY-1", LocalDateTime.now().plusMinutes(15));
+		Payment payment = Payment.createRequested(reservation, PaymentType.APPROVE, "payment-id-1");
+		payment.markUnknown("pg timeout", LocalDateTime.of(2026, 3, 3, 16, 20));
+		given(paymentRepository.findApprovePayment(
+			eq("PAY-1"), eq(PaymentProvider.NAVERPAY), eq("payment-id-1")))
+			.willReturn(Optional.of(payment));
+
+		// when
+		paymentApprovalRecordService.failIfRequested("PAY-1", PaymentProvider.NAVERPAY, "payment-id-1",
+			PaymentFailCode.ORDER_CANCELED,
+			"취소된 주문 보상",
+			respondedAt
+		);
+
+		// then
+		assertThat(payment.getStatus()).isEqualTo(PaymentStatus.FAILED);
+		assertThat(payment.getFailCode()).isEqualTo(PaymentFailCode.ORDER_CANCELED);
+		assertThat(payment.getRespondedAt()).isEqualTo(respondedAt);
+	}
+
 	@DisplayName("보상 흐름 실패 처리 시 REQUESTED가 아니면 상태를 갱신하지 않고 종료한다")
 	@Test
 	void failIfRequested_whenNotRequested_skipMark() {

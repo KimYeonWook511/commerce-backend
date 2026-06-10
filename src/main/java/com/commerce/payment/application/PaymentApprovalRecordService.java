@@ -87,7 +87,8 @@ public class PaymentApprovalRecordService {
 	}
 
 	/**
-	 * 보상 흐름 전용: REQUESTED 상태일 때만 실패 처리하고, 그 외 상태이거나 이력이 없으면 조용히 skip한다.
+	 * 보상 흐름 전용: REQUESTED 또는 UNKNOWN 상태일 때 실패 처리하고, 그 외 상태(SUCCEEDED/FAILED)이거나 이력이 없으면 조용히 skip한다.
+	 * 보상 대상 approve 는 실시간 경로에서는 REQUESTED, 대사 경로에서는 UNKNOWN 으로 진입하므로 둘 다 FAILED 로 확정한다 (ADR-039).
 	 * 호출처(catch 블록)가 상태를 확인하거나 try-catch로 mark 예외를 잡지 않도록 의도를 캡슐화한다.
 	 */
 	@Transactional
@@ -107,9 +108,9 @@ public class PaymentApprovalRecordService {
 				merchantPayKey, provider, pgPaymentId);
 			return;
 		}
-		if (payment.getStatus() != PaymentStatus.REQUESTED) {
+		if (payment.getStatus() != PaymentStatus.REQUESTED && payment.getStatus() != PaymentStatus.UNKNOWN) {
 			log.warn(
-				"Payment not in REQUESTED state, skipping fail mark: merchantPayKey={}, pgPaymentId={}, status={}",
+				"Payment not in REQUESTED/UNKNOWN state, skipping fail mark: merchantPayKey={}, pgPaymentId={}, status={}",
 				merchantPayKey, pgPaymentId, payment.getStatus());
 			return;
 		}
