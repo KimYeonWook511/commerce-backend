@@ -37,11 +37,11 @@ public class PaymentReconciliationService {
 	// 한 주기 처리 상한. 운영 config 승격 전제.
 	private static final int RECONCILE_BATCH_SIZE = 100;
 
-	// 정책 최단 진입 지연(UNKNOWN_RECONCILE_DELAY = 1분). 1분 미만은 대사 대상 제외.
-	private static final int STALE_CUTOFF_MINUTES = 1;
+	// 정책 최단 진입 지연(UNKNOWN_RECONCILE_DELAY = 1분). 1분 미만은 대사 대상 제외. 정책과 단일 출처 공유.
+	private static final long STALE_CUTOFF_MINUTES = PaymentPostProcessTargetPolicy.UNKNOWN_RECONCILE_DELAY.toMinutes();
 
-	// 자동 대사 스캔 상한(ESCALATION_DELAY = 6시간). 6시간 초과는 스캔에서 제외해 무한 재시도를 방지한다 (ADR-L8).
-	private static final int ESCALATION_DELAY_HOURS = 6;
+	// 자동 대사 스캔 상한(ESCALATION_DELAY = 6시간). 6시간 초과는 스캔에서 제외해 무한 재시도를 방지한다 (ADR-L8). 정책과 단일 출처 공유.
+	private static final long ESCALATION_DELAY_HOURS = PaymentPostProcessTargetPolicy.ESCALATION_DELAY.toHours();
 
 	private final PaymentRepository paymentRepository;
 	private final OrderRepository orderRepository;
