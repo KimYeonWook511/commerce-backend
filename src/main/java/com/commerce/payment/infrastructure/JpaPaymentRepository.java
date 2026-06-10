@@ -48,10 +48,12 @@ public interface JpaPaymentRepository extends JpaRepository<Payment, Long> {
 		Pageable pageable
 	);
 
+	// UNKNOWN뿐 아니라 미확정 REQUESTED(승인 호출 후 결과 저장 전 중단되어 실제 과금됐을 수 있음)도
+	// 만료 차단 대상에 포함해 만료-대사 경합을 막는다.
 	@Query("""
 		SELECT DISTINCT p.orderId FROM Payment p
 		WHERE p.type = 'APPROVE'
-		  AND p.status = 'UNKNOWN'
+		  AND p.status IN ('UNKNOWN', 'REQUESTED')
 		  AND p.orderId IN :orderIds
 		""")
 	List<Long> findOrderIdsWithBlockingPaymentIn(@Param("orderIds") Collection<Long> orderIds);
