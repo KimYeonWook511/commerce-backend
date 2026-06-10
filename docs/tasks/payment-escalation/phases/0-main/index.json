@@ -1,0 +1,9 @@
+{
+  "project": "commerce-backend",
+  "phase": "0-main",
+  "harness_version": "v2",
+  "steps": [
+    { "step": 1, "name": "escalation-terminate-notify", "status": "pending" },
+    { "step": 2, "name": "order-null-notify", "status": "pending" }
+  ]
+}
