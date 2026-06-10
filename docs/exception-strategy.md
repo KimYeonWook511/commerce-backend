@@ -1,5 +1,19 @@
 # 예외 처리 정책
 
+## 핵심 원칙 (요약)
+
+> 코딩 시 반드시 지킬 보편 원칙이다. 도메인별 사례·상세는 아래 본문이 단일 출처다.
+
+- **DAO 예외 catch 금지**: Application/Adapter는 Spring DAO 예외(`DuplicateKeyException`, `DataIntegrityViolationException` 등)를 catch하지 않는다. 인프라 예외 타입에 직접 의존하지 않는다.
+- **find-first 패턴**: 정상 흐름은 사전 `find`로 처리(멱등/중복 흡수). DB 무결성 위반(unique race, NOT NULL/FK/CHECK)은 catch하지 말고 `GlobalExceptionHandler` 안전망(500)에 위임한다.
+- **충돌이 잦은 시나리오**는 예외적으로 try-save-catch가 더 적합하나, 이때도 인프라 예외 타입에 직접 의존하지 않는다.
+- **보상 catch (catch 안 2차 작업)**: 1차 예외는 진입 즉시 `log.error()`(근본 원인 보존). 2차 성공 시 1차만 전파. 2차 실패·덜 중요하면 `log.warn()`+1차 전파. 2차 실패·치명적이면 `addSuppressed`로 둘 다 전파. **레벨: 1차=ERROR, 2차=WARN.**
+- **catch 안 메서드는 가급적 예외를 안 던지게 설계**하고 의도를 메서드명에 캡슐화한다. Composite Exception은 도저히 안 될 때만.
+- **외부 캐시(Redis) 장애**: infra adapter가 `DataAccessException`을 잡아 도메인 예외(`*StoreUnavailableException`)로 변환(port에 DAO 예외 노출 금지). 정책 결정(fallback/응답 매핑)은 application/presentation이 한다. 도메인 예외는 `RuntimeException` 직접 상속.
+- **PG 결과 불명(UNKNOWN)**: 전송 후/불명 예외는 UNKNOWN 보존, 전송 전 버그는 안전망 500. UNKNOWN 행 있는 주문은 `PAYMENT_RESULT_PENDING`(409)로 차단.
+
+---
+
 ## DB 무결성 위반 흐름
 
 Infrastructure 레벨 예외는 Application Layer를 넘어가지 않는다.  

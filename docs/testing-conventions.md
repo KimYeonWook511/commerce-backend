@@ -1,5 +1,20 @@
 # 테스트 컨벤션
 
+## 핵심 원칙 (요약)
+
+> 코딩 시 반드시 지킬 보편 원칙이다. 동시성 테스트·TestSupport·태그 등 상세는 아래 본문이 단일 출처다.
+
+- **항상 테스트 동반**: 기능 추가 시 테스트 작성, 동작 수정 시 관련 테스트 갱신. 명시 지시 없으면 생략 금지.
+- **레이어별 종류**: Domain=단위(Mock 금지, 순수 객체). Application=단위(Repository·Port만 Mock)+통합 병행. Presentation=`@WebMvcTest` 슬라이스(Service는 `@MockitoBean`). Infrastructure=`@DataJpaTest` 슬라이스+통합. `@SpringBootTest`(전체 컨텍스트)는 지양.
+- **우선순위**: 단위·슬라이스를 두텁게, 통합은 핵심 경로만(느리고 비쌈).
+- **Mock**: `@ExtendWith(MockitoExtension.class)` + BDD 스타일(`given`/`then().should()`). Spring 빈 Mock은 `@MockitoBean`/`@MockitoSpyBean`(구 `@MockBean`/`@SpyBean` 금지).
+- **네이밍**: 영어 메서드명 `행위_조건_결과` + 한국어 `@DisplayName`. Infra 테스트 클래스명은 구현체(Adapter)명 따름.
+- **구조**: 모든 테스트 Given-When-Then. 한 테스트 한 행위. AssertJ `assertThat` 체이닝, 예외는 `assertThatThrownBy`.
+- **격리**: 테스트 간 영향 없게. 통합은 `@Transactional` 금지 + `tearDown` 삭제. 슬라이스는 `@Transactional` 롤백. 비동기 검증은 Awaitility.
+- **동시성**: 타이밍을 운/`Thread.sleep`/latch속도맞추기에 의존 금지. 불변식 단언 또는 결정론적 통제만. race 무대 컴포넌트는 진짜를 쓰고 결과를 stub으로 강제하지 않는다.
+
+---
+
 ## 기본 원칙
 
 - 새로운 기능을 추가하면 반드시 테스트를 함께 작성한다.

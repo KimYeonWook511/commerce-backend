@@ -2,6 +2,19 @@
 
 이 문서는 백엔드 application 로그(`com.commerce.*`)의 작성·운영 규칙을 정의한다. Epic "운영용 로깅 체계 도입"의 기준 문서이며, 후속 작업(logback 설정, MDC Filter, 도메인 로깅 보강 등)이 이 문서의 정책을 따른다.
 
+## 핵심 원칙 (요약)
+
+> 코딩 시 반드시 지킬 보편 원칙이다. 레벨표·마스킹·비동기 전파 등 상세는 아래 본문이 단일 출처다.
+
+- **레벨**: 5xx 시스템 예외·보상 1차 = ERROR. 운영 주목 4xx(반복 401/403, 결제 검증 실패)·보상 2차·외부 retry·`OptimisticLockingFailureException`(409) = WARN. 도메인 상태 전환(주문 생성/취소, 결제 승인 등) = INFO. **일상 4xx(재고 부족 등)는 무로그.**
+- **포맷**: SLF4J placeholder `{}`만 사용. 문자열 concat(`"... " + id`) 금지. 예외는 마지막 인자로 넘겨 stack 자동 출력(`log.error("주문 실패 orderId={}", id, e)`). `e.getMessage()`만 넣기·`e.printStackTrace()` 금지.
+- **레이어 책임**: Controller·Domain은 로그 없음. Application은 유스케이스 INFO. Infrastructure는 외부 호출 실패·retry. 예외 로깅은 `GlobalExceptionHandler`가 일괄(Application/Adapter는 직접 안 남김, 보상 catch 1·2차는 예외).
+- **마스킹**: 식별자는 `memberId`로 통일. 이메일은 원칙적 무로그(불가피하면 `a***@b.com`). password·token은 평문·해시 모두 금지. `Authorization` 헤더는 제거 또는 `Bearer ***`.
+- **로거·메시지**: `@Slf4j`(Lombok) 사용, 로거명은 클래스 FQN. 메시지 본문은 한국어, 식별자(`orderId` 등)는 영어. 이벤트는 "명사형+상태"(`주문 생성`, `결제 승인 완료`).
+- **MDC**: Filter가 `traceId`·`memberId` push, 요청 종료 시 `finally`에서 정리(자신이 push한 키만 remove, `MDC.clear()` 주의). 비동기 경계(Kafka/Outbox)는 명시 전파.
+
+---
+
 ## 1. 목적과 범위
 
 ### 정하는 것
