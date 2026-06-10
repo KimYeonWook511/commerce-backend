@@ -11,6 +11,7 @@ import com.commerce.order.domain.OrderStatus;
 import com.commerce.order.domain.repository.OrderRepository;
 import com.commerce.order.exception.OrderErrorCode;
 import com.commerce.order.exception.OrderException;
+import com.commerce.payment.application.port.NotificationPort;
 import com.commerce.payment.application.port.result.CancelOutcome;
 import com.commerce.payment.domain.Payment;
 import com.commerce.payment.domain.PaymentFailCode;
@@ -54,6 +55,7 @@ public class PaymentReconciliationService {
 	private final NaverPayGateway naverPayGateway;
 	private final PaymentPostProcessTargetPolicy targetPolicy;
 	private final PaymentPostProcessFlowPolicy flowPolicy;
+	private final NotificationPort notificationPort;
 
 	/**
 	 * stale APPROVE UNKNOWN/REQUESTED 결제를 PG 조회로 확정한다 (ADR-L1).
@@ -68,31 +70,64 @@ public class PaymentReconciliationService {
 		List<Payment> candidates = paymentRepository.findStaleApprovePaymentsForReconciliation(
 			staleCutoff, requestedStaleCutoff, escalationCutoff, PageRequest.of(0, RECONCILE_BATCH_SIZE));
 
+		if (!candidates.isEmpty()) {
+			log.info("대사 시작 candidates={} staleCutoff={} requestedStaleCutoff={} escalationCutoff={}",
+				candidates.size(), staleCutoff, requestedStaleCutoff, escalationCutoff);
+
+			int succeeded = 0, failed = 0, skipped = 0, errors = 0;
+			for (Payment payment : candidates) {
+				try {
+					PaymentReconcileOutcome outcome = processOne(payment, now);
+					switch (outcome) {
+						case SUCCEEDED -> succeeded++;
+						case FAILED -> failed++;
+						case SKIPPED -> skipped++;
+					}
+				} catch (Exception ex) {
+					errors++;
+					log.error("대사 처리 실패 paymentId={} merchantPayKey={} pgPaymentId={} status={}",
+						payment.getId(), payment.getMerchantPayKey(), payment.getPgPaymentId(), payment.getStatus(), ex);
+				}
+			}
+
+			log.info("대사 완료 succeeded={} failed={} skipped={} errors={}",
+				succeeded, failed, skipped, errors);
+		}
+
+		processEscalations(now, escalationCutoff);
+	}
+
+	private void processEscalations(LocalDateTime now, LocalDateTime escalationCutoff) {
+		List<Payment> candidates = paymentRepository.findEscalationCandidates(
+			escalationCutoff, PageRequest.of(0, RECONCILE_BATCH_SIZE));
+
 		if (candidates.isEmpty()) {
 			return;
 		}
 
-		log.info("대사 시작 candidates={} staleCutoff={} requestedStaleCutoff={} escalationCutoff={}",
-			candidates.size(), staleCutoff, requestedStaleCutoff, escalationCutoff);
+		log.info("escalation 처리 시작 candidates={} escalationCutoff={}", candidates.size(), escalationCutoff);
 
-		int succeeded = 0, failed = 0, skipped = 0, errors = 0;
 		for (Payment payment : candidates) {
 			try {
-				PaymentReconcileOutcome outcome = processOne(payment, now);
-				switch (outcome) {
-					case SUCCEEDED -> succeeded++;
-					case FAILED -> failed++;
-					case SKIPPED -> skipped++;
+				int affected = paymentRepository.escalateIfPending(payment.getId(), now);
+				if (affected == 1) {
+					notifyEscalation(payment);
 				}
 			} catch (Exception ex) {
-				errors++;
-				log.error("대사 처리 실패 paymentId={} merchantPayKey={} pgPaymentId={} status={}",
-					payment.getId(), payment.getMerchantPayKey(), payment.getPgPaymentId(), payment.getStatus(), ex);
+				log.error("escalation 처리 실패 paymentId={} orderId={} merchantPayKey={}",
+					payment.getId(), payment.getOrderId(), payment.getMerchantPayKey(), ex);
 			}
 		}
+	}
 
-		log.info("대사 완료 succeeded={} failed={} skipped={} errors={}",
-			succeeded, failed, skipped, errors);
+	private void notifyEscalation(Payment payment) {
+		try {
+			notificationPort.notifyManualReviewRequired(
+				payment.getOrderId(), payment.getMerchantPayKey(), "escalation: 6시간 초과 미확정 APPROVE");
+		} catch (Exception ex) {
+			log.warn("escalation 통지 전송 실패 paymentId={} orderId={} merchantPayKey={}",
+				payment.getId(), payment.getOrderId(), payment.getMerchantPayKey(), ex);
+		}
 	}
 
 	private PaymentReconcileOutcome processOne(Payment payment, LocalDateTime now) {
