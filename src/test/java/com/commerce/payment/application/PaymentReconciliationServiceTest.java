@@ -29,6 +29,8 @@ import com.commerce.payment.application.port.PgCanceller;
 import com.commerce.payment.domain.Payment;
 import com.commerce.payment.domain.PaymentFailCode;
 import com.commerce.payment.domain.PaymentProvider;
+import com.commerce.payment.exception.PaymentErrorCode;
+import com.commerce.payment.exception.PaymentException;
 import com.commerce.payment.domain.PaymentReservation;
 import com.commerce.payment.domain.PaymentStatus;
 import com.commerce.payment.domain.PaymentType;
@@ -252,7 +254,7 @@ class PaymentReconciliationServiceTest {
 			.compensateDuplicatePayment(any(), any(), any());
 	}
 
-	@DisplayName("succeedApproval이 ORDER_PAID_NOT_ALLOWED이고 주문이 PAID이며 중복 결제가 있으면 compensateDuplicatePayment를 호출한다")
+	@DisplayName("succeedApproval이 PAYMENT_DUPLICATE이고 주문이 PAID이며 중복 결제가 있으면 compensateDuplicatePayment를 호출한다")
 	@Test
 	void reconcile_orderPaidWithDuplicate_compensatesDuplicate() {
 		injectPolicies();
@@ -264,7 +266,8 @@ class PaymentReconciliationServiceTest {
 			.willReturn(List.of(payment));
 		given(naverPayGateway.getApprovalHistory("pg-1"))
 			.willReturn(NaverPayHistoryResult.approved("PAY-1", 1000));
-		willThrow(new OrderException(OrderErrorCode.ORDER_PAID_NOT_ALLOWED))
+		// 중복 결제는 saveApproved의 uk 위반으로 PAYMENT_DUPLICATE로 진입한다(현실 경로, H1)
+		willThrow(new PaymentException(PaymentErrorCode.PAYMENT_DUPLICATE))
 			.given(paymentApprovalService).succeedApproval(any(), any());
 		given(orderRepository.findById(payment.getOrderId())).willReturn(Optional.of(paidOrder));
 		given(paymentRepository.existsApprovedByOrderId(payment.getOrderId())).willReturn(true);

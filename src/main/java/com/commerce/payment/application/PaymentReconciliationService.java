@@ -15,6 +15,8 @@ import com.commerce.payment.application.port.result.CancelOutcome;
 import com.commerce.payment.domain.Payment;
 import com.commerce.payment.domain.PaymentFailCode;
 import com.commerce.payment.domain.repository.PaymentRepository;
+import com.commerce.payment.exception.PaymentErrorCode;
+import com.commerce.payment.exception.PaymentException;
 import com.commerce.payment.naverpay.application.port.NaverPayGateway;
 import com.commerce.payment.naverpay.application.port.result.NaverPayCancelResult;
 import com.commerce.payment.naverpay.application.port.result.NaverPayHistoryResult;
@@ -141,6 +143,13 @@ public class PaymentReconciliationService {
 			return PaymentReconcileOutcome.SUCCEEDED;
 		} catch (OrderException ex) {
 			if (ex.getErrorCode() == OrderErrorCode.ORDER_PAID_NOT_ALLOWED) {
+				return handleOrderNotCompletable(payment, now);
+			}
+			throw ex;
+		} catch (PaymentException ex) {
+			// 중복 결제: succeedApproval이 order.completePayment() 도달 전에 saveApproved의
+			// uk_payment_approved_order_key 위반으로 PAYMENT_DUPLICATE를 던진다(order는 다른 결제로 이미 PAID).
+			if (ex.getErrorCode() == PaymentErrorCode.PAYMENT_DUPLICATE) {
 				return handleOrderNotCompletable(payment, now);
 			}
 			throw ex;
