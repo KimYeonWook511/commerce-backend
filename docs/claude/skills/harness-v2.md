@@ -71,6 +71,8 @@ execute.py가 각 agent를 `subprocess.Popen`으로 직접 실행하고 `proc.wa
 
 `CLAUDE.md`를 읽고 현재 Repo 규칙을 파악한다. Task 문서와 phase 문서를 우선 읽고, 부족한 공통 맥락이 있을 때만 루트 `docs/`를 추가로 읽는다. 요구사항이 모호하면 구현 전에 사용자와 논의한다.
 
+**계획 전 루트 문서 정합성 확인(필수)**: 구현 방향을 제안하기 전에 agent가 먼저 기존 결정과의 충돌을 확인한다. 임의로 계획을 세운 뒤 충돌 검토를 사용자에게 떠넘기지 않는다. `docs/adr.md`의 `Task ADR 색인` "주요 결정 키워드" 열을 훑어 관련 ADR을 식별하고(항상), 작업이 건드리는 영역에 따라 architecture/prd/db-schema/api-spec을 추가 확인한다. 제안은 "관련 결정/문서 + 선택지(정합 라벨: ADR 일치/위반)" 형식으로 제시해, agent가 문서를 실제로 확인했다는 근거를 남기고 사용자가 라벨만으로 판단할 수 있게 한다.
+
 ### 2. Step Design
 
 작업을 `docs/tasks/<task-name>/phases/<phase-name>/step{N}.md` 단위로 분해한다. phase는 통합 사이클 단위로, 기본 1개이며 선후 의존/중간 검증 가치가 있을 때만 나눈다.
@@ -99,7 +101,7 @@ worktree 안에서 Task 문서와 phase 구조를 작성한다. Task 문서는 �
 
 승인 후 `execute.py`가 아래 순서로 step을 처리한다.
 
-- **Developer Agent**: `execute.py`가 `subprocess.Popen`으로 `claude -p --model <developer_model> --output-format stream-json --verbose`를 직접 실행하고 `proc.wait()`로 완료를 감지한다(신호·timeout 없음). Acceptance Criteria를 직접 실행해 검증하고, 시행착오를 `<<<STRUGGLES>>>` 블록으로 남긴다.
+- **Developer Agent**: `execute.py`가 `subprocess.Popen`으로 `claude -p --model <developer_model> --output-format stream-json --verbose`를 직접 실행하고 `proc.wait()`로 완료를 감지한다(신호·timeout 없음). Acceptance Criteria를 직접 실행해 검증하고, 시행착오를 `<<<STRUGGLES>>>` 블록으로 남긴다. `step_context`가 컨텍스트에 핵심 코딩 컨벤션(logging / exception / testing)의 `## 핵심 원칙 (요약)` 섹션을 **항상 주입**하고, guardrails가 이를 자기 판단보다 우선하도록 강제한다(컨벤션 무시 코딩 방지). 전문이 필요한 도메인 세부는 step 문서가 경로를 명시하면 별도 주입된다.
 - **Reviewer Agent**: developer 결과를 read-only 관점으로 검토한다. subprocess로 실행되며 `pass`, `retryable_error`, `blocked` 중 하나를 반환한다.
 - **Commit Agent**: reviewer pass 시 subprocess로 실행되어 `git status`/`git diff`를 확인하고 commit-conventions.md를 읽어 커밋 단위와 메시지를 판단해 커밋한다. 코드 변경과 Task 문서 변경의 목적이 다르면 분리 commit(코드 → docs:)으로 나눈다. body는 작성하지 않고 subject만 사용한다.
 - **Finalize**: phase 종료 시 `execute.py finalize()`가 step commit agent가 흡수하지 못한 Task 문서 잔여 변경분을 `docs:` 커밋으로, phase index 두 개를 `chore:` 커밋으로 마무리한다. 이어서 원격 push(기본 동작, `--no-push`로 생략)까지 수행한다.
@@ -152,7 +154,7 @@ agent는 `developer_agent` / `reviewer_agent` / `commit_agent`이며, phase를 �
 - Orchestration: `.claude/skills/harness-v2/scripts/execute.py` (tmux 3-pane·중단 핸들러 포함)
 - Agent Runner: `.claude/skills/harness-v2/scripts/agent_runner.py` (subprocess 실행·stream-json 분기·`proc.wait()` 완료 감지·프로세스 그룹 정리)
 - Log Formatter: `.claude/skills/harness-v2/scripts/format_events.py` (stream-json → 사람용 로그)
-- Context Manager: `.claude/skills/harness-v2/scripts/step_context.py`
+- Context Manager: `.claude/skills/harness-v2/scripts/step_context.py` (Task 문서 + 핵심 코딩 컨벤션 요약 주입)
 - Developer Agent: `.claude/skills/harness-v2/scripts/developer_guardrails.py`, `developer_agent.py`
 - Verifier / AC 재검증: `.claude/skills/harness-v2/scripts/step_verifier.py`, `acceptance_runner.py`
 - Reviewer Agent: `.claude/skills/harness-v2/scripts/reviewer_guardrails.py`, `reviewer_agent.py`
