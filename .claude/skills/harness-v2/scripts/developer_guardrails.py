@@ -40,4 +40,9 @@ def build(
         "    <<<STRUGGLES>>>\n"
         "    - (시도했다 버린 접근 / 막힌 지점 / 해결 방법)\n"
         "    <<<END STRUGGLES>>>\n"
+        "13. 컨텍스트에 주입된 `필수 코딩 컨벤션`(logging / exception / testing)과 ADR 결정을 "
+        "자기 판단보다 우선한다. 특히 예외 처리(DAO 예외 catch 금지, find-first, 안전망 위임), "
+        "로깅(placeholder·레벨·memberId 마스킹), 테스트(레이어별 종류·네이밍·동시성 안티패턴)는 "
+        "주입된 원칙을 그대로 따르고 임의로 다른 방식을 쓰지 마라. 컨벤션과 충돌하는 구현이 불가피하면 "
+        "임의로 강행하지 말고 `blocked`로 남기고 사유를 적어라.\n"
     )
