@@ -33,7 +33,11 @@ def extract_summary_section(text: str) -> Optional[str]:
     # 다음 동급(##) 헤딩 전까지가 요약 섹션
     next_heading = re.search(r"\n## ", after)
     body = after[: next_heading.start()] if next_heading else after
-    return body.strip() or None
+    body = body.strip()
+    # 요약 섹션 끝의 구분선(---)은 md 가독성용이라 문서에는 두되, 주입 시에는 토큰 절약을 위해 제거한다.
+    if body.endswith("---"):
+        body = body[:-3].strip()
+    return body or None
 
 
 def load_convention_summaries(root_path: Path) -> list[tuple[str, str]]:
