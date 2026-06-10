@@ -191,7 +191,8 @@ public class PaymentReconciliationService {
 		if (order.getStatus() == OrderStatus.CANCELED) {
 			// C: CANCELED 주문 — 보상 취소(환불) + 통지 (ADR-L4)
 			paymentApprovalCompensationService.compensateCanceledOrderApproval(payment, this::pgCancelForReconciliation);
-			log.error("대사 보상 취소 실행 paymentId={} orderId={} merchantPayKey={}",
+			// 정상 복구 동작(예외 아님)이므로 운영 주목 수준 WARN (모니터링 false-positive 방지)
+			log.warn("대사 보상 취소 실행 paymentId={} orderId={} merchantPayKey={}",
 				payment.getId(), payment.getOrderId(), payment.getMerchantPayKey());
 			return PaymentReconcileOutcome.FAILED;
 		}
@@ -201,7 +202,7 @@ public class PaymentReconciliationService {
 			boolean hasDuplicateSucceeded = paymentRepository.existsApprovedByOrderId(payment.getOrderId());
 			if (hasDuplicateSucceeded) {
 				// 다른 SUCCEEDED APPROVE가 이미 있음 — 이 건은 중복 결제, 보상(환불)한다.
-				log.error("대사 PAID 주문 중복 결제 - 보상 paymentId={} orderId={} merchantPayKey={}",
+				log.warn("대사 PAID 주문 중복 결제 - 보상 paymentId={} orderId={} merchantPayKey={}",
 					payment.getId(), payment.getOrderId(), payment.getMerchantPayKey());
 				paymentApprovalCompensationService.compensateDuplicatePayment(
 					payment,
