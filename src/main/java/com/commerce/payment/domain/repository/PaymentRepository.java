@@ -27,6 +27,6 @@ public interface PaymentRepository {
 
 	boolean existsApprovedByOrderId(Long orderId);
 
-	// APPROVE 대사 후보: UNKNOWN/REQUESTED 중 staleCutoff보다 오래됐고 escalationCutoff보다 최근인 건. 1분~6시간 윈도우.
-	List<Payment> findStaleApprovePaymentsForReconciliation(LocalDateTime staleCutoff, LocalDateTime escalationCutoff, Pageable pageable);
+	// APPROVE 대사 후보: UNKNOWN은 staleCutoff(1분), REQUESTED는 requestedStaleCutoff(15분)보다 오래됐고 escalationCutoff(6시간)보다 최근인 건.
+	List<Payment> findStaleApprovePaymentsForReconciliation(LocalDateTime staleCutoff, LocalDateTime requestedStaleCutoff, LocalDateTime escalationCutoff, Pageable pageable);
 }

@@ -37,8 +37,11 @@ public class PaymentReconciliationService {
 	// 한 주기 처리 상한. 운영 config 승격 전제.
 	private static final int RECONCILE_BATCH_SIZE = 100;
 
-	// 정책 최단 진입 지연(UNKNOWN_RECONCILE_DELAY = 1분). 1분 미만은 대사 대상 제외. 정책과 단일 출처 공유.
+	// UNKNOWN 진입 지연(UNKNOWN_RECONCILE_DELAY = 1분). 1분 미만 UNKNOWN은 대사 대상 제외. 정책과 단일 출처 공유.
 	private static final long STALE_CUTOFF_MINUTES = PaymentPostProcessTargetPolicy.UNKNOWN_RECONCILE_DELAY.toMinutes();
+
+	// REQUESTED 진입 지연(REQUESTED_STALE_DELAY = 15분). 15분 미만 REQUESTED는 스캔 후보에서 제외해 starvation을 막는다. 정책과 단일 출처 공유.
+	private static final long REQUESTED_STALE_CUTOFF_MINUTES = PaymentPostProcessTargetPolicy.REQUESTED_STALE_DELAY.toMinutes();
 
 	// 자동 대사 스캔 상한(ESCALATION_DELAY = 6시간). 6시간 초과는 스캔에서 제외해 무한 재시도를 방지한다 (ADR-L8). 정책과 단일 출처 공유.
 	private static final long ESCALATION_DELAY_HOURS = PaymentPostProcessTargetPolicy.ESCALATION_DELAY.toHours();
@@ -59,16 +62,18 @@ public class PaymentReconciliationService {
 	public void reconcile() {
 		LocalDateTime now = LocalDateTime.now();
 		LocalDateTime staleCutoff = now.minusMinutes(STALE_CUTOFF_MINUTES);
+		LocalDateTime requestedStaleCutoff = now.minusMinutes(REQUESTED_STALE_CUTOFF_MINUTES);
 		LocalDateTime escalationCutoff = now.minusHours(ESCALATION_DELAY_HOURS);
 
 		List<Payment> candidates = paymentRepository.findStaleApprovePaymentsForReconciliation(
-			staleCutoff, escalationCutoff, PageRequest.of(0, RECONCILE_BATCH_SIZE));
+			staleCutoff, requestedStaleCutoff, escalationCutoff, PageRequest.of(0, RECONCILE_BATCH_SIZE));
 
 		if (candidates.isEmpty()) {
 			return;
 		}
 
-		log.info("대사 시작 candidates={} staleCutoff={} escalationCutoff={}", candidates.size(), staleCutoff, escalationCutoff);
+		log.info("대사 시작 candidates={} staleCutoff={} requestedStaleCutoff={} escalationCutoff={}",
+			candidates.size(), staleCutoff, requestedStaleCutoff, escalationCutoff);
 
 		int succeeded = 0, failed = 0, skipped = 0, errors = 0;
 		for (Payment payment : candidates) {

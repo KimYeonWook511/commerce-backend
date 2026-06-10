@@ -19,7 +19,8 @@ public class PaymentPostProcessTargetPolicy {
 	public static final Duration UNKNOWN_RECONCILE_DELAY = Duration.ofMinutes(1);
 
 	// 승인 가능 시간(10분) + 마진(5분) — 윈도우가 닫힌 뒤에 reconcile해 AlreadyOnGoing 오판 방지
-	private static final Duration REQUESTED_STALE_DELAY = Duration.ofMinutes(15);
+	// 대사 스캔 윈도우 REQUESTED 하한과 단일 출처를 공유하기 위해 public (PaymentReconciliationService 참조)
+	public static final Duration REQUESTED_STALE_DELAY = Duration.ofMinutes(15);
 
 	// reconcile 대상이 이 시간을 넘도록 PG가 결론을 못 내면 MANUAL 승급. 운영 config로 확정 예정
 	// 대사 스캔 윈도우 상한과 단일 출처를 공유하기 위해 public (PaymentReconciliationService 참조)
