@@ -161,7 +161,7 @@ step 실행 상태 파일이다.
 Task 문서만으로 부족한 공통 맥락이 있으면 루트 문서를 추가로 읽는다. 이 step의 작업이 건드리는 영역에 해당하는 문서를 **반드시** 포함한다 (step 작성 시 아래 매핑으로 골라 명시):
 
 - 구조·레이어·책임 → `/docs/architecture.md`
-- 설계 결정·정책 → `/docs/adr.md` (관련 항목) + **동일 task의 `adr.md`**
+- 설계 결정·정책 → `/docs/adr.md` (관련 항목)
 - try-catch·예외 처리·DB 무결성·외부 캐시 장애 → `/docs/exception-strategy.md`
 - 로그 추가·레벨·MDC → `/docs/logging-conventions.md`
 - 테스트 작성 → `/docs/testing-conventions.md`
