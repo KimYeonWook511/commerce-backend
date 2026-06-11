@@ -180,27 +180,28 @@ class EscalationScanQueryIntegrationTest {
 		assertThat(result).isEmpty();
 	}
 
-	@DisplayName("escalateIfPending 호출 시 escalatedAt이 기록되고 영향 행 수 1이 반환된다")
+	@DisplayName("Payment.escalate() 호출 후 save하면 escalatedAt이 기록된다")
 	@Test
-	void escalateIfPending_unknownPayment_setsEscalatedAtAndReturnsOne() {
+	void escalate_unknownPayment_setsEscalatedAt() {
 		LocalDateTime now = LocalDateTime.now();
 
 		Payment payment = Payment.createRequested(reservation("ESC-SQ-UP-1"), PaymentType.APPROVE, "pg-esc-up-1");
 		payment.markUnknown("timeout", now.minusHours(7));
 		Payment saved = paymentRepository.save(payment);
 
-		int affected = paymentRepository.escalateIfPending(saved.getId(), now);
+		boolean escalated = saved.escalate(now);
+		assertThat(escalated).isTrue();
+		paymentRepository.save(saved);
 
-		assertThat(affected).isEqualTo(1);
-
+		em.flush();
 		em.clear();
 		Payment reloaded = em.find(Payment.class, saved.getId());
 		assertThat(reloaded.getEscalatedAt()).isNotNull();
 	}
 
-	@DisplayName("이미 escalatedAt이 기록된 건에 escalateIfPending을 다시 호출하면 영향 행 수 0이 반환된다")
+	@DisplayName("이미 escalatedAt이 기록된 Payment에 escalate()를 다시 호출하면 false를 반환한다(멱등)")
 	@Test
-	void escalateIfPending_alreadyEscalated_returnsZero() {
+	void escalate_alreadyEscalated_returnsFalse() {
 		LocalDateTime now = LocalDateTime.now();
 
 		Payment payment = Payment.createRequested(reservation("ESC-SQ-UP-2"), PaymentType.APPROVE, "pg-esc-up-2");
@@ -208,17 +209,21 @@ class EscalationScanQueryIntegrationTest {
 		Payment saved = paymentRepository.save(payment);
 
 		// 첫 번째 escalation
-		int first = paymentRepository.escalateIfPending(saved.getId(), now);
-		assertThat(first).isEqualTo(1);
+		boolean first = saved.escalate(now);
+		assertThat(first).isTrue();
+		paymentRepository.save(saved);
 
-		// 두 번째 호출 — 이미 escalatedAt이 있으므로 0이어야 함
-		int second = paymentRepository.escalateIfPending(saved.getId(), now);
-		assertThat(second).isEqualTo(0);
+		// reload 후 두 번째 시도 — escalatedAt이 있으므로 false
+		em.flush();
+		em.clear();
+		Payment reloaded = em.find(Payment.class, saved.getId());
+		boolean second = reloaded.escalate(now);
+		assertThat(second).isFalse();
 	}
 
-	@DisplayName("escalateIfPending 후 해당 건이 escalatedAt IS NULL 필터로 다음 스캔에서 제외된다")
+	@DisplayName("escalate() + save 후 해당 건이 escalatedAt IS NULL 필터로 다음 스캔에서 제외된다")
 	@Test
-	void escalateIfPending_thenExcludedFromNextScan() {
+	void escalate_thenExcludedFromNextScan() {
 		LocalDateTime now = LocalDateTime.now();
 		LocalDateTime escalationCutoff = now.minusHours(6);
 
@@ -231,7 +236,9 @@ class EscalationScanQueryIntegrationTest {
 			.hasSize(1);
 
 		// escalation 처리
-		paymentRepository.escalateIfPending(saved.getId(), now);
+		saved.escalate(now);
+		paymentRepository.save(saved);
+		em.flush();
 		em.clear();
 
 		// escalation 후: escalatedAt IS NULL 아님이므로 스캔에서 제외됨

@@ -32,8 +32,4 @@ public interface PaymentRepository {
 
 	// escalation 후보: escalatedAt IS NULL이고 6시간 초과 UNKNOWN/REQUESTED APPROVE 건 (대사 스캔 윈도우 밖).
 	List<Payment> findEscalationCandidates(LocalDateTime escalationCutoff, Pageable pageable);
-
-	// 조건부 UPDATE: escalatedAt IS NULL AND status IN (UNKNOWN,REQUESTED)일 때만 escalatedAt을 기록. 영향 행 수를 반환한다.
-	// 영향 행 수 1 = 이 호출이 escalation 주체. 0 = 이미 다른 주체가 처리(중복 통지 차단).
-	int escalateIfPending(Long id, LocalDateTime now);
 }

@@ -4,6 +4,7 @@ import java.time.LocalDateTime;
 import java.util.List;
 
 import org.springframework.data.domain.PageRequest;
+import org.springframework.orm.ObjectOptimisticLockingFailureException;
 import org.springframework.stereotype.Service;
 
 import com.commerce.order.domain.Order;
@@ -109,10 +110,16 @@ public class PaymentReconciliationService {
 
 		for (Payment payment : candidates) {
 			try {
-				int affected = paymentRepository.escalateIfPending(payment.getId(), now);
-				if (affected == 1) {
-					notifyEscalation(payment);
+				boolean escalated = payment.escalate(now);
+				if (!escalated) {
+					continue;
 				}
+				paymentRepository.save(payment);
+				notifyEscalation(payment);
+			} catch (ObjectOptimisticLockingFailureException ex) {
+				// 이미 다른 주체가 escalation 처리 — 정상 skip (ADR-L3)
+				log.info("escalation skip - 낙관적 락 충돌, 이미 다른 주체가 처리 paymentId={} orderId={}",
+					payment.getId(), payment.getOrderId());
 			} catch (Exception ex) {
 				log.error("escalation 처리 실패 paymentId={} orderId={} merchantPayKey={}",
 					payment.getId(), payment.getOrderId(), payment.getMerchantPayKey(), ex);
