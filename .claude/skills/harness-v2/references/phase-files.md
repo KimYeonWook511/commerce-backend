@@ -158,10 +158,17 @@ step 실행 상태 파일이다.
 - `/docs/tasks/<task-name>/db-schema.md`
 - `{이전 step에서 생성/수정된 파일 경로}`
 
-Task 문서만으로 부족한 공통 맥락이 있으면 아래처럼 루트 문서를 추가로 읽는다.
+Task 문서만으로 부족한 공통 맥락이 있으면 루트 문서를 추가로 읽는다. 이 step의 작업이 건드리는 영역에 해당하는 문서를 **반드시** 포함한다 (step 작성 시 아래 매핑으로 골라 명시):
 
-- `/docs/architecture.md`
-- `/docs/adr.md`
+- 구조·레이어·책임 → `/docs/architecture.md`
+- 설계 결정·정책 → `/docs/adr.md` (관련 항목)
+- try-catch·예외 처리·DB 무결성·외부 캐시 장애 → `/docs/exception-strategy.md`
+- 로그 추가·레벨·MDC → `/docs/logging-conventions.md`
+- 테스트 작성 → `/docs/testing-conventions.md`
+- 스키마·테이블·제약 → `/docs/db-schema.md`
+- API 추가·변경 → `/docs/api-spec.md`
+
+(logging/exception/testing의 핵심 원칙 요약은 `step_context`가 항상 자동 주입하지만, 도메인 사례·세부가 필요한 step은 위 경로를 명시해 전문을 함께 읽는다.)
 
 이전 step에서 만들어진 코드와 task 문서를 꼼꼼히 읽고, 설계 의도를 이해한 뒤 작업하라.
 
@@ -171,17 +178,31 @@ Task 문서만으로 부족한 공통 맥락이 있으면 아래처럼 루트 �
 
 ## Acceptance Criteria
 
+이 step의 작업 종류에 맞는 실제 실행 커맨드를 적는다. 단위/슬라이스가 기본이며, 아래에 해당하면 해당 테스트를 **반드시 포함**한다 (`/docs/testing-conventions.md`의 태그 기준).
+
 ```bash
+# 기본 (단위·슬라이스)
 ./gradlew test
+
+# DB·Testcontainers 통합이 필요하면
+./gradlew integrationTest
+
+# Spring Batch 관련이면
+./gradlew batchTest
+
+# 동시성·락·race 관련이면 (격리 실행)
+./gradlew concurrencyTest
 ```
+
+(위는 선택용 예시다. 실제 step에는 해당하는 커맨드만 남긴다.)
 
 ## 검증 절차
 
 1. 위 Acceptance Criteria 커맨드를 실행한다.
 2. 아래를 확인한다.
-   - architecture.md 디렉토리 구조를 따르는가?
-   - ADR 기술 스택을 벗어나지 않았는가?
-   - 상위 작업 규칙을 위반하지 않았는가?
+  - architecture.md 디렉토리 구조를 따르는가?
+  - ADR 기술 스택을 벗어나지 않았는가?
+  - 상위 작업 규칙을 위반하지 않았는가?
 3. 결과에 따라 step 상태를 갱신한다.
 
 ## 금지사항
@@ -216,6 +237,8 @@ Task 문서만으로 부족한 공통 맥락이 있으면 아래처럼 루트 �
   - repository 조회 조건 변경
   - 공통 예외/응답 변경
   - 인증/권한 경계 변경
+- step의 작업 종류에 맞는 테스트를 Acceptance Criteria에 포함한다. `./gradlew test`(단위·슬라이스)가 기본이고, DB/Testcontainers 통합이면 `integrationTest`, Spring Batch면 `batchTest`, 동시성·락·race면 `concurrencyTest`를 추가한다. 통합/batch/concurrency가 필요한 step에서 `./gradlew test`만 적어 누락하지 않는다.
+- step의 `읽어야 할 파일`에 그 작업이 건드리는 영역의 루트 문서를 매핑대로 명시한다. try-catch/예외 → `/docs/exception-strategy.md`, 로그 → `/docs/logging-conventions.md`, 테스트 → `/docs/testing-conventions.md`, 설계 결정 → 관련 `/docs/adr.md` 등 step이 다루는 관심사를 보고 누락 없이 고른다.
 - shared domain 계약을 바꾸는 step은 사용처 탐색 커맨드를 `검증 절차`에 포함한다.
   - 예: `rg "Product.builder" src/main/java src/test/java`
 
