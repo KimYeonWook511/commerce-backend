@@ -3,8 +3,28 @@
   "phase": "0-main",
   "harness_version": "v2",
   "steps": [
-    { "step": 1, "name": "add-payment-version", "status": "pending" },
-    { "step": 2, "name": "terminal-transition-optimistic-absorb", "status": "pending" },
-    { "step": 3, "name": "escalation-to-domain-method", "status": "pending" }
-  ]
+    {
+      "step": 1,
+      "name": "add-payment-version",
+      "status": "completed",
+      "started_at": "2026-06-11T16:50:18+0900",
+      "summary": "Payment 엔티티에 @Version private Long version 필드를 추가하고, V9__add_payment_version.sql 마이그레이션으로 tbl_payment에 version BIGINT NOT NULL DEFAULT 0 컬럼을 추가한다."
+    },
+    {
+      "step": 2,
+      "name": "terminal-transition-optimistic-absorb",
+      "status": "pending"
+    },
+    {
+      "step": 3,
+      "name": "escalation-to-domain-method",
+      "status": "pending"
+    }
+  ],
+  "created_at": "2026-06-11T16:50:18+0900",
+  "execution": {
+    "developer_model": "sonnet",
+    "reviewer_model": "opus",
+    "commit_model": "haiku"
+  }
 }
