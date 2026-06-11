@@ -2,6 +2,7 @@ package com.commerce.payment.application;
 
 import java.time.LocalDateTime;
 
+import org.springframework.orm.ObjectOptimisticLockingFailureException;
 import org.springframework.stereotype.Service;
 import org.springframework.transaction.annotation.Transactional;
 
@@ -62,8 +63,10 @@ public class PaymentApprovalRecordService {
 	/**
 	 * REQUESTED 상태일 때만 UNKNOWN 마킹. 그 외 상태이거나 이력이 없으면 조용히 skip한다.
 	 * PG 호출 timeout / 네트워크 단절 시 결과 불명 흔적을 보존한다 (ADR-6).
+	 * @Transactional을 두지 않아 save()가 독립 트랜잭션으로 실행된다.
+	 * ObjectOptimisticLockingFailureException 흡수가 같은 트랜잭션 안에서 일어나면 EntityManager가 rollback-only로
+	 * 마킹돼 UnexpectedRollbackException이 전파된다. 독립 트랜잭션이면 save 실패가 깨끗하게 롤백되고 예외만 전파된다 (ADR-L2).
 	 */
-	@Transactional
 	public void markUnknownIfRequested(
 		String merchantPayKey,
 		PaymentProvider provider,
@@ -83,15 +86,21 @@ public class PaymentApprovalRecordService {
 			return;
 		}
 		payment.markUnknown(failDetail, respondedAt);
-		paymentRepository.save(payment);
+		try {
+			paymentRepository.save(payment);
+		} catch (ObjectOptimisticLockingFailureException ex) {
+			// 이미 다른 주체가 종착 전이를 완료 — 단조 종착이므로 재시도 아닌 skip (ADR-L2)
+			log.warn("낙관적 락 충돌로 UNKNOWN 마킹 skip merchantPayKey={} pgPaymentId={}",
+				merchantPayKey, pgPaymentId);
+		}
 	}
 
 	/**
 	 * 보상 흐름 전용: REQUESTED 또는 UNKNOWN 상태일 때 실패 처리하고, 그 외 상태(SUCCEEDED/FAILED)이거나 이력이 없으면 조용히 skip한다.
 	 * 보상 대상 approve 는 실시간 경로에서는 REQUESTED, 대사 경로에서는 UNKNOWN 으로 진입하므로 둘 다 FAILED 로 확정한다 (ADR-039).
 	 * 호출처(catch 블록)가 상태를 확인하거나 try-catch로 mark 예외를 잡지 않도록 의도를 캡슐화한다.
+	 * @Transactional을 두지 않는 이유는 markUnknownIfRequested와 동일하다 (ADR-L2).
 	 */
-	@Transactional
 	public void failIfPending(
 		String merchantPayKey,
 		PaymentProvider provider,
@@ -115,6 +124,12 @@ public class PaymentApprovalRecordService {
 			return;
 		}
 		payment.fail(failCode, failDetail, respondedAt);
-		paymentRepository.save(payment);
+		try {
+			paymentRepository.save(payment);
+		} catch (ObjectOptimisticLockingFailureException ex) {
+			// 이미 다른 주체가 종착 전이를 완료 — 보상 best-effort이므로 skip (ADR-L2)
+			log.warn("낙관적 락 충돌로 보상 실패 마킹 skip merchantPayKey={} pgPaymentId={}",
+				merchantPayKey, pgPaymentId);
+		}
 	}
 }
