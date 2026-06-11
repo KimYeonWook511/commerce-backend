@@ -238,7 +238,7 @@ Task 문서만으로 부족한 공통 맥락이 있으면 루트 문서를 추�
   - 공통 예외/응답 변경
   - 인증/권한 경계 변경
 - step의 작업 종류에 맞는 테스트를 Acceptance Criteria에 포함한다. `./gradlew test`(단위·슬라이스)가 기본이고, DB/Testcontainers 통합이면 `integrationTest`, Spring Batch면 `batchTest`, 동시성·락·race면 `concurrencyTest`를 추가한다. 통합/batch/concurrency가 필요한 step에서 `./gradlew test`만 적어 누락하지 않는다.
-- step의 `읽어야 할 파일`에 그 작업이 건드리는 영역의 루트 문서를 매핑대로 명시한다. try-catch/예외 → `exception-strategy.md`, 로그 → `logging-conventions.md`, 테스트 → `testing-conventions.md`, 설계 결정 → 관련 `adr.md`. step이 다루는 관심사를 보고 누락 없이 고른다.
+- step의 `읽어야 할 파일`에 그 작업이 건드리는 영역의 루트 문서를 매핑대로 명시한다. try-catch/예외 → `/docs/exception-strategy.md`, 로그 → `/docs/logging-conventions.md`, 테스트 → `/docs/testing-conventions.md`, 설계 결정 → 관련 `/docs/adr.md` 등 step이 다루는 관심사를 보고 누락 없이 고른다.
 - shared domain 계약을 바꾸는 step은 사용처 탐색 커맨드를 `검증 절차`에 포함한다.
   - 예: `rg "Product.builder" src/main/java src/test/java`
 
