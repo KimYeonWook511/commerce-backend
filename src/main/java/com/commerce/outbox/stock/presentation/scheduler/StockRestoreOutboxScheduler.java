@@ -1,4 +1,4 @@
-package com.commerce.outbox.stock.scheduler;
+package com.commerce.outbox.stock.presentation.scheduler;
 
 import java.time.LocalDateTime;
 

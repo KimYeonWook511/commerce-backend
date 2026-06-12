@@ -1,4 +1,4 @@
-package com.commerce.payment.scheduler;
+package com.commerce.payment.presentation.scheduler;
 
 import org.springframework.context.annotation.Profile;
 import org.springframework.scheduling.annotation.Scheduled;

@@ -1,4 +1,4 @@
-package com.commerce.order.batch;
+package com.commerce.order.presentation.scheduler;
 
 import java.time.LocalDateTime;
 import org.springframework.batch.core.Job;

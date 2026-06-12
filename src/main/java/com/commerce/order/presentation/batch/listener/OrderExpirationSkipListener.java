@@ -1,4 +1,4 @@
-package com.commerce.order.batch.listener;
+package com.commerce.order.presentation.batch.listener;
 
 import org.springframework.batch.core.SkipListener;
 import org.springframework.stereotype.Component;

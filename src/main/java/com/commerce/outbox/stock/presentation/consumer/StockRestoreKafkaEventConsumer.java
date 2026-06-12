@@ -1,4 +1,4 @@
-package com.commerce.outbox.stock.infrastructure;
+package com.commerce.outbox.stock.presentation.consumer;
 
 import java.io.IOException;
 import java.util.List;
