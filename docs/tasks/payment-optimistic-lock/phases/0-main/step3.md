@@ -41,11 +41,12 @@ escalation의 멱등 메커니즘을 조건부 UPDATE(CAS)에서 `Payment.escala
 - `PaymentRepository`(port), `JpaPaymentRepository`(`@Modifying @Query` 조건부 UPDATE), `PaymentRepositoryAdapter`에서 `escalateIfPending`을 제거한다.
 - escalation 후보 조회(`findEscalationCandidates`)는 read 경로라 그대로 둔다.
 
-### 3. `PaymentReconciliationService.processEscalations` 전환
+### 3. escalation을 transition + useCase 구조로 전환 (ADR-L2 적용)
 
-- 건별 처리를 `find → escalate() → save`로 바꾼다. application 건별 단건 트랜잭션 경계를 유지한다(현재 `PaymentReconciliationService`의 escalation 건별 처리 패턴과 동일).
-- 통지 주체 판정: **save 성공 = 이 트랜잭션이 escalation 주체 → 커밋 이후 통지**. 동시 시도 중 진 쪽은 `ObjectOptimisticLockingFailureException` → skip(통지 안 함). 사전 find에서 이미 `escalatedAt != null`이거나 status가 종착이면 escalation 대상이 아니므로 skip.
-- **충돌 skip의 로그 레벨**: escalation 충돌(`OptimisticLockException`)은 "이미 다른 주체가 escalation" = 정상 skip이지 처리 실패가 아니다. `processEscalations`의 기존 건별 `catch (Exception) { log.error("escalation 처리 실패" ...) }`가 이 충돌을 ERROR로 남기지 않도록, `OptimisticLockException`(`ObjectOptimisticLockingFailureException`)을 그 catch보다 **먼저 구분해 `log.debug`/`log.info`로 skip 처리**한다(ERROR 노이즈 방지). 그 외 진짜 처리 실패만 기존 `log.error` 경로로 남긴다.
+- **escalate transition**(별도 빈의 public `@Transactional` 메서드 — 예: `PaymentApprovalRecordService.escalate(...)`): `find → escalate() → saveChecked`. 충돌은 catch 안 함 → `PAYMENT_CONCURRENTLY_MODIFIED` 전파. 사전 find에서 이미 `escalatedAt != null`이거나 status가 종착이면 escalation 대상이 아니다(도메인 가드가 예외 또는 no-op).
+- **useCase `processEscalations`**(`PaymentReconciliationService`, **트랜잭션 없음**): escalation 후보별로 transition.escalate를 호출한다. **정상 완료 = 이 건이 통지 주체 → 커밋 이후 통지**. private 래퍼에서 `PAYMENT_CONCURRENTLY_MODIFIED`(다른 주체가 먼저 escalation)를 catch → skip(통지 안 함). transition이 **별도 빈**이라 `@Transactional`이 적용되고 충돌 시 그 트랜잭션만 롤백된다.
+  - 함정(ADR-L2): escalate transition은 `processEscalations`와 **별도 빈**(self-call 금지). `processEscalations`(useCase)에는 `@Transactional`을 달지 않는다.
+- **충돌 skip의 로그 레벨**: escalation 충돌은 "이미 다른 주체가 escalation" = 정상 skip이지 처리 실패가 아니다. `processEscalations`의 기존 건별 `catch (Exception) { log.error("escalation 처리 실패" ...) }`가 이 충돌을 ERROR로 남기지 않도록, skip 래퍼가 `PAYMENT_CONCURRENTLY_MODIFIED`를 **먼저 구분해 `log.debug`/`log.info`로** 처리한다. 그 외 진짜 처리 실패만 기존 `log.error` 경로로.
 - 통지는 commit 이후 best-effort(try/catch, 전송 실패가 트랜잭션·루프를 막지 않음, `log.warn`)를 유지한다. 통지를 커밋 **전**에 보내지 않는다.
 - `NotificationPort` 호출(`notifyManualReviewRequired` 등) 시그니처·reason 문자열은 기존 escalation 통지와 동일하게 유지한다.
 

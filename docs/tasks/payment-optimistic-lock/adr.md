@@ -36,36 +36,46 @@
 
 ---
 
-## ADR-L2: 충돌 처리는 메서드 의도 기반 — 조건부 skip 메서드는 흡수, 무조건 전이는 전파(기존 핸들러·루프에 위임)
+## ADR-L2: 충돌 처리 — transition(tx 안 변환 전파) + useCase(tx 밖 skip), adapter가 도메인 예외로 변환
 
 - 상태: accepted
-- supersedes: 없음
+- supersedes: 없음 (본 task 내 이전 초안 "메서드 의도별 application 흡수"를 폐기하고 본 결정으로 대체)
 - superseded-by: 없음
 
 ### 배경
 
-- `@Version` 도입으로 전이 시 `OptimisticLockException`(`ObjectOptimisticLockingFailureException`)이 발생할 수 있다. 충돌을 어디서 어떻게 처리할지 결정이 필요했다. 기존 예외 처리 정책(`docs/exception-strategy.md`)에는 두 메커니즘이 이미 있다: (a) `GlobalExceptionHandler`에 `OptimisticLockingFailureException → 409`(COMMON-409-1) 핸들러(낙관 락 충돌을 "정상 시나리오"로 매핑), (b) `PaymentReconciliationService.reconcile()` 대사 본 루프의 건별 `catch (Exception)` 격리. 그리고 "DAO 예외(`OptimisticLockingFailureException` 포함)는 application/adapter에서 catch 금지" 원칙이 있다.
+- `@Version` 도입으로 전이 시 `OptimisticLockException`(`ObjectOptimisticLockingFailureException`)이 **flush 시점** 발생한다. 충돌이 나면 그 트랜잭션은 **rollback-only**로 마킹된다.
+- 보상·best-effort 경로(`markUnknownIfRequested`/`failIfPending`)는 충돌을 **흡수(skip)** 해야 한다(예외를 던지면 보상 흐름의 PG 환불이 끊김 — `runPgCancel` 단계 독립 commit 정책). 그런데 흡수를 **트랜잭션 안에서** 하면(같은 메서드에서 catch 후 정상 리턴) commit 시점에 `UnexpectedRollbackException`이 난다. `@Transactional(REQUIRES_NEW)`를 붙여도 같은 메서드 안 catch면 동일하다.
+- 코드베이스 기존 정책: 인프라 예외(DAO)는 application/domain이 직접 의존하지 않고 **adapter에서 도메인 예외로 변환**(선례 `saveUsed`/`saveApproved`). 보상 흐름은 각 단계가 자기 `@Transactional`로 **독립 commit**(`docs/tasks/payment-compensation-to-domain/adr.md`).
 
 ### 고려한 대안
 
-- **모든 종착 전이를 application에서 try-catch로 흡수**: `@Version` 도입 시 영향받는 save 경로마다 try-catch를 새로 심는 방식. DAO 예외 catch 금지 원칙과 어긋나고, 기존 409 핸들러·대사 루프 격리와 중복이다. 기각.
-- **모든 충돌을 흡수(succeed 포함)**: `succeed`가 졌을 때(상대가 FAILED/UNKNOWN 종착) "PG는 승인(과금)했는데 우리는 실패로 기록"한 모순을 조용히 삼켜 돈 문제가 묻힌다. 기각.
+- **application에서 `OptimisticLockException` 직접 catch + `@Transactional` 제거**(본 task 초기 구현): DAO 타입 직접 의존(정책 위반) + 보상 단계별 독립 commit 깨짐 + 트랜잭션 경계가 "호출자가 tx를 안 연다"는 암묵 전제에 의존. 기각.
+- **메서드에 `@Transactional(REQUIRES_NEW)` + 내부 catch**(코드 리뷰어 제안): 같은 메서드 안 catch라 그 새 트랜잭션이 rollback-only가 되어 `UnexpectedRollbackException`이 여전하다. 기각.
 
 ### 결정 내용
 
-- `@Version`의 핵심 역할은 **lost update 차단**이고, "진 쪽(충돌 예외) 처리"는 메서드 의도로 가른다. 이는 exception-strategy의 "catch 안 메서드는 예외 안 던지게 설계, 의도를 메서드명에 캡슐화" 철학과 일치한다.
-  - **조건부 skip 메서드**(`markUnknownIfRequested`, `failIfPending` — 이름에 "조건 안 맞으면 skip"을 박은 메서드, 보상·best-effort 경로에서 호출): `OptimisticLockException`을 **내부 skip**으로 흡수한다(이미 다른 주체가 전이 → 단조 종착이라 재시도 아닌 skip). 이는 그 메서드의 기존 "조건부 skip" 의미의 자연스러운 확장이다.
-  - **무조건 전이 메서드**(`fail`, `succeed`, cancel `succeed`): **전파**한다. HTTP 경로는 기존 `OptimisticLockingFailureException → 409` 핸들러가, 대사 경로는 본 루프의 건별 `catch (Exception)`가 받는다. application에 새 try-catch를 심지 않는다.
-- `succeed`는 흡수하지 않는다(전파 → 409). succeed가 졌다 = 누가 먼저 종착. 상대가 SUCCEEDED면 재호출 시 사전 find가 멱등 흡수하고, FAILED/UNKNOWN이면 모순이라 드러나야 한다.
-- 흡수가 필요한 조건부 skip 메서드 처리는 결제 타입(APPROVE/CANCEL) 무관하게 일관 적용한다. 단 CANCEL 전용 동시 충돌 **재현 테스트**는 CANCEL 대사가 미구현이라(충돌 시나리오 부재) Epic #208로 위임한다(메커니즘 검증은 APPROVE succeed-vs-fail 테스트가 담당).
+문제의 본질은 "흡수했다"가 아니라 **"흡수를 트랜잭션 안에서 했다"** 이다. 흡수를 트랜잭션 경계 밖으로 옮긴다.
+
+- **transition**(별도 빈, **public `@Transactional`**): `find → 도메인 전이 → saveChecked`. 충돌도 가드 위반도 catch 안 함 → 도메인 예외 전파 → 트랜잭션 깨끗이 rollback.
+- **adapter `saveChecked`**(신규): `saveAndFlush`로 flush를 adapter 프레임 안으로 당겨와 `ObjectOptimisticLockingFailureException`을 `PaymentException(PAYMENT_CONCURRENTLY_MODIFIED)`으로 변환 throw. (`saveAndFlush`는 "실패할 save를 성공시키는 도구"가 아니라 "충돌을 잡을 위치로 flush를 당겨오는 도구" — `saveUsed`/`saveApproved` 선례.)
+- **useCase**(= orchestrator: 실시간 승인·보상·대사 흐름, **트랜잭션 없음**): transition을 호출하고, skip이 필요하면 **useCase의 private 래퍼 메서드**에서 도메인 예외(`PAYMENT_CONCURRENTLY_MODIFIED`, 가드 위반 `PAYMENT_STATUS_TRANSITION_NOT_ALLOWED` 등 skip 대상)를 catch해 skip. catch가 트랜잭션 경계 밖이라 rollback-only와 무관.
+- **함정(반드시 지킬 것)**: transition은 useCase와 **별도 빈의 public 메서드**여야 한다(private이면 `@Transactional` 무효, 같은 빈 self-call이면 프록시 우회로 무효). useCase에는 `@Transactional`을 **달지 않는다**(달면 흡수가 다시 트랜잭션 안으로 들어가 원래 문제로 회귀).
+- **`succeed`·무조건 `fail`**: skip 안 함 → 전파 → 409. succeed가 졌다 = 누가 먼저 종착. 상대가 SUCCEEDED면 재호출 시 사전 find가 멱등 흡수, FAILED/UNKNOWN이면 모순이라 드러나야 한다. 단 이 "전파" 원칙은 **APPROVE 종착 전이** 기준이다(과금됐는데 실패 기록되는 모순을 막기 위함). CANCEL `succeed`/`fail`은 보상 useCase(`runPgCancel`)의 best-effort `catch(PaymentException)`가 충돌(`PAYMENT_CONCURRENTLY_MODIFIED`)을 멱등 흡수한다 — 진 쪽은 이미 다른 주체가 같은 CANCEL 레코드를 종착시킨 중복 보상이라 흡수가 옳고, 미해소분은 REQUESTED로 남아 CANCEL 대사(Epic #208)에서 재확정된다.
+
+### 예외 코드 granularity (의미 코드 vs 일반 코드)
+
+- 충돌은 **일반 코드**(`PAYMENT_CONCURRENTLY_MODIFIED` = "다른 처리가 먼저 상태를 바꿈")로 던지고, "이미 무엇이 됐는지"가 필요하면 **재조회**로 판정한다.
+- unique 위반(`PAYMENT_DUPLICATE`)과 version 충돌은 정책이 달라(중복→보상 vs 재시도/skip) 절대 한 코드로 합치지 않는다.
+- 의미 코드(`PAYMENT_RESERVATION_ALREADY_USED` 류)는 "version 충돌 = 이미 사용됨"이 1:1로 성립하는 전제 위에서만 정직하다. 같은 행에 다른 동시 쓰기 경로가 하나만 늘어도 거짓 양성이 되고 컴파일로 안 잡힌다. 새로 짜는 전이는 일반 코드 + 재조회로 간다.
 
 ### 근거
 
-- 낙관 락 충돌은 무결성 위반(unique/FK)과 달리 "정상 시나리오"라 기존 정책이 409 매핑·루프 격리를 이미 마련해 뒀다. 그 위에 새 catch를 심는 건 중복·정책 위반이다. 흡수가 정말 필요한 곳은 "예외를 던지면 보상 흐름이 깨지는" 조건부 skip 메서드뿐이고, 그 흡수는 `approval-concurrency-guard`의 `ObjectOptimisticLockingFailureException` 처리 선례를 따른다(인프라 예외 타입 직접 의존 최소화).
+- 흡수 위치를 트랜잭션 경계 밖(useCase)으로 옮기면 기존 모든 정책과 양립한다: adapter 변환 / DAO 타입 격리 / 보상 단계별 독립 commit / 보상 메서드는 예외 안 던짐. 상세 설계·코드 스케치는 외부 설계 논의(`payment-optimistic-lock-design.md`, repo 미커밋 — 별도 보관)에 있다.
 
 ### 결과
 
-- 새로 심는 try-catch가 최소화되고(조건부 skip 메서드에 한정), 무조건 전이의 충돌은 기존 409 핸들러·대사 루프 격리가 받는다. step 작업은 "모든 전이 경로를 전수 점검해 메서드 의도대로 흡수(조건부 skip)/전파(무조건)가 일관되는지 확인"이 된다(누락 시 예상 못 한 `OptimisticLockException` 누수가 `@Version` 도입의 진짜 회귀 위험). 기존 succeed-vs-succeed 동시성 테스트는 order 비관 락 직렬화로 `@Version` 충돌이 안 나 통과 유지된다.
+- transition/useCase 분리로 흡수가 트랜잭션 밖에서 안전하게 일어난다. 낙관 락 충돌 처리가 코드베이스 정책과 일관된다. 루트 `docs/exception-strategy.md`에 "낙관 락 충돌 처리" 섹션으로 정본화 예정(별도 작업). CANCEL 전용 동시 충돌 재현 테스트는 CANCEL 대사 미구현이라 Epic #208로 위임(메커니즘 검증은 APPROVE 경로 결정적 충돌 테스트가 담당).
 
 ---
 
