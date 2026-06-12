@@ -4,7 +4,6 @@ import java.time.LocalDateTime;
 import java.util.List;
 
 import org.springframework.data.domain.PageRequest;
-import org.springframework.orm.ObjectOptimisticLockingFailureException;
 import org.springframework.stereotype.Service;
 
 import com.commerce.order.domain.Order;
@@ -108,22 +107,36 @@ public class PaymentReconciliationService {
 
 		log.info("escalation 처리 시작 candidates={} escalationCutoff={}", candidates.size(), escalationCutoff);
 
+		// useCase(트랜잭션 없음): escalate transition은 별도 빈(public @Transactional)이라 충돌 시 그 트랜잭션만 rollback된다 (ADR-L2/L3).
 		for (Payment payment : candidates) {
 			try {
-				boolean escalated = payment.escalate(now);
-				if (!escalated) {
-					continue;
+				if (escalateSkippable(payment, now)) {
+					// transition 성공 = 이 건이 통지 주체 → 커밋 이후 통지 (best-effort)
+					notifyEscalation(payment);
 				}
-				paymentRepository.save(payment);
-				notifyEscalation(payment);
-			} catch (ObjectOptimisticLockingFailureException ex) {
-				// 이미 다른 주체가 escalation 처리 — 정상 skip (ADR-L3)
-				log.info("escalation skip - 낙관적 락 충돌, 이미 다른 주체가 처리 paymentId={} orderId={}",
-					payment.getId(), payment.getOrderId());
 			} catch (Exception ex) {
 				log.error("escalation 처리 실패 paymentId={} orderId={} merchantPayKey={}",
 					payment.getId(), payment.getOrderId(), payment.getMerchantPayKey(), ex);
 			}
+		}
+	}
+
+	/**
+	 * escalate transition을 호출하되 PAYMENT_CONCURRENTLY_MODIFIED(다른 주체가 먼저 escalation)는 흡수해 통지 주체에서 빠진다(skip).
+	 * 충돌은 처리 실패가 아니라 정상 skip이므로 log.info로 남기고, 그 외 도메인 예외는 rethrow해 호출부의 건별 catch(log.error)가 받게 한다.
+	 * @return 이 건이 통지 주체이면 true, escalation 대상 아님(no-op)/충돌 skip이면 false.
+	 */
+	private boolean escalateSkippable(Payment payment, LocalDateTime now) {
+		try {
+			return paymentApprovalRecordService.escalate(
+				payment.getMerchantPayKey(), payment.getProvider(), payment.getPgPaymentId(), now);
+		} catch (PaymentException ex) {
+			if (ex.getErrorCode() == PaymentErrorCode.PAYMENT_CONCURRENTLY_MODIFIED) {
+				log.info("escalation skip - 낙관적 락 충돌, 이미 다른 주체가 처리 paymentId={} orderId={}",
+					payment.getId(), payment.getOrderId());
+				return false;
+			}
+			throw ex;
 		}
 	}
 

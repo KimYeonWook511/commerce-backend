@@ -17,16 +17,17 @@ import org.junit.jupiter.api.Test;
 import org.springframework.beans.factory.annotation.Autowired;
 import org.springframework.boot.test.context.SpringBootTest;
 import org.springframework.context.annotation.Import;
-import org.springframework.orm.ObjectOptimisticLockingFailureException;
 import org.springframework.test.context.ActiveProfiles;
 import org.springframework.test.context.DynamicPropertyRegistry;
 import org.springframework.test.context.DynamicPropertySource;
 
+import com.commerce.payment.application.PaymentApprovalRecordService;
 import com.commerce.payment.domain.Payment;
 import com.commerce.payment.domain.PaymentProvider;
 import com.commerce.payment.domain.PaymentReservation;
 import com.commerce.payment.domain.PaymentType;
-import com.commerce.payment.domain.repository.PaymentRepository;
+import com.commerce.payment.exception.PaymentErrorCode;
+import com.commerce.payment.exception.PaymentException;
 import com.commerce.payment.infrastructure.persistence.support.PaymentPersistenceTestSupport;
 import com.commerce.payment.infrastructure.persistence.support.PaymentReservationPersistenceTestSupport;
 import com.commerce.member.infrastructure.persistence.support.MemberPersistenceTestSupport;
@@ -55,7 +56,7 @@ class PaymentEscalationConcurrencyTest {
 	}
 
 	@Autowired
-	private PaymentRepository paymentRepository;
+	private PaymentApprovalRecordService paymentApprovalRecordService;
 
 	@Autowired
 	private PaymentPersistenceTestSupport paymentPersistence;
@@ -82,9 +83,9 @@ class PaymentEscalationConcurrencyTest {
 		);
 	}
 
-	@DisplayName("같은 escalation 건에 N개 스레드가 동시에 find→escalate()→save를 시도하면 정확히 1개 스레드만 save에 성공하고 나머지는 낙관적 락 충돌로 skip된다")
+	@DisplayName("같은 escalation 건에 N개 스레드가 동시에 escalate transition을 호출하면 정확히 1개 스레드만 통지 주체(true)가 되고 나머지는 PAYMENT_CONCURRENTLY_MODIFIED로 skip된다")
 	@Test
-	void escalate_concurrent_exactlyOneThreadSucceeds() throws Exception {
+	void escalate_concurrent_exactlyOneThreadBecomesNotificationSubject() throws Exception {
 		// given: 6시간 초과 UNKNOWN APPROVE 결제 1건 준비
 		PaymentReservation reservation = reservationPersistence.save(
 			PaymentReservation.createReserved(
@@ -100,7 +101,7 @@ class PaymentEscalationConcurrencyTest {
 		ConcurrentLinkedQueue<Throwable> unexpectedErrors = new ConcurrentLinkedQueue<>();
 		LocalDateTime escalationTime = LocalDateTime.now();
 
-		// when: N개 스레드가 동시에 find → escalate() → save 시도
+		// when: N개 스레드가 동시에 escalate transition(find → escalate() → saveChecked) 호출
 		CountDownLatch startLatch = new CountDownLatch(1);
 		CountDownLatch doneLatch = new CountDownLatch(threadCount);
 		ExecutorService executor = Executors.newFixedThreadPool(threadCount);
@@ -109,15 +110,16 @@ class PaymentEscalationConcurrencyTest {
 				executor.submit(() -> {
 					try {
 						startLatch.await();
-						Payment candidate = paymentPersistence.getPayment(
-							"ESC-CON-1", PaymentProvider.NAVERPAY, "pg-esc-con-1", PaymentType.APPROVE);
-						boolean escalated = candidate.escalate(escalationTime);
-						if (escalated) {
-							paymentRepository.save(candidate);
+						boolean notificationSubject = paymentApprovalRecordService.escalate(
+							"ESC-CON-1", PaymentProvider.NAVERPAY, "pg-esc-con-1", escalationTime);
+						if (notificationSubject) {
 							successCount.incrementAndGet();
 						}
-					} catch (ObjectOptimisticLockingFailureException ex) {
-						// 정상 skip — 다른 스레드가 먼저 save 성공
+					} catch (PaymentException ex) {
+						// 정상 skip — 다른 스레드가 먼저 escalation 성공 (transition이 PAYMENT_CONCURRENTLY_MODIFIED로 변환)
+						if (ex.getErrorCode() != PaymentErrorCode.PAYMENT_CONCURRENTLY_MODIFIED) {
+							unexpectedErrors.add(ex);
+						}
 					} catch (Throwable ex) {
 						unexpectedErrors.add(ex);
 					} finally {
@@ -131,10 +133,10 @@ class PaymentEscalationConcurrencyTest {
 			executor.shutdownNow();
 		}
 
-		// then: 예상치 못한 예외 없음
+		// then: 예상치 못한 예외 없음 (충돌 외 다른 예외 없음)
 		assertThat(unexpectedErrors).isEmpty();
 
-		// then: 정확히 1개 스레드만 escalation 주체 (통지 1회 보장)
+		// then: 정확히 1개 스레드만 escalation 통지 주체 (통지 1회 보장)
 		assertThat(successCount.get()).isEqualTo(1);
 
 		// then: DB에 escalatedAt이 기록됨
