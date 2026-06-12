@@ -60,7 +60,7 @@ support/   또는 common/
 
 근거:
 - **tx 경계가 패키지로 보인다.** "`@Transactional`은 `service/`에만" 을 컨벤션·ArchUnit으로 강제 가능.
-- **self-invocation 함정 소멸.** `usecase → transaction`은 항상 패키지를 넘는 호출 → 프록시 적용 보장. (skip private 메서드가 호출하는 `transaction` Service도 별도 빈이라 프록시를 탄다.)
+- **self-invocation 함정 소멸.** `usecase → service`는 항상 패키지를 넘는 호출 → 프록시 적용 보장. (skip private 메서드가 호출하는 `service` Service도 별도 빈이라 프록시를 탄다.)
 - **충돌 반응이 흐름 옆에 명시된다.** skip이 private이라 그 흐름을 읽으면 "충돌을 어떻게 다루는지"가 바로 보인다.
 
 네이밍 주의:
@@ -269,7 +269,7 @@ Redis 타임아웃이 raw로 application까지 새면 안 되고, 구현체가 �
 
 패키지 분리의 진짜 값어치는 "걸 수 있는 경계가 생긴다"는 것. 권장 규칙 예:
 
-- `usecase` 패키지의 클래스에는 `@Transactional` 금지 (tx는 `transaction`만). skip은 usecase의 private 메서드라 이 규칙에 자연히 포함된다.
+- `usecase` 패키지의 클래스에는 `@Transactional` 금지 (tx는 `service`만). skip은 usecase의 private 메서드라 이 규칙에 자연히 포함된다.
 - `persistence` 밖에서는 JPA/DAO 예외 타입(`ObjectOptimisticLockingFailureException` 등) 참조 금지.
 - `saveAndFlush` 호출은 `persistence`에서만.
 - Controller(presentation)는 충돌 예외를 catch하지 않는다.
