@@ -16,7 +16,7 @@ import org.springframework.orm.ObjectOptimisticLockingFailureException;
 import org.springframework.test.util.ReflectionTestUtils;
 
 import com.commerce.cart.application.result.CartItemSummaryResult;
-import com.commerce.cart.presentation.request.CartItemAddRequest;
+import com.commerce.cart.presentation.http.request.CartItemAddRequest;
 
 /**
  * cart phase ADR 결정 8의 retry 정책에 대한 단위 테스트.

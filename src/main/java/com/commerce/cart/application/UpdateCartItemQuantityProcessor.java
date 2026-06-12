@@ -8,7 +8,7 @@ import com.commerce.cart.domain.CartItem;
 import com.commerce.cart.domain.repository.CartItemRepository;
 import com.commerce.cart.exception.CartErrorCode;
 import com.commerce.cart.exception.CartException;
-import com.commerce.cart.presentation.request.CartItemUpdateRequest;
+import com.commerce.cart.presentation.http.request.CartItemUpdateRequest;
 
 import lombok.RequiredArgsConstructor;
 import lombok.extern.slf4j.Slf4j;

@@ -8,7 +8,7 @@ import com.commerce.cart.domain.CartItem;
 import com.commerce.cart.domain.repository.CartItemRepository;
 import com.commerce.cart.exception.CartErrorCode;
 import com.commerce.cart.exception.CartException;
-import com.commerce.cart.presentation.request.CartItemAddRequest;
+import com.commerce.cart.presentation.http.request.CartItemAddRequest;
 import com.commerce.product.domain.Product;
 import com.commerce.product.domain.ProductStatus;
 import com.commerce.product.domain.repository.ProductRepository;

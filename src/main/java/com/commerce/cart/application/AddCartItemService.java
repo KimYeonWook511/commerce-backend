@@ -4,7 +4,7 @@ import org.springframework.orm.ObjectOptimisticLockingFailureException;
 import org.springframework.stereotype.Service;
 
 import com.commerce.cart.application.result.CartItemSummaryResult;
-import com.commerce.cart.presentation.request.CartItemAddRequest;
+import com.commerce.cart.presentation.http.request.CartItemAddRequest;
 
 import lombok.RequiredArgsConstructor;
 
