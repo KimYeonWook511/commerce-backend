@@ -127,8 +127,12 @@ class ArchitectureRulesTest {
     @Test
     @DisplayName("JPA/DAO 예외 타입은 infrastructure.persistence 밖에서 참조하지 않는다")
     void daoExceptionsConfinedToPersistence() {
+        // common 의 GlobalExceptionHandler 는 HTTP 매핑을 위해 Spring DAO 예외를 직접 다뤄야 하는
+        // 영구적 예외처다(마이그레이션으로 사라질 임시 위반이 아님). freeze 스냅샷에 의존하지 않고
+        // 규칙에서 명시적으로 제외해, 재배치 완료 후 freeze 를 완전히 제거할 수 있게 한다.
         ArchRule rule = noClasses()
                 .that().resideOutsideOfPackage("..infrastructure.persistence..")
+                .and().areNotAssignableTo("com.commerce.common.exception.GlobalExceptionHandler")
                 .should().dependOnClassesThat()
                 .haveFullyQualifiedName("org.springframework.orm.ObjectOptimisticLockingFailureException")
                 .orShould().dependOnClassesThat()
@@ -137,10 +141,6 @@ class ArchitectureRulesTest {
                 .haveFullyQualifiedName("org.springframework.dao.DataIntegrityViolationException")
                 .orShould().dependOnClassesThat()
                 .haveFullyQualifiedName("jakarta.persistence.OptimisticLockException");
-        // 예외: common 의 GlobalExceptionHandler 는 HTTP 매핑을 위해 Spring DAO 예외를 알 수 있다.
-        //       해당 클래스가 잡히면 아래처럼 제외한다.
-        //   .that().resideOutsideOfPackage("..infrastructure.persistence..")
-        //   .and().areNotAssignableTo("com.commerce.common.exception.GlobalExceptionHandler")
         check(rule);
     }
 
