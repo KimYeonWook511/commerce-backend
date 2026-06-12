@@ -11,7 +11,7 @@
 - **네이밍**: 영어 메서드명 `행위_조건_결과` + 한국어 `@DisplayName`. Infra 테스트 클래스명은 구현체(Adapter)명 따름.
 - **구조**: 모든 테스트 Given-When-Then. 한 테스트 한 행위. AssertJ `assertThat` 체이닝, 예외는 `assertThatThrownBy`.
 - **격리**: 테스트 간 영향 없게. 통합은 `@Transactional` 금지 + `tearDown` 삭제. 슬라이스는 `@Transactional` 롤백. 비동기 검증은 Awaitility.
-- **동시성**: 타이밍을 운/`Thread.sleep`/latch속도맞추기에 의존 금지. 불변식 단언 또는 결정론적 통제만. race 무대 컴포넌트는 진짜를 쓰고 결과를 stub으로 강제하지 않는다.
+- **동시성**: 타이밍을 운/`Thread.sleep`/latch속도맞추기에 의존 금지. 불변식 단언 또는 결정론적 통제만. race 무대 컴포넌트는 진짜를 쓰고 결과를 stub으로 강제하지 않는다. 낙관 락 충돌은 winner를 단언하지 말고 불변식("성공 전이 정확히 1건" 등)으로 검증 — 충돌 정책 의미는 `docs/optimistic-lock-design.md`.
 
 ---
 
@@ -26,6 +26,8 @@
 
 ## 테스트 패키지 구조
 
+테스트 패키지는 **프로덕션 패키지 구조를 미러링**한다(`application/{usecase,service}`, `infrastructure/{persistence,cache,...}` 등). 아래는 구조 예시이며, 실제 클래스 목록은 코드가 단일 출처다.
+
 ```
 src/test/java/
 └── com/commerce/
@@ -35,22 +37,30 @@ src/test/java/
     │   ├── PersistenceCleanupTestSupport.java            ← FK 순서대로 정렬 후 일괄 삭제
     │   └── CleanupOrder.java                             ← FK 안전 삭제 순서 (enum)
     │
+    ├── architecture/                                     ← 구조 규칙 검증 (도메인 무관, 전체 검사)
+    │   └── ArchitectureRulesTest.java                    ← ArchUnit (규칙 상세는 architecture.md)
+    │
     └── order/
         ├── domain/
         │   └── OrderTest.java                            ← 단위 테스트
         ├── application/
-        │   ├── CreateOrderServiceTest.java               ← 단위 테스트
-        │   └── CreateOrderServiceIntegrationTest.java    ← 통합 테스트
+        │   ├── usecase/                                  ← orchestrator(흐름/정책) 테스트
+        │   │   ├── CreateOrderServiceTest.java           ← 단위 (흐름·정책)
+        │   │   └── CreateOrderServiceIntegrationTest.java ← 통합
+        │   └── service/                                  ← tx 단위작업 테스트
+        │       └── PaymentTransitionServiceTest.java     ← 단위
         ├── presentation/
         │   └── OrderControllerTest.java                  ← 슬라이스 테스트
         └── infrastructure/
             ├── persistence/
             │   ├── support/
             │   │   └── OrderPersistenceTestSupport.java  ← 도메인별 삭제 + 테스트 데이터 헬퍼
-            │   └── OrderRepositoryJpaAdapterTest.java    ← 슬라이스 테스트 or 통합 테스트
+            │   └── OrderRepositoryJpaAdapterTest.java    ← 슬라이스 or 통합 테스트
             └── cache/
                 └── RedisOrderIdempotencyStoreTest.java   ← 통합 테스트
 ```
+
+> 범용 helper(예: `support/`의 `OptimisticRetry`)의 테스트는 프로덕션 위치를 따라 `support/` 아래 둔다.
 
 ---
 
@@ -139,12 +149,15 @@ then(pgCanceller).should(never()).cancel(any(), any());
 ```
 검증 대상
 ├── 인덱스, 실행 계획
-├── 동시성 (Optimistic/Pessimistic Lock)
-├── 트랜잭션 격리 수준
+├── 동시성 — 비관 락(FOR UPDATE), 격리 수준, 데드락 (실제 DB 필요)
 ├── DB 전용 문법/타입 (JSON 컬럼, 전용 함수 등)
 ├── Flyway/Liquibase 마이그레이션
 └── Redis TTL, 직렬화/역직렬화
 ```
+
+> 낙관 락(`@Version`)은 JPA 레벨 동작이라 슬라이스(H2)에서도 충돌 발생/버전 증가를 검증할 수 있다.
+> 비관 락(`FOR UPDATE`)·격리 수준·데드락은 실제 DB 스케줄러에 의존하므로 통합(Testcontainers)으로 검증한다.
+> 단, 충돌 정책(skip/retry/전파)이 application 흐름에서 의도대로 갈리는지는 application 동시성 테스트가 본다(아래 동시성 규칙·`docs/optimistic-lock-design.md`).
 
 ---
 
@@ -296,7 +309,7 @@ CI 는 다음 두 잡을 병렬로 실행한다.
 - 도커가 필요한 학습용 테스트는 `docker` tag 도 함께 부여한다 (다른 docker 사용 클래스와의 일관성)
 - 모든 Test task 의 `excludeTags` 에 `learning` 이 포함되어 있어 `@Disabled` 와 이중 안전망이 된다
 
-학습용 도메인 (`AsyncTestEntity`, `LockMember` 등) 은 별도 모듈로 분리하지 않고 `src/test` 위치를 유지한다. 운영 코드 리팩토링 시 IDE 가 컴파일 깨짐을 알려주는 안전망 역할을 한다.
+학습용 도메인(예: 비동기/락 학습용 엔티티 등, 실제 목록은 코드가 출처)은 별도 모듈로 분리하지 않고 `src/test` 위치를 유지한다. 운영 코드 리팩토링 시 IDE 가 컴파일 깨짐을 알려주는 안전망 역할을 한다.
 
 ---
 
@@ -307,7 +320,7 @@ CI 는 다음 두 잡을 병렬로 실행한다.
 - **효과**: `ddl-auto`의 schema 생성/alter 실패가 silent로 넘어가지 않고 부팅 단계에서 즉시 실패하여 회귀를 노출한다.
 - **적용 환경**: `local`
 - **적용 제외 환경**:
-  - `test` — Testcontainer fresh MySQL 부팅 시 `ALTER TABLE ... DROP FOREIGN KEY ...`가 `IF EXISTS` 없이 실행되어 무해 실패가 발생하고 `halt_on_error`와 충돌하므로 제외. test 환경의 schema 회귀 감지는 `NaverPayServiceConcurrencyTest`의 `countPayments == 1` 데이터 invariant로 대체한다.
+  - `test` — Testcontainer fresh MySQL 부팅 시 `ALTER TABLE ... DROP FOREIGN KEY ...`가 `IF EXISTS` 없이 실행되어 무해 실패가 발생하고 `halt_on_error`와 충돌하므로 제외. test 환경의 schema 회귀 감지는 결제 동시성 통합 테스트의 데이터 invariant(예: 동시 승인 후 `성공한 결제 = 정확히 1건`)로 대체한다(해당 테스트 위치는 코드가 단일 출처).
   - `prod` — 운영 미가동 + 추후 Flyway 도입과 함께 `ddl-auto: validate`로 전환되면 의미가 사라진다.
 - **Fragility**: local의 `halt_on_error` 적용은 `ddl-auto: update` 전제에 의존한다. local ddl-auto가 `create-drop`/`create`로 변경되면 같은 ALTER FK DROP 충돌이 재발하므로 `halt_on_error` 적용 여부를 함께 재검토해야 한다.
 
@@ -415,6 +428,7 @@ Spring Boot 3.4 부터 `@MockBean` / `@SpyBean` 이 deprecated 되었고 `@Mocki
 - **mock 응답은 thread-safe하게 작성한다.** 외부 상태(`AtomicInteger` 등)를 참조하면 동시 호출 안전성을 직접 챙긴다.
 - N thread 동시 진입, 모든 종료 후 **인터리빙 무관 불변식**만 단언한다.
 - 예: "재고는 음수 안 됨", "성공은 정확히 1건", "결제 완료 시 PG cancel 0회".
+- 낙관 락(`@Version`) 충돌도 같은 패턴으로 검증한다 — 같은 행을 동시 전이할 때 누가 이기는지는 비결정론적이므로 winner를 단언하지 말고, "성공 전이는 정확히 1건", "충돌 시 보상의 마킹은 skip되되 PG 환불은 계속(끊기지 않음)" 같은 **불변식**을 단언한다. 충돌 정책(skip/retry/전파)의 의미는 `docs/optimistic-lock-design.md`가 단일 출처.
 - `CountDownLatch`는 "타이밍 맞추기" 가 아니라 "모든 thread 동시 시작 / 종료 대기" 동기화 장치로만 쓴다.
 
 **2. 결정론적 제어 패턴 (예외적)** — 특정 race 시나리오를 회귀로 박제
@@ -425,7 +439,7 @@ Spring Boot 3.4 부터 `@MockBean` / `@SpyBean` 이 deprecated 되었고 `@Mocki
   - `@MockitoSpyBean` + `willAnswer`에서 `callRealMethod()`를 호출하면서 latch로 timing만 통제
   - 트랜잭션 수동 begin/commit으로 commit 순서 확정
 - **결과 단언의 한계**: 데드락 / 락 타임아웃처럼 DB 스케줄러에 결과가 달린 경우, 어느 thread가 winner가 될지 결정론적으로 단언할 수 없다. 이때는 **window 자체는 결정론적으로 강제**하되 **결과는 invariant로 단언**한다. "양쪽 다 성공할 수는 없다", "재고 총합은 보존된다" 같은 식. `assertThatThrownBy`로 특정 예외를 결정론적으로 단언하면 flaky가 된다.
-- 좋은 예: `OrderConcurrencyServiceDeadlockTest.createOrderWithPessimisticLock_whenOppositeOrder_mayFailWithLockTimeout` (DisplayName: "반대 순서로 락을 잡는 동시 요청에서 양쪽 다 성공하지 못하고 적어도 한 주문은 실패한다") — latch로 "양쪽 thread가 각자 첫 락을 잡을 때까지 대기"라는 window를 결정론적으로 강제하고, 결과는 `errors.isNotEmpty()` / `orderCount < 2L` 같은 invariant로 단언한다.
+- 패턴 형태: latch로 "양쪽 thread가 각자 첫 락을 잡을 때까지 대기"라는 window만 결정론적으로 강제하고, 결과는 `errors.isNotEmpty()` / `orderCount < 2` 같은 invariant로 단언한다(어느 쪽이 이기는지는 단언하지 않는다).
 
 ### 금지
 
@@ -436,7 +450,7 @@ Spring Boot 3.4 부터 `@MockBean` / `@SpyBean` 이 deprecated 되었고 `@Mocki
 
 ### 테스트로 해결할 일이 아닌 경우
 
-타이밍에 따라 결과가 달라진다는 건 그 로직이 race에 노출돼 있다는 신호다. 답은 "모든 타이밍을 테스트하자" 가 아니라 **"타이밍과 무관하게 만들자"** 다. 락 / 유니크 제약 / 원자적 UPDATE(`SET qty = qty - 1 WHERE qty >= 1`) / 트랜잭션 경계 재설계로 위험한 인터리빙을 **불가능하게 설계**한다. 테스트는 그 설계가 작동하는지 불변식으로 확인하는 역할이다.
+타이밍에 따라 결과가 달라진다는 건 그 로직이 race에 노출돼 있다는 신호다. 답은 "모든 타이밍을 테스트하자" 가 아니라 **"타이밍과 무관하게 만들자"** 다. 낙관 락(`@Version`) / 비관 락(`FOR UPDATE`) / 유니크 제약 / 원자적·조건부 UPDATE(`SET qty = qty - 1 WHERE qty >= 1`, `SET status='X' WHERE status='Y'`) / 트랜잭션 경계 재설계로 위험한 인터리빙을 **불가능하게 설계**한다(이 선택 기준은 `docs/optimistic-lock-design.md`). 테스트는 그 설계가 작동하는지 불변식으로 확인하는 역할이다.
 
 ### stress / soak 테스트
 
