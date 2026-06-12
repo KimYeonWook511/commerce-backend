@@ -3,13 +3,53 @@
   "phase": "0-main",
   "harness_version": "v2",
   "steps": [
-    { "step": 1, "name": "move-persistence-adapters", "status": "pending" },
-    { "step": 2, "name": "move-cache-messaging-notification", "status": "pending" },
-    { "step": 3, "name": "relocate-inbound-adapters", "status": "pending" },
-    { "step": 4, "name": "move-controllers-to-http", "status": "pending" },
-    { "step": 5, "name": "relocate-exceptions", "status": "pending" },
-    { "step": 6, "name": "move-naverpay-pg", "status": "pending" },
-    { "step": 7, "name": "split-application-usecase-service", "status": "pending" },
-    { "step": 8, "name": "finalize-archunit-strict", "status": "pending" }
-  ]
+    {
+      "step": 1,
+      "name": "move-persistence-adapters",
+      "status": "completed",
+      "started_at": "2026-06-12T15:22:46+0900",
+      "summary": "전 도메인(cart/member/order/outbox/payment/product/stock)의 JPA adapter·Jpa repository 23개 파일을 infrastructure/ 루트에서 infrastructure/persistence/로 git mv로 이동하고, package 선언 및 main·test 양쪽 import를 모두 갱신한다. ./gradlew test, integrationTest batchTest 모두 통과."
+    },
+    {
+      "step": 2,
+      "name": "move-cache-messaging-notification",
+      "status": "pending"
+    },
+    {
+      "step": 3,
+      "name": "relocate-inbound-adapters",
+      "status": "pending"
+    },
+    {
+      "step": 4,
+      "name": "move-controllers-to-http",
+      "status": "pending"
+    },
+    {
+      "step": 5,
+      "name": "relocate-exceptions",
+      "status": "pending"
+    },
+    {
+      "step": 6,
+      "name": "move-naverpay-pg",
+      "status": "pending"
+    },
+    {
+      "step": 7,
+      "name": "split-application-usecase-service",
+      "status": "pending"
+    },
+    {
+      "step": 8,
+      "name": "finalize-archunit-strict",
+      "status": "pending"
+    }
+  ],
+  "created_at": "2026-06-12T15:22:45+0900",
+  "execution": {
+    "developer_model": "sonnet",
+    "reviewer_model": "opus",
+    "commit_model": "haiku"
+  }
 }
