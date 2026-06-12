@@ -1,4 +1,4 @@
-package com.commerce.outbox.infrastructure;
+package com.commerce.outbox.infrastructure.persistence;
 
 import org.springframework.data.jpa.repository.JpaRepository;
 

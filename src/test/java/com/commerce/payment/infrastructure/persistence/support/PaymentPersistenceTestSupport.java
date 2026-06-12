@@ -8,7 +8,7 @@ import com.commerce.payment.domain.Payment;
 import com.commerce.payment.domain.PaymentProvider;
 import com.commerce.payment.domain.PaymentStatus;
 import com.commerce.payment.domain.PaymentType;
-import com.commerce.payment.infrastructure.JpaPaymentRepository;
+import com.commerce.payment.infrastructure.persistence.JpaPaymentRepository;
 
 import lombok.RequiredArgsConstructor;
 import com.commerce.support.CleanupOrder;

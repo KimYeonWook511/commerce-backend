@@ -1,4 +1,4 @@
-package com.commerce.payment.infrastructure;
+package com.commerce.payment.infrastructure.persistence;
 
 import java.time.LocalDateTime;
 import java.util.List;

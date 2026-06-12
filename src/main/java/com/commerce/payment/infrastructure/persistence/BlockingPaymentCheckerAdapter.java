@@ -1,4 +1,4 @@
-package com.commerce.payment.infrastructure;
+package com.commerce.payment.infrastructure.persistence;
 
 import java.util.Collection;
 import java.util.HashSet;

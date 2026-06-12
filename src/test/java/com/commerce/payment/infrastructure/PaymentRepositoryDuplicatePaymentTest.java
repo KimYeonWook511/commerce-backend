@@ -26,6 +26,8 @@ import com.commerce.payment.exception.PaymentErrorCode;
 import com.commerce.payment.exception.PaymentException;
 import com.commerce.payment.infrastructure.persistence.support.PaymentPersistenceTestSupport;
 import com.commerce.payment.infrastructure.persistence.support.PaymentReservationPersistenceTestSupport;
+import com.commerce.payment.infrastructure.persistence.PaymentRepositoryAdapter;
+import com.commerce.payment.infrastructure.persistence.PaymentReservationRepositoryAdapter;
 import com.commerce.support.PersistenceCleanupTestSupport;
 import com.commerce.support.TestcontainersSupport;
 

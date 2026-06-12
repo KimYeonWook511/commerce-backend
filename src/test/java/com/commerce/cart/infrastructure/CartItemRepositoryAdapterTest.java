@@ -21,6 +21,7 @@ import com.commerce.cart.domain.repository.CartItemRepository;
 import com.commerce.common.jpa.JpaConfig;
 
 import jakarta.persistence.EntityManager;
+import com.commerce.cart.infrastructure.persistence.CartItemRepositoryAdapter;
 
 @DataJpaTest
 @Import({JpaConfig.class, CartItemRepositoryAdapter.class})

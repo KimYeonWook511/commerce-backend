@@ -1,4 +1,4 @@
-package com.commerce.outbox.infrastructure;
+package com.commerce.outbox.infrastructure.persistence;
 
 import java.time.LocalDateTime;
 import java.util.List;

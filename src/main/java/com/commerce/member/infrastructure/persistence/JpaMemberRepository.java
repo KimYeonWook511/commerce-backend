@@ -1,4 +1,4 @@
-package com.commerce.member.infrastructure;
+package com.commerce.member.infrastructure.persistence;
 
 import java.util.Optional;
 

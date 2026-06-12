@@ -19,6 +19,7 @@ import com.commerce.payment.domain.PaymentReservationStatus;
 import com.commerce.payment.domain.repository.PaymentReservationRepository;
 import com.commerce.payment.infrastructure.persistence.support.PaymentReservationPersistenceTestSupport;
 
+import com.commerce.payment.infrastructure.persistence.PaymentReservationRepositoryAdapter;
 import jakarta.persistence.EntityManager;
 
 @DataJpaTest

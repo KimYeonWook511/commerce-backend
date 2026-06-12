@@ -7,8 +7,8 @@ import org.springframework.boot.test.context.TestComponent;
 
 import com.commerce.order.domain.Order;
 import com.commerce.order.domain.OrderStatus;
-import com.commerce.order.infrastructure.JpaOrderItemRepository;
-import com.commerce.order.infrastructure.JpaOrderRepository;
+import com.commerce.order.infrastructure.persistence.JpaOrderItemRepository;
+import com.commerce.order.infrastructure.persistence.JpaOrderRepository;
 
 import lombok.RequiredArgsConstructor;
 import com.commerce.support.CleanupOrder;

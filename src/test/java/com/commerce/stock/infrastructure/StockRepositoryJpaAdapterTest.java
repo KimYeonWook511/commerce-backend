@@ -14,10 +14,11 @@ import org.springframework.test.context.ActiveProfiles;
 import com.commerce.common.jpa.JpaConfig;
 import com.commerce.product.domain.Product;
 import com.commerce.product.domain.ProductStatus;
-import com.commerce.product.infrastructure.JpaProductRepository;
+import com.commerce.product.infrastructure.persistence.JpaProductRepository;
 import com.commerce.stock.domain.Stock;
 import com.commerce.stock.domain.repository.StockRepository;
 
+import com.commerce.stock.infrastructure.persistence.StockRepositoryAdapter;
 import jakarta.persistence.EntityManager;
 
 @DataJpaTest

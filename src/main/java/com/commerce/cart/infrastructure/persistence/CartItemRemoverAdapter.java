@@ -1,4 +1,4 @@
-package com.commerce.cart.infrastructure;
+package com.commerce.cart.infrastructure.persistence;
 
 import java.util.List;
 

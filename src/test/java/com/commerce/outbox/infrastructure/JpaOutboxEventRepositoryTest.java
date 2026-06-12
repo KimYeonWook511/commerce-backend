@@ -22,6 +22,7 @@ import com.commerce.outbox.domain.OutboxEventStatus;
 import com.commerce.outbox.domain.OutboxEventType;
 import com.commerce.outbox.domain.OutboxPublishTarget;
 
+import com.commerce.outbox.infrastructure.persistence.JpaOutboxEventRepository;
 import jakarta.persistence.EntityManager;
 
 @DataJpaTest

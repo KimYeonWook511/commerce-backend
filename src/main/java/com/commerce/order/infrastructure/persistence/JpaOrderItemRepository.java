@@ -1,4 +1,4 @@
-package com.commerce.order.infrastructure;
+package com.commerce.order.infrastructure.persistence;
 
 import org.springframework.data.jpa.repository.JpaRepository;
 

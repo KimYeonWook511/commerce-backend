@@ -5,7 +5,7 @@ import java.util.Optional;
 import org.springframework.boot.test.context.TestComponent;
 
 import com.commerce.stock.domain.Stock;
-import com.commerce.stock.infrastructure.JpaStockRepository;
+import com.commerce.stock.infrastructure.persistence.JpaStockRepository;
 
 import lombok.RequiredArgsConstructor;
 import com.commerce.support.CleanupOrder;

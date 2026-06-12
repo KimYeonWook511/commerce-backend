@@ -10,6 +10,7 @@ import org.springframework.context.annotation.Import;
 import org.springframework.dao.DataIntegrityViolationException;
 import org.springframework.test.context.ActiveProfiles;
 
+import com.commerce.outbox.infrastructure.persistence.JpaProcessedEventRepository;
 import com.commerce.common.jpa.JpaConfig;
 import com.commerce.outbox.domain.ProcessedEvent;
 import com.commerce.outbox.domain.ProcessedEventConsumerType;

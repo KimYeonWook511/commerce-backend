@@ -1,4 +1,4 @@
-package com.commerce.order.infrastructure;
+package com.commerce.order.infrastructure.persistence;
 
 import java.time.LocalDateTime;
 import java.util.List;

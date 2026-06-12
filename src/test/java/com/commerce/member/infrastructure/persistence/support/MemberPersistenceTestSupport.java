@@ -3,7 +3,7 @@ package com.commerce.member.infrastructure.persistence.support;
 import org.springframework.boot.test.context.TestComponent;
 
 import com.commerce.member.domain.Member;
-import com.commerce.member.infrastructure.JpaMemberRepository;
+import com.commerce.member.infrastructure.persistence.JpaMemberRepository;
 
 import lombok.RequiredArgsConstructor;
 import com.commerce.support.CleanupOrder;
