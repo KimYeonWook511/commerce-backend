@@ -7,6 +7,7 @@ import java.util.Optional;
 import org.hibernate.exception.ConstraintViolationException;
 import org.springframework.dao.DataIntegrityViolationException;
 import org.springframework.data.domain.Pageable;
+import org.springframework.orm.ObjectOptimisticLockingFailureException;
 import org.springframework.stereotype.Repository;
 
 import com.commerce.payment.domain.Payment;
@@ -45,6 +46,22 @@ public class PaymentRepositoryAdapter implements PaymentRepository {
 				throw new PaymentException(PaymentErrorCode.PAYMENT_DUPLICATE);
 			}
 			throw ex;
+		}
+	}
+
+	/**
+	 * 낙관 락(@Version) 충돌 변환 전용 저장 경로.
+	 * saveAndFlush의 조기 flush가 버전 충돌을 이 메서드 호출 안에서 확정한다(load-bearing).
+	 * 진 쪽의 ObjectOptimisticLockingFailureException을 PaymentException(PAYMENT_CONCURRENTLY_MODIFIED)으로 변환한다.
+	 * catch 블록에서 추가 DB 쓰기를 하지 않는다 — 충돌 후 트랜잭션은 rollback-only 상태다.
+	 * 충돌을 skip할지 전파할지(409)는 이 변환 예외를 받는 useCase(트랜잭션 경계 밖)가 결정한다.
+	 */
+	@Override
+	public Payment saveChecked(Payment payment) {
+		try {
+			return jpaPaymentRepository.saveAndFlush(payment);
+		} catch (ObjectOptimisticLockingFailureException ex) {
+			throw new PaymentException(PaymentErrorCode.PAYMENT_CONCURRENTLY_MODIFIED);
 		}
 	}
 

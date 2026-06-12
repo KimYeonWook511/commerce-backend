@@ -138,9 +138,9 @@ class PaymentCancellationServiceTest {
 		assertThat(payment.getRespondedAt()).isEqualTo(respondedAt);
 	}
 
-	@DisplayName("취소 결과 불명 시 REQUESTED 상태면 취소 이력을 UNKNOWN으로 마킹한다")
+	@DisplayName("markUnknown transition: REQUESTED 상태면 취소 이력을 UNKNOWN으로 마킹한다")
 	@Test
-	void markUnknownIfRequested_whenRequested_marksUnknown() {
+	void markUnknown_whenRequested_marksUnknown() {
 		// given
 		LocalDateTime respondedAt = LocalDateTime.of(2026, 3, 3, 16, 21);
 		Payment payment = Payment.createCancelRequested(1L, "PAY-1", "payment-id-1", 1000,
@@ -150,19 +150,20 @@ class PaymentCancellationServiceTest {
 			.willReturn(Optional.of(payment));
 
 		// when
-		paymentCancellationService.markUnknownIfRequested("PAY-1", PaymentProvider.NAVERPAY, "payment-id-1",
+		paymentCancellationService.markUnknown("PAY-1", PaymentProvider.NAVERPAY, "payment-id-1",
 			"취소 결과 불명", respondedAt);
 
 		// then
 		assertThat(payment.getStatus()).isEqualTo(PaymentStatus.UNKNOWN);
 		assertThat(payment.getFailDetail()).isEqualTo("취소 결과 불명");
 		assertThat(payment.getRespondedAt()).isEqualTo(respondedAt);
+		then(paymentRepository).should().saveChecked(payment);
 	}
 
-	@DisplayName("취소 결과 불명이어도 REQUESTED 상태가 아니면 UNKNOWN 마킹을 건너뛴다")
+	@DisplayName("markUnknown transition: REQUESTED가 아니면 도메인 가드가 PAYMENT_STATUS_TRANSITION_NOT_ALLOWED를 전파한다 (skip은 useCase 책임)")
 	@Test
-	void markUnknownIfRequested_whenNotRequested_skips() {
-		// given: 이미 SUCCEEDED 등으로 확정된 취소 이력은 마킹하지 않는다
+	void markUnknown_whenNotRequested_throwsTransitionNotAllowed() {
+		// given: 이미 SUCCEEDED 등으로 확정된 취소 이력은 종착 전이가 막힌다
 		LocalDateTime respondedAt = LocalDateTime.of(2026, 3, 3, 16, 21);
 		Payment payment = Payment.createCancelRequested(1L, "PAY-1", "payment-id-1", 1000,
 			PaymentProvider.NAVERPAY);
@@ -171,12 +172,13 @@ class PaymentCancellationServiceTest {
 			eq("PAY-1"), eq(PaymentProvider.NAVERPAY), eq("payment-id-1")))
 			.willReturn(Optional.of(payment));
 
-		// when
-		paymentCancellationService.markUnknownIfRequested("PAY-1", PaymentProvider.NAVERPAY, "payment-id-1",
-			"취소 결과 불명", respondedAt);
-
-		// then
+		// when & then
+		assertThatThrownBy(() -> paymentCancellationService.markUnknown("PAY-1", PaymentProvider.NAVERPAY,
+			"payment-id-1", "취소 결과 불명", respondedAt))
+			.isInstanceOf(PaymentException.class)
+			.extracting(e -> ((PaymentException) e).getErrorCode())
+			.isEqualTo(PaymentErrorCode.PAYMENT_STATUS_TRANSITION_NOT_ALLOWED);
 		assertThat(payment.getStatus()).isEqualTo(PaymentStatus.SUCCEEDED);
-		then(paymentRepository).should(never()).save(any(Payment.class));
+		then(paymentRepository).should(never()).saveChecked(any(Payment.class));
 	}
 }

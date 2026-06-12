@@ -16,6 +16,10 @@ public interface PaymentRepository {
 	// APPROVE 승인 완료 전용 저장 경로. uk_payment_approved_order_key 위반 시 PaymentException(PAYMENT_DUPLICATE)로 매핑.
 	Payment saveApproved(Payment payment);
 
+	// 낙관 락(@Version) 충돌을 PaymentException(PAYMENT_CONCURRENTLY_MODIFIED)으로 변환하는 전용 저장 경로.
+	// skip/전파 분기가 필요한 전이(markUnknown/fail 등)에서 사용한다. 정책(skip/전파)은 호출하는 useCase가 결정한다.
+	Payment saveChecked(Payment payment);
+
 	Optional<Payment> findApprovePayment(String merchantPayKey, PaymentProvider provider, String pgPaymentId);
 
 	Optional<Payment> findCancelPayment(String merchantPayKey, PaymentProvider provider, String pgPaymentId);

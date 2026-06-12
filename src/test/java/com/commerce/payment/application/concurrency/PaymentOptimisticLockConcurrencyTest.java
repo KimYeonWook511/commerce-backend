@@ -33,6 +33,8 @@ import com.commerce.payment.domain.PaymentProvider;
 import com.commerce.payment.domain.PaymentReservation;
 import com.commerce.payment.domain.PaymentStatus;
 import com.commerce.payment.domain.PaymentType;
+import com.commerce.payment.exception.PaymentErrorCode;
+import com.commerce.payment.exception.PaymentException;
 import com.commerce.payment.infrastructure.persistence.support.PaymentPersistenceTestSupport;
 import com.commerce.payment.infrastructure.persistence.support.PaymentReservationPersistenceTestSupport;
 import com.commerce.product.domain.Product;
@@ -91,9 +93,9 @@ class PaymentOptimisticLockConcurrencyTest {
 		);
 	}
 
-	@DisplayName("같은 APPROVE Payment에 succeedApproval과 markUnknownIfRequested를 동시에 시도하면 lost update 없이 하나의 상태로 확정된다")
+	@DisplayName("같은 APPROVE Payment에 succeedApproval과 markUnknown transition을 동시에 시도하면 진 쪽 markUnknown이 충돌을 전파하고 lost update 없이 하나의 상태로 확정된다")
 	@Test
-	void succeedApproval_vs_markUnknownIfRequested_whenConcurrent_lostUpdatePrevented() throws Exception {
+	void succeedApproval_vs_markUnknown_whenConcurrent_lostUpdatePrevented() throws Exception {
 		// given
 		String merchantPayKey = "PAY-OPTLOCK-1";
 		String pgPaymentId = "pg-optlock-1";
@@ -113,7 +115,7 @@ class PaymentOptimisticLockConcurrencyTest {
 		ConcurrentLinkedQueue<Throwable> succeedErrors = new ConcurrentLinkedQueue<>();
 		ConcurrentLinkedQueue<Throwable> markUnknownErrors = new ConcurrentLinkedQueue<>();
 
-		// when: succeedApproval(무조건 전이)와 markUnknownIfRequested(조건부 skip) 동시 시도
+		// when: succeedApproval(무조건 전이)와 markUnknown(transition: 충돌/가드 위반 전파) 동시 시도
 		CountDownLatch startLatch = new CountDownLatch(1);
 		CountDownLatch doneLatch = new CountDownLatch(2);
 		ExecutorService executor = Executors.newFixedThreadPool(2);
@@ -131,7 +133,7 @@ class PaymentOptimisticLockConcurrencyTest {
 			executor.submit(() -> {
 				try {
 					startLatch.await();
-					paymentApprovalRecordService.markUnknownIfRequested(
+					paymentApprovalRecordService.markUnknown(
 						merchantPayKey, PaymentProvider.NAVERPAY, pgPaymentId, "concurrent timeout", now
 					);
 				} catch (Throwable ex) {
@@ -146,17 +148,23 @@ class PaymentOptimisticLockConcurrencyTest {
 			executor.shutdownNow();
 		}
 
-		// then: markUnknownIfRequested는 조건부 skip — @Version 충돌 시 흡수, 상태 불일치 시 skip. 예외 없어야 함
-		assertThat(markUnknownErrors).isEmpty();
+		// then: markUnknown transition은 catch하지 않고 전파한다 — 진 쪽은 @Version 충돌(PAYMENT_CONCURRENTLY_MODIFIED) 또는
+		// 가드 위반(상대가 먼저 SUCCEEDED → PAYMENT_STATUS_TRANSITION_NOT_ALLOWED)만 던진다. skip은 useCase 책임이라 여기선 전파가 정상.
+		assertThat(markUnknownErrors).allSatisfy(ex -> {
+			assertThat(ex).isInstanceOf(PaymentException.class);
+			assertThat(((PaymentException) ex).getErrorCode())
+				.isIn(PaymentErrorCode.PAYMENT_CONCURRENTLY_MODIFIED,
+					PaymentErrorCode.PAYMENT_STATUS_TRANSITION_NOT_ALLOWED);
+		});
 
 		// then: 최종 payment 상태는 SUCCEEDED 또는 UNKNOWN 중 하나 (lost update 없음)
 		Payment finalPayment = paymentPersistence.getPayment(merchantPayKey, PaymentProvider.NAVERPAY, pgPaymentId, PaymentType.APPROVE);
 		assertThat(finalPayment.getStatus()).isIn(PaymentStatus.SUCCEEDED, PaymentStatus.UNKNOWN);
 	}
 
-	@DisplayName("같은 APPROVE Payment에 fail과 markUnknownIfRequested를 동시에 시도하면 markUnknownIfRequested는 충돌을 흡수하고 lost update 없이 하나의 상태로 확정된다")
+	@DisplayName("같은 APPROVE Payment에 fail과 markUnknown transition을 동시에 시도하면 진 쪽이 충돌을 전파하고 lost update 없이 하나의 상태로 확정된다")
 	@Test
-	void fail_vs_markUnknownIfRequested_whenConcurrent_markUnknownSilentlyAbsorbed() throws Exception {
+	void fail_vs_markUnknown_whenConcurrent_loserPropagatesConflict() throws Exception {
 		// given
 		String merchantPayKey = "PAY-OPTLOCK-2";
 		String pgPaymentId = "pg-optlock-2";
@@ -171,7 +179,7 @@ class PaymentOptimisticLockConcurrencyTest {
 		ConcurrentLinkedQueue<Throwable> failErrors = new ConcurrentLinkedQueue<>();
 		ConcurrentLinkedQueue<Throwable> markUnknownErrors = new ConcurrentLinkedQueue<>();
 
-		// when: fail(무조건 전이)와 markUnknownIfRequested(조건부 skip) 동시 시도
+		// when: fail(무조건 전이)와 markUnknown(transition) 동시 시도 — 둘 다 saveChecked로 충돌을 PAYMENT_CONCURRENTLY_MODIFIED로 변환
 		CountDownLatch startLatch = new CountDownLatch(1);
 		CountDownLatch doneLatch = new CountDownLatch(2);
 		ExecutorService executor = Executors.newFixedThreadPool(2);
@@ -192,7 +200,7 @@ class PaymentOptimisticLockConcurrencyTest {
 			executor.submit(() -> {
 				try {
 					startLatch.await();
-					paymentApprovalRecordService.markUnknownIfRequested(
+					paymentApprovalRecordService.markUnknown(
 						merchantPayKey, PaymentProvider.NAVERPAY, pgPaymentId, "timeout", now
 					);
 				} catch (Throwable ex) {
@@ -207,8 +215,15 @@ class PaymentOptimisticLockConcurrencyTest {
 			executor.shutdownNow();
 		}
 
-		// then: markUnknownIfRequested는 @Version 충돌 또는 상태 불일치 시 항상 예외 없이 skip
-		assertThat(markUnknownErrors).isEmpty();
+		// then: 진 쪽 transition은 @Version 충돌(PAYMENT_CONCURRENTLY_MODIFIED) 또는 가드 위반(PAYMENT_STATUS_TRANSITION_NOT_ALLOWED)을 전파한다.
+		// 정확히 한 transition만 성공하므로(아래 종착 상태 검증) 두 에러 큐 중 최대 1건만 채워지고, 채워졌다면 위 두 코드 중 하나다.
+		assertThat(failErrors.size() + markUnknownErrors.size()).isLessThanOrEqualTo(1);
+		assertThat(markUnknownErrors).allSatisfy(ex -> assertThat(ex).isInstanceOf(PaymentException.class)
+			.extracting(e -> ((PaymentException) e).getErrorCode())
+			.isIn(PaymentErrorCode.PAYMENT_CONCURRENTLY_MODIFIED, PaymentErrorCode.PAYMENT_STATUS_TRANSITION_NOT_ALLOWED));
+		assertThat(failErrors).allSatisfy(ex -> assertThat(ex).isInstanceOf(PaymentException.class)
+			.extracting(e -> ((PaymentException) e).getErrorCode())
+			.isIn(PaymentErrorCode.PAYMENT_CONCURRENTLY_MODIFIED, PaymentErrorCode.PAYMENT_STATUS_TRANSITION_NOT_ALLOWED));
 
 		// then: 최종 payment 상태는 FAILED 또는 UNKNOWN 중 하나 (lost update 없음 — 두 값 중 하나로 확정)
 		Payment finalPayment = paymentPersistence.getPayment(merchantPayKey, PaymentProvider.NAVERPAY, pgPaymentId, PaymentType.APPROVE);

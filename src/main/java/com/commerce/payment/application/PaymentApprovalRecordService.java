@@ -2,7 +2,6 @@ package com.commerce.payment.application;
 
 import java.time.LocalDateTime;
 
-import org.springframework.orm.ObjectOptimisticLockingFailureException;
 import org.springframework.stereotype.Service;
 import org.springframework.transaction.annotation.Transactional;
 
@@ -10,7 +9,6 @@ import com.commerce.payment.domain.Payment;
 import com.commerce.payment.domain.PaymentFailCode;
 import com.commerce.payment.domain.PaymentProvider;
 import com.commerce.payment.domain.PaymentReservation;
-import com.commerce.payment.domain.PaymentStatus;
 import com.commerce.payment.domain.PaymentType;
 import com.commerce.payment.domain.repository.PaymentRepository;
 import com.commerce.payment.domain.repository.PaymentReservationRepository;
@@ -18,9 +16,7 @@ import com.commerce.payment.exception.PaymentErrorCode;
 import com.commerce.payment.exception.PaymentException;
 
 import lombok.RequiredArgsConstructor;
-import lombok.extern.slf4j.Slf4j;
 
-@Slf4j
 @Service
 @RequiredArgsConstructor
 public class PaymentApprovalRecordService {
@@ -45,6 +41,13 @@ public class PaymentApprovalRecordService {
 			});
 	}
 
+	/**
+	 * APPROVE 결제 이력을 FAILED로 전이하는 transition (별도 빈의 public @Transactional, ADR-L2).
+	 * find → 도메인 전이(fail 가드) → saveChecked. 충돌도 가드 위반도 catch하지 않고 도메인 예외를 전파한다.
+	 * 단조 종착(skip)이 필요한 호출처(보상/실시간)는 useCase의 private skip 래퍼에서 PAYMENT_CONCURRENTLY_MODIFIED·
+	 * PAYMENT_STATUS_TRANSITION_NOT_ALLOWED·PAYMENT_RECORD_NOT_FOUND를 흡수한다(트랜잭션 경계 밖). 무조건 전이(대사)는 그대로 전파한다.
+	 * 보상 대상 approve 는 실시간 경로에서는 REQUESTED, 대사 경로에서는 UNKNOWN 으로 진입하므로 둘 다 FAILED 로 확정한다 (ADR-039).
+	 */
 	@Transactional
 	public void fail(
 		String merchantPayKey,
@@ -57,79 +60,26 @@ public class PaymentApprovalRecordService {
 		Payment payment = paymentRepository.findApprovePayment(merchantPayKey, provider, pgPaymentId)
 			.orElseThrow(() -> new PaymentException(PaymentErrorCode.PAYMENT_RECORD_NOT_FOUND));
 		payment.fail(failCode, failDetail, respondedAt);
-		paymentRepository.save(payment);
+		paymentRepository.saveChecked(payment);
 	}
 
 	/**
-	 * REQUESTED 상태일 때만 UNKNOWN 마킹. 그 외 상태이거나 이력이 없으면 조용히 skip한다.
+	 * APPROVE 결제 이력을 UNKNOWN으로 전이하는 transition (별도 빈의 public @Transactional, ADR-L2).
+	 * find → 도메인 전이(markUnknown 가드: REQUESTED 아니면 PAYMENT_STATUS_TRANSITION_NOT_ALLOWED) → saveChecked.
 	 * PG 호출 timeout / 네트워크 단절 시 결과 불명 흔적을 보존한다 (ADR-6).
-	 * @Transactional을 두지 않아 save()가 독립 트랜잭션으로 실행된다.
-	 * ObjectOptimisticLockingFailureException 흡수가 같은 트랜잭션 안에서 일어나면 EntityManager가 rollback-only로
-	 * 마킹돼 UnexpectedRollbackException이 전파된다. 독립 트랜잭션이면 save 실패가 깨끗하게 롤백되고 예외만 전파된다 (ADR-L2).
+	 * 충돌·가드 위반을 catch하지 않고 전파한다 — skip 판단은 useCase의 private 래퍼(트랜잭션 경계 밖)가 담당한다.
 	 */
-	public void markUnknownIfRequested(
+	@Transactional
+	public void markUnknown(
 		String merchantPayKey,
 		PaymentProvider provider,
 		String pgPaymentId,
-		String failDetail,
-		LocalDateTime respondedAt
-	) {
-		Payment payment = paymentRepository.findApprovePayment(merchantPayKey, provider, pgPaymentId).orElse(null);
-		if (payment == null) {
-			log.warn("Payment not found, skipping unknown mark: merchantPayKey={}, pgPaymentId={}", merchantPayKey,
-				pgPaymentId);
-			return;
-		}
-		if (payment.getStatus() != PaymentStatus.REQUESTED) {
-			log.warn("Payment not in REQUESTED state, skipping unknown mark: merchantPayKey={}, pgPaymentId={}, status={}",
-				merchantPayKey, pgPaymentId, payment.getStatus());
-			return;
-		}
-		payment.markUnknown(failDetail, respondedAt);
-		try {
-			paymentRepository.save(payment);
-		} catch (ObjectOptimisticLockingFailureException ex) {
-			// 이미 다른 주체가 종착 전이를 완료 — 단조 종착이므로 재시도 아닌 skip (ADR-L2)
-			log.warn("낙관적 락 충돌로 UNKNOWN 마킹 skip merchantPayKey={} pgPaymentId={}",
-				merchantPayKey, pgPaymentId);
-		}
-	}
-
-	/**
-	 * 보상 흐름 전용: REQUESTED 또는 UNKNOWN 상태일 때 실패 처리하고, 그 외 상태(SUCCEEDED/FAILED)이거나 이력이 없으면 조용히 skip한다.
-	 * 보상 대상 approve 는 실시간 경로에서는 REQUESTED, 대사 경로에서는 UNKNOWN 으로 진입하므로 둘 다 FAILED 로 확정한다 (ADR-039).
-	 * 호출처(catch 블록)가 상태를 확인하거나 try-catch로 mark 예외를 잡지 않도록 의도를 캡슐화한다.
-	 * @Transactional을 두지 않는 이유는 markUnknownIfRequested와 동일하다 (ADR-L2).
-	 */
-	public void failIfPending(
-		String merchantPayKey,
-		PaymentProvider provider,
-		String pgPaymentId,
-		PaymentFailCode failCode,
 		String failDetail,
 		LocalDateTime respondedAt
 	) {
 		Payment payment = paymentRepository.findApprovePayment(merchantPayKey, provider, pgPaymentId)
-			.orElse(null);
-		if (payment == null) {
-			log.warn(
-				"보상 실패 마킹 skip - 결제 이력 없음 merchantPayKey={} provider={} pgPaymentId={}",
-				merchantPayKey, provider, pgPaymentId);
-			return;
-		}
-		if (payment.getStatus() != PaymentStatus.REQUESTED && payment.getStatus() != PaymentStatus.UNKNOWN) {
-			log.warn(
-				"보상 실패 마킹 skip - REQUESTED/UNKNOWN 아님 merchantPayKey={} pgPaymentId={} status={}",
-				merchantPayKey, pgPaymentId, payment.getStatus());
-			return;
-		}
-		payment.fail(failCode, failDetail, respondedAt);
-		try {
-			paymentRepository.save(payment);
-		} catch (ObjectOptimisticLockingFailureException ex) {
-			// 이미 다른 주체가 종착 전이를 완료 — 보상 best-effort이므로 skip (ADR-L2)
-			log.warn("낙관적 락 충돌로 보상 실패 마킹 skip merchantPayKey={} pgPaymentId={}",
-				merchantPayKey, pgPaymentId);
-		}
+			.orElseThrow(() -> new PaymentException(PaymentErrorCode.PAYMENT_RECORD_NOT_FOUND));
+		payment.markUnknown(failDetail, respondedAt);
+		paymentRepository.saveChecked(payment);
 	}
 }

@@ -32,7 +32,8 @@ public enum PaymentErrorCode implements ErrorCode {
 	PAYMENT_RESERVATION_STATUS_TRANSITION_NOT_ALLOWED(HttpStatus.INTERNAL_SERVER_ERROR, "PAYMENT-500-3",
 		"결제 예약 상태 전이가 허용되지 않습니다"),
 	PAYMENT_RESULT_PENDING(HttpStatus.CONFLICT, "PAYMENT-409-5", "결제 결과 확인 중입니다. 잠시 후 주문 내역에서 확인해 주세요."),
-	PAYMENT_RESERVATION_ALREADY_USED(HttpStatus.CONFLICT, "PAYMENT-409-4", "이미 다른 승인이 예약을 소비했습니다");
+	PAYMENT_RESERVATION_ALREADY_USED(HttpStatus.CONFLICT, "PAYMENT-409-4", "이미 다른 승인이 예약을 소비했습니다"),
+	PAYMENT_CONCURRENTLY_MODIFIED(HttpStatus.CONFLICT, "PAYMENT-409-6", "다른 처리가 먼저 결제 상태를 변경했습니다");
 
 	private final HttpStatus status;
 	private final String code;
