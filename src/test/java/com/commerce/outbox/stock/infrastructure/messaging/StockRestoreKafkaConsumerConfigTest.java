@@ -1,4 +1,4 @@
-package com.commerce.outbox.stock.infrastructure;
+package com.commerce.outbox.stock.infrastructure.messaging;
 
 import static org.assertj.core.api.Assertions.assertThat;
 import static org.mockito.BDDMockito.then;

@@ -1,4 +1,4 @@
-package com.commerce.outbox.stock.infrastructure;
+package com.commerce.outbox.stock.infrastructure.messaging;
 
 import org.apache.kafka.clients.consumer.ConsumerRecord;
 import org.apache.kafka.common.TopicPartition;

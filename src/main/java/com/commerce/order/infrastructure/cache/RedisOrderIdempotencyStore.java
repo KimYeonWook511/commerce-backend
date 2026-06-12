@@ -1,4 +1,4 @@
-package com.commerce.order.infrastructure;
+package com.commerce.order.infrastructure.cache;
 
 import java.time.Duration;
 

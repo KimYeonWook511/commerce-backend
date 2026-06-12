@@ -1,4 +1,4 @@
-package com.commerce.outbox.stock.infrastructure;
+package com.commerce.outbox.stock.infrastructure.messaging;
 
 import java.util.concurrent.TimeUnit;
 
@@ -7,7 +7,7 @@ import org.springframework.kafka.core.KafkaTemplate;
 import org.springframework.stereotype.Component;
 
 import com.commerce.outbox.domain.OutboxPublishTarget;
-import com.commerce.outbox.infrastructure.OutboxRelayMessage;
+import com.commerce.outbox.infrastructure.messaging.OutboxRelayMessage;
 import com.commerce.outbox.stock.application.port.StockRestoreEventPublisher;
 import com.fasterxml.jackson.core.JsonProcessingException;
 import com.fasterxml.jackson.databind.ObjectMapper;

@@ -21,7 +21,7 @@ import org.mockito.junit.jupiter.MockitoExtension;
 import com.commerce.common.kafka.exception.KafkaConsumeNonRetryableException;
 import com.commerce.outbox.domain.OutboxAggregateType;
 import com.commerce.outbox.domain.OutboxEventType;
-import com.commerce.outbox.infrastructure.OutboxRelayMessage;
+import com.commerce.outbox.infrastructure.messaging.OutboxRelayMessage;
 import com.commerce.outbox.stock.application.StockRestoreOutboxConsumeService;
 import com.commerce.outbox.stock.application.command.StockRestoreConsumeCommand;
 import com.commerce.outbox.stock.application.payload.StockRestoreRequestedPayload;

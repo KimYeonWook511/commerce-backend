@@ -1,4 +1,4 @@
-package com.commerce.outbox.stock.infrastructure;
+package com.commerce.outbox.stock.infrastructure.messaging;
 
 import static org.assertj.core.api.Assertions.assertThatThrownBy;
 import static org.mockito.ArgumentMatchers.any;
@@ -26,7 +26,7 @@ import org.springframework.test.util.ReflectionTestUtils;
 import com.commerce.outbox.domain.OutboxAggregateType;
 import com.commerce.outbox.domain.OutboxEventType;
 import com.commerce.outbox.domain.OutboxPublishTarget;
-import com.commerce.outbox.infrastructure.OutboxRelayMessage;
+import com.commerce.outbox.infrastructure.messaging.OutboxRelayMessage;
 import com.fasterxml.jackson.core.JsonProcessingException;
 import com.fasterxml.jackson.databind.ObjectMapper;
 

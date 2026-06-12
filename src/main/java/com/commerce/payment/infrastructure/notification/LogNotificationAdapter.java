@@ -1,4 +1,4 @@
-package com.commerce.payment.infrastructure;
+package com.commerce.payment.infrastructure.notification;
 
 import com.commerce.payment.application.port.NotificationPort;
 import lombok.extern.slf4j.Slf4j;

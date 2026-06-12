@@ -1,4 +1,4 @@
-package com.commerce.auth.infrastructure;
+package com.commerce.auth.infrastructure.cache;
 
 import java.time.Duration;
 import java.util.Optional;

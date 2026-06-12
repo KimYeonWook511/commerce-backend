@@ -1,4 +1,4 @@
-package com.commerce.outbox.infrastructure;
+package com.commerce.outbox.infrastructure.messaging;
 
 import java.time.LocalDateTime;
 
