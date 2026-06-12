@@ -8,22 +8,32 @@
       "name": "move-persistence-adapters",
       "status": "completed",
       "started_at": "2026-06-12T15:22:46+0900",
-      "summary": "전 도메인(cart/member/order/outbox/payment/product/stock)의 JPA adapter·Jpa repository 23개 파일을 infrastructure/ 루트에서 infrastructure/persistence/로 git mv로 이동하고, package 선언 및 main·test 양쪽 import를 모두 갱신한다. ./gradlew test, integrationTest batchTest 모두 통과."
+      "summary": "전 도메인(cart/member/order/outbox/payment/product/stock)의 JPA adapter·Jpa repository 23개 파일을 infrastructure/ 루트에서 infrastructure/persistence/로 git mv로 이동하고, package 선언 및 main·test 양쪽 import를 모두 갱신한다. ./gradlew test, integrationTest batchTest 모두 통과.",
+      "completed_at": "2026-06-12T15:31:22+0900"
     },
     {
       "step": 2,
       "name": "move-cache-messaging-notification",
-      "status": "pending"
+      "status": "completed",
+      "started_at": "2026-06-12T15:33:03+0900",
+      "summary": "Redis 캐시 구현체 2개(auth/order)를 infrastructure/cache/로, Kafka producer·consumer config·relay message 3개(outbox/outbox-stock)를 infrastructure/messaging/으로, NotificationPort 구현체 1개(payment)를 infrastructure/notification/으로 git mv로 이동하고 package 선언·import를 main·test 양쪽에서 모두 갱신한다. OutboxRelayMessage를 참조하는 consumer·통합테스트 import도 함께 갱신하고 ./gradlew test, integrationTest 모두 통과.",
+      "completed_at": "2026-06-12T15:37:54+0900"
     },
     {
       "step": 3,
       "name": "relocate-inbound-adapters",
-      "status": "pending"
+      "status": "completed",
+      "started_at": "2026-06-12T15:39:00+0900",
+      "summary": "scheduler 3개(order/outbox-stock/payment), consumer 1개(outbox-stock), batch config·listener 6개(order)를 presentation/{scheduler,consumer,batch,batch/listener}로 git mv로 이동하고 package 선언·import를 main·test 양쪽에서 갱신한다. archunit_store baseline을 현재 위반 상태(OrderExpirationBatchConfig의 OptimisticLockingFailureException 참조)로 재초기화하여 freeze 통과. ./gradlew test, integrationTest batchTest 모두 통과.",
+      "completed_at": "2026-06-12T15:49:37+0900"
     },
     {
       "step": 4,
       "name": "move-controllers-to-http",
-      "status": "pending"
+      "status": "completed",
+      "started_at": "2026-06-12T15:51:20+0900",
+      "summary": "전 도메인(auth/cart/order/payment/naverpay/product/stock) Controller 8개와 request DTO 14개를 presentation/ 루트에서 presentation/http/와 presentation/http/request/로 git mv로 이동하고, package 선언·import를 main·test 양쪽에서 모두 갱신한다. cart application 계층(4개)과 test(5개)의 request import도 함께 갱신. ./gradlew test, integrationTest 모두 통과.",
+      "completed_at": "2026-06-12T16:10:00+0900"
     },
     {
       "step": 5,

@@ -1,5 +1,10 @@
 {
   "phases": [
-    { "dir": "0-main", "harness_version": "v2", "status": "pending" }
+    {
+      "dir": "0-main",
+      "harness_version": "v2",
+      "status": "in_progress",
+      "started_at": "2026-06-12T15:22:46+0900"
+    }
   ]
 }
