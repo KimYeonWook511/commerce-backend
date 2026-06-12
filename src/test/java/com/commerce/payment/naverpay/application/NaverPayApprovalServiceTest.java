@@ -271,7 +271,7 @@ class NaverPayApprovalServiceTest {
 		then(paymentApprovalService).should().succeedApproval(any(Payment.class), any());
 	}
 
-	@DisplayName("AlreadyComplete 경로에서 history 조회가 결과 불명(UNKNOWN)이면 markUnknownIfRequested를 호출하고 PAYMENT_RESULT_PENDING을 던진다")
+	@DisplayName("AlreadyComplete 경로에서 history 조회가 결과 불명(UNKNOWN)이면 markUnknown를 호출하고 PAYMENT_RESULT_PENDING을 던진다")
 	@Test
 	void approve_whenAlreadyCompleteAndHistoryUnknown_callsMarkUnknownAndThrowsResultPending() {
 		// given: AlreadyComplete는 PG가 이미 처리한 상태이므로 이력조회가 결과 불명이면
@@ -296,7 +296,7 @@ class NaverPayApprovalServiceTest {
 				PaymentException paymentException = (PaymentException)exception;
 				assertThat(paymentException.getErrorCode()).isEqualTo(PaymentErrorCode.PAYMENT_RESULT_PENDING);
 			});
-		then(paymentApprovalRecordService).should().markUnknownIfRequested(
+		then(paymentApprovalRecordService).should().markUnknown(
 			eq("PAY-1"), eq(PaymentProvider.NAVERPAY), eq("pg-payment-id"), any(), any());
 		then(paymentApprovalService).should(never()).succeedApproval(any(), any());
 	}
@@ -325,7 +325,7 @@ class NaverPayApprovalServiceTest {
 				PaymentException paymentException = (PaymentException)exception;
 				assertThat(paymentException.getErrorCode()).isEqualTo(PaymentErrorCode.PAYMENT_NOT_FOUND);
 			});
-		then(paymentApprovalRecordService).should().failIfPending(
+		then(paymentApprovalRecordService).should().fail(
 			eq("PAY-1"), eq(PaymentProvider.NAVERPAY), eq("pg-payment-id"),
 			eq(PaymentFailCode.MERCHANT_PAY_KEY_MISMATCH), eq("가맹점 결제 키 불일치"), any());
 		then(naverPayGateway).should(never()).cancel(any(), anyInt(), any());
@@ -406,7 +406,7 @@ class NaverPayApprovalServiceTest {
 				PaymentException paymentException = (PaymentException)exception;
 				assertThat(paymentException.getErrorCode()).isEqualTo(PaymentErrorCode.PAYMENT_ALREADY_CANCELED);
 			});
-		then(paymentApprovalRecordService).should().failIfPending(
+		then(paymentApprovalRecordService).should().fail(
 			eq("PAY-1"), eq(PaymentProvider.NAVERPAY), eq("pg-payment-id"),
 			eq(PaymentFailCode.ALREADY_CANCELED), eq("이미 취소된 결제"), any());
 	}
@@ -461,7 +461,7 @@ class NaverPayApprovalServiceTest {
 				PaymentException paymentException = (PaymentException)exception;
 				assertThat(paymentException.getErrorCode()).isEqualTo(PaymentErrorCode.PAYMENT_PG_NETWORK_ERROR);
 			});
-		then(paymentApprovalRecordService).should().failIfPending(eq("PAY-1"), eq(PaymentProvider.NAVERPAY),
+		then(paymentApprovalRecordService).should().fail(eq("PAY-1"), eq(PaymentProvider.NAVERPAY),
 			eq("pg-payment-id"), eq(PaymentFailCode.PG_NETWORK_ERROR), eq("network error"), any());
 	}
 
@@ -489,7 +489,7 @@ class NaverPayApprovalServiceTest {
 				PaymentException paymentException = (PaymentException)exception;
 				assertThat(paymentException.getErrorCode()).isEqualTo(PaymentErrorCode.PAYMENT_PG_SERVER_ERROR);
 			});
-		then(paymentApprovalRecordService).should().failIfPending(eq("PAY-1"), eq(PaymentProvider.NAVERPAY),
+		then(paymentApprovalRecordService).should().fail(eq("PAY-1"), eq(PaymentProvider.NAVERPAY),
 			eq("pg-payment-id"), eq(PaymentFailCode.PG_SERVER_ERROR), eq("server error"), any());
 	}
 
@@ -517,7 +517,7 @@ class NaverPayApprovalServiceTest {
 				PaymentException paymentException = (PaymentException)exception;
 				assertThat(paymentException.getErrorCode()).isEqualTo(PaymentErrorCode.PAYMENT_PG_INVALID_RESPONSE);
 			});
-		then(paymentApprovalRecordService).should().failIfPending(eq("PAY-1"), eq(PaymentProvider.NAVERPAY), eq("pg-payment-id"),
+		then(paymentApprovalRecordService).should().fail(eq("PAY-1"), eq(PaymentProvider.NAVERPAY), eq("pg-payment-id"),
 			eq(PaymentFailCode.PG_INVALID_RESPONSE), eq("invalid response"), any());
 		then(paymentApprovalService).should(never()).succeedApproval(any(), any());
 	}
@@ -546,7 +546,7 @@ class NaverPayApprovalServiceTest {
 				PaymentException paymentException = (PaymentException)exception;
 				assertThat(paymentException.getErrorCode()).isEqualTo(PaymentErrorCode.PAYMENT_TIME_EXPIRED);
 			});
-		then(paymentApprovalRecordService).should().failIfPending(eq("PAY-1"), eq(PaymentProvider.NAVERPAY), eq("pg-payment-id"),
+		then(paymentApprovalRecordService).should().fail(eq("PAY-1"), eq(PaymentProvider.NAVERPAY), eq("pg-payment-id"),
 			eq(PaymentFailCode.TIME_EXPIRED), eq("결제 승인 가능 시간 초과 시 (10분 초과시)"), any());
 	}
 
@@ -574,11 +574,11 @@ class NaverPayApprovalServiceTest {
 				PaymentException paymentException = (PaymentException)exception;
 				assertThat(paymentException.getErrorCode()).isEqualTo(PaymentErrorCode.PAYMENT_PG_MAINTENANCE);
 			});
-		then(paymentApprovalRecordService).should().failIfPending(eq("PAY-1"), eq(PaymentProvider.NAVERPAY), eq("pg-payment-id"),
+		then(paymentApprovalRecordService).should().fail(eq("PAY-1"), eq(PaymentProvider.NAVERPAY), eq("pg-payment-id"),
 			eq(PaymentFailCode.PG_MAINTENANCE), eq("서비스 점검중"), any());
 	}
 
-	@DisplayName("게이트웨이 UNKNOWN 결과 시 markUnknownIfRequested를 호출하고 PAYMENT_RESULT_PENDING을 던진다")
+	@DisplayName("게이트웨이 UNKNOWN 결과 시 markUnknown를 호출하고 PAYMENT_RESULT_PENDING을 던진다")
 	@Test
 	void approve_whenGatewayReturnsUnknown_callsMarkUnknownAndThrowsResultPending() {
 		// given
@@ -601,7 +601,7 @@ class NaverPayApprovalServiceTest {
 				PaymentException paymentException = (PaymentException)exception;
 				assertThat(paymentException.getErrorCode()).isEqualTo(PaymentErrorCode.PAYMENT_RESULT_PENDING);
 			});
-		then(paymentApprovalRecordService).should().markUnknownIfRequested(
+		then(paymentApprovalRecordService).should().markUnknown(
 			eq("PAY-1"), eq(PaymentProvider.NAVERPAY), eq("pg-payment-id"), any(), any());
 		then(paymentApprovalService).should(never()).succeedApproval(any(), any());
 	}
@@ -763,7 +763,7 @@ class NaverPayApprovalServiceTest {
 				OrderException orderException = (OrderException)exception;
 				assertThat(orderException.getErrorCode()).isEqualTo(OrderErrorCode.ORDER_PAYMENT_NOT_ALLOWED);
 			});
-		// 보상(PG cancel, failIfPending)이 발생하지 않는다 — REQUESTED 유지로 reconcile self-heal
+		// 보상(PG cancel, fail)이 발생하지 않는다 — REQUESTED 유지로 reconcile self-heal
 		then(paymentApprovalCompensationService).should(never()).compensateMerchantKeyMismatch(any());
 		then(paymentApprovalCompensationService).should(never()).compensateAmountMismatch(any(), anyInt(), any());
 		then(paymentApprovalCompensationService).should(never()).compensateDuplicatePayment(any(), any(), any());
@@ -794,7 +794,7 @@ class NaverPayApprovalServiceTest {
 				PaymentException paymentException = (PaymentException)exception;
 				assertThat(paymentException.getErrorCode()).isEqualTo(PaymentErrorCode.PAYMENT_STATUS_TRANSITION_NOT_ALLOWED);
 			});
-		// 보상(PG cancel, failIfPending)이 발생하지 않는다 — REQUESTED 유지로 reconcile self-heal
+		// 보상(PG cancel, fail)이 발생하지 않는다 — REQUESTED 유지로 reconcile self-heal
 		then(paymentApprovalCompensationService).should(never()).compensateMerchantKeyMismatch(any());
 		then(paymentApprovalCompensationService).should(never()).compensateAmountMismatch(any(), anyInt(), any());
 		then(paymentApprovalCompensationService).should(never()).compensateDuplicatePayment(any(), any(), any());
@@ -822,7 +822,7 @@ class NaverPayApprovalServiceTest {
 		assertThatThrownBy(() -> naverPayApprovalService.approve(memberId, "PAY-1", "pg-payment-id"))
 			.isInstanceOf(RuntimeException.class)
 			.hasMessage("db write failed");
-		// 보상(PG cancel, failIfPending)이 발생하지 않는다 — REQUESTED 유지로 reconcile self-heal
+		// 보상(PG cancel, fail)이 발생하지 않는다 — REQUESTED 유지로 reconcile self-heal
 		then(paymentApprovalCompensationService).should(never()).compensateMerchantKeyMismatch(any());
 		then(paymentApprovalCompensationService).should(never()).compensateAmountMismatch(any(), anyInt(), any());
 		then(paymentApprovalCompensationService).should(never()).compensateDuplicatePayment(any(), any(), any());
@@ -878,7 +878,7 @@ class NaverPayApprovalServiceTest {
 				PaymentException paymentException = (PaymentException)exception;
 				assertThat(paymentException.getErrorCode()).isEqualTo(PaymentErrorCode.PAYMENT_NOT_FOUND);
 			});
-		then(paymentApprovalRecordService).should().failIfPending(
+		then(paymentApprovalRecordService).should().fail(
 			eq("PAY-ATTACKER"), eq(PaymentProvider.NAVERPAY), eq("pg-victim-payment-id"),
 			eq(PaymentFailCode.MERCHANT_PAY_KEY_MISMATCH), eq("가맹점 결제 키 불일치"), any());
 		then(naverPayGateway).should(never()).cancel(any(), anyInt(), any());

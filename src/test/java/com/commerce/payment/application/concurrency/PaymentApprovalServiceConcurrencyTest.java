@@ -30,6 +30,8 @@ import com.commerce.payment.domain.Payment;
 import com.commerce.payment.domain.PaymentProvider;
 import com.commerce.payment.domain.PaymentReservation;
 import com.commerce.payment.domain.PaymentType;
+import org.springframework.dao.OptimisticLockingFailureException;
+
 import com.commerce.payment.exception.PaymentErrorCode;
 import com.commerce.payment.exception.PaymentException;
 import com.commerce.payment.application.PaymentApprovalService;
@@ -118,6 +120,11 @@ class PaymentApprovalServiceConcurrencyTest {
 		}
 		if (throwable instanceof OrderException orderException) {
 			return orderException.getErrorCode() == OrderErrorCode.ORDER_PAID_NOT_ALLOWED;
+		}
+		// @Version 도입 후 order 비관 락으로 직렬화해도 payment 행 버전 충돌이 발생할 수 있다.
+		// succeed는 무조건 전이 메서드이므로 충돌 시 전파(ADR-L2).
+		if (throwable instanceof OptimisticLockingFailureException) {
+			return true;
 		}
 		return false;
 	}

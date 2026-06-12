@@ -1,7 +1,9 @@
 package com.commerce.payment.application;
 
 import java.time.LocalDateTime;
+import java.util.EnumSet;
 import java.util.Objects;
+import java.util.Set;
 
 import org.springframework.stereotype.Service;
 
@@ -10,6 +12,7 @@ import com.commerce.payment.application.port.PgCanceller;
 import com.commerce.payment.application.port.result.CancelOutcome;
 import com.commerce.payment.domain.Payment;
 import com.commerce.payment.domain.PaymentFailCode;
+import com.commerce.payment.domain.PaymentProvider;
 import com.commerce.payment.domain.PaymentStatus;
 import com.commerce.payment.exception.PaymentException;
 import com.commerce.payment.exception.PaymentErrorCode;
@@ -21,6 +24,13 @@ import lombok.extern.slf4j.Slf4j;
 @Service
 @RequiredArgsConstructor
 public class PaymentApprovalCompensationService {
+
+	// transition(별도 빈)이 던지는 도메인 예외 중 best-effort 보상에서 skip할 코드 집합 (ADR-L2).
+	// 충돌(다른 주체가 먼저 종착) / 가드 위반(이미 종착) / 이력 없음은 단조 종착이므로 흡수한다. 흡수는 트랜잭션 경계 밖(useCase)에서만 한다.
+	private static final Set<PaymentErrorCode> SKIPPABLE = EnumSet.of(
+		PaymentErrorCode.PAYMENT_CONCURRENTLY_MODIFIED,
+		PaymentErrorCode.PAYMENT_STATUS_TRANSITION_NOT_ALLOWED,
+		PaymentErrorCode.PAYMENT_RECORD_NOT_FOUND);
 
 	private final PaymentApprovalRecordService paymentApprovalRecordService;
 	private final PaymentCancellationService paymentCancellationService;
@@ -50,8 +60,8 @@ public class PaymentApprovalCompensationService {
 	}
 
 	public void compensateMerchantKeyMismatch(Payment approvePayment) {
-		// PG 결제 자체가 없으므로 cancel 없이 failIfPending만.
-		paymentApprovalRecordService.failIfPending(
+		// PG 결제 자체가 없으므로 cancel 없이 approve fail만 (skip 가능).
+		failSkippable(
 			approvePayment.getMerchantPayKey(), approvePayment.getProvider(), approvePayment.getPgPaymentId(),
 			PaymentFailCode.MERCHANT_PAY_KEY_MISMATCH, "가맹점 결제 키 불일치", LocalDateTime.now()
 		);
@@ -86,8 +96,8 @@ public class PaymentApprovalCompensationService {
 		PgCanceller pgCanceller
 	) {
 		LocalDateTime now = LocalDateTime.now();
-		// approve payment가 race window에서 이미 SUCCEEDED 상태가 됐어도 PG cancel은 멈추지 않는다. REQUESTED가 아니면 mark만 skip한다.
-		paymentApprovalRecordService.failIfPending(
+		// approve payment가 race window에서 이미 SUCCEEDED 상태가 됐어도 PG cancel은 멈추지 않는다. 종착/충돌이면 approve fail만 skip한다.
+		failSkippable(
 			approvePayment.getMerchantPayKey(), approvePayment.getProvider(), approvePayment.getPgPaymentId(),
 			failCode, failDetail, now
 		);
@@ -115,7 +125,7 @@ public class PaymentApprovalCompensationService {
 					cancelPayment.getPgPaymentId(), outcome.failCode(), outcome.failDetail(), now
 				);
 				// PG 취소 결과 불명: cancel 기록을 UNKNOWN 보존해 대사 대상으로 남긴다 (#219)
-				case UNKNOWN -> paymentCancellationService.markUnknownIfRequested(
+				case UNKNOWN -> markUnknownSkippable(
 					cancelPayment.getMerchantPayKey(), cancelPayment.getProvider(),
 					cancelPayment.getPgPaymentId(), outcome.failDetail(), now
 				);
@@ -126,6 +136,45 @@ public class PaymentApprovalCompensationService {
 				cancelPayment.getMerchantPayKey(), cancelPayment.getPgPaymentId(),
 				cancelReason, ex.getErrorCode()
 			);
+		}
+	}
+
+	/**
+	 * approve fail transition을 호출하되 best-effort 보상에서 흡수 대상(ADR-L2 SKIPPABLE) 도메인 예외는 skip한다.
+	 * transition은 별도 빈(public @Transactional)이라 충돌 시 그 트랜잭션만 깨끗이 rollback되고, 흡수 catch는 트랜잭션 경계 밖에서 일어난다.
+	 */
+	private void failSkippable(
+		String merchantPayKey, PaymentProvider provider, String pgPaymentId,
+		PaymentFailCode failCode, String failDetail, LocalDateTime respondedAt
+	) {
+		try {
+			paymentApprovalRecordService.fail(merchantPayKey, provider, pgPaymentId, failCode, failDetail, respondedAt);
+		} catch (PaymentException ex) {
+			if (SKIPPABLE.contains(ex.getErrorCode())) {
+				log.warn("보상 실패 마킹 skip - {} merchantPayKey={} pgPaymentId={}",
+					ex.getErrorCode(), merchantPayKey, pgPaymentId);
+				return;
+			}
+			throw ex;
+		}
+	}
+
+	/**
+	 * cancel markUnknown transition을 호출하되 흡수 대상(ADR-L2 SKIPPABLE) 도메인 예외는 skip한다. (failSkippable과 동일 구조)
+	 */
+	private void markUnknownSkippable(
+		String merchantPayKey, PaymentProvider provider, String pgPaymentId,
+		String failDetail, LocalDateTime respondedAt
+	) {
+		try {
+			paymentCancellationService.markUnknown(merchantPayKey, provider, pgPaymentId, failDetail, respondedAt);
+		} catch (PaymentException ex) {
+			if (SKIPPABLE.contains(ex.getErrorCode())) {
+				log.warn("취소 UNKNOWN 마킹 skip - {} merchantPayKey={} pgPaymentId={}",
+					ex.getErrorCode(), merchantPayKey, pgPaymentId);
+				return;
+			}
+			throw ex;
 		}
 	}
 }

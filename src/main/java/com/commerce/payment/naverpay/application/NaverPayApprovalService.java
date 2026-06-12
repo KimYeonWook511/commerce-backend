@@ -1,6 +1,8 @@
 package com.commerce.payment.naverpay.application;
 
 import java.time.LocalDateTime;
+import java.util.EnumSet;
+import java.util.Set;
 
 import org.springframework.stereotype.Service;
 
@@ -36,6 +38,13 @@ import lombok.extern.slf4j.Slf4j;
 @Service
 @RequiredArgsConstructor
 public class NaverPayApprovalService {
+
+	// transition(별도 빈)이 던지는 도메인 예외 중 best-effort 기록에서 skip할 코드 집합 (ADR-L2).
+	// 충돌(다른 주체가 먼저 종착) / 가드 위반(이미 종착) / 이력 없음은 단조 종착이므로 흡수한다. 흡수는 트랜잭션 경계 밖(useCase)에서만 한다.
+	private static final Set<PaymentErrorCode> SKIPPABLE = EnumSet.of(
+		PaymentErrorCode.PAYMENT_CONCURRENTLY_MODIFIED,
+		PaymentErrorCode.PAYMENT_STATUS_TRANSITION_NOT_ALLOWED,
+		PaymentErrorCode.PAYMENT_RECORD_NOT_FOUND);
 
 	private final NaverPayGateway naverPayGateway;
 	private final PaymentReservationRepository paymentReservationRepository;
@@ -95,7 +104,7 @@ public class NaverPayApprovalService {
 			case PROCESSING -> toResponse(payment.getPgPaymentId(), NaverPayApproveStatus.PROCESSING);
 			case ALREADY_COMPLETE -> processAlreadyComplete(payment);
 			case FAILED -> {
-				paymentApprovalRecordService.failIfPending(
+				failSkippable(
 					payment.getMerchantPayKey(), payment.getProvider(), payment.getPgPaymentId(),
 					result.getFailCode(), result.getFailDetail(), LocalDateTime.now()
 				);
@@ -105,7 +114,7 @@ public class NaverPayApprovalService {
 				completeVerifiedApproval(payment, result.getMerchantPayKey(), result.getTotalPayAmount());
 			// PG 호출 timeout / 네트워크 단절: 결과 불명 흔적 보존 + 사용자 재시도 차단 (ADR-6)
 			case UNKNOWN -> {
-				paymentApprovalRecordService.markUnknownIfRequested(
+				markUnknownSkippable(
 					payment.getMerchantPayKey(), payment.getProvider(), payment.getPgPaymentId(),
 					result.getFailDetail(), LocalDateTime.now()
 				);
@@ -120,7 +129,7 @@ public class NaverPayApprovalService {
 		// AlreadyComplete 는 PG 가 이미 처리한 상태이므로 이력조회가 결과 불명이면 UNKNOWN 보존이 가장 강하게 적용된다.
 		// approve 직접 경로의 case UNKNOWN 과 동일하게 흔적을 남기고 재시도를 차단한다 (ADR-027, #219).
 		if (result.getStatus() == NaverPayHistoryResult.Status.UNKNOWN) {
-			paymentApprovalRecordService.markUnknownIfRequested(
+			markUnknownSkippable(
 				payment.getMerchantPayKey(), payment.getProvider(), payment.getPgPaymentId(),
 				result.getFailDetail(), LocalDateTime.now()
 			);
@@ -133,7 +142,7 @@ public class NaverPayApprovalService {
 
 		if (result.getStatus() == NaverPayHistoryResult.Status.APPROVED) {
 			if (!payment.getMerchantPayKey().equals(result.getMerchantPayKey())) {
-				paymentApprovalRecordService.failIfPending(
+				failSkippable(
 					payment.getMerchantPayKey(), payment.getProvider(), payment.getPgPaymentId(),
 					PaymentFailCode.MERCHANT_PAY_KEY_MISMATCH, "가맹점 결제 키 불일치", LocalDateTime.now()
 				);
@@ -143,7 +152,7 @@ public class NaverPayApprovalService {
 		}
 
 		if (result.getStatus() == NaverPayHistoryResult.Status.CANCELED) {
-			paymentApprovalRecordService.failIfPending(
+			failSkippable(
 				payment.getMerchantPayKey(), payment.getProvider(), payment.getPgPaymentId(),
 				PaymentFailCode.ALREADY_CANCELED, "이미 취소된 결제", LocalDateTime.now()
 			);
@@ -200,6 +209,45 @@ public class NaverPayApprovalService {
 				payment.getPgPaymentId(),
 				ex
 			);
+			throw ex;
+		}
+	}
+
+	/**
+	 * fail transition을 호출하되 best-effort 흡수 대상(ADR-L2 SKIPPABLE) 도메인 예외는 skip한다.
+	 * transition은 별도 빈(public @Transactional)이라 충돌 시 그 트랜잭션만 깨끗이 rollback되고, 흡수 catch는 트랜잭션 경계 밖에서 일어난다.
+	 */
+	private void failSkippable(
+		String merchantPayKey, PaymentProvider provider, String pgPaymentId,
+		PaymentFailCode failCode, String failDetail, LocalDateTime respondedAt
+	) {
+		try {
+			paymentApprovalRecordService.fail(merchantPayKey, provider, pgPaymentId, failCode, failDetail, respondedAt);
+		} catch (PaymentException ex) {
+			if (SKIPPABLE.contains(ex.getErrorCode())) {
+				log.warn("결제 실패 마킹 skip - {} merchantPayKey={} pgPaymentId={}",
+					ex.getErrorCode(), merchantPayKey, pgPaymentId);
+				return;
+			}
+			throw ex;
+		}
+	}
+
+	/**
+	 * markUnknown transition을 호출하되 best-effort 흡수 대상(ADR-L2 SKIPPABLE) 도메인 예외는 skip한다. (failSkippable과 동일 구조)
+	 */
+	private void markUnknownSkippable(
+		String merchantPayKey, PaymentProvider provider, String pgPaymentId,
+		String failDetail, LocalDateTime respondedAt
+	) {
+		try {
+			paymentApprovalRecordService.markUnknown(merchantPayKey, provider, pgPaymentId, failDetail, respondedAt);
+		} catch (PaymentException ex) {
+			if (SKIPPABLE.contains(ex.getErrorCode())) {
+				log.warn("UNKNOWN 마킹 skip - {} merchantPayKey={} pgPaymentId={}",
+					ex.getErrorCode(), merchantPayKey, pgPaymentId);
+				return;
+			}
 			throw ex;
 		}
 	}

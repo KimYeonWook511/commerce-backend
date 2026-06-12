@@ -21,11 +21,13 @@ import org.springframework.test.context.ActiveProfiles;
 import org.springframework.test.context.DynamicPropertyRegistry;
 import org.springframework.test.context.DynamicPropertySource;
 
+import com.commerce.payment.application.PaymentApprovalRecordService;
 import com.commerce.payment.domain.Payment;
 import com.commerce.payment.domain.PaymentProvider;
 import com.commerce.payment.domain.PaymentReservation;
 import com.commerce.payment.domain.PaymentType;
-import com.commerce.payment.domain.repository.PaymentRepository;
+import com.commerce.payment.exception.PaymentErrorCode;
+import com.commerce.payment.exception.PaymentException;
 import com.commerce.payment.infrastructure.persistence.support.PaymentPersistenceTestSupport;
 import com.commerce.payment.infrastructure.persistence.support.PaymentReservationPersistenceTestSupport;
 import com.commerce.member.infrastructure.persistence.support.MemberPersistenceTestSupport;
@@ -54,7 +56,7 @@ class PaymentEscalationConcurrencyTest {
 	}
 
 	@Autowired
-	private PaymentRepository paymentRepository;
+	private PaymentApprovalRecordService paymentApprovalRecordService;
 
 	@Autowired
 	private PaymentPersistenceTestSupport paymentPersistence;
@@ -81,9 +83,9 @@ class PaymentEscalationConcurrencyTest {
 		);
 	}
 
-	@DisplayName("같은 escalation 건에 N개 스레드가 동시에 조건부 UPDATE를 시도하면 정확히 1개 스레드만 영향 행 수 1을 받는다")
+	@DisplayName("같은 escalation 건에 N개 스레드가 동시에 escalate transition을 호출하면 정확히 1개 스레드만 통지 주체(true)가 되고 나머지는 PAYMENT_CONCURRENTLY_MODIFIED로 skip된다")
 	@Test
-	void escalateIfPending_concurrent_exactlyOneThreadGetsAffected() throws Exception {
+	void escalate_concurrent_exactlyOneThreadBecomesNotificationSubject() throws Exception {
 		// given: 6시간 초과 UNKNOWN APPROVE 결제 1건 준비
 		PaymentReservation reservation = reservationPersistence.save(
 			PaymentReservation.createReserved(
@@ -92,13 +94,14 @@ class PaymentEscalationConcurrencyTest {
 		);
 		Payment payment = Payment.createRequested(reservation, PaymentType.APPROVE, "pg-esc-con-1");
 		payment.markUnknown("timeout", LocalDateTime.now().minusHours(7));
-		Payment saved = paymentPersistence.save(payment);
+		paymentPersistence.save(payment);
 
 		int threadCount = 10;
-		AtomicInteger affectedCount = new AtomicInteger(0);
-		ConcurrentLinkedQueue<Throwable> errors = new ConcurrentLinkedQueue<>();
+		AtomicInteger successCount = new AtomicInteger(0);
+		ConcurrentLinkedQueue<Throwable> unexpectedErrors = new ConcurrentLinkedQueue<>();
+		LocalDateTime escalationTime = LocalDateTime.now();
 
-		// when: N개 스레드가 CountDownLatch로 동시에 escalateIfPending 호출
+		// when: N개 스레드가 동시에 escalate transition(find → escalate() → saveChecked) 호출
 		CountDownLatch startLatch = new CountDownLatch(1);
 		CountDownLatch doneLatch = new CountDownLatch(threadCount);
 		ExecutorService executor = Executors.newFixedThreadPool(threadCount);
@@ -107,10 +110,18 @@ class PaymentEscalationConcurrencyTest {
 				executor.submit(() -> {
 					try {
 						startLatch.await();
-						int affected = paymentRepository.escalateIfPending(saved.getId(), LocalDateTime.now());
-						affectedCount.addAndGet(affected);
+						boolean notificationSubject = paymentApprovalRecordService.escalate(
+							"ESC-CON-1", PaymentProvider.NAVERPAY, "pg-esc-con-1", escalationTime);
+						if (notificationSubject) {
+							successCount.incrementAndGet();
+						}
+					} catch (PaymentException ex) {
+						// 정상 skip — 다른 스레드가 먼저 escalation 성공 (transition이 PAYMENT_CONCURRENTLY_MODIFIED로 변환)
+						if (ex.getErrorCode() != PaymentErrorCode.PAYMENT_CONCURRENTLY_MODIFIED) {
+							unexpectedErrors.add(ex);
+						}
 					} catch (Throwable ex) {
-						errors.add(ex);
+						unexpectedErrors.add(ex);
 					} finally {
 						doneLatch.countDown();
 					}
@@ -122,10 +133,15 @@ class PaymentEscalationConcurrencyTest {
 			executor.shutdownNow();
 		}
 
-		// then: 예외 없이 모든 스레드가 정상 반환 (DB 레벨 원자성으로 처리됨)
-		assertThat(errors).isEmpty();
+		// then: 예상치 못한 예외 없음 (충돌 외 다른 예외 없음)
+		assertThat(unexpectedErrors).isEmpty();
 
-		// then: 영향 행 수 합계 = 1 (정확히 1개 스레드만 escalation 주체)
-		assertThat(affectedCount.get()).isEqualTo(1);
+		// then: 정확히 1개 스레드만 escalation 통지 주체 (통지 1회 보장)
+		assertThat(successCount.get()).isEqualTo(1);
+
+		// then: DB에 escalatedAt이 기록됨
+		Payment escalated = paymentPersistence.getPayment(
+			"ESC-CON-1", PaymentProvider.NAVERPAY, "pg-esc-con-1", PaymentType.APPROVE);
+		assertThat(escalated.getEscalatedAt()).isNotNull();
 	}
 }

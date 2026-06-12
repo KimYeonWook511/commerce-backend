@@ -1,0 +1,11 @@
+{
+  "phases": [
+    {
+      "dir": "0-main",
+      "harness_version": "v2",
+      "status": "completed",
+      "started_at": "2026-06-11T16:50:18+0900",
+      "completed_at": "2026-06-11T17:51:38+0900"
+    }
+  ]
+}

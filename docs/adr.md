@@ -45,6 +45,7 @@ task adr(`docs/tasks/<task>/adr.md`)의 역할은 harness 도입을 기점으로
 | unique-find-first-policy | [`docs/tasks/unique-find-first-policy/adr.md`](tasks/unique-find-first-policy/adr.md) | find-first 패턴 (ADR-011 연계) |
 | unknown-reconciliation | [`docs/tasks/unknown-reconciliation/adr.md`](tasks/unknown-reconciliation/adr.md) | UNKNOWN/stale REQUESTED 대사를 `@Scheduled` 서비스 루프로 구현(ADR-040~048), 만료 배치가 미확정 결제 주문 제외(order 소유 port 의존 역전), 대사 SUCCEEDED·주문 CANCELED 시 보상 환불, `PaymentStatus.MANUAL_REVIEW` 미도입(ADR-039 준수), escalation을 스캔 시간 윈도우 상한으로 제외, 비-INIT 주문 종착 전이 (ADR-029/030/039 연계) |
 | payment-escalation | [`docs/tasks/payment-escalation/adr.md`](tasks/payment-escalation/adr.md) | 6시간 초과 미확정 APPROVE escalation 통지·종착을 새 상태 대신 `escalatedAt` 직교 필드로 표현, 조건부 UPDATE 영향 행 수로 중복 통지 차단, order==null 정합성 오류 통지 (ADR-049, ADR-039/044/047 연계) |
+| payment-optimistic-lock | [`docs/tasks/payment-optimistic-lock/adr.md`](tasks/payment-optimistic-lock/adr.md) | `Payment`에 `@Version` 낙관 락 도입(같은 행 동시 전이 lost update 차단), 충돌 처리는 transition tx 안 전파 + useCase tx 밖 skip + adapter `saveChecked` 도메인 예외 변환, escalation 멱등을 조건부 UPDATE에서 `@Version`+`escalate()` 도메인 메서드로 환원 (ADR-050~052, ADR-049 멱등 메커니즘 supersede) |
 
 향후 task 추가 시 본 표에 한 줄을 갱신한다. task adr 위치는 모두 `docs/tasks/<task>/adr.md`로 고정한다.
 
@@ -519,4 +520,30 @@ task adr(`docs/tasks/<task>/adr.md`)의 역할은 harness 도입을 기점으로
 - **배경**: ADR-047이 escalation을 스캔 윈도우 상한으로 자동 제외만 하고 운영 가시성(통지·종착)은 #238로 미뤘다(ADR-039 재검토 trigger). 6시간 초과 건이 통지 없이 `UNKNOWN`으로 묻혀 운영자가 능동 조회해야만 인지 가능했다.
 - **이유**: status는 "결제에 일어난 사실"만 담고(ADR-039), "운영자에게 위임됐나"는 직교 축이라 별 컬럼으로 분리한다. 새 status(ESCALATED)는 ADR-044가 같은 이유로 철회한 방향이고 "결론 났나/처리됐나"를 한 값에 뭉갠다. 별도 테이블은 한 번 통지·종착뿐이라 과하다(YAGNI). 멱등을 조건부 UPDATE 영향 행 수로 보장하는 것은 `uk_payment_approved_order_key` unique가 이중 SUCCEEDED를 막는 것과 같은 DB 레벨 멱등 방식이다.
 - **트레이드오프**: status enum이 4개로 유지돼 단순하다. `escalatedAt` 기록(커밋) 후 통지가 best-effort라 전송 유실 시 재통지되지 않는다(진실 원천은 `escalatedAt` — ADR-045 정신). escalation 이력·단계가 필요해지면 별도 테이블로 승격할 여지를 남긴다. CANCEL escalation은 CANCEL 대사 미구현으로 범위 밖(별도 이슈).
-- **연계**: ADR-039, ADR-044, ADR-045, ADR-047, #238.
+- **갱신(ADR-052)**: escalation 멱등 메커니즘(조건부 UPDATE 영향 행 수)은 `@Version` 도입(ADR-050)으로 `Payment.escalate()` 도메인 메서드 + 낙관 락으로 환원됨. `escalatedAt` 직교 필드·status 불변·통지 commit 후 best-effort 1회 정신은 유지.
+- **연계**: ADR-039, ADR-044, ADR-045, ADR-047, ADR-052, #238.
+
+### ADR-050: Payment에 @Version 낙관 락을 도입해 같은 행 동시 전이 lost update를 막는다
+
+- **결정**: `Payment`에 `@Version Long version`을 추가하고 V9 migration으로 `tbl_payment.version BIGINT NOT NULL DEFAULT 0`을 추가한다. 같은 행 동시 전이(succeed vs fail 등)의 lost update를 `@Version` 불일치(`OptimisticLockException`)로 감지한다.
+- **배경**: 핵심 엔티티(Order/PaymentReservation/CartItem/Stock)는 모두 `@Version`을 갖는데 `Payment`만 없어, 같은 행 동시 read-modify-write 전이에서 lost update가 가능했다.
+- **이유**: 짧은 tx·낮은 충돌·부수효과 분리 워크로드에서 비관 락(행 FOR UPDATE)보다 낙관 락이 적합하고 다른 엔티티와의 일관성도 보존한다. 자동 재시도 루프는 두지 않고 충돌은 흡수(종착) 또는 전파(succeed)로만 처리한다(ADR-051).
+- **트레이드오프**: 기존 방어(생성=Reservation `@Version`(ADR-036), 이중 SUCCEEDED=`uk_payment_approved_order_key`, 승인 직렬화=order 비관 락)와 직교하며 그 위에 같은 행 동시 전이 방어를 더한다. order `findByIdForUpdate` 비관 락은 payment+order 원자성·승인 반영 직렬화 목적이라 유지(낙관 전환은 부분취소 등 합산 검증 도입 시 재판단).
+- **연계**: ADR-036, ADR-051, ADR-052, #243.
+
+### ADR-051: 낙관 락 충돌을 transition은 tx 안에서 전파하고 useCase는 tx 밖에서 skip한다
+
+- **결정**: 충돌 처리를 두 계층으로 가른다. transition(별도 빈의 public `@Transactional`: `find → 도메인 전이 → saveChecked`)은 충돌·가드 위반을 catch하지 않고 도메인 예외로 전파해 트랜잭션을 깨끗이 rollback시킨다. useCase(orchestrator, **트랜잭션 없음**)는 private 래퍼에서 skip 대상 도메인 예외(`PAYMENT_CONCURRENTLY_MODIFIED`/`PAYMENT_STATUS_TRANSITION_NOT_ALLOWED`/`PAYMENT_RECORD_NOT_FOUND`)를 트랜잭션 경계 밖에서 흡수한다. DAO 예외(`ObjectOptimisticLockingFailureException`)는 application/domain이 직접 다루지 않고 adapter `saveChecked`(`saveAndFlush`)가 `PAYMENT_CONCURRENTLY_MODIFIED`로 변환한다. `succeed`·무조건 `fail`(APPROVE 종착)은 skip하지 않고 전파해 `OptimisticLockingFailureException → 409` 핸들러가 받는다.
+- **배경**: 흡수를 트랜잭션 안에서 하면(같은 메서드 catch, `@Transactional(REQUIRES_NEW)` 포함) flush 충돌이 그 tx를 rollback-only로 만들어 commit 시 `UnexpectedRollbackException`이 난다. 문제의 본질은 "흡수했다"가 아니라 "흡수를 트랜잭션 안에서 했다"이다(본 task 초기 구현이 application 직접 catch + `@Transactional` 제거로 이를 위반해 재작성).
+- **이유**: 흡수를 tx 경계 밖(useCase)으로 옮기면 adapter 변환(인프라 예외 도메인 격리)·보상 단계별 독립 commit(payment-compensation-to-domain)과 모두 양립한다. 충돌은 일반 코드(`PAYMENT_CONCURRENTLY_MODIFIED` = "다른 처리가 먼저 상태를 바꿈")로 던지고 "무엇이 됐는지"는 재조회로 판정한다. unique 위반(`PAYMENT_DUPLICATE`)과 version 충돌은 정책이 달라(보상 vs skip/재시도) 한 코드로 합치지 않는다.
+- **트레이드오프**: transition은 useCase와 반드시 별도 빈의 public 메서드여야 한다(private이면 `@Transactional` 무효, 같은 빈 self-call이면 프록시 우회). CANCEL `succeed`/`fail` 충돌은 보상 `runPgCancel`의 best-effort `catch(PaymentException)`가 멱등 흡수하며("전파" 원칙은 APPROVE 종착 기준), 미해소분은 REQUESTED로 남아 CANCEL 대사(#208)에서 재확정된다.
+- **연계**: ADR-050, ADR-052, sql-exception-translator-removal(adapter 변환), payment-compensation-to-domain(단계별 독립 commit), #243.
+
+### ADR-052: escalation 멱등을 조건부 UPDATE에서 @Version + escalate() 도메인 메서드로 환원한다
+
+- supersedes: ADR-049의 escalation 멱등 메커니즘(조건부 UPDATE 영향 행 수) 부분. `escalatedAt` 직교 필드·status 불변·통지 정신은 유지.
+- **결정**: `escalateIfPending`(repository 조건부 UPDATE)을 제거하고 `Payment.escalate(now)` 도메인 메서드로 환원한다. escalation 가능 상태(`UNKNOWN/REQUESTED`)·멱등(`escalatedAt IS NULL`) 가드를 엔티티 안에 둔다. 통지 주체는 escalate transition(`find → escalate() → saveChecked`) 성공으로 판정하고, 동시 시도 진 쪽은 `PAYMENT_CONCURRENTLY_MODIFIED`로 skip한다(통지 정확히 1회).
+- **배경**: ADR-049는 `Payment`에 `@Version`이 없어 메모리 가드로 race를 못 막으므로 DB 레벨 원자성(조건부 UPDATE 영향 행 수)으로 멱등을 보장했다. ADR-050이 `@Version`을 도입하며 그 전제가 사라졌다.
+- **이유**: 규칙(어떤 상태에서·한 번만)을 SQL WHERE에서 도메인 메서드로 올리면 네 전이(`succeed`/`fail`/`markUnknown`/`escalate`)가 모두 엔티티 가드에 모여 일관되고 표현력이 좋다. 통지 정확히 1회는 `@Version`이 보장한다.
+- **트레이드오프**: `@DynamicUpdate`가 없어 version bump 없는 CAS 유지 시 동시 `fail()` save가 `escalatedAt`을 stale로 덮을 위험이 있어, 결국 환원이 더 단순하고 안전하다. 통지 주체 판정이 영향 행 수에서 save 성공/예외 흡수로 바뀌어 `PaymentEscalationConcurrencyTest`를 save 성공 1회 검증으로 갱신했다. CANCEL escalation은 CANCEL 대사 미구현으로 범위 밖.
+- **연계**: ADR-049(supersede: 멱등 메커니즘 부분), ADR-050, ADR-051, #243.

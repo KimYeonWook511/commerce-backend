@@ -9,7 +9,6 @@ import org.springframework.transaction.annotation.Transactional;
 import com.commerce.payment.domain.Payment;
 import com.commerce.payment.domain.PaymentFailCode;
 import com.commerce.payment.domain.PaymentProvider;
-import com.commerce.payment.domain.PaymentStatus;
 import com.commerce.payment.domain.repository.PaymentRepository;
 import com.commerce.payment.exception.PaymentErrorCode;
 import com.commerce.payment.exception.PaymentException;
@@ -59,7 +58,7 @@ public class PaymentCancellationService {
 		Payment payment = paymentRepository.findCancelPayment(merchantPayKey, provider, pgPaymentId)
 			.orElseThrow(() -> new PaymentException(PaymentErrorCode.PAYMENT_RECORD_NOT_FOUND));
 		payment.succeed(respondedAt);
-		paymentRepository.save(payment);
+		paymentRepository.saveChecked(payment);
 	}
 
 	@Transactional
@@ -74,34 +73,27 @@ public class PaymentCancellationService {
 		Payment payment = paymentRepository.findCancelPayment(merchantPayKey, provider, pgPaymentId)
 			.orElseThrow(() -> new PaymentException(PaymentErrorCode.PAYMENT_RECORD_NOT_FOUND));
 		payment.fail(failCode, failDetail, respondedAt);
-		paymentRepository.save(payment);
+		paymentRepository.saveChecked(payment);
 	}
 
 	/**
-	 * REQUESTED 상태일 때만 CANCEL 기록을 UNKNOWN 마킹. 그 외 상태이거나 이력이 없으면 조용히 skip한다.
+	 * CANCEL 기록을 UNKNOWN으로 전이하는 transition (별도 빈의 public @Transactional, ADR-L2).
+	 * find → 도메인 전이(markUnknown 가드: REQUESTED 아니면 PAYMENT_STATUS_TRANSITION_NOT_ALLOWED) → saveChecked.
 	 * PG 취소 결과 불명(네트워크/서버오류/응답 해석 불가) 시 흔적을 보존해 대사 대상으로 남긴다 (#219).
 	 * CANCEL 타입 UNKNOWN 은 existsUnknownByOrderId(APPROVE 한정) 에 잡히지 않아 주문 재결제를 차단하지 않는다.
+	 * 충돌·가드 위반을 catch하지 않고 전파한다 — skip 판단은 useCase의 private 래퍼(트랜잭션 경계 밖)가 담당한다.
 	 */
 	@Transactional
-	public void markUnknownIfRequested(
+	public void markUnknown(
 		String merchantPayKey,
 		PaymentProvider provider,
 		String pgPaymentId,
 		String failDetail,
 		LocalDateTime respondedAt
 	) {
-		Payment payment = paymentRepository.findCancelPayment(merchantPayKey, provider, pgPaymentId).orElse(null);
-		if (payment == null) {
-			log.warn("Cancel payment not found, skipping unknown mark: merchantPayKey={}, pgPaymentId={}",
-				merchantPayKey, pgPaymentId);
-			return;
-		}
-		if (payment.getStatus() != PaymentStatus.REQUESTED) {
-			log.warn("Cancel payment not in REQUESTED state, skipping unknown mark: merchantPayKey={}, pgPaymentId={}, status={}",
-				merchantPayKey, pgPaymentId, payment.getStatus());
-			return;
-		}
+		Payment payment = paymentRepository.findCancelPayment(merchantPayKey, provider, pgPaymentId)
+			.orElseThrow(() -> new PaymentException(PaymentErrorCode.PAYMENT_RECORD_NOT_FOUND));
 		payment.markUnknown(failDetail, respondedAt);
-		paymentRepository.save(payment);
+		paymentRepository.saveChecked(payment);
 	}
 }

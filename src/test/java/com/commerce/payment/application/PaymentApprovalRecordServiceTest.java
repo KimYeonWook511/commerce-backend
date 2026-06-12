@@ -1,6 +1,7 @@
 package com.commerce.payment.application;
 
 import static org.assertj.core.api.Assertions.assertThat;
+import static org.assertj.core.api.Assertions.assertThatThrownBy;
 import static org.mockito.ArgumentMatchers.any;
 import static org.mockito.ArgumentMatchers.eq;
 import static org.mockito.BDDMockito.given;
@@ -25,6 +26,8 @@ import com.commerce.payment.domain.PaymentStatus;
 import com.commerce.payment.domain.PaymentType;
 import com.commerce.payment.domain.repository.PaymentRepository;
 import com.commerce.payment.domain.repository.PaymentReservationRepository;
+import com.commerce.payment.exception.PaymentErrorCode;
+import com.commerce.payment.exception.PaymentException;
 
 @ExtendWith(MockitoExtension.class)
 class PaymentApprovalRecordServiceTest {
@@ -109,35 +112,9 @@ class PaymentApprovalRecordServiceTest {
 		assertThat(payment.getRespondedAt()).isEqualTo(respondedAt);
 	}
 
-	@DisplayName("보상 흐름 실패 처리 시 REQUESTED 상태이면 실패로 전이한다")
+	@DisplayName("fail transition: UNKNOWN 상태이면 실패로 전이한다 (대사 경로 보상)")
 	@Test
-	void failIfPending_whenRequested_updatePayment() {
-		// given
-		LocalDateTime respondedAt = LocalDateTime.of(2026, 3, 3, 16, 21);
-		PaymentReservation reservation = PaymentReservation.createReserved(
-			1L, 1L, 1000, PaymentProvider.NAVERPAY, "PAY-1", LocalDateTime.now().plusMinutes(15));
-		Payment payment = Payment.createRequested(reservation, PaymentType.APPROVE, "payment-id-1");
-		given(paymentRepository.findApprovePayment(
-			eq("PAY-1"), eq(PaymentProvider.NAVERPAY), eq("payment-id-1")))
-			.willReturn(Optional.of(payment));
-
-		// when
-		paymentApprovalRecordService.failIfPending("PAY-1", PaymentProvider.NAVERPAY, "payment-id-1",
-			PaymentFailCode.APPROVE_PROCESS_FAILED,
-			"compensation",
-			respondedAt
-		);
-
-		// then
-		assertThat(payment.getStatus()).isEqualTo(PaymentStatus.FAILED);
-		assertThat(payment.getFailCode()).isEqualTo(PaymentFailCode.APPROVE_PROCESS_FAILED);
-		assertThat(payment.getFailDetail()).isEqualTo("compensation");
-		assertThat(payment.getRespondedAt()).isEqualTo(respondedAt);
-	}
-
-	@DisplayName("보상 흐름 실패 처리 시 UNKNOWN 상태이면 실패로 전이한다 (대사 경로 보상)")
-	@Test
-	void failIfPending_whenUnknown_updatePayment() {
+	void fail_whenUnknown_updatePayment() {
 		// given
 		LocalDateTime respondedAt = LocalDateTime.of(2026, 3, 3, 16, 21);
 		PaymentReservation reservation = PaymentReservation.createReserved(
@@ -149,7 +126,7 @@ class PaymentApprovalRecordServiceTest {
 			.willReturn(Optional.of(payment));
 
 		// when
-		paymentApprovalRecordService.failIfPending("PAY-1", PaymentProvider.NAVERPAY, "payment-id-1",
+		paymentApprovalRecordService.fail("PAY-1", PaymentProvider.NAVERPAY, "payment-id-1",
 			PaymentFailCode.ORDER_CANCELED,
 			"취소된 주문 보상",
 			respondedAt
@@ -159,11 +136,12 @@ class PaymentApprovalRecordServiceTest {
 		assertThat(payment.getStatus()).isEqualTo(PaymentStatus.FAILED);
 		assertThat(payment.getFailCode()).isEqualTo(PaymentFailCode.ORDER_CANCELED);
 		assertThat(payment.getRespondedAt()).isEqualTo(respondedAt);
+		then(paymentRepository).should().saveChecked(payment);
 	}
 
-	@DisplayName("보상 흐름 실패 처리 시 REQUESTED가 아니면 상태를 갱신하지 않고 종료한다")
+	@DisplayName("fail transition: 종착(SUCCEEDED) 상태이면 도메인 가드가 PAYMENT_STATUS_TRANSITION_NOT_ALLOWED를 전파한다 (skip은 useCase 책임)")
 	@Test
-	void failIfPending_whenNotRequested_skipMark() {
+	void fail_whenTerminalStatus_throwsTransitionNotAllowed() {
 		// given
 		LocalDateTime succeededAt = LocalDateTime.of(2026, 3, 3, 16, 21);
 		PaymentReservation reservation = PaymentReservation.createReserved(
@@ -174,35 +152,75 @@ class PaymentApprovalRecordServiceTest {
 			eq("PAY-1"), eq(PaymentProvider.NAVERPAY), eq("payment-id-1")))
 			.willReturn(Optional.of(payment));
 
-		// when
-		paymentApprovalRecordService.failIfPending("PAY-1", PaymentProvider.NAVERPAY, "payment-id-1",
-			PaymentFailCode.APPROVE_PROCESS_FAILED,
-			"compensation",
-			LocalDateTime.of(2026, 3, 3, 16, 22)
-		);
-
-		// then
+		// when & then: 종착 전이 시 가드 위반은 catch하지 않고 전파한다
+		assertThatThrownBy(() -> paymentApprovalRecordService.fail("PAY-1", PaymentProvider.NAVERPAY, "payment-id-1",
+			PaymentFailCode.APPROVE_PROCESS_FAILED, "compensation", LocalDateTime.of(2026, 3, 3, 16, 22)))
+			.isInstanceOf(PaymentException.class)
+			.extracting(ex -> ((PaymentException) ex).getErrorCode())
+			.isEqualTo(PaymentErrorCode.PAYMENT_STATUS_TRANSITION_NOT_ALLOWED);
 		assertThat(payment.getStatus()).isEqualTo(PaymentStatus.SUCCEEDED);
-		assertThat(payment.getFailCode()).isNull();
-		assertThat(payment.getRespondedAt()).isEqualTo(succeededAt);
+		then(paymentRepository).should(never()).saveChecked(any());
 	}
 
-	@DisplayName("보상 흐름 실패 처리 시 이력이 없으면 상태를 갱신하지 않고 종료한다")
+	@DisplayName("fail transition: 이력이 없으면 PAYMENT_RECORD_NOT_FOUND를 전파한다 (skip은 useCase 책임)")
 	@Test
-	void failIfPending_whenPaymentNotFound_skipMark() {
+	void fail_whenPaymentNotFound_throwsRecordNotFound() {
 		// given
 		given(paymentRepository.findApprovePayment(
 			eq("PAY-1"), eq(PaymentProvider.NAVERPAY), eq("payment-id-1")))
 			.willReturn(Optional.empty());
 
-		// when
-		paymentApprovalRecordService.failIfPending(
+		// when & then
+		assertThatThrownBy(() -> paymentApprovalRecordService.fail(
 			"PAY-1", PaymentProvider.NAVERPAY, "payment-id-1",
-			PaymentFailCode.APPROVE_PROCESS_FAILED,
-			"compensation",
-			LocalDateTime.of(2026, 3, 3, 16, 21));
+			PaymentFailCode.APPROVE_PROCESS_FAILED, "compensation", LocalDateTime.of(2026, 3, 3, 16, 21)))
+			.isInstanceOf(PaymentException.class)
+			.extracting(ex -> ((PaymentException) ex).getErrorCode())
+			.isEqualTo(PaymentErrorCode.PAYMENT_RECORD_NOT_FOUND);
+		then(paymentRepository).should(never()).saveChecked(any());
+	}
+
+	@DisplayName("markUnknown transition: REQUESTED 상태이면 UNKNOWN으로 전이한다")
+	@Test
+	void markUnknown_whenRequested_marksUnknown() {
+		// given
+		LocalDateTime respondedAt = LocalDateTime.of(2026, 3, 3, 16, 21);
+		PaymentReservation reservation = PaymentReservation.createReserved(
+			1L, 1L, 1000, PaymentProvider.NAVERPAY, "PAY-1", LocalDateTime.now().plusMinutes(15));
+		Payment payment = Payment.createRequested(reservation, PaymentType.APPROVE, "payment-id-1");
+		given(paymentRepository.findApprovePayment(
+			eq("PAY-1"), eq(PaymentProvider.NAVERPAY), eq("payment-id-1")))
+			.willReturn(Optional.of(payment));
+
+		// when
+		paymentApprovalRecordService.markUnknown("PAY-1", PaymentProvider.NAVERPAY, "payment-id-1",
+			"pg timeout", respondedAt);
 
 		// then
-		then(paymentRepository).should(never()).save(any());
+		assertThat(payment.getStatus()).isEqualTo(PaymentStatus.UNKNOWN);
+		assertThat(payment.getFailDetail()).isEqualTo("pg timeout");
+		assertThat(payment.getRespondedAt()).isEqualTo(respondedAt);
+		then(paymentRepository).should().saveChecked(payment);
+	}
+
+	@DisplayName("markUnknown transition: REQUESTED가 아니면 도메인 가드가 PAYMENT_STATUS_TRANSITION_NOT_ALLOWED를 전파한다 (skip은 useCase 책임)")
+	@Test
+	void markUnknown_whenNotRequested_throwsTransitionNotAllowed() {
+		// given
+		PaymentReservation reservation = PaymentReservation.createReserved(
+			1L, 1L, 1000, PaymentProvider.NAVERPAY, "PAY-1", LocalDateTime.now().plusMinutes(15));
+		Payment payment = Payment.createRequested(reservation, PaymentType.APPROVE, "payment-id-1");
+		payment.succeed(LocalDateTime.of(2026, 3, 3, 16, 20));
+		given(paymentRepository.findApprovePayment(
+			eq("PAY-1"), eq(PaymentProvider.NAVERPAY), eq("payment-id-1")))
+			.willReturn(Optional.of(payment));
+
+		// when & then
+		assertThatThrownBy(() -> paymentApprovalRecordService.markUnknown("PAY-1", PaymentProvider.NAVERPAY,
+			"payment-id-1", "pg timeout", LocalDateTime.of(2026, 3, 3, 16, 21)))
+			.isInstanceOf(PaymentException.class)
+			.extracting(ex -> ((PaymentException) ex).getErrorCode())
+			.isEqualTo(PaymentErrorCode.PAYMENT_STATUS_TRANSITION_NOT_ALLOWED);
+		then(paymentRepository).should(never()).saveChecked(any());
 	}
 }

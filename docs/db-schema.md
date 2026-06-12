@@ -180,6 +180,7 @@ PG 에 실제로 보낸 요청 사건. type ∈ `{APPROVE, CANCEL}`. append-only
 
 COLUMNS:
 - `id (PK)`
+- `version BIGINT NOT NULL DEFAULT 0` — `@Version` 낙관적 락 (V9). 같은 행 동시 종착 전이 lost update 차단 (ADR-050)
 - `order_id BIGINT NOT NULL` — 소속 Order PK 값. FK 제약 없음 (참조용 값)
 - `merchant_pay_key VARCHAR(64) NOT NULL` — 어느 Reservation 에서 비롯됐는지 (값으로 연결)
 - `pg_payment_id VARCHAR(64) NOT NULL` — PG 가 발급한 외부 결제 ID. NOT NULL (RESERVE 가 빠져 항상 존재)
@@ -205,7 +206,7 @@ INDEX:
 - **FK**: `order_id` 는 FK 제약 없음 (참조용 값)
 - **append-only**: Payment 행은 한번 INSERT 후 상태 전이 (UPDATE) 만 일어남. 행 삭제 금지
 - unique key 대상 컬럼(`merchant_pay_key` 64, `provider` 32, `pg_payment_id` 64, `type` 32)은 `@Column(length=...)`을 명시한다. utf8mb4 + InnoDB unique key 한도 3072 bytes 안에 들어오도록 산정 (ADR-023 참조)
-- **escalation 멱등**: `escalated_at` set 은 조건부 UPDATE (`WHERE escalated_at IS NULL AND status IN (UNKNOWN,REQUESTED)`) 로만 수행. 영향 행 1 이 escalation 통지 주체를 결정한다 (동시 race 에서도 1회 보장, ADR-049)
+- **escalation 멱등**: `escalated_at` set 은 도메인 메서드 `Payment.escalate(now)`(가드 `escalated_at IS NULL AND status IN (UNKNOWN,REQUESTED)`) + `@Version`(`version` 컬럼) 낙관 락으로 수행. transition 의 `saveChecked` 성공 1 건만 escalation 통지 주체가 되고 동시 race 의 진 쪽은 `PAYMENT_CONCURRENTLY_MODIFIED` 로 skip 된다 (동시 race 에서도 1회 보장). 조건부 UPDATE 영향 행 수 방식에서 환원 — `@Version` 도입(V9, ADR-050) 으로 전제 해소 (ADR-049 → ADR-052)
 
 ### `tbl_outbox_event`
 

@@ -1,9 +1,12 @@
 package com.commerce.payment.application;
 
+import static org.assertj.core.api.Assertions.assertThatCode;
+import static org.assertj.core.api.Assertions.assertThatThrownBy;
 import static org.mockito.ArgumentMatchers.any;
 import static org.mockito.ArgumentMatchers.eq;
 import static org.mockito.BDDMockito.given;
 import static org.mockito.BDDMockito.then;
+import static org.mockito.BDDMockito.willThrow;
 import static org.mockito.Mockito.never;
 
 import java.time.LocalDateTime;
@@ -40,18 +43,43 @@ class PaymentApprovalCompensationServiceTest {
 	@InjectMocks
 	private PaymentApprovalCompensationService compensationService;
 
-	@DisplayName("merchantKeyMismatch 보상: failIfPending 호출, pgCanceller.cancel 미호출")
+	@DisplayName("merchantKeyMismatch 보상: fail 호출, pgCanceller.cancel 미호출")
 	@Test
 	void compensateMerchantKeyMismatch_callsFailIfRequestedOnly() {
 		Payment approvePayment = createApprovePayment("PAY-1", "pg-id", 1000);
 
 		compensationService.compensateMerchantKeyMismatch(approvePayment);
 
-		then(paymentApprovalRecordService).should().failIfPending(
+		then(paymentApprovalRecordService).should().fail(
 			eq("PAY-1"), eq(PaymentProvider.NAVERPAY), eq("pg-id"),
 			eq(PaymentFailCode.MERCHANT_PAY_KEY_MISMATCH), any(), any()
 		);
 		then(pgCanceller).should(never()).cancel(any(), any());
+	}
+
+	@DisplayName("skip 래퍼: transition이 PAYMENT_CONCURRENTLY_MODIFIED를 던지면 흡수하고 예외를 전파하지 않는다 (트랜잭션 경계 밖 skip)")
+	@Test
+	void failSkippable_whenTransitionConflict_absorbed() {
+		Payment approvePayment = createApprovePayment("PAY-1", "pg-id", 1000);
+		willThrow(new PaymentException(PaymentErrorCode.PAYMENT_CONCURRENTLY_MODIFIED))
+			.given(paymentApprovalRecordService).fail(any(), any(), any(), any(), any(), any());
+
+		// transition이 충돌을 던져도 보상 useCase는 skip하고 정상 종료한다
+		assertThatCode(() -> compensationService.compensateMerchantKeyMismatch(approvePayment))
+			.doesNotThrowAnyException();
+	}
+
+	@DisplayName("skip 래퍼: transition이 SKIPPABLE 아닌 도메인 예외를 던지면 그대로 전파한다")
+	@Test
+	void failSkippable_whenNonSkippableError_rethrown() {
+		Payment approvePayment = createApprovePayment("PAY-1", "pg-id", 1000);
+		willThrow(new PaymentException(PaymentErrorCode.PAYMENT_AMOUNT_MISMATCH))
+			.given(paymentApprovalRecordService).fail(any(), any(), any(), any(), any(), any());
+
+		assertThatThrownBy(() -> compensationService.compensateMerchantKeyMismatch(approvePayment))
+			.isInstanceOf(PaymentException.class)
+			.extracting(ex -> ((PaymentException) ex).getErrorCode())
+			.isEqualTo(PaymentErrorCode.PAYMENT_AMOUNT_MISMATCH);
 	}
 
 	@DisplayName("amountMismatch 보상: PG cancel 성공 시 succeed 호출")
@@ -106,7 +134,7 @@ class PaymentApprovalCompensationServiceTest {
 		);
 	}
 
-	@DisplayName("amountMismatch 보상: PG cancel 결과 불명 시 markUnknownIfRequested 호출")
+	@DisplayName("amountMismatch 보상: PG cancel 결과 불명 시 markUnknown 호출")
 	@Test
 	void compensateAmountMismatch_whenUnknown_callsMarkUnknown() {
 		// PG 취소 결과 불명 시 cancel 기록을 FAILED로 박제하지 않고 UNKNOWN으로 보존해 대사 대상으로 남긴다 (#219)
@@ -120,7 +148,7 @@ class PaymentApprovalCompensationServiceTest {
 
 		compensationService.compensateAmountMismatch(approvePayment, 2000, pgCanceller);
 
-		then(paymentCancellationService).should().markUnknownIfRequested(
+		then(paymentCancellationService).should().markUnknown(
 			eq("PAY-1"), eq(PaymentProvider.NAVERPAY), eq("pg-id"), any(), any()
 		);
 		then(paymentCancellationService).should(never()).fail(any(), any(), any(), any(), any(), any());

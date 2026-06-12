@@ -7,10 +7,8 @@ import java.util.Optional;
 
 import org.springframework.data.domain.Pageable;
 import org.springframework.data.jpa.repository.JpaRepository;
-import org.springframework.data.jpa.repository.Modifying;
 import org.springframework.data.jpa.repository.Query;
 import org.springframework.data.repository.query.Param;
-import org.springframework.transaction.annotation.Transactional;
 
 import com.commerce.payment.domain.Payment;
 import com.commerce.payment.domain.PaymentProvider;
@@ -80,16 +78,4 @@ public interface JpaPaymentRepository extends JpaRepository<Payment, Long> {
 		Pageable pageable
 	);
 
-	// 조건부 UPDATE: escalatedAt IS NULL AND status IN (UNKNOWN,REQUESTED)인 경우에만 escalatedAt 기록.
-	// @Transactional로 트랜잭션이 없는 호출 컨텍스트(PaymentReconciliationService)에서도 독립 커밋된다.
-	// 반환값(영향 행 수)이 1이면 이 호출이 escalation 주체, 0이면 이미 다른 주체가 처리(중복 통지 차단).
-	@Transactional
-	@Modifying
-	@Query("""
-		UPDATE Payment p SET p.escalatedAt = :now
-		WHERE p.id = :id
-		  AND p.escalatedAt IS NULL
-		  AND p.status IN ('UNKNOWN', 'REQUESTED')
-		""")
-	int escalateIfPending(@Param("id") Long id, @Param("now") LocalDateTime now);
 }

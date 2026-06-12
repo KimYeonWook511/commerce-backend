@@ -15,6 +15,7 @@ import jakarta.persistence.GenerationType;
 import jakarta.persistence.Id;
 import jakarta.persistence.Table;
 import jakarta.persistence.UniqueConstraint;
+import jakarta.persistence.Version;
 import lombok.AccessLevel;
 import lombok.Builder;
 import lombok.Getter;
@@ -37,6 +38,9 @@ public class Payment extends BaseTimeEntity {
 	@Id
 	@GeneratedValue(strategy = GenerationType.IDENTITY)
 	private Long id;
+
+	@Version
+	private Long version;
 
 	@Column(nullable = false, length = 64)
 	private String merchantPayKey;
@@ -166,6 +170,22 @@ public class Payment extends BaseTimeEntity {
 		this.status = PaymentStatus.UNKNOWN;
 		this.failDetail = failDetail;
 		this.respondedAt = respondedAt;
+	}
+
+	/**
+	 * escalation 가능 상태(UNKNOWN/REQUESTED)이고 아직 escalation 되지 않았으면 escalatedAt을 기록하고 true를 반환한다.
+	 * 이미 escalation됐거나 종착 상태이면 false를 반환한다(멱등/skip).
+	 * 통지 주체 여부는 save 성공(@Version)으로 최종 확정한다(ADR-L3).
+	 */
+	public boolean escalate(LocalDateTime now) {
+		if (this.status != PaymentStatus.UNKNOWN && this.status != PaymentStatus.REQUESTED) {
+			return false;
+		}
+		if (this.escalatedAt != null) {
+			return false;
+		}
+		this.escalatedAt = now;
+		return true;
 	}
 
 	public void verifyApprovedResponse(String responseMerchantPayKey, int responseTotalAmount) {
