@@ -18,17 +18,41 @@ src/main/java/com/commerce/
     └── stock/         # 재고 복구 이벤트 생성·릴레이·소비
 ```
 
-각 도메인은 아래 레이어 구조를 따른다.
+각 도메인은 아래 레이어 구조를 따른다. **레이어마다 나누는 축이 다르다**: application은 *책임*으로, domain은 *엔티티*로, infrastructure는 *외부 대상*으로, presentation은 *진입 방식*으로 나눈다. 전 도메인을 똑같이 잘게 쪼개지 않고, 책임·경계가 실제로 공존하는 도메인(예: payment)만 아래 깊이로 나눈다. 단순 CRUD 도메인은 평평하게 둔다.
 
 ```
 <domain>/
-├── application/     # 유스케이스 서비스, command, result
-│   └── port/        # 외부 시스템 연동 인터페이스 (Redis, 결제 PG, 이메일 등)
-├── domain/          # 엔티티, 도메인 로직, repository port
-├── infrastructure/  # JpaXxxRepository, XxxRepositoryAdapter, 외부 연동 구현체
-├── presentation/    # Controller, request DTO
-└── exception/       # 도메인 예외
+├── presentation/        # inbound adapter — 얇게 위임 (tx·로직·로그 없음)
+│   ├── http/            # Controller, request DTO
+│   ├── scheduler/       # @Scheduled (cron 트리거만, 위임)
+│   ├── batch/           # Spring Batch Job/Step 정의 (위임)
+│   └── consumer/        # @KafkaListener (메시지 트리거만, 위임)
+├── application/
+│   ├── usecase/         # orchestrator — tx 없음. 흐름 조립 + 충돌 정책 선택 (skip은 private 메서드)
+│   ├── service/         # tx 단위작업 — @Transactional. 충돌 시 전파(catch 안 함)
+│   ├── port/            # 외부 시스템 연동 인터페이스(outbound): PG, cache, messaging producer, email 등
+│   └── dto/             # command(=Command DTO), result
+├── domain/
+│   ├── <entity>/        # 엔티티 + 전이 로직
+│   ├── repository/      # repository port (도메인 모델 영속성)
+│   ├── policy/          # 순수 도메인 정책 (상태로 분류 계산 — tx 모름)
+│   └── exception/       # 도메인 예외 (모든 레이어가 의존 → 가장 안쪽)
+└── infrastructure/      # outbound adapter — 외부 대상별
+    ├── persistence/     # JpaXxxRepository, XxxRepositoryAdapter (예외 변환·saveAndFlush·락)
+    ├── pg/              # 결제 PG 연동
+    ├── cache/           # Redis 등
+    ├── messaging/       # Kafka/RabbitMQ producer 구현
+    └── notification/    # 알림 채널 구현
 ```
+
+배치 기준 요약(상세·근거는 `docs/package-structure-guide.md` 단일 출처):
+
+- **무엇이 유스케이스를 깨우든(HTTP·cron·batch·message) 진입점은 전부 inbound adapter** → `presentation/` 아래에 두고 얇게 위임한다. `@Scheduled`/배치 Job/`@KafkaListener`를 application Service에 직접 달지 않는다.
+- **인터페이스(port)는 안쪽 레이어에, 구현체는 바깥 레이어에** — 항상 다른 레이어로 가른다. 캐시·messaging producer 등 "외부 기능"은 `application/port/` + `infrastructure/`, "도메인 모델 영속성"은 `domain/repository/` + `infrastructure/persistence/`.
+- **메시징 방향이 위치를 가른다**: producer(보내기)는 outbound → `application/port/` + `infrastructure/messaging/`, consumer(받기)는 inbound → `presentation/consumer/`.
+- **`ApplicationEventPublisher`는 외부 브로커가 아닌 in-process 디커플링** → port로 감싸지 않고 application이 직접 발행하되, 리스너의 트랜잭션 시점(동기 / `@TransactionalEventListener(AFTER_COMMIT)` / `REQUIRES_NEW`)을 명시 관리한다. 프로세스 경계를 넘고 유실 불가한 이벤트는 in-process가 아닌 Outbox + Kafka 를 쓴다.
+- **도메인 예외는 `domain/exception/`**(엔티티 가드와 adapter 변환이 함께 던지고 모든 레이어가 의존). 인프라 fallback용 기술 예외(예: `OrderIdempotencyStoreUnavailableException`)만 `infrastructure/`에 둔다.
+- **엔티티는 `domain/`에 두고 JPA 매핑 애너테이션(`@Entity`/`@Id`/`@Version` 등) 사용을 허용한다.** 순수 POJO 도메인 객체 + 별도 매핑 클래스(JpaEntity)와 변환 코드를 두는 비용이 현재 규모에서 비효율적이라 판단해, domain 은 "선언적 매핑 메타데이터"까지만 허용한다(Spring 생태계 관습 일관성, ADR-006). 단 동작하는 JPA 런타임(`EntityManager` 로 직접 쿼리·flush 등)은 domain 에 두지 않는다 — 이 경계는 ArchUnit 으로 강제한다(아래 "아키텍처 규칙 강제" 참고).
 
 ---
 
@@ -68,94 +92,80 @@ Port 인터페이스 설계 원칙:
 
 - 네이밍은 `{행위}{도메인}Service` 형식을 따른다 (`CreateOrderService`, `CancelOrderService`, `GetOrderService`)
 - 구조는 UseCase 패턴과 동일하며, 현재는 Spring 생태계 관습과의 일관성을 위해 `Service` suffix를 사용한다 (ADR-006 참고)
-- 처음부터 지나치게 잘게 나누지 않되, 트랜잭션 흐름·변경 이유·호출 맥락이 달라지는 시점에 분리한다
+- 처음부터 지나치게 잘게 나누지 않되, 트랜잭션 흐름·변경 이유·호출 맥락·충돌 처리 정책(전파/skip/retry)이 달라지는 시점에 분리한다
+- 클래스명은 `Service` suffix 를 유지하되, 책임이 공존하는 도메인은 패키지(`application/{usecase,service}`)로 역할을 가른다 (패키지 구조 참고)
 
 ---
 
 ## 도메인별 서비스
 
-각 도메인의 application 계층은 위 "서비스 네이밍 원칙"에 따라 유스케이스 단위 Service로 구성된다. 도메인별 서비스의 정확한 전체 목록은 코드(`com.commerce.<domain>.application`)가 단일 출처이며, 특정 기능의 구현 맥락은 해당 task의 `docs/tasks/<task>/architecture.md`를 참조한다. 본 문서는 개별 서비스를 전수 나열하지 않는다.
+각 도메인의 application 계층은 위 "서비스 네이밍 원칙"에 따라 유스케이스 단위 Service로 구성된다. 도메인별 서비스의 정확한 전체 목록은 코드(`com.commerce.<domain>.application`)가 단일 출처이며, 특정 기능의 구현 맥락은 해당 task의 `docs/tasks/<task>/architecture.md`를 참조한다. 본 문서는 개별 서비스를 하나하나 다 적지 않는다.
 
 ---
 
 ## 데이터 흐름
 
-아래 흐름은 컴포넌트 간 협력과 순서, 트랜잭션 경계를 보여주는 개념도다. 등장하는 클래스·메서드명은 현재 구현 기준 예시이며, 정확한 시그니처는 코드가 단일 출처다. 흐름이 표현하려는 것은 "어떤 책임이 어떤 순서로, 어떤 경계 안팎에서 협력하는가"이다.
+이 섹션은 **코드를 읽어도 한눈에 안 보이는 것** — 책임의 *순서*, *트랜잭션 경계 안팎*, *왜 그 순서인가* — 만 기록한다. 클래스·메서드명·호출 그래프는 코드(`com.commerce.<domain>`)가 기준이므로 적지 않는다(적어 두면 코드가 바뀔 때 문서가 안 맞게 된다).
+
+단순 위임 흐름(상품 공개/관리자 조회, 관리자 상품·재고 관리, 장바구니 추가·조회·수량변경·삭제 등)은 `Controller → Service → Repository`의 평탄한 위임이라 코드가 그대로 출처다. 본 섹션은 경계·순서·보상이 얽힌 흐름만 다룬다.
 
 ```
-# 상품 공개 조회
-ProductController → ProductQueryService → ProductRepository, StockRepository
+# 결제 reserve — 순서·경계 (클래스명은 코드가 출처)
+1. 주문 확인 + 결제 가능 상태 검증
+2. UNKNOWN 행 차단 검사 (UNKNOWN 있는 주문은 reserve 차단 — PAYMENT_RESULT_PENDING 409)
+3. 재사용 가능 Reservation 탐색, 없으면 RESERVED INSERT
+   - 동시 중복 요청(따닥)은 uk_payment_reservation_reserved_key UNIQUE 가 차단
 
-# 관리자 상품 관리
-AdminProductController → AdminProductService → ProductRepository
+# 결제 승인 (네이버페이) — 순서·경계
+1. (memberId, merchantPayKey) 로 Reservation 역조회 (Order 안 거침)
+   - 남의/없는 키는 PAYMENT_RESERVATION_NOT_FOUND 로 존재 비노출 (ADR-038)
+2. PG 호출 전 차단 검사:
+   - UNKNOWN 행 차단
+   - USED Reservation: 같은 pgPaymentId 는 멱등 200 / 다른 pgPaymentId 는 ALREADY_USED 차단
+   - 이미 성공한 주문은 PAYMENT_DUPLICATE 차단 (approved_order_key 존재, ADR-037)
+3. [트랜잭션 안] Reservation 사용 처리(@Version) + Payment(APPROVE, REQUESTED) INSERT
+   - 동시 이중 use 진 쪽은 saveUsed 에서 ALREADY_USED 로 PG 호출 전 차단 (ADR-036)
+   - 이 충돌→ALREADY_USED 번역은 use 가 그 행의 유일한 동시 쓰기 경로임을 전제 (5장 예외 정책 참고)
+4. [트랜잭션 밖] PG approve 호출
+5. 승인 시도 상태 반영 → 승인 완료 반영
+   - saveApproved 의 uk_payment_approved_order_key 위반은 adapter 가 PAYMENT_DUPLICATE 로 번역 (ADR-033)
+6. 종착/보상 판단 (성공 APPROVE 행 존재 기반):
+   - 이중결제 → fail-first 단일 보상 (PG cancel)
+   - 정상 승인 후 transient 기록 실패(@Version 충돌 포함)는 보상 없이 전파·REQUESTED 유지로 reconcile 위임 (ADR-032)
 
-# 관리자 재고 관리
-AdminStockController → AdminStockService → StockRepository, StockHistoryRepository
+# 주문 만료 배치 — 경계
+- 미확정 APPROVE 결제(UNKNOWN/stale REQUESTED) 걸린 주문은 BlockingPaymentChecker port 로
+  만료 대상에서 제외 → 만료-대사 경합(돈은 빠졌는데 주문 취소) 방지 (order 소유 port·payment adapter 구현, ADR-042)
+- 만료 → 주문 취소 → 재고 복구 이벤트 생성 → Outbox relay → Kafka consumer 가 재고 복구
+  (이벤트 유실 방지를 위해 in-process 이벤트가 아닌 Outbox + Kafka, 5장 참고)
 
-# 장바구니 담기 / 조회 / 수량 변경 / 항목 삭제
-CartController → AddCartItemService → CartItemRepository (UPSERT: 있으면 수량 합산, 없으면 생성)
-CartController → GetMyCartService → CartItemRepository, ProductRepository (최신 가격 재조립, 구매 불가 마킹)
-CartController → UpdateCartItemQuantityService → CartItemRepository (수량 절대값 변경)
-CartController → RemoveCartItemService → CartItemRepository (항목 삭제)
-
-# 주문 생성
-OrderController → OrderCreateService
-  → StockInventoryService (재고 차감)
-  → ReservePaymentService (결제 준비 — PaymentReservation 생성/재사용)
-  → CartItemRemover port (주문된 productId만 cart에서 제거)
-
-# 결제 reserve (구 ready)
-ReservePaymentController → ReservePaymentService
-  → OrderRepository (주문 확인 + 결제 가능 상태 검증)
-  → PaymentRepository (UNKNOWN 차단 검사)
-  → PaymentReservationRepository (재사용 가능 Reservation 탐색 또는 신규 RESERVED INSERT)
-  → uk_payment_reservation_reserved_key UNIQUE 가 동시 중복 요청(따닥) 차단
-
-# 결제 승인 (네이버페이)
-NaverPayController → NaverPayApprovalService
-  → PaymentReservationRepository ((memberId, merchantPayKey) 로 Reservation 역조회 — Order 안 거침; 남의/없는 키는 PAYMENT_RESERVATION_NOT_FOUND 로 존재 비노출, ADR-038)
-  → PaymentRepository (UNKNOWN 차단 검사)
-  → USED Reservation 발견 시: 같은 pgPaymentId 는 멱등 응답 200, 다른 pgPaymentId 는 PAYMENT_RESERVATION_ALREADY_USED 차단
-  → 이미 성공(APPROVE·SUCCEEDED) 결제 있는 주문 진입 차단 — PG 호출 전 PAYMENT_DUPLICATE (approved_order_key 존재 검사, ADR-037)
-  → [트랜잭션 안] Reservation 사용 처리 (@Version 낙관적 락 — 동시 이중 use 진 쪽은 saveUsed 에서 PAYMENT_RESERVATION_ALREADY_USED 로 PG 호출 전 차단, ADR-036) + Payment(APPROVE, REQUESTED) INSERT
-  → [트랜잭션 밖] PG Gateway (approve API 호출)
-  → PaymentApprovalRecordService (승인 시도 상태 반영)
-  → 승인 완료 반영 (saveApproved — uk_payment_approved_order_key 위반은 adapter 가 PAYMENT_DUPLICATE 도메인 예외로 번역, ADR-033)
-  → 완료 여부 판단 (성공 APPROVE 행 존재 기반, 보상 가능성 판단)
-  → PaymentCancellationService (취소 시도 이력 기록, 보상 흐름)
-  → PaymentApprovalCompensationService (보상 dispatcher — 이중결제 fail-first 단일 보상; 정상 승인 후 transient 기록 실패는 보상 없이 전파·REQUESTED 유지로 reconcile 에 위임, ADR-032)
-
-# 주문 만료 배치
-Spring Batch (주문 만료)
-  → BlockingPaymentChecker port (미확정 APPROVE 결제(UNKNOWN/stale REQUESTED) 걸린 주문을 만료 대상에서 제외 — order 소유 port·payment adapter 구현, chunk orderId 일괄 조회로 N+1 회피, ADR-042)
-  → OrderExpirationService (만료 대상 처리)
-  → OrderCancelService (주문 취소)
-  → StockRestoreOutboxCreateService (복구 이벤트 생성)
-  → Outbox 스케줄러 → relay → Kafka
-  → Kafka consumer → StockRestoreOutboxConsumeService (재고 복구)
-
-# 결제 대사 (reconciliation)
-@Scheduled PaymentReconciliationService (ADR-040)
-  → 스캔: stale APPROVE 미확정 결제 후보 (시간 윈도우 — UNKNOWN ≈1분 / REQUESTED ≈15분 하한, ≈6시간 상한 초과는 escalation 제외, ADR-047)
-  → [건별, 트랜잭션 밖] PG Gateway 이력 조회 (getApprovalHistory — 승인 재요청이 아니라 이미 일어난 결과 확인. 이중과금 방지)
-  → 후처리 정책 (PaymentPostProcessTargetPolicy/FlowPolicy — src/main 단일 출처, ADR-046) 으로 확정/보상/대기 결정
-  → 승인 확정: PG 재호출 없이 우리 상태만 SUCCEEDED + Order PAID 반영
-  → 주문이 이미 CANCELED / 중복 결제: 보상 취소(PG cancel) + FAILED+failCode 종착 + NotificationPort 통지 (ADR-043)
-  → 비-INIT 주문은 건너뛰지 않고 종착 상태로 전이해 무한 재시도 차단 (ADR-048)
+# 결제 대사 (reconciliation) — 순서·경계 (ADR-040)
+1. 스캔: stale 미확정 결제 후보 (UNKNOWN ≈1분 / REQUESTED ≈15분 하한, ≈6시간 상한 초과는 escalation 제외, ADR-047)
+2. [건별, 트랜잭션 밖] PG 이력 조회 (getApprovalHistory — 승인 재요청이 아니라 이미 일어난 결과 확인, 이중과금 방지)
+3. 후처리 정책(대상 식별·flow 결정 — src/main 단일 출처, ADR-046)으로 확정/보상/대기 결정
+4. 확정: PG 재호출 없이 우리 상태만 SUCCEEDED + Order PAID
+5. 이미 CANCELED / 중복: 보상 취소(PG cancel) + FAILED 종착 + NotificationPort 통지 (ADR-043)
+6. 건별 독립 트랜잭션으로 처리(한 건 실패가 루프를 멈추지 않음) — 비-INIT 주문은 종착 상태로 전이해 무한 재시도 차단 (ADR-048)
 ```
 
 ---
 
 ## 도메인 책임
 
-- `auth`는 인증 유스케이스의 owner다. 비밀번호 검증, JWT 발급·검증, refresh token 저장 흐름을 담당한다. 회원 생성·조회는 `member.application`에 위임한다.
-- `security`는 HTTP 요청 인증/인가 adapter다. `JwtAuthenticationFilter`가 `TokenAuthenticationService`를 호출해 인증 결과를 `AuthenticationContext`에 저장하고, `AuthorizationInterceptor`와 `AuthenticatedMemberIdArgumentResolver`가 이를 사용한다.
-- `product` 도메인은 공개 상품 조회와 관리자 상품 등록·수정·soft delete를 제공한다. 상품 목록은 `ON_SALE` 또는 `SOLD_OUT` 상태, `deletedAt IS NULL`, `createdAt DESC` 기준으로 반환한다. 상품 상세는 상품 정보와 현재 재고 수량을 조합한다.
-- `stock` 도메인은 상품별 현재 재고, 주문 경로의 재고 차감·복구, 관리자 초기 재고 생성, 관리자 수동 조정, 재고 변경 이력을 담당한다. `Product : Stock = 1:1` 관계를 유지하며, `Stock` 은 `productId: Long` 으로 Product 를 ID 참조한다(ADR-020). `StockHistory` 는 Stock 과 별도 aggregate 로 `stockId: Long` 으로 Stock 을 ID 참조한다. 응답 조립 시 Application 계층이 path 컨텍스트(productId)를 외부 주입한다. 후속 트랙(`order-jpa-association-decouple`, `payment-jpa-association-decouple`)에서 Order·Payment aggregate 에도 동일 원칙이 적용됐다. DB FK 일괄 제거는 `cross-aggregate-fk-cleanup` 트랙에서 완료됐다.
-- `order` 도메인은 주문 생성·취소·만료를 담당한다. 주문 생성은 멱등 키로 중복 요청을 방어한다. 만료 처리는 Spring Batch로 스케줄링하며, 미확정 APPROVE 결제(UNKNOWN/stale REQUESTED)가 걸린 주문은 `BlockingPaymentChecker` port로 만료 대상에서 제외해 만료-대사 경합(돈은 빠졌는데 주문 취소)을 막는다(ADR-042). 주문 생성 트랜잭션 내에서 `CartItemRemover` port를 통해 주문된 항목만 cart에서 제거한다. `Order` 는 `memberId: Long` 으로 Member 를, `OrderItem` 은 `productId: Long` 으로 Product 를 ID 참조한다(ADR-020). same-aggregate 관계(`Order.orderItems`, `OrderItem.order`)는 객체 참조를 유지한다. cross-aggregate fetch join 은 제거하고 사용처별로 batch composition(필요한 Product를 ID 목록으로 한 번에 조회) 또는 컬럼 직접 사용(cancel/expiration)으로 대체한다. 세부 결정은 `docs/tasks/order-jpa-association-decouple/adr.md` 참조. 후속 트랙: `payment-jpa-association-decouple`. DB FK 일괄 제거는 `cross-aggregate-fk-cleanup` 트랙에서 완료됐다.
-- `cart` 도메인은 회원의 장바구니 항목 추가(UPSERT)·조회(최신 가격 재조립, 구매 불가 마킹)·수량 변경·삭제를 담당한다. 다른 aggregate(Member, Product)는 `Long` ID로만 참조한다(ADR-020). 주문-cart 연동은 `CartItemRemover` port(order 소유)를 cart 쪽 adapter가 구현하는 방식으로 의존 방향을 보존한다.
-- `payment` core는 결제 예약(reserve)·승인·시도 이력 관리를 담당한다. `naverpay`는 provider 서브패키지로, PG 호출과 내부 결제 상태 반영을 분리한다. 도메인은 두 엔티티로 분리됐다 (ADR-026): `PaymentReservation` (결제창 준비물, `RESERVED → USED` 전이) + `Payment` (PG 사건 append-only, type ∈ `{APPROVE, CANCEL}`). Order 는 결제 식별자를 모른다 — merchantPayKey 발급·저장 책임이 `PaymentReservation` 으로 이동했다. `Payment` 는 `orderId: Long` 으로 Order 를, `merchantPayKey` 로 `PaymentReservation` 을 값 참조한다. 결제 완료 판단은 *성공한 APPROVE 행 존재(EXISTS)* 기반이다 (ADR-014, ADR-026). 보상 정책(중복 승인 보상 포함)은 payment.application의 보상 서비스가 소유하며, 이중결제(uk 위반) 탐지는 adapter 가 도메인 예외(PAYMENT_DUPLICATE)로 번역하고 application 이 fail-first 로 보상한다 (ADR-015, ADR-026, ADR-033). 정상 승인 후 transient 기록 실패는 보상 없이 전파하고 approve 를 REQUESTED 로 두어 reconcile 에 위임한다 (완료 우선, ADR-032). UNKNOWN 마킹 — PG 호출 결과 불명 시 흔적을 보존하고, UNKNOWN 행 있는 주문은 reserve/approve 를 차단한다 (`PAYMENT_RESULT_PENDING` 409). ADR-020 후속 트랙 series (Stock / Order / Payment / FK cleanup) 완전 종료. `cross-aggregate-fk-cleanup` 트랙에서 cross-aggregate FK 5건을 Flyway V4 migration 으로 일괄 제거해 코드 + DB schema 정합성이 회복됐다. 운영 DB 의 FK 제거 적용은 별도 결정. 결제 도메인 재설계 세부 결정은 `docs/tasks/payment-order-redesign/` 참조 (ADR-026). 대사(reconciliation) 후처리 — `@Scheduled` 기반 대사 서비스가 stale 미확정 결제를 PG 이력 조회로 확정하며, 결정 정책(대상 식별·flow 결정, src/main 단일 출처)에 따라 확정·보상·escalation 제외를 수행한다 (ADR-040/046/047). 승인 확정은 PG 재요청 없이 이력 조회로만 하고(이중과금 방지), 주문이 이미 취소됐거나 중복이면 보상 취소(PG cancel)로 정합성을 복구한다 (ADR-043/048). 운영자 통지는 `NotificationPort`(현재 no-op 로그, 실제 채널 adapter는 후속)로 hook 지점만 확보한다 (ADR-045). 결제 상태(`status`)는 일어난 사실(REQUESTED/SUCCEEDED/FAILED/UNKNOWN)만 담고 후처리 분류는 정책이 계산하므로, 보상·escalation 종착에 새 상태를 도입하지 않는다 (ADR-039/044).
-- `outbox` 도메인은 재고 복구 이벤트를 Outbox 패턴으로 처리한다. 이벤트 생성, Kafka 릴레이, 소비 책임을 별도 서비스로 분리한다.
+각 도메인이 **무엇을 책임지나**와 핵심 설계 결정만 기록한다. 구체 클래스·메서드·상태값·트랙 이력은 코드(`com.commerce.<domain>`)와 ADR이 단일 출처다.
+
+> 공통 원칙(ADR-020, 모든 도메인에 적용): cross-aggregate 참조는 객체가 아니라 `Long` ID(또는 값)로 한다. same-aggregate 관계만 객체 참조를 유지한다. cross-aggregate FK는 제거됐고(운영 DB 적용은 별도 결정), 조회는 사용처별 batch composition 또는 컬럼 직접 사용으로 대체한다. 도메인별 적용 세부는 각 `docs/tasks/*-jpa-association-decouple/` 참조.
+
+- **`auth`** — 인증 유스케이스의 owner. 비밀번호 검증, JWT 발급·검증, refresh token 저장. 회원 생성·조회는 `member`에 위임한다.
+- **`security`** — HTTP 요청 인증/인가 adapter. 토큰을 검증해 인증 컨텍스트에 싣고, 인가 인터셉터·argument resolver가 이를 사용한다.
+- **`product`** — 공개 상품 조회와 관리자 상품 관리(등록·수정·soft delete). 상세는 상품 정보 + 현재 재고를 조합한다.
+- **`stock`** — 상품별 재고, 주문 경로의 차감·복구, 관리자 조정, 변경 이력. `Product : Stock = 1:1`. `StockHistory`는 별도 aggregate.
+- **`order`** — 주문 생성·취소·만료. 생성은 멱등 키로 중복 방어. 만료는 Spring Batch로 스케줄링하되, 미확정 결제(UNKNOWN/stale REQUESTED)가 걸린 주문은 `BlockingPaymentChecker` port로 만료 대상에서 제외해 만료-대사 경합(돈은 빠졌는데 주문 취소)을 막는다(ADR-042). 생성 tx 내에서 `CartItemRemover` port로 주문된 항목만 cart에서 제거한다.
+- **`cart`** — 장바구니 항목 추가(UPSERT)·조회(최신 가격 재조립·구매 불가 마킹)·수량 변경·삭제. 주문-cart 연동은 `CartItemRemover` port(order 소유)를 cart adapter가 구현해 의존 방향을 보존한다.
+- **`payment`** — 결제 예약(reserve)·승인·시도 이력. `naverpay`는 provider 서브패키지(PG 호출과 내부 상태 반영 분리). 도메인은 두 엔티티로 분리(ADR-026): `PaymentReservation`(결제창 준비물, `RESERVED→USED`) + `Payment`(PG 사건 append-only). 완료 판단은 *성공한 APPROVE 행 존재(EXISTS)* 기반(ADR-014/026). `status`는 일어난 사실만 담고 후처리 분류는 정책이 계산한다 — 보상·escalation 종착에 새 상태를 두지 않는다(ADR-039/044). 결과 불명 시 UNKNOWN으로 흔적을 보존하고 해당 주문의 reserve/approve를 `PAYMENT_RESULT_PENDING`(409)로 차단한다. 세부는 `docs/tasks/payment-order-redesign/`(ADR-026), 예외·충돌 처리는 `docs/exception-strategy.md`·`docs/optimistic-lock-design.md`.
+  - 보상: 이중결제(uk 위반)는 adapter가 도메인 예외로 번역하고 application이 fail-first로 보상한다. 정상 승인 후 transient 기록 실패(@Version 충돌 포함)는 보상 없이 전파하고 approve를 REQUESTED로 두어 대사에 위임한다(완료 우선). 보상 흐름은 tx를 열지 않고 단계별 독립 commit으로 진행하며, 충돌은 tx 경계 밖에서 skip한다(ADR-008/015/032/033).
+  - 대사(reconciliation): `@Scheduled` 트리거(presentation/scheduler)가 깨우는 서비스가 stale 미확정 결제를 PG **이력 조회**(재요청 아님, 이중과금 방지)로 확정·보상하며, 건별 독립 tx로 한 건 실패가 루프를 멈추지 않는다(ADR-040/043/047/048). 운영자 통지는 `NotificationPort`로 hook만 확보(ADR-045).
+- **`outbox`** — 재고 복구 이벤트를 Outbox 패턴으로 처리(생성·Kafka 릴레이·소비를 분리).
 
 ---
 
@@ -183,6 +193,14 @@ log.info("결제 승인 완료 merchantPayKey={} provider={} pgPaymentId={} orde
 ## Application 계층 트랜잭션·영속화 컨벤션
 
 Application Service의 트랜잭션 경계와 영속화 호출 방식은 ADR-021(method-level `@Transactional`)과 ADR-022(`repository.save(entity)` 명시 호출)를 따른다. 정책 본문·근거·트레이드오프는 ADR을 단일 출처로 한다.
+
+낙관적 락(@Version) 충돌 처리는 아래 경계 규칙을 따른다. 근거·상세는 `docs/optimistic-lock-design.md`(또는 해당 ADR)를 단일 출처로 한다.
+
+- **트랜잭션 경계 안에서는 충돌을 catch하지 않는다.** 변환된 도메인 예외를 전파시켜 깨끗이 rollback한다. 경계 안에서 catch하면 `REQUIRES_NEW`라도 `UnexpectedRollbackException`이 난다.
+- **충돌의 skip/retry/전파 결정(정책)은 트랜잭션 경계 밖**(usecase)에서 한다. 같은 tx 단위작업(`service` 패키지)을 호출 맥락에 따라 전파(→409)·skip(보상)·retry(고경합)로 재사용한다. skip·retry 모두 **한 곳이면 그 Service의 private 메서드, 여러 곳이면 helper**(`OptimisticRetry`, `support`/`common`)로 둔다 — 별도 `policy` 패키지는 만들지 않는다.
+- **여러 tx 단위작업을 한 tx로 묶을 때**는 usecase에 `@Transactional`을 달지 않고(외부 호출이 tx에 빨려들고 규칙 위반), 둘을 감싸는 전용 메서드를 `service` 패키지에 만들어 거기에만 tx를 단다(`PaymentApprovalService.succeedApproval` — order+payment 한 tx). 묶음 메서드는 리포지토리/도메인 객체를 직접 다뤄 한 메서드 안에서 완결한다.
+- **충돌을 도메인 예외로 변환하는 전용 저장 경로**(`saveUsed`/`saveApproved`/`saveChecked` 류)는 flush 시점을 adapter 프레임 안으로 당기기 위해 ADR-022의 기본(`save`) 대신 `saveAndFlush`를 쓴다. 이 변환은 `infrastructure/persistence/` adapter에서만 한다.
+- 충돌은 의미가 1:1로 떨어지는 전용 경로(예: reservation use)에서만 의미 코드(`ALREADY_USED`)로 번역하고, 그렇지 않으면 일반 충돌 코드(`CONCURRENTLY_MODIFIED`)로 두고 필요 시 재조회로 상태를 판정한다.
 
 ---
 
@@ -219,6 +237,23 @@ HTTP 요청 traceId는 스레드 로컬 MDC라 비동기 경계에서 자동 전
 로깅 컨벤션(레이어별 로그 책임, 레벨 기준, 예외 로깅 표준, 민감 정보 마스킹 등)은 `docs/logging-conventions.md`를 참고한다.
 
 환경별 appender·encoder·rolling·마스킹 등 로깅 인프라 설정의 단일 진실의 원천은 `src/main/resources/logback-spring.xml`이다. `application-{local,prod,test}.yml`에는 `logging:` 섹션을 두지 않는다.
+
+---
+
+## 아키텍처 규칙 강제 (ArchUnit)
+
+위 레이어·트랜잭션 경계 규칙 중 **기계적으로 검증 가능한 것**은 문서 서술이 아니라 ArchUnit 테스트로 강제한다. 문서는 "어떤 규칙이 왜 있는가"의 포인터만 갖고, "무엇이 강제되나"의 구현은 테스트 코드가 단일 출처다(`src/test/.../architecture/ArchitectureRulesTest`).
+
+강제 대상 규칙(요지):
+
+- 의존 방향: `domain`은 `application`·`infrastructure`·`presentation`·Spring 런타임(`@Transactional`, `KafkaTemplate`, `EntityManager` 등)을 참조하지 않는다. 단 엔티티의 JPA 매핑 애너테이션(`@Entity`/`@Version` 등 선언적 메타데이터)은 허용한다(위 패키지 구조의 결정 근거 참고).
+- 트랜잭션 경계: `@Transactional`은 `application.service` 패키지에만 둔다. `application.usecase`·`presentation`에는 두지 않는다(usecase의 private skip 메서드도 tx를 열지 않는다).
+- 예외 변환 격리: JPA/DAO 예외 타입(`ObjectOptimisticLockingFailureException`, `DataIntegrityViolationException` 등)은 `infrastructure.persistence` 밖에서 참조하지 않는다.
+- flush 경로: `saveAndFlush` 호출은 `infrastructure.persistence` adapter에서만 한다.
+- 진입점 격리: `@Scheduled`·`@KafkaListener`·Spring Batch Job 정의는 `presentation` 하위에만 둔다(application Service에 직접 달지 않는다).
+- 기술 누수 차단: `application`은 `KafkaTemplate`·Redis 클라이언트 등 기술 타입을 직접 참조하지 않는다(`application.port` 인터페이스로만).
+
+규칙 본문(정확한 패키지 매칭·예외 허용 목록)은 테스트 코드가, 각 규칙의 근거는 관련 ADR이 단일 출처다.
 
 ---
 

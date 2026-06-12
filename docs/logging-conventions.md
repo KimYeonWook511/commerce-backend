@@ -2,6 +2,8 @@
 
 이 문서는 백엔드 application 로그(`com.commerce.*`)의 작성·운영 규칙을 정의한다. Epic "운영용 로깅 체계 도입"의 기준 문서이며, 후속 작업(logback 설정, MDC Filter, 도메인 로깅 보강 등)이 이 문서의 정책을 따른다.
 
+---
+
 ## 핵심 원칙 (요약)
 
 > 코딩 시 반드시 지킬 보편 원칙이다. 레벨표·마스킹·비동기 전파 등 상세는 아래 본문이 단일 출처다.
@@ -35,12 +37,14 @@
 - **대상**: 우리 application 로그 (`com.commerce.*`)
 - **범위 밖**: Tomcat access log, Hibernate SQL 출력, Spring framework 시작 로그 등 framework 로그 — `logback-spring.xml`에서 별도 logger 레벨로 침묵·노이즈 컨트롤
 
+---
+
 ## 2. 로그 레벨 기준
 
 | 레벨 | 사용 기준 |
 |------|----------|
 | **ERROR** | 5xx 시스템 예외(DB 무결성, DataAccess 부모, NPE 등), 보상 흐름의 1차 예외, 외부 호출 완전 실패로 거래가 종료된 경우 |
-| **WARN** | **운영 주목이 필요한** 4xx(반복 401·403, 결제 검증 실패 등), 보상 흐름의 2차 예외(덜 중요), 외부 호출 retry, `OptimisticLockingFailureException` 409 |
+| **WARN** | **운영 주목이 필요한** 4xx(반복 401·403, 결제 검증 실패 등), 보상 흐름의 2차 예외(덜 중요), 외부 호출 retry, `OptimisticLockingFailureException` 409 (낙관 락 충돌 — 정상 시나리오라 stack 없이 빈도만 주목, `docs/optimistic-lock-design.md`·`docs/exception-strategy.md`) |
 | **INFO** | 도메인 비즈니스 이벤트 — 상태 전환(주문 생성/취소, 결제 승인/취소, 회원 가입, 재고 차감/복구 등) |
 | **DEBUG** | 외부 API 요청·응답 본문, SQL 파라미터, 로컬·테스트 진단, Filter body 캐싱 옵션. **5장의 마스킹 패턴이 그대로 적용된다**(password·token 평문 노출 차단) |
 
@@ -53,6 +57,8 @@
 - **local·test**: 더 상세하게 (디버깅·테스트 실패 원인 분석)
 - **prod**: 더 조용하게 (디스크·노이즈 최소화)
 - **외부 라이브러리**: noisy logger(`org.hibernate.SQL`, `io.netty`, Kafka consumer 등)는 운영에서 침묵 처리
+
+---
 
 ## 3. 레이어별 로그 정책
 
@@ -68,6 +74,8 @@
 운영 액세스 로그에는 요청·응답 body를 남기지 않는다. 디버깅이 필요한 경우 Filter 옵션으로 DEBUG 레벨에서 켤 수 있게 한다(운영 OFF, 로컬 ON).
 
 도메인 파라미터의 의미 있는 필드는 Application 레이어가 INFO 로그로 표현한다 — body 통째 로깅보다 의미가 명확하고 마스킹 부담도 줄어든다.
+
+---
 
 ## 4. 예외 로깅 표준
 
@@ -114,6 +122,8 @@ e.printStackTrace();
 - **2차 예외 (덜 중요)**: `log.warn()` + 1차 예외 전파
 - **2차 예외 (치명적)**: Composite Exception(`addSuppressed`)으로 1차·2차 둘 다 전파
 
+---
+
 ## 5. 민감 정보 마스킹
 
 GDPR(Article 4·5)·개인정보보호법(PIPA)의 data minimization, purpose limitation, storage limitation 원칙을 따른다.
@@ -137,6 +147,8 @@ GDPR(Article 4·5)·개인정보보호법(PIPA)의 data minimization, purpose li
 4. **Authorization 헤더**는 Filter에서 access log 작성 시 통째로 제거하거나 `Bearer ***`로 대체한다.
 5. **보관 기간**은 무기한 보관하지 않는다. 구체 일수는 운영 로그 파이프라인 작업에서 결정한다.
 
+---
+
 ## 6. 로거 네이밍 관례
 
 - **`@Slf4j` (Lombok) 우선** 사용한다. 현재 코드의 일관된 패턴이다.
@@ -153,6 +165,8 @@ public class CreateOrderService {
     }
 }
 ```
+
+---
 
 ## 7. 메시지 작성 규칙
 
@@ -186,6 +200,8 @@ log.info("주문 생성 orderId=" + orderId);
 | `재고 차감 실패` | 재고 부족 등으로 차감 실패 |
 | `naverpay http 5xx retry attempt=2` | PG 호출 재시도 진입 |
 
+---
+
 ## 8. MDC 운영
 
 ### 설정
@@ -194,7 +210,7 @@ Filter가 요청 진입 시 다음을 MDC에 push한다.
 - `traceId`: 요청 단위 추적 ID (모든 요청)
 - `memberId`: 사용자 식별자 (인증된 경우만)
 
-MDC 키는 `com.commerce.common.log.LogContext`에서 단일 관리한다.
+MDC 키는 공통 로그 컨텍스트 유틸(`common.log`)에서 단일 관리한다(키 문자열을 산발적으로 하드코딩하지 않는다). 정확한 클래스는 코드가 단일 출처다.
 
 ### 정리
 요청 종료 시 **반드시 `MDC.clear()`를 호출**한다. Filter의 `finally` 블록 책임이다. 안 하면 스레드 풀에서 다음 요청에 누적되어 잘못된 traceId·memberId가 남는다.
@@ -204,55 +220,33 @@ MDC 키는 `com.commerce.common.log.LogContext`에서 단일 관리한다.
 
 ### 비동기·이벤트 경계의 traceId 전파
 
-#### 적용 경계 (구현 완료)
+동기 HTTP 흐름은 같은 스레드라 MDC traceId가 자동 유지된다. 스레드·프로세스·시간 경계를 넘는 비동기 흐름은 **traceId를 명시적으로 실어 보내고 받는 쪽에서 복원**해야 한다. 아래는 경계별 *정책*이며, 구현(클래스·메서드·Bean 등록)은 코드가 단일 출처다.
 
-##### Kafka 경계
+#### 적용 경계
 
-Kafka producer/consumer 경계는 `ProducerInterceptor` + `RecordInterceptor` 조합으로 traceId를 전파한다.
+**Kafka 경계** — producer가 MDC의 traceId를 메시지 헤더(`X-Trace-Id`)에 싣고, consumer가 그 헤더를 읽어 MDC에 복원한다. 헤더가 없거나 유효하지 않으면 신규 UUID를 발급한다. 처리 종료 후(에러 핸들러·DLT 발행 완료 이후) 자신이 push한 traceId만 정리한다. DLT 발행도 같은 경로를 타므로 traceId가 자동 전파된다.
 
-- **producer**: `TraceIdKafkaProducerInterceptor.onSend()`가 MDC `traceId`를 헤더 `X-Trace-Id`에 부착. MDC에 유효한 traceId가 없으면 신규 UUID 발급.
-- **consumer**: `TraceIdRecordInterceptor.intercept()`가 헤더 `X-Trace-Id`를 읽어 MDC에 push. 헤더가 없거나 유효하지 않으면 신규 UUID 발급. `afterRecord()` 콜백에서 `MDC.remove("traceId")`로 정리 (error handler·DLT 발행 완료 이후 실행 보장).
-- **등록**: `TraceIdKafkaConfig` — `DefaultKafkaProducerFactoryCustomizer` Bean(producer factory) + `TraceIdRecordInterceptor` Bean(consumer factory 주입)
-- **DLT**: `DeadLetterPublishingRecoverer`가 동일 KafkaTemplate을 사용하므로 DLT 발행 시에도 traceId 헤더 자동 전파.
+**Outbox 경계** — relay 스케줄러에는 원본 HTTP 요청 컨텍스트가 없다. 그래서 **outbox 이벤트 생성 시점의 traceId를 DB 컬럼에 저장**해 두고, relay 시점에 복원한다. 복원은 MDC가 비어 있을 때만 하고(이미 유효한 traceId가 있으면 보존), 자신이 push한 경우에만 정리한다. 저장된 traceId가 없으면(NULL) MDC를 건드리지 않고, 발행 단계의 신규 UUID fallback에 맡긴다.
 
-##### `@TransactionalEventListener(AFTER_COMMIT)` 경계
+**`@TransactionalEventListener(AFTER_COMMIT)` 경계** — 현재 사용처 0건(architecture.md 참조). 도입 시 원칙: 동기 listener는 같은 요청 스레드라 MDC가 이미 있으므로 건드리지 않는다(건드리면 후속 access log에서 traceId 유실 위험). 비동기 listener는 이벤트 객체에 traceId를 동봉하고 진입 시 MDC가 비어 있을 때만 push, push한 경우에만 정리한다(Outbox 경계와 동일 원칙).
 
-현재 프로젝트 내 `@TransactionalEventListener` 사용처 0건 (`OrderIdempotencyCacheEvent` 사례는 `order-idempotency-cache-simplification` 에서 제거됨).
+> 공통 메커니즘: **MDC가 비어 있을 때만 push하고, 자신이 push한 키만 finally에서 remove한다.** 이미 있는 traceId는 보존한다. 이 규칙이 경계마다 반복되는 이유는 "남의 traceId를 덮어쓰거나 지우지 않기" 위해서다.
 
-향후 listener 도입 시:
-- 동기 listener (기본): 같은 HTTP 요청 스레드의 MDC에 traceId가 이미 있으므로 별도 처리 불필요. listener가 MDC를 건드리면 후속 응답 access log에서 traceId 유실 위험이 있으므로 주의.
-- 비동기 listener (`@Async`, multicaster TaskExecutor): 이벤트 객체에 traceId 필드를 동봉하고 listener 진입 시 MDC에 push. MDC가 비어있을 때만 push하고, push한 경우에만 `finally`에서 제거 (Outbox 패턴 참조).
-- 향후 이벤트가 5개 이상 늘어나는 시점에 `ApplicationEventMulticaster` wrapping 방식으로 재검토한다 (ADR-019 참조).
+#### 미적용 경계 (의식적 제외 — 누락 아님)
 
-##### Outbox 경계
+다음은 traceId를 **의도적으로** 적용하지 않는다. 공통 이유는 "요청 단위 추적이 아니라 여러 독립 거래를 묶는 배치성 작업"이라 실행 단위 traceId가 오히려 의미를 희석하기 때문이다.
 
-Outbox relay 스케줄러는 HTTP 요청 컨텍스트가 없으므로, 원본 HTTP 요청의 traceId를 DB 컬럼에 저장해 두고 relay 시점에 복원한다.
+- **Outbox relay 스케줄러 자체 로그**: 한 번 실행에서 여러 독립 이벤트를 배치 처리한다. 스케줄러 로그는 운영 통계 성격(`selected=5 published=3`)이고, 개별 이벤트는 각자 outbox에 저장된 traceId로 추적된다.
+- **Spring Batch**: chunk/item/job 중 어느 단위에 traceId를 부여할지 모호하다. 운영상 필요하면 별도 작업으로 분리한다.
+- **`@Async`**: 현재 미사용. 도입 시 `TaskDecorator` 방식으로 별도 작업한다.
 
-- `tbl_outbox_event.trace_id` 컬럼에 outbox 생성 시점의 MDC traceId를 저장한다. `LogContext.isValidTraceId()`로 검증하고, 유효하지 않으면 `NULL`로 저장한다.
-- `StockRestoreOutboxRelayService.publishTarget()`이 **MDC에 이미 유효한 traceId가 있으면 그대로 보존**한다. MDC가 비어있을 때만 outbox의 traceId를 MDC에 복원한 뒤 Kafka publish를 호출한다. `TraceIdKafkaProducerInterceptor`가 MDC에서 읽어 헤더 `X-Trace-Id`에 자동 부착한다.
-- 우리가 push한 경우에만 `finally`에서 `LogContext.removeTraceId()`로 정리한다.
-- 스케줄러 호출 경로에서는 MDC가 항상 비어 있으므로 outbox의 traceId가 사용된다. HTTP 흐름에서 relay가 직접 호출되는 경우(향후 시나리오)에는 호출 스레드 MDC가 보존된다.
-- 저장된 traceId가 `NULL`이면 MDC 조작 없이 진행한다. 이 경우 `TraceIdKafkaProducerInterceptor`가 신규 UUID를 발급하는 fallback 동작이 적용된다 (기존 데이터 호환).
+#### 신규 비동기 경계 추가 시 판단 기준
 
-#### 미적용 경계 (정책상 제외)
+- 요청 단위로 거래 흐름을 추적해야 하는가? → **적용**한다.
+- 여러 독립 거래를 묶는 배치성 작업인가? → **미적용**(운영 통계 로그 성격).
+- 호출 스레드의 MDC가 자동 전파되는가? → 자동 전파되면 별도 작업 불필요.
 
-다음 경계에는 traceId를 의도적으로 적용하지 않는다. 누락이 아니라 의식적인 정책 결정이다.
-
-- **Outbox 스케줄러 자체 로그** (`StockRestoreOutboxScheduler`)
-  - 적용 안 함. 이유: 한 번의 스케줄러 실행에서 여러 독립 outbox 이벤트를 배치 처리하므로, 실행 단위 traceId를 부여하면 독립 거래들이 같은 traceId를 공유하게 되어 의미가 희석된다.
-  - 운영 통계 로그(`selected=5 published=3` 등) 성격이며, 개별 이벤트 처리는 outbox에 저장된 traceId로 추적된다.
-- **Spring Batch** (`OrderExpirationJob` 등)
-  - 적용 안 함. 이유: chunk별 traceId의 의미가 모호하다(chunk 단위? item 단위? job 실행 단위?). 운영상 필요 판단 시 별도 작업으로 분리한다.
-- **`@Async`**
-  - 현재 프로덕션 코드에서 미사용. 도입 시점에 `TaskDecorator` 방식으로 별도 작업한다.
-
-#### 신규 비동기 경계 추가 시 가이드
-
-새 비동기/이벤트 경계를 도입할 때 다음 기준으로 traceId 적용 여부를 판단한다.
-
-- **요청 단위로 거래 흐름을 추적해야 하는가?** → 적용한다.
-- **여러 독립 거래를 묶는 배치성 작업인가?** → 미적용 (운영 통계 로그 성격).
-- **호출 스레드의 MDC가 자동 전파되는가?** → 자동 전파되면 별도 작업 불필요.
+---
 
 ## 9. 포맷 정책
 
@@ -277,6 +271,8 @@ Outbox relay 스케줄러는 HTTP 요청 컨텍스트가 없으므로, 원본 HT
 | `exception` | (선택) `{class, message, stackTrace}` — ERROR + stack trace 케이스만 |
 
 도메인별 추가 MDC(`orderId`, `pgPaymentId` 등)는 필요 시 JSON 상위 필드로 자연스럽게 직렬화된다.
+
+---
 
 ## 10. 참조
 

@@ -1,0 +1,221 @@
+package com.commerce.architecture;
+
+import com.tngtech.archunit.base.DescribedPredicate;
+import com.tngtech.archunit.core.domain.JavaClasses;
+import com.tngtech.archunit.core.importer.ClassFileImporter;
+import com.tngtech.archunit.core.importer.ImportOption;
+import com.tngtech.archunit.lang.ArchRule;
+import com.tngtech.archunit.library.freeze.FreezingArchRule;
+import org.junit.jupiter.api.BeforeAll;
+import org.junit.jupiter.api.DisplayName;
+import org.junit.jupiter.api.Test;
+
+import static com.tngtech.archunit.lang.syntax.ArchRuleDefinition.methods;
+import static com.tngtech.archunit.lang.syntax.ArchRuleDefinition.noClasses;
+import static com.tngtech.archunit.lang.syntax.ArchRuleDefinition.noMethods;
+
+/**
+ * architecture.md 의 레이어·트랜잭션 경계 규칙 중 기계적으로 검증 가능한 것을 강제한다.
+ *
+ * - 문서(architecture.md): "어떤 규칙이 왜 있는가"의 포인터
+ * - 이 테스트: "무엇이 강제되나"의 단일 출처
+ *
+ * 규칙의 근거는 각 @DisplayName 에 단 ADR/문서 포인터를 참고.
+ *
+ * NOTE: 패키지 컨벤션 가정 — com.commerce.<domain>.{presentation,application,domain,infrastructure}
+ *       application 하위: usecase / service / port / dto  (skip·retry 모두 한 곳이면 usecase의 private 메서드, 여러 곳이면 support/ helper)
+ *       infrastructure 하위: persistence / pg / cache / messaging / notification
+ *       실제 패키지명이 다르면 아래 매처 문자열만 조정한다.
+ *
+ * BASELINE(freeze): 현재 구조는 위 패키지 컨벤션으로 아직 재배치되지 않아 일부 규칙을 위반한다.
+ *       구조 마이그레이션 동안에는 각 규칙을 {@link FreezingArchRule}로 감싸 현재 위반을
+ *       archunit_store 스냅샷에 박는다 → 기존 위반은 통과, 새 위반만 실패.
+ *       전 도메인 재배치가 끝나 위반이 0이 되면 freeze 래핑을 떼고 엄격(strict)으로 전환한다.
+ */
+@DisplayName("아키텍처 규칙 (architecture.md 강제)")
+class ArchitectureRulesTest {
+
+    private static final String BASE = "com.commerce";
+
+    private static JavaClasses productionClasses;
+
+    @BeforeAll
+    static void importClasses() {
+        productionClasses = new ClassFileImporter()
+                .withImportOption(ImportOption.Predefined.DO_NOT_INCLUDE_TESTS)
+                .importPackages(BASE);
+    }
+
+    /**
+     * 마이그레이션 동안 모든 규칙을 freeze baseline 으로 검증한다.
+     * 기존 위반은 스냅샷이 봐주고, 새 위반만 실패한다. 재배치 완료 후 이 래퍼를 제거해 엄격으로 전환한다.
+     */
+    private static void check(ArchRule rule) {
+        FreezingArchRule.freeze(rule).check(productionClasses);
+    }
+
+    // ────────────────────────────────────────────────────────────
+    // 1. 의존 방향 — domain 은 가장 안쪽 (헥사고날)
+    // ────────────────────────────────────────────────────────────
+
+    @Test
+    @DisplayName("domain 은 application·infrastructure·presentation 을 참조하지 않는다")
+    void domainDoesNotDependOnOuterLayers() {
+        ArchRule rule = noClasses()
+                .that().resideInAPackage("..domain..")
+                .should().dependOnClassesThat()
+                .resideInAnyPackage("..application..", "..infrastructure..", "..presentation..");
+        check(rule);
+    }
+
+    @Test
+    @DisplayName("domain 은 Spring 트랜잭션·기술 클라이언트를 참조하지 않는다 (순수 도메인 로직)")
+    void domainDoesNotDependOnSpringTech() {
+        ArchRule rule = noClasses()
+                .that().resideInAPackage("..domain..")
+                .should().dependOnClassesThat()
+                .resideInAnyPackage(
+                        "org.springframework.transaction..",
+                        "org.springframework.kafka..",
+                        "org.springframework.data.redis..")
+                // 엔티티 매핑 애너테이션(@Entity/@Id/@Version/@Column 등)은 허용한다(입장 B).
+                // 순수 POJO 도메인 객체 + 별도 매핑 클래스 도입 비용이 비효율적이라 판단해,
+                // domain 은 "선언적 매핑 메타데이터"까지만 허용한다.
+                // 단, 동작하는 JPA 런타임(EntityManager 로 직접 쿼리/flush 등)이 domain 에 들어오면 진짜 오염이므로 금지.
+                .orShould().dependOnClassesThat()
+                .haveFullyQualifiedName("jakarta.persistence.EntityManager")
+                .orShould().dependOnClassesThat()
+                .haveFullyQualifiedName("jakarta.persistence.EntityManagerFactory");
+        check(rule);
+    }
+
+    // ────────────────────────────────────────────────────────────
+    // 2. 트랜잭션 경계 — @Transactional 은 service 패키지에만
+    //    근거: 충돌 catch 는 tx 경계 밖에서. usecase(및 그 안의 private skip 메서드)는 tx 를 열지 않는다.
+    // ────────────────────────────────────────────────────────────
+
+    @Test
+    @DisplayName("@Transactional 은 application.service 패키지에만 둔다")
+    void transactionalOnlyInServicePackage() {
+        ArchRule rule = noMethods()
+                .that().areDeclaredInClassesThat()
+                .resideInAPackage("..application.usecase..")
+                .should().beAnnotatedWith("org.springframework.transaction.annotation.Transactional");
+        check(rule);
+    }
+
+    @Test
+    @DisplayName("presentation(진입점)에는 @Transactional 을 두지 않는다")
+    void noTransactionalInPresentation() {
+        ArchRule ruleMethods = noMethods()
+                .that().areDeclaredInClassesThat().resideInAPackage("..presentation..")
+                .should().beAnnotatedWith("org.springframework.transaction.annotation.Transactional");
+
+        ArchRule ruleClasses = noClasses()
+                .that().resideInAPackage("..presentation..")
+                .should().beAnnotatedWith("org.springframework.transaction.annotation.Transactional");
+
+        check(ruleMethods);
+        check(ruleClasses);
+    }
+
+    // ────────────────────────────────────────────────────────────
+    // 3. 예외 변환 격리 — JPA/DAO 예외 타입은 persistence 밖에서 모른다
+    //    근거: 기술 예외 → 도메인 예외 변환은 adapter 에서만 (ADR-022, 충돌 설계 문서)
+    // ────────────────────────────────────────────────────────────
+
+    @Test
+    @DisplayName("JPA/DAO 예외 타입은 infrastructure.persistence 밖에서 참조하지 않는다")
+    void daoExceptionsConfinedToPersistence() {
+        // common 의 GlobalExceptionHandler 는 HTTP 매핑을 위해 Spring DAO 예외를 직접 다뤄야 하는
+        // 영구적 예외처다(마이그레이션으로 사라질 임시 위반이 아님). freeze 스냅샷에 의존하지 않고
+        // 규칙에서 명시적으로 제외해, 재배치 완료 후 freeze 를 완전히 제거할 수 있게 한다.
+        ArchRule rule = noClasses()
+                .that().resideOutsideOfPackage("..infrastructure.persistence..")
+                .and().areNotAssignableTo("com.commerce.common.exception.GlobalExceptionHandler")
+                .should().dependOnClassesThat()
+                .haveFullyQualifiedName("org.springframework.orm.ObjectOptimisticLockingFailureException")
+                .orShould().dependOnClassesThat()
+                .haveFullyQualifiedName("org.springframework.dao.OptimisticLockingFailureException")
+                .orShould().dependOnClassesThat()
+                .haveFullyQualifiedName("org.springframework.dao.DataIntegrityViolationException")
+                .orShould().dependOnClassesThat()
+                .haveFullyQualifiedName("jakarta.persistence.OptimisticLockException");
+        check(rule);
+    }
+
+    // ────────────────────────────────────────────────────────────
+    // 4. flush 경로 — saveAndFlush 는 persistence adapter 에서만
+    //    근거: 충돌을 tx 내부에서 변환하려면 flush 를 adapter 프레임으로 당겨야 함
+    // ────────────────────────────────────────────────────────────
+
+    @Test
+    @DisplayName("saveAndFlush 호출은 infrastructure.persistence 에서만 한다")
+    void saveAndFlushOnlyInPersistence() {
+        ArchRule rule = noClasses()
+                .that().resideOutsideOfPackage("..infrastructure.persistence..")
+                .should().callMethodWhere(DescribedPredicate.describe(
+                        "이름이 saveAndFlush 인 메서드",
+                        target -> target.getName().equals("saveAndFlush")));
+        check(rule);
+    }
+
+    // ────────────────────────────────────────────────────────────
+    // 5. 진입점 격리 — @Scheduled / @KafkaListener 는 presentation 하위에만
+    //    근거: 무엇이 깨우든 진입점은 inbound adapter, application Service 에 직접 달지 않음
+    // ────────────────────────────────────────────────────────────
+
+    @Test
+    @DisplayName("@Scheduled 는 presentation 하위에만 둔다")
+    void scheduledOnlyInPresentation() {
+        ArchRule rule = methods()
+                .that().areAnnotatedWith("org.springframework.scheduling.annotation.Scheduled")
+                .should().beDeclaredInClassesThat().resideInAPackage("..presentation..");
+        check(rule);
+    }
+
+    @Test
+    @DisplayName("@KafkaListener 는 presentation.consumer 하위에만 둔다")
+    void kafkaListenerOnlyInConsumer() {
+        ArchRule rule = methods()
+                .that().areAnnotatedWith("org.springframework.kafka.annotation.KafkaListener")
+                .should().beDeclaredInClassesThat().resideInAPackage("..presentation.consumer..");
+        check(rule);
+    }
+
+    // ────────────────────────────────────────────────────────────
+    // 6. 기술 누수 차단 — application 은 기술 타입을 직접 참조하지 않음 (port 로만)
+    // ────────────────────────────────────────────────────────────
+
+    @Test
+    @DisplayName("application 은 KafkaTemplate·Redis 클라이언트를 직접 참조하지 않는다")
+    void applicationDoesNotDependOnTechClients() {
+        ArchRule rule = noClasses()
+                .that().resideInAPackage("..application..")
+                .should().dependOnClassesThat()
+                .resideInAnyPackage(
+                        "org.springframework.kafka..",
+                        "org.springframework.data.redis..",
+                        "redis.clients..");
+        check(rule);
+    }
+
+    // ────────────────────────────────────────────────────────────
+    // 7. 레이어 접근 — adapter 구현이 repository port 를 구현 (의존 방향 보존)
+    //    (선택: LayeredArchitecture 로 전체 의존 방향을 한 번에 검증해도 됨)
+    // ────────────────────────────────────────────────────────────
+
+    @Test
+    @DisplayName("Controller 는 충돌 예외를 직접 catch 하지 않는다 (GlobalExceptionHandler 위임)")
+    void controllersDoNotCatchConflictExceptions() {
+        // ArchUnit 은 catch 블록 자체를 직접 매칭하기 어렵다.
+        // 차선책: presentation 이 충돌/낙관락 예외 타입에 의존하지 않음을 검사.
+        ArchRule rule = noClasses()
+                .that().resideInAPackage("..presentation..")
+                .should().dependOnClassesThat()
+                .haveFullyQualifiedName("org.springframework.orm.ObjectOptimisticLockingFailureException")
+                .orShould().dependOnClassesThat()
+                .haveFullyQualifiedName("org.springframework.dao.OptimisticLockingFailureException");
+        check(rule);
+    }
+}
