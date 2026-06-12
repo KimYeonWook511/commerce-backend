@@ -445,7 +445,7 @@ approvalService.succeedApproval(orderId, ...);   // 묶인 tx 호출
 - 한 tx 안에 **락 전략을 섞어도 된다**(order는 비관, payment는 낙관). 경합 지점은 비관으로 직렬화,
   전이 가드는 @Version으로.
 
-> 원칙 한 줄: **tx 경계는 "함께 커밋돼야 하는 것들"을 감싸는 메서드에 달리고, 그 메서드는 `transaction`
+> 원칙 한 줄: **tx 경계는 "함께 커밋돼야 하는 것들"을 감싸는 메서드에 달리고, 그 메서드는 `service`
 > 패키지에 산다.** 단일이면 `PaymentTransitionService.markUnknown`, 둘을 묶으면
 > `PaymentApprovalService.succeedApproval` — 둘 다 service 패키지의 메서드이고, 묶는 단위만 다르다.
 
@@ -453,12 +453,12 @@ approvalService.succeedApproval(orderId, ...);   // 묶인 tx 호출
 
 "tx는 service 패키지에서만 연다"는 규칙은 **동기·비동기와 무관하게 유지된다.** 비동기는 tx 경계의 위치를 옮기는 게 아니라, **여러 tx를 잇는 방식**만 바꾼다.
 
-| | tx는 transaction에서만? | 흐름을 잇는 주체 | 진입점 |
+| | tx는 service에서만? | 흐름을 잇는 주체 | 진입점 |
 |---|---|---|---|
 | 동기 | 예 | orchestrator(`usecase`)가 같은 스레드에서 순서대로 호출 | Controller |
 | 비동기 | 예 | 메시지 브로커(Kafka)가 다른 스레드/시간에 연결 | `@KafkaListener`(consumer) |
 
-비동기로 가면 한 흐름이 여러 tx로 쪼개지지만, 각 조각도 여전히 "진입점(consumer) → transaction 단위작업"이다. 추가로 신경 쓸 것은 메시지 중복 전달 대비 **멱등성**뿐이며, 이는 "tx를 어디서 관리하나"가 아니라 "tx 안 작업을 멱등하게 짜나"의 문제다.
+비동기로 가면 한 흐름이 여러 tx로 쪼개지지만, 각 조각도 여전히 "진입점(consumer) → tx 단위작업"이다. 추가로 신경 쓸 것은 메시지 중복 전달 대비 **멱등성**뿐이며, 이는 "tx를 어디서 관리하나"가 아니라 "tx 안 작업을 멱등하게 짜나"의 문제다.
 
 > 패키지명 주의: tx 단위작업 묶음을 `application/service/`로 둔다(클래스명도 `…Service`). `service`는 평이해서
 > "여기만 tx를 연다"는 의도가 이름에 안 드러나므로, 그 의도는 패키지 주석과 ArchUnit("@Transactional은 service에만")으로
