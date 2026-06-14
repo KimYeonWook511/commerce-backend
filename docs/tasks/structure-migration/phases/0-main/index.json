@@ -65,7 +65,7 @@
       "status": "completed",
       "started_at": "2026-06-14T16:34:53+0900",
       "summary": "ArchitectureRulesTest의 FreezingArchRule 래핑을 제거하고 strict(rule.check)로 전환한다. daoExceptionsConfinedToPersistence와 controllersDoNotCatchConflictExceptions 규칙에 OrderExpirationBatchConfig를 ADR-L1 근거 영구 예외처로 추가한다. archunit.properties·archunit_store/ 임시 산출물을 git rm으로 제거한다. ./gradlew test 통과로 strict 위반 0 확인.",
-      "completed_at": "2026-06-14T16:52:00+0900"
+      "completed_at": "2026-06-14T16:37:36+0900"
     }
   ],
   "created_at": "2026-06-12T15:22:45+0900",
@@ -73,5 +73,6 @@
     "developer_model": "sonnet",
     "reviewer_model": "opus",
     "commit_model": "haiku"
-  }
+  },
+  "completed_at": "2026-06-14T16:39:04+0900"
 }
