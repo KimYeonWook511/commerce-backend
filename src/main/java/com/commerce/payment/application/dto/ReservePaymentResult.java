@@ -1,4 +1,4 @@
-package com.commerce.payment.application.result;
+package com.commerce.payment.application.dto;
 
 import lombok.Builder;
 import lombok.Getter;

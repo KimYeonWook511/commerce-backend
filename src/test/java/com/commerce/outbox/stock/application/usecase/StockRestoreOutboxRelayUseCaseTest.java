@@ -33,7 +33,7 @@ import com.commerce.outbox.domain.OutboxAggregateType;
 import com.commerce.outbox.domain.OutboxEventType;
 import com.commerce.outbox.domain.OutboxPublishTarget;
 import com.commerce.outbox.domain.repository.OutboxEventRepository;
-import com.commerce.outbox.stock.application.result.OutboxPublishResult;
+import com.commerce.outbox.stock.application.dto.OutboxPublishResult;
 import com.commerce.outbox.stock.application.port.StockRestoreEventPublisher;
 
 @ExtendWith(MockitoExtension.class)

@@ -43,7 +43,7 @@ import com.commerce.order.domain.exception.OrderException;
 import com.commerce.member.domain.Member;
 import com.commerce.order.domain.Order;
 import com.commerce.order.domain.OrderStatus;
-import com.commerce.outbox.stock.application.command.StockRestoreOutboxCreateCommand;
+import com.commerce.outbox.stock.application.dto.StockRestoreOutboxCreateCommand;
 import com.commerce.outbox.stock.application.service.StockRestoreOutboxCreateService;
 import com.commerce.product.domain.Product;
 import com.commerce.product.domain.ProductStatus;

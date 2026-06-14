@@ -1,4 +1,4 @@
-package com.commerce.stock.application.command;
+package com.commerce.stock.application.dto;
 
 import com.commerce.stock.domain.StockAdjustmentReason;
 

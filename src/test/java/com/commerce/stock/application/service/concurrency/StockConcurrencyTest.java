@@ -22,7 +22,7 @@ import com.commerce.product.domain.ProductStatus;
 import com.commerce.product.infrastructure.persistence.support.ProductPersistenceTestSupport;
 import com.commerce.stock.application.service.StockConcurrencyService;
 import com.commerce.stock.application.service.StockInventoryService;
-import com.commerce.stock.application.command.StockDecreaseBatchCommand;
+import com.commerce.stock.application.dto.StockDecreaseBatchCommand;
 import com.commerce.stock.domain.Stock;
 import com.commerce.stock.infrastructure.persistence.support.StockPersistenceTestSupport;
 import com.commerce.support.PersistenceCleanupTestSupport;

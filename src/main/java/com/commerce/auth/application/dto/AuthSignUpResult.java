@@ -1,4 +1,4 @@
-package com.commerce.auth.application.result;
+package com.commerce.auth.application.dto;
 
 import com.commerce.member.domain.Member;
 

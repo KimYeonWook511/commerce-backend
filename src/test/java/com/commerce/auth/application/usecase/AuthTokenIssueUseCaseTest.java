@@ -21,7 +21,7 @@ import org.springframework.test.util.ReflectionTestUtils;
 import com.commerce.auth.application.port.RefreshTokenStore;
 import com.commerce.auth.application.port.TokenIssuer;
 import com.commerce.auth.application.port.vo.TokenClaims;
-import com.commerce.auth.application.result.AuthTokenIssueResult;
+import com.commerce.auth.application.dto.AuthTokenIssueResult;
 import com.commerce.auth.infrastructure.RefreshTokenStoreUnavailableException;
 import com.commerce.member.domain.Member;
 

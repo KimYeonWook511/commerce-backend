@@ -20,7 +20,7 @@ import org.springframework.mock.web.MockHttpServletRequest;
 import org.springframework.mock.web.MockHttpServletResponse;
 
 import com.commerce.auth.application.usecase.TokenAuthenticationUseCase;
-import com.commerce.auth.application.result.TokenAuthenticationResult;
+import com.commerce.auth.application.dto.TokenAuthenticationResult;
 import com.commerce.auth.domain.exception.AuthErrorCode;
 import com.commerce.auth.domain.exception.AuthException;
 import com.commerce.common.log.LogContext;

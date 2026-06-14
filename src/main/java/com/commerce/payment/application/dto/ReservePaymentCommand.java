@@ -1,4 +1,4 @@
-package com.commerce.payment.application.command;
+package com.commerce.payment.application.dto;
 
 import com.commerce.payment.domain.PaymentProvider;
 

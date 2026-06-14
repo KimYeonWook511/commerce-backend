@@ -3,10 +3,10 @@ package com.commerce.product.application.service;
 import org.springframework.stereotype.Service;
 import org.springframework.transaction.annotation.Transactional;
 
-import com.commerce.product.application.command.AdminProductCreateCommand;
-import com.commerce.product.application.command.AdminProductUpdateCommand;
-import com.commerce.product.application.result.AdminProductDeleteResult;
-import com.commerce.product.application.result.AdminProductResult;
+import com.commerce.product.application.dto.AdminProductCreateCommand;
+import com.commerce.product.application.dto.AdminProductUpdateCommand;
+import com.commerce.product.application.dto.AdminProductDeleteResult;
+import com.commerce.product.application.dto.AdminProductResult;
 import com.commerce.product.domain.Product;
 import com.commerce.product.domain.repository.ProductRepository;
 import com.commerce.product.domain.exception.ProductErrorCode;

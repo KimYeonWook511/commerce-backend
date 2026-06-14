@@ -1,4 +1,4 @@
-package com.commerce.product.application.command;
+package com.commerce.product.application.dto;
 
 import com.commerce.product.domain.ProductStatus;
 

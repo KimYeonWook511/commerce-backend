@@ -3,7 +3,7 @@ package com.commerce.outbox.stock.application.payload;
 import java.util.Comparator;
 import java.util.List;
 
-import com.commerce.outbox.stock.application.command.StockRestoreOutboxCreateCommand;
+import com.commerce.outbox.stock.application.dto.StockRestoreOutboxCreateCommand;
 
 import lombok.Builder;
 import lombok.Getter;

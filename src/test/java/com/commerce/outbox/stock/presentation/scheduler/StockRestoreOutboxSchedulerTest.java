@@ -15,7 +15,7 @@ import org.mockito.Mock;
 import org.mockito.junit.jupiter.MockitoExtension;
 
 import com.commerce.outbox.stock.application.usecase.StockRestoreOutboxRelayUseCase;
-import com.commerce.outbox.stock.application.result.OutboxPublishResult;
+import com.commerce.outbox.stock.application.dto.OutboxPublishResult;
 
 import ch.qos.logback.classic.Level;
 import ch.qos.logback.classic.Logger;

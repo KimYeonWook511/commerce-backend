@@ -28,10 +28,10 @@ import com.commerce.order.domain.repository.OrderRepository;
 import com.commerce.order.domain.exception.OrderErrorCode;
 import com.commerce.order.domain.exception.OrderException;
 import com.commerce.order.application.port.OrderIdempotencyStore;
-import com.commerce.order.application.command.OrderCreateItem;
-import com.commerce.order.application.command.OrderCreateCommand;
-import com.commerce.order.application.result.OrderCancelResult;
-import com.commerce.order.application.result.OrderCreateResult;
+import com.commerce.order.application.dto.OrderCreateItem;
+import com.commerce.order.application.dto.OrderCreateCommand;
+import com.commerce.order.application.dto.OrderCancelResult;
+import com.commerce.order.application.dto.OrderCreateResult;
 import com.commerce.order.application.usecase.OrderCreateUseCase;
 import com.commerce.product.domain.Product;
 import com.commerce.product.domain.ProductStatus;
@@ -40,7 +40,7 @@ import com.commerce.stock.domain.exception.StockErrorCode;
 import com.commerce.stock.domain.exception.StockException;
 import com.commerce.stock.application.service.StockInventoryService;
 import com.commerce.stock.application.service.StockConcurrencyService;
-import com.commerce.stock.application.command.StockDecreaseBatchCommand;
+import com.commerce.stock.application.dto.StockDecreaseBatchCommand;
 
 @ExtendWith(MockitoExtension.class)
 class OrderApplicationServiceTest {

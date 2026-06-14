@@ -26,8 +26,8 @@ import com.commerce.auth.application.usecase.TokenAuthenticationUseCase;
 import com.commerce.security.resolver.AuthenticatedMemberIdArgumentResolver;
 import com.commerce.common.config.WebConfig;
 import com.commerce.product.application.service.ProductQueryService;
-import com.commerce.product.application.result.ProductDetailResult;
-import com.commerce.product.application.result.ProductSummaryResult;
+import com.commerce.product.application.dto.ProductDetailResult;
+import com.commerce.product.application.dto.ProductSummaryResult;
 import com.commerce.product.domain.exception.ProductErrorCode;
 import com.commerce.product.domain.exception.ProductException;
 

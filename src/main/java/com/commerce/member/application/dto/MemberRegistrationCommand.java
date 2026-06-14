@@ -1,4 +1,4 @@
-package com.commerce.member.application.command;
+package com.commerce.member.application.dto;
 
 import lombok.Builder;
 import lombok.Getter;

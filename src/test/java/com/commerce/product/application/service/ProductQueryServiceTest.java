@@ -16,8 +16,8 @@ import org.mockito.Mock;
 import org.mockito.junit.jupiter.MockitoExtension;
 import org.springframework.test.util.ReflectionTestUtils;
 
-import com.commerce.product.application.result.ProductDetailResult;
-import com.commerce.product.application.result.ProductSummaryResult;
+import com.commerce.product.application.dto.ProductDetailResult;
+import com.commerce.product.application.dto.ProductSummaryResult;
 import com.commerce.product.domain.Product;
 import com.commerce.product.domain.ProductStatus;
 import com.commerce.product.domain.repository.ProductRepository;

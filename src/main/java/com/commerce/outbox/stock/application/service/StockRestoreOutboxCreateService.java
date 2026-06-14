@@ -9,7 +9,7 @@ import com.commerce.outbox.domain.OutboxAggregateType;
 import com.commerce.outbox.domain.OutboxEvent;
 import com.commerce.outbox.domain.OutboxEventType;
 import com.commerce.outbox.domain.repository.OutboxEventRepository;
-import com.commerce.outbox.stock.application.command.StockRestoreOutboxCreateCommand;
+import com.commerce.outbox.stock.application.dto.StockRestoreOutboxCreateCommand;
 import com.commerce.outbox.stock.application.payload.StockRestoreRequestedPayload;
 import com.fasterxml.jackson.core.JsonProcessingException;
 import com.fasterxml.jackson.databind.ObjectMapper;

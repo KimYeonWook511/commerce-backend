@@ -1,4 +1,4 @@
-package com.commerce.payment.naverpay.application.result;
+package com.commerce.payment.naverpay.application.dto;
 
 import lombok.Builder;
 import lombok.Getter;

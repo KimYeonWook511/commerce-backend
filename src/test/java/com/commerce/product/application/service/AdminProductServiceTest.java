@@ -17,10 +17,10 @@ import org.mockito.Mock;
 import org.mockito.junit.jupiter.MockitoExtension;
 import org.springframework.test.util.ReflectionTestUtils;
 
-import com.commerce.product.application.command.AdminProductCreateCommand;
-import com.commerce.product.application.command.AdminProductUpdateCommand;
-import com.commerce.product.application.result.AdminProductDeleteResult;
-import com.commerce.product.application.result.AdminProductResult;
+import com.commerce.product.application.dto.AdminProductCreateCommand;
+import com.commerce.product.application.dto.AdminProductUpdateCommand;
+import com.commerce.product.application.dto.AdminProductDeleteResult;
+import com.commerce.product.application.dto.AdminProductResult;
 import com.commerce.product.domain.Product;
 import com.commerce.product.domain.ProductStatus;
 import com.commerce.product.domain.repository.ProductRepository;

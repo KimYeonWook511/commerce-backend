@@ -13,8 +13,8 @@ import com.commerce.common.ApiResponse;
 import com.commerce.common.exception.CommonErrorCode;
 import com.commerce.common.exception.CommonException;
 import com.commerce.product.application.service.ProductQueryService;
-import com.commerce.product.application.result.ProductDetailResult;
-import com.commerce.product.application.result.ProductSummaryResult;
+import com.commerce.product.application.dto.ProductDetailResult;
+import com.commerce.product.application.dto.ProductSummaryResult;
 
 import lombok.RequiredArgsConstructor;
 

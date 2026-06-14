@@ -1,4 +1,4 @@
-package com.commerce.outbox.stock.application.command;
+package com.commerce.outbox.stock.application.dto;
 
 import java.time.LocalDateTime;
 import java.util.List;

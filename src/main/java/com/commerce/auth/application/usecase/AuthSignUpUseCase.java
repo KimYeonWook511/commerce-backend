@@ -2,12 +2,12 @@ package com.commerce.auth.application.usecase;
 
 import org.springframework.stereotype.Component;
 
-import com.commerce.auth.application.command.AuthSignUpCommand;
-import com.commerce.auth.application.result.AuthSignUpResult;
-import com.commerce.auth.application.result.AuthTokenIssueResult;
+import com.commerce.auth.application.dto.AuthSignUpCommand;
+import com.commerce.auth.application.dto.AuthSignUpResult;
+import com.commerce.auth.application.dto.AuthTokenIssueResult;
 import com.commerce.auth.application.port.PasswordHasher;
 import com.commerce.member.application.service.MemberRegistrationService;
-import com.commerce.member.application.command.MemberRegistrationCommand;
+import com.commerce.member.application.dto.MemberRegistrationCommand;
 import com.commerce.member.domain.Member;
 
 import lombok.RequiredArgsConstructor;

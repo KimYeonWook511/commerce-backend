@@ -5,7 +5,7 @@ import org.springframework.stereotype.Component;
 import com.commerce.auth.application.port.RefreshTokenStore;
 import com.commerce.auth.application.port.TokenIssuer;
 import com.commerce.auth.application.port.vo.TokenClaims;
-import com.commerce.auth.application.result.AuthTokenIssueResult;
+import com.commerce.auth.application.dto.AuthTokenIssueResult;
 import com.commerce.member.domain.Member;
 
 import lombok.RequiredArgsConstructor;

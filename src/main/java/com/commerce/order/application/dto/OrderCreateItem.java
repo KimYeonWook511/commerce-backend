@@ -1,4 +1,4 @@
-package com.commerce.order.application.command;
+package com.commerce.order.application.dto;
 
 import lombok.Builder;
 import lombok.Getter;

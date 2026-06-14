@@ -1,4 +1,4 @@
-package com.commerce.stock.application.result;
+package com.commerce.stock.application.dto;
 
 import java.util.Map;
 

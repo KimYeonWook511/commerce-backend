@@ -14,7 +14,7 @@ import org.mockito.InjectMocks;
 import org.mockito.Mock;
 import org.mockito.junit.jupiter.MockitoExtension;
 
-import com.commerce.member.application.command.MemberRegistrationCommand;
+import com.commerce.member.application.dto.MemberRegistrationCommand;
 import com.commerce.member.domain.Member;
 import com.commerce.member.domain.repository.MemberRepository;
 import com.commerce.member.domain.exception.MemberErrorCode;

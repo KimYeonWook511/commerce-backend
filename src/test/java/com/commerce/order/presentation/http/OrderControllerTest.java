@@ -19,13 +19,13 @@ import org.springframework.test.context.bean.override.mockito.MockitoBean;
 import org.springframework.test.web.servlet.MockMvc;
 
 import com.commerce.auth.application.usecase.TokenAuthenticationUseCase;
-import com.commerce.auth.application.result.TokenAuthenticationResult;
+import com.commerce.auth.application.dto.TokenAuthenticationResult;
 import com.commerce.common.config.WebConfig;
 import com.commerce.order.application.service.OrderCancelService;
 import com.commerce.order.application.usecase.OrderCreateUseCase;
-import com.commerce.order.application.command.OrderCreateCommand;
-import com.commerce.order.application.result.OrderCancelResult;
-import com.commerce.order.application.result.OrderCreateResult;
+import com.commerce.order.application.dto.OrderCreateCommand;
+import com.commerce.order.application.dto.OrderCancelResult;
+import com.commerce.order.application.dto.OrderCreateResult;
 import com.commerce.order.domain.OrderStatus;
 import com.commerce.security.filter.JwtAuthenticationFilter;
 import com.commerce.security.interceptor.AuthorizationInterceptor;

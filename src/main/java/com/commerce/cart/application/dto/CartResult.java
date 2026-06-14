@@ -1,4 +1,4 @@
-package com.commerce.cart.application.result;
+package com.commerce.cart.application.dto;
 
 import java.util.List;
 

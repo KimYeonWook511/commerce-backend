@@ -18,10 +18,10 @@ import org.springframework.test.context.DynamicPropertySource;
 
 import com.commerce.member.domain.Member;
 import com.commerce.member.infrastructure.persistence.support.MemberPersistenceTestSupport;
-import com.commerce.order.application.command.OrderCreateCommand;
+import com.commerce.order.application.dto.OrderCreateCommand;
 import com.commerce.order.application.usecase.OrderCreateUseCase;
-import com.commerce.order.application.command.OrderCreateItem;
-import com.commerce.order.application.result.OrderCreateResult;
+import com.commerce.order.application.dto.OrderCreateItem;
+import com.commerce.order.application.dto.OrderCreateResult;
 import com.commerce.order.infrastructure.persistence.support.OrderPersistenceTestSupport;
 import com.commerce.product.domain.Product;
 import com.commerce.product.domain.ProductStatus;

@@ -3,7 +3,7 @@ package com.commerce.cart.application.usecase;
 import org.springframework.orm.ObjectOptimisticLockingFailureException;
 import org.springframework.stereotype.Component;
 
-import com.commerce.cart.application.result.CartItemSummaryResult;
+import com.commerce.cart.application.dto.CartItemSummaryResult;
 import com.commerce.cart.application.service.UpdateCartItemQuantityService;
 import com.commerce.cart.presentation.http.request.CartItemUpdateRequest;
 

@@ -23,10 +23,10 @@ import com.commerce.auth.application.service.AuthLoginService;
 import com.commerce.auth.application.usecase.AuthSignUpUseCase;
 import com.commerce.auth.application.service.AuthTokenReissueService;
 import com.commerce.auth.application.usecase.TokenAuthenticationUseCase;
-import com.commerce.auth.application.command.AuthLoginCommand;
-import com.commerce.auth.application.command.AuthSignUpCommand;
-import com.commerce.auth.application.result.AuthLoginResult;
-import com.commerce.auth.application.result.AuthSignUpResult;
+import com.commerce.auth.application.dto.AuthLoginCommand;
+import com.commerce.auth.application.dto.AuthSignUpCommand;
+import com.commerce.auth.application.dto.AuthLoginResult;
+import com.commerce.auth.application.dto.AuthSignUpResult;
 import com.commerce.auth.infrastructure.jwt.JwtProperties;
 import com.commerce.member.domain.Member;
 

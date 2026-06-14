@@ -14,7 +14,7 @@ import org.springframework.test.context.ActiveProfiles;
 import org.springframework.test.context.DynamicPropertyRegistry;
 import org.springframework.test.context.DynamicPropertySource;
 
-import com.commerce.auth.application.command.AuthSignUpCommand;
+import com.commerce.auth.application.dto.AuthSignUpCommand;
 import com.commerce.auth.application.port.RefreshTokenStore;
 import com.commerce.member.domain.exception.MemberException;
 import com.commerce.member.infrastructure.persistence.support.MemberPersistenceTestSupport;

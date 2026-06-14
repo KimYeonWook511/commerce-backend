@@ -44,8 +44,8 @@ import com.commerce.payment.naverpay.application.port.NaverPayGateway;
 import com.commerce.payment.naverpay.application.port.result.NaverPayApproveResult;
 import com.commerce.payment.naverpay.application.port.result.NaverPayCancelResult;
 import com.commerce.payment.naverpay.application.port.result.NaverPayHistoryResult;
-import com.commerce.payment.naverpay.application.result.NaverPayApproveResponse;
-import com.commerce.payment.naverpay.application.result.NaverPayApproveStatus;
+import com.commerce.payment.naverpay.application.dto.NaverPayApproveResponse;
+import com.commerce.payment.naverpay.application.dto.NaverPayApproveStatus;
 
 @ExtendWith(MockitoExtension.class)
 class NaverPayApprovalUseCaseTest {

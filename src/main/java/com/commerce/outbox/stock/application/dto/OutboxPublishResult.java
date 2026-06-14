@@ -1,4 +1,4 @@
-package com.commerce.outbox.stock.application.result;
+package com.commerce.outbox.stock.application.dto;
 
 import lombok.Builder;
 import lombok.Getter;

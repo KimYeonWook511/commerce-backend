@@ -15,7 +15,7 @@ import org.mockito.junit.jupiter.MockitoExtension;
 import org.springframework.orm.ObjectOptimisticLockingFailureException;
 import org.springframework.test.util.ReflectionTestUtils;
 
-import com.commerce.cart.application.result.CartItemSummaryResult;
+import com.commerce.cart.application.dto.CartItemSummaryResult;
 import com.commerce.cart.application.service.AddCartItemService;
 import com.commerce.cart.presentation.http.request.CartItemAddRequest;
 

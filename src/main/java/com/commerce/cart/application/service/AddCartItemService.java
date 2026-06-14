@@ -3,7 +3,7 @@ package com.commerce.cart.application.service;
 import org.springframework.stereotype.Service;
 import org.springframework.transaction.annotation.Transactional;
 
-import com.commerce.cart.application.result.CartItemSummaryResult;
+import com.commerce.cart.application.dto.CartItemSummaryResult;
 import com.commerce.cart.domain.CartItem;
 import com.commerce.cart.domain.repository.CartItemRepository;
 import com.commerce.cart.domain.exception.CartErrorCode;

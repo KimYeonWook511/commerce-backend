@@ -32,10 +32,10 @@ import org.springframework.test.context.bean.override.mockito.MockitoSpyBean;
 
 import com.commerce.member.domain.Member;
 import com.commerce.member.infrastructure.persistence.support.MemberPersistenceTestSupport;
-import com.commerce.order.application.command.OrderCreateCommand;
-import com.commerce.order.application.command.OrderCreateItem;
+import com.commerce.order.application.dto.OrderCreateCommand;
+import com.commerce.order.application.dto.OrderCreateItem;
 import com.commerce.order.application.port.OrderIdempotencyStore;
-import com.commerce.order.application.result.OrderCreateResult;
+import com.commerce.order.application.dto.OrderCreateResult;
 import com.commerce.order.domain.exception.OrderErrorCode;
 import com.commerce.order.domain.exception.OrderException;
 import com.commerce.order.infrastructure.OrderIdempotencyStoreUnavailableException;

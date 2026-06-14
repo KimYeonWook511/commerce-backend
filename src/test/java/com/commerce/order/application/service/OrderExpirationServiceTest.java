@@ -22,7 +22,7 @@ import com.commerce.order.domain.OrderStatus;
 import com.commerce.order.domain.repository.OrderRepository;
 import com.commerce.order.domain.exception.OrderErrorCode;
 import com.commerce.order.domain.exception.OrderException;
-import com.commerce.outbox.stock.application.command.StockRestoreOutboxCreateCommand;
+import com.commerce.outbox.stock.application.dto.StockRestoreOutboxCreateCommand;
 import com.commerce.outbox.stock.application.service.StockRestoreOutboxCreateService;
 
 @ExtendWith(MockitoExtension.class)

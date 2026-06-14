@@ -8,8 +8,8 @@ import java.util.stream.Collectors;
 import org.springframework.stereotype.Service;
 import org.springframework.transaction.annotation.Transactional;
 
-import com.commerce.stock.application.command.StockDecreaseBatchCommand;
-import com.commerce.stock.application.result.StockDecreaseBatchResult;
+import com.commerce.stock.application.dto.StockDecreaseBatchCommand;
+import com.commerce.stock.application.dto.StockDecreaseBatchResult;
 import com.commerce.stock.domain.Stock;
 import com.commerce.stock.domain.repository.StockRepository;
 import com.commerce.stock.domain.exception.StockErrorCode;

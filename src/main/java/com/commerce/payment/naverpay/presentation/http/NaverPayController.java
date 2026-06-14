@@ -12,7 +12,7 @@ import org.springframework.web.bind.annotation.RestController;
 import com.commerce.security.annotation.AuthenticatedMemberId;
 import com.commerce.common.ApiResponse;
 import com.commerce.payment.naverpay.application.usecase.NaverPayApprovalUseCase;
-import com.commerce.payment.naverpay.application.result.NaverPayApproveResponse;
+import com.commerce.payment.naverpay.application.dto.NaverPayApproveResponse;
 import com.commerce.payment.naverpay.presentation.http.request.NaverPayApproveRequest;
 
 import jakarta.validation.Valid;

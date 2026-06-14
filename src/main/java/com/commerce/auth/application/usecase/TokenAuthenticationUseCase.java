@@ -4,7 +4,7 @@ import org.springframework.stereotype.Component;
 
 import com.commerce.auth.application.port.TokenValidator;
 import com.commerce.auth.application.port.vo.ParsedTokenClaims;
-import com.commerce.auth.application.result.TokenAuthenticationResult;
+import com.commerce.auth.application.dto.TokenAuthenticationResult;
 import com.commerce.auth.domain.exception.AuthErrorCode;
 import com.commerce.auth.domain.exception.AuthException;
 

@@ -3,7 +3,7 @@ package com.commerce.member.application.service;
 import org.springframework.stereotype.Service;
 import org.springframework.transaction.annotation.Transactional;
 
-import com.commerce.member.application.command.MemberRegistrationCommand;
+import com.commerce.member.application.dto.MemberRegistrationCommand;
 import com.commerce.member.domain.Member;
 import com.commerce.member.domain.repository.MemberRepository;
 import com.commerce.member.domain.exception.MemberErrorCode;

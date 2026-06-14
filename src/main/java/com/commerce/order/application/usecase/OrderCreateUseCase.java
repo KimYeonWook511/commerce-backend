@@ -9,8 +9,8 @@ import org.springframework.util.StringUtils;
 
 import com.commerce.common.exception.CommonErrorCode;
 import com.commerce.common.exception.CommonException;
-import com.commerce.order.application.command.OrderCreateCommand;
-import com.commerce.order.application.result.OrderCreateResult;
+import com.commerce.order.application.dto.OrderCreateCommand;
+import com.commerce.order.application.dto.OrderCreateResult;
 import com.commerce.order.application.port.OrderIdempotencyStore;
 import com.commerce.order.application.service.OrderCreateService;
 import com.commerce.order.domain.Order;

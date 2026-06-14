@@ -5,9 +5,9 @@ import org.springframework.transaction.annotation.Transactional;
 
 import com.commerce.auth.domain.exception.AuthErrorCode;
 import com.commerce.auth.domain.exception.AuthException;
-import com.commerce.auth.application.command.AuthLoginCommand;
-import com.commerce.auth.application.result.AuthLoginResult;
-import com.commerce.auth.application.result.AuthTokenIssueResult;
+import com.commerce.auth.application.dto.AuthLoginCommand;
+import com.commerce.auth.application.dto.AuthLoginResult;
+import com.commerce.auth.application.dto.AuthTokenIssueResult;
 import com.commerce.auth.application.port.PasswordHasher;
 import com.commerce.auth.application.usecase.AuthTokenIssueUseCase;
 import com.commerce.member.application.service.MemberQueryService;

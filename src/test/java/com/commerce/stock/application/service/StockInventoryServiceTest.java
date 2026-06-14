@@ -18,8 +18,8 @@ import org.springframework.test.util.ReflectionTestUtils;
 
 import com.commerce.product.domain.Product;
 import com.commerce.product.domain.ProductStatus;
-import com.commerce.stock.application.command.StockDecreaseBatchCommand;
-import com.commerce.stock.application.result.StockDecreaseBatchResult;
+import com.commerce.stock.application.dto.StockDecreaseBatchCommand;
+import com.commerce.stock.application.dto.StockDecreaseBatchResult;
 import com.commerce.stock.domain.Stock;
 import com.commerce.stock.domain.repository.StockRepository;
 import com.commerce.stock.domain.exception.StockErrorCode;
