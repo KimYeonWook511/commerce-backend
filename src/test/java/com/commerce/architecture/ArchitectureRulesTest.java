@@ -99,7 +99,7 @@ class ArchitectureRulesTest {
     }
 
     @Test
-    @DisplayName("application 계층 클래스에 class-level @Transactional 을 두지 않는다 (ADR-021, ADR-L2: method-level 만 허용)")
+    @DisplayName("application 계층 클래스에 class-level @Transactional 을 두지 않는다 (메서드별 tx 정책을 코드 표면에 명시 — 누락이 silent readOnly 가 아니라 tx 없음으로 드러남)")
     void noClassLevelTransactionalInApplication() {
         ArchRule rule = noClasses()
                 .that().resideInAPackage("..application..")
@@ -132,7 +132,7 @@ class ArchitectureRulesTest {
     void daoExceptionsConfinedToPersistence() {
         // GlobalExceptionHandler: HTTP 매핑을 위해 Spring DAO 예외를 직접 다뤄야 하는 영구 예외처.
         // OrderExpirationBatchConfig: Spring Batch fault-tolerance(.retry/.skip)는 프레임워크에 예외 타입을
-        // 선언적으로 신고하는 경계라 변환 대상이 없다. GlobalExceptionHandler 와 같은 부류의 영구 예외처(ADR-L1).
+        // 선언적으로 신고하는 경계라 변환 대상이 없다. GlobalExceptionHandler 와 같은 부류의 영구 예외처.
         ArchRule rule = noClasses()
                 .that().resideOutsideOfPackage("..infrastructure.persistence..")
                 .and().areNotAssignableTo("com.commerce.common.exception.GlobalExceptionHandler")
@@ -211,11 +211,11 @@ class ArchitectureRulesTest {
 
     // ────────────────────────────────────────────────────────────
     // 8. 명칭 규칙 — usecase/service 패키지 접미사 강제
-    //    근거: ADR-006 supersede, ADR-L1 (tx 여부로 역할 분류)
+    //    근거: tx 여부로 역할 분류 (usecase = 흐름 조립/tx 없음, service = tx 단위작업)
     // ────────────────────────────────────────────────────────────
 
     @Test
-    @DisplayName("usecase 패키지의 클래스명은 UseCase 접미사를 가진다 (ADR-006 supersede, ADR-L1)")
+    @DisplayName("usecase 패키지의 클래스명은 UseCase 접미사를 가진다 (tx 없는 orchestrator 역할 명시)")
     void usecaseClassesShouldEndWithUseCase() {
         ArchRule rule = classes().that().resideInAPackage("..application.usecase..")
                 .and().areTopLevelClasses()
@@ -224,7 +224,7 @@ class ArchitectureRulesTest {
     }
 
     @Test
-    @DisplayName("service 패키지의 클래스명은 Service 접미사를 가진다 (ADR-006 supersede, ADR-L1)")
+    @DisplayName("service 패키지의 클래스명은 Service 접미사를 가진다 (tx 단위작업 역할 명시)")
     void serviceClassesShouldEndWithService() {
         ArchRule rule = classes().that().resideInAPackage("..application.service..")
                 .and().areTopLevelClasses()
@@ -237,7 +237,7 @@ class ArchitectureRulesTest {
     void controllersDoNotCatchConflictExceptions() {
         // ArchUnit 은 catch 블록 자체를 직접 매칭하기 어렵다.
         // 차선책: presentation 이 충돌/낙관락 예외 타입에 의존하지 않음을 검사.
-        // OrderExpirationBatchConfig: Spring Batch fault-tolerance(.retry/.skip)는 선언적 신고라 변환 대상이 없다(ADR-L1).
+        // OrderExpirationBatchConfig: Spring Batch fault-tolerance(.retry/.skip)는 선언적 신고라 변환 대상이 없다.
         ArchRule rule = noClasses()
                 .that().resideInAPackage("..presentation..")
                 .and().areNotAssignableTo("com.commerce.order.presentation.batch.OrderExpirationBatchConfig")
