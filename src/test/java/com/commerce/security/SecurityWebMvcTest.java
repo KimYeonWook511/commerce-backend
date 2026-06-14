@@ -28,8 +28,8 @@ import org.springframework.web.bind.annotation.RestController;
 
 import com.commerce.security.filter.JwtAuthenticationFilterConfig;
 import com.commerce.security.interceptor.AuthorizationInterceptor;
-import com.commerce.auth.application.usecase.TokenAuthenticationService;
-import com.commerce.auth.application.result.TokenAuthenticationResult;
+import com.commerce.auth.application.usecase.TokenAuthenticationUseCase;
+import com.commerce.auth.application.dto.TokenAuthenticationResult;
 import com.commerce.security.resolver.AuthenticatedMemberIdArgumentResolver;
 import com.commerce.common.config.WebConfig;
 import com.commerce.common.log.LogContext;
@@ -54,7 +54,7 @@ class SecurityWebMvcTest {
 	private MockMvc mockMvc;
 
 	@MockitoBean
-	private TokenAuthenticationService tokenAuthenticationService;
+	private TokenAuthenticationUseCase tokenAuthenticationUseCase;
 
 	@AfterEach
 	void tearDown() {
@@ -76,7 +76,7 @@ class SecurityWebMvcTest {
 	@Test
 	void secureEndpoint_whenTokenValid_returnOk() throws Exception {
 		// given
-		given(tokenAuthenticationService.authenticateAccessToken("access-token"))
+		given(tokenAuthenticationUseCase.authenticateAccessToken("access-token"))
 			.willReturn(TokenAuthenticationResult.of(1L, "ROLE_USER"));
 
 		// when & then
@@ -89,7 +89,7 @@ class SecurityWebMvcTest {
 	@Test
 	void adminEndpoint_whenRoleMismatch_returnForbidden() throws Exception {
 		// given
-		given(tokenAuthenticationService.authenticateAccessToken("access-token"))
+		given(tokenAuthenticationUseCase.authenticateAccessToken("access-token"))
 			.willReturn(TokenAuthenticationResult.of(1L, "ROLE_USER"));
 
 		// when & then
@@ -105,7 +105,7 @@ class SecurityWebMvcTest {
 	@Test
 	void memberIdEndpoint_whenAuthenticated_returnMemberId() throws Exception {
 		// given
-		given(tokenAuthenticationService.authenticateAccessToken("access-token"))
+		given(tokenAuthenticationUseCase.authenticateAccessToken("access-token"))
 			.willReturn(TokenAuthenticationResult.of(10L, "ROLE_USER"));
 
 		// when & then
@@ -122,7 +122,7 @@ class SecurityWebMvcTest {
 		mockMvc.perform(get("/products"))
 			.andExpect(status().isOk());
 
-		then(tokenAuthenticationService).should(never()).authenticateAccessToken(any());
+		then(tokenAuthenticationUseCase).should(never()).authenticateAccessToken(any());
 		assertThat(LogContext.getMemberId()).isNull();
 	}
 
@@ -130,7 +130,7 @@ class SecurityWebMvcTest {
 	@Test
 	void authenticatedRequest_mdcMemberIdSetInControllerAndRemovedAfter() throws Exception {
 		// given
-		given(tokenAuthenticationService.authenticateAccessToken("access-token"))
+		given(tokenAuthenticationUseCase.authenticateAccessToken("access-token"))
 			.willReturn(TokenAuthenticationResult.of(42L, "ROLE_USER"));
 
 		// when & then

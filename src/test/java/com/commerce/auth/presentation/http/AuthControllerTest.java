@@ -20,13 +20,13 @@ import org.springframework.test.web.servlet.MockMvc;
 import org.springframework.test.util.ReflectionTestUtils;
 
 import com.commerce.auth.application.service.AuthLoginService;
-import com.commerce.auth.application.service.AuthSignUpService;
+import com.commerce.auth.application.usecase.AuthSignUpUseCase;
 import com.commerce.auth.application.service.AuthTokenReissueService;
-import com.commerce.auth.application.usecase.TokenAuthenticationService;
-import com.commerce.auth.application.command.AuthLoginCommand;
-import com.commerce.auth.application.command.AuthSignUpCommand;
-import com.commerce.auth.application.result.AuthLoginResult;
-import com.commerce.auth.application.result.AuthSignUpResult;
+import com.commerce.auth.application.usecase.TokenAuthenticationUseCase;
+import com.commerce.auth.application.dto.AuthLoginCommand;
+import com.commerce.auth.application.dto.AuthSignUpCommand;
+import com.commerce.auth.application.dto.AuthLoginResult;
+import com.commerce.auth.application.dto.AuthSignUpResult;
 import com.commerce.auth.infrastructure.jwt.JwtProperties;
 import com.commerce.member.domain.Member;
 
@@ -39,7 +39,7 @@ class AuthControllerTest {
 	private MockMvc mockMvc;
 
 	@MockitoBean
-	private AuthSignUpService authSignUpService;
+	private AuthSignUpUseCase authSignUpUseCase;
 
 	@MockitoBean
 	private AuthLoginService authLoginService;
@@ -51,7 +51,7 @@ class AuthControllerTest {
 	private JwtProperties jwtProperties;
 
 	@MockitoBean
-	private TokenAuthenticationService tokenAuthenticationService;
+	private TokenAuthenticationUseCase tokenAuthenticationUseCase;
 
 	@DisplayName("회원가입 성공 시 member 필드와 토큰을 반환한다")
 	@Test
@@ -59,7 +59,7 @@ class AuthControllerTest {
 		// given
 		Member member = Member.createUser("test@example.com", "hashed-password", "tester");
 		ReflectionTestUtils.setField(member, "id", 1L);
-		given(authSignUpService.signUp(org.mockito.ArgumentMatchers.any(AuthSignUpCommand.class)))
+		given(authSignUpUseCase.signUp(org.mockito.ArgumentMatchers.any(AuthSignUpCommand.class)))
 			.willReturn(AuthSignUpResult.from(member, "access-token", "refresh-token"));
 		given(jwtProperties.getRefreshExpiration()).willReturn(604800000L);
 

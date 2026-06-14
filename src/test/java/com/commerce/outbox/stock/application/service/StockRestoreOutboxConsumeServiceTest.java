@@ -18,7 +18,7 @@ import org.mockito.junit.jupiter.MockitoExtension;
 import com.commerce.outbox.domain.ProcessedEvent;
 import com.commerce.outbox.domain.ProcessedEventConsumerType;
 import com.commerce.outbox.domain.repository.ProcessedEventRepository;
-import com.commerce.outbox.stock.application.command.StockRestoreConsumeCommand;
+import com.commerce.outbox.stock.application.dto.StockRestoreConsumeCommand;
 import com.commerce.stock.application.service.StockInventoryService;
 
 @ExtendWith(MockitoExtension.class)

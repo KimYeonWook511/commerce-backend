@@ -5,7 +5,7 @@ import org.springframework.context.annotation.Bean;
 import org.springframework.context.annotation.Configuration;
 import org.springframework.core.Ordered;
 
-import com.commerce.auth.application.usecase.TokenAuthenticationService;
+import com.commerce.auth.application.usecase.TokenAuthenticationUseCase;
 import com.fasterxml.jackson.databind.ObjectMapper;
 
 @Configuration
@@ -13,11 +13,11 @@ public class JwtAuthenticationFilterConfig {
 
 	@Bean
 	public FilterRegistrationBean<JwtAuthenticationFilter> jwtAuthenticationFilter(
-		TokenAuthenticationService tokenAuthenticationService,
+		TokenAuthenticationUseCase tokenAuthenticationUseCase,
 		ObjectMapper objectMapper
 	) {
 		FilterRegistrationBean<JwtAuthenticationFilter> bean =
-			new FilterRegistrationBean<>(new JwtAuthenticationFilter(tokenAuthenticationService, objectMapper));
+			new FilterRegistrationBean<>(new JwtAuthenticationFilter(tokenAuthenticationUseCase, objectMapper));
 		bean.addUrlPatterns("/*");
 		bean.setOrder(Ordered.HIGHEST_PRECEDENCE + 30);
 		return bean;

@@ -28,10 +28,11 @@ import com.commerce.order.domain.repository.OrderRepository;
 import com.commerce.order.domain.exception.OrderErrorCode;
 import com.commerce.order.domain.exception.OrderException;
 import com.commerce.order.application.port.OrderIdempotencyStore;
-import com.commerce.order.application.command.OrderCreateItem;
-import com.commerce.order.application.command.OrderCreateCommand;
-import com.commerce.order.application.result.OrderCancelResult;
-import com.commerce.order.application.result.OrderCreateResult;
+import com.commerce.order.application.dto.OrderCreateItem;
+import com.commerce.order.application.dto.OrderCreateCommand;
+import com.commerce.order.application.dto.OrderCancelResult;
+import com.commerce.order.application.dto.OrderCreateResult;
+import com.commerce.order.application.usecase.OrderCreateUseCase;
 import com.commerce.product.domain.Product;
 import com.commerce.product.domain.ProductStatus;
 import com.commerce.product.domain.repository.ProductRepository;
@@ -39,7 +40,7 @@ import com.commerce.stock.domain.exception.StockErrorCode;
 import com.commerce.stock.domain.exception.StockException;
 import com.commerce.stock.application.service.StockInventoryService;
 import com.commerce.stock.application.service.StockConcurrencyService;
-import com.commerce.stock.application.command.StockDecreaseBatchCommand;
+import com.commerce.stock.application.dto.StockDecreaseBatchCommand;
 
 @ExtendWith(MockitoExtension.class)
 class OrderApplicationServiceTest {
@@ -63,10 +64,10 @@ class OrderApplicationServiceTest {
 	private OrderIdempotencyStore orderIdempotencyStore;
 
 	@Mock
-	private OrderCreateProcessor orderCreateProcessor;
+	private OrderCreateService orderCreateService;
 
 	@InjectMocks
-	private OrderCreateService orderCreateService;
+	private OrderCreateUseCase orderCreateUseCase;
 
 	@InjectMocks
 	private OrderCancelService orderCancelService;
@@ -76,26 +77,26 @@ class OrderApplicationServiceTest {
 
 	private final String idempotencyKey = "idempotency-key";
 
-	@DisplayName("기본 주문 생성은 멱등성 확인 후 processor에 위임한다")
+	@DisplayName("기본 주문 생성은 멱등성 확인 후 service에 위임한다")
 	@Test
-	void createOrder_whenValidRequest_delegatesToProcessor() {
+	void createOrder_whenValidRequest_delegatesToService() {
 		// given
 		OrderCreateCommand command = createDefaultRequest();
 		stubForIdempotencyReserved();
-		OrderCreateResult expected = stubProcessorSuccess(command);
+		OrderCreateResult expected = stubServiceSuccess(command);
 
 		// when
-		OrderCreateResult result = orderCreateService.createOrder(command);
+		OrderCreateResult result = orderCreateUseCase.createOrder(command);
 
 		// then
 		assertThat(result.getOrderId()).isEqualTo(expected.getOrderId());
-		then(orderCreateProcessor).should().execute(eq(command));
+		then(orderCreateService).should().execute(eq(command));
 		then(orderIdempotencyStore).should().clear(1L, idempotencyKey);
 	}
 
-	@DisplayName("같은 상품이 여러 항목으로 들어오면 processor에 위임한다")
+	@DisplayName("같은 상품이 여러 항목으로 들어오면 service에 위임한다")
 	@Test
-	void createOrder_whenDuplicateProductItems_delegatesToProcessor() {
+	void createOrder_whenDuplicateProductItems_delegatesToService() {
 		// given
 		OrderCreateCommand command = OrderCreateCommand.builder()
 			.memberId(1L)
@@ -107,13 +108,13 @@ class OrderApplicationServiceTest {
 			))
 			.build();
 		stubForIdempotencyReserved();
-		stubProcessorSuccess(command);
+		stubServiceSuccess(command);
 
 		// when
-		orderCreateService.createOrder(command);
+		orderCreateUseCase.createOrder(command);
 
 		// then
-		then(orderCreateProcessor).should().execute(eq(command));
+		then(orderCreateService).should().execute(eq(command));
 		then(orderIdempotencyStore).should().clear(1L, idempotencyKey);
 	}
 
@@ -361,11 +362,11 @@ class OrderApplicationServiceTest {
 			.willReturn(Optional.of(existingOrder));
 
 		// when
-		OrderCreateResult result = orderCreateService.createOrder(command);
+		OrderCreateResult result = orderCreateUseCase.createOrder(command);
 
 		// then
 		assertThat(result.getOrderId()).isEqualTo(99L);
-		then(orderCreateProcessor).shouldHaveNoInteractions();
+		then(orderCreateService).shouldHaveNoInteractions();
 		then(orderIdempotencyStore).should().clear(1L, idempotencyKey);
 	}
 
@@ -382,18 +383,18 @@ class OrderApplicationServiceTest {
 		given(orderIdempotencyStore.reserve(anyLong(), anyString(), any())).willReturn(false);
 
 		// when & then
-		assertThatThrownBy(() -> orderCreateService.createOrder(command))
+		assertThatThrownBy(() -> orderCreateUseCase.createOrder(command))
 			.isInstanceOf(OrderException.class)
 			.satisfies(ex -> assertThat(((OrderException)ex).getErrorCode())
 				.isEqualTo(OrderErrorCode.ORDER_IDEMPOTENCY_IN_PROGRESS));
 
-		then(orderCreateProcessor).shouldHaveNoInteractions();
+		then(orderCreateService).shouldHaveNoInteractions();
 		then(orderIdempotencyStore).should(org.mockito.Mockito.never()).clear(anyLong(), anyString());
 	}
 
-	@DisplayName("processor가 예외를 던지면 멱등키를 clear하고 예외를 재발생한다")
+	@DisplayName("service가 예외를 던지면 멱등키를 clear하고 예외를 재발생한다")
 	@Test
-	void createOrder_whenProcessorThrows_clearAndRethrow() {
+	void createOrder_whenServiceThrows_clearAndRethrow() {
 		// given
 		OrderCreateCommand command = OrderCreateCommand.builder()
 			.memberId(1L)
@@ -403,11 +404,11 @@ class OrderApplicationServiceTest {
 
 		stubForIdempotencyReserved();
 		willThrow(new StockException(StockErrorCode.STOCK_NOT_FOUND))
-			.given(orderCreateProcessor)
+			.given(orderCreateService)
 			.execute(eq(command));
 
 		// when & then
-		assertThatThrownBy(() -> orderCreateService.createOrder(command))
+		assertThatThrownBy(() -> orderCreateUseCase.createOrder(command))
 			.isInstanceOf(StockException.class);
 
 		then(orderIdempotencyStore).should().clear(1L, idempotencyKey);
@@ -449,11 +450,11 @@ class OrderApplicationServiceTest {
 			.willReturn(true);
 	}
 
-	private OrderCreateResult stubProcessorSuccess(OrderCreateCommand command) {
+	private OrderCreateResult stubServiceSuccess(OrderCreateCommand command) {
 		Order order = Order.create(1L);
 		ReflectionTestUtils.setField(order, "id", 100L);
 		OrderCreateResult result = OrderCreateResult.from(order);
-		given(orderCreateProcessor.execute(eq(command))).willReturn(result);
+		given(orderCreateService.execute(eq(command))).willReturn(result);
 		return result;
 	}
 

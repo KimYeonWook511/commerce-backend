@@ -56,8 +56,7 @@ Java, Spring Boot, Gradle, MySQL, JPA(Hibernate) 백엔드 프로젝트.
 - 도메인 중심 네이밍을 우선하고 기존 프로젝트 패턴을 따른다.
 - 비즈니스 로직은 Domain 또는 application 계층에 둔다. Controller는 요청 수신·입력 검증·서비스 위임·응답 반환만 담당한다.
 - 외부 시스템 연동(Redis, 이메일, 결제 PG 등)은 `application/port/` 인터페이스로만 의존한다.
-- Service 클래스는 유스케이스 단위 단일 행위만 담당한다 (`CreateOrderService`, `CancelOrderService` 형식).
-- application 계층은 역할로 나눈다: `application/usecase/`(흐름 조립·정책 선택, tx 없음)와 `application/service/`(tx 단위작업, `@Transactional`). `@Transactional`은 `service` 패키지에만 둔다. 여러 단위작업을 한 tx로 묶을 땐 usecase가 아니라 묶는 메서드를 `service`에 만들어 거기에 tx를 단다. 배치 기준은 `docs/package-structure-guide.md`.
+- application service 클래스는 유스케이스 단위 단일 행위만 담당한다. **역할별 접미사**(ADR-006 supersede): `application/usecase/`는 `…UseCase`(흐름 조립·정책 선택, tx 없음), `application/service/`는 `…Service`(tx 단위작업, `@Transactional`). 예: `NaverPayApprovalUseCase`, `CreateOrderService`. `@Transactional`은 `service` 패키지에만 둔다. 여러 단위작업을 한 tx로 묶을 땐 usecase가 아니라 묶는 메서드를 `service`에 만들어 거기에 tx를 단다. 단순 작업(조율 없음)은 usecase 없이 Controller가 service를 직접 호출한다. 배치 기준은 `docs/package-structure-guide.md`.
 - DB 무결성 위반은 Application/Adapter에서 catch 하지 않고 `GlobalExceptionHandler` 안전망(500)으로 위임한다.
 - 낙관 락(@Version) 충돌은 tx 경계 안에서 catch하지 않고(도메인 예외로 전파시켜 깨끗이 rollback), skip/retry/전파는 tx 경계 밖에서 정한다. 변환은 `infrastructure/persistence/` adapter가 한다. 상세는 `docs/optimistic-lock-design.md`.
 - 위 구조 규칙(@Transactional 위치, 예외 격리 등) 중 기계로 검증 가능한 것은 `ArchitectureRulesTest`(ArchUnit)가 강제한다.

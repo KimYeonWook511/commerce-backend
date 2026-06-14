@@ -14,8 +14,8 @@ import com.commerce.order.domain.repository.OrderRepository;
 import com.commerce.order.domain.exception.OrderErrorCode;
 import com.commerce.order.domain.exception.OrderException;
 import com.commerce.order.domain.OrderItem;
-import com.commerce.outbox.application.usecase.OutboxService;
-import com.commerce.outbox.stock.application.command.StockRestoreOutboxCreateCommand;
+import com.commerce.outbox.stock.application.dto.StockRestoreOutboxCreateCommand;
+import com.commerce.outbox.stock.application.service.StockRestoreOutboxCreateService;
 
 import lombok.RequiredArgsConstructor;
 import lombok.extern.slf4j.Slf4j;
@@ -23,11 +23,10 @@ import lombok.extern.slf4j.Slf4j;
 @Slf4j
 @Service
 @RequiredArgsConstructor
-@Transactional(readOnly = true)
 public class OrderExpirationService {
 
 	private final OrderRepository orderRepository;
-	private final OutboxService outboxService;
+	private final StockRestoreOutboxCreateService stockRestoreOutboxCreateService;
 
 	@Transactional
 	public void expireOrder(Long orderId, LocalDateTime requestedAt) {
@@ -36,7 +35,7 @@ public class OrderExpirationService {
 
 		order.cancel();
 
-		outboxService.createStockRestoreOutboxEvent(toStockRestoreOutboxCreateCommand(order, requestedAt));
+		stockRestoreOutboxCreateService.createOutboxEvent(toStockRestoreOutboxCreateCommand(order, requestedAt));
 
 		log.info("주문 만료 orderId={} itemCount={}", order.getId(), order.getOrderItems().size());
 	}

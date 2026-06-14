@@ -16,13 +16,13 @@ import org.mockito.Mock;
 import org.mockito.junit.jupiter.MockitoExtension;
 import org.springframework.test.util.ReflectionTestUtils;
 
-import com.commerce.auth.application.command.AuthTokenReissueCommand;
+import com.commerce.auth.application.dto.AuthTokenReissueCommand;
 import com.commerce.auth.application.port.RefreshTokenStore;
-import com.commerce.auth.application.usecase.AuthTokenIssueService;
+import com.commerce.auth.application.usecase.AuthTokenIssueUseCase;
 import com.commerce.auth.application.port.TokenValidator;
 import com.commerce.auth.application.port.vo.ParsedTokenClaims;
-import com.commerce.auth.application.result.AuthTokenIssueResult;
-import com.commerce.auth.application.result.AuthTokenReissueResult;
+import com.commerce.auth.application.dto.AuthTokenIssueResult;
+import com.commerce.auth.application.dto.AuthTokenReissueResult;
 import com.commerce.auth.domain.exception.AuthErrorCode;
 import com.commerce.auth.domain.exception.AuthException;
 import com.commerce.auth.infrastructure.RefreshTokenStoreUnavailableException;
@@ -36,7 +36,7 @@ class AuthTokenReissueServiceTest {
 	private MemberQueryService memberQueryService;
 
 	@Mock
-	private AuthTokenIssueService authTokenIssueService;
+	private AuthTokenIssueUseCase authTokenIssueUseCase;
 
 	@Mock
 	private TokenValidator tokenValidator;
@@ -59,7 +59,7 @@ class AuthTokenReissueServiceTest {
 		given(tokenValidator.validateRefreshToken("refresh-token")).willReturn(claims);
 		given(refreshTokenStore.get(1L)).willReturn(Optional.of("refresh-token"));
 		given(memberQueryService.findById(1L)).willReturn(Optional.of(member));
-		given(authTokenIssueService.issue(member))
+		given(authTokenIssueUseCase.issue(member))
 			.willReturn(AuthTokenIssueResult.of("new-access-token", "new-refresh-token"));
 
 		AuthTokenReissueCommand command = AuthTokenReissueCommand.builder()
@@ -72,7 +72,7 @@ class AuthTokenReissueServiceTest {
 		// then
 		assertThat(result.getAccessToken()).isEqualTo("new-access-token");
 		assertThat(result.getRefreshToken()).isEqualTo("new-refresh-token");
-		then(authTokenIssueService).should().issue(member);
+		then(authTokenIssueUseCase).should().issue(member);
 	}
 
 	@DisplayName("리프레시 토큰이 일치하지 않으면 예외가 발생한다")

@@ -18,9 +18,10 @@ import org.springframework.test.context.DynamicPropertySource;
 
 import com.commerce.member.domain.Member;
 import com.commerce.member.infrastructure.persistence.support.MemberPersistenceTestSupport;
-import com.commerce.order.application.command.OrderCreateCommand;
-import com.commerce.order.application.command.OrderCreateItem;
-import com.commerce.order.application.result.OrderCreateResult;
+import com.commerce.order.application.dto.OrderCreateCommand;
+import com.commerce.order.application.usecase.OrderCreateUseCase;
+import com.commerce.order.application.dto.OrderCreateItem;
+import com.commerce.order.application.dto.OrderCreateResult;
 import com.commerce.order.infrastructure.persistence.support.OrderPersistenceTestSupport;
 import com.commerce.product.domain.Product;
 import com.commerce.product.domain.ProductStatus;
@@ -45,7 +46,7 @@ import com.commerce.support.TestcontainersSupport;
 class OrderApplicationServiceIntegrationTest {
 
 	@Autowired
-	private OrderCreateService orderCreateService;
+	private OrderCreateUseCase orderCreateUseCase;
 
 	@Autowired
 	private OrderCancelService orderCancelService;
@@ -98,10 +99,10 @@ class OrderApplicationServiceIntegrationTest {
 			.build();
 
 		// when
-		OrderCreateResult created = orderCreateService.createOrder(firstRequest);
+		OrderCreateResult created = orderCreateUseCase.createOrder(firstRequest);
 
 		// then
-		assertThatThrownBy(() -> orderCreateService.createOrder(secondRequest))
+		assertThatThrownBy(() -> orderCreateUseCase.createOrder(secondRequest))
 			.isInstanceOf(StockException.class)
 			.satisfies(exception -> {
 				StockException stockException = (StockException) exception;
@@ -110,7 +111,7 @@ class OrderApplicationServiceIntegrationTest {
 
 		orderCancelService.cancelOrder(member.getId(), created.getOrderId());
 
-		OrderCreateResult recreated = orderCreateService.createOrder(secondRequest);
+		OrderCreateResult recreated = orderCreateUseCase.createOrder(secondRequest);
 		assertThat(recreated.getOrderId()).isNotNull();
 		assertThat(stockPersistence.findByProductId(product.getId()).orElseThrow().getQuantity()).isZero();
 	}

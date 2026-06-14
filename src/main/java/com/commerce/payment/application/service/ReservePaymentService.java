@@ -16,8 +16,8 @@ import com.commerce.order.domain.OrderItem;
 import com.commerce.order.domain.repository.OrderRepository;
 import com.commerce.order.domain.exception.OrderErrorCode;
 import com.commerce.order.domain.exception.OrderException;
-import com.commerce.payment.application.command.ReservePaymentCommand;
-import com.commerce.payment.application.result.ReservePaymentResult;
+import com.commerce.payment.application.dto.ReservePaymentCommand;
+import com.commerce.payment.application.dto.ReservePaymentResult;
 import com.commerce.payment.domain.PaymentReservation;
 import com.commerce.payment.domain.repository.PaymentRepository;
 import com.commerce.payment.domain.repository.PaymentReservationRepository;
@@ -36,7 +36,6 @@ import lombok.extern.slf4j.Slf4j;
 @Slf4j
 @Service
 @RequiredArgsConstructor
-@Transactional(readOnly = true)
 public class ReservePaymentService {
 
 	private final OrderRepository orderRepository;

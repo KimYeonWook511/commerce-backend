@@ -28,17 +28,17 @@ import org.springframework.test.context.ActiveProfiles;
 import org.springframework.test.context.bean.override.mockito.MockitoBean;
 import org.springframework.test.web.servlet.MockMvc;
 
-import com.commerce.auth.application.usecase.TokenAuthenticationService;
-import com.commerce.auth.application.result.TokenAuthenticationResult;
-import com.commerce.cart.application.usecase.AddCartItemService;
+import com.commerce.auth.application.usecase.TokenAuthenticationUseCase;
+import com.commerce.auth.application.dto.TokenAuthenticationResult;
+import com.commerce.cart.application.usecase.AddCartItemUseCase;
 import com.commerce.cart.application.service.GetMyCartService;
 import com.commerce.cart.application.service.RemoveCartItemService;
-import com.commerce.cart.application.usecase.UpdateCartItemQuantityService;
-import com.commerce.cart.application.result.CartItemSummaryResult;
+import com.commerce.cart.application.usecase.UpdateCartItemQuantityUseCase;
+import com.commerce.cart.application.dto.CartItemSummaryResult;
 import com.commerce.cart.domain.exception.CartErrorCode;
 import com.commerce.cart.domain.exception.CartException;
-import com.commerce.cart.application.result.CartItemResult;
-import com.commerce.cart.application.result.CartResult;
+import com.commerce.cart.application.dto.CartItemResult;
+import com.commerce.cart.application.dto.CartResult;
 import com.commerce.cart.presentation.http.request.CartItemAddRequest;
 import com.commerce.cart.presentation.http.request.CartItemUpdateRequest;
 import com.commerce.common.config.WebConfig;
@@ -61,25 +61,25 @@ class CartControllerTest {
 	private MockMvc mockMvc;
 
 	@MockitoBean
-	private AddCartItemService addCartItemService;
+	private AddCartItemUseCase addCartItemUseCase;
 
 	@MockitoBean
 	private GetMyCartService getMyCartService;
 
 	@MockitoBean
-	private UpdateCartItemQuantityService updateCartItemQuantityService;
+	private UpdateCartItemQuantityUseCase updateCartItemQuantityUseCase;
 
 	@MockitoBean
 	private RemoveCartItemService removeCartItemService;
 
 	@MockitoBean
-	private TokenAuthenticationService tokenAuthenticationService;
+	private TokenAuthenticationUseCase tokenAuthenticationUseCase;
 
 	@DisplayName("유효한 장바구니 담기 요청이면 201을 반환한다")
 	@Test
 	void addCartItem_whenValidRequest_returnCreated() throws Exception {
 		stubForToken();
-		given(addCartItemService.add(anyLong(), any(CartItemAddRequest.class)))
+		given(addCartItemUseCase.add(anyLong(), any(CartItemAddRequest.class)))
 			.willReturn(CartItemSummaryResult.builder()
 				.productId(123L)
 				.quantity(5)
@@ -144,7 +144,7 @@ class CartControllerTest {
 	void addCartItem_whenProductNotFound_returnNotFound() throws Exception {
 		stubForToken();
 		willThrow(new CartException(CartErrorCode.CART_ITEM_PRODUCT_NOT_FOUND))
-			.given(addCartItemService).add(anyLong(), argThat(request -> request != null && request.getProductId() == 999L));
+			.given(addCartItemUseCase).add(anyLong(), argThat(request -> request != null && request.getProductId() == 999L));
 
 		mockMvc.perform(post("/cart/items")
 				.header("Authorization", "Bearer access-token")
@@ -160,7 +160,7 @@ class CartControllerTest {
 	void addCartItem_whenProductUnavailable_returnConflict() throws Exception {
 		stubForToken();
 		willThrow(new CartException(CartErrorCode.CART_ITEM_PRODUCT_UNAVAILABLE))
-			.given(addCartItemService).add(anyLong(), argThat(request -> request != null && request.getProductId() == 888L));
+			.given(addCartItemUseCase).add(anyLong(), argThat(request -> request != null && request.getProductId() == 888L));
 
 		mockMvc.perform(post("/cart/items")
 				.header("Authorization", "Bearer access-token")
@@ -207,7 +207,7 @@ class CartControllerTest {
 	@Test
 	void updateCartItem_whenValidRequest_returnOk() throws Exception {
 		stubForToken();
-		given(updateCartItemQuantityService.update(anyLong(), eq(123L), any(CartItemUpdateRequest.class)))
+		given(updateCartItemQuantityUseCase.update(anyLong(), eq(123L), any(CartItemUpdateRequest.class)))
 			.willReturn(CartItemSummaryResult.builder()
 				.productId(123L)
 				.quantity(5)
@@ -282,7 +282,7 @@ class CartControllerTest {
 	}
 
 	private void stubForToken() {
-		given(tokenAuthenticationService.authenticateAccessToken("access-token"))
+		given(tokenAuthenticationUseCase.authenticateAccessToken("access-token"))
 			.willReturn(TokenAuthenticationResult.of(1L, "ROLE_USER"));
 	}
 }

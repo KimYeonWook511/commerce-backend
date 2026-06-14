@@ -14,8 +14,8 @@ import org.mockito.InjectMocks;
 import org.mockito.Mock;
 import org.mockito.junit.jupiter.MockitoExtension;
 
-import com.commerce.outbox.stock.application.service.StockRestoreOutboxRelayService;
-import com.commerce.outbox.stock.application.result.OutboxPublishResult;
+import com.commerce.outbox.stock.application.usecase.StockRestoreOutboxRelayUseCase;
+import com.commerce.outbox.stock.application.dto.OutboxPublishResult;
 
 import ch.qos.logback.classic.Level;
 import ch.qos.logback.classic.Logger;
@@ -27,7 +27,7 @@ import org.slf4j.LoggerFactory;
 class StockRestoreOutboxSchedulerTest {
 
 	@Mock
-	private StockRestoreOutboxRelayService stockRestoreOutboxRelayService;
+	private StockRestoreOutboxRelayUseCase stockRestoreOutboxRelayUseCase;
 
 	@InjectMocks
 	private StockRestoreOutboxScheduler stockRestoreOutboxScheduler;
@@ -53,7 +53,7 @@ class StockRestoreOutboxSchedulerTest {
 	@Test
 	void publishPendingEvents_whenResultExists_callServiceAndLog() {
 		// given
-		given(stockRestoreOutboxRelayService.publishPendingEvents(any()))
+		given(stockRestoreOutboxRelayUseCase.publishPendingEvents(any()))
 			.willReturn(OutboxPublishResult.builder()
 				.selectedCount(3)
 				.publishedCount(2)
@@ -65,7 +65,7 @@ class StockRestoreOutboxSchedulerTest {
 		stockRestoreOutboxScheduler.publishPendingEvents();
 
 		// then
-		then(stockRestoreOutboxRelayService).should().publishPendingEvents(any());
+		then(stockRestoreOutboxRelayUseCase).should().publishPendingEvents(any());
 		assertThat(listAppender.list)
 			.anySatisfy(event -> {
 				assertThat(event.getLevel()).isEqualTo(Level.INFO);
@@ -82,7 +82,7 @@ class StockRestoreOutboxSchedulerTest {
 	@Test
 	void publishPendingEvents_whenAllCountsZero_notLog() {
 		// given
-		given(stockRestoreOutboxRelayService.publishPendingEvents(any()))
+		given(stockRestoreOutboxRelayUseCase.publishPendingEvents(any()))
 			.willReturn(OutboxPublishResult.builder()
 				.selectedCount(0)
 				.publishedCount(0)
@@ -94,7 +94,7 @@ class StockRestoreOutboxSchedulerTest {
 		stockRestoreOutboxScheduler.publishPendingEvents();
 
 		// then
-		then(stockRestoreOutboxRelayService).should().publishPendingEvents(any());
+		then(stockRestoreOutboxRelayUseCase).should().publishPendingEvents(any());
 		assertThat(listAppender.list).isEmpty();
 	}
 
@@ -102,7 +102,7 @@ class StockRestoreOutboxSchedulerTest {
 	@Test
 	void publishRetryableFailedEvents_whenResultExists_callServiceAndLog() {
 		// given
-		given(stockRestoreOutboxRelayService.publishRetryableFailedEvents(any()))
+		given(stockRestoreOutboxRelayUseCase.publishRetryableFailedEvents(any()))
 			.willReturn(OutboxPublishResult.builder()
 				.selectedCount(2)
 				.publishedCount(1)
@@ -114,7 +114,7 @@ class StockRestoreOutboxSchedulerTest {
 		stockRestoreOutboxScheduler.publishRetryableFailedEvents();
 
 		// then
-		then(stockRestoreOutboxRelayService).should().publishRetryableFailedEvents(any());
+		then(stockRestoreOutboxRelayUseCase).should().publishRetryableFailedEvents(any());
 		assertThat(listAppender.list)
 			.anySatisfy(event -> {
 				assertThat(event.getLevel()).isEqualTo(Level.INFO);
@@ -131,13 +131,13 @@ class StockRestoreOutboxSchedulerTest {
 	@Test
 	void recoverStalePublishingEvents_whenRecoveredCountPositive_logWarn() {
 		// given
-		given(stockRestoreOutboxRelayService.recoverStalePublishingEvents(any())).willReturn(5);
+		given(stockRestoreOutboxRelayUseCase.recoverStalePublishingEvents(any())).willReturn(5);
 
 		// when
 		stockRestoreOutboxScheduler.recoverStalePublishingEvents();
 
 		// then
-		then(stockRestoreOutboxRelayService).should().recoverStalePublishingEvents(any());
+		then(stockRestoreOutboxRelayUseCase).should().recoverStalePublishingEvents(any());
 		assertThat(listAppender.list)
 			.anySatisfy(event -> {
 				assertThat(event.getLevel()).isEqualTo(Level.WARN);
@@ -151,13 +151,13 @@ class StockRestoreOutboxSchedulerTest {
 	@Test
 	void recoverStalePublishingEvents_whenRecoveredCountZero_notLog() {
 		// given
-		given(stockRestoreOutboxRelayService.recoverStalePublishingEvents(any())).willReturn(0);
+		given(stockRestoreOutboxRelayUseCase.recoverStalePublishingEvents(any())).willReturn(0);
 
 		// when
 		stockRestoreOutboxScheduler.recoverStalePublishingEvents();
 
 		// then
-		then(stockRestoreOutboxRelayService).should().recoverStalePublishingEvents(any());
+		then(stockRestoreOutboxRelayUseCase).should().recoverStalePublishingEvents(any());
 		assertThat(listAppender.list).isEmpty();
 	}
 }

@@ -18,8 +18,8 @@ import com.commerce.common.exception.CommonErrorCode;
 import com.commerce.common.exception.CommonException;
 import com.commerce.member.domain.MemberRole;
 import com.commerce.stock.application.service.AdminStockService;
-import com.commerce.stock.application.result.AdminStockResult;
-import com.commerce.stock.application.result.StockHistoryResult;
+import com.commerce.stock.application.dto.AdminStockResult;
+import com.commerce.stock.application.dto.StockHistoryResult;
 import com.commerce.stock.presentation.http.request.AdminStockAdjustRequest;
 import com.commerce.stock.presentation.http.request.AdminStockCreateRequest;
 

@@ -14,19 +14,21 @@ import lombok.RequiredArgsConstructor;
 
 @Service
 @RequiredArgsConstructor
-@Transactional(readOnly = true)
 public class MemberQueryService {
 
 	private final MemberRepository memberRepository;
 
+	@Transactional(readOnly = true)
 	public Optional<Member> findById(Long memberId) {
 		return memberRepository.findById(memberId);
 	}
 
+	@Transactional(readOnly = true)
 	public Optional<Member> findByEmail(String email) {
 		return memberRepository.findByEmail(email);
 	}
 
+	@Transactional(readOnly = true)
 	public Member getById(Long memberId) {
 		return memberRepository.findById(memberId)
 			.orElseThrow(() -> new MemberException(MemberErrorCode.MEMBER_NOT_FOUND));

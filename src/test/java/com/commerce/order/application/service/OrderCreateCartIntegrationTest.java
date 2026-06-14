@@ -20,9 +20,10 @@ import com.commerce.cart.domain.CartItem;
 import com.commerce.cart.infrastructure.persistence.support.CartPersistenceTestSupport;
 import com.commerce.member.domain.Member;
 import com.commerce.member.infrastructure.persistence.support.MemberPersistenceTestSupport;
-import com.commerce.order.application.command.OrderCreateCommand;
-import com.commerce.order.application.command.OrderCreateItem;
-import com.commerce.order.application.result.OrderCreateResult;
+import com.commerce.order.application.dto.OrderCreateCommand;
+import com.commerce.order.application.usecase.OrderCreateUseCase;
+import com.commerce.order.application.dto.OrderCreateItem;
+import com.commerce.order.application.dto.OrderCreateResult;
 import com.commerce.order.infrastructure.persistence.support.OrderPersistenceTestSupport;
 import com.commerce.product.domain.Product;
 import com.commerce.product.domain.ProductStatus;
@@ -47,7 +48,7 @@ import com.commerce.support.TestcontainersSupport;
 class OrderCreateCartIntegrationTest {
 
 	@Autowired
-	private OrderCreateService orderCreateService;
+	private OrderCreateUseCase orderCreateUseCase;
 
 	@Autowired
 	private PersistenceCleanupTestSupport persistenceCleanup;
@@ -106,7 +107,7 @@ class OrderCreateCartIntegrationTest {
 			.build();
 
 		// when
-		OrderCreateResult result = orderCreateService.createOrder(command);
+		OrderCreateResult result = orderCreateUseCase.createOrder(command);
 
 		// then
 		assertThat(result.getOrderId()).isNotNull();
@@ -137,7 +138,7 @@ class OrderCreateCartIntegrationTest {
 			.build();
 
 		// when
-		OrderCreateResult result = orderCreateService.createOrder(command);
+		OrderCreateResult result = orderCreateUseCase.createOrder(command);
 
 		// then
 		assertThat(result.getOrderId()).isNotNull();
@@ -166,7 +167,7 @@ class OrderCreateCartIntegrationTest {
 			.build();
 
 		// when & then
-		assertThatThrownBy(() -> orderCreateService.createOrder(command))
+		assertThatThrownBy(() -> orderCreateUseCase.createOrder(command))
 			.isInstanceOf(StockException.class);
 
 		List<CartItem> remaining = cartPersistence.findAllByMemberIdOrderByCreatedAtDesc(member.getId());

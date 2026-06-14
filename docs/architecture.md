@@ -88,12 +88,14 @@ Port 인터페이스 설계 원칙:
 
 ## 서비스 네이밍 원칙
 
-하나의 Service 클래스는 하나의 유스케이스 행위만 담당한다.
+하나의 application service 클래스는 하나의 유스케이스 행위만 담당한다.
 
-- 네이밍은 `{행위}{도메인}Service` 형식을 따른다 (`CreateOrderService`, `CancelOrderService`, `GetOrderService`)
-- 구조는 UseCase 패턴과 동일하며, 현재는 Spring 생태계 관습과의 일관성을 위해 `Service` suffix를 사용한다 (ADR-006 참고)
-- 처음부터 지나치게 잘게 나누지 않되, 트랜잭션 흐름·변경 이유·호출 맥락·충돌 처리 정책(전파/skip/retry)이 달라지는 시점에 분리한다
-- 클래스명은 `Service` suffix 를 유지하되, 책임이 공존하는 도메인은 패키지(`application/{usecase,service}`)로 역할을 가른다 (패키지 구조 참고)
+- 네이밍은 **역할별 접미사**를 따른다 (ADR-006 supersede):
+  - `application/usecase/`(흐름 조립·정책 선택, tx 없음) → **`{행위}{도메인}UseCase`** (`NaverPayApprovalUseCase`, `PaymentReconciliationUseCase`)
+  - `application/service/`(tx 단위작업, `@Transactional`) → **`{행위}{도메인}Service`** (`PaymentTransitionService`, `CreateOrderService`)
+- 접미사가 패키지(역할)와 일치하므로 import·스택 트레이스·로그처럼 패키지 경로가 안 보이는 곳에서도 흐름(UseCase)인지 tx 단위작업(Service)인지 드러난다. 빈 등록 stereotype도 역할별로 가른다 — UseCase는 `@Component`, Service는 `@Service`로 등록해 역할을 한 번 더 드러낸다(둘은 기능 동일).
+- 처음부터 지나치게 잘게 나누지 않되, 트랜잭션 흐름·변경 이유·호출 맥락·충돌 처리 정책(전파/skip/retry)이 달라지는 시점에 분리한다.
+- 단순 작업(조율 없이 tx 한 번)은 usecase를 두지 않고 Controller가 service를 직접 호출한다. usecase는 조율(외부 호출·여러 tx 단계·충돌 정책·격리 루프)이 있을 때만 둔다.
 
 ---
 
@@ -107,7 +109,7 @@ Port 인터페이스 설계 원칙:
 
 이 섹션은 **코드를 읽어도 한눈에 안 보이는 것** — 책임의 *순서*, *트랜잭션 경계 안팎*, *왜 그 순서인가* — 만 기록한다. 클래스·메서드명·호출 그래프는 코드(`com.commerce.<domain>`)가 기준이므로 적지 않는다(적어 두면 코드가 바뀔 때 문서가 안 맞게 된다).
 
-단순 위임 흐름(상품 공개/관리자 조회, 관리자 상품·재고 관리, 장바구니 추가·조회·수량변경·삭제 등)은 `Controller → Service → Repository`의 평탄한 위임이라 코드가 그대로 출처다. 본 섹션은 경계·순서·보상이 얽힌 흐름만 다룬다.
+단순 위임 흐름(상품 공개/관리자 조회, 관리자 상품·재고 관리, 장바구니 추가·조회·수량변경·삭제 등)은 `Controller → service(…Service) → Repository`의 평탄한 위임이라(usecase 없음) 코드가 그대로 출처다. 본 섹션은 경계·순서·보상이 얽힌 흐름만 다룬다.
 
 ```
 # 결제 reserve — 순서·경계 (클래스명은 코드가 출처)

@@ -9,8 +9,8 @@ import java.util.stream.Collectors;
 import org.springframework.stereotype.Service;
 import org.springframework.transaction.annotation.Transactional;
 
-import com.commerce.cart.application.result.CartItemResult;
-import com.commerce.cart.application.result.CartResult;
+import com.commerce.cart.application.dto.CartItemResult;
+import com.commerce.cart.application.dto.CartResult;
 import com.commerce.cart.domain.CartItem;
 import com.commerce.cart.domain.repository.CartItemRepository;
 import com.commerce.product.domain.Product;

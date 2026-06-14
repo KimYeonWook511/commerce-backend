@@ -1,0 +1,38 @@
+{
+  "project": "commerce-backend",
+  "phase": "0-main",
+  "harness_version": "v2",
+  "steps": [
+    {
+      "step": 1,
+      "name": "role-suffix-and-component",
+      "status": "completed",
+      "started_at": "2026-06-14T19:30:38+0900",
+      "completed_at": "2026-06-14T19:44:50+0900",
+      "summary": "usecase/ 7개 클래스 ...Service→...UseCase 리네임 + @Service→@Component 전환, cart/service/ 2개 Processor→Service 리네임 + @Component→@Service 전환, 모든 참조처(application/presentation/infrastructure/security/test) 업데이트 완료. test/integrationTest AC 통과."
+    },
+    {
+      "step": 2,
+      "name": "class-tx-to-method",
+      "status": "completed",
+      "started_at": "2026-06-14T21:11:33+0900",
+      "completed_at": "2026-06-14T21:15:23+0900",
+      "summary": "ProductQueryService/AdminStockService/StockConcurrencyService/StockInventoryService 4개 클래스의 class-level @Transactional(readOnly = true) 제거. ProductQueryService 2개·AdminStockService 1개 조회 메서드에 method-level @Transactional(readOnly = true) 명시. ArchUnit noClassLevelTransactionalInApplication 규칙 추가 (ADR-021, ADR-L2). test/integrationTest AC 통과."
+    },
+    {
+      "step": 3,
+      "name": "orchestrator-to-usecase",
+      "status": "completed",
+      "started_at": "2026-06-14T21:17:09+0900",
+      "completed_at": "2026-06-14T21:36:16+0900",
+      "summary": "AuthSignUpService/StockRestoreOutboxRelayService → usecase/ 이동 후 ...UseCase 리네임 + @Service→@Component + @Transactional 제거. OrderCreateService → OrderCreateUseCase(usecase/) + OrderCreateProcessor → OrderCreateService(service/) 분리. OutboxService 삭제 후 OrderExpirationService가 StockRestoreOutboxCreateService 직접 주입. ArchUnit usecase/service 패키지 접미사 규칙 추가(areTopLevelClasses 한정). 모든 참조처·테스트 파일 동기화. test/integrationTest/batchTest AC 통과."
+    }
+  ],
+  "created_at": "2026-06-14T19:30:38+0900",
+  "execution": {
+    "developer_model": "sonnet",
+    "reviewer_model": "opus",
+    "commit_model": "haiku"
+  },
+  "completed_at": "2026-06-14T21:38:17+0900"
+}

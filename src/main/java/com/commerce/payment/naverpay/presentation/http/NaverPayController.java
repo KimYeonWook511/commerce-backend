@@ -11,8 +11,8 @@ import org.springframework.web.bind.annotation.RestController;
 
 import com.commerce.security.annotation.AuthenticatedMemberId;
 import com.commerce.common.ApiResponse;
-import com.commerce.payment.naverpay.application.usecase.NaverPayApprovalService;
-import com.commerce.payment.naverpay.application.result.NaverPayApproveResponse;
+import com.commerce.payment.naverpay.application.usecase.NaverPayApprovalUseCase;
+import com.commerce.payment.naverpay.application.dto.NaverPayApproveResponse;
 import com.commerce.payment.naverpay.presentation.http.request.NaverPayApproveRequest;
 
 import jakarta.validation.Valid;
@@ -23,7 +23,7 @@ import lombok.RequiredArgsConstructor;
 @RequestMapping("/payments/naverpay")
 public class NaverPayController {
 
-	private final NaverPayApprovalService naverPayApprovalService;
+	private final NaverPayApprovalUseCase naverPayApprovalUseCase;
 
 	@GetMapping("/return")
 	public void returnFromNaverPay(
@@ -40,7 +40,7 @@ public class NaverPayController {
 		@AuthenticatedMemberId Long memberId,
 		@Valid @RequestBody NaverPayApproveRequest request
 	) {
-		NaverPayApproveResponse response = naverPayApprovalService.approve(
+		NaverPayApproveResponse response = naverPayApprovalUseCase.approve(
 			memberId, request.getMerchantPayKey(), request.getPaymentId());
 		return ResponseEntity.status(HttpStatus.OK).body(ApiResponse.of(response));
 	}

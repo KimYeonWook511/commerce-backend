@@ -20,13 +20,13 @@ import org.springframework.test.web.servlet.MockMvc;
 
 import com.commerce.security.filter.JwtAuthenticationFilter;
 import com.commerce.security.interceptor.AuthorizationInterceptor;
-import com.commerce.auth.application.usecase.TokenAuthenticationService;
-import com.commerce.auth.application.result.TokenAuthenticationResult;
+import com.commerce.auth.application.usecase.TokenAuthenticationUseCase;
+import com.commerce.auth.application.dto.TokenAuthenticationResult;
 import com.commerce.security.resolver.AuthenticatedMemberIdArgumentResolver;
 import com.commerce.common.config.WebConfig;
-import com.commerce.payment.naverpay.application.usecase.NaverPayApprovalService;
-import com.commerce.payment.naverpay.application.result.NaverPayApproveResponse;
-import com.commerce.payment.naverpay.application.result.NaverPayApproveStatus;
+import com.commerce.payment.naverpay.application.usecase.NaverPayApprovalUseCase;
+import com.commerce.payment.naverpay.application.dto.NaverPayApproveResponse;
+import com.commerce.payment.naverpay.application.dto.NaverPayApproveStatus;
 
 
 @WebMvcTest(NaverPayController.class)
@@ -44,10 +44,10 @@ class NaverPayControllerTest {
 	private MockMvc mockMvc;
 
 	@MockitoBean
-	private NaverPayApprovalService naverPayApprovalService;
+	private NaverPayApprovalUseCase naverPayApprovalUseCase;
 
 	@MockitoBean
-	private TokenAuthenticationService tokenAuthenticationService;
+	private TokenAuthenticationUseCase tokenAuthenticationUseCase;
 
 	@DisplayName("결제 결과 요청은 정상적으로 응답한다")
 	@Test
@@ -70,7 +70,7 @@ class NaverPayControllerTest {
 			.pgPaymentId("pg-payment-id")
 			.status(NaverPayApproveStatus.SUCCESS)
 			.build();
-		given(naverPayApprovalService.approve(1L, "PAY-1", "pg-payment-id")).willReturn(response);
+		given(naverPayApprovalUseCase.approve(1L, "PAY-1", "pg-payment-id")).willReturn(response);
 
 		String requestBody = """
 			{
@@ -90,7 +90,7 @@ class NaverPayControllerTest {
 			.andExpect(jsonPath("$.data.pgPaymentId").value("pg-payment-id"))
 			.andExpect(jsonPath("$.data.status").value("SUCCESS"));
 
-		then(naverPayApprovalService).should().approve(1L, "PAY-1", "pg-payment-id");
+		then(naverPayApprovalUseCase).should().approve(1L, "PAY-1", "pg-payment-id");
 	}
 
 	@DisplayName("merchantPayKey가 비어있으면 요청 값 검증에 실패한다")
@@ -138,7 +138,7 @@ class NaverPayControllerTest {
 	}
 
 	private void stubForValidToken() {
-		given(tokenAuthenticationService.authenticateAccessToken("access-token"))
+		given(tokenAuthenticationUseCase.authenticateAccessToken("access-token"))
 			.willReturn(TokenAuthenticationResult.of(1L, "ROLE_USER"));
 	}
 }

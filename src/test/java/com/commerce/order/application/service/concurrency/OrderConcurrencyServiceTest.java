@@ -30,12 +30,12 @@ import org.springframework.test.context.bean.override.mockito.MockitoBean;
 
 import com.commerce.order.application.service.OrderCancelService;
 import com.commerce.order.application.service.OrderConcurrencyService;
-import com.commerce.order.application.service.OrderCreateService;
+import com.commerce.order.application.usecase.OrderCreateUseCase;
 import com.commerce.member.domain.Member;
 import com.commerce.order.application.port.OrderIdempotencyStore;
-import com.commerce.order.application.command.OrderCreateItem;
-import com.commerce.order.application.command.OrderCreateCommand;
-import com.commerce.order.application.result.OrderCreateResult;
+import com.commerce.order.application.dto.OrderCreateItem;
+import com.commerce.order.application.dto.OrderCreateCommand;
+import com.commerce.order.application.dto.OrderCreateResult;
 import com.commerce.product.domain.Product;
 import com.commerce.product.domain.ProductStatus;
 import com.commerce.stock.domain.Stock;
@@ -67,7 +67,7 @@ class OrderConcurrencyServiceTest {
 	private OrderConcurrencyService orderConcurrencyService;
 
 	@Autowired
-	private OrderCreateService orderCreateService;
+	private OrderCreateUseCase orderCreateUseCase;
 
 	@Autowired
 	private OrderCancelService orderCancelService;
@@ -230,7 +230,7 @@ class OrderConcurrencyServiceTest {
 			String idempotencyKey = "idempotency-" + sequence.incrementAndGet();
 			OrderCreateCommand command =
 				createRequest(member.getId(), product.getId(), 1, idempotencyKey);
-			orderCreateService.createOrder(command);
+			orderCreateUseCase.createOrder(command);
 		}, errors);
 
 		// then
@@ -256,7 +256,7 @@ class OrderConcurrencyServiceTest {
 		Product product = productPersistence.save(createProduct("cancel-product", 1000));
 		stockPersistence.save(createStock(product, 5));
 
-		OrderCreateResult created = orderCreateService.createOrder(
+		OrderCreateResult created = orderCreateUseCase.createOrder(
 			createRequest(member.getId(), product.getId(), 2, "cancel-key")
 		);
 

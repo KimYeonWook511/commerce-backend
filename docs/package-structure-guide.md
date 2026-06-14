@@ -33,9 +33,9 @@ tx를 여는 레이어와 안 여는 레이어를 **물리적으로 갈라** sel
 ```
 payment/application/
 ├── usecase/        # orchestrator — 진입점. tx 없음. 흐름 조립 + 정책 선택
-│   ├── NaverPayApprovalService
-│   ├── PaymentApprovalCompensationService   # skip 정책은 이 안의 private 메서드로
-│   └── PaymentReconciliationService
+│   ├── NaverPayApprovalUseCase
+│   ├── PaymentApprovalCompensationUseCase   # skip 정책은 이 안의 private 메서드로
+│   └── PaymentReconciliationUseCase
 ├── service/        # tx 단위작업. @Transactional. 충돌 시 전파(catch 안 함)
 │   ├── PaymentTransitionService        (markUnknown/fail/succeed)
 │   ├── PaymentApprovalService          (succeedApproval — order+payment 한 tx)
@@ -55,7 +55,7 @@ support/   또는 common/
 
 충돌 반응(skip/retry) 배치 — **정식 레이어(`policy/`)를 만들지 않는다**:
 
-- **skip**("충돌이면 조용히 넘어감")은 그것을 쓰는 흐름 하나에만 의미가 있다 → 그 **Service 안의 private 메서드**로 둔다(예: `PaymentApprovalCompensationService.markUnknownBestEffort(...)`). 흐름 옆에 맥락이 남고 클래스·빈·주입이 안 는다. **여러 Service가 같은 skip을 공유할 때만** 별도 클래스로 추출한다(두 번째 사용처가 분리 시점).
+- **skip**("충돌이면 조용히 넘어감")은 그것을 쓰는 흐름 하나에만 의미가 있다 → 그 **클래스 안의 private 메서드**로 둔다(예: `PaymentApprovalCompensationUseCase.markUnknownBestEffort(...)`). 흐름 옆에 맥락이 남고 클래스·빈·주입이 안 는다. **여러 Service가 같은 skip을 공유할 때만** 별도 클래스로 추출한다(두 번째 사용처가 분리 시점).
 - **retry**("충돌이면 다시 시도")도 skip과 **같은 기준**이다 — 한 곳에서만 쓰면 그 Service 안의 private 메서드, 여러 도메인이 공유하면 별도 helper(`OptimisticRetry`, `support/`·`common/`). retry라서 무조건 helper인 게 아니라, 마침 여러 도메인이 쓰는 경우가 잦을 뿐이다. (단 retry 루프가 부르는 tx 단위작업은 별도 빈이어야 프록시가 적용된다.)
 
 근거:
@@ -63,9 +63,10 @@ support/   또는 common/
 - **self-invocation 함정 소멸.** `usecase → service`는 항상 패키지를 넘는 호출 → 프록시 적용 보장. (skip private 메서드가 호출하는 `service` Service도 별도 빈이라 프록시를 탄다.)
 - **충돌 반응이 흐름 옆에 명시된다.** skip이 private이라 그 흐름을 읽으면 "충돌을 어떻게 다루는지"가 바로 보인다.
 
-네이밍 주의:
-- 클래스명은 기존 `…Service` 컨벤션(ADR-006) 유지, **패키지로 역할을 표현**한다 (`service/PaymentTransitionService`).
-- 패키지명: tx 단위작업 묶음은 `service/`를 쓴다(클래스명도 `…Service`, ADR-006). `service`는 평이해서 "여기만 tx를 연다"는 의도가 이름에 드러나지 않으므로, 그 의도는 패키지 주석과 ArchUnit("@Transactional은 service에만")으로 보완한다. 의도를 직접 드러내고 싶으면 `transaction`/`tx`도 대안이다. `usecase` 대안: `flow`/`orchestration`.
+네이밍 주의 (ADR-006 supersede — 역할별 접미사 이원화):
+- **클래스 접미사가 패키지(역할)와 일치한다**: `usecase/`의 클래스는 `…UseCase`, `service/`의 클래스는 `…Service`. 예: `usecase/NaverPayApprovalUseCase`, `service/PaymentTransitionService`.
+- 접미사가 역할을 직접 드러내므로 import·스택 트레이스·로그처럼 패키지 경로가 안 보이는 곳에서도 흐름(UseCase)인지 tx 단위작업(Service)인지 구분된다. 빈 등록 stereotype도 역할별로 가른다 — UseCase는 `@Component`, Service는 `@Service`(둘은 기능 동일하나 역할 신호로 분리).
+- 패키지명 대안: `usecase`→`flow`/`orchestration`, `service`→`transaction`/`tx`(다만 접미사 이원화로 의도가 이미 드러나므로 평이한 `service`로 충분).
 - retry helper는 `Service`를 안 붙이고 메커니즘 이름(`OptimisticRetry`)으로 둔다 — 유스케이스 행위가 아니라 재사용 메커니즘이라서다.
 
 ---
@@ -158,7 +159,7 @@ payment/presentation/
 ```java
 @Component
 class PaymentReconciliationScheduler {        // presentation/scheduler/
-    private final PaymentReconciliationService reconciliation;  // application/usecase/
+    private final PaymentReconciliationUseCase reconciliation;  // application/usecase/
 
     @Scheduled(cron = "...")
     void run() { reconciliation.reconcile(); }  // 위임만. tx도 로직도 없음

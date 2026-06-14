@@ -19,13 +19,13 @@ import org.springframework.test.web.servlet.MockMvc;
 
 import com.commerce.security.filter.JwtAuthenticationFilter;
 import com.commerce.security.interceptor.AuthorizationInterceptor;
-import com.commerce.auth.application.usecase.TokenAuthenticationService;
-import com.commerce.auth.application.result.TokenAuthenticationResult;
+import com.commerce.auth.application.usecase.TokenAuthenticationUseCase;
+import com.commerce.auth.application.dto.TokenAuthenticationResult;
 import com.commerce.security.resolver.AuthenticatedMemberIdArgumentResolver;
 import com.commerce.common.config.WebConfig;
 import com.commerce.payment.application.service.ReservePaymentService;
-import com.commerce.payment.application.command.ReservePaymentCommand;
-import com.commerce.payment.application.result.ReservePaymentResult;
+import com.commerce.payment.application.dto.ReservePaymentCommand;
+import com.commerce.payment.application.dto.ReservePaymentResult;
 
 
 @WebMvcTest(ReservePaymentController.class)
@@ -46,7 +46,7 @@ class ReservePaymentControllerTest {
 	private ReservePaymentService reservePaymentService;
 
 	@MockitoBean
-	private TokenAuthenticationService tokenAuthenticationService;
+	private TokenAuthenticationUseCase tokenAuthenticationUseCase;
 
 	@DisplayName("결제 예약 요청이 유효하면 결제 예약 응답을 반환한다")
 	@Test
@@ -161,7 +161,7 @@ class ReservePaymentControllerTest {
 	}
 
 	private void stubForValidToken() {
-		given(tokenAuthenticationService.authenticateAccessToken("access-token"))
+		given(tokenAuthenticationUseCase.authenticateAccessToken("access-token"))
 			.willReturn(TokenAuthenticationResult.of(1L, "ROLE_USER"));
 	}
 }

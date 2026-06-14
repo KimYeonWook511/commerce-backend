@@ -6,7 +6,7 @@ import java.util.List;
 import org.springframework.stereotype.Service;
 import org.springframework.transaction.annotation.Transactional;
 
-import com.commerce.order.application.result.OrderCancelResult;
+import com.commerce.order.application.dto.OrderCancelResult;
 import com.commerce.order.domain.Order;
 import com.commerce.order.domain.OrderItem;
 import com.commerce.order.domain.repository.OrderRepository;
@@ -20,7 +20,6 @@ import lombok.extern.slf4j.Slf4j;
 @Slf4j
 @Service
 @RequiredArgsConstructor
-@Transactional(readOnly = true)
 public class OrderCancelService {
 
 	private final OrderRepository orderRepository;

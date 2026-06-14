@@ -10,7 +10,7 @@ import com.commerce.common.kafka.exception.KafkaConsumeNonRetryableException;
 import com.commerce.outbox.domain.OutboxEventType;
 import com.commerce.outbox.infrastructure.messaging.OutboxRelayMessage;
 import com.commerce.outbox.stock.application.service.StockRestoreOutboxConsumeService;
-import com.commerce.outbox.stock.application.command.StockRestoreConsumeCommand;
+import com.commerce.outbox.stock.application.dto.StockRestoreConsumeCommand;
 import com.commerce.outbox.stock.application.payload.StockRestoreRequestedPayload;
 import com.fasterxml.jackson.databind.ObjectMapper;
 

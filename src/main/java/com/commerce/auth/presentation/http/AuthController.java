@@ -18,14 +18,14 @@ import com.commerce.auth.presentation.http.request.AuthSignUpRequest;
 import com.commerce.auth.presentation.http.request.AuthTokenReissueRequest;
 import com.commerce.auth.infrastructure.jwt.JwtProperties;
 import com.commerce.auth.application.service.AuthLoginService;
-import com.commerce.auth.application.service.AuthSignUpService;
+import com.commerce.auth.application.usecase.AuthSignUpUseCase;
 import com.commerce.auth.application.service.AuthTokenReissueService;
-import com.commerce.auth.application.command.AuthLoginCommand;
-import com.commerce.auth.application.command.AuthSignUpCommand;
-import com.commerce.auth.application.command.AuthTokenReissueCommand;
-import com.commerce.auth.application.result.AuthLoginResult;
-import com.commerce.auth.application.result.AuthSignUpResult;
-import com.commerce.auth.application.result.AuthTokenReissueResult;
+import com.commerce.auth.application.dto.AuthLoginCommand;
+import com.commerce.auth.application.dto.AuthSignUpCommand;
+import com.commerce.auth.application.dto.AuthTokenReissueCommand;
+import com.commerce.auth.application.dto.AuthLoginResult;
+import com.commerce.auth.application.dto.AuthSignUpResult;
+import com.commerce.auth.application.dto.AuthTokenReissueResult;
 import com.commerce.common.ApiResponse;
 import com.commerce.common.exception.CommonErrorCode;
 import com.commerce.common.exception.CustomException;
@@ -38,7 +38,7 @@ import lombok.RequiredArgsConstructor;
 @RequestMapping("/auth")
 public class AuthController {
 
-	private final AuthSignUpService authSignUpService;
+	private final AuthSignUpUseCase authSignUpUseCase;
 	private final AuthLoginService authLoginService;
 	private final AuthTokenReissueService authTokenReissueService;
 	private final JwtProperties jwtProperties;
@@ -47,7 +47,7 @@ public class AuthController {
 	public ResponseEntity<ApiResponse<AuthSignUpResult>> signUp(
 		@Valid @RequestBody AuthSignUpRequest request
 	) {
-		AuthSignUpResult signUpResult = authSignUpService.signUp(
+		AuthSignUpResult signUpResult = authSignUpUseCase.signUp(
 			AuthSignUpCommand.builder()
 				.email(request.getEmail())
 				.password(request.getPassword())

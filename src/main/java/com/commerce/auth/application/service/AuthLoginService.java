@@ -5,11 +5,11 @@ import org.springframework.transaction.annotation.Transactional;
 
 import com.commerce.auth.domain.exception.AuthErrorCode;
 import com.commerce.auth.domain.exception.AuthException;
-import com.commerce.auth.application.command.AuthLoginCommand;
-import com.commerce.auth.application.result.AuthLoginResult;
-import com.commerce.auth.application.result.AuthTokenIssueResult;
+import com.commerce.auth.application.dto.AuthLoginCommand;
+import com.commerce.auth.application.dto.AuthLoginResult;
+import com.commerce.auth.application.dto.AuthTokenIssueResult;
 import com.commerce.auth.application.port.PasswordHasher;
-import com.commerce.auth.application.usecase.AuthTokenIssueService;
+import com.commerce.auth.application.usecase.AuthTokenIssueUseCase;
 import com.commerce.member.application.service.MemberQueryService;
 import com.commerce.member.domain.Member;
 
@@ -19,13 +19,13 @@ import lombok.extern.slf4j.Slf4j;
 @Slf4j
 @Service
 @RequiredArgsConstructor
-@Transactional(readOnly = true)
 public class AuthLoginService {
 
 	private final MemberQueryService memberQueryService;
-	private final AuthTokenIssueService authTokenIssueService;
+	private final AuthTokenIssueUseCase authTokenIssueUseCase;
 	private final PasswordHasher passwordHasher;
 
+	@Transactional(readOnly = true)
 	public AuthLoginResult login(AuthLoginCommand command) {
 		Member member = memberQueryService.findByEmail(command.getEmail())
 			.orElseThrow(() -> new AuthException(AuthErrorCode.INVALID_CREDENTIALS));
@@ -34,7 +34,7 @@ public class AuthLoginService {
 			throw new AuthException(AuthErrorCode.INVALID_CREDENTIALS);
 		}
 
-		AuthTokenIssueResult tokenIssueResult = authTokenIssueService.issue(member);
+		AuthTokenIssueResult tokenIssueResult = authTokenIssueUseCase.issue(member);
 
 		log.info("로그인 성공 memberId={}", member.getId());
 		return AuthLoginResult.from(

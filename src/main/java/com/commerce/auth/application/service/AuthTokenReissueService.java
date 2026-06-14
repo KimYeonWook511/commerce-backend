@@ -3,13 +3,13 @@ package com.commerce.auth.application.service;
 import org.springframework.stereotype.Service;
 import org.springframework.transaction.annotation.Transactional;
 
-import com.commerce.auth.application.command.AuthTokenReissueCommand;
+import com.commerce.auth.application.dto.AuthTokenReissueCommand;
 import com.commerce.auth.application.port.RefreshTokenStore;
-import com.commerce.auth.application.usecase.AuthTokenIssueService;
+import com.commerce.auth.application.usecase.AuthTokenIssueUseCase;
 import com.commerce.auth.application.port.TokenValidator;
 import com.commerce.auth.application.port.vo.ParsedTokenClaims;
-import com.commerce.auth.application.result.AuthTokenIssueResult;
-import com.commerce.auth.application.result.AuthTokenReissueResult;
+import com.commerce.auth.application.dto.AuthTokenIssueResult;
+import com.commerce.auth.application.dto.AuthTokenReissueResult;
 import com.commerce.auth.domain.exception.AuthErrorCode;
 import com.commerce.auth.domain.exception.AuthException;
 import com.commerce.member.application.service.MemberQueryService;
@@ -19,14 +19,14 @@ import lombok.RequiredArgsConstructor;
 
 @Service
 @RequiredArgsConstructor
-@Transactional(readOnly = true)
 public class AuthTokenReissueService {
 
 	private final MemberQueryService memberQueryService;
-	private final AuthTokenIssueService authTokenIssueService;
+	private final AuthTokenIssueUseCase authTokenIssueUseCase;
 	private final TokenValidator tokenValidator;
 	private final RefreshTokenStore refreshTokenStore;
 
+	@Transactional(readOnly = true)
 	public AuthTokenReissueResult reissue(AuthTokenReissueCommand command) {
 		String refreshToken = command.getRefreshToken();
 		ParsedTokenClaims claims = tokenValidator.validateRefreshToken(refreshToken);
@@ -38,7 +38,7 @@ public class AuthTokenReissueService {
 		Member member = memberQueryService.findById(memberId)
 			.orElseThrow(() -> new AuthException(AuthErrorCode.TOKEN_INVALID));
 
-		AuthTokenIssueResult tokenIssueResult = authTokenIssueService.issue(member);
+		AuthTokenIssueResult tokenIssueResult = authTokenIssueUseCase.issue(member);
 
 		return AuthTokenReissueResult.of(
 			tokenIssueResult.getAccessToken(),

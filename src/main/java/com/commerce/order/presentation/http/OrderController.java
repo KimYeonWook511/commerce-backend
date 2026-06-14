@@ -15,11 +15,11 @@ import com.commerce.common.ApiResponse;
 import com.commerce.common.exception.CommonErrorCode;
 import com.commerce.common.exception.CommonException;
 import com.commerce.order.application.service.OrderCancelService;
-import com.commerce.order.application.service.OrderCreateService;
-import com.commerce.order.application.command.OrderCreateCommand;
-import com.commerce.order.application.command.OrderCreateItem;
-import com.commerce.order.application.result.OrderCancelResult;
-import com.commerce.order.application.result.OrderCreateResult;
+import com.commerce.order.application.usecase.OrderCreateUseCase;
+import com.commerce.order.application.dto.OrderCreateCommand;
+import com.commerce.order.application.dto.OrderCreateItem;
+import com.commerce.order.application.dto.OrderCancelResult;
+import com.commerce.order.application.dto.OrderCreateResult;
 import com.commerce.order.presentation.http.request.OrderCreateRequest;
 
 import jakarta.validation.Valid;
@@ -30,7 +30,7 @@ import lombok.RequiredArgsConstructor;
 @RequestMapping("/orders")
 public class OrderController {
 
-	private final OrderCreateService orderCreateService;
+	private final OrderCreateUseCase orderCreateUseCase;
 	private final OrderCancelService orderCancelService;
 
 	@PostMapping
@@ -54,7 +54,7 @@ public class OrderController {
 					.build())
 				.toList())
 			.build();
-		OrderCreateResult result = orderCreateService.createOrder(command);
+		OrderCreateResult result = orderCreateUseCase.createOrder(command);
 
 		return ResponseEntity.status(HttpStatus.CREATED).body(ApiResponse.of(result));
 	}

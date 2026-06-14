@@ -20,8 +20,8 @@ import org.springframework.orm.ObjectOptimisticLockingFailureException;
 import org.springframework.test.context.ActiveProfiles;
 import org.springframework.test.util.ReflectionTestUtils;
 
-import com.commerce.cart.application.usecase.AddCartItemService;
-import com.commerce.cart.application.usecase.UpdateCartItemQuantityService;
+import com.commerce.cart.application.usecase.AddCartItemUseCase;
+import com.commerce.cart.application.usecase.UpdateCartItemQuantityUseCase;
 import com.commerce.cart.domain.CartItem;
 import com.commerce.cart.domain.exception.CartErrorCode;
 import com.commerce.cart.domain.exception.CartException;
@@ -46,10 +46,10 @@ import com.commerce.support.PersistenceCleanupTestSupport;
 class CartConcurrencyTest {
 
 	@Autowired
-	private AddCartItemService addCartItemService;
+	private AddCartItemUseCase addCartItemUseCase;
 
 	@Autowired
-	private UpdateCartItemQuantityService updateCartItemQuantityService;
+	private UpdateCartItemQuantityUseCase updateCartItemQuantityUseCase;
 
 	@Autowired
 	private CartPersistenceTestSupport cartPersistence;
@@ -77,7 +77,7 @@ class CartConcurrencyTest {
 		// when
 		ConcurrentLinkedQueue<Throwable> errors = new ConcurrentLinkedQueue<>();
 		runConcurrent(threadCount,
-			index -> addCartItemService.add(memberId, createAddRequest(product.getId(), 1)),
+			index -> addCartItemUseCase.add(memberId, createAddRequest(product.getId(), 1)),
 			errors);
 
 		// then
@@ -103,7 +103,7 @@ class CartConcurrencyTest {
 		// when
 		ConcurrentLinkedQueue<Throwable> errors = new ConcurrentLinkedQueue<>();
 		runConcurrent(threadCount,
-			index -> addCartItemService.add(memberId, createAddRequest(product.getId(), 1)),
+			index -> addCartItemUseCase.add(memberId, createAddRequest(product.getId(), 1)),
 			errors);
 
 		// then
@@ -135,7 +135,7 @@ class CartConcurrencyTest {
 		// when
 		ConcurrentLinkedQueue<Throwable> errors = new ConcurrentLinkedQueue<>();
 		runConcurrent(targetQuantities.length,
-			index -> updateCartItemQuantityService.update(memberId, product.getId(), createUpdateRequest(targetQuantities[index])),
+			index -> updateCartItemQuantityUseCase.update(memberId, product.getId(), createUpdateRequest(targetQuantities[index])),
 			errors);
 
 		// then

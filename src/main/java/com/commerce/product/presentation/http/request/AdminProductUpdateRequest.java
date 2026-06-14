@@ -1,6 +1,6 @@
 package com.commerce.product.presentation.http.request;
 
-import com.commerce.product.application.command.AdminProductUpdateCommand;
+import com.commerce.product.application.dto.AdminProductUpdateCommand;
 import com.commerce.product.domain.ProductStatus;
 
 import jakarta.validation.constraints.NotBlank;

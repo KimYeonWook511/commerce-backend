@@ -1,6 +1,6 @@
 package com.commerce.stock.presentation.http.request;
 
-import com.commerce.stock.application.command.AdminStockAdjustCommand;
+import com.commerce.stock.application.dto.AdminStockAdjustCommand;
 import com.commerce.stock.domain.StockAdjustmentReason;
 
 import jakarta.validation.constraints.NotBlank;

@@ -9,10 +9,10 @@ import com.commerce.product.domain.Product;
 import com.commerce.product.domain.exception.ProductErrorCode;
 import com.commerce.product.domain.exception.ProductException;
 import com.commerce.product.domain.repository.ProductRepository;
-import com.commerce.stock.application.command.AdminStockAdjustCommand;
-import com.commerce.stock.application.command.AdminStockCreateCommand;
-import com.commerce.stock.application.result.AdminStockResult;
-import com.commerce.stock.application.result.StockHistoryResult;
+import com.commerce.stock.application.dto.AdminStockAdjustCommand;
+import com.commerce.stock.application.dto.AdminStockCreateCommand;
+import com.commerce.stock.application.dto.AdminStockResult;
+import com.commerce.stock.application.dto.StockHistoryResult;
 import com.commerce.stock.domain.Stock;
 import com.commerce.stock.domain.StockAdjustmentReason;
 import com.commerce.stock.domain.StockHistory;
@@ -26,7 +26,6 @@ import lombok.extern.slf4j.Slf4j;
 
 @Slf4j
 @Service
-@Transactional(readOnly = true)
 @RequiredArgsConstructor
 public class AdminStockService {
 
@@ -85,6 +84,7 @@ public class AdminStockService {
 		return AdminStockResult.from(stock);
 	}
 
+	@Transactional(readOnly = true)
 	public List<StockHistoryResult> getHistoriesByProductId(Long productId) {
 		Stock stock = stockRepository.findByProductId(productId)
 			.orElseThrow(() -> new StockException(StockErrorCode.STOCK_NOT_FOUND));

@@ -28,16 +28,16 @@ import org.springframework.test.web.servlet.MockMvc;
 
 import com.commerce.security.filter.JwtAuthenticationFilter;
 import com.commerce.security.interceptor.AuthorizationInterceptor;
-import com.commerce.auth.application.usecase.TokenAuthenticationService;
-import com.commerce.auth.application.result.TokenAuthenticationResult;
+import com.commerce.auth.application.usecase.TokenAuthenticationUseCase;
+import com.commerce.auth.application.dto.TokenAuthenticationResult;
 import com.commerce.security.resolver.AuthenticatedMemberIdArgumentResolver;
 import com.commerce.common.config.WebConfig;
 import com.commerce.stock.domain.StockAdjustmentReason;
 import com.commerce.stock.application.service.AdminStockService;
-import com.commerce.stock.application.command.AdminStockAdjustCommand;
-import com.commerce.stock.application.command.AdminStockCreateCommand;
-import com.commerce.stock.application.result.AdminStockResult;
-import com.commerce.stock.application.result.StockHistoryResult;
+import com.commerce.stock.application.dto.AdminStockAdjustCommand;
+import com.commerce.stock.application.dto.AdminStockCreateCommand;
+import com.commerce.stock.application.dto.AdminStockResult;
+import com.commerce.stock.application.dto.StockHistoryResult;
 
 
 @WebMvcTest(AdminStockController.class)
@@ -58,7 +58,7 @@ class AdminStockControllerTest {
 	private AdminStockService stockService;
 
 	@MockitoBean
-	private TokenAuthenticationService tokenAuthenticationService;
+	private TokenAuthenticationUseCase tokenAuthenticationUseCase;
 
 	@DisplayName("관리자는 초기 재고를 생성할 수 있다")
 	@Test
@@ -463,7 +463,7 @@ class AdminStockControllerTest {
 	}
 
 	private void stubForToken(String role) {
-		given(tokenAuthenticationService.authenticateAccessToken("access-token"))
+		given(tokenAuthenticationUseCase.authenticateAccessToken("access-token"))
 			.willReturn(TokenAuthenticationResult.of(1L, role));
 	}
 }

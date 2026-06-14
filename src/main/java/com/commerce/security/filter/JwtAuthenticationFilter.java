@@ -5,8 +5,8 @@ import java.util.Set;
 
 import org.springframework.web.filter.OncePerRequestFilter;
 
-import com.commerce.auth.application.usecase.TokenAuthenticationService;
-import com.commerce.auth.application.result.TokenAuthenticationResult;
+import com.commerce.auth.application.usecase.TokenAuthenticationUseCase;
+import com.commerce.auth.application.dto.TokenAuthenticationResult;
 import com.commerce.auth.domain.exception.AuthErrorCode;
 import com.commerce.auth.domain.exception.AuthException;
 import com.commerce.common.ApiResponse;
@@ -35,7 +35,7 @@ public class JwtAuthenticationFilter extends OncePerRequestFilter {
 		"/payments/naverpay/return"
 	);
 
-	private final TokenAuthenticationService tokenAuthenticationService;
+	private final TokenAuthenticationUseCase tokenAuthenticationUseCase;
 	private final ObjectMapper objectMapper;
 
 	@Override
@@ -61,7 +61,7 @@ public class JwtAuthenticationFilter extends OncePerRequestFilter {
 
 		// 토큰 처리
 		try {
-			TokenAuthenticationResult principal = tokenAuthenticationService.authenticateAccessToken(token);
+			TokenAuthenticationResult principal = tokenAuthenticationUseCase.authenticateAccessToken(token);
 
 			// memberId, role Context에 저장
 			Long memberId = principal.getMemberId();

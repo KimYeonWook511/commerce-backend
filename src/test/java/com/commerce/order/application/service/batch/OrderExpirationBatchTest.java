@@ -43,8 +43,8 @@ import com.commerce.order.domain.exception.OrderException;
 import com.commerce.member.domain.Member;
 import com.commerce.order.domain.Order;
 import com.commerce.order.domain.OrderStatus;
-import com.commerce.outbox.application.usecase.OutboxService;
-import com.commerce.outbox.stock.application.command.StockRestoreOutboxCreateCommand;
+import com.commerce.outbox.stock.application.dto.StockRestoreOutboxCreateCommand;
+import com.commerce.outbox.stock.application.service.StockRestoreOutboxCreateService;
 import com.commerce.product.domain.Product;
 import com.commerce.product.domain.ProductStatus;
 import com.commerce.member.infrastructure.persistence.support.MemberPersistenceTestSupport;
@@ -85,7 +85,7 @@ class OrderExpirationBatchTest {
 	private PaymentReservationPersistenceTestSupport reservationPersistence;
 
 	@MockitoBean
-	private OutboxService outboxService;
+	private StockRestoreOutboxCreateService stockRestoreOutboxCreateService;
 
 	@BeforeEach
 	void setUp() {
@@ -116,8 +116,8 @@ class OrderExpirationBatchTest {
 		assertThat(execution.getStatus()).isEqualTo(BatchStatus.COMPLETED);
 		Order result = orderPersistence.findById(order.getId()).orElseThrow();
 		assertThat(result.getStatus()).isEqualTo(OrderStatus.CANCELED);
-		then(outboxService).should()
-			.createStockRestoreOutboxEvent(argThat(command -> command.getOrderId().equals(result.getId())));
+		then(stockRestoreOutboxCreateService).should()
+			.createOutboxEvent(argThat(command -> command.getOrderId().equals(result.getId())));
 	}
 
 	@DisplayName("만료 대상이 없으면 아무 것도 처리하지 않는다")
@@ -138,8 +138,8 @@ class OrderExpirationBatchTest {
 		StepExecution stepExecution = execution.getStepExecutions().iterator().next();
 		assertThat(stepExecution.getReadCount()).isEqualTo(0);
 		assertThat(stepExecution.getWriteCount()).isEqualTo(0);
-		then(outboxService).should(never())
-			.createStockRestoreOutboxEvent(any(StockRestoreOutboxCreateCommand.class));
+		then(stockRestoreOutboxCreateService).should(never())
+			.createOutboxEvent(any(StockRestoreOutboxCreateCommand.class));
 	}
 
 	@DisplayName("만료 기준을 지나지 않은 주문은 배치에서 유지된다")
@@ -159,8 +159,8 @@ class OrderExpirationBatchTest {
 		assertThat(execution.getStatus()).isEqualTo(BatchStatus.COMPLETED);
 		Order result = orderPersistence.findById(order.getId()).orElseThrow();
 		assertThat(result.getStatus()).isEqualTo(OrderStatus.INIT);
-		then(outboxService).should(never())
-			.createStockRestoreOutboxEvent(any(StockRestoreOutboxCreateCommand.class));
+		then(stockRestoreOutboxCreateService).should(never())
+			.createOutboxEvent(any(StockRestoreOutboxCreateCommand.class));
 	}
 
 	@DisplayName("만료 주문이 청크 사이즈를 넘어도 모두 취소 처리된다")
@@ -189,8 +189,8 @@ class OrderExpirationBatchTest {
 		List<Long> orderIds = orders.stream().map(Order::getId).toList();
 		List<Order> updatedOrders = orderPersistence.findAllById(orderIds);
 		assertThat(updatedOrders).allMatch(order -> order.getStatus() == OrderStatus.CANCELED);
-		then(outboxService).should(times(totalOrders))
-			.createStockRestoreOutboxEvent(any(StockRestoreOutboxCreateCommand.class));
+		then(stockRestoreOutboxCreateService).should(times(totalOrders))
+			.createOutboxEvent(any(StockRestoreOutboxCreateCommand.class));
 	}
 
 	@DisplayName("같은 조건으로 배치를 다시 실행해도 추가 처리하지 않는다")
@@ -220,8 +220,8 @@ class OrderExpirationBatchTest {
 		StepExecution secondStep = secondExecution.getStepExecutions().iterator().next();
 		assertThat(secondStep.getReadCount()).isEqualTo(0);
 		assertThat(secondStep.getWriteCount()).isEqualTo(0);
-		then(outboxService).should(times(2))
-			.createStockRestoreOutboxEvent(any(StockRestoreOutboxCreateCommand.class));
+		then(stockRestoreOutboxCreateService).should(times(2))
+			.createOutboxEvent(any(StockRestoreOutboxCreateCommand.class));
 	}
 
 	@DisplayName("주문 만료 처리 중 CustomException이 발생하면 해당 주문을 skip한다")
@@ -233,8 +233,8 @@ class OrderExpirationBatchTest {
 		Product product = productPersistence.save(createProduct());
 		Order order = orderPersistence.save(createOrder(member, product));
 		doThrow(new OrderException(OrderErrorCode.ORDER_CANCEL_NOT_ALLOWED))
-			.when(outboxService)
-			.createStockRestoreOutboxEvent(any(StockRestoreOutboxCreateCommand.class));
+			.when(stockRestoreOutboxCreateService)
+			.createOutboxEvent(any(StockRestoreOutboxCreateCommand.class));
 		JobParameters parameters = jobParameters(now.plusMinutes(10));
 
 		// when
@@ -277,7 +277,7 @@ class OrderExpirationBatchTest {
 		assertThat(stepExecution.getWriteCount()).isEqualTo(0);
 		Order result = orderPersistence.findById(order.getId()).orElseThrow();
 		assertThat(result.getStatus()).isEqualTo(OrderStatus.INIT);
-		then(outboxService).should(never()).createStockRestoreOutboxEvent(any());
+		then(stockRestoreOutboxCreateService).should(never()).createOutboxEvent(any());
 	}
 
 	@DisplayName("UNKNOWN 결제 주문은 제외되고 일반 만료 주문은 정상 처리된다")

@@ -11,12 +11,12 @@ import org.springframework.web.bind.annotation.RequestBody;
 import org.springframework.web.bind.annotation.RequestMapping;
 import org.springframework.web.bind.annotation.RestController;
 
-import com.commerce.cart.application.usecase.AddCartItemService;
+import com.commerce.cart.application.usecase.AddCartItemUseCase;
 import com.commerce.cart.application.service.GetMyCartService;
 import com.commerce.cart.application.service.RemoveCartItemService;
-import com.commerce.cart.application.usecase.UpdateCartItemQuantityService;
-import com.commerce.cart.application.result.CartItemSummaryResult;
-import com.commerce.cart.application.result.CartResult;
+import com.commerce.cart.application.usecase.UpdateCartItemQuantityUseCase;
+import com.commerce.cart.application.dto.CartItemSummaryResult;
+import com.commerce.cart.application.dto.CartResult;
 import com.commerce.cart.presentation.http.request.CartItemAddRequest;
 import com.commerce.cart.presentation.http.request.CartItemUpdateRequest;
 import com.commerce.common.ApiResponse;
@@ -30,9 +30,9 @@ import lombok.RequiredArgsConstructor;
 @RequestMapping("/cart")
 public class CartController {
 
-	private final AddCartItemService addCartItemService;
+	private final AddCartItemUseCase addCartItemUseCase;
 	private final GetMyCartService getMyCartService;
-	private final UpdateCartItemQuantityService updateCartItemQuantityService;
+	private final UpdateCartItemQuantityUseCase updateCartItemQuantityUseCase;
 	private final RemoveCartItemService removeCartItemService;
 
 	@PostMapping("/items")
@@ -40,7 +40,7 @@ public class CartController {
 		@AuthenticatedMemberId Long memberId,
 		@Valid @RequestBody CartItemAddRequest request
 	) {
-		CartItemSummaryResult result = addCartItemService.add(memberId, request);
+		CartItemSummaryResult result = addCartItemUseCase.add(memberId, request);
 		return ResponseEntity.status(HttpStatus.CREATED).body(ApiResponse.of(result));
 	}
 
@@ -58,7 +58,7 @@ public class CartController {
 		@PathVariable Long productId,
 		@Valid @RequestBody CartItemUpdateRequest request
 	) {
-		CartItemSummaryResult result = updateCartItemQuantityService.update(memberId, productId, request);
+		CartItemSummaryResult result = updateCartItemQuantityUseCase.update(memberId, productId, request);
 		return ResponseEntity.status(HttpStatus.OK).body(ApiResponse.of(result));
 	}
 

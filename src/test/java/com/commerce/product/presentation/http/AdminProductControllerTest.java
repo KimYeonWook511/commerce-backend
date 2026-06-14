@@ -24,15 +24,15 @@ import org.springframework.test.web.servlet.MockMvc;
 
 import com.commerce.security.filter.JwtAuthenticationFilter;
 import com.commerce.security.interceptor.AuthorizationInterceptor;
-import com.commerce.auth.application.usecase.TokenAuthenticationService;
-import com.commerce.auth.application.result.TokenAuthenticationResult;
+import com.commerce.auth.application.usecase.TokenAuthenticationUseCase;
+import com.commerce.auth.application.dto.TokenAuthenticationResult;
 import com.commerce.security.resolver.AuthenticatedMemberIdArgumentResolver;
 import com.commerce.common.config.WebConfig;
 import com.commerce.product.application.service.AdminProductService;
-import com.commerce.product.application.command.AdminProductCreateCommand;
-import com.commerce.product.application.command.AdminProductUpdateCommand;
-import com.commerce.product.application.result.AdminProductDeleteResult;
-import com.commerce.product.application.result.AdminProductResult;
+import com.commerce.product.application.dto.AdminProductCreateCommand;
+import com.commerce.product.application.dto.AdminProductUpdateCommand;
+import com.commerce.product.application.dto.AdminProductDeleteResult;
+import com.commerce.product.application.dto.AdminProductResult;
 import com.commerce.product.domain.ProductStatus;
 
 
@@ -54,7 +54,7 @@ class AdminProductControllerTest {
 	private AdminProductService adminProductService;
 
 	@MockitoBean
-	private TokenAuthenticationService tokenAuthenticationService;
+	private TokenAuthenticationUseCase tokenAuthenticationUseCase;
 
 	@DisplayName("관리자는 상품을 등록할 수 있다")
 	@Test
@@ -262,7 +262,7 @@ class AdminProductControllerTest {
 	}
 
 	private void stubForToken(String role) {
-		given(tokenAuthenticationService.authenticateAccessToken("access-token"))
+		given(tokenAuthenticationUseCase.authenticateAccessToken("access-token"))
 			.willReturn(TokenAuthenticationResult.of(1L, role));
 	}
 }
