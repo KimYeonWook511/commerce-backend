@@ -1,7 +1,6 @@
-package com.commerce.auth.application.service;
+package com.commerce.auth.application.usecase;
 
-import org.springframework.stereotype.Service;
-import org.springframework.transaction.annotation.Transactional;
+import org.springframework.stereotype.Component;
 
 import com.commerce.auth.domain.exception.AuthErrorCode;
 import com.commerce.auth.domain.exception.AuthException;
@@ -9,7 +8,6 @@ import com.commerce.auth.application.dto.AuthLoginCommand;
 import com.commerce.auth.application.dto.AuthLoginResult;
 import com.commerce.auth.application.dto.AuthTokenIssueResult;
 import com.commerce.auth.application.port.PasswordHasher;
-import com.commerce.auth.application.usecase.AuthTokenIssueUseCase;
 import com.commerce.member.application.service.MemberQueryService;
 import com.commerce.member.domain.Member;
 
@@ -17,15 +15,14 @@ import lombok.RequiredArgsConstructor;
 import lombok.extern.slf4j.Slf4j;
 
 @Slf4j
-@Service
+@Component
 @RequiredArgsConstructor
-public class AuthLoginService {
+public class AuthLoginUseCase {
 
 	private final MemberQueryService memberQueryService;
 	private final AuthTokenIssueUseCase authTokenIssueUseCase;
 	private final PasswordHasher passwordHasher;
 
-	@Transactional(readOnly = true)
 	public AuthLoginResult login(AuthLoginCommand command) {
 		Member member = memberQueryService.findByEmail(command.getEmail())
 			.orElseThrow(() -> new AuthException(AuthErrorCode.INVALID_CREDENTIALS));

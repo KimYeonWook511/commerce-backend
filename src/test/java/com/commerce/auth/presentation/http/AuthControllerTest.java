@@ -19,9 +19,9 @@ import org.springframework.test.context.bean.override.mockito.MockitoBean;
 import org.springframework.test.web.servlet.MockMvc;
 import org.springframework.test.util.ReflectionTestUtils;
 
-import com.commerce.auth.application.service.AuthLoginService;
+import com.commerce.auth.application.usecase.AuthLoginUseCase;
 import com.commerce.auth.application.usecase.AuthSignUpUseCase;
-import com.commerce.auth.application.service.AuthTokenReissueService;
+import com.commerce.auth.application.usecase.AuthTokenReissueUseCase;
 import com.commerce.auth.application.usecase.TokenAuthenticationUseCase;
 import com.commerce.auth.application.dto.AuthLoginCommand;
 import com.commerce.auth.application.dto.AuthSignUpCommand;
@@ -42,10 +42,10 @@ class AuthControllerTest {
 	private AuthSignUpUseCase authSignUpUseCase;
 
 	@MockitoBean
-	private AuthLoginService authLoginService;
+	private AuthLoginUseCase authLoginUseCase;
 
 	@MockitoBean
-	private AuthTokenReissueService authTokenReissueService;
+	private AuthTokenReissueUseCase authTokenReissueUseCase;
 
 	@MockitoBean
 	private JwtProperties jwtProperties;
@@ -90,7 +90,7 @@ class AuthControllerTest {
 		// given
 		Member member = Member.createUser("test@example.com", "hashed-password", "tester");
 		ReflectionTestUtils.setField(member, "id", 1L);
-		given(authLoginService.login(org.mockito.ArgumentMatchers.any(AuthLoginCommand.class)))
+		given(authLoginUseCase.login(org.mockito.ArgumentMatchers.any(AuthLoginCommand.class)))
 			.willReturn(AuthLoginResult.from(member, "access-token", "refresh-token"));
 		given(jwtProperties.getRefreshExpiration()).willReturn(604800000L);
 
