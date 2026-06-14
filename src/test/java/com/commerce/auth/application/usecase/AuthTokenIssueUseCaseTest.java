@@ -35,7 +35,7 @@ class AuthTokenIssueUseCaseTest {
 	private RefreshTokenStore refreshTokenStore;
 
 	@InjectMocks
-	private AuthTokenIssueUseCase authTokenIssueService;
+	private AuthTokenIssueUseCase authTokenIssueUseCase;
 
 	@DisplayName("회원 정보로 access token과 refresh token을 발급하고 refresh token을 저장한다")
 	@Test
@@ -48,7 +48,7 @@ class AuthTokenIssueUseCaseTest {
 		given(tokenIssuer.createRefreshToken(any(TokenClaims.class))).willReturn("refresh-token");
 
 		// when
-		AuthTokenIssueResult result = authTokenIssueService.issue(member);
+		AuthTokenIssueResult result = authTokenIssueUseCase.issue(member);
 
 		// then
 		assertThat(result.getAccessToken()).isEqualTo("access-token");
@@ -67,7 +67,7 @@ class AuthTokenIssueUseCaseTest {
 		ArgumentCaptor<TokenClaims> refreshClaimsCaptor = ArgumentCaptor.forClass(TokenClaims.class);
 
 		// when
-		authTokenIssueService.issue(member);
+		authTokenIssueUseCase.issue(member);
 
 		// then
 		then(tokenIssuer).should().createAccessToken(accessClaimsCaptor.capture());
@@ -90,7 +90,7 @@ class AuthTokenIssueUseCaseTest {
 		willThrow(new RefreshTokenStoreUnavailableException(new RuntimeException("boom"))).given(refreshTokenStore).save(anyLong(), anyString());
 
 		// when & then
-		assertThatThrownBy(() -> authTokenIssueService.issue(member))
+		assertThatThrownBy(() -> authTokenIssueUseCase.issue(member))
 			.isInstanceOf(RefreshTokenStoreUnavailableException.class);
 	}
 }

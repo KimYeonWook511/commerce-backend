@@ -34,7 +34,7 @@ class AuthLoginServiceTest {
 	private MemberQueryService memberQueryService;
 
 	@Mock
-	private AuthTokenIssueUseCase authTokenIssueService;
+	private AuthTokenIssueUseCase authTokenIssueUseCase;
 
 	@Mock
 	private PasswordHasher passwordHasher;
@@ -51,7 +51,7 @@ class AuthLoginServiceTest {
 
 		given(memberQueryService.findByEmail("test@example.com")).willReturn(Optional.of(member));
 		given(passwordHasher.matches("password123", "hashed-password")).willReturn(true);
-		given(authTokenIssueService.issue(member)).willReturn(AuthTokenIssueResult.of("access-token", "refresh-token"));
+		given(authTokenIssueUseCase.issue(member)).willReturn(AuthTokenIssueResult.of("access-token", "refresh-token"));
 
 		AuthLoginCommand command = AuthLoginCommand.builder()
 			.email("test@example.com")
@@ -64,7 +64,7 @@ class AuthLoginServiceTest {
 		// then
 		assertThat(result.getAccessToken()).isEqualTo("access-token");
 		assertThat(result.getRefreshToken()).isEqualTo("refresh-token");
-		then(authTokenIssueService).should().issue(member);
+		then(authTokenIssueUseCase).should().issue(member);
 	}
 
 	@DisplayName("로그인 시 이메일에 해당하는 회원이 없으면 예외가 발생한다")
@@ -85,7 +85,7 @@ class AuthLoginServiceTest {
 				AuthException authException = (AuthException) exception;
 				assertThat(authException.getErrorCode()).isEqualTo(AuthErrorCode.INVALID_CREDENTIALS);
 			});
-		then(authTokenIssueService).should(never()).issue(any());
+		then(authTokenIssueUseCase).should(never()).issue(any());
 	}
 
 	@DisplayName("로그인 시 비밀번호가 불일치하면 예외가 발생한다")
@@ -110,6 +110,6 @@ class AuthLoginServiceTest {
 				AuthException authException = (AuthException) exception;
 				assertThat(authException.getErrorCode()).isEqualTo(AuthErrorCode.INVALID_CREDENTIALS);
 			});
-		then(authTokenIssueService).should(never()).issue(any());
+		then(authTokenIssueUseCase).should(never()).issue(any());
 	}
 }

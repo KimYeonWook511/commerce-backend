@@ -58,7 +58,7 @@ class AdminStockControllerTest {
 	private AdminStockService stockService;
 
 	@MockitoBean
-	private TokenAuthenticationUseCase tokenAuthenticationService;
+	private TokenAuthenticationUseCase tokenAuthenticationUseCase;
 
 	@DisplayName("관리자는 초기 재고를 생성할 수 있다")
 	@Test
@@ -463,7 +463,7 @@ class AdminStockControllerTest {
 	}
 
 	private void stubForToken(String role) {
-		given(tokenAuthenticationService.authenticateAccessToken("access-token"))
+		given(tokenAuthenticationUseCase.authenticateAccessToken("access-token"))
 			.willReturn(TokenAuthenticationResult.of(1L, role));
 	}
 }

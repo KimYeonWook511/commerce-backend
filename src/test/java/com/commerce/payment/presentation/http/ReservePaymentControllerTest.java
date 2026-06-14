@@ -46,7 +46,7 @@ class ReservePaymentControllerTest {
 	private ReservePaymentService reservePaymentService;
 
 	@MockitoBean
-	private TokenAuthenticationUseCase tokenAuthenticationService;
+	private TokenAuthenticationUseCase tokenAuthenticationUseCase;
 
 	@DisplayName("결제 예약 요청이 유효하면 결제 예약 응답을 반환한다")
 	@Test
@@ -161,7 +161,7 @@ class ReservePaymentControllerTest {
 	}
 
 	private void stubForValidToken() {
-		given(tokenAuthenticationService.authenticateAccessToken("access-token"))
+		given(tokenAuthenticationUseCase.authenticateAccessToken("access-token"))
 			.willReturn(TokenAuthenticationResult.of(1L, "ROLE_USER"));
 	}
 }

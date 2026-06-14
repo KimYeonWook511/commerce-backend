@@ -44,10 +44,10 @@ class NaverPayControllerTest {
 	private MockMvc mockMvc;
 
 	@MockitoBean
-	private NaverPayApprovalUseCase naverPayApprovalService;
+	private NaverPayApprovalUseCase naverPayApprovalUseCase;
 
 	@MockitoBean
-	private TokenAuthenticationUseCase tokenAuthenticationService;
+	private TokenAuthenticationUseCase tokenAuthenticationUseCase;
 
 	@DisplayName("결제 결과 요청은 정상적으로 응답한다")
 	@Test
@@ -70,7 +70,7 @@ class NaverPayControllerTest {
 			.pgPaymentId("pg-payment-id")
 			.status(NaverPayApproveStatus.SUCCESS)
 			.build();
-		given(naverPayApprovalService.approve(1L, "PAY-1", "pg-payment-id")).willReturn(response);
+		given(naverPayApprovalUseCase.approve(1L, "PAY-1", "pg-payment-id")).willReturn(response);
 
 		String requestBody = """
 			{
@@ -90,7 +90,7 @@ class NaverPayControllerTest {
 			.andExpect(jsonPath("$.data.pgPaymentId").value("pg-payment-id"))
 			.andExpect(jsonPath("$.data.status").value("SUCCESS"));
 
-		then(naverPayApprovalService).should().approve(1L, "PAY-1", "pg-payment-id");
+		then(naverPayApprovalUseCase).should().approve(1L, "PAY-1", "pg-payment-id");
 	}
 
 	@DisplayName("merchantPayKey가 비어있으면 요청 값 검증에 실패한다")
@@ -138,7 +138,7 @@ class NaverPayControllerTest {
 	}
 
 	private void stubForValidToken() {
-		given(tokenAuthenticationService.authenticateAccessToken("access-token"))
+		given(tokenAuthenticationUseCase.authenticateAccessToken("access-token"))
 			.willReturn(TokenAuthenticationResult.of(1L, "ROLE_USER"));
 	}
 }

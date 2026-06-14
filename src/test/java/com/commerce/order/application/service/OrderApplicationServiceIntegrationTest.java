@@ -46,7 +46,7 @@ import com.commerce.support.TestcontainersSupport;
 class OrderApplicationServiceIntegrationTest {
 
 	@Autowired
-	private OrderCreateUseCase orderCreateService;
+	private OrderCreateUseCase orderCreateUseCase;
 
 	@Autowired
 	private OrderCancelService orderCancelService;
@@ -99,10 +99,10 @@ class OrderApplicationServiceIntegrationTest {
 			.build();
 
 		// when
-		OrderCreateResult created = orderCreateService.createOrder(firstRequest);
+		OrderCreateResult created = orderCreateUseCase.createOrder(firstRequest);
 
 		// then
-		assertThatThrownBy(() -> orderCreateService.createOrder(secondRequest))
+		assertThatThrownBy(() -> orderCreateUseCase.createOrder(secondRequest))
 			.isInstanceOf(StockException.class)
 			.satisfies(exception -> {
 				StockException stockException = (StockException) exception;
@@ -111,7 +111,7 @@ class OrderApplicationServiceIntegrationTest {
 
 		orderCancelService.cancelOrder(member.getId(), created.getOrderId());
 
-		OrderCreateResult recreated = orderCreateService.createOrder(secondRequest);
+		OrderCreateResult recreated = orderCreateUseCase.createOrder(secondRequest);
 		assertThat(recreated.getOrderId()).isNotNull();
 		assertThat(stockPersistence.findByProductId(product.getId()).orElseThrow().getQuantity()).isZero();
 	}

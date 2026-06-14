@@ -46,10 +46,10 @@ import com.commerce.support.PersistenceCleanupTestSupport;
 class CartConcurrencyTest {
 
 	@Autowired
-	private AddCartItemUseCase addCartItemService;
+	private AddCartItemUseCase addCartItemUseCase;
 
 	@Autowired
-	private UpdateCartItemQuantityUseCase updateCartItemQuantityService;
+	private UpdateCartItemQuantityUseCase updateCartItemQuantityUseCase;
 
 	@Autowired
 	private CartPersistenceTestSupport cartPersistence;
@@ -77,7 +77,7 @@ class CartConcurrencyTest {
 		// when
 		ConcurrentLinkedQueue<Throwable> errors = new ConcurrentLinkedQueue<>();
 		runConcurrent(threadCount,
-			index -> addCartItemService.add(memberId, createAddRequest(product.getId(), 1)),
+			index -> addCartItemUseCase.add(memberId, createAddRequest(product.getId(), 1)),
 			errors);
 
 		// then
@@ -103,7 +103,7 @@ class CartConcurrencyTest {
 		// when
 		ConcurrentLinkedQueue<Throwable> errors = new ConcurrentLinkedQueue<>();
 		runConcurrent(threadCount,
-			index -> addCartItemService.add(memberId, createAddRequest(product.getId(), 1)),
+			index -> addCartItemUseCase.add(memberId, createAddRequest(product.getId(), 1)),
 			errors);
 
 		// then
@@ -135,7 +135,7 @@ class CartConcurrencyTest {
 		// when
 		ConcurrentLinkedQueue<Throwable> errors = new ConcurrentLinkedQueue<>();
 		runConcurrent(targetQuantities.length,
-			index -> updateCartItemQuantityService.update(memberId, product.getId(), createUpdateRequest(targetQuantities[index])),
+			index -> updateCartItemQuantityUseCase.update(memberId, product.getId(), createUpdateRequest(targetQuantities[index])),
 			errors);
 
 		// then

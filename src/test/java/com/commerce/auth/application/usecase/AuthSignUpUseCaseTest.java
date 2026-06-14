@@ -29,7 +29,7 @@ class AuthSignUpUseCaseTest {
 	private MemberRegistrationService memberRegistrationService;
 
 	@Mock
-	private AuthTokenIssueUseCase authTokenIssueService;
+	private AuthTokenIssueUseCase authTokenIssueUseCase;
 
 	@Mock
 	private PasswordHasher passwordHasher;
@@ -52,7 +52,7 @@ class AuthSignUpUseCaseTest {
 
 		given(passwordHasher.hash("password123")).willReturn("hashed-password");
 		given(memberRegistrationService.register(any(MemberRegistrationCommand.class))).willReturn(member);
-		given(authTokenIssueService.issue(member)).willReturn(AuthTokenIssueResult.of("access-token", "refresh-token"));
+		given(authTokenIssueUseCase.issue(member)).willReturn(AuthTokenIssueResult.of("access-token", "refresh-token"));
 
 		// when
 		AuthSignUpResult result = authSignUpUseCase.signUp(command);
@@ -60,7 +60,7 @@ class AuthSignUpUseCaseTest {
 		// then
 		ArgumentCaptor<MemberRegistrationCommand> commandCaptor = ArgumentCaptor.forClass(MemberRegistrationCommand.class);
 		then(memberRegistrationService).should().register(commandCaptor.capture());
-		then(authTokenIssueService).should().issue(member);
+		then(authTokenIssueUseCase).should().issue(member);
 		assertThat(commandCaptor.getValue().getEmail()).isEqualTo("test@example.com");
 		assertThat(commandCaptor.getValue().getPasswordHash()).isEqualTo("hashed-password");
 		assertThat(commandCaptor.getValue().getUsername()).isEqualTo("user1");

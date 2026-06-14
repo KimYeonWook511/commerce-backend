@@ -32,7 +32,7 @@ class UpdateCartItemQuantityUseCaseTest {
 	private UpdateCartItemQuantityService processor;
 
 	@InjectMocks
-	private UpdateCartItemQuantityUseCase updateCartItemQuantityService;
+	private UpdateCartItemQuantityUseCase updateCartItemQuantityUseCase;
 
 	@DisplayName("정상 호출은 Processor 1회 호출로 결과를 반환한다")
 	@Test
@@ -44,7 +44,7 @@ class UpdateCartItemQuantityUseCaseTest {
 			.productId(productId).quantity(7).build();
 		given(processor.execute(memberId, productId, request)).willReturn(expected);
 
-		CartItemSummaryResult result = updateCartItemQuantityService.update(memberId, productId, request);
+		CartItemSummaryResult result = updateCartItemQuantityUseCase.update(memberId, productId, request);
 
 		assertThat(result).isSameAs(expected);
 		then(processor).should(times(1)).execute(memberId, productId, request);
@@ -63,7 +63,7 @@ class UpdateCartItemQuantityUseCaseTest {
 			.willThrow(new ObjectOptimisticLockingFailureException("cart", null))
 			.willReturn(expected);
 
-		CartItemSummaryResult result = updateCartItemQuantityService.update(memberId, productId, request);
+		CartItemSummaryResult result = updateCartItemQuantityUseCase.update(memberId, productId, request);
 
 		assertThat(result).isSameAs(expected);
 		then(processor).should(times(2)).execute(memberId, productId, request);
@@ -79,7 +79,7 @@ class UpdateCartItemQuantityUseCaseTest {
 		given(processor.execute(memberId, productId, request))
 			.willThrow(new ObjectOptimisticLockingFailureException("cart", null));
 
-		assertThatThrownBy(() -> updateCartItemQuantityService.update(memberId, productId, request))
+		assertThatThrownBy(() -> updateCartItemQuantityUseCase.update(memberId, productId, request))
 			.isInstanceOf(ObjectOptimisticLockingFailureException.class);
 		then(processor).should(times(3)).execute(memberId, productId, request);
 	}

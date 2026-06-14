@@ -65,7 +65,7 @@ class PaymentReconciliationIntegrationTest {
 	}
 
 	@Autowired
-	private PaymentReconciliationUseCase reconciliationService;
+	private PaymentReconciliationUseCase reconciliationUseCase;
 
 	@Autowired
 	private PaymentRepository paymentRepository;
@@ -127,7 +127,7 @@ class PaymentReconciliationIntegrationTest {
 			.willReturn(NaverPayHistoryResult.approved("PAY-RECN-2", 1000));
 
 		// when
-		reconciliationService.reconcile();
+		reconciliationUseCase.reconcile();
 
 		// then: payment SUCCEEDED
 		assertThat(paymentPersistence.findApproveSucceeded("PAY-RECN-2")).isPresent();
@@ -172,7 +172,7 @@ class PaymentReconciliationIntegrationTest {
 			.willReturn(NaverPayCancelResult.success());
 
 		// when: 1회 reconcile
-		reconciliationService.reconcile();
+		reconciliationUseCase.reconcile();
 
 		// then: approve payment → FAILED (보상 취소로 인한 ORDER_CANCELED, ADR-039 + ADR-L4)
 		Payment approvePayment = paymentPersistence.getPayment(
@@ -192,7 +192,7 @@ class PaymentReconciliationIntegrationTest {
 			eq(order.getId()), eq("PAY-RECN-3"), any(String.class));
 
 		// when: 2회 reconcile (멱등성 검증)
-		reconciliationService.reconcile();
+		reconciliationUseCase.reconcile();
 
 		// then: cancel payment 추가 생성 없음 (이중 환불 없음)
 		assertThat(paymentPersistence.countCancelPayments("PAY-RECN-3")).isEqualTo(1L);

@@ -49,7 +49,7 @@ class ProductControllerTest {
 	private ProductQueryService productQueryService;
 
 	@MockitoBean
-	private TokenAuthenticationUseCase tokenAuthenticationService;
+	private TokenAuthenticationUseCase tokenAuthenticationUseCase;
 
 	@DisplayName("상품 목록 조회는 인증 없이 성공한다")
 	@Test

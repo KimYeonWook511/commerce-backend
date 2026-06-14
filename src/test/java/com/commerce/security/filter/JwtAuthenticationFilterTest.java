@@ -32,9 +32,9 @@ import jakarta.servlet.ServletException;
 
 class JwtAuthenticationFilterTest {
 
-	private final TokenAuthenticationUseCase tokenAuthenticationService = mock(TokenAuthenticationUseCase.class);
+	private final TokenAuthenticationUseCase tokenAuthenticationUseCase = mock(TokenAuthenticationUseCase.class);
 	private final ObjectMapper objectMapper = new ObjectMapper();
-	private final JwtAuthenticationFilter filter = new JwtAuthenticationFilter(tokenAuthenticationService, objectMapper);
+	private final JwtAuthenticationFilter filter = new JwtAuthenticationFilter(tokenAuthenticationUseCase, objectMapper);
 
 	@BeforeEach
 	void setUp() {
@@ -53,7 +53,7 @@ class JwtAuthenticationFilterTest {
 		request.addHeader("Authorization", "Bearer valid-token");
 		MockHttpServletResponse response = new MockHttpServletResponse();
 
-		when(tokenAuthenticationService.authenticateAccessToken("valid-token"))
+		when(tokenAuthenticationUseCase.authenticateAccessToken("valid-token"))
 			.thenReturn(TokenAuthenticationResult.of(42L, "ROLE_USER"));
 
 		AtomicReference<String> mdcDuringChain = new AtomicReference<>();
@@ -75,7 +75,7 @@ class JwtAuthenticationFilterTest {
 		request.addHeader("Authorization", "Bearer valid-token");
 		MockHttpServletResponse response = new MockHttpServletResponse();
 
-		when(tokenAuthenticationService.authenticateAccessToken("valid-token"))
+		when(tokenAuthenticationUseCase.authenticateAccessToken("valid-token"))
 			.thenReturn(TokenAuthenticationResult.of(42L, "ROLE_USER"));
 
 		AtomicReference<Object> attributeDuringChain = new AtomicReference<>();
@@ -98,7 +98,7 @@ class JwtAuthenticationFilterTest {
 		MockHttpServletResponse response = new MockHttpServletResponse();
 		MockFilterChain chain = new MockFilterChain();
 
-		when(tokenAuthenticationService.authenticateAccessToken("valid-token"))
+		when(tokenAuthenticationUseCase.authenticateAccessToken("valid-token"))
 			.thenReturn(TokenAuthenticationResult.of(42L, "ROLE_USER"));
 
 		filter.doFilter(request, response, chain);
@@ -128,7 +128,7 @@ class JwtAuthenticationFilterTest {
 		MockHttpServletResponse response = new MockHttpServletResponse();
 		MockFilterChain chain = new MockFilterChain();
 
-		when(tokenAuthenticationService.authenticateAccessToken("invalid-token"))
+		when(tokenAuthenticationUseCase.authenticateAccessToken("invalid-token"))
 			.thenThrow(new AuthException(AuthErrorCode.TOKEN_INVALID));
 
 		filter.doFilter(request, response, chain);
@@ -166,7 +166,7 @@ class JwtAuthenticationFilterTest {
 		request.addHeader("Authorization", "Bearer valid-token");
 		MockHttpServletResponse response = new MockHttpServletResponse();
 
-		when(tokenAuthenticationService.authenticateAccessToken("valid-token"))
+		when(tokenAuthenticationUseCase.authenticateAccessToken("valid-token"))
 			.thenReturn(TokenAuthenticationResult.of(42L, "ROLE_USER"));
 
 		FilterChain chain = mock(FilterChain.class);
@@ -186,7 +186,7 @@ class JwtAuthenticationFilterTest {
 		request.addHeader("Authorization", "Bearer valid-token");
 		MockHttpServletResponse response = new MockHttpServletResponse();
 
-		when(tokenAuthenticationService.authenticateAccessToken("valid-token"))
+		when(tokenAuthenticationUseCase.authenticateAccessToken("valid-token"))
 			.thenReturn(TokenAuthenticationResult.of(99L, "ROLE_USER"));
 
 		AtomicReference<String> mdcDuringChain = new AtomicReference<>();

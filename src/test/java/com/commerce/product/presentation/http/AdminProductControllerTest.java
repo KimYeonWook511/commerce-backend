@@ -54,7 +54,7 @@ class AdminProductControllerTest {
 	private AdminProductService adminProductService;
 
 	@MockitoBean
-	private TokenAuthenticationUseCase tokenAuthenticationService;
+	private TokenAuthenticationUseCase tokenAuthenticationUseCase;
 
 	@DisplayName("관리자는 상품을 등록할 수 있다")
 	@Test
@@ -262,7 +262,7 @@ class AdminProductControllerTest {
 	}
 
 	private void stubForToken(String role) {
-		given(tokenAuthenticationService.authenticateAccessToken("access-token"))
+		given(tokenAuthenticationUseCase.authenticateAccessToken("access-token"))
 			.willReturn(TokenAuthenticationResult.of(1L, role));
 	}
 }

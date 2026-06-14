@@ -24,7 +24,7 @@ class TokenAuthenticationUseCaseTest {
 	private TokenValidator tokenValidator;
 
 	@InjectMocks
-	private TokenAuthenticationUseCase tokenAuthenticationService;
+	private TokenAuthenticationUseCase tokenAuthenticationUseCase;
 
 	@DisplayName("access token이 유효하면 인증 주체를 반환한다")
 	@Test
@@ -34,7 +34,7 @@ class TokenAuthenticationUseCaseTest {
 		given(tokenValidator.validateAccessToken("access-token")).willReturn(claims);
 
 		// when
-		TokenAuthenticationResult result = tokenAuthenticationService.authenticateAccessToken("access-token");
+		TokenAuthenticationResult result = tokenAuthenticationUseCase.authenticateAccessToken("access-token");
 
 		// then
 		assertThat(result.getMemberId()).isEqualTo(1L);
@@ -49,7 +49,7 @@ class TokenAuthenticationUseCaseTest {
 		given(tokenValidator.validateAccessToken("access-token")).willReturn(claims);
 
 		// when & then
-		assertThatThrownBy(() -> tokenAuthenticationService.authenticateAccessToken("access-token"))
+		assertThatThrownBy(() -> tokenAuthenticationUseCase.authenticateAccessToken("access-token"))
 			.isInstanceOf(AuthException.class)
 			.satisfies(exception -> {
 				AuthException authException = (AuthException) exception;

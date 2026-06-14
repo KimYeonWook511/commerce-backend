@@ -46,19 +46,19 @@ class OrderControllerTest {
 	private MockMvc mockMvc;
 
 	@MockitoBean
-	private OrderCreateUseCase orderCreateService;
+	private OrderCreateUseCase orderCreateUseCase;
 
 	@MockitoBean
 	private OrderCancelService orderCancelService;
 
 	@MockitoBean
-	private TokenAuthenticationUseCase tokenAuthenticationService;
+	private TokenAuthenticationUseCase tokenAuthenticationUseCase;
 
 	@DisplayName("유효한 주문 생성 요청이면 201을 반환한다")
 	@Test
 	void createOrder_whenValidRequest_returnCreated() throws Exception {
 		stubForToken();
-		given(orderCreateService.createOrder(any(OrderCreateCommand.class)))
+		given(orderCreateUseCase.createOrder(any(OrderCreateCommand.class)))
 			.willReturn(OrderCreateResult.builder()
 				.orderId(1L)
 				.totalPrice(10000)
@@ -129,7 +129,7 @@ class OrderControllerTest {
 	}
 
 	private void stubForToken() {
-		given(tokenAuthenticationService.authenticateAccessToken("access-token"))
+		given(tokenAuthenticationUseCase.authenticateAccessToken("access-token"))
 			.willReturn(TokenAuthenticationResult.of(1L, "ROLE_USER"));
 	}
 }

@@ -39,7 +39,7 @@ class AuthControllerTest {
 	private MockMvc mockMvc;
 
 	@MockitoBean
-	private AuthSignUpUseCase authSignUpService;
+	private AuthSignUpUseCase authSignUpUseCase;
 
 	@MockitoBean
 	private AuthLoginService authLoginService;
@@ -51,7 +51,7 @@ class AuthControllerTest {
 	private JwtProperties jwtProperties;
 
 	@MockitoBean
-	private TokenAuthenticationUseCase tokenAuthenticationService;
+	private TokenAuthenticationUseCase tokenAuthenticationUseCase;
 
 	@DisplayName("회원가입 성공 시 member 필드와 토큰을 반환한다")
 	@Test
@@ -59,7 +59,7 @@ class AuthControllerTest {
 		// given
 		Member member = Member.createUser("test@example.com", "hashed-password", "tester");
 		ReflectionTestUtils.setField(member, "id", 1L);
-		given(authSignUpService.signUp(org.mockito.ArgumentMatchers.any(AuthSignUpCommand.class)))
+		given(authSignUpUseCase.signUp(org.mockito.ArgumentMatchers.any(AuthSignUpCommand.class)))
 			.willReturn(AuthSignUpResult.from(member, "access-token", "refresh-token"));
 		given(jwtProperties.getRefreshExpiration()).willReturn(604800000L);
 

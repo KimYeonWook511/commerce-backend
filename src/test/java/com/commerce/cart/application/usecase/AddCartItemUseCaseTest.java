@@ -32,7 +32,7 @@ class AddCartItemUseCaseTest {
 	private AddCartItemService processor;
 
 	@InjectMocks
-	private AddCartItemUseCase addCartItemService;
+	private AddCartItemUseCase addCartItemUseCase;
 
 	@DisplayName("정상 호출은 Processor 1회 호출로 결과를 반환한다")
 	@Test
@@ -43,7 +43,7 @@ class AddCartItemUseCaseTest {
 			.productId(100L).quantity(3).build();
 		given(processor.execute(memberId, request)).willReturn(expected);
 
-		CartItemSummaryResult result = addCartItemService.add(memberId, request);
+		CartItemSummaryResult result = addCartItemUseCase.add(memberId, request);
 
 		assertThat(result).isSameAs(expected);
 		then(processor).should(times(1)).execute(memberId, request);
@@ -61,7 +61,7 @@ class AddCartItemUseCaseTest {
 			.willThrow(new ObjectOptimisticLockingFailureException("cart", null))
 			.willReturn(expected);
 
-		CartItemSummaryResult result = addCartItemService.add(memberId, request);
+		CartItemSummaryResult result = addCartItemUseCase.add(memberId, request);
 
 		assertThat(result).isSameAs(expected);
 		then(processor).should(times(2)).execute(memberId, request);
@@ -76,7 +76,7 @@ class AddCartItemUseCaseTest {
 		given(processor.execute(memberId, request))
 			.willThrow(new ObjectOptimisticLockingFailureException("cart", null));
 
-		assertThatThrownBy(() -> addCartItemService.add(memberId, request))
+		assertThatThrownBy(() -> addCartItemUseCase.add(memberId, request))
 			.isInstanceOf(ObjectOptimisticLockingFailureException.class);
 		then(processor).should(times(3)).execute(memberId, request);
 	}

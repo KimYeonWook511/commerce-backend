@@ -67,7 +67,7 @@ class OrderConcurrencyServiceTest {
 	private OrderConcurrencyService orderConcurrencyService;
 
 	@Autowired
-	private OrderCreateUseCase orderCreateService;
+	private OrderCreateUseCase orderCreateUseCase;
 
 	@Autowired
 	private OrderCancelService orderCancelService;
@@ -230,7 +230,7 @@ class OrderConcurrencyServiceTest {
 			String idempotencyKey = "idempotency-" + sequence.incrementAndGet();
 			OrderCreateCommand command =
 				createRequest(member.getId(), product.getId(), 1, idempotencyKey);
-			orderCreateService.createOrder(command);
+			orderCreateUseCase.createOrder(command);
 		}, errors);
 
 		// then
@@ -256,7 +256,7 @@ class OrderConcurrencyServiceTest {
 		Product product = productPersistence.save(createProduct("cancel-product", 1000));
 		stockPersistence.save(createStock(product, 5));
 
-		OrderCreateResult created = orderCreateService.createOrder(
+		OrderCreateResult created = orderCreateUseCase.createOrder(
 			createRequest(member.getId(), product.getId(), 2, "cancel-key")
 		);
 

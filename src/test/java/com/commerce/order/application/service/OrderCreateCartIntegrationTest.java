@@ -48,7 +48,7 @@ import com.commerce.support.TestcontainersSupport;
 class OrderCreateCartIntegrationTest {
 
 	@Autowired
-	private OrderCreateUseCase orderCreateService;
+	private OrderCreateUseCase orderCreateUseCase;
 
 	@Autowired
 	private PersistenceCleanupTestSupport persistenceCleanup;
@@ -107,7 +107,7 @@ class OrderCreateCartIntegrationTest {
 			.build();
 
 		// when
-		OrderCreateResult result = orderCreateService.createOrder(command);
+		OrderCreateResult result = orderCreateUseCase.createOrder(command);
 
 		// then
 		assertThat(result.getOrderId()).isNotNull();
@@ -138,7 +138,7 @@ class OrderCreateCartIntegrationTest {
 			.build();
 
 		// when
-		OrderCreateResult result = orderCreateService.createOrder(command);
+		OrderCreateResult result = orderCreateUseCase.createOrder(command);
 
 		// then
 		assertThat(result.getOrderId()).isNotNull();
@@ -167,7 +167,7 @@ class OrderCreateCartIntegrationTest {
 			.build();
 
 		// when & then
-		assertThatThrownBy(() -> orderCreateService.createOrder(command))
+		assertThatThrownBy(() -> orderCreateUseCase.createOrder(command))
 			.isInstanceOf(StockException.class);
 
 		List<CartItem> remaining = cartPersistence.findAllByMemberIdOrderByCreatedAtDesc(member.getId());

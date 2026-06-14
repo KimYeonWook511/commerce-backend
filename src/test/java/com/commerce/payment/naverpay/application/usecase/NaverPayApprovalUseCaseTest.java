@@ -60,7 +60,7 @@ class NaverPayApprovalUseCaseTest {
 	private PaymentApprovalRecordService paymentApprovalRecordService;
 
 	@Mock
-	private PaymentApprovalCompensationUseCase paymentApprovalCompensationService;
+	private PaymentApprovalCompensationUseCase paymentApprovalCompensationUseCase;
 
 	@Mock
 	private PaymentReservationRepository paymentReservationRepository;
@@ -72,7 +72,7 @@ class NaverPayApprovalUseCaseTest {
 	private OrderRepository orderRepository;
 
 	@InjectMocks
-	private NaverPayApprovalUseCase naverPayApprovalService;
+	private NaverPayApprovalUseCase naverPayApprovalUseCase;
 
 	@DisplayName("예약 정보가 없으면 PAYMENT_RESERVATION_NOT_FOUND를 던진다")
 	@Test
@@ -82,7 +82,7 @@ class NaverPayApprovalUseCaseTest {
 		given(paymentReservationRepository.findByMemberIdAndMerchantPayKey(memberId, "PAY-1")).willReturn(Optional.empty());
 
 		// when & then
-		assertThatThrownBy(() -> naverPayApprovalService.approve(memberId, "PAY-1", "pg-payment-id"))
+		assertThatThrownBy(() -> naverPayApprovalUseCase.approve(memberId, "PAY-1", "pg-payment-id"))
 			.isInstanceOf(PaymentException.class)
 			.satisfies(exception -> {
 				PaymentException paymentException = (PaymentException)exception;
@@ -99,7 +99,7 @@ class NaverPayApprovalUseCaseTest {
 			.willReturn(Optional.empty());
 
 		// when & then
-		assertThatThrownBy(() -> naverPayApprovalService.approve(attackerMemberId, "PAY-1", "pg-payment-id"))
+		assertThatThrownBy(() -> naverPayApprovalUseCase.approve(attackerMemberId, "PAY-1", "pg-payment-id"))
 			.isInstanceOf(PaymentException.class)
 			.satisfies(exception -> {
 				PaymentException paymentException = (PaymentException)exception;
@@ -120,7 +120,7 @@ class NaverPayApprovalUseCaseTest {
 		given(paymentRepository.existsUnknownByOrderId(reservation.getOrderId())).willReturn(true);
 
 		// when & then
-		assertThatThrownBy(() -> naverPayApprovalService.approve(memberId, "PAY-1", "pg-payment-id"))
+		assertThatThrownBy(() -> naverPayApprovalUseCase.approve(memberId, "PAY-1", "pg-payment-id"))
 			.isInstanceOf(PaymentException.class)
 			.satisfies(exception -> {
 				PaymentException paymentException = (PaymentException)exception;
@@ -148,7 +148,7 @@ class NaverPayApprovalUseCaseTest {
 
 		// when
 		assertThatNoException().isThrownBy(() -> {
-			NaverPayApproveResponse result = naverPayApprovalService.approve(memberId, "PAY-1", "pg-payment-id");
+			NaverPayApproveResponse result = naverPayApprovalUseCase.approve(memberId, "PAY-1", "pg-payment-id");
 
 			// then: 멱등 200 응답 — PG 호출 0회, 새 payment/reservation save 0회
 			assertThat(result.getStatus()).isEqualTo(NaverPayApproveStatus.SUCCESS);
@@ -181,7 +181,7 @@ class NaverPayApprovalUseCaseTest {
 		given(paymentApprovalService.succeedApproval(any(Payment.class), any())).willReturn(completedPayment);
 
 		// when
-		NaverPayApproveResponse result = naverPayApprovalService.approve(memberId, "PAY-1", "pg-payment-id");
+		NaverPayApproveResponse result = naverPayApprovalUseCase.approve(memberId, "PAY-1", "pg-payment-id");
 
 		// then: 새 payment 생성 없이 기존 REQUESTED 시도를 재확인해 성공 완료
 		assertThat(result.getStatus()).isEqualTo(NaverPayApproveStatus.SUCCESS);
@@ -209,7 +209,7 @@ class NaverPayApprovalUseCaseTest {
 		given(paymentApprovalService.succeedApproval(any(Payment.class), any())).willReturn(completedPayment);
 
 		// when
-		NaverPayApproveResponse result = naverPayApprovalService.approve(memberId, "PAY-1", "pg-payment-id");
+		NaverPayApproveResponse result = naverPayApprovalUseCase.approve(memberId, "PAY-1", "pg-payment-id");
 
 		// then
 		assertThat(result.getStatus()).isEqualTo(NaverPayApproveStatus.SUCCESS);
@@ -235,7 +235,7 @@ class NaverPayApprovalUseCaseTest {
 		given(naverPayGateway.approve("pg-payment-id")).willReturn(NaverPayApproveResult.processing());
 
 		// when
-		NaverPayApproveResponse result = naverPayApprovalService.approve(memberId, "PAY-1", "pg-payment-id");
+		NaverPayApproveResponse result = naverPayApprovalUseCase.approve(memberId, "PAY-1", "pg-payment-id");
 
 		// then
 		assertThat(result.getStatus()).isEqualTo(NaverPayApproveStatus.PROCESSING);
@@ -264,7 +264,7 @@ class NaverPayApprovalUseCaseTest {
 		given(paymentApprovalService.succeedApproval(any(Payment.class), any())).willReturn(completedPayment);
 
 		// when
-		NaverPayApproveResponse result = naverPayApprovalService.approve(memberId, "PAY-1", "pg-payment-id");
+		NaverPayApproveResponse result = naverPayApprovalUseCase.approve(memberId, "PAY-1", "pg-payment-id");
 
 		// then
 		assertThat(result.getStatus()).isEqualTo(NaverPayApproveStatus.SUCCESS);
@@ -290,7 +290,7 @@ class NaverPayApprovalUseCaseTest {
 			.willReturn(NaverPayHistoryResult.unknown("이력조회 결과 불명: 네트워크 오류"));
 
 		// when & then
-		assertThatThrownBy(() -> naverPayApprovalService.approve(memberId, "PAY-1", "pg-payment-id"))
+		assertThatThrownBy(() -> naverPayApprovalUseCase.approve(memberId, "PAY-1", "pg-payment-id"))
 			.isInstanceOf(PaymentException.class)
 			.satisfies(exception -> {
 				PaymentException paymentException = (PaymentException)exception;
@@ -319,7 +319,7 @@ class NaverPayApprovalUseCaseTest {
 			.willReturn(NaverPayHistoryResult.approved("OTHER-PAY", 1000));
 
 		// when & then
-		assertThatThrownBy(() -> naverPayApprovalService.approve(memberId, "PAY-1", "pg-payment-id"))
+		assertThatThrownBy(() -> naverPayApprovalUseCase.approve(memberId, "PAY-1", "pg-payment-id"))
 			.isInstanceOf(PaymentException.class)
 			.satisfies(exception -> {
 				PaymentException paymentException = (PaymentException)exception;
@@ -349,7 +349,7 @@ class NaverPayApprovalUseCaseTest {
 			.willReturn(NaverPayHistoryResult.failed(PaymentErrorCode.PAYMENT_INVALID_MERCHANT));
 
 		// when & then
-		assertThatThrownBy(() -> naverPayApprovalService.approve(memberId, "PAY-1", "pg-payment-id"))
+		assertThatThrownBy(() -> naverPayApprovalUseCase.approve(memberId, "PAY-1", "pg-payment-id"))
 			.isInstanceOf(PaymentException.class)
 			.satisfies(exception -> {
 				PaymentException paymentException = (PaymentException)exception;
@@ -375,7 +375,7 @@ class NaverPayApprovalUseCaseTest {
 			.willReturn(NaverPayHistoryResult.failed(PaymentErrorCode.PAYMENT_NOT_FOUND));
 
 		// when & then
-		assertThatThrownBy(() -> naverPayApprovalService.approve(memberId, "PAY-1", "pg-payment-id"))
+		assertThatThrownBy(() -> naverPayApprovalUseCase.approve(memberId, "PAY-1", "pg-payment-id"))
 			.isInstanceOf(PaymentException.class)
 			.satisfies(exception -> {
 				PaymentException paymentException = (PaymentException)exception;
@@ -400,7 +400,7 @@ class NaverPayApprovalUseCaseTest {
 		given(naverPayGateway.getApprovalHistory("pg-payment-id")).willReturn(NaverPayHistoryResult.canceled());
 
 		// when & then
-		assertThatThrownBy(() -> naverPayApprovalService.approve(memberId, "PAY-1", "pg-payment-id"))
+		assertThatThrownBy(() -> naverPayApprovalUseCase.approve(memberId, "PAY-1", "pg-payment-id"))
 			.isInstanceOf(PaymentException.class)
 			.satisfies(exception -> {
 				PaymentException paymentException = (PaymentException)exception;
@@ -429,7 +429,7 @@ class NaverPayApprovalUseCaseTest {
 			.willReturn(NaverPayHistoryResult.failed(PaymentErrorCode.PAYMENT_NOT_FOUND));
 
 		// when & then
-		assertThatThrownBy(() -> naverPayApprovalService.approve(memberId, "PAY-1", "pg-payment-id"))
+		assertThatThrownBy(() -> naverPayApprovalUseCase.approve(memberId, "PAY-1", "pg-payment-id"))
 			.isInstanceOf(PaymentException.class)
 			.satisfies(exception -> {
 				PaymentException paymentException = (PaymentException)exception;
@@ -455,7 +455,7 @@ class NaverPayApprovalUseCaseTest {
 				PaymentFailCode.PG_NETWORK_ERROR, PaymentErrorCode.PAYMENT_PG_NETWORK_ERROR, "network error"));
 
 		// when & then
-		assertThatThrownBy(() -> naverPayApprovalService.approve(memberId, "PAY-1", "pg-payment-id"))
+		assertThatThrownBy(() -> naverPayApprovalUseCase.approve(memberId, "PAY-1", "pg-payment-id"))
 			.isInstanceOf(PaymentException.class)
 			.satisfies(exception -> {
 				PaymentException paymentException = (PaymentException)exception;
@@ -483,7 +483,7 @@ class NaverPayApprovalUseCaseTest {
 				PaymentFailCode.PG_SERVER_ERROR, PaymentErrorCode.PAYMENT_PG_SERVER_ERROR, "server error"));
 
 		// when & then
-		assertThatThrownBy(() -> naverPayApprovalService.approve(memberId, "PAY-1", "pg-payment-id"))
+		assertThatThrownBy(() -> naverPayApprovalUseCase.approve(memberId, "PAY-1", "pg-payment-id"))
 			.isInstanceOf(PaymentException.class)
 			.satisfies(exception -> {
 				PaymentException paymentException = (PaymentException)exception;
@@ -511,7 +511,7 @@ class NaverPayApprovalUseCaseTest {
 				PaymentFailCode.PG_INVALID_RESPONSE, PaymentErrorCode.PAYMENT_PG_INVALID_RESPONSE, "invalid response"));
 
 		// when & then
-		assertThatThrownBy(() -> naverPayApprovalService.approve(memberId, "PAY-1", "pg-payment-id"))
+		assertThatThrownBy(() -> naverPayApprovalUseCase.approve(memberId, "PAY-1", "pg-payment-id"))
 			.isInstanceOf(PaymentException.class)
 			.satisfies(exception -> {
 				PaymentException paymentException = (PaymentException)exception;
@@ -540,7 +540,7 @@ class NaverPayApprovalUseCaseTest {
 				PaymentFailCode.TIME_EXPIRED, PaymentErrorCode.PAYMENT_TIME_EXPIRED, "결제 승인 가능 시간 초과 시 (10분 초과시)"));
 
 		// when & then
-		assertThatThrownBy(() -> naverPayApprovalService.approve(memberId, "PAY-1", "pg-payment-id"))
+		assertThatThrownBy(() -> naverPayApprovalUseCase.approve(memberId, "PAY-1", "pg-payment-id"))
 			.isInstanceOf(PaymentException.class)
 			.satisfies(exception -> {
 				PaymentException paymentException = (PaymentException)exception;
@@ -568,7 +568,7 @@ class NaverPayApprovalUseCaseTest {
 				PaymentFailCode.PG_MAINTENANCE, PaymentErrorCode.PAYMENT_PG_MAINTENANCE, "서비스 점검중"));
 
 		// when & then
-		assertThatThrownBy(() -> naverPayApprovalService.approve(memberId, "PAY-1", "pg-payment-id"))
+		assertThatThrownBy(() -> naverPayApprovalUseCase.approve(memberId, "PAY-1", "pg-payment-id"))
 			.isInstanceOf(PaymentException.class)
 			.satisfies(exception -> {
 				PaymentException paymentException = (PaymentException)exception;
@@ -595,7 +595,7 @@ class NaverPayApprovalUseCaseTest {
 			.willReturn(NaverPayApproveResult.unknown("승인 호출 중 네트워크 오류: timeout"));
 
 		// when & then
-		assertThatThrownBy(() -> naverPayApprovalService.approve(memberId, "PAY-1", "pg-payment-id"))
+		assertThatThrownBy(() -> naverPayApprovalUseCase.approve(memberId, "PAY-1", "pg-payment-id"))
 			.isInstanceOf(PaymentException.class)
 			.satisfies(exception -> {
 				PaymentException paymentException = (PaymentException)exception;
@@ -623,13 +623,13 @@ class NaverPayApprovalUseCaseTest {
 			.willReturn(NaverPayApproveResult.success("OTHER-PAY", 1000));
 
 		// when & then
-		assertThatThrownBy(() -> naverPayApprovalService.approve(memberId, "PAY-1", "pg-payment-id"))
+		assertThatThrownBy(() -> naverPayApprovalUseCase.approve(memberId, "PAY-1", "pg-payment-id"))
 			.isInstanceOf(PaymentException.class)
 			.satisfies(exception -> {
 				PaymentException paymentException = (PaymentException)exception;
 				assertThat(paymentException.getErrorCode()).isEqualTo(PaymentErrorCode.PAYMENT_MERCHANT_KEY_MISMATCH);
 			});
-		then(paymentApprovalCompensationService).should().compensateMerchantKeyMismatch(any());
+		then(paymentApprovalCompensationUseCase).should().compensateMerchantKeyMismatch(any());
 	}
 
 	@DisplayName("승인 금액이 다르면 compensateAmountMismatch를 호출하고 예외를 던진다")
@@ -648,13 +648,13 @@ class NaverPayApprovalUseCaseTest {
 		given(naverPayGateway.approve("pg-payment-id")).willReturn(NaverPayApproveResult.success("PAY-1", 2000));
 
 		// when & then
-		assertThatThrownBy(() -> naverPayApprovalService.approve(memberId, "PAY-1", "pg-payment-id"))
+		assertThatThrownBy(() -> naverPayApprovalUseCase.approve(memberId, "PAY-1", "pg-payment-id"))
 			.isInstanceOf(PaymentException.class)
 			.satisfies(exception -> {
 				PaymentException paymentException = (PaymentException)exception;
 				assertThat(paymentException.getErrorCode()).isEqualTo(PaymentErrorCode.PAYMENT_AMOUNT_MISMATCH);
 			});
-		then(paymentApprovalCompensationService).should().compensateAmountMismatch(any(), eq(2000), any());
+		then(paymentApprovalCompensationUseCase).should().compensateAmountMismatch(any(), eq(2000), any());
 	}
 
 	@DisplayName("succeedApproval이 PAYMENT_DUPLICATE를 던지면 compensateDuplicatePayment를 호출하고 PAYMENT_DUPLICATE를 전파한다")
@@ -675,13 +675,13 @@ class NaverPayApprovalUseCaseTest {
 			.willThrow(new PaymentException(PaymentErrorCode.PAYMENT_DUPLICATE));
 
 		// when & then
-		assertThatThrownBy(() -> naverPayApprovalService.approve(memberId, "PAY-1", "pg-payment-id"))
+		assertThatThrownBy(() -> naverPayApprovalUseCase.approve(memberId, "PAY-1", "pg-payment-id"))
 			.isInstanceOf(PaymentException.class)
 			.satisfies(exception -> {
 				PaymentException paymentException = (PaymentException)exception;
 				assertThat(paymentException.getErrorCode()).isEqualTo(PaymentErrorCode.PAYMENT_DUPLICATE);
 			});
-		then(paymentApprovalCompensationService).should().compensateDuplicatePayment(any(), any(), any());
+		then(paymentApprovalCompensationUseCase).should().compensateDuplicatePayment(any(), any(), any());
 	}
 
 	@DisplayName("결제 완료 반영 중 merchantPayKey 불일치 예외가 발생하면 compensateMerchantKeyMismatch를 호출하고 예외를 던진다")
@@ -702,13 +702,13 @@ class NaverPayApprovalUseCaseTest {
 			.willThrow(new PaymentException(PaymentErrorCode.PAYMENT_MERCHANT_KEY_MISMATCH));
 
 		// when & then
-		assertThatThrownBy(() -> naverPayApprovalService.approve(memberId, "PAY-1", "pg-payment-id"))
+		assertThatThrownBy(() -> naverPayApprovalUseCase.approve(memberId, "PAY-1", "pg-payment-id"))
 			.isInstanceOf(PaymentException.class)
 			.satisfies(exception -> {
 				PaymentException paymentException = (PaymentException)exception;
 				assertThat(paymentException.getErrorCode()).isEqualTo(PaymentErrorCode.PAYMENT_MERCHANT_KEY_MISMATCH);
 			});
-		then(paymentApprovalCompensationService).should().compensateMerchantKeyMismatch(any());
+		then(paymentApprovalCompensationUseCase).should().compensateMerchantKeyMismatch(any());
 	}
 
 	@DisplayName("결제 완료 반영 중 금액 불일치 예외가 발생하면 compensateAmountMismatch를 호출하고 예외를 던진다")
@@ -729,13 +729,13 @@ class NaverPayApprovalUseCaseTest {
 			.willThrow(new PaymentException(PaymentErrorCode.PAYMENT_AMOUNT_MISMATCH));
 
 		// when & then
-		assertThatThrownBy(() -> naverPayApprovalService.approve(memberId, "PAY-1", "pg-payment-id"))
+		assertThatThrownBy(() -> naverPayApprovalUseCase.approve(memberId, "PAY-1", "pg-payment-id"))
 			.isInstanceOf(PaymentException.class)
 			.satisfies(exception -> {
 				PaymentException paymentException = (PaymentException)exception;
 				assertThat(paymentException.getErrorCode()).isEqualTo(PaymentErrorCode.PAYMENT_AMOUNT_MISMATCH);
 			});
-		then(paymentApprovalCompensationService).should().compensateAmountMismatch(any(), eq(1000), any());
+		then(paymentApprovalCompensationUseCase).should().compensateAmountMismatch(any(), eq(1000), any());
 	}
 
 	@DisplayName("결제 완료 반영 중 CustomException(주문 예외)이 발생하면 보상 없이 예외를 전파하고 approve는 REQUESTED로 남는다")
@@ -757,16 +757,16 @@ class NaverPayApprovalUseCaseTest {
 			.willThrow(new OrderException(OrderErrorCode.ORDER_PAYMENT_NOT_ALLOWED));
 
 		// when & then
-		assertThatThrownBy(() -> naverPayApprovalService.approve(memberId, "PAY-1", "pg-payment-id"))
+		assertThatThrownBy(() -> naverPayApprovalUseCase.approve(memberId, "PAY-1", "pg-payment-id"))
 			.isInstanceOf(OrderException.class)
 			.satisfies(exception -> {
 				OrderException orderException = (OrderException)exception;
 				assertThat(orderException.getErrorCode()).isEqualTo(OrderErrorCode.ORDER_PAYMENT_NOT_ALLOWED);
 			});
 		// 보상(PG cancel, fail)이 발생하지 않는다 — REQUESTED 유지로 reconcile self-heal
-		then(paymentApprovalCompensationService).should(never()).compensateMerchantKeyMismatch(any());
-		then(paymentApprovalCompensationService).should(never()).compensateAmountMismatch(any(), anyInt(), any());
-		then(paymentApprovalCompensationService).should(never()).compensateDuplicatePayment(any(), any(), any());
+		then(paymentApprovalCompensationUseCase).should(never()).compensateMerchantKeyMismatch(any());
+		then(paymentApprovalCompensationUseCase).should(never()).compensateAmountMismatch(any(), anyInt(), any());
+		then(paymentApprovalCompensationUseCase).should(never()).compensateDuplicatePayment(any(), any(), any());
 	}
 
 	@DisplayName("결제 완료 반영 중 unmapped PaymentException이 발생하면 보상 없이 예외를 전파하고 approve는 REQUESTED로 남는다")
@@ -788,16 +788,16 @@ class NaverPayApprovalUseCaseTest {
 			.willThrow(new PaymentException(PaymentErrorCode.PAYMENT_STATUS_TRANSITION_NOT_ALLOWED));
 
 		// when & then
-		assertThatThrownBy(() -> naverPayApprovalService.approve(memberId, "PAY-1", "pg-payment-id"))
+		assertThatThrownBy(() -> naverPayApprovalUseCase.approve(memberId, "PAY-1", "pg-payment-id"))
 			.isInstanceOf(PaymentException.class)
 			.satisfies(exception -> {
 				PaymentException paymentException = (PaymentException)exception;
 				assertThat(paymentException.getErrorCode()).isEqualTo(PaymentErrorCode.PAYMENT_STATUS_TRANSITION_NOT_ALLOWED);
 			});
 		// 보상(PG cancel, fail)이 발생하지 않는다 — REQUESTED 유지로 reconcile self-heal
-		then(paymentApprovalCompensationService).should(never()).compensateMerchantKeyMismatch(any());
-		then(paymentApprovalCompensationService).should(never()).compensateAmountMismatch(any(), anyInt(), any());
-		then(paymentApprovalCompensationService).should(never()).compensateDuplicatePayment(any(), any(), any());
+		then(paymentApprovalCompensationUseCase).should(never()).compensateMerchantKeyMismatch(any());
+		then(paymentApprovalCompensationUseCase).should(never()).compensateAmountMismatch(any(), anyInt(), any());
+		then(paymentApprovalCompensationUseCase).should(never()).compensateDuplicatePayment(any(), any(), any());
 	}
 
 	@DisplayName("결제 완료 반영 중 예상하지 못한 예외(RuntimeException)가 발생하면 보상 없이 예외를 전파하고 approve는 REQUESTED로 남는다")
@@ -819,13 +819,13 @@ class NaverPayApprovalUseCaseTest {
 			.willThrow(new RuntimeException("db write failed"));
 
 		// when & then
-		assertThatThrownBy(() -> naverPayApprovalService.approve(memberId, "PAY-1", "pg-payment-id"))
+		assertThatThrownBy(() -> naverPayApprovalUseCase.approve(memberId, "PAY-1", "pg-payment-id"))
 			.isInstanceOf(RuntimeException.class)
 			.hasMessage("db write failed");
 		// 보상(PG cancel, fail)이 발생하지 않는다 — REQUESTED 유지로 reconcile self-heal
-		then(paymentApprovalCompensationService).should(never()).compensateMerchantKeyMismatch(any());
-		then(paymentApprovalCompensationService).should(never()).compensateAmountMismatch(any(), anyInt(), any());
-		then(paymentApprovalCompensationService).should(never()).compensateDuplicatePayment(any(), any(), any());
+		then(paymentApprovalCompensationUseCase).should(never()).compensateMerchantKeyMismatch(any());
+		then(paymentApprovalCompensationUseCase).should(never()).compensateAmountMismatch(any(), anyInt(), any());
+		then(paymentApprovalCompensationUseCase).should(never()).compensateDuplicatePayment(any(), any(), any());
 	}
 
 	@DisplayName("다른 사용자의 pgPaymentId로 승인 응답을 받으면 compensateMerchantKeyMismatch를 호출하고 예외를 던진다")
@@ -845,13 +845,13 @@ class NaverPayApprovalUseCaseTest {
 			.willReturn(NaverPayApproveResult.success("PAY-VICTIM", 1000));
 
 		// when & then
-		assertThatThrownBy(() -> naverPayApprovalService.approve(memberId, "PAY-ATTACKER", "pg-victim-payment-id"))
+		assertThatThrownBy(() -> naverPayApprovalUseCase.approve(memberId, "PAY-ATTACKER", "pg-victim-payment-id"))
 			.isInstanceOf(PaymentException.class)
 			.satisfies(exception -> {
 				PaymentException paymentException = (PaymentException)exception;
 				assertThat(paymentException.getErrorCode()).isEqualTo(PaymentErrorCode.PAYMENT_MERCHANT_KEY_MISMATCH);
 			});
-		then(paymentApprovalCompensationService).should().compensateMerchantKeyMismatch(any());
+		then(paymentApprovalCompensationUseCase).should().compensateMerchantKeyMismatch(any());
 	}
 
 	@DisplayName("다른 사용자의 pgPaymentId로 AlreadyComplete 응답을 받았고 history merchantPayKey가 다르면 실패 처리하고 취소하지 않는다")
@@ -872,7 +872,7 @@ class NaverPayApprovalUseCaseTest {
 			.willReturn(NaverPayHistoryResult.approved("PAY-VICTIM", 1000));
 
 		// when & then
-		assertThatThrownBy(() -> naverPayApprovalService.approve(memberId, "PAY-ATTACKER", "pg-victim-payment-id"))
+		assertThatThrownBy(() -> naverPayApprovalUseCase.approve(memberId, "PAY-ATTACKER", "pg-victim-payment-id"))
 			.isInstanceOf(PaymentException.class)
 			.satisfies(exception -> {
 				PaymentException paymentException = (PaymentException)exception;
@@ -900,7 +900,7 @@ class NaverPayApprovalUseCaseTest {
 			.willReturn(payment);
 
 		// when & then
-		assertThatThrownBy(() -> naverPayApprovalService.approve(memberId, "PAY-1", "pg-payment-id"))
+		assertThatThrownBy(() -> naverPayApprovalUseCase.approve(memberId, "PAY-1", "pg-payment-id"))
 			.isInstanceOf(PaymentException.class)
 			.satisfies(exception -> {
 				PaymentException paymentException = (PaymentException)exception;
@@ -925,7 +925,7 @@ class NaverPayApprovalUseCaseTest {
 			.willReturn(payment);
 
 		// when & then
-		assertThatThrownBy(() -> naverPayApprovalService.approve(memberId, "PAY-1", "pg-payment-id"))
+		assertThatThrownBy(() -> naverPayApprovalUseCase.approve(memberId, "PAY-1", "pg-payment-id"))
 			.isInstanceOf(PaymentException.class)
 			.satisfies(exception -> {
 				PaymentException paymentException = (PaymentException)exception;
@@ -950,7 +950,7 @@ class NaverPayApprovalUseCaseTest {
 			.willReturn(payment);
 
 		// when
-		NaverPayApproveResponse result = naverPayApprovalService.approve(memberId, "PAY-1", "pg-payment-id");
+		NaverPayApproveResponse result = naverPayApprovalUseCase.approve(memberId, "PAY-1", "pg-payment-id");
 
 		// then
 		assertThat(result.getStatus()).isEqualTo(NaverPayApproveStatus.SUCCESS);
@@ -964,7 +964,7 @@ class NaverPayApprovalUseCaseTest {
 		Payment cancelPayment = Payment.createCancelRequested(1L, "PAY-1", "pg-id", 1000, PaymentProvider.NAVERPAY);
 		given(naverPayGateway.cancel("pg-id", 1000, "취소 사유")).willReturn(NaverPayCancelResult.success());
 
-		CancelOutcome outcome = ReflectionTestUtils.invokeMethod(naverPayApprovalService, "pgCancel", cancelPayment, "취소 사유");
+		CancelOutcome outcome = ReflectionTestUtils.invokeMethod(naverPayApprovalUseCase, "pgCancel", cancelPayment, "취소 사유");
 
 		assertThat(outcome.status()).isEqualTo(CancelOutcome.Status.SUCCESS);
 	}
@@ -975,7 +975,7 @@ class NaverPayApprovalUseCaseTest {
 		Payment cancelPayment = Payment.createCancelRequested(1L, "PAY-1", "pg-id", 1000, PaymentProvider.NAVERPAY);
 		given(naverPayGateway.cancel("pg-id", 1000, "취소 사유")).willReturn(NaverPayCancelResult.alreadyCanceled());
 
-		CancelOutcome outcome = ReflectionTestUtils.invokeMethod(naverPayApprovalService, "pgCancel", cancelPayment, "취소 사유");
+		CancelOutcome outcome = ReflectionTestUtils.invokeMethod(naverPayApprovalUseCase, "pgCancel", cancelPayment, "취소 사유");
 
 		assertThat(outcome.status()).isEqualTo(CancelOutcome.Status.SUCCESS);
 	}
@@ -986,7 +986,7 @@ class NaverPayApprovalUseCaseTest {
 		Payment cancelPayment = Payment.createCancelRequested(1L, "PAY-1", "pg-id", 1000, PaymentProvider.NAVERPAY);
 		given(naverPayGateway.cancel("pg-id", 1000, "취소 사유")).willReturn(NaverPayCancelResult.processing());
 
-		CancelOutcome outcome = ReflectionTestUtils.invokeMethod(naverPayApprovalService, "pgCancel", cancelPayment, "취소 사유");
+		CancelOutcome outcome = ReflectionTestUtils.invokeMethod(naverPayApprovalUseCase, "pgCancel", cancelPayment, "취소 사유");
 
 		assertThat(outcome.status()).isEqualTo(CancelOutcome.Status.PROCESSING);
 	}
@@ -998,7 +998,7 @@ class NaverPayApprovalUseCaseTest {
 		given(naverPayGateway.cancel("pg-id", 1000, "취소 사유"))
 			.willReturn(NaverPayCancelResult.failed(PaymentFailCode.PG_REQUEST_REJECTED, "reject reason"));
 
-		CancelOutcome outcome = ReflectionTestUtils.invokeMethod(naverPayApprovalService, "pgCancel", cancelPayment, "취소 사유");
+		CancelOutcome outcome = ReflectionTestUtils.invokeMethod(naverPayApprovalUseCase, "pgCancel", cancelPayment, "취소 사유");
 
 		assertThat(outcome.status()).isEqualTo(CancelOutcome.Status.FAILED);
 		assertThat(outcome.failCode()).isEqualTo(PaymentFailCode.PG_REQUEST_REJECTED);
