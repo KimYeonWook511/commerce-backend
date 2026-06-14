@@ -20,8 +20,8 @@ import org.springframework.orm.ObjectOptimisticLockingFailureException;
 import org.springframework.test.context.ActiveProfiles;
 import org.springframework.test.util.ReflectionTestUtils;
 
-import com.commerce.cart.application.usecase.AddCartItemService;
-import com.commerce.cart.application.usecase.UpdateCartItemQuantityService;
+import com.commerce.cart.application.usecase.AddCartItemUseCase;
+import com.commerce.cart.application.usecase.UpdateCartItemQuantityUseCase;
 import com.commerce.cart.domain.CartItem;
 import com.commerce.cart.domain.exception.CartErrorCode;
 import com.commerce.cart.domain.exception.CartException;
@@ -46,10 +46,10 @@ import com.commerce.support.PersistenceCleanupTestSupport;
 class CartConcurrencyTest {
 
 	@Autowired
-	private AddCartItemService addCartItemService;
+	private AddCartItemUseCase addCartItemService;
 
 	@Autowired
-	private UpdateCartItemQuantityService updateCartItemQuantityService;
+	private UpdateCartItemQuantityUseCase updateCartItemQuantityService;
 
 	@Autowired
 	private CartPersistenceTestSupport cartPersistence;

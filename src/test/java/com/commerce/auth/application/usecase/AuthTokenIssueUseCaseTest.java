@@ -26,7 +26,7 @@ import com.commerce.auth.infrastructure.RefreshTokenStoreUnavailableException;
 import com.commerce.member.domain.Member;
 
 @ExtendWith(MockitoExtension.class)
-class AuthTokenIssueServiceTest {
+class AuthTokenIssueUseCaseTest {
 
 	@Mock
 	private TokenIssuer tokenIssuer;
@@ -35,7 +35,7 @@ class AuthTokenIssueServiceTest {
 	private RefreshTokenStore refreshTokenStore;
 
 	@InjectMocks
-	private AuthTokenIssueService authTokenIssueService;
+	private AuthTokenIssueUseCase authTokenIssueService;
 
 	@DisplayName("회원 정보로 access token과 refresh token을 발급하고 refresh token을 저장한다")
 	@Test

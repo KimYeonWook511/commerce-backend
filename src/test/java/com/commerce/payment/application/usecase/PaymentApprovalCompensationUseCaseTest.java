@@ -31,7 +31,7 @@ import com.commerce.payment.domain.exception.PaymentErrorCode;
 import com.commerce.payment.domain.exception.PaymentException;
 
 @ExtendWith(MockitoExtension.class)
-class PaymentApprovalCompensationServiceTest {
+class PaymentApprovalCompensationUseCaseTest {
 
 	@Mock
 	private PaymentApprovalRecordService paymentApprovalRecordService;
@@ -43,7 +43,7 @@ class PaymentApprovalCompensationServiceTest {
 	private PgCanceller pgCanceller;
 
 	@InjectMocks
-	private PaymentApprovalCompensationService compensationService;
+	private PaymentApprovalCompensationUseCase compensationService;
 
 	@DisplayName("merchantKeyMismatch 보상: fail 호출, pgCanceller.cancel 미호출")
 	@Test

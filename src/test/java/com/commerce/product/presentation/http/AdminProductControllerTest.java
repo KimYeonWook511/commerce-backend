@@ -24,7 +24,7 @@ import org.springframework.test.web.servlet.MockMvc;
 
 import com.commerce.security.filter.JwtAuthenticationFilter;
 import com.commerce.security.interceptor.AuthorizationInterceptor;
-import com.commerce.auth.application.usecase.TokenAuthenticationService;
+import com.commerce.auth.application.usecase.TokenAuthenticationUseCase;
 import com.commerce.auth.application.result.TokenAuthenticationResult;
 import com.commerce.security.resolver.AuthenticatedMemberIdArgumentResolver;
 import com.commerce.common.config.WebConfig;
@@ -54,7 +54,7 @@ class AdminProductControllerTest {
 	private AdminProductService adminProductService;
 
 	@MockitoBean
-	private TokenAuthenticationService tokenAuthenticationService;
+	private TokenAuthenticationUseCase tokenAuthenticationService;
 
 	@DisplayName("관리자는 상품을 등록할 수 있다")
 	@Test

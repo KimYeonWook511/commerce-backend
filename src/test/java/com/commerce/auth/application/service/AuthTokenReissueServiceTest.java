@@ -18,7 +18,7 @@ import org.springframework.test.util.ReflectionTestUtils;
 
 import com.commerce.auth.application.command.AuthTokenReissueCommand;
 import com.commerce.auth.application.port.RefreshTokenStore;
-import com.commerce.auth.application.usecase.AuthTokenIssueService;
+import com.commerce.auth.application.usecase.AuthTokenIssueUseCase;
 import com.commerce.auth.application.port.TokenValidator;
 import com.commerce.auth.application.port.vo.ParsedTokenClaims;
 import com.commerce.auth.application.result.AuthTokenIssueResult;
@@ -36,7 +36,7 @@ class AuthTokenReissueServiceTest {
 	private MemberQueryService memberQueryService;
 
 	@Mock
-	private AuthTokenIssueService authTokenIssueService;
+	private AuthTokenIssueUseCase authTokenIssueService;
 
 	@Mock
 	private TokenValidator tokenValidator;

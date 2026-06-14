@@ -22,7 +22,7 @@ import org.springframework.test.web.servlet.MockMvc;
 
 import com.commerce.security.filter.JwtAuthenticationFilter;
 import com.commerce.security.interceptor.AuthorizationInterceptor;
-import com.commerce.auth.application.usecase.TokenAuthenticationService;
+import com.commerce.auth.application.usecase.TokenAuthenticationUseCase;
 import com.commerce.security.resolver.AuthenticatedMemberIdArgumentResolver;
 import com.commerce.common.config.WebConfig;
 import com.commerce.product.application.service.ProductQueryService;
@@ -49,7 +49,7 @@ class ProductControllerTest {
 	private ProductQueryService productQueryService;
 
 	@MockitoBean
-	private TokenAuthenticationService tokenAuthenticationService;
+	private TokenAuthenticationUseCase tokenAuthenticationService;
 
 	@DisplayName("상품 목록 조회는 인증 없이 성공한다")
 	@Test

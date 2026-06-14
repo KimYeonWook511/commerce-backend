@@ -1,6 +1,6 @@
 package com.commerce.cart.application.service;
 
-import org.springframework.stereotype.Component;
+import org.springframework.stereotype.Service;
 import org.springframework.transaction.annotation.Transactional;
 
 import com.commerce.cart.application.result.CartItemSummaryResult;
@@ -17,9 +17,9 @@ import lombok.extern.slf4j.Slf4j;
  * cart 항목 수량 절대값 변경 트랜잭션 경계. 정책: ADR-021, ADR-022, cart adr 결정 8.
  */
 @Slf4j
-@Component
+@Service
 @RequiredArgsConstructor
-public class UpdateCartItemQuantityProcessor {
+public class UpdateCartItemQuantityService {
 
 	private final CartItemRepository cartItemRepository;
 

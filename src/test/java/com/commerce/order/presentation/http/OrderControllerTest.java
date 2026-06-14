@@ -18,7 +18,7 @@ import org.springframework.test.context.ActiveProfiles;
 import org.springframework.test.context.bean.override.mockito.MockitoBean;
 import org.springframework.test.web.servlet.MockMvc;
 
-import com.commerce.auth.application.usecase.TokenAuthenticationService;
+import com.commerce.auth.application.usecase.TokenAuthenticationUseCase;
 import com.commerce.auth.application.result.TokenAuthenticationResult;
 import com.commerce.common.config.WebConfig;
 import com.commerce.order.application.service.OrderCancelService;
@@ -52,7 +52,7 @@ class OrderControllerTest {
 	private OrderCancelService orderCancelService;
 
 	@MockitoBean
-	private TokenAuthenticationService tokenAuthenticationService;
+	private TokenAuthenticationUseCase tokenAuthenticationService;
 
 	@DisplayName("유효한 주문 생성 요청이면 201을 반환한다")
 	@Test

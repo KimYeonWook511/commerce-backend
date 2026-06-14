@@ -28,7 +28,7 @@ import com.commerce.product.domain.ProductStatus;
 import com.commerce.product.domain.repository.ProductRepository;
 
 @ExtendWith(MockitoExtension.class)
-class AddCartItemProcessorTest {
+class AddCartItemServiceTest {
 
 	@Mock
 	private CartItemRepository cartItemRepository;
@@ -37,7 +37,7 @@ class AddCartItemProcessorTest {
 	private ProductRepository productRepository;
 
 	@InjectMocks
-	private AddCartItemProcessor processor;
+	private AddCartItemService processor;
 
 	@DisplayName("기존 항목이 없으면 새로 저장한다")
 	@Test

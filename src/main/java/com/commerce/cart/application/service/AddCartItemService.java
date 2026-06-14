@@ -1,6 +1,6 @@
 package com.commerce.cart.application.service;
 
-import org.springframework.stereotype.Component;
+import org.springframework.stereotype.Service;
 import org.springframework.transaction.annotation.Transactional;
 
 import com.commerce.cart.application.result.CartItemSummaryResult;
@@ -20,9 +20,9 @@ import lombok.extern.slf4j.Slf4j;
  * cart 항목 추가 트랜잭션 경계. 정책: ADR-021, ADR-022, cart adr 결정 6-5/8.
  */
 @Slf4j
-@Component
+@Service
 @RequiredArgsConstructor
-public class AddCartItemProcessor {
+public class AddCartItemService {
 
 	private final CartItemRepository cartItemRepository;
 	private final ProductRepository productRepository;

@@ -28,12 +28,12 @@ import org.springframework.test.context.ActiveProfiles;
 import org.springframework.test.context.bean.override.mockito.MockitoBean;
 import org.springframework.test.web.servlet.MockMvc;
 
-import com.commerce.auth.application.usecase.TokenAuthenticationService;
+import com.commerce.auth.application.usecase.TokenAuthenticationUseCase;
 import com.commerce.auth.application.result.TokenAuthenticationResult;
-import com.commerce.cart.application.usecase.AddCartItemService;
+import com.commerce.cart.application.usecase.AddCartItemUseCase;
 import com.commerce.cart.application.service.GetMyCartService;
 import com.commerce.cart.application.service.RemoveCartItemService;
-import com.commerce.cart.application.usecase.UpdateCartItemQuantityService;
+import com.commerce.cart.application.usecase.UpdateCartItemQuantityUseCase;
 import com.commerce.cart.application.result.CartItemSummaryResult;
 import com.commerce.cart.domain.exception.CartErrorCode;
 import com.commerce.cart.domain.exception.CartException;
@@ -61,19 +61,19 @@ class CartControllerTest {
 	private MockMvc mockMvc;
 
 	@MockitoBean
-	private AddCartItemService addCartItemService;
+	private AddCartItemUseCase addCartItemService;
 
 	@MockitoBean
 	private GetMyCartService getMyCartService;
 
 	@MockitoBean
-	private UpdateCartItemQuantityService updateCartItemQuantityService;
+	private UpdateCartItemQuantityUseCase updateCartItemQuantityService;
 
 	@MockitoBean
 	private RemoveCartItemService removeCartItemService;
 
 	@MockitoBean
-	private TokenAuthenticationService tokenAuthenticationService;
+	private TokenAuthenticationUseCase tokenAuthenticationService;
 
 	@DisplayName("유효한 장바구니 담기 요청이면 201을 반환한다")
 	@Test

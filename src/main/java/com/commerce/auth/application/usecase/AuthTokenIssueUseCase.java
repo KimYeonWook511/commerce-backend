@@ -1,6 +1,6 @@
 package com.commerce.auth.application.usecase;
 
-import org.springframework.stereotype.Service;
+import org.springframework.stereotype.Component;
 
 import com.commerce.auth.application.port.RefreshTokenStore;
 import com.commerce.auth.application.port.TokenIssuer;
@@ -10,9 +10,9 @@ import com.commerce.member.domain.Member;
 
 import lombok.RequiredArgsConstructor;
 
-@Service
+@Component
 @RequiredArgsConstructor
-public class AuthTokenIssueService {
+public class AuthTokenIssueUseCase {
 
 	private final TokenIssuer tokenIssuer;
 	private final RefreshTokenStore refreshTokenStore;

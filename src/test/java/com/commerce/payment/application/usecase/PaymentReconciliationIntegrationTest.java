@@ -65,7 +65,7 @@ class PaymentReconciliationIntegrationTest {
 	}
 
 	@Autowired
-	private PaymentReconciliationService reconciliationService;
+	private PaymentReconciliationUseCase reconciliationService;
 
 	@Autowired
 	private PaymentRepository paymentRepository;

@@ -25,13 +25,13 @@ import com.commerce.cart.domain.exception.CartException;
 import com.commerce.cart.presentation.http.request.CartItemUpdateRequest;
 
 @ExtendWith(MockitoExtension.class)
-class UpdateCartItemQuantityProcessorTest {
+class UpdateCartItemQuantityServiceTest {
 
 	@Mock
 	private CartItemRepository cartItemRepository;
 
 	@InjectMocks
-	private UpdateCartItemQuantityProcessor processor;
+	private UpdateCartItemQuantityService processor;
 
 	@DisplayName("기존 항목의 수량을 절대값으로 변경하고 save를 명시 호출한다 (ADR-022)")
 	@Test

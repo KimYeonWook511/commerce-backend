@@ -1,6 +1,6 @@
 package com.commerce.auth.application.usecase;
 
-import org.springframework.stereotype.Service;
+import org.springframework.stereotype.Component;
 
 import com.commerce.auth.application.port.TokenValidator;
 import com.commerce.auth.application.port.vo.ParsedTokenClaims;
@@ -10,9 +10,9 @@ import com.commerce.auth.domain.exception.AuthException;
 
 import lombok.RequiredArgsConstructor;
 
-@Service
+@Component
 @RequiredArgsConstructor
-public class TokenAuthenticationService {
+public class TokenAuthenticationUseCase {
 
 	private final TokenValidator tokenValidator;
 

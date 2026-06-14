@@ -41,7 +41,7 @@ import com.commerce.payment.domain.PaymentStatus;
 import com.commerce.payment.domain.PaymentType;
 import com.commerce.payment.domain.exception.PaymentErrorCode;
 import com.commerce.payment.domain.exception.PaymentException;
-import com.commerce.payment.naverpay.application.usecase.NaverPayApprovalService;
+import com.commerce.payment.naverpay.application.usecase.NaverPayApprovalUseCase;
 import com.commerce.payment.naverpay.application.result.NaverPayApproveResponse;
 import com.commerce.payment.naverpay.application.result.NaverPayApproveStatus;
 import com.commerce.payment.naverpay.application.port.NaverPayGateway;
@@ -70,7 +70,7 @@ import com.commerce.support.PersistenceCleanupTestSupport;
 class NaverPayServiceConcurrencyTest {
 
 	@Autowired
-	private NaverPayApprovalService naverPayApprovalService;
+	private NaverPayApprovalUseCase naverPayApprovalService;
 
 	@Autowired
 	private MemberPersistenceTestSupport memberPersistence;

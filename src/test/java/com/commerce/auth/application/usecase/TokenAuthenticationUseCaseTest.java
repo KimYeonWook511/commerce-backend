@@ -18,13 +18,13 @@ import com.commerce.auth.domain.exception.AuthErrorCode;
 import com.commerce.auth.domain.exception.AuthException;
 
 @ExtendWith(MockitoExtension.class)
-class TokenAuthenticationServiceTest {
+class TokenAuthenticationUseCaseTest {
 
 	@Mock
 	private TokenValidator tokenValidator;
 
 	@InjectMocks
-	private TokenAuthenticationService tokenAuthenticationService;
+	private TokenAuthenticationUseCase tokenAuthenticationService;
 
 	@DisplayName("access token이 유효하면 인증 주체를 반환한다")
 	@Test

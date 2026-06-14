@@ -4,7 +4,7 @@ import java.time.LocalDateTime;
 import java.util.EnumSet;
 import java.util.Set;
 
-import org.springframework.stereotype.Service;
+import org.springframework.stereotype.Component;
 
 import com.commerce.common.exception.CustomException;
 import com.commerce.order.domain.Order;
@@ -21,7 +21,7 @@ import com.commerce.payment.domain.repository.PaymentReservationRepository;
 import com.commerce.payment.domain.exception.PaymentErrorCode;
 import com.commerce.payment.domain.exception.PaymentException;
 import com.commerce.payment.application.service.PaymentApprovalRecordService;
-import com.commerce.payment.application.usecase.PaymentApprovalCompensationService;
+import com.commerce.payment.application.usecase.PaymentApprovalCompensationUseCase;
 import com.commerce.payment.application.service.PaymentApprovalService;
 import com.commerce.payment.application.port.result.CancelOutcome;
 import com.commerce.payment.naverpay.application.result.NaverPayApproveResponse;
@@ -35,9 +35,9 @@ import lombok.RequiredArgsConstructor;
 import lombok.extern.slf4j.Slf4j;
 
 @Slf4j
-@Service
+@Component
 @RequiredArgsConstructor
-public class NaverPayApprovalService {
+public class NaverPayApprovalUseCase {
 
 	// transition(별도 빈)이 던지는 도메인 예외 중 best-effort 기록에서 skip할 코드 집합 (ADR-L2).
 	// 충돌(다른 주체가 먼저 종착) / 가드 위반(이미 종착) / 이력 없음은 단조 종착이므로 흡수한다. 흡수는 트랜잭션 경계 밖(useCase)에서만 한다.
@@ -52,7 +52,7 @@ public class NaverPayApprovalService {
 	private final OrderRepository orderRepository;
 	private final PaymentApprovalService paymentApprovalService;
 	private final PaymentApprovalRecordService paymentApprovalRecordService;
-	private final PaymentApprovalCompensationService paymentApprovalCompensationService;
+	private final PaymentApprovalCompensationUseCase paymentApprovalCompensationService;
 
 	public NaverPayApproveResponse approve(Long memberId, String merchantPayKey, String pgPaymentId) {
 		PaymentReservation reservation = paymentReservationRepository.findByMemberIdAndMerchantPayKey(memberId, merchantPayKey)

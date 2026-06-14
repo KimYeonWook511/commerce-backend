@@ -4,7 +4,7 @@ import java.time.LocalDateTime;
 import java.util.List;
 
 import org.springframework.data.domain.PageRequest;
-import org.springframework.stereotype.Service;
+import org.springframework.stereotype.Component;
 
 import com.commerce.order.domain.Order;
 import com.commerce.order.domain.OrderStatus;
@@ -33,9 +33,9 @@ import lombok.RequiredArgsConstructor;
 import lombok.extern.slf4j.Slf4j;
 
 @Slf4j
-@Service
+@Component
 @RequiredArgsConstructor
-public class PaymentReconciliationService {
+public class PaymentReconciliationUseCase {
 
 	// 한 주기 처리 상한. 운영 config 승격 전제.
 	private static final int RECONCILE_BATCH_SIZE = 100;
@@ -53,7 +53,7 @@ public class PaymentReconciliationService {
 	private final OrderRepository orderRepository;
 	private final PaymentApprovalService paymentApprovalService;
 	private final PaymentApprovalRecordService paymentApprovalRecordService;
-	private final PaymentApprovalCompensationService paymentApprovalCompensationService;
+	private final PaymentApprovalCompensationUseCase paymentApprovalCompensationService;
 	private final NaverPayGateway naverPayGateway;
 	private final PaymentPostProcessTargetPolicy targetPolicy;
 	private final PaymentPostProcessFlowPolicy flowPolicy;

@@ -27,7 +27,7 @@ import com.commerce.order.domain.repository.OrderRepository;
 import com.commerce.order.domain.exception.OrderErrorCode;
 import com.commerce.order.domain.exception.OrderException;
 import com.commerce.payment.application.service.PaymentApprovalRecordService;
-import com.commerce.payment.application.usecase.PaymentApprovalCompensationService;
+import com.commerce.payment.application.usecase.PaymentApprovalCompensationUseCase;
 import com.commerce.payment.application.service.PaymentApprovalService;
 import com.commerce.payment.application.port.result.CancelOutcome;
 import com.commerce.payment.domain.Payment;
@@ -48,7 +48,7 @@ import com.commerce.payment.naverpay.application.result.NaverPayApproveResponse;
 import com.commerce.payment.naverpay.application.result.NaverPayApproveStatus;
 
 @ExtendWith(MockitoExtension.class)
-class NaverPayApprovalServiceTest {
+class NaverPayApprovalUseCaseTest {
 
 	@Mock
 	private NaverPayGateway naverPayGateway;
@@ -60,7 +60,7 @@ class NaverPayApprovalServiceTest {
 	private PaymentApprovalRecordService paymentApprovalRecordService;
 
 	@Mock
-	private PaymentApprovalCompensationService paymentApprovalCompensationService;
+	private PaymentApprovalCompensationUseCase paymentApprovalCompensationService;
 
 	@Mock
 	private PaymentReservationRepository paymentReservationRepository;
@@ -72,7 +72,7 @@ class NaverPayApprovalServiceTest {
 	private OrderRepository orderRepository;
 
 	@InjectMocks
-	private NaverPayApprovalService naverPayApprovalService;
+	private NaverPayApprovalUseCase naverPayApprovalService;
 
 	@DisplayName("예약 정보가 없으면 PAYMENT_RESERVATION_NOT_FOUND를 던진다")
 	@Test

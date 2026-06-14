@@ -5,7 +5,7 @@ import java.util.EnumSet;
 import java.util.Objects;
 import java.util.Set;
 
-import org.springframework.stereotype.Service;
+import org.springframework.stereotype.Component;
 
 import com.commerce.payment.application.port.NotificationPort;
 import com.commerce.payment.application.service.PaymentApprovalRecordService;
@@ -23,9 +23,9 @@ import lombok.RequiredArgsConstructor;
 import lombok.extern.slf4j.Slf4j;
 
 @Slf4j
-@Service
+@Component
 @RequiredArgsConstructor
-public class PaymentApprovalCompensationService {
+public class PaymentApprovalCompensationUseCase {
 
 	// transition(별도 빈)이 던지는 도메인 예외 중 best-effort 보상에서 skip할 코드 집합 (ADR-L2).
 	// 충돌(다른 주체가 먼저 종착) / 가드 위반(이미 종착) / 이력 없음은 단조 종착이므로 흡수한다. 흡수는 트랜잭션 경계 밖(useCase)에서만 한다.

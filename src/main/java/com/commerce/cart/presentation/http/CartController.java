@@ -11,10 +11,10 @@ import org.springframework.web.bind.annotation.RequestBody;
 import org.springframework.web.bind.annotation.RequestMapping;
 import org.springframework.web.bind.annotation.RestController;
 
-import com.commerce.cart.application.usecase.AddCartItemService;
+import com.commerce.cart.application.usecase.AddCartItemUseCase;
 import com.commerce.cart.application.service.GetMyCartService;
 import com.commerce.cart.application.service.RemoveCartItemService;
-import com.commerce.cart.application.usecase.UpdateCartItemQuantityService;
+import com.commerce.cart.application.usecase.UpdateCartItemQuantityUseCase;
 import com.commerce.cart.application.result.CartItemSummaryResult;
 import com.commerce.cart.application.result.CartResult;
 import com.commerce.cart.presentation.http.request.CartItemAddRequest;
@@ -30,9 +30,9 @@ import lombok.RequiredArgsConstructor;
 @RequestMapping("/cart")
 public class CartController {
 
-	private final AddCartItemService addCartItemService;
+	private final AddCartItemUseCase addCartItemService;
 	private final GetMyCartService getMyCartService;
-	private final UpdateCartItemQuantityService updateCartItemQuantityService;
+	private final UpdateCartItemQuantityUseCase updateCartItemQuantityService;
 	private final RemoveCartItemService removeCartItemService;
 
 	@PostMapping("/items")

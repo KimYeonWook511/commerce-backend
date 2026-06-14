@@ -15,15 +15,15 @@ public class PaymentPostProcessTargetPolicy {
 	// NaverPay 승인 가능 시간(10분)에서 파생. #208 운영 config 승격 전제.
 
 	// UNKNOWN은 빨리 폴링 — capture 후 ack 유실인 경우 PG 조회가 즉시 APPROVED를 반환해 빠른 복구·차단 해제 가능
-	// 대사 스캔 윈도우 하한과 단일 출처를 공유하기 위해 public (PaymentReconciliationService 참조)
+	// 대사 스캔 윈도우 하한과 단일 출처를 공유하기 위해 public (PaymentReconciliationUseCase 참조)
 	public static final Duration UNKNOWN_RECONCILE_DELAY = Duration.ofMinutes(1);
 
 	// 승인 가능 시간(10분) + 마진(5분) — 윈도우가 닫힌 뒤에 reconcile해 AlreadyOnGoing 오판 방지
-	// 대사 스캔 윈도우 REQUESTED 하한과 단일 출처를 공유하기 위해 public (PaymentReconciliationService 참조)
+	// 대사 스캔 윈도우 REQUESTED 하한과 단일 출처를 공유하기 위해 public (PaymentReconciliationUseCase 참조)
 	public static final Duration REQUESTED_STALE_DELAY = Duration.ofMinutes(15);
 
 	// reconcile 대상이 이 시간을 넘도록 PG가 결론을 못 내면 MANUAL 승급. 운영 config로 확정 예정
-	// 대사 스캔 윈도우 상한과 단일 출처를 공유하기 위해 public (PaymentReconciliationService 참조)
+	// 대사 스캔 윈도우 상한과 단일 출처를 공유하기 위해 public (PaymentReconciliationUseCase 참조)
 	public static final Duration ESCALATION_DELAY = Duration.ofHours(6);
 
 	public PaymentPostProcessTarget resolvePostProcessTarget(Payment approvePayment, Payment cancelPayment, LocalDateTime now) {

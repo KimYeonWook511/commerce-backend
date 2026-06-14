@@ -28,7 +28,7 @@ import org.springframework.web.bind.annotation.RestController;
 
 import com.commerce.security.filter.JwtAuthenticationFilterConfig;
 import com.commerce.security.interceptor.AuthorizationInterceptor;
-import com.commerce.auth.application.usecase.TokenAuthenticationService;
+import com.commerce.auth.application.usecase.TokenAuthenticationUseCase;
 import com.commerce.auth.application.result.TokenAuthenticationResult;
 import com.commerce.security.resolver.AuthenticatedMemberIdArgumentResolver;
 import com.commerce.common.config.WebConfig;
@@ -54,7 +54,7 @@ class SecurityWebMvcTest {
 	private MockMvc mockMvc;
 
 	@MockitoBean
-	private TokenAuthenticationService tokenAuthenticationService;
+	private TokenAuthenticationUseCase tokenAuthenticationService;
 
 	@AfterEach
 	void tearDown() {

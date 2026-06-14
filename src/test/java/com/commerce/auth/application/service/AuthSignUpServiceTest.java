@@ -18,7 +18,7 @@ import com.commerce.auth.application.command.AuthSignUpCommand;
 import com.commerce.auth.application.result.AuthSignUpResult;
 import com.commerce.auth.application.result.AuthTokenIssueResult;
 import com.commerce.auth.application.port.PasswordHasher;
-import com.commerce.auth.application.usecase.AuthTokenIssueService;
+import com.commerce.auth.application.usecase.AuthTokenIssueUseCase;
 import com.commerce.member.application.service.MemberRegistrationService;
 import com.commerce.member.application.command.MemberRegistrationCommand;
 import com.commerce.member.domain.Member;
@@ -30,7 +30,7 @@ class AuthSignUpServiceTest {
 	private MemberRegistrationService memberRegistrationService;
 
 	@Mock
-	private AuthTokenIssueService authTokenIssueService;
+	private AuthTokenIssueUseCase authTokenIssueService;
 
 	@Mock
 	private PasswordHasher passwordHasher;

@@ -22,7 +22,7 @@ import org.springframework.test.util.ReflectionTestUtils;
 import com.commerce.auth.application.service.AuthLoginService;
 import com.commerce.auth.application.service.AuthSignUpService;
 import com.commerce.auth.application.service.AuthTokenReissueService;
-import com.commerce.auth.application.usecase.TokenAuthenticationService;
+import com.commerce.auth.application.usecase.TokenAuthenticationUseCase;
 import com.commerce.auth.application.command.AuthLoginCommand;
 import com.commerce.auth.application.command.AuthSignUpCommand;
 import com.commerce.auth.application.result.AuthLoginResult;
@@ -51,7 +51,7 @@ class AuthControllerTest {
 	private JwtProperties jwtProperties;
 
 	@MockitoBean
-	private TokenAuthenticationService tokenAuthenticationService;
+	private TokenAuthenticationUseCase tokenAuthenticationService;
 
 	@DisplayName("회원가입 성공 시 member 필드와 토큰을 반환한다")
 	@Test

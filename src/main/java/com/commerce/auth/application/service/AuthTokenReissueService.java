@@ -5,7 +5,7 @@ import org.springframework.transaction.annotation.Transactional;
 
 import com.commerce.auth.application.command.AuthTokenReissueCommand;
 import com.commerce.auth.application.port.RefreshTokenStore;
-import com.commerce.auth.application.usecase.AuthTokenIssueService;
+import com.commerce.auth.application.usecase.AuthTokenIssueUseCase;
 import com.commerce.auth.application.port.TokenValidator;
 import com.commerce.auth.application.port.vo.ParsedTokenClaims;
 import com.commerce.auth.application.result.AuthTokenIssueResult;
@@ -23,7 +23,7 @@ import lombok.RequiredArgsConstructor;
 public class AuthTokenReissueService {
 
 	private final MemberQueryService memberQueryService;
-	private final AuthTokenIssueService authTokenIssueService;
+	private final AuthTokenIssueUseCase authTokenIssueService;
 	private final TokenValidator tokenValidator;
 	private final RefreshTokenStore refreshTokenStore;
 

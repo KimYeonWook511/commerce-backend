@@ -58,7 +58,7 @@ import com.commerce.support.PersistenceCleanupTestSupport;
 class NaverPayServiceIntegrationTest {
 
 	@Autowired
-	private NaverPayApprovalService naverPayApprovalService;
+	private NaverPayApprovalUseCase naverPayApprovalService;
 
 	@Autowired
 	private MemberPersistenceTestSupport memberPersistence;

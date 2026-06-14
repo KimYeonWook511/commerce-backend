@@ -44,7 +44,7 @@ import com.commerce.payment.postprocess.flow.PaymentPostProcessFlowPolicy;
 import com.commerce.payment.postprocess.target.PaymentPostProcessTargetPolicy;
 
 @ExtendWith(MockitoExtension.class)
-class PaymentReconciliationServiceTest {
+class PaymentReconciliationUseCaseTest {
 
 	@Mock
 	private PaymentRepository paymentRepository;
@@ -59,7 +59,7 @@ class PaymentReconciliationServiceTest {
 	private PaymentApprovalRecordService paymentApprovalRecordService;
 
 	@Mock
-	private PaymentApprovalCompensationService paymentApprovalCompensationService;
+	private PaymentApprovalCompensationUseCase paymentApprovalCompensationService;
 
 	@Mock
 	private NaverPayGateway naverPayGateway;
@@ -68,7 +68,7 @@ class PaymentReconciliationServiceTest {
 	private NotificationPort notificationPort;
 
 	@InjectMocks
-	private PaymentReconciliationService reconciliationService;
+	private PaymentReconciliationUseCase reconciliationService;
 
 	// PaymentPostProcessTargetPolicy, PaymentPostProcessFlowPolicy는 @InjectMocks가 주입하지 못하므로 실 인스턴스 직접 주입
 	private final PaymentPostProcessTargetPolicy realTargetPolicy = new PaymentPostProcessTargetPolicy();

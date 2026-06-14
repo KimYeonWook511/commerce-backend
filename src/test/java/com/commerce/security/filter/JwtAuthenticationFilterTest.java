@@ -19,7 +19,7 @@ import org.springframework.mock.web.MockFilterChain;
 import org.springframework.mock.web.MockHttpServletRequest;
 import org.springframework.mock.web.MockHttpServletResponse;
 
-import com.commerce.auth.application.usecase.TokenAuthenticationService;
+import com.commerce.auth.application.usecase.TokenAuthenticationUseCase;
 import com.commerce.auth.application.result.TokenAuthenticationResult;
 import com.commerce.auth.domain.exception.AuthErrorCode;
 import com.commerce.auth.domain.exception.AuthException;
@@ -32,7 +32,7 @@ import jakarta.servlet.ServletException;
 
 class JwtAuthenticationFilterTest {
 
-	private final TokenAuthenticationService tokenAuthenticationService = mock(TokenAuthenticationService.class);
+	private final TokenAuthenticationUseCase tokenAuthenticationService = mock(TokenAuthenticationUseCase.class);
 	private final ObjectMapper objectMapper = new ObjectMapper();
 	private final JwtAuthenticationFilter filter = new JwtAuthenticationFilter(tokenAuthenticationService, objectMapper);
 

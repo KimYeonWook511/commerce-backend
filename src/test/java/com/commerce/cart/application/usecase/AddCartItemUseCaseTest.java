@@ -16,23 +16,23 @@ import org.springframework.orm.ObjectOptimisticLockingFailureException;
 import org.springframework.test.util.ReflectionTestUtils;
 
 import com.commerce.cart.application.result.CartItemSummaryResult;
-import com.commerce.cart.application.service.AddCartItemProcessor;
+import com.commerce.cart.application.service.AddCartItemService;
 import com.commerce.cart.presentation.http.request.CartItemAddRequest;
 
 /**
  * cart phase ADR 결정 8의 retry 정책에 대한 단위 테스트.
  *
- * <p>AddCartItemService는 outer Service로 retry loop만 담당한다.
- * 실제 비즈니스 로직 검증은 {@link AddCartItemProcessorTest}에서 수행한다.
+ * <p>AddCartItemUseCase는 outer UseCase로 retry loop만 담당한다.
+ * 실제 비즈니스 로직 검증은 {@link AddCartItemServiceTest}에서 수행한다.
  */
 @ExtendWith(MockitoExtension.class)
-class AddCartItemServiceTest {
+class AddCartItemUseCaseTest {
 
 	@Mock
-	private AddCartItemProcessor processor;
+	private AddCartItemService processor;
 
 	@InjectMocks
-	private AddCartItemService addCartItemService;
+	private AddCartItemUseCase addCartItemService;
 
 	@DisplayName("정상 호출은 Processor 1회 호출로 결과를 반환한다")
 	@Test

@@ -28,7 +28,7 @@ import org.springframework.test.web.servlet.MockMvc;
 
 import com.commerce.security.filter.JwtAuthenticationFilter;
 import com.commerce.security.interceptor.AuthorizationInterceptor;
-import com.commerce.auth.application.usecase.TokenAuthenticationService;
+import com.commerce.auth.application.usecase.TokenAuthenticationUseCase;
 import com.commerce.auth.application.result.TokenAuthenticationResult;
 import com.commerce.security.resolver.AuthenticatedMemberIdArgumentResolver;
 import com.commerce.common.config.WebConfig;
@@ -58,7 +58,7 @@ class AdminStockControllerTest {
 	private AdminStockService stockService;
 
 	@MockitoBean
-	private TokenAuthenticationService tokenAuthenticationService;
+	private TokenAuthenticationUseCase tokenAuthenticationService;
 
 	@DisplayName("관리자는 초기 재고를 생성할 수 있다")
 	@Test
