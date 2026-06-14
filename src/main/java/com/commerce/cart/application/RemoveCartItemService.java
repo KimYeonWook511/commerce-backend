@@ -5,8 +5,8 @@ import org.springframework.transaction.annotation.Transactional;
 
 import com.commerce.cart.domain.CartItem;
 import com.commerce.cart.domain.repository.CartItemRepository;
-import com.commerce.cart.exception.CartErrorCode;
-import com.commerce.cart.exception.CartException;
+import com.commerce.cart.domain.exception.CartErrorCode;
+import com.commerce.cart.domain.exception.CartException;
 
 import lombok.RequiredArgsConstructor;
 import lombok.extern.slf4j.Slf4j;

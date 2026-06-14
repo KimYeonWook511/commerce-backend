@@ -9,8 +9,8 @@ import com.commerce.product.application.result.AdminProductDeleteResult;
 import com.commerce.product.application.result.AdminProductResult;
 import com.commerce.product.domain.Product;
 import com.commerce.product.domain.repository.ProductRepository;
-import com.commerce.product.exception.ProductErrorCode;
-import com.commerce.product.exception.ProductException;
+import com.commerce.product.domain.exception.ProductErrorCode;
+import com.commerce.product.domain.exception.ProductException;
 
 import lombok.RequiredArgsConstructor;
 import lombok.extern.slf4j.Slf4j;

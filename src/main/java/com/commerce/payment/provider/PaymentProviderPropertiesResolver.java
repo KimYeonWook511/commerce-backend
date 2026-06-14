@@ -8,8 +8,8 @@ import java.util.stream.Collectors;
 import org.springframework.stereotype.Component;
 
 import com.commerce.payment.domain.PaymentProvider;
-import com.commerce.payment.exception.PaymentErrorCode;
-import com.commerce.payment.exception.PaymentException;
+import com.commerce.payment.domain.exception.PaymentErrorCode;
+import com.commerce.payment.domain.exception.PaymentException;
 
 @Component
 public class PaymentProviderPropertiesResolver {

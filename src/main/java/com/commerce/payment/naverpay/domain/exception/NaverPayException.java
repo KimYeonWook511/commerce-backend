@@ -1,4 +1,4 @@
-package com.commerce.payment.naverpay.exception;
+package com.commerce.payment.naverpay.domain.exception;
 
 public class NaverPayException extends RuntimeException {
 

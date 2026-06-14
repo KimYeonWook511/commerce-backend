@@ -16,9 +16,9 @@ import com.commerce.order.application.result.OrderCreateResult;
 import com.commerce.order.application.port.OrderIdempotencyStore;
 import com.commerce.order.domain.Order;
 import com.commerce.order.domain.repository.OrderRepository;
-import com.commerce.order.exception.OrderErrorCode;
-import com.commerce.order.exception.OrderException;
-import com.commerce.order.exception.OrderIdempotencyStoreUnavailableException;
+import com.commerce.order.domain.exception.OrderErrorCode;
+import com.commerce.order.domain.exception.OrderException;
+import com.commerce.order.infrastructure.OrderIdempotencyStoreUnavailableException;
 
 import lombok.RequiredArgsConstructor;
 import lombok.extern.slf4j.Slf4j;

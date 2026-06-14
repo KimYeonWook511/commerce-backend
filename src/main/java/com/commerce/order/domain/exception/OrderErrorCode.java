@@ -1,4 +1,4 @@
-package com.commerce.order.exception;
+package com.commerce.order.domain.exception;
 
 import org.springframework.http.HttpStatus;
 

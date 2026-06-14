@@ -38,8 +38,8 @@ import com.commerce.payment.domain.PaymentType;
 import com.commerce.payment.infrastructure.persistence.support.PaymentPersistenceTestSupport;
 import com.commerce.payment.infrastructure.persistence.support.PaymentReservationPersistenceTestSupport;
 
-import com.commerce.order.exception.OrderErrorCode;
-import com.commerce.order.exception.OrderException;
+import com.commerce.order.domain.exception.OrderErrorCode;
+import com.commerce.order.domain.exception.OrderException;
 import com.commerce.member.domain.Member;
 import com.commerce.order.domain.Order;
 import com.commerce.order.domain.OrderStatus;

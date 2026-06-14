@@ -7,7 +7,7 @@ import org.springframework.data.redis.core.StringRedisTemplate;
 import org.springframework.stereotype.Component;
 
 import com.commerce.order.application.port.OrderIdempotencyStore;
-import com.commerce.order.exception.OrderIdempotencyStoreUnavailableException;
+import com.commerce.order.infrastructure.OrderIdempotencyStoreUnavailableException;
 
 import lombok.RequiredArgsConstructor;
 import lombok.extern.slf4j.Slf4j;

@@ -14,8 +14,8 @@ import org.mockito.junit.jupiter.MockitoExtension;
 import com.commerce.auth.application.port.TokenValidator;
 import com.commerce.auth.application.port.vo.ParsedTokenClaims;
 import com.commerce.auth.application.result.TokenAuthenticationResult;
-import com.commerce.auth.exception.AuthErrorCode;
-import com.commerce.auth.exception.AuthException;
+import com.commerce.auth.domain.exception.AuthErrorCode;
+import com.commerce.auth.domain.exception.AuthException;
 
 @ExtendWith(MockitoExtension.class)
 class TokenAuthenticationServiceTest {

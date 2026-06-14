@@ -28,8 +28,8 @@ import com.commerce.common.config.WebConfig;
 import com.commerce.product.application.ProductQueryService;
 import com.commerce.product.application.result.ProductDetailResult;
 import com.commerce.product.application.result.ProductSummaryResult;
-import com.commerce.product.exception.ProductErrorCode;
-import com.commerce.product.exception.ProductException;
+import com.commerce.product.domain.exception.ProductErrorCode;
+import com.commerce.product.domain.exception.ProductException;
 
 @WebMvcTest(ProductController.class)
 @AutoConfigureMockMvc(addFilters = true)

@@ -10,8 +10,8 @@ import com.commerce.product.application.result.ProductSummaryResult;
 import com.commerce.product.domain.Product;
 import com.commerce.product.domain.ProductStatus;
 import com.commerce.product.domain.repository.ProductRepository;
-import com.commerce.product.exception.ProductErrorCode;
-import com.commerce.product.exception.ProductException;
+import com.commerce.product.domain.exception.ProductErrorCode;
+import com.commerce.product.domain.exception.ProductException;
 import com.commerce.stock.domain.repository.StockRepository;
 
 import lombok.RequiredArgsConstructor;

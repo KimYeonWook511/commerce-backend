@@ -8,8 +8,8 @@ import org.springframework.stereotype.Repository;
 import com.commerce.payment.domain.PaymentProvider;
 import com.commerce.payment.domain.PaymentReservation;
 import com.commerce.payment.domain.repository.PaymentReservationRepository;
-import com.commerce.payment.exception.PaymentErrorCode;
-import com.commerce.payment.exception.PaymentException;
+import com.commerce.payment.domain.exception.PaymentErrorCode;
+import com.commerce.payment.domain.exception.PaymentException;
 
 import lombok.RequiredArgsConstructor;
 

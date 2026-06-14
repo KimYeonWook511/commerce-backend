@@ -1,4 +1,4 @@
-package com.commerce.auth.exception;
+package com.commerce.auth.domain.exception;
 
 import com.commerce.common.exception.CustomException;
 import com.commerce.common.exception.ErrorCode;

@@ -1,4 +1,4 @@
-package com.commerce.member.exception;
+package com.commerce.member.domain.exception;
 
 import org.springframework.http.HttpStatus;
 

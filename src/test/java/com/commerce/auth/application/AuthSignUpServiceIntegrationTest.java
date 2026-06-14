@@ -16,7 +16,7 @@ import org.springframework.test.context.DynamicPropertySource;
 
 import com.commerce.auth.application.command.AuthSignUpCommand;
 import com.commerce.auth.application.port.RefreshTokenStore;
-import com.commerce.member.exception.MemberException;
+import com.commerce.member.domain.exception.MemberException;
 import com.commerce.member.infrastructure.persistence.support.MemberPersistenceTestSupport;
 import com.commerce.support.PersistenceCleanupTestSupport;
 import com.commerce.support.TestcontainersSupport;

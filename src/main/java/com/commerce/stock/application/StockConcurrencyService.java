@@ -13,8 +13,8 @@ import org.springframework.transaction.support.TransactionTemplate;
 
 import com.commerce.stock.domain.Stock;
 import com.commerce.stock.domain.repository.StockRepository;
-import com.commerce.stock.exception.StockErrorCode;
-import com.commerce.stock.exception.StockException;
+import com.commerce.stock.domain.exception.StockErrorCode;
+import com.commerce.stock.domain.exception.StockException;
 import com.zaxxer.hikari.HikariDataSource;
 import com.zaxxer.hikari.HikariPoolMXBean;
 

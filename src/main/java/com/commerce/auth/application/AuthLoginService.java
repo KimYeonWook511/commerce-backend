@@ -3,8 +3,8 @@ package com.commerce.auth.application;
 import org.springframework.stereotype.Service;
 import org.springframework.transaction.annotation.Transactional;
 
-import com.commerce.auth.exception.AuthErrorCode;
-import com.commerce.auth.exception.AuthException;
+import com.commerce.auth.domain.exception.AuthErrorCode;
+import com.commerce.auth.domain.exception.AuthException;
 import com.commerce.auth.application.command.AuthLoginCommand;
 import com.commerce.auth.application.result.AuthLoginResult;
 import com.commerce.auth.application.result.AuthTokenIssueResult;

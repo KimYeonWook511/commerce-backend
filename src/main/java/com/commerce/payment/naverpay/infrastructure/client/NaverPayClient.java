@@ -23,8 +23,8 @@ import com.commerce.payment.naverpay.infrastructure.client.response.body.NaverPa
 import com.commerce.payment.naverpay.infrastructure.client.request.NaverPayHistoryRequest;
 import com.commerce.payment.naverpay.infrastructure.client.response.NaverPayResponse;
 import com.commerce.payment.naverpay.infrastructure.client.response.body.NaverPayHistoryBody;
-import com.commerce.payment.naverpay.exception.NaverPayErrorCode;
-import com.commerce.payment.naverpay.exception.NaverPayException;
+import com.commerce.payment.naverpay.domain.exception.NaverPayErrorCode;
+import com.commerce.payment.naverpay.domain.exception.NaverPayException;
 import com.fasterxml.jackson.core.type.TypeReference;
 import com.fasterxml.jackson.databind.ObjectMapper;
 

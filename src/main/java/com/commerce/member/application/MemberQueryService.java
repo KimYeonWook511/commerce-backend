@@ -7,8 +7,8 @@ import org.springframework.transaction.annotation.Transactional;
 
 import com.commerce.member.domain.Member;
 import com.commerce.member.domain.repository.MemberRepository;
-import com.commerce.member.exception.MemberErrorCode;
-import com.commerce.member.exception.MemberException;
+import com.commerce.member.domain.exception.MemberErrorCode;
+import com.commerce.member.domain.exception.MemberException;
 
 import lombok.RequiredArgsConstructor;
 

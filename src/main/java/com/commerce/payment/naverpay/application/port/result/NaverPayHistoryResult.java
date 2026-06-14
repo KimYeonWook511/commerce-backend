@@ -1,6 +1,6 @@
 package com.commerce.payment.naverpay.application.port.result;
 
-import com.commerce.payment.exception.PaymentErrorCode;
+import com.commerce.payment.domain.exception.PaymentErrorCode;
 
 import lombok.Getter;
 

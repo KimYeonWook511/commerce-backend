@@ -9,8 +9,8 @@ import java.time.LocalDateTime;
 import org.junit.jupiter.api.DisplayName;
 import org.junit.jupiter.api.Test;
 
-import com.commerce.payment.exception.PaymentErrorCode;
-import com.commerce.payment.exception.PaymentException;
+import com.commerce.payment.domain.exception.PaymentErrorCode;
+import com.commerce.payment.domain.exception.PaymentException;
 
 class PaymentTest {
 

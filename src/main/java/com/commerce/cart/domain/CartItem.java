@@ -2,8 +2,8 @@ package com.commerce.cart.domain;
 
 import java.util.Objects;
 
-import com.commerce.cart.exception.CartErrorCode;
-import com.commerce.cart.exception.CartException;
+import com.commerce.cart.domain.exception.CartErrorCode;
+import com.commerce.cart.domain.exception.CartException;
 import com.commerce.common.jpa.BaseTimeEntity;
 
 import jakarta.persistence.Column;

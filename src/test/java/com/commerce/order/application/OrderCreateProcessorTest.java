@@ -21,8 +21,8 @@ import org.springframework.test.util.ReflectionTestUtils;
 
 import com.commerce.member.domain.Member;
 import com.commerce.member.domain.repository.MemberRepository;
-import com.commerce.member.exception.MemberErrorCode;
-import com.commerce.member.exception.MemberException;
+import com.commerce.member.domain.exception.MemberErrorCode;
+import com.commerce.member.domain.exception.MemberException;
 import com.commerce.order.application.command.OrderCreateCommand;
 import com.commerce.order.application.command.OrderCreateItem;
 import com.commerce.order.application.port.CartItemRemover;
@@ -32,11 +32,11 @@ import com.commerce.order.domain.repository.OrderRepository;
 import com.commerce.product.domain.Product;
 import com.commerce.product.domain.ProductStatus;
 import com.commerce.product.domain.repository.ProductRepository;
-import com.commerce.product.exception.ProductErrorCode;
-import com.commerce.product.exception.ProductException;
+import com.commerce.product.domain.exception.ProductErrorCode;
+import com.commerce.product.domain.exception.ProductException;
 import com.commerce.stock.application.StockInventoryService;
-import com.commerce.stock.exception.StockErrorCode;
-import com.commerce.stock.exception.StockException;
+import com.commerce.stock.domain.exception.StockErrorCode;
+import com.commerce.stock.domain.exception.StockException;
 
 @ExtendWith(MockitoExtension.class)
 class OrderCreateProcessorTest {

@@ -18,8 +18,8 @@ import org.springframework.test.util.ReflectionTestUtils;
 
 import com.commerce.product.domain.Product;
 import com.commerce.product.domain.ProductStatus;
-import com.commerce.product.exception.ProductErrorCode;
-import com.commerce.product.exception.ProductException;
+import com.commerce.product.domain.exception.ProductErrorCode;
+import com.commerce.product.domain.exception.ProductException;
 import com.commerce.product.domain.repository.ProductRepository;
 import com.commerce.stock.application.command.AdminStockAdjustCommand;
 import com.commerce.stock.application.command.AdminStockCreateCommand;
@@ -30,8 +30,8 @@ import com.commerce.stock.domain.StockAdjustmentReason;
 import com.commerce.stock.domain.StockHistory;
 import com.commerce.stock.domain.repository.StockHistoryRepository;
 import com.commerce.stock.domain.repository.StockRepository;
-import com.commerce.stock.exception.StockErrorCode;
-import com.commerce.stock.exception.StockException;
+import com.commerce.stock.domain.exception.StockErrorCode;
+import com.commerce.stock.domain.exception.StockException;
 
 @ExtendWith(MockitoExtension.class)
 class AdminStockServiceTest {

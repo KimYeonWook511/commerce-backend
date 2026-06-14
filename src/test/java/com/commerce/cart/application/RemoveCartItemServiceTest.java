@@ -19,8 +19,8 @@ import org.mockito.junit.jupiter.MockitoExtension;
 
 import com.commerce.cart.domain.CartItem;
 import com.commerce.cart.domain.repository.CartItemRepository;
-import com.commerce.cart.exception.CartErrorCode;
-import com.commerce.cart.exception.CartException;
+import com.commerce.cart.domain.exception.CartErrorCode;
+import com.commerce.cart.domain.exception.CartException;
 
 @ExtendWith(MockitoExtension.class)
 class RemoveCartItemServiceTest {

@@ -2,8 +2,8 @@ package com.commerce.security.resolver;
 
 import com.commerce.security.annotation.AuthenticatedMemberId;
 import com.commerce.security.context.AuthenticationContext;
-import com.commerce.auth.exception.AuthErrorCode;
-import com.commerce.auth.exception.AuthException;
+import com.commerce.auth.domain.exception.AuthErrorCode;
+import com.commerce.auth.domain.exception.AuthException;
 import org.springframework.core.MethodParameter;
 import org.springframework.stereotype.Component;
 import org.springframework.web.bind.support.WebDataBinderFactory;

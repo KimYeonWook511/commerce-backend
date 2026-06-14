@@ -1,7 +1,7 @@
 package com.commerce.stock.domain;
 
-import com.commerce.stock.exception.StockErrorCode;
-import com.commerce.stock.exception.StockException;
+import com.commerce.stock.domain.exception.StockErrorCode;
+import com.commerce.stock.domain.exception.StockException;
 import com.commerce.common.jpa.BaseTimeEntity;
 
 import jakarta.persistence.Column;

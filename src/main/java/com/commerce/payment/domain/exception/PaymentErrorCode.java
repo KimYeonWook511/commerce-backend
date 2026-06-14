@@ -1,4 +1,4 @@
-package com.commerce.payment.exception;
+package com.commerce.payment.domain.exception;
 
 import org.springframework.http.HttpStatus;
 

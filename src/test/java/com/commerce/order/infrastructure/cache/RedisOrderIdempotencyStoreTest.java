@@ -22,7 +22,7 @@ import org.springframework.dao.QueryTimeoutException;
 import org.springframework.data.redis.core.StringRedisTemplate;
 import org.springframework.data.redis.core.ValueOperations;
 
-import com.commerce.order.exception.OrderIdempotencyStoreUnavailableException;
+import com.commerce.order.infrastructure.OrderIdempotencyStoreUnavailableException;
 
 @ExtendWith(MockitoExtension.class)
 class RedisOrderIdempotencyStoreTest {

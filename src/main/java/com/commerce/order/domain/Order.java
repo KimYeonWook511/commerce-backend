@@ -4,8 +4,8 @@ import java.util.ArrayList;
 import java.util.List;
 
 import com.commerce.common.jpa.BaseTimeEntity;
-import com.commerce.order.exception.OrderErrorCode;
-import com.commerce.order.exception.OrderException;
+import com.commerce.order.domain.exception.OrderErrorCode;
+import com.commerce.order.domain.exception.OrderException;
 
 import jakarta.persistence.CascadeType;
 import jakarta.persistence.Column;

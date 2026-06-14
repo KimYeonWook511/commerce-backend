@@ -27,8 +27,8 @@ import com.commerce.payment.naverpay.infrastructure.client.request.NaverPayCance
 import com.commerce.payment.naverpay.infrastructure.client.response.NaverPayResponse;
 import com.commerce.payment.naverpay.infrastructure.client.response.body.NaverPayApproveBody;
 import com.commerce.payment.naverpay.infrastructure.client.response.body.NaverPayCancelBody;
-import com.commerce.payment.naverpay.exception.NaverPayErrorCode;
-import com.commerce.payment.naverpay.exception.NaverPayException;
+import com.commerce.payment.naverpay.domain.exception.NaverPayErrorCode;
+import com.commerce.payment.naverpay.domain.exception.NaverPayException;
 import com.fasterxml.jackson.databind.ObjectMapper;
 
 class NaverPayClientTest {

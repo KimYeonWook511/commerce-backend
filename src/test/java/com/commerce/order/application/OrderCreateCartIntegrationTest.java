@@ -28,7 +28,7 @@ import com.commerce.product.domain.Product;
 import com.commerce.product.domain.ProductStatus;
 import com.commerce.product.infrastructure.persistence.support.ProductPersistenceTestSupport;
 import com.commerce.stock.domain.Stock;
-import com.commerce.stock.exception.StockException;
+import com.commerce.stock.domain.exception.StockException;
 import com.commerce.stock.infrastructure.persistence.support.StockPersistenceTestSupport;
 import com.commerce.support.PersistenceCleanupTestSupport;
 import com.commerce.support.TestcontainersSupport;

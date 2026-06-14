@@ -7,13 +7,13 @@ import org.springframework.transaction.annotation.Transactional;
 
 import com.commerce.order.domain.Order;
 import com.commerce.order.domain.repository.OrderRepository;
-import com.commerce.order.exception.OrderErrorCode;
-import com.commerce.order.exception.OrderException;
+import com.commerce.order.domain.exception.OrderErrorCode;
+import com.commerce.order.domain.exception.OrderException;
 import com.commerce.payment.domain.Payment;
 import com.commerce.payment.domain.PaymentStatus;
 import com.commerce.payment.domain.repository.PaymentRepository;
-import com.commerce.payment.exception.PaymentErrorCode;
-import com.commerce.payment.exception.PaymentException;
+import com.commerce.payment.domain.exception.PaymentErrorCode;
+import com.commerce.payment.domain.exception.PaymentException;
 
 import lombok.RequiredArgsConstructor;
 import lombok.extern.slf4j.Slf4j;

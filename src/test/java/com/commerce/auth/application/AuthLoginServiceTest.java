@@ -17,8 +17,8 @@ import org.mockito.Mock;
 import org.mockito.junit.jupiter.MockitoExtension;
 import org.springframework.test.util.ReflectionTestUtils;
 
-import com.commerce.auth.exception.AuthErrorCode;
-import com.commerce.auth.exception.AuthException;
+import com.commerce.auth.domain.exception.AuthErrorCode;
+import com.commerce.auth.domain.exception.AuthException;
 import com.commerce.auth.application.command.AuthLoginCommand;
 import com.commerce.auth.application.result.AuthLoginResult;
 import com.commerce.auth.application.result.AuthTokenIssueResult;

@@ -1,4 +1,4 @@
-package com.commerce.stock.exception;
+package com.commerce.stock.domain.exception;
 
 import com.commerce.common.exception.CustomException;
 import com.commerce.common.exception.ErrorCode;

@@ -8,7 +8,7 @@ import org.springframework.data.redis.core.StringRedisTemplate;
 import org.springframework.stereotype.Component;
 
 import com.commerce.auth.application.port.RefreshTokenStore;
-import com.commerce.auth.exception.RefreshTokenStoreUnavailableException;
+import com.commerce.auth.infrastructure.RefreshTokenStoreUnavailableException;
 import com.commerce.auth.infrastructure.jwt.JwtProperties;
 
 import lombok.RequiredArgsConstructor;

@@ -39,13 +39,13 @@ import com.commerce.order.application.result.OrderCreateResult;
 import com.commerce.product.domain.Product;
 import com.commerce.product.domain.ProductStatus;
 import com.commerce.stock.domain.Stock;
-import com.commerce.stock.exception.StockErrorCode;
-import com.commerce.stock.exception.StockException;
+import com.commerce.stock.domain.exception.StockErrorCode;
+import com.commerce.stock.domain.exception.StockException;
 import com.commerce.order.domain.OrderStatus;
 import org.springframework.dao.OptimisticLockingFailureException;
 
-import com.commerce.order.exception.OrderErrorCode;
-import com.commerce.order.exception.OrderException;
+import com.commerce.order.domain.exception.OrderErrorCode;
+import com.commerce.order.domain.exception.OrderException;
 import com.commerce.member.infrastructure.persistence.support.MemberPersistenceTestSupport;
 import com.commerce.order.infrastructure.persistence.support.OrderPersistenceTestSupport;
 import com.commerce.product.infrastructure.persistence.support.ProductPersistenceTestSupport;

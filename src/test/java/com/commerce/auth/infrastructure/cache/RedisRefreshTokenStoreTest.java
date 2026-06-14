@@ -20,7 +20,7 @@ import org.springframework.dao.QueryTimeoutException;
 import org.springframework.data.redis.core.StringRedisTemplate;
 import org.springframework.data.redis.core.ValueOperations;
 
-import com.commerce.auth.exception.RefreshTokenStoreUnavailableException;
+import com.commerce.auth.infrastructure.RefreshTokenStoreUnavailableException;
 import com.commerce.auth.infrastructure.jwt.JwtProperties;
 
 @ExtendWith(MockitoExtension.class)

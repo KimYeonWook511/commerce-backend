@@ -1,4 +1,4 @@
-package com.commerce.auth.exception;
+package com.commerce.auth.presentation;
 
 import static org.assertj.core.api.Assertions.assertThat;
 
@@ -10,6 +10,8 @@ import org.slf4j.LoggerFactory;
 import org.springframework.http.HttpStatus;
 import org.springframework.http.ResponseEntity;
 
+import com.commerce.auth.domain.exception.AuthErrorCode;
+import com.commerce.auth.infrastructure.RefreshTokenStoreUnavailableException;
 import com.commerce.common.ApiResponse;
 
 import ch.qos.logback.classic.Level;

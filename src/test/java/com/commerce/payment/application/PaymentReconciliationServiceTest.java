@@ -23,15 +23,15 @@ import org.springframework.test.util.ReflectionTestUtils;
 import com.commerce.order.domain.Order;
 import com.commerce.order.domain.OrderStatus;
 import com.commerce.order.domain.repository.OrderRepository;
-import com.commerce.order.exception.OrderErrorCode;
-import com.commerce.order.exception.OrderException;
+import com.commerce.order.domain.exception.OrderErrorCode;
+import com.commerce.order.domain.exception.OrderException;
 import com.commerce.payment.application.port.NotificationPort;
 import com.commerce.payment.application.port.PgCanceller;
 import com.commerce.payment.domain.Payment;
 import com.commerce.payment.domain.PaymentFailCode;
 import com.commerce.payment.domain.PaymentProvider;
-import com.commerce.payment.exception.PaymentErrorCode;
-import com.commerce.payment.exception.PaymentException;
+import com.commerce.payment.domain.exception.PaymentErrorCode;
+import com.commerce.payment.domain.exception.PaymentException;
 import com.commerce.payment.domain.PaymentReservation;
 import com.commerce.payment.domain.PaymentStatus;
 import com.commerce.payment.domain.PaymentType;
@@ -149,7 +149,7 @@ class PaymentReconciliationServiceTest {
 		given(paymentRepository.findStaleApprovePaymentsForReconciliation(any(), any(), any(), any(Pageable.class)))
 			.willReturn(List.of(payment));
 		given(naverPayGateway.getApprovalHistory("pg-1"))
-			.willReturn(NaverPayHistoryResult.failed(com.commerce.payment.exception.PaymentErrorCode.PAYMENT_NOT_FOUND));
+			.willReturn(NaverPayHistoryResult.failed(com.commerce.payment.domain.exception.PaymentErrorCode.PAYMENT_NOT_FOUND));
 
 		reconciliationService.reconcile();
 

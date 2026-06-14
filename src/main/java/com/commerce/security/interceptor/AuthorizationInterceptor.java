@@ -6,7 +6,7 @@ import org.springframework.web.servlet.HandlerInterceptor;
 
 import com.commerce.security.annotation.RequireRole;
 import com.commerce.security.context.AuthenticationContext;
-import com.commerce.auth.exception.AuthErrorCode;
+import com.commerce.auth.domain.exception.AuthErrorCode;
 import com.commerce.common.ApiResponse;
 import com.commerce.common.exception.ErrorCode;
 import com.fasterxml.jackson.databind.ObjectMapper;

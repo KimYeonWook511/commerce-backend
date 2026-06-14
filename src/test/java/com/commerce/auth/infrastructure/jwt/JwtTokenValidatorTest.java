@@ -12,8 +12,8 @@ import java.util.Date;
 
 import com.commerce.auth.application.port.vo.ParsedTokenClaims;
 import com.commerce.auth.application.port.vo.TokenClaims;
-import com.commerce.auth.exception.AuthErrorCode;
-import com.commerce.auth.exception.AuthException;
+import com.commerce.auth.domain.exception.AuthErrorCode;
+import com.commerce.auth.domain.exception.AuthException;
 import com.commerce.member.domain.MemberRole;
 
 import io.jsonwebtoken.Jwts;

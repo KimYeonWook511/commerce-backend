@@ -12,8 +12,8 @@ import com.commerce.payment.application.ReservePaymentService;
 import com.commerce.payment.application.command.ReservePaymentCommand;
 import com.commerce.payment.application.result.ReservePaymentResult;
 import com.commerce.payment.domain.PaymentProvider;
-import com.commerce.payment.exception.PaymentErrorCode;
-import com.commerce.payment.exception.PaymentException;
+import com.commerce.payment.domain.exception.PaymentErrorCode;
+import com.commerce.payment.domain.exception.PaymentException;
 import com.commerce.payment.presentation.http.request.ReservePaymentRequest;
 import com.commerce.security.annotation.AuthenticatedMemberId;
 

@@ -5,13 +5,13 @@ import java.util.List;
 import org.springframework.stereotype.Component;
 
 import com.commerce.payment.domain.PaymentFailCode;
-import com.commerce.payment.exception.PaymentErrorCode;
+import com.commerce.payment.domain.exception.PaymentErrorCode;
 import com.commerce.payment.naverpay.application.port.NaverPayGateway;
 import com.commerce.payment.naverpay.application.port.result.NaverPayApproveResult;
 import com.commerce.payment.naverpay.application.port.result.NaverPayCancelResult;
 import com.commerce.payment.naverpay.application.port.result.NaverPayHistoryResult;
-import com.commerce.payment.naverpay.exception.NaverPayErrorCode;
-import com.commerce.payment.naverpay.exception.NaverPayException;
+import com.commerce.payment.naverpay.domain.exception.NaverPayErrorCode;
+import com.commerce.payment.naverpay.domain.exception.NaverPayException;
 import com.commerce.payment.naverpay.infrastructure.client.NaverPayClient;
 import com.commerce.payment.naverpay.infrastructure.client.request.NaverPayCancelRequest;
 import com.commerce.payment.naverpay.infrastructure.client.request.NaverPayCancelRequester;

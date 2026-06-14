@@ -1,4 +1,4 @@
-package com.commerce.payment.naverpay.exception;
+package com.commerce.payment.naverpay.domain.exception;
 
 public enum NaverPayErrorCode {
 	NETWORK("네이버페이 요청 중 네트워크 오류가 발생한 경우"),

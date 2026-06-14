@@ -22,8 +22,8 @@ import com.commerce.stock.application.command.StockDecreaseBatchCommand;
 import com.commerce.stock.application.result.StockDecreaseBatchResult;
 import com.commerce.stock.domain.Stock;
 import com.commerce.stock.domain.repository.StockRepository;
-import com.commerce.stock.exception.StockErrorCode;
-import com.commerce.stock.exception.StockException;
+import com.commerce.stock.domain.exception.StockErrorCode;
+import com.commerce.stock.domain.exception.StockException;
 
 @ExtendWith(MockitoExtension.class)
 class StockInventoryServiceTest {
