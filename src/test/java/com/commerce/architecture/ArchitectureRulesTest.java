@@ -5,7 +5,6 @@ import com.tngtech.archunit.core.domain.JavaClasses;
 import com.tngtech.archunit.core.importer.ClassFileImporter;
 import com.tngtech.archunit.core.importer.ImportOption;
 import com.tngtech.archunit.lang.ArchRule;
-import com.tngtech.archunit.library.freeze.FreezingArchRule;
 import org.junit.jupiter.api.BeforeAll;
 import org.junit.jupiter.api.DisplayName;
 import org.junit.jupiter.api.Test;
@@ -27,10 +26,8 @@ import static com.tngtech.archunit.lang.syntax.ArchRuleDefinition.noMethods;
  *       infrastructure 하위: persistence / pg / cache / messaging / notification
  *       실제 패키지명이 다르면 아래 매처 문자열만 조정한다.
  *
- * BASELINE(freeze): 현재 구조는 위 패키지 컨벤션으로 아직 재배치되지 않아 일부 규칙을 위반한다.
- *       구조 마이그레이션 동안에는 각 규칙을 {@link FreezingArchRule}로 감싸 현재 위반을
- *       archunit_store 스냅샷에 박는다 → 기존 위반은 통과, 새 위반만 실패.
- *       전 도메인 재배치가 끝나 위반이 0이 되면 freeze 래핑을 떼고 엄격(strict)으로 전환한다.
+ * STRICT: 전 도메인 재배치가 완료돼 위반이 0이 됐으므로, freeze 래핑을 제거하고 엄격(strict) 모드로 전환했다.
+ *       archunit_store 스냅샷과 archunit.properties 도 함께 제거됐다. 이제 새 위반이 생기면 즉시 실패한다.
  */
 @DisplayName("아키텍처 규칙 (architecture.md 강제)")
 class ArchitectureRulesTest {
@@ -46,12 +43,8 @@ class ArchitectureRulesTest {
                 .importPackages(BASE);
     }
 
-    /**
-     * 마이그레이션 동안 모든 규칙을 freeze baseline 으로 검증한다.
-     * 기존 위반은 스냅샷이 봐주고, 새 위반만 실패한다. 재배치 완료 후 이 래퍼를 제거해 엄격으로 전환한다.
-     */
     private static void check(ArchRule rule) {
-        FreezingArchRule.freeze(rule).check(productionClasses);
+        rule.check(productionClasses);
     }
 
     // ────────────────────────────────────────────────────────────
@@ -127,12 +120,13 @@ class ArchitectureRulesTest {
     @Test
     @DisplayName("JPA/DAO 예외 타입은 infrastructure.persistence 밖에서 참조하지 않는다")
     void daoExceptionsConfinedToPersistence() {
-        // common 의 GlobalExceptionHandler 는 HTTP 매핑을 위해 Spring DAO 예외를 직접 다뤄야 하는
-        // 영구적 예외처다(마이그레이션으로 사라질 임시 위반이 아님). freeze 스냅샷에 의존하지 않고
-        // 규칙에서 명시적으로 제외해, 재배치 완료 후 freeze 를 완전히 제거할 수 있게 한다.
+        // GlobalExceptionHandler: HTTP 매핑을 위해 Spring DAO 예외를 직접 다뤄야 하는 영구 예외처.
+        // OrderExpirationBatchConfig: Spring Batch fault-tolerance(.retry/.skip)는 프레임워크에 예외 타입을
+        // 선언적으로 신고하는 경계라 변환 대상이 없다. GlobalExceptionHandler 와 같은 부류의 영구 예외처(ADR-L1).
         ArchRule rule = noClasses()
                 .that().resideOutsideOfPackage("..infrastructure.persistence..")
                 .and().areNotAssignableTo("com.commerce.common.exception.GlobalExceptionHandler")
+                .and().areNotAssignableTo("com.commerce.order.presentation.batch.OrderExpirationBatchConfig")
                 .should().dependOnClassesThat()
                 .haveFullyQualifiedName("org.springframework.orm.ObjectOptimisticLockingFailureException")
                 .orShould().dependOnClassesThat()
@@ -210,8 +204,10 @@ class ArchitectureRulesTest {
     void controllersDoNotCatchConflictExceptions() {
         // ArchUnit 은 catch 블록 자체를 직접 매칭하기 어렵다.
         // 차선책: presentation 이 충돌/낙관락 예외 타입에 의존하지 않음을 검사.
+        // OrderExpirationBatchConfig: Spring Batch fault-tolerance(.retry/.skip)는 선언적 신고라 변환 대상이 없다(ADR-L1).
         ArchRule rule = noClasses()
                 .that().resideInAPackage("..presentation..")
+                .and().areNotAssignableTo("com.commerce.order.presentation.batch.OrderExpirationBatchConfig")
                 .should().dependOnClassesThat()
                 .haveFullyQualifiedName("org.springframework.orm.ObjectOptimisticLockingFailureException")
                 .orShould().dependOnClassesThat()
