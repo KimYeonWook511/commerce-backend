@@ -22,7 +22,7 @@ import com.commerce.auth.application.usecase.TokenAuthenticationUseCase;
 import com.commerce.auth.application.result.TokenAuthenticationResult;
 import com.commerce.common.config.WebConfig;
 import com.commerce.order.application.service.OrderCancelService;
-import com.commerce.order.application.service.OrderCreateService;
+import com.commerce.order.application.usecase.OrderCreateUseCase;
 import com.commerce.order.application.command.OrderCreateCommand;
 import com.commerce.order.application.result.OrderCancelResult;
 import com.commerce.order.application.result.OrderCreateResult;
@@ -46,7 +46,7 @@ class OrderControllerTest {
 	private MockMvc mockMvc;
 
 	@MockitoBean
-	private OrderCreateService orderCreateService;
+	private OrderCreateUseCase orderCreateService;
 
 	@MockitoBean
 	private OrderCancelService orderCancelService;

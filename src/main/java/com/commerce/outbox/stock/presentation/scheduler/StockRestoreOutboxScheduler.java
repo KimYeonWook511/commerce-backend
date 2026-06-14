@@ -6,7 +6,7 @@ import org.springframework.context.annotation.Profile;
 import org.springframework.scheduling.annotation.Scheduled;
 import org.springframework.stereotype.Component;
 
-import com.commerce.outbox.stock.application.service.StockRestoreOutboxRelayService;
+import com.commerce.outbox.stock.application.usecase.StockRestoreOutboxRelayUseCase;
 import com.commerce.outbox.stock.application.result.OutboxPublishResult;
 
 import lombok.RequiredArgsConstructor;
@@ -18,7 +18,7 @@ import lombok.extern.slf4j.Slf4j;
 @RequiredArgsConstructor
 public class StockRestoreOutboxScheduler {
 
-	private final StockRestoreOutboxRelayService stockRestoreOutboxRelayService;
+	private final StockRestoreOutboxRelayUseCase stockRestoreOutboxRelayService;
 
 	@Scheduled(cron = "${outbox.stock-restore.producer.cron:*/10 * * * * *}")
 	public void publishPendingEvents() {

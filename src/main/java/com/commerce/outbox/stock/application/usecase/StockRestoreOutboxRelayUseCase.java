@@ -1,12 +1,10 @@
-package com.commerce.outbox.stock.application.service;
+package com.commerce.outbox.stock.application.usecase;
 
 import java.time.LocalDateTime;
 import java.util.List;
 
 import org.springframework.beans.factory.annotation.Value;
-import org.springframework.stereotype.Service;
-import org.springframework.transaction.annotation.Propagation;
-import org.springframework.transaction.annotation.Transactional;
+import org.springframework.stereotype.Component;
 
 import com.commerce.common.log.LogContext;
 import com.commerce.outbox.domain.OutboxEventType;
@@ -18,10 +16,10 @@ import com.commerce.outbox.stock.application.result.OutboxPublishResult;
 import lombok.RequiredArgsConstructor;
 import lombok.extern.slf4j.Slf4j;
 
-@Service
+@Component
 @RequiredArgsConstructor
 @Slf4j
-public class StockRestoreOutboxRelayService {
+public class StockRestoreOutboxRelayUseCase {
 
 	private static final int MAX_ERROR_LENGTH = 1000;
 	private static final OutboxEventType STOCK_RESTORE_EVENT_TYPE = OutboxEventType.STOCK_RESTORE_REQUESTED;
@@ -41,7 +39,6 @@ public class StockRestoreOutboxRelayService {
 	@Value("${outbox.stock-restore.stale-publishing-seconds:300}")
 	private long stalePublishingSeconds;
 
-	@Transactional(propagation = Propagation.NOT_SUPPORTED)
 	public OutboxPublishResult publishPendingEvents(LocalDateTime now) {
 		List<OutboxPublishTarget> targets = outboxEventRepository.findPendingPublishTargets(
 			STOCK_RESTORE_EVENT_TYPE,
@@ -67,7 +64,6 @@ public class StockRestoreOutboxRelayService {
 		return toPublishResult(targets.size(), publishedCount, failedCount, skippedCount);
 	}
 
-	@Transactional(propagation = Propagation.NOT_SUPPORTED)
 	public OutboxPublishResult publishRetryableFailedEvents(LocalDateTime now) {
 		List<OutboxPublishTarget> targets = outboxEventRepository.findRetryableFailedPublishTargets(
 			STOCK_RESTORE_EVENT_TYPE,
@@ -94,7 +90,6 @@ public class StockRestoreOutboxRelayService {
 		return toPublishResult(targets.size(), publishedCount, failedCount, skippedCount);
 	}
 
-	@Transactional(propagation = Propagation.NOT_SUPPORTED)
 	public int recoverStalePublishingEvents(LocalDateTime now) {
 		LocalDateTime staleThreshold = now.minusSeconds(stalePublishingSeconds);
 		List<Long> staleTargetIds = outboxEventRepository.findStalePublishingTargetIds(

@@ -1,4 +1,4 @@
-package com.commerce.auth.application.service;
+package com.commerce.auth.application.usecase;
 
 import static org.assertj.core.api.Assertions.assertThat;
 import static org.assertj.core.api.Assertions.assertThatThrownBy;
@@ -25,10 +25,10 @@ import com.commerce.support.TestcontainersSupport;
 @ActiveProfiles("test")
 @Tag("docker")
 @Import({PersistenceCleanupTestSupport.class, MemberPersistenceTestSupport.class})
-class AuthSignUpServiceIntegrationTest {
+class AuthSignUpUseCaseIntegrationTest {
 
 	@Autowired
-	private AuthSignUpService authSignUpService;
+	private AuthSignUpUseCase authSignUpUseCase;
 
 	@Autowired
 	private RefreshTokenStore refreshTokenStore;
@@ -61,7 +61,7 @@ class AuthSignUpServiceIntegrationTest {
 			.build();
 
 		// When
-		var result = authSignUpService.signUp(command);
+		var result = authSignUpUseCase.signUp(command);
 
 		// Then
 		assertThat(refreshTokenStore.get(result.getMember().getMemberId())).isPresent();
@@ -76,7 +76,7 @@ class AuthSignUpServiceIntegrationTest {
 			.password("password123")
 			.username("firstUser")
 			.build();
-		authSignUpService.signUp(firstCommand);
+		authSignUpUseCase.signUp(firstCommand);
 
 		AuthSignUpCommand secondCommand = AuthSignUpCommand.builder()
 			.email("duplicate@example.com")
@@ -85,7 +85,7 @@ class AuthSignUpServiceIntegrationTest {
 			.build();
 
 		// When / Then
-		assertThatThrownBy(() -> authSignUpService.signUp(secondCommand))
+		assertThatThrownBy(() -> authSignUpUseCase.signUp(secondCommand))
 			.isInstanceOf(MemberException.class);
 	}
 }

@@ -18,7 +18,7 @@ import com.commerce.auth.presentation.http.request.AuthSignUpRequest;
 import com.commerce.auth.presentation.http.request.AuthTokenReissueRequest;
 import com.commerce.auth.infrastructure.jwt.JwtProperties;
 import com.commerce.auth.application.service.AuthLoginService;
-import com.commerce.auth.application.service.AuthSignUpService;
+import com.commerce.auth.application.usecase.AuthSignUpUseCase;
 import com.commerce.auth.application.service.AuthTokenReissueService;
 import com.commerce.auth.application.command.AuthLoginCommand;
 import com.commerce.auth.application.command.AuthSignUpCommand;
@@ -38,7 +38,7 @@ import lombok.RequiredArgsConstructor;
 @RequestMapping("/auth")
 public class AuthController {
 
-	private final AuthSignUpService authSignUpService;
+	private final AuthSignUpUseCase authSignUpService;
 	private final AuthLoginService authLoginService;
 	private final AuthTokenReissueService authTokenReissueService;
 	private final JwtProperties jwtProperties;

@@ -1,4 +1,4 @@
-package com.commerce.order.application.service;
+package com.commerce.order.application.usecase;
 
 import static org.assertj.core.api.Assertions.assertThat;
 
@@ -41,10 +41,10 @@ import com.commerce.support.TestcontainersSupport;
 @Tag("docker")
 @Tag("concurrency")
 @Import({PersistenceCleanupTestSupport.class, MemberPersistenceTestSupport.class, ProductPersistenceTestSupport.class, StockPersistenceTestSupport.class, OrderPersistenceTestSupport.class})
-class OrderCreateServiceConcurrencyTest {
+class OrderCreateUseCaseConcurrencyTest {
 
 	@Autowired
-	private OrderCreateService orderCreateService;
+	private OrderCreateUseCase orderCreateUseCase;
 
 	@Autowired
 	private PersistenceCleanupTestSupport persistenceCleanup;
@@ -105,7 +105,7 @@ class OrderCreateServiceConcurrencyTest {
 				ready.countDown();
 				try {
 					start.await();
-					OrderCreateResult result = orderCreateService.createOrder(command);
+					OrderCreateResult result = orderCreateUseCase.createOrder(command);
 					successResult.compareAndSet(null, result);
 					successCount.incrementAndGet();
 				} catch (OrderException ex) {

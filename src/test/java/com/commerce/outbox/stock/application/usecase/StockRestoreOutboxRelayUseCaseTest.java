@@ -1,4 +1,4 @@
-package com.commerce.outbox.stock.application.service;
+package com.commerce.outbox.stock.application.usecase;
 
 import static org.assertj.core.api.Assertions.assertThat;
 import static org.mockito.ArgumentMatchers.any;
@@ -37,7 +37,7 @@ import com.commerce.outbox.stock.application.result.OutboxPublishResult;
 import com.commerce.outbox.stock.application.port.StockRestoreEventPublisher;
 
 @ExtendWith(MockitoExtension.class)
-class StockRestoreOutboxRelayServiceTest {
+class StockRestoreOutboxRelayUseCaseTest {
 
 	@Mock
 	private OutboxEventRepository outboxEventRepository;
@@ -46,14 +46,14 @@ class StockRestoreOutboxRelayServiceTest {
 	private StockRestoreEventPublisher eventPublisher;
 
 	@InjectMocks
-	private StockRestoreOutboxRelayService stockRestoreOutboxRelayService;
+	private StockRestoreOutboxRelayUseCase stockRestoreOutboxRelayUseCase;
 
 	@BeforeEach
 	void setUp() {
-		ReflectionTestUtils.setField(stockRestoreOutboxRelayService, "batchSize", 100);
-		ReflectionTestUtils.setField(stockRestoreOutboxRelayService, "retryBaseSeconds", 30L);
-		ReflectionTestUtils.setField(stockRestoreOutboxRelayService, "retryMaxSeconds", 3600L);
-		ReflectionTestUtils.setField(stockRestoreOutboxRelayService, "stalePublishingSeconds", 300L);
+		ReflectionTestUtils.setField(stockRestoreOutboxRelayUseCase, "batchSize", 100);
+		ReflectionTestUtils.setField(stockRestoreOutboxRelayUseCase, "retryBaseSeconds", 30L);
+		ReflectionTestUtils.setField(stockRestoreOutboxRelayUseCase, "retryMaxSeconds", 3600L);
+		ReflectionTestUtils.setField(stockRestoreOutboxRelayUseCase, "stalePublishingSeconds", 300L);
 	}
 
 	@AfterEach
@@ -93,7 +93,7 @@ class StockRestoreOutboxRelayServiceTest {
 			.publish(any());
 
 		// when
-		OutboxPublishResult result = stockRestoreOutboxRelayService.publishPendingEvents(now);
+		OutboxPublishResult result = stockRestoreOutboxRelayUseCase.publishPendingEvents(now);
 
 		// then
 		assertThat(result.getSelectedCount()).isEqualTo(3);
@@ -121,7 +121,7 @@ class StockRestoreOutboxRelayServiceTest {
 		)).willReturn(List.of());
 
 		// when
-		OutboxPublishResult result = stockRestoreOutboxRelayService.publishPendingEvents(now);
+		OutboxPublishResult result = stockRestoreOutboxRelayUseCase.publishPendingEvents(now);
 
 		// then
 		assertThat(result.getSelectedCount()).isZero();
@@ -154,7 +154,7 @@ class StockRestoreOutboxRelayServiceTest {
 		)).willThrow(new IllegalStateException("mark failed"));
 
 		// when
-		OutboxPublishResult result = stockRestoreOutboxRelayService.publishPendingEvents(now);
+		OutboxPublishResult result = stockRestoreOutboxRelayUseCase.publishPendingEvents(now);
 
 		// then
 		assertThat(result.getSelectedCount()).isEqualTo(1);
@@ -188,7 +188,7 @@ class StockRestoreOutboxRelayServiceTest {
 		)).willReturn(1);
 
 		// when
-		stockRestoreOutboxRelayService.publishPendingEvents(now);
+		stockRestoreOutboxRelayUseCase.publishPendingEvents(now);
 
 		// then
 		assertThat(errorCaptor.getValue()).hasSize(1000);
@@ -213,7 +213,7 @@ class StockRestoreOutboxRelayServiceTest {
 		given(outboxEventRepository.markSent(10L, OutboxEventType.STOCK_RESTORE_REQUESTED)).willReturn(0);
 
 		// when
-		OutboxPublishResult result = stockRestoreOutboxRelayService.publishRetryableFailedEvents(now);
+		OutboxPublishResult result = stockRestoreOutboxRelayUseCase.publishRetryableFailedEvents(now);
 
 		// then
 		assertThat(result.getSelectedCount()).isEqualTo(1);
@@ -247,7 +247,7 @@ class StockRestoreOutboxRelayServiceTest {
 		)).willReturn(1);
 
 		// when
-		OutboxPublishResult result = stockRestoreOutboxRelayService.publishRetryableFailedEvents(now);
+		OutboxPublishResult result = stockRestoreOutboxRelayUseCase.publishRetryableFailedEvents(now);
 
 		// then
 		assertThat(result.getSelectedCount()).isEqualTo(1);
@@ -283,7 +283,7 @@ class StockRestoreOutboxRelayServiceTest {
 		)).willReturn(2);
 
 		// when
-		int recoveredCount = stockRestoreOutboxRelayService.recoverStalePublishingEvents(now);
+		int recoveredCount = stockRestoreOutboxRelayUseCase.recoverStalePublishingEvents(now);
 
 		// then
 		assertThat(recoveredCount).isEqualTo(2);
@@ -301,7 +301,7 @@ class StockRestoreOutboxRelayServiceTest {
 		)).willReturn(List.of());
 
 		// when
-		int recoveredCount = stockRestoreOutboxRelayService.recoverStalePublishingEvents(now);
+		int recoveredCount = stockRestoreOutboxRelayUseCase.recoverStalePublishingEvents(now);
 
 		// then
 		assertThat(recoveredCount).isZero();
@@ -336,7 +336,7 @@ class StockRestoreOutboxRelayServiceTest {
 		}).when(eventPublisher).publish(any());
 
 		// when
-		stockRestoreOutboxRelayService.publishPendingEvents(now);
+		stockRestoreOutboxRelayUseCase.publishPendingEvents(now);
 
 		// then
 		assertThat(capturedTraceId.get()).isEqualTo(traceId);
@@ -368,7 +368,7 @@ class StockRestoreOutboxRelayServiceTest {
 		}).when(eventPublisher).publish(any());
 
 		// when
-		stockRestoreOutboxRelayService.publishPendingEvents(now);
+		stockRestoreOutboxRelayUseCase.publishPendingEvents(now);
 
 		// then
 		assertThat(capturedTraceId.get()).isEqualTo(existingTraceId);
@@ -398,7 +398,7 @@ class StockRestoreOutboxRelayServiceTest {
 		}).when(eventPublisher).publish(any());
 
 		// when
-		stockRestoreOutboxRelayService.publishPendingEvents(now);
+		stockRestoreOutboxRelayUseCase.publishPendingEvents(now);
 
 		// then
 		assertThat(capturedTraceId.get()).isEqualTo("pre-existing-trace");
@@ -427,7 +427,7 @@ class StockRestoreOutboxRelayServiceTest {
 		}).when(eventPublisher).publish(any());
 
 		// when
-		stockRestoreOutboxRelayService.publishPendingEvents(now);
+		stockRestoreOutboxRelayUseCase.publishPendingEvents(now);
 
 		// then
 		assertThat(capturedTraceId.get()).isNull();
@@ -457,7 +457,7 @@ class StockRestoreOutboxRelayServiceTest {
 		doThrow(new IllegalStateException("publish failed")).when(eventPublisher).publish(any());
 
 		// when
-		stockRestoreOutboxRelayService.publishPendingEvents(now);
+		stockRestoreOutboxRelayUseCase.publishPendingEvents(now);
 
 		// then
 		assertThat(LogContext.getTraceId()).isNull();

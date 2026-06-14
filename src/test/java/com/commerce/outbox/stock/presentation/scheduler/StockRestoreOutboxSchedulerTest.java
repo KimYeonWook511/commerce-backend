@@ -14,7 +14,7 @@ import org.mockito.InjectMocks;
 import org.mockito.Mock;
 import org.mockito.junit.jupiter.MockitoExtension;
 
-import com.commerce.outbox.stock.application.service.StockRestoreOutboxRelayService;
+import com.commerce.outbox.stock.application.usecase.StockRestoreOutboxRelayUseCase;
 import com.commerce.outbox.stock.application.result.OutboxPublishResult;
 
 import ch.qos.logback.classic.Level;
@@ -27,7 +27,7 @@ import org.slf4j.LoggerFactory;
 class StockRestoreOutboxSchedulerTest {
 
 	@Mock
-	private StockRestoreOutboxRelayService stockRestoreOutboxRelayService;
+	private StockRestoreOutboxRelayUseCase stockRestoreOutboxRelayService;
 
 	@InjectMocks
 	private StockRestoreOutboxScheduler stockRestoreOutboxScheduler;

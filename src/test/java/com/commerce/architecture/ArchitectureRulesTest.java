@@ -9,6 +9,7 @@ import org.junit.jupiter.api.BeforeAll;
 import org.junit.jupiter.api.DisplayName;
 import org.junit.jupiter.api.Test;
 
+import static com.tngtech.archunit.lang.syntax.ArchRuleDefinition.classes;
 import static com.tngtech.archunit.lang.syntax.ArchRuleDefinition.methods;
 import static com.tngtech.archunit.lang.syntax.ArchRuleDefinition.noClasses;
 import static com.tngtech.archunit.lang.syntax.ArchRuleDefinition.noMethods;
@@ -207,6 +208,29 @@ class ArchitectureRulesTest {
     // 7. 레이어 접근 — adapter 구현이 repository port 를 구현 (의존 방향 보존)
     //    (선택: LayeredArchitecture 로 전체 의존 방향을 한 번에 검증해도 됨)
     // ────────────────────────────────────────────────────────────
+
+    // ────────────────────────────────────────────────────────────
+    // 8. 명칭 규칙 — usecase/service 패키지 접미사 강제
+    //    근거: ADR-006 supersede, ADR-L1 (tx 여부로 역할 분류)
+    // ────────────────────────────────────────────────────────────
+
+    @Test
+    @DisplayName("usecase 패키지의 클래스명은 UseCase 접미사를 가진다 (ADR-006 supersede, ADR-L1)")
+    void usecaseClassesShouldEndWithUseCase() {
+        ArchRule rule = classes().that().resideInAPackage("..application.usecase..")
+                .and().areTopLevelClasses()
+                .should().haveSimpleNameEndingWith("UseCase");
+        check(rule);
+    }
+
+    @Test
+    @DisplayName("service 패키지의 클래스명은 Service 접미사를 가진다 (ADR-006 supersede, ADR-L1)")
+    void serviceClassesShouldEndWithService() {
+        ArchRule rule = classes().that().resideInAPackage("..application.service..")
+                .and().areTopLevelClasses()
+                .should().haveSimpleNameEndingWith("Service");
+        check(rule);
+    }
 
     @Test
     @DisplayName("Controller 는 충돌 예외를 직접 catch 하지 않는다 (GlobalExceptionHandler 위임)")

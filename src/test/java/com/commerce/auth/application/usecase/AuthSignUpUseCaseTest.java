@@ -1,4 +1,4 @@
-package com.commerce.auth.application.service;
+package com.commerce.auth.application.usecase;
 
 import static org.assertj.core.api.Assertions.assertThat;
 import static org.mockito.ArgumentMatchers.any;
@@ -18,13 +18,12 @@ import com.commerce.auth.application.command.AuthSignUpCommand;
 import com.commerce.auth.application.result.AuthSignUpResult;
 import com.commerce.auth.application.result.AuthTokenIssueResult;
 import com.commerce.auth.application.port.PasswordHasher;
-import com.commerce.auth.application.usecase.AuthTokenIssueUseCase;
 import com.commerce.member.application.service.MemberRegistrationService;
 import com.commerce.member.application.command.MemberRegistrationCommand;
 import com.commerce.member.domain.Member;
 
 @ExtendWith(MockitoExtension.class)
-class AuthSignUpServiceTest {
+class AuthSignUpUseCaseTest {
 
 	@Mock
 	private MemberRegistrationService memberRegistrationService;
@@ -36,7 +35,7 @@ class AuthSignUpServiceTest {
 	private PasswordHasher passwordHasher;
 
 	@InjectMocks
-	private AuthSignUpService authSignUpService;
+	private AuthSignUpUseCase authSignUpUseCase;
 
 	@DisplayName("회원가입 시 비밀번호를 해시하고 회원 등록 후 토큰을 반환한다")
 	@Test
@@ -56,7 +55,7 @@ class AuthSignUpServiceTest {
 		given(authTokenIssueService.issue(member)).willReturn(AuthTokenIssueResult.of("access-token", "refresh-token"));
 
 		// when
-		AuthSignUpResult result = authSignUpService.signUp(command);
+		AuthSignUpResult result = authSignUpUseCase.signUp(command);
 
 		// then
 		ArgumentCaptor<MemberRegistrationCommand> commandCaptor = ArgumentCaptor.forClass(MemberRegistrationCommand.class);

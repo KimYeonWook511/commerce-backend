@@ -22,8 +22,8 @@ import com.commerce.order.domain.OrderStatus;
 import com.commerce.order.domain.repository.OrderRepository;
 import com.commerce.order.domain.exception.OrderErrorCode;
 import com.commerce.order.domain.exception.OrderException;
-import com.commerce.outbox.application.usecase.OutboxService;
 import com.commerce.outbox.stock.application.command.StockRestoreOutboxCreateCommand;
+import com.commerce.outbox.stock.application.service.StockRestoreOutboxCreateService;
 
 @ExtendWith(MockitoExtension.class)
 class OrderExpirationServiceTest {
@@ -32,7 +32,7 @@ class OrderExpirationServiceTest {
 	private OrderRepository orderRepository;
 
 	@Mock
-	private OutboxService stockRestoreOutboxService;
+	private StockRestoreOutboxCreateService stockRestoreOutboxCreateService;
 
 	@InjectMocks
 	private OrderExpirationService orderExpirationService;
@@ -51,8 +51,8 @@ class OrderExpirationServiceTest {
 
 		// then
 		assertThat(order.getStatus()).isEqualTo(OrderStatus.CANCELED);
-		then(stockRestoreOutboxService).should()
-			.createStockRestoreOutboxEvent(org.mockito.ArgumentMatchers.argThat(command ->
+		then(stockRestoreOutboxCreateService).should()
+			.createOutboxEvent(org.mockito.ArgumentMatchers.argThat(command ->
 				command.getOrderId().equals(order.getId())
 					&& command.getItems().size() == 1
 					&& command.getItems().getFirst().getProductId().equals(1L)
@@ -90,8 +90,8 @@ class OrderExpirationServiceTest {
 			.isInstanceOf(OrderException.class)
 			.extracting("errorCode")
 			.isEqualTo(OrderErrorCode.ORDER_CANCEL_NOT_ALLOWED);
-		then(stockRestoreOutboxService).should(never())
-			.createStockRestoreOutboxEvent(org.mockito.ArgumentMatchers.any(StockRestoreOutboxCreateCommand.class));
+		then(stockRestoreOutboxCreateService).should(never())
+			.createOutboxEvent(org.mockito.ArgumentMatchers.any(StockRestoreOutboxCreateCommand.class));
 	}
 
 	private Order createOrderWithItem() {

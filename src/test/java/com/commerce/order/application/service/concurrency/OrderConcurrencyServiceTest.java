@@ -30,7 +30,7 @@ import org.springframework.test.context.bean.override.mockito.MockitoBean;
 
 import com.commerce.order.application.service.OrderCancelService;
 import com.commerce.order.application.service.OrderConcurrencyService;
-import com.commerce.order.application.service.OrderCreateService;
+import com.commerce.order.application.usecase.OrderCreateUseCase;
 import com.commerce.member.domain.Member;
 import com.commerce.order.application.port.OrderIdempotencyStore;
 import com.commerce.order.application.command.OrderCreateItem;
@@ -67,7 +67,7 @@ class OrderConcurrencyServiceTest {
 	private OrderConcurrencyService orderConcurrencyService;
 
 	@Autowired
-	private OrderCreateService orderCreateService;
+	private OrderCreateUseCase orderCreateService;
 
 	@Autowired
 	private OrderCancelService orderCancelService;

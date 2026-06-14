@@ -15,7 +15,7 @@ import com.commerce.common.ApiResponse;
 import com.commerce.common.exception.CommonErrorCode;
 import com.commerce.common.exception.CommonException;
 import com.commerce.order.application.service.OrderCancelService;
-import com.commerce.order.application.service.OrderCreateService;
+import com.commerce.order.application.usecase.OrderCreateUseCase;
 import com.commerce.order.application.command.OrderCreateCommand;
 import com.commerce.order.application.command.OrderCreateItem;
 import com.commerce.order.application.result.OrderCancelResult;
@@ -30,7 +30,7 @@ import lombok.RequiredArgsConstructor;
 @RequestMapping("/orders")
 public class OrderController {
 
-	private final OrderCreateService orderCreateService;
+	private final OrderCreateUseCase orderCreateService;
 	private final OrderCancelService orderCancelService;
 
 	@PostMapping

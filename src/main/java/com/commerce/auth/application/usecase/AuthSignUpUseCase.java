@@ -1,14 +1,11 @@
-package com.commerce.auth.application.service;
+package com.commerce.auth.application.usecase;
 
-import org.springframework.stereotype.Service;
-import org.springframework.transaction.annotation.Propagation;
-import org.springframework.transaction.annotation.Transactional;
+import org.springframework.stereotype.Component;
 
 import com.commerce.auth.application.command.AuthSignUpCommand;
 import com.commerce.auth.application.result.AuthSignUpResult;
 import com.commerce.auth.application.result.AuthTokenIssueResult;
 import com.commerce.auth.application.port.PasswordHasher;
-import com.commerce.auth.application.usecase.AuthTokenIssueUseCase;
 import com.commerce.member.application.service.MemberRegistrationService;
 import com.commerce.member.application.command.MemberRegistrationCommand;
 import com.commerce.member.domain.Member;
@@ -17,15 +14,14 @@ import lombok.RequiredArgsConstructor;
 import lombok.extern.slf4j.Slf4j;
 
 @Slf4j
-@Service
+@Component
 @RequiredArgsConstructor
-public class AuthSignUpService {
+public class AuthSignUpUseCase {
 
 	private final MemberRegistrationService memberRegistrationService;
 	private final AuthTokenIssueUseCase authTokenIssueService;
 	private final PasswordHasher passwordHasher;
 
-	@Transactional(propagation = Propagation.NOT_SUPPORTED)
 	public AuthSignUpResult signUp(AuthSignUpCommand command) {
 		Member member = memberRegistrationService.register(MemberRegistrationCommand.builder()
 			.email(command.getEmail())

@@ -20,7 +20,7 @@ import org.springframework.test.web.servlet.MockMvc;
 import org.springframework.test.util.ReflectionTestUtils;
 
 import com.commerce.auth.application.service.AuthLoginService;
-import com.commerce.auth.application.service.AuthSignUpService;
+import com.commerce.auth.application.usecase.AuthSignUpUseCase;
 import com.commerce.auth.application.service.AuthTokenReissueService;
 import com.commerce.auth.application.usecase.TokenAuthenticationUseCase;
 import com.commerce.auth.application.command.AuthLoginCommand;
@@ -39,7 +39,7 @@ class AuthControllerTest {
 	private MockMvc mockMvc;
 
 	@MockitoBean
-	private AuthSignUpService authSignUpService;
+	private AuthSignUpUseCase authSignUpService;
 
 	@MockitoBean
 	private AuthLoginService authLoginService;

@@ -1,4 +1,4 @@
-package com.commerce.order.application.service;
+package com.commerce.order.application.usecase;
 
 import static org.assertj.core.api.Assertions.assertThat;
 import static org.assertj.core.api.Assertions.assertThatThrownBy;
@@ -52,10 +52,10 @@ import com.commerce.support.TestcontainersSupport;
 @ActiveProfiles("test")
 @Tag("docker")
 @Import({PersistenceCleanupTestSupport.class, MemberPersistenceTestSupport.class, ProductPersistenceTestSupport.class, StockPersistenceTestSupport.class, OrderPersistenceTestSupport.class})
-class OrderCreateServiceIdempotencyTest {
+class OrderCreateUseCaseIdempotencyTest {
 
 	@Autowired
-	private OrderCreateService orderCreateService;
+	private OrderCreateUseCase orderCreateUseCase;
 
 	@MockitoSpyBean
 	private OrderIdempotencyStore orderIdempotencyStore;
@@ -103,8 +103,8 @@ class OrderCreateServiceIdempotencyTest {
 			.build();
 
 		// when
-		OrderCreateResult first = orderCreateService.createOrder(command);
-		OrderCreateResult second = orderCreateService.createOrder(command);
+		OrderCreateResult first = orderCreateUseCase.createOrder(command);
+		OrderCreateResult second = orderCreateUseCase.createOrder(command);
 
 		// then
 		assertThat(first.getOrderId()).isEqualTo(second.getOrderId());
@@ -129,13 +129,13 @@ class OrderCreateServiceIdempotencyTest {
 			.build();
 
 		// when
-		OrderCreateResult first = orderCreateService.createOrder(command);
+		OrderCreateResult first = orderCreateUseCase.createOrder(command);
 
 		// Redis TTL 만료 시뮬레이션: Redis 상태를 직접 제거한다
 		orderIdempotencyStore.clear(member.getId(), "ttl-expired-key");
 
 		// TTL 만료 후 동일 키로 재요청 → DB 사전 find 로 기존 주문 발견 → 기존 주문 반환
-		OrderCreateResult second = orderCreateService.createOrder(command);
+		OrderCreateResult second = orderCreateUseCase.createOrder(command);
 
 		// then
 		assertThat(first.getOrderId()).isEqualTo(second.getOrderId());
@@ -161,7 +161,7 @@ class OrderCreateServiceIdempotencyTest {
 			.build();
 
 		// when & then
-		assertThatThrownBy(() -> orderCreateService.createOrder(command))
+		assertThatThrownBy(() -> orderCreateUseCase.createOrder(command))
 			.isInstanceOf(OrderException.class)
 			.satisfies(ex -> assertThat(((OrderException)ex).getErrorCode())
 				.isEqualTo(OrderErrorCode.ORDER_IDEMPOTENCY_IN_PROGRESS));
@@ -190,11 +190,11 @@ class OrderCreateServiceIdempotencyTest {
 		// when
 		Future<OrderCreateResult> future1 = executor.submit(() -> {
 			barrier.await();
-			return orderCreateService.createOrder(command);
+			return orderCreateUseCase.createOrder(command);
 		});
 		Future<OrderCreateResult> future2 = executor.submit(() -> {
 			barrier.await();
-			return orderCreateService.createOrder(command);
+			return orderCreateUseCase.createOrder(command);
 		});
 
 		OrderCreateResult winnerResult = null;
@@ -252,7 +252,7 @@ class OrderCreateServiceIdempotencyTest {
 			.given(orderIdempotencyStore).reserve(anyLong(), anyString(), any(Duration.class));
 
 		// when
-		OrderCreateResult result = orderCreateService.createOrder(command);
+		OrderCreateResult result = orderCreateUseCase.createOrder(command);
 
 		// then
 		// fallback 경로로 DB unique 안전망을 거쳐 주문이 정상 생성되고 재고도 차감된다.
