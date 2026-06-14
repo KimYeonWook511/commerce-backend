@@ -1,4 +1,4 @@
-package com.commerce.payment.naverpay.infrastructure.client.response;
+package com.commerce.payment.naverpay.infrastructure.pg.client.response;
 
 import com.fasterxml.jackson.annotation.JsonIgnoreProperties;
 

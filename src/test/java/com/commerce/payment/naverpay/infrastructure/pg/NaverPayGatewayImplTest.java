@@ -1,4 +1,4 @@
-package com.commerce.payment.naverpay.infrastructure;
+package com.commerce.payment.naverpay.infrastructure.pg;
 
 import static org.assertj.core.api.Assertions.assertThat;
 import static org.assertj.core.api.Assertions.assertThatThrownBy;
@@ -23,12 +23,12 @@ import com.commerce.payment.naverpay.application.port.result.NaverPayCancelResul
 import com.commerce.payment.naverpay.application.port.result.NaverPayHistoryResult;
 import com.commerce.payment.naverpay.domain.exception.NaverPayErrorCode;
 import com.commerce.payment.naverpay.domain.exception.NaverPayException;
-import com.commerce.payment.naverpay.infrastructure.client.NaverPayClient;
-import com.commerce.payment.naverpay.infrastructure.client.request.NaverPayCancelRequest;
-import com.commerce.payment.naverpay.infrastructure.client.response.NaverPayResponse;
-import com.commerce.payment.naverpay.infrastructure.client.response.body.NaverPayApproveBody;
-import com.commerce.payment.naverpay.infrastructure.client.response.body.NaverPayCancelBody;
-import com.commerce.payment.naverpay.infrastructure.client.response.body.NaverPayHistoryBody;
+import com.commerce.payment.naverpay.infrastructure.pg.client.NaverPayClient;
+import com.commerce.payment.naverpay.infrastructure.pg.client.request.NaverPayCancelRequest;
+import com.commerce.payment.naverpay.infrastructure.pg.client.response.NaverPayResponse;
+import com.commerce.payment.naverpay.infrastructure.pg.client.response.body.NaverPayApproveBody;
+import com.commerce.payment.naverpay.infrastructure.pg.client.response.body.NaverPayCancelBody;
+import com.commerce.payment.naverpay.infrastructure.pg.client.response.body.NaverPayHistoryBody;
 
 import ch.qos.logback.classic.Level;
 import ch.qos.logback.classic.Logger;

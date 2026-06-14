@@ -1,4 +1,4 @@
-package com.commerce.payment.naverpay.infrastructure.code;
+package com.commerce.payment.naverpay.infrastructure.pg.code;
 
 public enum NaverPayApproveCode {
 	SUCCESS("Success", "성공"),

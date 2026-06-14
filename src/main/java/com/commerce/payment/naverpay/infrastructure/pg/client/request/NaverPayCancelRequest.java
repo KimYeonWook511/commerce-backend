@@ -1,4 +1,4 @@
-package com.commerce.payment.naverpay.infrastructure.client.request;
+package com.commerce.payment.naverpay.infrastructure.pg.client.request;
 
 import lombok.Builder;
 import lombok.Getter;

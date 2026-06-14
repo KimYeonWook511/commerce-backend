@@ -1,4 +1,4 @@
-package com.commerce.payment.naverpay.infrastructure;
+package com.commerce.payment.naverpay.infrastructure.pg;
 
 import static org.assertj.core.api.Assertions.assertThat;
 
