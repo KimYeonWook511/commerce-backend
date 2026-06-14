@@ -239,6 +239,7 @@ Task 문서만으로 부족한 공통 맥락이 있으면 루트 문서를 추�
   - 인증/권한 경계 변경
 - step의 작업 종류에 맞는 테스트를 Acceptance Criteria에 포함한다. `./gradlew test`(단위·슬라이스)가 기본이고, DB/Testcontainers 통합이면 `integrationTest`, Spring Batch면 `batchTest`, 동시성·락·race면 `concurrencyTest`를 추가한다. 통합/batch/concurrency가 필요한 step에서 `./gradlew test`만 적어 누락하지 않는다.
 - step의 `읽어야 할 파일`에 그 작업이 건드리는 영역의 루트 문서를 매핑대로 명시한다. try-catch/예외 → `/docs/exception-strategy.md`, 로그 → `/docs/logging-conventions.md`, 테스트 → `/docs/testing-conventions.md`, 설계 결정 → 관련 `/docs/adr.md` 등 step이 다루는 관심사를 보고 누락 없이 고른다.
+- 구현 지시에 ADR 번호를 포함하지 않는다. "ADR-XXX 근거를 달라", "@DisplayName에 ADR-L1을 단다" 같은 지시는 developer agent가 코드 주석·애너테이션에 ADR 번호를 박게 된다. ADR 번호는 PR description·commit message에서만 참조한다. 코드 주석이 필요하다면 "왜"를 직접 한 문장으로 서술하도록 지시한다.
 - shared domain 계약을 바꾸는 step은 사용처 탐색 커맨드를 `검증 절차`에 포함한다.
   - 예: `rg "Product.builder" src/main/java src/test/java`
 
