@@ -1,11 +1,9 @@
-package com.commerce.auth.application.service;
+package com.commerce.auth.application.usecase;
 
-import org.springframework.stereotype.Service;
-import org.springframework.transaction.annotation.Transactional;
+import org.springframework.stereotype.Component;
 
 import com.commerce.auth.application.dto.AuthTokenReissueCommand;
 import com.commerce.auth.application.port.RefreshTokenStore;
-import com.commerce.auth.application.usecase.AuthTokenIssueUseCase;
 import com.commerce.auth.application.port.TokenValidator;
 import com.commerce.auth.application.port.vo.ParsedTokenClaims;
 import com.commerce.auth.application.dto.AuthTokenIssueResult;
@@ -17,16 +15,15 @@ import com.commerce.member.domain.Member;
 
 import lombok.RequiredArgsConstructor;
 
-@Service
+@Component
 @RequiredArgsConstructor
-public class AuthTokenReissueService {
+public class AuthTokenReissueUseCase {
 
 	private final MemberQueryService memberQueryService;
 	private final AuthTokenIssueUseCase authTokenIssueUseCase;
 	private final TokenValidator tokenValidator;
 	private final RefreshTokenStore refreshTokenStore;
 
-	@Transactional(readOnly = true)
 	public AuthTokenReissueResult reissue(AuthTokenReissueCommand command) {
 		String refreshToken = command.getRefreshToken();
 		ParsedTokenClaims claims = tokenValidator.validateRefreshToken(refreshToken);

@@ -1,4 +1,4 @@
-package com.commerce.auth.application.service;
+package com.commerce.auth.application.usecase;
 
 import static org.assertj.core.api.Assertions.assertThat;
 import static org.assertj.core.api.Assertions.assertThatThrownBy;
@@ -23,12 +23,11 @@ import com.commerce.auth.application.dto.AuthLoginCommand;
 import com.commerce.auth.application.dto.AuthLoginResult;
 import com.commerce.auth.application.dto.AuthTokenIssueResult;
 import com.commerce.auth.application.port.PasswordHasher;
-import com.commerce.auth.application.usecase.AuthTokenIssueUseCase;
 import com.commerce.member.application.service.MemberQueryService;
 import com.commerce.member.domain.Member;
 
 @ExtendWith(MockitoExtension.class)
-class AuthLoginServiceTest {
+class AuthLoginUseCaseTest {
 
 	@Mock
 	private MemberQueryService memberQueryService;
@@ -40,7 +39,7 @@ class AuthLoginServiceTest {
 	private PasswordHasher passwordHasher;
 
 	@InjectMocks
-	private AuthLoginService authLoginService;
+	private AuthLoginUseCase authLoginUseCase;
 
 	@DisplayName("로그인 시 비밀번호가 일치하면 토큰을 반환한다")
 	@Test
@@ -59,7 +58,7 @@ class AuthLoginServiceTest {
 			.build();
 
 		// when
-		AuthLoginResult result = authLoginService.login(command);
+		AuthLoginResult result = authLoginUseCase.login(command);
 
 		// then
 		assertThat(result.getAccessToken()).isEqualTo("access-token");
@@ -79,7 +78,7 @@ class AuthLoginServiceTest {
 			.build();
 
 		// when & then
-		assertThatThrownBy(() -> authLoginService.login(command))
+		assertThatThrownBy(() -> authLoginUseCase.login(command))
 			.isInstanceOf(AuthException.class)
 			.satisfies(exception -> {
 				AuthException authException = (AuthException) exception;
@@ -104,7 +103,7 @@ class AuthLoginServiceTest {
 			.build();
 
 		// when & then
-		assertThatThrownBy(() -> authLoginService.login(command))
+		assertThatThrownBy(() -> authLoginUseCase.login(command))
 			.isInstanceOf(AuthException.class)
 			.satisfies(exception -> {
 				AuthException authException = (AuthException) exception;

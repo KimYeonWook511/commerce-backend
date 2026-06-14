@@ -17,9 +17,9 @@ import com.commerce.auth.presentation.http.request.AuthLoginRequest;
 import com.commerce.auth.presentation.http.request.AuthSignUpRequest;
 import com.commerce.auth.presentation.http.request.AuthTokenReissueRequest;
 import com.commerce.auth.infrastructure.jwt.JwtProperties;
-import com.commerce.auth.application.service.AuthLoginService;
+import com.commerce.auth.application.usecase.AuthLoginUseCase;
 import com.commerce.auth.application.usecase.AuthSignUpUseCase;
-import com.commerce.auth.application.service.AuthTokenReissueService;
+import com.commerce.auth.application.usecase.AuthTokenReissueUseCase;
 import com.commerce.auth.application.dto.AuthLoginCommand;
 import com.commerce.auth.application.dto.AuthSignUpCommand;
 import com.commerce.auth.application.dto.AuthTokenReissueCommand;
@@ -39,8 +39,8 @@ import lombok.RequiredArgsConstructor;
 public class AuthController {
 
 	private final AuthSignUpUseCase authSignUpUseCase;
-	private final AuthLoginService authLoginService;
-	private final AuthTokenReissueService authTokenReissueService;
+	private final AuthLoginUseCase authLoginUseCase;
+	private final AuthTokenReissueUseCase authTokenReissueUseCase;
 	private final JwtProperties jwtProperties;
 
 	@PostMapping("/signup")
@@ -66,7 +66,7 @@ public class AuthController {
 	public ResponseEntity<ApiResponse<AuthLoginResult>> login(
 		@Valid @RequestBody AuthLoginRequest request
 	) {
-		AuthLoginResult loginResult = authLoginService.login(
+		AuthLoginResult loginResult = authLoginUseCase.login(
 			AuthLoginCommand.builder()
 				.email(request.getEmail())
 				.password(request.getPassword())
@@ -86,7 +86,7 @@ public class AuthController {
 		@RequestBody(required = false) AuthTokenReissueRequest request
 	) {
 		String resolvedRefreshToken = resolveRefreshToken(refreshToken, request);
-		AuthTokenReissueResult reissueResult = authTokenReissueService.reissue(
+		AuthTokenReissueResult reissueResult = authTokenReissueUseCase.reissue(
 			AuthTokenReissueCommand.builder()
 				.refreshToken(resolvedRefreshToken)
 				.build()

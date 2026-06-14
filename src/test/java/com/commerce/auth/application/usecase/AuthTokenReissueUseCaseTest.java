@@ -1,4 +1,4 @@
-package com.commerce.auth.application.service;
+package com.commerce.auth.application.usecase;
 
 import static org.assertj.core.api.Assertions.assertThat;
 import static org.assertj.core.api.Assertions.assertThatThrownBy;
@@ -18,7 +18,6 @@ import org.springframework.test.util.ReflectionTestUtils;
 
 import com.commerce.auth.application.dto.AuthTokenReissueCommand;
 import com.commerce.auth.application.port.RefreshTokenStore;
-import com.commerce.auth.application.usecase.AuthTokenIssueUseCase;
 import com.commerce.auth.application.port.TokenValidator;
 import com.commerce.auth.application.port.vo.ParsedTokenClaims;
 import com.commerce.auth.application.dto.AuthTokenIssueResult;
@@ -30,7 +29,7 @@ import com.commerce.member.application.service.MemberQueryService;
 import com.commerce.member.domain.Member;
 
 @ExtendWith(MockitoExtension.class)
-class AuthTokenReissueServiceTest {
+class AuthTokenReissueUseCaseTest {
 
 	@Mock
 	private MemberQueryService memberQueryService;
@@ -45,7 +44,7 @@ class AuthTokenReissueServiceTest {
 	private RefreshTokenStore refreshTokenStore;
 
 	@InjectMocks
-	private AuthTokenReissueService authTokenReissueService;
+	private AuthTokenReissueUseCase authTokenReissueUseCase;
 
 	@DisplayName("리프레시 토큰이 유효하면 토큰을 재발급한다")
 	@Test
@@ -67,7 +66,7 @@ class AuthTokenReissueServiceTest {
 			.build();
 
 		// when
-		AuthTokenReissueResult result = authTokenReissueService.reissue(command);
+		AuthTokenReissueResult result = authTokenReissueUseCase.reissue(command);
 
 		// then
 		assertThat(result.getAccessToken()).isEqualTo("new-access-token");
@@ -89,7 +88,7 @@ class AuthTokenReissueServiceTest {
 			.build();
 
 		// when & then
-		assertThatThrownBy(() -> authTokenReissueService.reissue(command))
+		assertThatThrownBy(() -> authTokenReissueUseCase.reissue(command))
 			.isInstanceOf(AuthException.class)
 			.satisfies(exception -> {
 				AuthException authException = (AuthException) exception;
@@ -109,7 +108,7 @@ class AuthTokenReissueServiceTest {
 			.build();
 
 		// when & then
-		assertThatThrownBy(() -> authTokenReissueService.reissue(command))
+		assertThatThrownBy(() -> authTokenReissueUseCase.reissue(command))
 			.isInstanceOf(AuthException.class)
 			.satisfies(exception -> {
 				AuthException authException = (AuthException) exception;
@@ -130,7 +129,7 @@ class AuthTokenReissueServiceTest {
 			.build();
 
 		// when & then
-		assertThatThrownBy(() -> authTokenReissueService.reissue(command))
+		assertThatThrownBy(() -> authTokenReissueUseCase.reissue(command))
 			.isInstanceOf(AuthException.class)
 			.satisfies(exception -> {
 				AuthException authException = (AuthException) exception;
@@ -152,7 +151,7 @@ class AuthTokenReissueServiceTest {
 			.build();
 
 		// when & then
-		assertThatThrownBy(() -> authTokenReissueService.reissue(command))
+		assertThatThrownBy(() -> authTokenReissueUseCase.reissue(command))
 			.isInstanceOf(AuthException.class)
 			.satisfies(exception -> {
 				AuthException authException = (AuthException) exception;
@@ -175,7 +174,7 @@ class AuthTokenReissueServiceTest {
 			.build();
 
 		// when & then
-		assertThatThrownBy(() -> authTokenReissueService.reissue(command))
+		assertThatThrownBy(() -> authTokenReissueUseCase.reissue(command))
 			.isInstanceOf(AuthException.class)
 			.satisfies(exception -> {
 				AuthException authException = (AuthException) exception;
@@ -197,7 +196,7 @@ class AuthTokenReissueServiceTest {
 			.build();
 
 		// when & then
-		assertThatThrownBy(() -> authTokenReissueService.reissue(command))
+		assertThatThrownBy(() -> authTokenReissueUseCase.reissue(command))
 			.isInstanceOf(RefreshTokenStoreUnavailableException.class);
 	}
 
