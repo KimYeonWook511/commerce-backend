@@ -45,8 +45,8 @@ src/test/java/
         │   └── OrderTest.java                            ← 단위 테스트
         ├── application/
         │   ├── usecase/                                  ← orchestrator(흐름/정책) 테스트
-        │   │   ├── CreateOrderServiceTest.java           ← 단위 (흐름·정책)
-        │   │   └── CreateOrderServiceIntegrationTest.java ← 통합
+        │   │   ├── CreateOrderUseCaseTest.java            ← 단위 (흐름·정책)
+        │   │   └── CreateOrderUseCaseIntegrationTest.java ← 통합
         │   └── service/                                  ← tx 단위작업 테스트
         │       └── PaymentTransitionServiceTest.java     ← 단위
         ├── presentation/

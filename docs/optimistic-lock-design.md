@@ -190,8 +190,8 @@ skip("충돌이면 조용히 넘어감")은 보통 **그것을 쓰는 흐름 하
 
 ```java
 // application/usecase/ — 보상 orchestrator, tx 없음 (ADR-8: 외부 호출은 tx 밖, DB 쓰기만 짧은 tx)
-@Service
-class PaymentApprovalCompensationService {
+@Component
+class PaymentApprovalCompensationUseCase {
 
     private static final Set<PaymentErrorCode> SKIPPABLE = EnumSet.of(
         PAYMENT_CONCURRENTLY_MODIFIED,          // 버전 충돌 = 누가 이미 전이시킴
@@ -235,8 +235,8 @@ retry의 배치 기준은 skip과 **동일**하다 — 쓰는 곳이 하나면 p
 **한 곳에서만 쓰면 → private 메서드** (예: Stock 차감에서만 재시도)
 
 ```java
-@Service
-class StockDecreaseService {   // application/usecase/
+@Component
+class StockDecreaseUseCase {   // application/usecase/
     private final StockService txService;   // application/service/ — 별도 빈 (프록시 위해 필수)
 
     public void decrease(Long id, int qty) { decreaseWithRetry(id, qty, 3); }
@@ -403,7 +403,7 @@ T1: saveUsed → version=5로 UPDATE 시도 → 충돌
 ```java
 // ✗ usecase에 @Transactional — 하면 안 됨
 @Component
-class NaverPayApprovalService {   // application/usecase/
+class NaverPayApprovalUseCase {   // application/usecase/
     @Transactional                  // ← usecase가 tx를 열게 됨
     public void approve(...) {
         pgGateway.approve(...);     // ← 외부 호출이 tx 안으로 빨려들어감 (ADR-8 위반!)

@@ -172,7 +172,7 @@ catch 안에서 호출하는 skip 로직은 가급적 예외를 던지지 않게
 
 > 아래는 원칙이 적용된 *예시*다(완전한 목록 아님). 클래스·메서드명은 코드가 단일 출처이므로 예시가 낡아도 원칙 자체는 유지된다.
 
-- **상위 catch는 진입 즉시 1차를 ERROR로 남긴다** — 예: `NaverPayApprovalService.completeVerifiedApproval`의 상위 catch(`PaymentException`/`CustomException`/`Exception`)가 진입 직후 1차 예외를 `log.error`로 보존한다.
+- **상위 catch는 진입 즉시 1차를 ERROR로 남긴다** — 예: `NaverPayApprovalUseCase.completeVerifiedApproval`의 상위 catch(`PaymentException`/`CustomException`/`Exception`)가 진입 직후 1차 예외를 `log.error`로 보존한다.
 - **보상 catch 안 skip은 예외를 안 던지고 흐름을 멈추지 않는다** — 예: 보상 흐름에서 "현재 상태가 REQUESTED면 실패 처리, 아니면 skip"을 캡슐화해(현재는 `failIfRequested`, 향후 흐름 Service의 private 메서드로) 호출처가 try-catch 없이 평탄하게 진행한다. approve payment가 race window에서 이미 SUCCEEDED가 됐어도 PG cancel은 멈추지 않고 mark만 skip된다.
 - **사실 조회와 정책 적용을 분리한다** — 예: "완료된 Payment row 존재 여부"라는 *사실*은 Payment 도메인 소유자에 박아 두고(`hasCompletedPayment`), 보상 service는 그 사실을 받아 *정책*(`if (hasCompletedPayment) skip`)만 적용한다. 이는 낙관 락 충돌에서 "상태가 필요하면 예외가 아니라 재조회로 판정한다"(design 문서 5장)와 같은 사상 — *충돌·사실은 예외로 드러내되, 그걸 어떻게 쓸지는 호출한 쪽의 정책*. 도메인 정의 변경 시 영향 범위가 한 곳에 갇히고, NaverPay adapter가 Payment 저장소에 직접 접근하지 않는 의도도 유지된다.
 - **find-first의 예외적 허용 — 충돌 자체가 보상 신호일 때**: `uk_payment_approved_order_key` UNIQUE 위반(`DataIntegrityViolationException`)은 find-first의 예외 케이스다. `approved_order_key`는 APPROVE+SUCCEEDED 전이 시 단 한 번 set 되는 NULL 트릭 컬럼이라 사전 `find`로 레이스를 흡수하기 어렵고, 위반 발생 자체가 *이미 다른 결제가 성공했다*는 신호이므로 즉시 PG cancel 보상이 필요하다 → catch하여 보상(`compensateDuplicateApproval`)을 실행하고 원 예외를 전파한다.
@@ -211,7 +211,7 @@ PG 호출 결과가 확인되지 않아 결제 상태가 불명확한 경우의 
 
 ### 해소 정책
 
-- UNKNOWN 해소 (단건 대사, 배치 대사) 는 후속 task 의 `PaymentReconciliationService` 신설로 처리한다
+- UNKNOWN 해소 (단건 대사, 배치 대사) 는 후속 task 의 `PaymentReconciliationUseCase` 신설로 처리한다
 - 이번 task 는 마킹 + 차단까지만 포함한다. 해소 없이도 시스템은 안전하다 (사용자 안내 + 재시도 차단으로 추가 사고 없음)
 
 ---
