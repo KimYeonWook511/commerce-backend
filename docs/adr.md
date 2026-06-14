@@ -47,6 +47,7 @@ task adr(`docs/tasks/<task>/adr.md`)의 역할은 harness 도입을 기점으로
 | payment-escalation | [`docs/tasks/payment-escalation/adr.md`](tasks/payment-escalation/adr.md) | 6시간 초과 미확정 APPROVE escalation 통지·종착을 새 상태 대신 `escalatedAt` 직교 필드로 표현, 조건부 UPDATE 영향 행 수로 중복 통지 차단, order==null 정합성 오류 통지 (ADR-049, ADR-039/044/047 연계) |
 | payment-optimistic-lock | [`docs/tasks/payment-optimistic-lock/adr.md`](tasks/payment-optimistic-lock/adr.md) | `Payment`에 `@Version` 낙관 락 도입(같은 행 동시 전이 lost update 차단), 충돌 처리는 transition tx 안 전파 + useCase tx 밖 skip + adapter `saveChecked` 도메인 예외 변환, escalation 멱등을 조건부 UPDATE에서 `@Version`+`escalate()` 도메인 메서드로 환원 (ADR-050~052, ADR-049 멱등 메커니즘 supersede) |
 | structure-migration | [`docs/tasks/structure-migration/adr.md`](tasks/structure-migration/adr.md) | 전 도메인 헥사고날 목표 패키지 재배치(순수 이동·동작 불변, 리네임 없음), ArchUnit freeze→strict 전환·임시 산출물 제거, Spring Batch fault-tolerance의 DAO 예외 참조를 `GlobalExceptionHandler`처럼 규칙 예외처로 인정 (ADR-053) |
+| application-layer-relocate | [`docs/tasks/application-layer-relocate/adr.md`](tasks/application-layer-relocate/adr.md) | application 계층 역할별 접미사 이원화(usecase=`…UseCase`/`@Component`, service=`…Service`/`@Service`, ADR-006 supersede→ADR-054), class-level `@Transactional` 전 도메인 폐지(ADR-055) |
 
 향후 task 추가 시 본 표에 한 줄을 갱신한다. task adr 위치는 모두 `docs/tasks/<task>/adr.md`로 고정한다.
 
@@ -94,7 +95,7 @@ task adr(`docs/tasks/<task>/adr.md`)의 역할은 harness 도입을 기점으로
 - **주의사항**: AFTER_COMMIT 시점은 트랜잭션이 이미 종료된 이후다. 핸들러 안에서 추가 DB 작업이 필요하다면 `Propagation.REQUIRES_NEW`로 새 트랜잭션을 열어야 한다. Redis만 다루는 경우라면 불필요하다.
 - **주문 멱등성 캐시는 본 정책 적용 대상에서 제외** (`order-idempotency-cache-simplification` 결정). `OrderCreateService` 가 `NOT_SUPPORTED` 라 `try-finally` 직접 호출이 자동으로 commit 이후 실행됨. listener 우회 불필요.
 
-### ADR-006: application 계층 클래스명은 Service suffix를 사용한다
+### ADR-006: application 계층 클래스명은 Service suffix를 사용한다 *(superseded: ADR-054)*
 - **결정**: 유스케이스 단일 책임 구조를 유지하되, 클래스 suffix는 `UseCase` 대신 `Service`로 명명한다.
 - **이유**: Spring 기반 프로젝트 관습과의 일관성을 유지하고, 기존 코드베이스의 네이밍과 통일한다. 구조적으로는 UseCase 패턴과 동일하다 (`CreateOrderService` = `CreateOrderUseCase`).
 - **트레이드오프**: DDD 순수론 관점에서 `UseCase`가 더 명확한 의도를 드러내나, 현재는 친숙한 네이밍을 우선한다.
@@ -557,3 +558,21 @@ task adr(`docs/tasks/<task>/adr.md`)의 역할은 harness 도입을 기점으로
 - **이유**: `GlobalExceptionHandler`(HTTP 매핑)와 `OrderExpirationBatchConfig`(batch fault-tolerance)는 둘 다 DAO 예외를 비즈니스 분기로 catch하는 곳이 아니라 **프레임워크 경계에 예외 타입을 선언적으로 넘기는 곳**이다. 같은 부류라 같은 방식(규칙 예외처)으로 다룬다. 임시방편이 아니라 영구 예외처이며, batch fault-tolerance를 도메인 예외로 바꾸는 후속 작업은 불필요하다(런타임 흐름과 무관).
 - **트레이드오프**: 예외처를 한 클래스로 좁게 잡아 batch listener 등 다른 곳의 DAO 예외 누수는 규칙이 계속 차단한다.
 - **연계**: structure-migration task adr(ADR-L1), ADR-011/034(DAO 예외 격리), #247.
+
+### ADR-054: application 계층은 역할별 접미사·빈 애너테이션으로 흐름과 tx 단위작업을 가른다 (ADR-006 supersede)
+
+- **결정**: application 계층 클래스의 접미사·패키지·빈 애너테이션을 역할에 맞춰 이원화한다.
+  - `usecase/` (흐름 조립·정책 선택, tx 없음) → 클래스명 `…UseCase`, 빈 등록 `@Component`
+  - `service/` (tx 단위작업) → 클래스명 `…Service`, 빈 등록 `@Service`
+- **분류 기준**: `@Transactional` 애너테이션 유무가 아니라 **실제 tx를 여는가**로 판단한다. `Propagation.NOT_SUPPORTED`는 tx를 열지 않으므로, NOT_SUPPORTED 메서드만 가진 orchestrator는 `usecase/`로 분류하고 애너테이션을 제거한다. tx를 실제로 여는 메서드(REQUIRED 등)를 하나라도 가지면 `service/`로 둔다(혼합 클래스 포함).
+- **이유**: ADR-006은 Spring 관습 일관성을 위해 `…Service` 단일 접미사를 택했으나, structure-migration으로 `usecase/`·`service/` 패키지가 물리 분리되면서 패키지(역할)와 클래스명이 어긋났다. 접미사·빈 애너테이션을 역할과 일치시키면 패키지 경로가 안 보이는 곳(import·스택 트레이스·로그)에서도 역할이 드러난다.
+- **트레이드오프**: 기존 코드의 클래스명·빈 애너테이션 일괄 변경. 동작은 불변(이동·리네임). `@Service`만 쓰던 관습과 달라진다.
+- **supersedes**: ADR-006.
+- **연계**: ADR-053(structure-migration, usecase/service 패키지 물리 분리), #248.
+
+### ADR-055: application class-level @Transactional을 전 도메인에서 폐지한다 (ADR-021 적용 범위 확장)
+
+- **결정**: ADR-021("응용 Service의 `@Transactional`은 method-level에만 부착")의 적용 범위를 기존 도메인(Order/Stock/Auth/Member/Product/Payment) 전체로 확장한다. class-level `@Transactional(readOnly = true)` + method override 패턴을 제거하고, 조회 메서드도 `@Transactional(readOnly = true)`를 메서드마다 명시한다. ArchUnit으로 application 패키지의 class-level `@Transactional`을 금지한다.
+- **이유**: ADR-021의 근거(메서드별 tx 정책이 코드 표면에 명시됨, 누락이 silent readOnly가 아니라 "tx 없음"으로 즉시 드러남)는 신설 Service뿐 아니라 기존 도메인에도 동일하게 유효하다. ADR-021이 "기존 도메인 마이그레이션은 후속 트랙으로 분리"라고 예고한 그 후속 트랙이다.
+- **트레이드오프**: 메서드 수만큼 애너테이션이 반복된다(ADR-021 트레이드오프와 동일). 의도 명세 역할이라 가독성 손실이 아니다.
+- **연계**: ADR-021, ADR-008, #248.
