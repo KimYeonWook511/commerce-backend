@@ -90,7 +90,7 @@ public class NaverPayGatewayImpl implements NaverPayGateway {
 		} catch (NaverPayException ex) {
 			if (isResultUnknown(ex.getErrorCode())) {
 				// 네트워크/서버 오류/응답 해석 불가: 이력조회로 승인 결과를 확정하지 못함 → UNKNOWN.
-				// FAILED 로 두면 UNKNOWN 흔적이 안 남아 "결제됐는데 미결제 박제" 가 된다 (ADR-027, #219).
+				// FAILED 로 두면 UNKNOWN 흔적이 안 남아 "결제됐는데 미결제 박제" 가 된다 (#219).
 				log.warn("네이버페이 이력조회 결과 불명 pgPaymentId={} errorCode={} message={}",
 					pgPaymentId, ex.getErrorCode(), ex.getMessage());
 				return NaverPayHistoryResult.unknown("이력조회 결과 불명: " + ex.getMessage());
@@ -108,7 +108,7 @@ public class NaverPayGatewayImpl implements NaverPayGateway {
 		log.info("네이버페이 이력조회 응답 pgPaymentId={} code={}", pgPaymentId, response.getCode());
 
 		// 우리 객체(파싱된 응답)를 다루는 영역은 명시적 null 체크로 처리하고, 그 외 예상 못 한 NPE 는
-		// catch 하지 않고 전파해 안전망(500)에 위임한다 (ADR-027, #218 일관화).
+		// catch 하지 않고 전파해 안전망(500)에 위임한다 (#218 일관화).
 		NaverPayHistoryBody body = response.getBody();
 		List<NaverPayHistoryBody.History> historyList = (body == null) ? null : body.getList();
 		if (historyList == null) {
@@ -130,7 +130,7 @@ public class NaverPayGatewayImpl implements NaverPayGateway {
 		if (history.isCompletedApproval()) {
 			if (history.getMerchantPayKey() == null) {
 				// 승인 이력이나 merchantPayKey 누락 = 외부 응답 이상(해석 불가) → 결과 불명. 재시도 차단을 위해 UNKNOWN 보존.
-				// approve 직접 경로의 detail/merchantPayKey 누락 처리와 일관 (ADR-027). 값이 존재하나 다른 경우는
+				// approve 직접 경로의 detail/merchantPayKey 누락 처리와 일관. 값이 존재하나 다른 경우는
 				// 호출처(processAlreadyComplete)에서 진짜 키 불일치(FAILED)로 가른다.
 				log.warn("네이버페이 이력조회 승인 이력 merchantPayKey 누락 pgPaymentId={}", pgPaymentId);
 				return NaverPayHistoryResult.unknown("이력조회 응답 해석 불가: 승인 이력 merchantPayKey 누락");

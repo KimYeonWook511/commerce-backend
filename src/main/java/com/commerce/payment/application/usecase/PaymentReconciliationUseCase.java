@@ -46,7 +46,7 @@ public class PaymentReconciliationUseCase {
 	// REQUESTED 진입 지연(REQUESTED_STALE_DELAY = 15분). 15분 미만 REQUESTED는 스캔 후보에서 제외해 starvation을 막는다. 정책과 단일 출처 공유.
 	private static final long REQUESTED_STALE_CUTOFF_MINUTES = PaymentPostProcessTargetPolicy.REQUESTED_STALE_DELAY.toMinutes();
 
-	// 자동 대사 스캔 상한(ESCALATION_DELAY = 6시간). 6시간 초과는 스캔에서 제외해 무한 재시도를 방지한다 (ADR-L8). 정책과 단일 출처 공유.
+	// 자동 대사 스캔 상한(ESCALATION_DELAY = 6시간). 6시간 초과는 스캔에서 제외해 무한 재시도를 방지한다. 정책과 단일 출처 공유.
 	private static final long ESCALATION_DELAY_HOURS = PaymentPostProcessTargetPolicy.ESCALATION_DELAY.toHours();
 
 	private final PaymentRepository paymentRepository;
@@ -60,7 +60,7 @@ public class PaymentReconciliationUseCase {
 	private final NotificationPort notificationPort;
 
 	/**
-	 * stale APPROVE UNKNOWN/REQUESTED 결제를 PG 조회로 확정한다 (ADR-L1).
+	 * stale APPROVE UNKNOWN/REQUESTED 결제를 PG 조회로 확정한다.
 	 * PG 조회(외부 호출)는 트랜잭션 경계 밖에서 수행하고, 상태 확정은 건별 단건 트랜잭션으로 처리한다.
 	 */
 	public void reconcile() {
@@ -109,7 +109,7 @@ public class PaymentReconciliationUseCase {
 
 		log.info("escalation 처리 시작 candidates={} escalationCutoff={}", candidates.size(), escalationCutoff);
 
-		// useCase(트랜잭션 없음): escalate transition은 별도 빈(public @Transactional)이라 충돌 시 그 트랜잭션만 rollback된다 (ADR-L2/L3).
+		// useCase(트랜잭션 없음): escalate transition은 별도 빈(public @Transactional)이라 충돌 시 그 트랜잭션만 rollback된다.
 		for (Payment payment : candidates) {
 			try {
 				if (escalateSkippable(payment, now)) {
@@ -168,7 +168,7 @@ public class PaymentReconciliationUseCase {
 		return switch (target) {
 			case APPROVE_RECONCILE -> processApproveReconcile(payment, now);
 			case MANUAL_REVIEW -> {
-				// escalation(6시간 초과)은 step 2 스캔 윈도우 상한으로 처리. 상태 변경 없이 로그만 남긴다 (ADR-L5, 후속 #238).
+				// escalation(6시간 초과)은 step 2 스캔 윈도우 상한으로 처리. 상태 변경 없이 로그만 남긴다 (후속 #238).
 				log.warn("대사 escalation 임계 초과 - 상태 변경 없이 건너뜀 paymentId={} orderId={} merchantPayKey={}",
 					payment.getId(), payment.getOrderId(), payment.getMerchantPayKey());
 				yield PaymentReconcileOutcome.SKIPPED;
@@ -182,7 +182,7 @@ public class PaymentReconciliationUseCase {
 	}
 
 	private PaymentReconcileOutcome processApproveReconcile(Payment payment, LocalDateTime now) {
-		// PG 조회: 트랜잭션 경계 밖에서 수행 (ADR-L1)
+		// PG 조회: 트랜잭션 경계 밖에서 수행
 		NaverPayHistoryResult historyResult = naverPayGateway.getApprovalHistory(payment.getPgPaymentId());
 		PaymentVerificationStatus verificationStatus = toVerificationStatus(historyResult);
 		PaymentPostProcessFlow flow = flowPolicy.resolveFlow(PaymentPostProcessTarget.APPROVE_RECONCILE, verificationStatus);
@@ -244,7 +244,7 @@ public class PaymentReconciliationUseCase {
 		}
 	}
 
-	// succeedApproval이 ORDER_PAID_NOT_ALLOWED로 거부된 경우: 주문 상태를 재조회해 분기한다 (ADR-L4, ADR-L9).
+	// succeedApproval이 ORDER_PAID_NOT_ALLOWED로 거부된 경우: 주문 상태를 재조회해 분기한다.
 	// 어떤 경로든 종착 상태(SUCCEEDED/FAILED)로 전이해 다음 주기에 재스캔되지 않도록 한다.
 	private PaymentReconcileOutcome handleOrderNotCompletable(Payment payment, LocalDateTime now) {
 		Order order = orderRepository.findById(payment.getOrderId()).orElse(null);
@@ -262,7 +262,7 @@ public class PaymentReconciliationUseCase {
 		}
 
 		if (order.getStatus() == OrderStatus.CANCELED) {
-			// C: CANCELED 주문 — 보상 취소(환불) + 통지 (ADR-L4)
+			// C: CANCELED 주문 — 보상 취소(환불) + 통지
 			paymentApprovalCompensationUseCase.compensateCanceledOrderApproval(payment, this::pgCancelForReconciliation);
 			// 정상 복구 동작(예외 아님)이므로 운영 주목 수준 WARN (모니터링 false-positive 방지)
 			log.warn("대사 보상 취소 실행 paymentId={} orderId={} merchantPayKey={}",
@@ -271,7 +271,7 @@ public class PaymentReconciliationUseCase {
 		}
 
 		if (order.getStatus() == OrderStatus.PAID) {
-			// PAID: 이 결제가 성공 주체인지 vs 중복 결제인지 판별한다 (ADR-L9).
+			// PAID: 이 결제가 성공 주체인지 vs 중복 결제인지 판별한다.
 			boolean hasDuplicateSucceeded = paymentRepository.existsApprovedByOrderId(payment.getOrderId());
 			if (hasDuplicateSucceeded) {
 				// 다른 SUCCEEDED APPROVE가 이미 있음 — 이 건은 중복 결제, 보상(환불)한다.
