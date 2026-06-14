@@ -14,7 +14,6 @@ import com.commerce.order.domain.exception.OrderException;
 import com.commerce.payment.application.port.NotificationPort;
 import com.commerce.payment.application.service.PaymentApprovalRecordService;
 import com.commerce.payment.application.service.PaymentApprovalService;
-import com.commerce.payment.application.usecase.PaymentApprovalCompensationService;
 import com.commerce.payment.application.port.result.CancelOutcome;
 import com.commerce.payment.domain.Payment;
 import com.commerce.payment.domain.PaymentFailCode;
