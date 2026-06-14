@@ -30,7 +30,7 @@ import lombok.RequiredArgsConstructor;
 @RequestMapping("/orders")
 public class OrderController {
 
-	private final OrderCreateUseCase orderCreateService;
+	private final OrderCreateUseCase orderCreateUseCase;
 	private final OrderCancelService orderCancelService;
 
 	@PostMapping
@@ -54,7 +54,7 @@ public class OrderController {
 					.build())
 				.toList())
 			.build();
-		OrderCreateResult result = orderCreateService.createOrder(command);
+		OrderCreateResult result = orderCreateUseCase.createOrder(command);
 
 		return ResponseEntity.status(HttpStatus.CREATED).body(ApiResponse.of(result));
 	}

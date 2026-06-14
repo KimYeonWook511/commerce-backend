@@ -19,7 +19,7 @@ import lombok.extern.slf4j.Slf4j;
 public class AuthSignUpUseCase {
 
 	private final MemberRegistrationService memberRegistrationService;
-	private final AuthTokenIssueUseCase authTokenIssueService;
+	private final AuthTokenIssueUseCase authTokenIssueUseCase;
 	private final PasswordHasher passwordHasher;
 
 	public AuthSignUpResult signUp(AuthSignUpCommand command) {
@@ -29,7 +29,7 @@ public class AuthSignUpUseCase {
 			.username(command.getUsername())
 			.build());
 
-		AuthTokenIssueResult tokenIssueResult = authTokenIssueService.issue(member);
+		AuthTokenIssueResult tokenIssueResult = authTokenIssueUseCase.issue(member);
 
 		log.info("회원 가입 성공 memberId={}", member.getId());
 		return AuthSignUpResult.from(

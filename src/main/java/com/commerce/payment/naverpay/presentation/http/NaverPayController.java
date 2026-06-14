@@ -23,7 +23,7 @@ import lombok.RequiredArgsConstructor;
 @RequestMapping("/payments/naverpay")
 public class NaverPayController {
 
-	private final NaverPayApprovalUseCase naverPayApprovalService;
+	private final NaverPayApprovalUseCase naverPayApprovalUseCase;
 
 	@GetMapping("/return")
 	public void returnFromNaverPay(
@@ -40,7 +40,7 @@ public class NaverPayController {
 		@AuthenticatedMemberId Long memberId,
 		@Valid @RequestBody NaverPayApproveRequest request
 	) {
-		NaverPayApproveResponse response = naverPayApprovalService.approve(
+		NaverPayApproveResponse response = naverPayApprovalUseCase.approve(
 			memberId, request.getMerchantPayKey(), request.getPaymentId());
 		return ResponseEntity.status(HttpStatus.OK).body(ApiResponse.of(response));
 	}

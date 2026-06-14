@@ -22,7 +22,7 @@ import lombok.extern.slf4j.Slf4j;
 public class AuthLoginService {
 
 	private final MemberQueryService memberQueryService;
-	private final AuthTokenIssueUseCase authTokenIssueService;
+	private final AuthTokenIssueUseCase authTokenIssueUseCase;
 	private final PasswordHasher passwordHasher;
 
 	@Transactional(readOnly = true)
@@ -34,7 +34,7 @@ public class AuthLoginService {
 			throw new AuthException(AuthErrorCode.INVALID_CREDENTIALS);
 		}
 
-		AuthTokenIssueResult tokenIssueResult = authTokenIssueService.issue(member);
+		AuthTokenIssueResult tokenIssueResult = authTokenIssueUseCase.issue(member);
 
 		log.info("로그인 성공 memberId={}", member.getId());
 		return AuthLoginResult.from(

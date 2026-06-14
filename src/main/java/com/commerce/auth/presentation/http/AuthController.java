@@ -38,7 +38,7 @@ import lombok.RequiredArgsConstructor;
 @RequestMapping("/auth")
 public class AuthController {
 
-	private final AuthSignUpUseCase authSignUpService;
+	private final AuthSignUpUseCase authSignUpUseCase;
 	private final AuthLoginService authLoginService;
 	private final AuthTokenReissueService authTokenReissueService;
 	private final JwtProperties jwtProperties;
@@ -47,7 +47,7 @@ public class AuthController {
 	public ResponseEntity<ApiResponse<AuthSignUpResult>> signUp(
 		@Valid @RequestBody AuthSignUpRequest request
 	) {
-		AuthSignUpResult signUpResult = authSignUpService.signUp(
+		AuthSignUpResult signUpResult = authSignUpUseCase.signUp(
 			AuthSignUpCommand.builder()
 				.email(request.getEmail())
 				.password(request.getPassword())

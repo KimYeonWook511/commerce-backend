@@ -15,10 +15,10 @@ import lombok.extern.slf4j.Slf4j;
 @RequiredArgsConstructor
 public class PaymentReconciliationScheduler {
 
-	private final PaymentReconciliationUseCase paymentReconciliationService;
+	private final PaymentReconciliationUseCase paymentReconciliationUseCase;
 
 	@Scheduled(cron = "${payment.reconciliation.cron:0 */1 * * * *}")
 	public void run() {
-		paymentReconciliationService.reconcile();
+		paymentReconciliationUseCase.reconcile();
 	}
 }

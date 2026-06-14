@@ -35,7 +35,7 @@ public class JwtAuthenticationFilter extends OncePerRequestFilter {
 		"/payments/naverpay/return"
 	);
 
-	private final TokenAuthenticationUseCase tokenAuthenticationService;
+	private final TokenAuthenticationUseCase tokenAuthenticationUseCase;
 	private final ObjectMapper objectMapper;
 
 	@Override
@@ -61,7 +61,7 @@ public class JwtAuthenticationFilter extends OncePerRequestFilter {
 
 		// 토큰 처리
 		try {
-			TokenAuthenticationResult principal = tokenAuthenticationService.authenticateAccessToken(token);
+			TokenAuthenticationResult principal = tokenAuthenticationUseCase.authenticateAccessToken(token);
 
 			// memberId, role Context에 저장
 			Long memberId = principal.getMemberId();

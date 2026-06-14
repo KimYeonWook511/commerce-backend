@@ -30,9 +30,9 @@ import lombok.RequiredArgsConstructor;
 @RequestMapping("/cart")
 public class CartController {
 
-	private final AddCartItemUseCase addCartItemService;
+	private final AddCartItemUseCase addCartItemUseCase;
 	private final GetMyCartService getMyCartService;
-	private final UpdateCartItemQuantityUseCase updateCartItemQuantityService;
+	private final UpdateCartItemQuantityUseCase updateCartItemQuantityUseCase;
 	private final RemoveCartItemService removeCartItemService;
 
 	@PostMapping("/items")
@@ -40,7 +40,7 @@ public class CartController {
 		@AuthenticatedMemberId Long memberId,
 		@Valid @RequestBody CartItemAddRequest request
 	) {
-		CartItemSummaryResult result = addCartItemService.add(memberId, request);
+		CartItemSummaryResult result = addCartItemUseCase.add(memberId, request);
 		return ResponseEntity.status(HttpStatus.CREATED).body(ApiResponse.of(result));
 	}
 
@@ -58,7 +58,7 @@ public class CartController {
 		@PathVariable Long productId,
 		@Valid @RequestBody CartItemUpdateRequest request
 	) {
-		CartItemSummaryResult result = updateCartItemQuantityService.update(memberId, productId, request);
+		CartItemSummaryResult result = updateCartItemQuantityUseCase.update(memberId, productId, request);
 		return ResponseEntity.status(HttpStatus.OK).body(ApiResponse.of(result));
 	}
 

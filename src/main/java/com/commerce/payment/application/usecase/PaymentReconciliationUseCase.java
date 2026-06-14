@@ -53,7 +53,7 @@ public class PaymentReconciliationUseCase {
 	private final OrderRepository orderRepository;
 	private final PaymentApprovalService paymentApprovalService;
 	private final PaymentApprovalRecordService paymentApprovalRecordService;
-	private final PaymentApprovalCompensationUseCase paymentApprovalCompensationService;
+	private final PaymentApprovalCompensationUseCase paymentApprovalCompensationUseCase;
 	private final NaverPayGateway naverPayGateway;
 	private final PaymentPostProcessTargetPolicy targetPolicy;
 	private final PaymentPostProcessFlowPolicy flowPolicy;
@@ -228,13 +228,13 @@ public class PaymentReconciliationUseCase {
 			}
 			// M1: PG history와 merchantPayKey/금액 불일치 → 실시간과 동일하게 보상하고 FAILED로 종착
 			if (ex.getErrorCode() == PaymentErrorCode.PAYMENT_MERCHANT_KEY_MISMATCH) {
-				paymentApprovalCompensationService.compensateMerchantKeyMismatch(payment);
+				paymentApprovalCompensationUseCase.compensateMerchantKeyMismatch(payment);
 				log.warn("대사 승인 - merchantPayKey 불일치 보상 paymentId={} orderId={} merchantPayKey={}",
 					payment.getId(), payment.getOrderId(), payment.getMerchantPayKey());
 				return PaymentReconcileOutcome.FAILED;
 			}
 			if (ex.getErrorCode() == PaymentErrorCode.PAYMENT_AMOUNT_MISMATCH) {
-				paymentApprovalCompensationService.compensateAmountMismatch(
+				paymentApprovalCompensationUseCase.compensateAmountMismatch(
 					payment, historyResult.getTotalPayAmount(), this::pgCancelForReconciliation);
 				log.warn("대사 승인 - 금액 불일치 보상 paymentId={} orderId={} merchantPayKey={}",
 					payment.getId(), payment.getOrderId(), payment.getMerchantPayKey());
@@ -263,7 +263,7 @@ public class PaymentReconciliationUseCase {
 
 		if (order.getStatus() == OrderStatus.CANCELED) {
 			// C: CANCELED 주문 — 보상 취소(환불) + 통지 (ADR-L4)
-			paymentApprovalCompensationService.compensateCanceledOrderApproval(payment, this::pgCancelForReconciliation);
+			paymentApprovalCompensationUseCase.compensateCanceledOrderApproval(payment, this::pgCancelForReconciliation);
 			// 정상 복구 동작(예외 아님)이므로 운영 주목 수준 WARN (모니터링 false-positive 방지)
 			log.warn("대사 보상 취소 실행 paymentId={} orderId={} merchantPayKey={}",
 				payment.getId(), payment.getOrderId(), payment.getMerchantPayKey());
@@ -277,7 +277,7 @@ public class PaymentReconciliationUseCase {
 				// 다른 SUCCEEDED APPROVE가 이미 있음 — 이 건은 중복 결제, 보상(환불)한다.
 				log.warn("대사 PAID 주문 중복 결제 - 보상 paymentId={} orderId={} merchantPayKey={}",
 					payment.getId(), payment.getOrderId(), payment.getMerchantPayKey());
-				paymentApprovalCompensationService.compensateDuplicatePayment(
+				paymentApprovalCompensationUseCase.compensateDuplicatePayment(
 					payment,
 					new RuntimeException("PAID 주문에 중복 결제 확인"),
 					this::pgCancelForReconciliation

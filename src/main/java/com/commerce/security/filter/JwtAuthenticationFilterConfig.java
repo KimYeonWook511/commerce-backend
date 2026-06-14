@@ -13,11 +13,11 @@ public class JwtAuthenticationFilterConfig {
 
 	@Bean
 	public FilterRegistrationBean<JwtAuthenticationFilter> jwtAuthenticationFilter(
-		TokenAuthenticationUseCase tokenAuthenticationService,
+		TokenAuthenticationUseCase tokenAuthenticationUseCase,
 		ObjectMapper objectMapper
 	) {
 		FilterRegistrationBean<JwtAuthenticationFilter> bean =
-			new FilterRegistrationBean<>(new JwtAuthenticationFilter(tokenAuthenticationService, objectMapper));
+			new FilterRegistrationBean<>(new JwtAuthenticationFilter(tokenAuthenticationUseCase, objectMapper));
 		bean.addUrlPatterns("/*");
 		bean.setOrder(Ordered.HIGHEST_PRECEDENCE + 30);
 		return bean;

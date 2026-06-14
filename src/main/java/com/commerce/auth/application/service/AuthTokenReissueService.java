@@ -22,7 +22,7 @@ import lombok.RequiredArgsConstructor;
 public class AuthTokenReissueService {
 
 	private final MemberQueryService memberQueryService;
-	private final AuthTokenIssueUseCase authTokenIssueService;
+	private final AuthTokenIssueUseCase authTokenIssueUseCase;
 	private final TokenValidator tokenValidator;
 	private final RefreshTokenStore refreshTokenStore;
 
@@ -38,7 +38,7 @@ public class AuthTokenReissueService {
 		Member member = memberQueryService.findById(memberId)
 			.orElseThrow(() -> new AuthException(AuthErrorCode.TOKEN_INVALID));
 
-		AuthTokenIssueResult tokenIssueResult = authTokenIssueService.issue(member);
+		AuthTokenIssueResult tokenIssueResult = authTokenIssueUseCase.issue(member);
 
 		return AuthTokenReissueResult.of(
 			tokenIssueResult.getAccessToken(),

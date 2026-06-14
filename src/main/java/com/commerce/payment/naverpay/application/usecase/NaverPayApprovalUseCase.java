@@ -52,7 +52,7 @@ public class NaverPayApprovalUseCase {
 	private final OrderRepository orderRepository;
 	private final PaymentApprovalService paymentApprovalService;
 	private final PaymentApprovalRecordService paymentApprovalRecordService;
-	private final PaymentApprovalCompensationUseCase paymentApprovalCompensationService;
+	private final PaymentApprovalCompensationUseCase paymentApprovalCompensationUseCase;
 
 	public NaverPayApproveResponse approve(Long memberId, String merchantPayKey, String pgPaymentId) {
 		PaymentReservation reservation = paymentReservationRepository.findByMemberIdAndMerchantPayKey(memberId, merchantPayKey)
@@ -184,11 +184,11 @@ public class NaverPayApprovalUseCase {
 			);
 			switch ((PaymentErrorCode)ex.getErrorCode()) {
 				case PAYMENT_MERCHANT_KEY_MISMATCH ->
-					paymentApprovalCompensationService.compensateMerchantKeyMismatch(payment);
+					paymentApprovalCompensationUseCase.compensateMerchantKeyMismatch(payment);
 				case PAYMENT_AMOUNT_MISMATCH ->
-					paymentApprovalCompensationService.compensateAmountMismatch(payment, responseTotalAmount, this::pgCancel);
+					paymentApprovalCompensationUseCase.compensateAmountMismatch(payment, responseTotalAmount, this::pgCancel);
 				case PAYMENT_DUPLICATE ->
-					paymentApprovalCompensationService.compensateDuplicatePayment(payment, ex, this::pgCancel);
+					paymentApprovalCompensationUseCase.compensateDuplicatePayment(payment, ex, this::pgCancel);
 				// 정상 승인 후 기록 실패는 보상 없이 전파. approve REQUESTED 유지 → reconcile self-heal (ADR-L1)
 				default -> {}
 			}
