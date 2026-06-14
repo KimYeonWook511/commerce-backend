@@ -17,7 +17,7 @@ import lombok.RequiredArgsConstructor;
 import lombok.extern.slf4j.Slf4j;
 
 /**
- * cart 항목 추가 트랜잭션 경계. 정책: ADR-021, ADR-022, cart adr 결정 6-5/8.
+ * cart 항목 추가 트랜잭션 경계.
  */
 @Slf4j
 @Service

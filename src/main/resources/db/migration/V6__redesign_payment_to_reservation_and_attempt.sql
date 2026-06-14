@@ -2,7 +2,7 @@
 -- tbl_payment (성공 결제 1:1 구조) 삭제, tbl_payment_attempt → tbl_payment rename,
 -- tbl_order.merchant_pay_key 제거, tbl_payment_reservation 신규 생성
 --
--- [경고] 파괴적 마이그레이션 — 운영 데이터 없음(pre-prod) 전제 (ADR-7).
+-- [경고] 파괴적 마이그레이션 — 운영 데이터 없음(pre-prod) 전제.
 -- DROP TABLE tbl_payment 으로 기존 성공 결제 이력을 영구 폐기하고, order_id 를 backfill 없이
 -- NOT NULL 로 추가한다. 기존 데이터가 있는 DB 에 그대로 적용하면 이력 손실 또는 ADD COLUMN 실패가 발생한다.
 -- 운영 단계 진입 시에는 별도 backfill task 가 필요하다: order_id 를 NULL 로 먼저 추가 → merchant_pay_key 로

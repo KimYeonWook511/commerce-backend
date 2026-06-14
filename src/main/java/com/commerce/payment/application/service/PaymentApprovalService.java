@@ -51,7 +51,7 @@ public class PaymentApprovalService {
 	}
 
 	/**
-	 * PG 승인 응답 수신 후 payment.succeed() + order.completePayment()를 한 트랜잭션으로 처리한다 (ADR-8).
+	 * PG 승인 응답 수신 후 payment.succeed() + order.completePayment()를 한 트랜잭션으로 처리한다.
 	 * 주문 행을 PK로 잠가(findByIdForUpdate) 같은 주문의 동시 승인 반영을 직렬화한다.
 	 */
 	@Transactional
