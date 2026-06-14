@@ -5,10 +5,10 @@ import java.util.Set;
 
 import org.springframework.web.filter.OncePerRequestFilter;
 
-import com.commerce.auth.application.TokenAuthenticationService;
+import com.commerce.auth.application.usecase.TokenAuthenticationService;
 import com.commerce.auth.application.result.TokenAuthenticationResult;
-import com.commerce.auth.exception.AuthErrorCode;
-import com.commerce.auth.exception.AuthException;
+import com.commerce.auth.domain.exception.AuthErrorCode;
+import com.commerce.auth.domain.exception.AuthException;
 import com.commerce.common.ApiResponse;
 import com.commerce.common.exception.CustomException;
 import com.commerce.common.exception.ErrorCode;

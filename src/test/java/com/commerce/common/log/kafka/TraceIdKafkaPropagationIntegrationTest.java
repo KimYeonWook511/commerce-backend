@@ -44,7 +44,7 @@ import org.springframework.test.context.TestPropertySource;
 import org.springframework.test.context.bean.override.mockito.MockitoSpyBean;
 
 import com.commerce.common.kafka.exception.KafkaConsumeNonRetryableException;
-import com.commerce.outbox.stock.infrastructure.StockRestoreKafkaConsumerConfig;
+import com.commerce.outbox.stock.infrastructure.messaging.StockRestoreKafkaConsumerConfig;
 import com.commerce.support.TestcontainersSupport;
 
 @Tag("docker")

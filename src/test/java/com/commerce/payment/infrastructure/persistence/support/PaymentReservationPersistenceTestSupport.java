@@ -5,7 +5,7 @@ import java.util.Optional;
 import org.springframework.boot.test.context.TestComponent;
 
 import com.commerce.payment.domain.PaymentReservation;
-import com.commerce.payment.infrastructure.JpaPaymentReservationRepository;
+import com.commerce.payment.infrastructure.persistence.JpaPaymentReservationRepository;
 import com.commerce.support.CleanupOrder;
 import com.commerce.support.PersistenceTestSupport;
 

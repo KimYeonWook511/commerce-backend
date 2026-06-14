@@ -26,9 +26,9 @@ import org.springframework.test.context.DynamicPropertySource;
 
 import com.commerce.member.domain.Member;
 import com.commerce.member.infrastructure.persistence.support.MemberPersistenceTestSupport;
-import com.commerce.order.application.OrderCancelService;
-import com.commerce.order.application.OrderConcurrencyService;
-import com.commerce.order.application.OrderCreateService;
+import com.commerce.order.application.service.OrderCancelService;
+import com.commerce.order.application.service.OrderConcurrencyService;
+import com.commerce.order.application.service.OrderCreateService;
 import com.commerce.order.application.command.OrderCreateCommand;
 import com.commerce.order.application.command.OrderCreateItem;
 import com.commerce.order.application.result.OrderCreateResult;

@@ -46,6 +46,7 @@ task adr(`docs/tasks/<task>/adr.md`)의 역할은 harness 도입을 기점으로
 | unknown-reconciliation | [`docs/tasks/unknown-reconciliation/adr.md`](tasks/unknown-reconciliation/adr.md) | UNKNOWN/stale REQUESTED 대사를 `@Scheduled` 서비스 루프로 구현(ADR-040~048), 만료 배치가 미확정 결제 주문 제외(order 소유 port 의존 역전), 대사 SUCCEEDED·주문 CANCELED 시 보상 환불, `PaymentStatus.MANUAL_REVIEW` 미도입(ADR-039 준수), escalation을 스캔 시간 윈도우 상한으로 제외, 비-INIT 주문 종착 전이 (ADR-029/030/039 연계) |
 | payment-escalation | [`docs/tasks/payment-escalation/adr.md`](tasks/payment-escalation/adr.md) | 6시간 초과 미확정 APPROVE escalation 통지·종착을 새 상태 대신 `escalatedAt` 직교 필드로 표현, 조건부 UPDATE 영향 행 수로 중복 통지 차단, order==null 정합성 오류 통지 (ADR-049, ADR-039/044/047 연계) |
 | payment-optimistic-lock | [`docs/tasks/payment-optimistic-lock/adr.md`](tasks/payment-optimistic-lock/adr.md) | `Payment`에 `@Version` 낙관 락 도입(같은 행 동시 전이 lost update 차단), 충돌 처리는 transition tx 안 전파 + useCase tx 밖 skip + adapter `saveChecked` 도메인 예외 변환, escalation 멱등을 조건부 UPDATE에서 `@Version`+`escalate()` 도메인 메서드로 환원 (ADR-050~052, ADR-049 멱등 메커니즘 supersede) |
+| structure-migration | [`docs/tasks/structure-migration/adr.md`](tasks/structure-migration/adr.md) | 전 도메인 헥사고날 목표 패키지 재배치(순수 이동·동작 불변, 리네임 없음), ArchUnit freeze→strict 전환·임시 산출물 제거, Spring Batch fault-tolerance의 DAO 예외 참조를 `GlobalExceptionHandler`처럼 규칙 예외처로 인정 (ADR-053) |
 
 향후 task 추가 시 본 표에 한 줄을 갱신한다. task adr 위치는 모두 `docs/tasks/<task>/adr.md`로 고정한다.
 
@@ -547,3 +548,12 @@ task adr(`docs/tasks/<task>/adr.md`)의 역할은 harness 도입을 기점으로
 - **이유**: 규칙(어떤 상태에서·한 번만)을 SQL WHERE에서 도메인 메서드로 올리면 네 전이(`succeed`/`fail`/`markUnknown`/`escalate`)가 모두 엔티티 가드에 모여 일관되고 표현력이 좋다. 통지 정확히 1회는 `@Version`이 보장한다.
 - **트레이드오프**: `@DynamicUpdate`가 없어 version bump 없는 CAS 유지 시 동시 `fail()` save가 `escalatedAt`을 stale로 덮을 위험이 있어, 결국 환원이 더 단순하고 안전하다. 통지 주체 판정이 영향 행 수에서 save 성공/예외 흡수로 바뀌어 `PaymentEscalationConcurrencyTest`를 save 성공 1회 검증으로 갱신했다. CANCEL escalation은 CANCEL 대사 미구현으로 범위 밖.
 - **연계**: ADR-049(supersede: 멱등 메커니즘 부분), ADR-050, ADR-051, #243.
+
+### ADR-053: Spring Batch fault-tolerance의 DAO 예외 참조를 ArchUnit 규칙 예외처로 인정한다
+
+- **결정**: `daoExceptionsConfinedToPersistence`(JPA/DAO 예외는 `infrastructure.persistence` 밖에서 참조 금지)와 `controllersDoNotCatchConflictExceptions`(presentation은 낙관 락 예외에 의존 금지) 두 규칙에서, `OrderExpirationBatchConfig`를 `GlobalExceptionHandler`와 동일하게 `areNotAssignableTo(...)`로 명시적 예외처로 제외한다. 예외 범위는 batch 패키지 전체가 아니라 해당 한 클래스로 좁게 잡는다.
+- **배경**: 구조 마이그레이션으로 batch가 `presentation/batch/`로 이동하면서, `OrderExpirationBatchConfig`의 `.retry(OptimisticLockingFailureException.class)`/`.skip(...)`이 위 두 규칙(persistence 밖 참조 금지 + presentation의 낙관 락 예외 의존 금지)에 걸렸다.
+- **고려한 대안**: (a) persistence로 이동 — 진입점(inbound adapter)인데 persistence로 내리면 레이어가 무너져 기각. (b) 도메인 예외로 변환(`Payment.saveChecked` 패턴 미러링) — 변환은 예외를 직접 catch하는 위치에서만 가능한데 `.retry(...)`는 catch가 아니라 프레임워크에 예외 타입을 선언적으로 신고하는 코드라 변환 대상 자체가 없어 적용 불가, 기각. (c) freeze 유지 — 마이그레이션 종료(freeze 제거)와 모순, 기각.
+- **이유**: `GlobalExceptionHandler`(HTTP 매핑)와 `OrderExpirationBatchConfig`(batch fault-tolerance)는 둘 다 DAO 예외를 비즈니스 분기로 catch하는 곳이 아니라 **프레임워크 경계에 예외 타입을 선언적으로 넘기는 곳**이다. 같은 부류라 같은 방식(규칙 예외처)으로 다룬다. 임시방편이 아니라 영구 예외처이며, batch fault-tolerance를 도메인 예외로 바꾸는 후속 작업은 불필요하다(런타임 흐름과 무관).
+- **트레이드오프**: 예외처를 한 클래스로 좁게 잡아 batch listener 등 다른 곳의 DAO 예외 누수는 규칙이 계속 차단한다.
+- **연계**: structure-migration task adr(ADR-L1), ADR-011/034(DAO 예외 격리), #247.

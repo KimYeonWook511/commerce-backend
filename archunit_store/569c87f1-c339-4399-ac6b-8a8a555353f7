@@ -1,1 +1,0 @@
-Method <com.commerce.outbox.stock.infrastructure.StockRestoreKafkaEventConsumer.consume(java.lang.String)> is not declared in classes that reside in a package '..presentation.consumer..' in (StockRestoreKafkaEventConsumer.java:35)

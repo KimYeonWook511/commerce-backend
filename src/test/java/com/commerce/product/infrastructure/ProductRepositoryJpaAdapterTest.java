@@ -15,6 +15,7 @@ import com.commerce.common.jpa.JpaConfig;
 import com.commerce.product.domain.Product;
 import com.commerce.product.domain.ProductStatus;
 
+import com.commerce.product.infrastructure.persistence.JpaProductRepository;
 import jakarta.persistence.EntityManager;
 
 @DataJpaTest

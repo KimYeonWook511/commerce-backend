@@ -17,6 +17,7 @@ import org.springframework.test.context.DynamicPropertySource;
 
 import com.commerce.common.jpa.JpaConfig;
 import com.commerce.member.domain.Member;
+import com.commerce.member.infrastructure.persistence.JpaMemberRepository;
 import com.commerce.support.TestcontainersSupport;
 
 @Tag("docker")

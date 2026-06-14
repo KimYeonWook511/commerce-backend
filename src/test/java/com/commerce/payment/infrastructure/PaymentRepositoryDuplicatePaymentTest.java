@@ -22,10 +22,12 @@ import com.commerce.payment.domain.PaymentProvider;
 import com.commerce.payment.domain.PaymentReservation;
 import com.commerce.payment.domain.PaymentType;
 import com.commerce.payment.domain.repository.PaymentRepository;
-import com.commerce.payment.exception.PaymentErrorCode;
-import com.commerce.payment.exception.PaymentException;
+import com.commerce.payment.domain.exception.PaymentErrorCode;
+import com.commerce.payment.domain.exception.PaymentException;
 import com.commerce.payment.infrastructure.persistence.support.PaymentPersistenceTestSupport;
 import com.commerce.payment.infrastructure.persistence.support.PaymentReservationPersistenceTestSupport;
+import com.commerce.payment.infrastructure.persistence.PaymentRepositoryAdapter;
+import com.commerce.payment.infrastructure.persistence.PaymentReservationRepositoryAdapter;
 import com.commerce.support.PersistenceCleanupTestSupport;
 import com.commerce.support.TestcontainersSupport;
 

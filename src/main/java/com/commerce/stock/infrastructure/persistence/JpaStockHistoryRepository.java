@@ -1,0 +1,12 @@
+package com.commerce.stock.infrastructure.persistence;
+
+import java.util.List;
+
+import org.springframework.data.jpa.repository.JpaRepository;
+
+import com.commerce.stock.domain.StockHistory;
+
+public interface JpaStockHistoryRepository extends JpaRepository<StockHistory, Long> {
+
+	List<StockHistory> findAllByStockIdOrderByCreatedAtDesc(Long stockId);
+}

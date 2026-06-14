@@ -66,7 +66,7 @@ class PaymentReservationTest {
 
 		// when & then
 		org.assertj.core.api.Assertions.assertThatThrownBy(reservation::expire)
-			.isInstanceOf(com.commerce.payment.exception.PaymentException.class);
+			.isInstanceOf(com.commerce.payment.domain.exception.PaymentException.class);
 	}
 
 	@DisplayName("RESERVED이고 만료되지 않았으며 memberId/provider/amount가 일치하면 isReusableFor이 true를 반환한다")
@@ -91,7 +91,7 @@ class PaymentReservationTest {
 
 		// when & then
 		org.assertj.core.api.Assertions.assertThatThrownBy(reservation::use)
-			.isInstanceOf(com.commerce.payment.exception.PaymentException.class);
+			.isInstanceOf(com.commerce.payment.domain.exception.PaymentException.class);
 	}
 
 	@DisplayName("USED 상태이면 isReusableFor이 false를 반환한다")

@@ -5,8 +5,8 @@ import java.util.Optional;
 import org.springframework.boot.test.context.TestComponent;
 
 import com.commerce.outbox.domain.OutboxEvent;
-import com.commerce.outbox.infrastructure.JpaOutboxEventRepository;
-import com.commerce.outbox.infrastructure.JpaProcessedEventRepository;
+import com.commerce.outbox.infrastructure.persistence.JpaOutboxEventRepository;
+import com.commerce.outbox.infrastructure.persistence.JpaProcessedEventRepository;
 
 import lombok.RequiredArgsConstructor;
 import com.commerce.support.CleanupOrder;

@@ -6,7 +6,7 @@ import java.util.Optional;
 import org.springframework.boot.test.context.TestComponent;
 
 import com.commerce.cart.domain.CartItem;
-import com.commerce.cart.infrastructure.JpaCartItemRepository;
+import com.commerce.cart.infrastructure.persistence.JpaCartItemRepository;
 import com.commerce.support.CleanupOrder;
 import com.commerce.support.PersistenceTestSupport;
 

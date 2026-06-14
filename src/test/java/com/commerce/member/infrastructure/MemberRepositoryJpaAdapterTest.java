@@ -12,6 +12,7 @@ import org.springframework.context.annotation.Import;
 import org.springframework.test.context.ActiveProfiles;
 
 import com.commerce.member.domain.Member;
+import com.commerce.member.infrastructure.persistence.MemberRepositoryAdapter;
 import com.commerce.member.domain.repository.MemberRepository;
 
 @DataJpaTest

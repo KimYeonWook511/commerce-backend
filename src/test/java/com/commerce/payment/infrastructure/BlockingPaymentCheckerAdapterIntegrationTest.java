@@ -24,6 +24,8 @@ import com.commerce.payment.domain.PaymentProvider;
 import com.commerce.payment.domain.PaymentReservation;
 import com.commerce.payment.domain.PaymentType;
 import com.commerce.payment.domain.repository.PaymentRepository;
+import com.commerce.payment.infrastructure.persistence.BlockingPaymentCheckerAdapter;
+import com.commerce.payment.infrastructure.persistence.PaymentRepositoryAdapter;
 import com.commerce.support.TestcontainersSupport;
 
 @Tag("docker")

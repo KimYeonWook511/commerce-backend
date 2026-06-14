@@ -1,0 +1,78 @@
+{
+  "project": "commerce-backend",
+  "phase": "0-main",
+  "harness_version": "v2",
+  "steps": [
+    {
+      "step": 1,
+      "name": "move-persistence-adapters",
+      "status": "completed",
+      "started_at": "2026-06-12T15:22:46+0900",
+      "summary": "전 도메인(cart/member/order/outbox/payment/product/stock)의 JPA adapter·Jpa repository 23개 파일을 infrastructure/ 루트에서 infrastructure/persistence/로 git mv로 이동하고, package 선언 및 main·test 양쪽 import를 모두 갱신한다. ./gradlew test, integrationTest batchTest 모두 통과.",
+      "completed_at": "2026-06-12T15:31:22+0900"
+    },
+    {
+      "step": 2,
+      "name": "move-cache-messaging-notification",
+      "status": "completed",
+      "started_at": "2026-06-12T15:33:03+0900",
+      "summary": "Redis 캐시 구현체 2개(auth/order)를 infrastructure/cache/로, Kafka producer·consumer config·relay message 3개(outbox/outbox-stock)를 infrastructure/messaging/으로, NotificationPort 구현체 1개(payment)를 infrastructure/notification/으로 git mv로 이동하고 package 선언·import를 main·test 양쪽에서 모두 갱신한다. OutboxRelayMessage를 참조하는 consumer·통합테스트 import도 함께 갱신하고 ./gradlew test, integrationTest 모두 통과.",
+      "completed_at": "2026-06-12T15:37:54+0900"
+    },
+    {
+      "step": 3,
+      "name": "relocate-inbound-adapters",
+      "status": "completed",
+      "started_at": "2026-06-12T15:39:00+0900",
+      "summary": "scheduler 3개(order/outbox-stock/payment), consumer 1개(outbox-stock), batch config·listener 6개(order)를 presentation/{scheduler,consumer,batch,batch/listener}로 git mv로 이동하고 package 선언·import를 main·test 양쪽에서 갱신한다. archunit_store baseline을 현재 위반 상태(OrderExpirationBatchConfig의 OptimisticLockingFailureException 참조)로 재초기화하여 freeze 통과. ./gradlew test, integrationTest batchTest 모두 통과.",
+      "completed_at": "2026-06-12T15:49:37+0900"
+    },
+    {
+      "step": 4,
+      "name": "move-controllers-to-http",
+      "status": "completed",
+      "started_at": "2026-06-12T15:51:20+0900",
+      "summary": "전 도메인(auth/cart/order/payment/naverpay/product/stock) Controller 8개와 request DTO 14개를 presentation/ 루트에서 presentation/http/와 presentation/http/request/로 git mv로 이동하고, package 선언·import를 main·test 양쪽에서 모두 갱신한다. cart application 계층(4개)과 test(5개)의 request import도 함께 갱신. ./gradlew test, integrationTest 모두 통과.",
+      "completed_at": "2026-06-12T15:55:29+0900"
+    },
+    {
+      "step": 5,
+      "name": "relocate-exceptions",
+      "status": "completed",
+      "started_at": "2026-06-12T15:56:48+0900",
+      "summary": "도메인 예외(XxxException/XxxErrorCode) 14쌍을 전 도메인(auth/cart/member/order/payment/product/stock/naverpay)의 domain/exception/으로, 인프라 기술 예외(RefreshTokenStoreUnavailableException/OrderIdempotencyStoreUnavailableException) 2개를 각 도메인 infrastructure/로, AuthExceptionHandler를 auth/presentation/으로 git mv 이동한다. package 선언·import를 main·test 양쪽에서 모두 갱신하며 AuthExceptionHandlerTest도 presentation 패키지로 이동한다. ./gradlew test, integrationTest 모두 통과.",
+      "completed_at": "2026-06-12T16:01:45+0900"
+    },
+    {
+      "step": 6,
+      "name": "move-naverpay-pg",
+      "status": "completed",
+      "started_at": "2026-06-14T16:14:18+0900",
+      "summary": "naverpay infrastructure 전체(top-level 3개·client/ 서브트리·code/ 서브트리)를 infrastructure/pg/ 아래로 git mv로 이동하고, package 선언을 infrastructure.pg.* 로, main·test 양쪽 import를 infrastructure.pg.* 로 갱신한다. ./gradlew test, integrationTest 모두 통과.",
+      "completed_at": "2026-06-14T16:17:29+0900"
+    },
+    {
+      "step": 7,
+      "name": "split-application-usecase-service",
+      "status": "completed",
+      "started_at": "2026-06-14T16:18:36+0900",
+      "summary": "전 도메인 application 계층 Service/Processor 클래스 34개를 @Transactional 보유 여부로 usecase/(8개, tx 없음)와 service/(26개, tx 있음)로 git mv 이동한다. main·test 양쪽 package 선언 및 cross-package 의존 import를 모두 갱신한다. ./gradlew test, integrationTest batchTest 모두 통과.",
+      "completed_at": "2026-06-14T16:33:37+0900"
+    },
+    {
+      "step": 8,
+      "name": "finalize-archunit-strict",
+      "status": "completed",
+      "started_at": "2026-06-14T16:34:53+0900",
+      "summary": "ArchitectureRulesTest의 FreezingArchRule 래핑을 제거하고 strict(rule.check)로 전환한다. daoExceptionsConfinedToPersistence와 controllersDoNotCatchConflictExceptions 규칙에 OrderExpirationBatchConfig를 ADR-L1 근거 영구 예외처로 추가한다. archunit.properties·archunit_store/ 임시 산출물을 git rm으로 제거한다. ./gradlew test 통과로 strict 위반 0 확인.",
+      "completed_at": "2026-06-14T16:37:36+0900"
+    }
+  ],
+  "created_at": "2026-06-12T15:22:45+0900",
+  "execution": {
+    "developer_model": "sonnet",
+    "reviewer_model": "opus",
+    "commit_model": "haiku"
+  },
+  "completed_at": "2026-06-14T16:39:04+0900"
+}

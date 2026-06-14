@@ -14,13 +14,14 @@ import org.springframework.test.context.ActiveProfiles;
 
 import com.commerce.common.jpa.JpaConfig;
 import com.commerce.member.domain.Member;
-import com.commerce.member.infrastructure.JpaMemberRepository;
+import com.commerce.member.infrastructure.persistence.JpaMemberRepository;
 import com.commerce.order.domain.Order;
 import com.commerce.order.domain.repository.OrderRepository;
 import com.commerce.product.domain.Product;
 import com.commerce.product.domain.ProductStatus;
-import com.commerce.product.infrastructure.JpaProductRepository;
+import com.commerce.product.infrastructure.persistence.JpaProductRepository;
 
+import com.commerce.order.infrastructure.persistence.OrderRepositoryAdapter;
 import jakarta.persistence.EntityManager;
 
 @DataJpaTest

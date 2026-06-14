@@ -19,7 +19,7 @@ import org.springframework.http.converter.HttpMessageNotReadableException;
 import org.springframework.validation.BindingResult;
 import org.springframework.web.bind.MethodArgumentNotValidException;
 
-import com.commerce.member.exception.MemberErrorCode;
+import com.commerce.member.domain.exception.MemberErrorCode;
 
 import ch.qos.logback.classic.Level;
 import ch.qos.logback.classic.Logger;

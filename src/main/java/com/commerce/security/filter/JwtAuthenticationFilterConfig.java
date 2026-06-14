@@ -5,7 +5,7 @@ import org.springframework.context.annotation.Bean;
 import org.springframework.context.annotation.Configuration;
 import org.springframework.core.Ordered;
 
-import com.commerce.auth.application.TokenAuthenticationService;
+import com.commerce.auth.application.usecase.TokenAuthenticationService;
 import com.fasterxml.jackson.databind.ObjectMapper;
 
 @Configuration

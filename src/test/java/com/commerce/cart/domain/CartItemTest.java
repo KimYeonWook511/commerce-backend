@@ -6,8 +6,8 @@ import static org.assertj.core.api.Assertions.assertThatThrownBy;
 import org.junit.jupiter.api.DisplayName;
 import org.junit.jupiter.api.Test;
 
-import com.commerce.cart.exception.CartErrorCode;
-import com.commerce.cart.exception.CartException;
+import com.commerce.cart.domain.exception.CartErrorCode;
+import com.commerce.cart.domain.exception.CartException;
 
 class CartItemTest {
 
