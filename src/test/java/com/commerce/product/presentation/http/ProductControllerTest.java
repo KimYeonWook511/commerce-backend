@@ -22,10 +22,10 @@ import org.springframework.test.web.servlet.MockMvc;
 
 import com.commerce.security.filter.JwtAuthenticationFilter;
 import com.commerce.security.interceptor.AuthorizationInterceptor;
-import com.commerce.auth.application.TokenAuthenticationService;
+import com.commerce.auth.application.usecase.TokenAuthenticationService;
 import com.commerce.security.resolver.AuthenticatedMemberIdArgumentResolver;
 import com.commerce.common.config.WebConfig;
-import com.commerce.product.application.ProductQueryService;
+import com.commerce.product.application.service.ProductQueryService;
 import com.commerce.product.application.result.ProductDetailResult;
 import com.commerce.product.application.result.ProductSummaryResult;
 import com.commerce.product.domain.exception.ProductErrorCode;

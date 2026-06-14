@@ -8,7 +8,7 @@ import org.springframework.web.bind.annotation.RequestMapping;
 import org.springframework.web.bind.annotation.RestController;
 
 import com.commerce.common.ApiResponse;
-import com.commerce.payment.application.ReservePaymentService;
+import com.commerce.payment.application.service.ReservePaymentService;
 import com.commerce.payment.application.command.ReservePaymentCommand;
 import com.commerce.payment.application.result.ReservePaymentResult;
 import com.commerce.payment.domain.PaymentProvider;

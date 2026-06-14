@@ -18,11 +18,11 @@ import org.springframework.test.context.ActiveProfiles;
 import org.springframework.test.context.bean.override.mockito.MockitoBean;
 import org.springframework.test.web.servlet.MockMvc;
 
-import com.commerce.auth.application.TokenAuthenticationService;
+import com.commerce.auth.application.usecase.TokenAuthenticationService;
 import com.commerce.auth.application.result.TokenAuthenticationResult;
 import com.commerce.common.config.WebConfig;
-import com.commerce.order.application.OrderCancelService;
-import com.commerce.order.application.OrderCreateService;
+import com.commerce.order.application.service.OrderCancelService;
+import com.commerce.order.application.service.OrderCreateService;
 import com.commerce.order.application.command.OrderCreateCommand;
 import com.commerce.order.application.result.OrderCancelResult;
 import com.commerce.order.application.result.OrderCreateResult;

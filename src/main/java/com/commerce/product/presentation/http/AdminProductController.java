@@ -15,7 +15,7 @@ import com.commerce.common.ApiResponse;
 import com.commerce.common.exception.CommonErrorCode;
 import com.commerce.common.exception.CommonException;
 import com.commerce.member.domain.MemberRole;
-import com.commerce.product.application.AdminProductService;
+import com.commerce.product.application.service.AdminProductService;
 import com.commerce.product.application.result.AdminProductDeleteResult;
 import com.commerce.product.application.result.AdminProductResult;
 import com.commerce.product.presentation.http.request.AdminProductCreateRequest;

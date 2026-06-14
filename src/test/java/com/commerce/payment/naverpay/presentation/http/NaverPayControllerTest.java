@@ -20,11 +20,11 @@ import org.springframework.test.web.servlet.MockMvc;
 
 import com.commerce.security.filter.JwtAuthenticationFilter;
 import com.commerce.security.interceptor.AuthorizationInterceptor;
-import com.commerce.auth.application.TokenAuthenticationService;
+import com.commerce.auth.application.usecase.TokenAuthenticationService;
 import com.commerce.auth.application.result.TokenAuthenticationResult;
 import com.commerce.security.resolver.AuthenticatedMemberIdArgumentResolver;
 import com.commerce.common.config.WebConfig;
-import com.commerce.payment.naverpay.application.NaverPayApprovalService;
+import com.commerce.payment.naverpay.application.usecase.NaverPayApprovalService;
 import com.commerce.payment.naverpay.application.result.NaverPayApproveResponse;
 import com.commerce.payment.naverpay.application.result.NaverPayApproveStatus;
 

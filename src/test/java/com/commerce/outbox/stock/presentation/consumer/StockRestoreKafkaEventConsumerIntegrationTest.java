@@ -51,7 +51,7 @@ import com.commerce.common.log.kafka.TraceIdKafkaConfig;
 import com.commerce.outbox.domain.OutboxAggregateType;
 import com.commerce.outbox.domain.OutboxEventType;
 import com.commerce.outbox.infrastructure.messaging.OutboxRelayMessage;
-import com.commerce.outbox.stock.application.StockRestoreOutboxConsumeService;
+import com.commerce.outbox.stock.application.service.StockRestoreOutboxConsumeService;
 import com.commerce.outbox.stock.infrastructure.messaging.StockRestoreKafkaConsumerConfig;
 import com.commerce.outbox.stock.application.payload.StockRestoreRequestedPayload;
 import com.commerce.support.TestcontainersSupport;

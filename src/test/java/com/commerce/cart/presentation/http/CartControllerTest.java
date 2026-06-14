@@ -28,12 +28,12 @@ import org.springframework.test.context.ActiveProfiles;
 import org.springframework.test.context.bean.override.mockito.MockitoBean;
 import org.springframework.test.web.servlet.MockMvc;
 
-import com.commerce.auth.application.TokenAuthenticationService;
+import com.commerce.auth.application.usecase.TokenAuthenticationService;
 import com.commerce.auth.application.result.TokenAuthenticationResult;
-import com.commerce.cart.application.AddCartItemService;
-import com.commerce.cart.application.GetMyCartService;
-import com.commerce.cart.application.RemoveCartItemService;
-import com.commerce.cart.application.UpdateCartItemQuantityService;
+import com.commerce.cart.application.usecase.AddCartItemService;
+import com.commerce.cart.application.service.GetMyCartService;
+import com.commerce.cart.application.service.RemoveCartItemService;
+import com.commerce.cart.application.usecase.UpdateCartItemQuantityService;
 import com.commerce.cart.application.result.CartItemSummaryResult;
 import com.commerce.cart.domain.exception.CartErrorCode;
 import com.commerce.cart.domain.exception.CartException;

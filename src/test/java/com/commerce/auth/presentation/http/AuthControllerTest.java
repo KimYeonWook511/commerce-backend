@@ -19,10 +19,10 @@ import org.springframework.test.context.bean.override.mockito.MockitoBean;
 import org.springframework.test.web.servlet.MockMvc;
 import org.springframework.test.util.ReflectionTestUtils;
 
-import com.commerce.auth.application.AuthLoginService;
-import com.commerce.auth.application.AuthSignUpService;
-import com.commerce.auth.application.AuthTokenReissueService;
-import com.commerce.auth.application.TokenAuthenticationService;
+import com.commerce.auth.application.service.AuthLoginService;
+import com.commerce.auth.application.service.AuthSignUpService;
+import com.commerce.auth.application.service.AuthTokenReissueService;
+import com.commerce.auth.application.usecase.TokenAuthenticationService;
 import com.commerce.auth.application.command.AuthLoginCommand;
 import com.commerce.auth.application.command.AuthSignUpCommand;
 import com.commerce.auth.application.result.AuthLoginResult;

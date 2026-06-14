@@ -11,7 +11,7 @@ import org.springframework.web.bind.annotation.RestController;
 
 import com.commerce.security.annotation.AuthenticatedMemberId;
 import com.commerce.common.ApiResponse;
-import com.commerce.payment.naverpay.application.NaverPayApprovalService;
+import com.commerce.payment.naverpay.application.usecase.NaverPayApprovalService;
 import com.commerce.payment.naverpay.application.result.NaverPayApproveResponse;
 import com.commerce.payment.naverpay.presentation.http.request.NaverPayApproveRequest;
 

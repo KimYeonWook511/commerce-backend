@@ -21,7 +21,7 @@ import org.springframework.dao.OptimisticLockingFailureException;
 import org.springframework.transaction.PlatformTransactionManager;
 
 import com.commerce.common.exception.CustomException;
-import com.commerce.order.application.OrderExpirationService;
+import com.commerce.order.application.service.OrderExpirationService;
 import com.commerce.order.application.port.BlockingPaymentChecker;
 import com.commerce.order.presentation.batch.listener.OrderExpirationJobListener;
 import com.commerce.order.presentation.batch.listener.OrderExpirationItemReadListener;

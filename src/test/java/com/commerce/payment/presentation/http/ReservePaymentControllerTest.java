@@ -19,11 +19,11 @@ import org.springframework.test.web.servlet.MockMvc;
 
 import com.commerce.security.filter.JwtAuthenticationFilter;
 import com.commerce.security.interceptor.AuthorizationInterceptor;
-import com.commerce.auth.application.TokenAuthenticationService;
+import com.commerce.auth.application.usecase.TokenAuthenticationService;
 import com.commerce.auth.application.result.TokenAuthenticationResult;
 import com.commerce.security.resolver.AuthenticatedMemberIdArgumentResolver;
 import com.commerce.common.config.WebConfig;
-import com.commerce.payment.application.ReservePaymentService;
+import com.commerce.payment.application.service.ReservePaymentService;
 import com.commerce.payment.application.command.ReservePaymentCommand;
 import com.commerce.payment.application.result.ReservePaymentResult;
 

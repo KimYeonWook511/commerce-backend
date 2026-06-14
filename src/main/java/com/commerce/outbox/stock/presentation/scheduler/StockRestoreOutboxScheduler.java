@@ -6,7 +6,7 @@ import org.springframework.context.annotation.Profile;
 import org.springframework.scheduling.annotation.Scheduled;
 import org.springframework.stereotype.Component;
 
-import com.commerce.outbox.stock.application.StockRestoreOutboxRelayService;
+import com.commerce.outbox.stock.application.service.StockRestoreOutboxRelayService;
 import com.commerce.outbox.stock.application.result.OutboxPublishResult;
 
 import lombok.RequiredArgsConstructor;
