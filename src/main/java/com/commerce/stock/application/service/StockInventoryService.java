@@ -18,7 +18,6 @@ import com.commerce.stock.domain.exception.StockException;
 import lombok.RequiredArgsConstructor;
 
 @Service
-@Transactional(readOnly = true)
 @RequiredArgsConstructor
 public class StockInventoryService {
 

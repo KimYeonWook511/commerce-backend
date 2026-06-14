@@ -18,12 +18,12 @@ import lombok.RequiredArgsConstructor;
 
 @Service
 @RequiredArgsConstructor
-@Transactional(readOnly = true)
 public class ProductQueryService {
 
 	private final ProductRepository productRepository;
 	private final StockRepository stockRepository;
 
+	@Transactional(readOnly = true)
 	public List<ProductSummaryResult> getProducts() {
 		return productRepository.findVisibleProducts(ProductStatus.publicStatuses())
 			.stream()
@@ -31,6 +31,7 @@ public class ProductQueryService {
 			.toList();
 	}
 
+	@Transactional(readOnly = true)
 	public ProductDetailResult getProduct(Long productId) {
 		Product product = productRepository.findVisibleProduct(productId, ProductStatus.publicStatuses())
 			.orElseThrow(() -> new ProductException(ProductErrorCode.PRODUCT_NOT_FOUND));

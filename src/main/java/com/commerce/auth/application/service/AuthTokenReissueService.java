@@ -19,7 +19,6 @@ import lombok.RequiredArgsConstructor;
 
 @Service
 @RequiredArgsConstructor
-@Transactional(readOnly = true)
 public class AuthTokenReissueService {
 
 	private final MemberQueryService memberQueryService;
@@ -27,6 +26,7 @@ public class AuthTokenReissueService {
 	private final TokenValidator tokenValidator;
 	private final RefreshTokenStore refreshTokenStore;
 
+	@Transactional(readOnly = true)
 	public AuthTokenReissueResult reissue(AuthTokenReissueCommand command) {
 		String refreshToken = command.getRefreshToken();
 		ParsedTokenClaims claims = tokenValidator.validateRefreshToken(refreshToken);

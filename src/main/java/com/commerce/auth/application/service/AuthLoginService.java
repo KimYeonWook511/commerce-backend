@@ -19,13 +19,13 @@ import lombok.extern.slf4j.Slf4j;
 @Slf4j
 @Service
 @RequiredArgsConstructor
-@Transactional(readOnly = true)
 public class AuthLoginService {
 
 	private final MemberQueryService memberQueryService;
 	private final AuthTokenIssueUseCase authTokenIssueService;
 	private final PasswordHasher passwordHasher;
 
+	@Transactional(readOnly = true)
 	public AuthLoginResult login(AuthLoginCommand command) {
 		Member member = memberQueryService.findByEmail(command.getEmail())
 			.orElseThrow(() -> new AuthException(AuthErrorCode.INVALID_CREDENTIALS));

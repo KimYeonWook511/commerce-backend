@@ -26,7 +26,6 @@ import lombok.extern.slf4j.Slf4j;
 
 @Slf4j
 @Service
-@Transactional(readOnly = true)
 @RequiredArgsConstructor
 public class AdminStockService {
 
@@ -85,6 +84,7 @@ public class AdminStockService {
 		return AdminStockResult.from(stock);
 	}
 
+	@Transactional(readOnly = true)
 	public List<StockHistoryResult> getHistoriesByProductId(Long productId) {
 		Stock stock = stockRepository.findByProductId(productId)
 			.orElseThrow(() -> new StockException(StockErrorCode.STOCK_NOT_FOUND));

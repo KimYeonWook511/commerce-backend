@@ -20,7 +20,6 @@ import lombok.extern.slf4j.Slf4j;
 @Slf4j
 @Service
 @RequiredArgsConstructor
-@Transactional(readOnly = true)
 public class OrderCancelService {
 
 	private final OrderRepository orderRepository;

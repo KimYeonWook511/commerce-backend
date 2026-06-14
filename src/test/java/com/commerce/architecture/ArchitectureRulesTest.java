@@ -98,6 +98,15 @@ class ArchitectureRulesTest {
     }
 
     @Test
+    @DisplayName("application 계층 클래스에 class-level @Transactional 을 두지 않는다 (ADR-021, ADR-L2: method-level 만 허용)")
+    void noClassLevelTransactionalInApplication() {
+        ArchRule rule = noClasses()
+                .that().resideInAPackage("..application..")
+                .should().beAnnotatedWith("org.springframework.transaction.annotation.Transactional");
+        check(rule);
+    }
+
+    @Test
     @DisplayName("presentation(진입점)에는 @Transactional 을 두지 않는다")
     void noTransactionalInPresentation() {
         ArchRule ruleMethods = noMethods()
