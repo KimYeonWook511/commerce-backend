@@ -60,7 +60,7 @@ public class OrderCreateUseCase {
 		try {
 			return findOrExecute(command, memberId, idempotencyKey);
 		} finally {
-			// NOT_SUPPORTED 이므로 finally 가 commit 이후에 호출됨 (ADR-005 정합).
+			// UseCase 계층(tx 없음)이므로 finally 는 orderCreateService tx 종료 후에 실행된다.
 			orderIdempotencyStore.clear(memberId, idempotencyKey);
 		}
 	}
