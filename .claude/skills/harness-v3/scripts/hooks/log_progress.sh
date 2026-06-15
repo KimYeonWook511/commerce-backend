@@ -22,14 +22,12 @@ case "$ROLE" in
 esac
 
 AID="$(field agent_id)"; [ -z "$AID" ] && AID="$ROLE"
-TP="$(field agent_transcript_path)"
-[ -z "$TP" ] && TP="$(field transcript_path)"
 PROJ="${CLAUDE_PROJECT_DIR:-.}"
 
-if [ -n "$TP" ] && [ -n "$AID" ] && { [ ! -f "$TP" ] || [ "$AID" != "$ROLE" ]; }; then
-  CAND="$(dirname "$TP")/subagents/agent-$AID.jsonl"
-  [ -f "$CAND" ] && TP="$CAND"
-fi
+# sub transcript: transcript_path(메인 세션 .jsonl) 확장자를 떼고 그 아래 subagents/agent-<id>.jsonl.
+# 메인 transcript로 fallback하면 메인 세션 활동이 role 로그를 오염시키므로 하지 않는다.
+TP="$(field transcript_path)"
+TP="${TP%.jsonl}/subagents/agent-$AID.jsonl"
 { [ -z "$TP" ] || [ ! -f "$TP" ]; } && exit 0
 
 PHASE=""
