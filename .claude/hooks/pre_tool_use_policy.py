@@ -1,8 +1,20 @@
 #!/usr/bin/env python3
 """
-현재 Repo 전용 Claude Code PreToolUse 정책 스크립트.
+Repo 전용 Claude Code PreToolUse 정책 스크립트.
 
-Claude Code가 Bash 명령을 실행하기 전에 일부 위험한 명령을 차단한다.
+세 가지 정책을 agent_type 으로 갈라 적용한다:
+
+  1. harness-v3-committer  (Bash)  → 화이트리스트: git status/diff/log/add/commit 외 모든 Bash 차단
+  2. harness-v3-reviewer   (Write) → 핸드오프(stepN-review.json) 외 경로 쓰기 차단
+  3. 그 외(메인/일반 작업)  (Bash)  → 블랙리스트: rm -rf, git reset --hard, git checkout --, force push 차단
+
+설계 원칙:
+  - fail-open: 입력 파싱 실패·형식 오류는 차단하지 않는다(정책 오류가 작업을 막으면 안 됨).
+  - 차단은 최신 형식으로 응답한다: hookSpecificOutput.permissionDecision = "deny".
+  - agent_type 이 입력에 없으면(플랫폼/버전 차이) 3번(블랙리스트)으로 fallback 한다.
+
+주의: 일부 Claude Code 버전/플랫폼에서 sub-agent의 PreToolUse 차단이 무시될 수 있다(이슈 #40580, WSL 라벨).
+그 경우 이 hook은 '탐지'만 하고 실제 차단은 각 agent .md의 프롬프트 제약이 baseline으로 담당한다.
 """
 
 from __future__ import annotations
@@ -20,16 +32,17 @@ class PolicyResult:
     reason: str = ""
 
 
+# ─────────────────────────────────────────────────────────────────────────────
+# 토큰 정규화 (sudo/env/command/git 접두사 제거) — 우회 차단
+# ─────────────────────────────────────────────────────────────────────────────
 def normalize_tokens(command: str) -> list[str]:
     try:
         tokens = shlex.split(command, posix=True)
     except ValueError:
-        # 잘못된 quoting은 차단 기준으로 삼지 않고 fail-open 한다.
-        return []
+        return []  # 잘못된 quoting은 fail-open
 
     while tokens:
         head = tokens[0]
-
         if head == "sudo":
             tokens = tokens[1:]
             while tokens:
@@ -45,7 +58,6 @@ def normalize_tokens(command: str) -> list[str]:
                     continue
                 break
             continue
-
         if head == "command":
             tokens = tokens[1:]
             while tokens:
@@ -58,7 +70,6 @@ def normalize_tokens(command: str) -> list[str]:
                     continue
                 break
             continue
-
         if head == "env":
             tokens = tokens[1:]
             while tokens:
@@ -74,22 +85,18 @@ def normalize_tokens(command: str) -> list[str]:
                     continue
                 break
             continue
-
         break
 
     if tokens and tokens[0] == "git":
         tokens = normalize_git_tokens(tokens)
-
     return tokens
 
 
 def normalize_git_tokens(tokens: list[str]) -> list[str]:
     normalized = tokens[:1]
     remainder = tokens[1:]
-
     while remainder:
         current = remainder[0]
-
         if current == "--":
             remainder = remainder[1:]
             break
@@ -103,7 +110,6 @@ def normalize_git_tokens(tokens: list[str]) -> list[str]:
             remainder = remainder[1:]
             continue
         break
-
     return normalized + remainder
 
 
@@ -111,13 +117,40 @@ def has_flag(tokens: Iterable[str], *flags: str) -> bool:
     return any(token == flag for token in tokens for flag in flags)
 
 
+# ─────────────────────────────────────────────────────────────────────────────
+# 복합 명령 분리 (&&, ||, ;, &, | 로 연결된 것을 각각 검사)
+# ─────────────────────────────────────────────────────────────────────────────
+_COMPOUND_SEPARATORS = frozenset({"&&", "||", ";", "&", "|"})
+
+
+def split_compound_commands(command: str) -> list[str]:
+    try:
+        lexer = shlex.shlex(command, posix=True, punctuation_chars=True)
+        tokens = list(lexer)
+    except ValueError:
+        return [command]
+
+    commands: list[str] = []
+    current: list[str] = []
+    for token in tokens:
+        if token in _COMPOUND_SEPARATORS:
+            if current:
+                commands.append(shlex.join(current))
+                current = []
+        else:
+            current.append(token)
+    if current:
+        commands.append(shlex.join(current))
+    return commands if commands else [command]
+
+
+# ─────────────────────────────────────────────────────────────────────────────
+# 1. 블랙리스트 (메인/일반 작업) — 위험한 명령만 차단
+# ─────────────────────────────────────────────────────────────────────────────
 def blocks_rm_rf(tokens: list[str]) -> bool:
     if not tokens or tokens[0] != "rm":
         return False
-
-    recursive = False
-    force = False
-
+    recursive = force = False
     for token in tokens[1:]:
         if token == "--":
             break
@@ -131,7 +164,6 @@ def blocks_rm_rf(tokens: list[str]) -> bool:
             chars = token[1:]
             recursive = recursive or ("r" in chars or "R" in chars)
             force = force or ("f" in chars)
-
     return recursive and force
 
 
@@ -149,66 +181,74 @@ def blocks_force_push(tokens: list[str]) -> bool:
     return has_flag(tokens[2:], "--force", "--force-with-lease", "-f")
 
 
-_COMPOUND_SEPARATORS = frozenset({"&&", "||", ";", "&", "|"})
-
-
-def split_compound_commands(command: str) -> list[str]:
-    """&&, ||, ;, &, | 로 연결된 복합 명령을 개별 명령으로 분리한다."""
-    try:
-        lexer = shlex.shlex(command, posix=True, punctuation_chars=True)
-        tokens = list(lexer)
-    except ValueError:
-        return [command]
-
-    commands: list[str] = []
-    current: list[str] = []
-    for token in tokens:
-        if token in _COMPOUND_SEPARATORS:
-            if current:
-                commands.append(shlex.join(current))
-                current = []
-        else:
-            current.append(token)
-
-    if current:
-        commands.append(shlex.join(current))
-
-    return commands if commands else [command]
-
-
-def evaluate_single_command(command: str) -> PolicyResult:
+def evaluate_blacklist_single(command: str) -> PolicyResult:
     tokens = normalize_tokens(command)
     if not tokens:
-        return PolicyResult(blocked=False)
-
+        return PolicyResult(False)
     if blocks_git_reset_hard(tokens):
-        return PolicyResult(True, "Repo Bash 명령어 정책에 따라 `git reset --hard`는 차단됩니다.")
-
+        return PolicyResult(True, "Repo 정책: `git reset --hard`는 차단됩니다.")
     if blocks_git_checkout_restore(tokens):
-        return PolicyResult(True, "Repo Bash 명령어 정책에 따라 `git checkout --`는 로컬 변경사항을 버리므로 차단됩니다.")
-
+        return PolicyResult(True, "Repo 정책: `git checkout --`는 로컬 변경을 버리므로 차단됩니다.")
     if blocks_rm_rf(tokens):
-        return PolicyResult(True, "Repo Bash 명령어 정책에 따라 위험한 명령인 `rm -rf` 계열 명령은 차단됩니다.")
-
+        return PolicyResult(True, "Repo 정책: `rm -rf` 계열 명령은 차단됩니다.")
     if blocks_force_push(tokens):
-        return PolicyResult(True, "Repo Bash 명령어 정책에 따라 강제 push는 차단됩니다.")
+        return PolicyResult(True, "Repo 정책: 강제 push는 차단됩니다.")
+    return PolicyResult(False)
 
-    return PolicyResult(blocked=False)
+
+# ─────────────────────────────────────────────────────────────────────────────
+# 2. committer 화이트리스트 — git status/diff/log/add/commit 외 모든 Bash 차단
+# ─────────────────────────────────────────────────────────────────────────────
+_COMMITTER_ALLOWED_GIT = frozenset({"status", "diff", "log", "add", "commit"})
 
 
-def evaluate_command(command: str) -> PolicyResult:
+def evaluate_committer_single(command: str) -> PolicyResult:
+    tokens = normalize_tokens(command)
+    if not tokens:
+        return PolicyResult(False)  # 파싱 불가는 fail-open
+    if tokens[0] != "git":
+        return PolicyResult(True, f"harness-v3-committer는 git 명령만 허용됩니다 (시도: `{tokens[0]}`).")
+    if len(tokens) < 2 or tokens[1] not in _COMMITTER_ALLOWED_GIT:
+        sub = tokens[1] if len(tokens) >= 2 else "(none)"
+        return PolicyResult(True, f"harness-v3-committer는 git status/diff/log/add/commit만 허용됩니다 (시도: `git {sub}`).")
+    # commit 서브커맨드라도 history 조작(--amend)은 차단
+    if tokens[1] == "commit" and "--amend" in tokens[2:]:
+        return PolicyResult(True, "harness-v3-committer는 `git commit --amend`(history 조작)를 할 수 없습니다.")
+    return PolicyResult(False)
+
+
+# ─────────────────────────────────────────────────────────────────────────────
+# 3. reviewer Write 가드 — 핸드오프 외 경로 쓰기 차단
+# ─────────────────────────────────────────────────────────────────────────────
+def evaluate_reviewer_write(file_path: str) -> PolicyResult:
+    # 허용: .../handoff/stepN-review.json (review 핸드오프만)
+    normalized = file_path.replace("\\", "/")
+    if "/handoff/" in normalized and normalized.endswith("-review.json"):
+        return PolicyResult(False)
+    return PolicyResult(True, f"harness-v3-reviewer는 review 핸드오프 외 파일을 쓸 수 없습니다 (시도: `{file_path}`).")
+
+
+# ─────────────────────────────────────────────────────────────────────────────
+# 디스패치
+# ─────────────────────────────────────────────────────────────────────────────
+def evaluate_bash(command: str, agent_type: str) -> PolicyResult:
     for sub in split_compound_commands(command):
-        result = evaluate_single_command(sub)
+        if agent_type == "harness-v3-committer":
+            result = evaluate_committer_single(sub)
+        else:
+            result = evaluate_blacklist_single(sub)
         if result.blocked:
             return result
-    return PolicyResult(blocked=False)
+    return PolicyResult(False)
 
 
 def emit_block(reason: str) -> int:
-    # Claude Code PreToolUse hook 응답 형식
     payload = {
-        "decision": "block",
-        "reason": reason,
+        "hookSpecificOutput": {
+            "hookEventName": "PreToolUse",
+            "permissionDecision": "deny",
+            "permissionDecisionReason": reason,
+        }
     }
     sys.stdout.write(json.dumps(payload, ensure_ascii=False))
     sys.stdout.flush()
@@ -220,21 +260,32 @@ def main() -> int:
         payload = json.load(sys.stdin)
     except json.JSONDecodeError:
         return 0
-
     if not isinstance(payload, dict):
         return 0
 
+    agent_type = payload.get("agent_type", "") or ""
+    tool_name = payload.get("tool_name", "") or ""
     tool_input = payload.get("tool_input", {})
     if not isinstance(tool_input, dict):
         return 0
 
-    command = tool_input.get("command", "")
-    if not isinstance(command, str) or not command.strip():
+    # reviewer Write 가드
+    if agent_type == "harness-v3-reviewer" and tool_name == "Write":
+        file_path = tool_input.get("file_path", "")
+        if isinstance(file_path, str) and file_path.strip():
+            result = evaluate_reviewer_write(file_path)
+            if result.blocked:
+                return emit_block(result.reason)
         return 0
 
-    result = evaluate_command(command)
-    if result.blocked:
-        return emit_block(result.reason)
+    # Bash 정책 (committer 화이트리스트 / 그 외 블랙리스트)
+    if tool_name == "Bash":
+        command = tool_input.get("command", "")
+        if not isinstance(command, str) or not command.strip():
+            return 0
+        result = evaluate_bash(command, agent_type)
+        if result.blocked:
+            return emit_block(result.reason)
     return 0
 
 

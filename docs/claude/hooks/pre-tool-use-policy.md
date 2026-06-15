@@ -1,74 +1,80 @@
-# PreToolUse Bash 정책
+# PreToolUse 정책 (Bash / Write)
 
 ## 목적
 
-이 문서는 현재 Repo 전용 Claude Code `PreToolUse` Bash hook의 운영 규칙을 설명한다.
+이 문서는 현재 Repo 전용 Claude Code `PreToolUse` hook의 운영 규칙을 설명한다.
 
-현재 정책은 Claude Code가 Bash 명령을 실행하기 전에 대표적인 위험 명령 패턴을 한 번 더 차단하는 최소 방어선 역할을 한다.
+이 정책은 두 가지를 한다: (1) repo 전체의 위험한 Bash 명령을 실행 전에 차단하는 **공용 최소 방어선**, (2) harness-v3 sub-agent(committer / reviewer)에 대해 역할별로 **더 좁은 규칙**을 적용. 입력의 `agent_type`으로 어느 규칙을 쓸지 가른다.
 
 ## 적용 범위
 
 - 이 정책은 현재 Repo에서만 적용된다.
 - hook 설정 파일은 `.claude/settings.json`이다.
 - 정책 스크립트는 `.claude/hooks/pre_tool_use_policy.py`이다.
+- 매처는 `Bash|Write`. Bash는 명령을, Write는 파일 경로를 검사한다.
 
-## 현재 차단 규칙
+## 규칙 (agent_type별 분기)
 
-현재 정책은 아래 대표 패턴을 차단한다.
+### 1. harness-v3-committer (Bash) — 화이트리스트
+
+`git status` / `git diff` / `git log` / `git add` / `git commit` **다섯 개만 허용**하고 나머지는 모두 차단한다. committer의 본업이 커밋뿐이라 그 외 명령은 정상 흐름이 아니다.
+
+- 차단: 위 5개 외 모든 git 서브커맨드(push / pull / fetch / reset / checkout / switch / rebase / merge / branch / clean / restore / stash / cherry-pick / revert / tag 등)
+- 차단: `git commit --amend` (commit 서브커맨드라도 history 조작이므로)
+- 차단: git이 아닌 모든 Bash 명령(rm / mv / echo > 파일 등)
+
+### 2. harness-v3-reviewer (Write) — 핸드오프 가드
+
+reviewer는 판정 핸드오프만 쓸 수 있다. `tool_input.file_path`가 `.../handoff/stepN-review.json` 패턴이 아니면 차단한다. (코드·문서·dev 핸드오프 등 다른 경로 쓰기 차단.)
+
+### 3. 그 외(메인 세션 / 일반 작업) (Bash) — 블랙리스트
+
+대표 위험 패턴만 차단하는 최소 방어선이다.
 
 - `git reset --hard`
 - `git checkout -- ...`
-- `rm -rf ...`
-- `rm -fr ...`
-- `rm --recursive --force ...`
-- `git push --force ...`
-- `git push --force-with-lease ...`
-- `git push -f ...`
+- `rm -rf ...` / `rm -fr ...` / `rm --recursive --force ...`
+- `git push --force ...` / `--force-with-lease` / `-f`
 
-차단 기준은 명령 문자열 자체가 아니라 shell token 기준으로 검사한다. `sudo`, `command`, `env FOO=bar ...` 같은 prefix가 있어도 실제 명령이 위 규칙에 해당하면 차단한다.
+차단 기준은 명령 문자열이 아니라 shell token 기준이다. `sudo`, `command`, `env FOO=bar ...`, `git -c ... ` 같은 prefix가 있어도 실제 명령이 규칙에 해당하면 차단한다. `&&`, `||`, `;`, `&`, `|`로 연결된 복합 명령은 각 명령을 개별 검사하고, 따옴표 안의 구분자는 분리 대상에서 제외한다.
 
-`&&`, `||`, `;`, `&`, `|`로 연결된 복합 명령도 각 명령을 개별적으로 검사한다. 예를 들어 `git commit -m "fix" && git push --force`는 두 번째 명령인 `git push --force`가 위 규칙에 해당하므로 차단한다. `ls;rm -rf build`처럼 공백 없이 연결된 명령도 분리하여 검사한다. 따옴표 안의 구분자는 분리 대상에서 제외된다.
+블랙리스트는 최소 방어선이라 `git restore`, `find ... -delete`, SQL `DROP TABLE` 등 다른 위험 명령까지 모두 막지는 않는다.
 
-현재 정책은 최소 방어선이다. 아래처럼 위험할 수 있는 다른 명령까지 모두 차단하는 것은 아니다.
+## 허용 예시 (일반 작업)
 
-- `git restore ...`
-- `find ... -delete`
-- SQL 실행 도구를 통한 `DROP TABLE`
-
-## 허용 예시
-
-아래 같은 일반적인 조회 및 검증 명령은 허용한다.
-
-- `ls -la`
-- `rg hooks .claude`
-- `sed -n '1,80p' docs/claude/hooks/pre-tool-use-policy.md`
-- `./gradlew test`
+- `ls -la`, `rg hooks .claude`, `./gradlew test`, `git status`
 
 ## 동작 방식
 
-Claude Code가 Bash 실행을 시도하면 `PreToolUse` hook이 stdin으로 JSON payload를 받는다.
+Claude Code가 도구 실행을 시도하면 `PreToolUse` hook이 stdin으로 JSON payload를 받는다.
 
-- `tool_name`이 `Bash`이면 `tool_input.command`를 읽는다.
-- `&&`, `||`, `;`, `&`, `|`로 연결된 복합 명령은 개별 명령으로 분리한 뒤 각각 검사한다.
-- 하나라도 차단 대상이면 `decision: block`과 차단 사유를 포함한 JSON을 stdout에 출력한다.
-- 모두 통과하면 exit 0으로 성공 종료한다.
-- 입력 JSON이 깨졌거나 payload 타입, `tool_input`, `command` 형식이 예상과 다르면 fail-open으로 처리한다.
+- `agent_type`과 `tool_name`을 읽어 위 1~3 규칙 중 하나로 분기한다.
+- `agent_type`이 비어 있으면(플랫폼/버전 차이로 미제공) 3번(블랙리스트)으로 fail-safe 동작한다.
+- 차단 시 아래 응답 형식을 stdout에 출력하고 exit 0. 통과 시 출력 없이 exit 0.
+- 입력 JSON이 깨졌거나 형식이 예상과 다르면 fail-open(통과)으로 처리한다.
 
-## Claude Code hook 응답 형식
+## Claude Code hook 응답 형식 (최신)
 
 ```json
 {
-  "decision": "block",
-  "reason": "Repo Bash 명령어 정책에 따라 `git reset --hard`는 차단됩니다."
+  "hookSpecificOutput": {
+    "hookEventName": "PreToolUse",
+    "permissionDecision": "deny",
+    "permissionDecisionReason": "harness-v3-committer는 git status/diff/log/add/commit만 허용됩니다 (시도: `git push`)."
+  }
 }
 ```
 
+## sub-agent 차단의 한계 (중요)
+
+일부 Claude Code 버전/플랫폼에서 **sub-agent의 PreToolUse 차단이 무시될 수 있다**(이슈 #40580, WSL 라벨, 작성 시점 open). hook은 호출되고 올바른 입력을 받지만 차단이 강제되지 않을 수 있다.
+
+따라서 committer 화이트리스트·reviewer 가드는 **2차 방어(defense-in-depth)**로 보고, 1차 방어는 각 sub-agent 정의(`.claude/agents/harness-v3-*.md`)의 프롬프트 제약으로 둔다. 본인 환경에서 sub-agent 차단이 실제로 동작하는지 1회 확인을 권장한다(예: committer가 비-git 명령을 시도했을 때 막히는지).
+
 ## 로컬 검증
 
-정책 스크립트 테스트는 아래 명령으로 실행할 수 있다.
-
 ```bash
-python3 .claude/hooks/tests/test_pre_tool_use_policy.py
+python3 -m unittest discover -s .claude/hooks/tests
 ```
 
-실제 Claude Code 동작 검증은 현재 Repo 루트에서 Claude Code를 실행한 뒤 허용 명령과 차단 명령을 각각 한 번씩 실행해 확인한다.
+실제 Claude Code 동작 검증은 repo 루트에서 Claude Code를 실행한 뒤 허용/차단 명령을 각각 실행해 확인한다.
