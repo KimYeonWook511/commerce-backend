@@ -57,9 +57,9 @@
 - **PostToolUse / Bash·Edit·Write·Read·Grep·Glob** (실시간 로깅)
   - 목적: harness sub-agent가 도구를 쓸 때마다 transcript의 새로 확정된 부분만 `<phase>/logs/<role>.log`에 증분 append
   - 스크립트: `.claude/skills/harness-v3/scripts/hooks/log_progress.sh`
-  - 비고: 백그라운드 프로세스 없음(좀비 0). 상태파일 + requestId dedup으로 중복 0. agent_type으로 harness sub-agent만 자체 필터. 항상 exit 0.
+  - 비고: 백그라운드 프로세스 없음(좀비 0). 상태파일 + requestId dedup + footer 가드로 중복 0(재기상해도 재덤프 안 함). agent_type으로 harness sub-agent만 자체 필터. 로그 위치는 `cwd`→git 최상위(worktree)로 찾고 `$CLAUDE_PROJECT_DIR`는 fallback. 항상 exit 0.
 
 - **SubagentStop / harness-v3-*** (로깅 마무리)
-  - 목적: 보류된 마지막 메시지 flush + 완료 박스 + 상태파일(`.harness/logstate-<id>.json`) 정리
+  - 목적: 보류된 마지막 메시지 flush + 완료 박스(footer)
   - 스크립트: `.claude/skills/harness-v3/scripts/hooks/log_stop.sh`
-  - 비고: 차단이 아니라 기록용. `.harness/active-phase` 마커로 로그 경로를 정한다. 항상 exit 0.
+  - 비고: 차단이 아니라 기록용. `.harness/active-phase` 마커로 로그 경로를 정한다. 상태파일(logstate)은 **여기서 지우지 않는다**(재기상 대비 보존; 정리는 `execute.py` init/finalize/중단). 항상 exit 0.

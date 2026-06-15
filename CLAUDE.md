@@ -90,5 +90,5 @@ Java, Spring Boot, Gradle, MySQL, JPA(Hibernate) 백엔드 프로젝트.
 
 task·하네스 운영
 - task별 문서 운영 가이드: `docs/tasks/README.md`
-- Claude Code hook 구조: `docs/claude/hooks/README.md`
+- Claude Code hook 구조: `docs/claude/hooks/overview.md`
 - Claude Code skill 문서: `docs/claude/skills/*`

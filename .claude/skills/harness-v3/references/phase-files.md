@@ -89,7 +89,7 @@ step 실행 상태 파일이다.
 - `completed_at`
 - `failed_at`
 - `blocked_at`
-- `execution`: phase 최초 실행 시 `execute.py`가 1회 기록한다. 재실행 시 기존 값을 보존한다. 하위 필드는 `developer_model`, `reviewer_model`, `commit_model` (각각 `--developer-model` / `--reviewer-model` / `--commit-model` CLI 인자값)
+- `execution`: phase 최초 실행 시 `execute.py`가 1회 기록한다. 재실행 시 기존 값을 보존한다. 하위 필드는 `developer_model`, `reviewer_model`, `commit_model` (각각 `--developer-model` / `--reviewer-model` / `--commit-model` CLI 인자값)과 `push` (`--no-push`면 `false`). init·step·finalize가 별도 프로세스라, `step`은 여기서 role별 모델을 읽고 `finalize`는 `push`를 읽는다.
 
 상태별 추가 필드 의미:
 
@@ -104,7 +104,8 @@ step 실행 상태 파일이다.
   "execution": {
     "developer_model": "sonnet",
     "reviewer_model": "opus",
-    "commit_model": "haiku"
+    "commit_model": "haiku",
+    "push": true
   }
 }
 ```
@@ -288,10 +289,11 @@ python3 .claude/skills/harness-v3/scripts/execute.py finalize docs/tasks/<task-n
 
 ## 내부 상태 — `.harness/` (worktree 루트)
 
-harness 실행 중에만 쓰는 폴더로 `.gitignore`로 제외된다(`/.harness/`). 두 가지를 담는다.
+harness 실행 중에만 쓰는 폴더로 `.gitignore`로 제외된다(`/.harness/`). 세 가지를 담는다.
 
-- `active-phase` (마커): `execute.py init`이 현재 phase 상대경로를 한 줄 적고 `finalize`가 지운다. 로깅 hook이 읽어 로그를 `<phase>/logs/`에 쓴다.
-- `logstate-<agent_id>.json`: 증분 로깅 북마크. PostToolUse가 갱신, SubagentStop이 종료 시 정리.
+- `active-phase` (마커): `execute.py init`이 현재 phase 상대경로를 한 줄 적고 `finalize`가 지운다(중단 시엔 남기고 다음 `step`이 자가복구). 로깅 hook이 읽어 로그를 `<phase>/logs/`에 쓴다. hook은 `$CLAUDE_PROJECT_DIR`가 아니라 도구 호출의 `cwd`→`git rev-parse --show-toplevel`로 worktree 루트를 먼저 찾고 실패 시에만 fallback하므로, develop 루트에서 띄워도 worktree 로그로 간다.
+- `logstate-<agent_id>.json`: 증분 로깅 북마크(찍은 키 + header + footer 여부). PostToolUse가 갱신한다. **SubagentStop은 지우지 않는다**(재기상 재덤프 방지로 보존). 정리는 `execute.py`가 init/finalize/중단(blocked·error) 시 일괄로 한다.
+- `log-panes.json`: `init`이 만든 tmux 로그 pane id(`{"panes":[...], "main_pane":...}`). 별도 프로세스인 `finalize`(및 중단 경로)가 읽어 pane을 kill하고 지운다.
 
 ## 핸드오프 — `<phase>/handoff/`
 
@@ -307,7 +309,7 @@ sub-agent가 execute.py에게 결과를 전달하는 유일한 통로(휘발성)
 - `stepN-output.json`: execute.py가 검증 통과 시 정본으로 누적하는 회고 재료(아래 구조).
 - `stepN-ac-output.json`: Acceptance Criteria 재실행 결과(execute.py 작성).
 - `<phase>/handoff/`: 위 핸드오프·프롬프트 파일.
-- `logs/`: 각 sub-agent의 transcript를 포맷한 사람용 로그(`harness-v3-developer.log` / `harness-v3-reviewer.log` / `harness-v3-committer.log`). **PostToolUse hook**(`log_progress.sh`)이 도구 경계마다 새로 확정된 부분만 증분 append하고(실시간), **SubagentStop hook**(`log_stop.sh`)이 마지막 보류분을 flush한 뒤 상태파일(`.harness/logstate-<id>.json`)을 정리한다. tmux 3-pane이 tail한다. 중복은 상태파일+requestId dedup으로 막는다.
+- `logs/`: 각 sub-agent의 transcript를 포맷한 사람용 로그(`harness-v3-developer.log` / `harness-v3-reviewer.log` / `harness-v3-committer.log`). **PostToolUse hook**(`log_progress.sh`)이 도구 경계마다 새로 확정된 부분만 증분 append하고(실시간), **SubagentStop hook**(`log_stop.sh`)이 마지막 보류분을 flush한 뒤 완료 박스(footer)를 붙인다. 상태파일(logstate)은 SubagentStop이 **지우지 않고**(재기상 대비) `execute.py`가 정리한다. tmux 3-pane이 tail한다. 중복은 상태파일(footer 가드 포함)+requestId dedup으로 막는다.
 
 ### `stepN-output.json` 구조 (v3 — 경량)
 
