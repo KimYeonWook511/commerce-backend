@@ -148,7 +148,7 @@ PR review까지 코드가 확정된 시점에 루트 문서를 현재 상태로 
 
 phase 폴더 아래 `logs/`에 sub-agent별 사람용 로그를 쌓는다: `harness-v3-developer.log` / `harness-v3-reviewer.log` / `harness-v3-committer.log`.
 
-실시간성은 **PostToolUse hook**으로 얻는다. sub-agent가 도구를 쓸 때마다 `log_progress.sh`가 그 sub-agent의 transcript(메인 세션 `.jsonl`의 `transcript_path`에서 확장자를 떼고 그 아래 `subagents/agent-<id>.jsonl`)를 읽어 **새로 확정된 부분만** 골라 로그에 append한다. 백그라운드 프로세스(tail)를 띄우지 않으므로 좀비 프로세스가 없고, 상태파일(`.harness/logstate-<id>.json`)의 '이미 찍은 키'로 재출력을 막아 중복이 없다. transcript는 스트리밍 중 같은 `requestId`로 누적 기록되는데, 포맷터가 키별 마지막(가장 완성된) 엔트리만 남겨 dedup한다. 마지막(진행 중일 수 있는) 메시지는 보류했다가 다음 PostToolUse나 SubagentStop에서 flush한다. **완료 박스(footer)가 한 번 찍히면 상태파일에 `footer` 플래그가 남아, P3 오배달로 같은 agent가 재기상해 hook이 다시 호출돼도 즉시 종료한다(전체 재덤프·footer 중복·재기상 노이즈 차단).**
+실시간성은 **PostToolUse hook**으로 얻는다. sub-agent가 도구를 쓸 때마다 `log_progress.sh`가 그 sub-agent의 transcript(메인 세션 `.jsonl`의 `transcript_path`에서 확장자를 떼고 그 아래 `subagents/agent-<id>.jsonl`)를 읽어 **새로 확정된 부분만** 골라 로그에 append한다. 백그라운드 프로세스(tail)를 띄우지 않으므로 좀비 프로세스가 없고, 상태파일(`.harness/logstate-<id>.json`)의 '이미 찍은 키'로 재출력을 막아 중복이 없다. transcript는 스트리밍 중 같은 `requestId`로 누적 기록되는데, 포맷터가 키별 마지막(가장 완성된) 엔트리만 남겨 dedup한다. 마지막(진행 중일 수 있는) 메시지는 보류했다가 다음 PostToolUse나 SubagentStop에서 flush한다. **완료 박스(footer)가 한 번 찍히면 상태파일에 `footer` 플래그가 남아, 완료 알림 오배달로 같은 agent가 재기상해 hook이 다시 호출돼도 즉시 종료한다(전체 재덤프·footer 중복·재기상 노이즈 차단).**
 
 - **PostToolUse → `log_progress.sh`**: 도구 경계마다 증분 append (실시간)
 - **SubagentStop → `log_stop.sh`**: 보류분 마지막 flush + 완료 박스(footer). 상태파일은 **여기서 지우지 않는다**(재기상 대비 보존, 정리는 `execute.py`가).
