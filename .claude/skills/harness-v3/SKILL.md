@@ -359,3 +359,22 @@ sync 후 agent는 변경 요약(무엇을 갱신했고 무엇을 보존했는지
 - 각 step의 시행착오는 Stage 6 실행 중 `execute.py`가 남긴 step output 산출물에 기록돼 있다. Stage 9에서는 그 산출물들과 PR review 처리 결과를 종합해 회고록을 작성한다.
 - 회고록은 merge 직전, 코드가 모두 확정된 뒤 1회 작성한다. 그래야 PR review에서 지적받아 고친 내용까지 회고에 반영된다.
 - 커밋·push는 Stage 6에서 오픈한 같은 PR에 쌓는다. 작성 후 merge로 마무리한다.
+
+---
+
+## 알려진 제약 / 주의
+
+실측으로 확인된 제약이다. harness 코드로는 더 막을 수 없는 부분이 있으니 운영 시 숙지한다.
+
+### P3 — sub-agent 완료 알림 오배달 (플랫폼 한계)
+
+- Claude Code(#40580 계열)에서 sub-agent의 완료 알림이 부모(셔틀)가 아니라 **다른, 아직 살아있는 sub-agent로 오배달**될 수 있다. 그 sub-agent는 재기상해 "더 진행할까요?"류로 응답한다.
+- 그래서 **셔틀은 완료 알림에 의존하지 않는다.** Task 호출이 리턴되면 곧바로 `execute.py step`을 부르고, 완료 판정은 **디스크 상태(handoff / `_stage` / git HEAD)**로만 한다. 떠도는 재기상 응답은 무시한다.
+- 재기상한 idle 에이전트가 UI에 보여도 **기능·로그·자원 피해는 0**이다(실측): 디스크 판정으로 파이프라인이 안 깨지고, 로그는 `transcript_formatter`의 footer 가드로 재덤프가 차단된다(완료된 agent의 재호출은 렌더하지 않음).
+- **재기상 자체는 harness로 못 막는다**: `TaskStop`은 running task만 종료하고 `completed` 에이전트는 거부하므로(실측), lingering 에이전트를 제거할 수단이 없다. 근본 해결은 업스트림(#40580) 몫이다.
+
+### B — committer는 working tree의 미커밋 변경을 흡수한다
+
+- commit agent는 그 시점 working tree의 **untracked/modified 파일을 step 커밋에 함께 담는다**(step 산출물만 고르지 않는다).
+- 따라서 **Stage 6 실행 전에 task 문서를 `docs:`로 선커밋해야 한다**(실행 전 절차 2번). 선커밋을 빠뜨리면 첫 step의 committer가 task 문서·기타 미커밋 파일까지 흡수한다.
+- 일반 운영에선 선커밋 절차로 자연히 방지된다. 실행 중 harness 소스 등 무관한 변경을 working tree에 남기지 않는다.
