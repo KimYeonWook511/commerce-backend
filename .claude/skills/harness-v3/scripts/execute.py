@@ -722,12 +722,17 @@ class StepExecutor:
             pass
 
     def _clear_logstate_files(self):
-        # SubagentStop은 재기상 대비로 logstate를 보존하므로, 정리는 init/finalize에서 일괄로 한다.
+        # SubagentStop은 재기상 대비로 logstate를 보존하므로, 정리는 init/finalize/중단에서 일괄로 한다.
         harness_dir = self.root_path / ".harness"
         if harness_dir.is_dir():
             for state_file in harness_dir.glob("logstate-*.json"):
                 with contextlib.suppress(FileNotFoundError):
                     state_file.unlink()
+
+    def _teardown_runtime(self):
+        # 정상 종료(finalize)·중단(blocked/error) 공통 런타임 정리: 로그 pane + logstate.
+        self._teardown_log_panes()
+        self._clear_logstate_files()
 
     # ── 핸드오프 파일 경로 (에이전트가 결과를 쓰는 곳; index 정본 아님) ──────────
     def handoff_dir(self) -> Path:
@@ -779,6 +784,7 @@ class StepExecutor:
         step["_stage"] = STAGE_DONE
         self.write_json(self.index_file, index)
         self.update_task_index("error")
+        self._teardown_runtime()
         return {"action": "error", "step": n, "message": error_message}
 
     # ── init: 프리플라이트 게이트 + 마커 + execution 기록 + tmux ────────────────
@@ -898,6 +904,7 @@ class StepExecutor:
                     step["_stage"] = STAGE_DONE
                     self.write_json(self.index_file, index)
                     self.update_task_index("blocked")
+                    self._teardown_runtime()
                     self._emit({"action": "blocked", "step": n, "reason": review.get("message", "")})
                 if decision == "retryable_error":
                     r = self._retry_or_fail(index, step, review.get("message", "reviewer 재시도 요청"))
@@ -950,8 +957,7 @@ class StepExecutor:
             self.finalize()        # v2 finalize: completed_at, task index, checklist, docs/chore 커밋, push
         finally:
             self.clear_marker()
-            self._teardown_log_panes()
-            self._clear_logstate_files()
+            self._teardown_runtime()
         self._emit({"action": "finalized", "phase": self.phase_relpath})
 
     # ── 씨앗 ①: verify — verify_step_result_v3 호출 ──────────────────────────
