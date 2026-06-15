@@ -26,7 +26,7 @@ public interface PaymentRepository {
 
 	Optional<Payment> findApproveSucceeded(String merchantPayKey);
 
-	// APPROVE 타입 UNKNOWN 결제가 있는 주문은 reserve/approve 차단 (ADR-6)
+	// APPROVE 타입 UNKNOWN 결제가 있는 주문은 reserve/approve 차단
 	boolean existsUnknownByOrderId(Long orderId);
 
 	boolean existsApprovedByOrderId(Long orderId);

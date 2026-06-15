@@ -35,7 +35,7 @@ public class PaymentRepositoryAdapter implements PaymentRepository {
 	 * APPROVE 승인 완료 전용 저장 경로.
 	 * saveAndFlush의 조기 flush가 uk_payment_approved_order_key 위반을 이 메서드 호출 안에서 확정한다(load-bearing).
 	 * constraint name이 uk_payment_approved_order_key인 경우에만 PaymentException(PAYMENT_DUPLICATE)로 변환하고,
-	 * 그 외 무결성 위반은 원 예외를 그대로 전파한다(ADR-011 carve-out).
+	 * 그 외 무결성 위반은 원 예외를 그대로 전파한다.
 	 */
 	@Override
 	public Payment saveApproved(Payment payment) {

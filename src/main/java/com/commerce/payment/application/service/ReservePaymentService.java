@@ -53,7 +53,7 @@ public class ReservePaymentService {
 
 		order.checkPayable();
 
-		// UNKNOWN 행이 있는 주문은 결제 시도 차단 (ADR-6)
+		// UNKNOWN 행이 있는 주문은 결제 시도 차단
 		if (paymentRepository.existsUnknownByOrderId(order.getId())) {
 			throw new PaymentException(PaymentErrorCode.PAYMENT_RESULT_PENDING);
 		}

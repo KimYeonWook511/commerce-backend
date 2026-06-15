@@ -27,7 +27,7 @@ import lombok.extern.slf4j.Slf4j;
 @RequiredArgsConstructor
 public class PaymentApprovalCompensationUseCase {
 
-	// transition(별도 빈)이 던지는 도메인 예외 중 best-effort 보상에서 skip할 코드 집합 (ADR-L2).
+	// transition(별도 빈)이 던지는 도메인 예외 중 best-effort 보상에서 skip할 코드 집합.
 	// 충돌(다른 주체가 먼저 종착) / 가드 위반(이미 종착) / 이력 없음은 단조 종착이므로 흡수한다. 흡수는 트랜잭션 경계 밖(useCase)에서만 한다.
 	private static final Set<PaymentErrorCode> SKIPPABLE = EnumSet.of(
 		PaymentErrorCode.PAYMENT_CONCURRENTLY_MODIFIED,
@@ -39,7 +39,7 @@ public class PaymentApprovalCompensationUseCase {
 	private final NotificationPort notificationPort;
 
 	/**
-	 * CANCELED 주문의 UNKNOWN 결제가 대사에서 SUCCEEDED 확정을 시도한 경우 보상 취소(환불)를 수행한다 (ADR-L4, C).
+	 * CANCELED 주문의 UNKNOWN 결제가 대사에서 SUCCEEDED 확정을 시도한 경우 보상 취소(환불)를 수행한다.
 	 * PG 보상 취소 → 통지(best-effort). 이중 환불은 runPgCancel 내부의 getOrCreate + REQUESTED 가드가 차단한다.
 	 */
 	public void compensateCanceledOrderApproval(Payment approvePayment, PgCanceller pgCanceller) {
@@ -142,7 +142,7 @@ public class PaymentApprovalCompensationUseCase {
 	}
 
 	/**
-	 * approve fail transition을 호출하되 best-effort 보상에서 흡수 대상(ADR-L2 SKIPPABLE) 도메인 예외는 skip한다.
+	 * approve fail transition을 호출하되 best-effort 보상에서 흡수 대상(SKIPPABLE) 도메인 예외는 skip한다.
 	 * transition은 별도 빈(public @Transactional)이라 충돌 시 그 트랜잭션만 깨끗이 rollback되고, 흡수 catch는 트랜잭션 경계 밖에서 일어난다.
 	 */
 	private void failSkippable(
@@ -162,7 +162,7 @@ public class PaymentApprovalCompensationUseCase {
 	}
 
 	/**
-	 * cancel markUnknown transition을 호출하되 흡수 대상(ADR-L2 SKIPPABLE) 도메인 예외는 skip한다. (failSkippable과 동일 구조)
+	 * cancel markUnknown transition을 호출하되 흡수 대상(SKIPPABLE) 도메인 예외는 skip한다. (failSkippable과 동일 구조)
 	 */
 	private void markUnknownSkippable(
 		String merchantPayKey, PaymentProvider provider, String pgPaymentId,

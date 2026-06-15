@@ -77,7 +77,7 @@ public class PaymentCancellationService {
 	}
 
 	/**
-	 * CANCEL 기록을 UNKNOWN으로 전이하는 transition (별도 빈의 public @Transactional, ADR-L2).
+	 * CANCEL 기록을 UNKNOWN으로 전이하는 transition (별도 빈의 public @Transactional).
 	 * find → 도메인 전이(markUnknown 가드: REQUESTED 아니면 PAYMENT_STATUS_TRANSITION_NOT_ALLOWED) → saveChecked.
 	 * PG 취소 결과 불명(네트워크/서버오류/응답 해석 불가) 시 흔적을 보존해 대사 대상으로 남긴다 (#219).
 	 * CANCEL 타입 UNKNOWN 은 existsUnknownByOrderId(APPROVE 한정) 에 잡히지 않아 주문 재결제를 차단하지 않는다.
