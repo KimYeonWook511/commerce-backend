@@ -592,6 +592,7 @@ class StepExecutor:
                 "developer_model": self.developer_model,
                 "reviewer_model": self.reviewer_model,
                 "commit_model": self.commit_model,
+                "push": self.auto_push,  # finalize는 별도 프로세스라 디스크로 전달
             }
             dirty = True
         if dirty:
@@ -637,6 +638,9 @@ class StepExecutor:
             print(f"  ✓ {message}")
 
         if self.auto_push:
+            if not self.branch_name:
+                print("\n  ERROR: push할 브랜치명을 확인할 수 없습니다(빈 refspec 방지).")
+                raise SystemExit(1)
             result = self.run_git("push", "-u", "origin", self.branch_name)
             if result.returncode != 0:
                 print(f"\n  ERROR: git push 실패: {result.stderr.strip()}")
@@ -912,6 +916,11 @@ class StepExecutor:
 
     # ── finalize: 마커 정리 + v2 finalize 그대로 ──────────────────────────────
     def cmd_finalize(self):
+        # 별도 프로세스라 push 선호(디스크)와 브랜치(git)를 다시 읽는다.
+        index = self.read_json(self.index_file)
+        recorded_push = index.get("execution", {}).get("push", True)
+        self.auto_push = bool(recorded_push) and self.auto_push  # 하나라도 no-push면 no-push
+        self.branch_name = self._read_current_branch()           # 빈 refspec 방지
         try:
             self.finalize()        # v2 finalize: completed_at, task index, checklist, docs/chore 커밋, push
         finally:
