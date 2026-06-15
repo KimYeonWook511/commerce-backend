@@ -813,6 +813,12 @@ class StepExecutor:
         """현재 활성 step의 _stage를 한 칸 진행시키고,
         에이전트 호출이 필요한 순간 invoke_agent 지시를 STDOUT에 찍고 종료한다.
         순수 Python 게이트(acceptance/verify)는 왕복 없이 인라인으로 처리한다."""
+        # step CLI엔 모델 인자가 없어 생성자 기본값이 들어온다. init이 기록한 모델을 따르도록
+        # index의 execution에서 role별 모델을 읽어 덮어쓴다(P1의 push와 같은 패턴).
+        execution = self.read_json(self.index_file).get("execution", {})
+        self.developer_model = execution.get("developer_model", self.developer_model)
+        self.reviewer_model = execution.get("reviewer_model", self.reviewer_model)
+        self.commit_model = execution.get("commit_model", self.commit_model)
         # 마커가 사라졌으면(외부 정리 등) 복구
         if not self.marker_path().exists():
             self.write_marker()
