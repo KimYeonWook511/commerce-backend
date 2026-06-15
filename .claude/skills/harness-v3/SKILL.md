@@ -274,8 +274,9 @@ STDOUT의 JSON 한 줄을 파싱해 `action`에 따라 처리한다 (사람용 �
   2. `role`에 해당하는 sub-agent를 Task(Agent 도구)로 호출한다: `developer`→`harness-v3-developer`, `reviewer`→`harness-v3-reviewer`, `commit`→`harness-v3-committer`.
      - 모델은 JSON의 `model` 값을 사용한다(사용자가 고른 값).
      - prompt는 1에서 읽은 `prompt_file` 내용을 그대로 전달한다.
-  3. Task는 블로킹이다. sub-agent가 끝나면(핸드오프를 디스크에 쓰고 종료) 다시 `step`을 호출한다.
+  3. Task 호출이 리턴되면(완료 알림 수신 여부와 무관하게) 다시 `step`을 호출한다. 완료 판정은 알림이 아니라 디스크 상태(핸드오프·`_stage`·git HEAD)로 한다.
   - 메인 에이전트는 **내용을 요약·변형하지 않는다.** prompt_file을 그대로 넘기고, 판정은 `execute.py`가 디스크의 핸드오프로 한다.
+  - **알림 라우팅은 신뢰하지 않는다.** Claude Code 결함으로 sub-agent 완료 알림이 다른 sub-agent로 오배달될 수 있다(이슈 #40580 계열). 오배달로 재기상한 sub-agent가 "더 진행할까요?"류로 돌아와도 step 진행 신호로 쓰지 않고 무시한다. 각 step에서 sub-agent는 정확히 1회만 호출하며 결과는 핸드오프(디스크)로만 받는다.
 - **`done`** — 모든 step이 끝났다. 루프를 종료하고 finalize로 간다.
 - **`blocked`** — reviewer가 사람 개입이 필요하다고 판정했다. 루프를 멈추고 사용자에게 `step`·`reason`을 보고한다. finalize하지 않는다.
 - **`error`** — step이 재시도 한도(3회)를 넘겨 실패했다. 루프를 멈추고 사용자에게 `step`·`message`를 보고한다. finalize하지 않는다.
