@@ -212,20 +212,36 @@ class StepExecutor:
             self.log_panes.append(pane)
             target = pane  # 다음 split은 방금 만든 pane을 나눈다
         if self.log_panes:
+            self._write_panes_state()
             print(f"  ✓ 로그 pane {len(self.log_panes)}개 생성 (오른쪽: developer / reviewer / committer)")
+
+    def _panes_state_path(self) -> Path:
+        return self.root_path / ".harness" / "log-panes.json"
+
+    def _write_panes_state(self):
+        # init이 만든 pane id를 디스크에 남겨, 별도 프로세스인 finalize가 정리하게 한다.
+        path = self._panes_state_path()
+        path.parent.mkdir(parents=True, exist_ok=True)
+        path.write_text(json.dumps({"panes": self.log_panes, "main_pane": self._main_pane}), encoding="utf-8")
 
     def _teardown_log_panes(self):
         """생성한 로그 pane과 임시 border-format을 정리한다 (정상 종료·중단 모두에서 호출)."""
+        # finalize는 init과 별도 프로세스라 self.log_panes가 비어 있다. 디스크 기록에서 복원한다.
+        if not self.log_panes and not self._main_pane:
+            state = self._read_handoff(self._panes_state_path()) or {}
+            self.log_panes = state.get("panes") or []
+            self._main_pane = state.get("main_pane") or ""
         for pane in self.log_panes:
             subprocess.run(["tmux", "kill-pane", "-t", pane], capture_output=True)
         self.log_panes = []
-        # 임시로 바꾼 pane-border-format을 원복한다 (윈도우 설정 제거 → 전역값 상속).
         if self._main_pane:
             subprocess.run(
                 ["tmux", "set-option", "-w", "-u", "-t", self._main_pane, "pane-border-format"],
                 capture_output=True,
             )
             self._main_pane = ""
+        with contextlib.suppress(FileNotFoundError):
+            self._panes_state_path().unlink()
 
     def _kill_stale_log_panes(self):
         """이전 실행이 중단으로 남긴 harness-v3 로그 pane을 정리한다(다음 run 오염 방지)."""

@@ -22,7 +22,10 @@ case "$ROLE" in
 esac
 
 AID="$(field agent_id)"; [ -z "$AID" ] && AID="$ROLE"
-PROJ="${CLAUDE_PROJECT_DIR:-.}"
+# 마커/로그 위치는 worktree 루트 기준. CLAUDE_PROJECT_DIR가 develop 루트일 수 있어 cwd의 git 최상위를 우선한다.
+CWD="$(field cwd)"
+PROJ="$(git -C "${CWD:-.}" rev-parse --show-toplevel 2>/dev/null)"
+[ -z "$PROJ" ] && PROJ="${CLAUDE_PROJECT_DIR:-.}"
 
 # sub transcript: transcript_path(메인 세션 .jsonl) 확장자를 떼고 그 아래 subagents/agent-<id>.jsonl.
 # 메인 transcript로 fallback하면 메인 세션 활동이 role 로그를 오염시키므로 하지 않는다.
