@@ -178,18 +178,18 @@ def _load_state(state_path):
             with open(state_path, encoding="utf-8") as f:
                 s = json.load(f)
             if isinstance(s, dict):
-                return set(s.get("emitted", [])), bool(s.get("header", False))
+                return set(s.get("emitted", [])), bool(s.get("header", False)), bool(s.get("footer", False))
         except (OSError, ValueError):
             pass
-    return set(), False
+    return set(), False, False
 
 
-def _save_state(state_path, emitted, header_done):
+def _save_state(state_path, emitted, header_done, footer_done):
     if not state_path:
         return
     os.makedirs(os.path.dirname(os.path.abspath(state_path)) or ".", exist_ok=True)
     with open(state_path, "w", encoding="utf-8") as f:
-        json.dump({"emitted": sorted(emitted), "header": header_done}, f)
+        json.dump({"emitted": sorted(emitted), "header": header_done, "footer": footer_done}, f)
 
 
 def run_incremental(input_path, out_path, role, state_path, description=None, final=False):
@@ -200,7 +200,11 @@ def run_incremental(input_path, out_path, role, state_path, description=None, fi
     - emit-once: state_path에 이미 찍은 키를 기록해 재호출 시 중복 출력하지 않는다.
     백그라운드 프로세스 없이 매 호출이 짧게 끝나므로 좀비/중복이 구조적으로 없다.
     """
-    emitted, header_done = _load_state(state_path)
+    emitted, header_done, footer_done = _load_state(state_path)
+    # 이미 footer까지 찍힌 agent는 완료된 것. P3 오배달로 재기상해 다시 호출돼도 렌더하지 않는다
+    # (전체 재덤프·footer 중복·재기상 응답 노이즈 차단).
+    if footer_done:
+        return
     if not os.path.exists(input_path):
         return
 
@@ -244,9 +248,10 @@ def run_incremental(input_path, out_path, role, state_path, description=None, fi
         emitted.add(k)
     if final:
         chunks.append(render_footer(role))
+        footer_done = True
 
     write_lines(out_path, chunks)
-    _save_state(state_path, emitted, header_done)
+    _save_state(state_path, emitted, header_done, footer_done)
 
 
 def main(argv=None):

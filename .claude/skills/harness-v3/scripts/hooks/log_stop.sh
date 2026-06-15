@@ -41,5 +41,6 @@ if [ -n "$TP" ] && [ -f "$TP" ]; then
   python3 "$SCRIPTS/transcript_formatter.py" \
     --input "$TP" --output "$LOGDIR/$ROLE.log" --role "$ROLE" --state "$STATE" --final >/dev/null 2>&1
 fi
-rm -f "$STATE" 2>/dev/null
+# logstate는 여기서 지우지 않는다. 지우면 P3 오배달로 재기상한 agent의 재-stop에서 state가 비어
+# 전체가 재덤프된다. emit-once·footer 가드가 작동하도록 보존하고, 정리는 execute.py finalize/init이 한다.
 exit 0

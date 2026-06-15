@@ -721,6 +721,14 @@ class StepExecutor:
         except FileNotFoundError:
             pass
 
+    def _clear_logstate_files(self):
+        # SubagentStop은 재기상 대비로 logstate를 보존하므로, 정리는 init/finalize에서 일괄로 한다.
+        harness_dir = self.root_path / ".harness"
+        if harness_dir.is_dir():
+            for state_file in harness_dir.glob("logstate-*.json"):
+                with contextlib.suppress(FileNotFoundError):
+                    state_file.unlink()
+
     # ── 핸드오프 파일 경로 (에이전트가 결과를 쓰는 곳; index 정본 아님) ──────────
     def handoff_dir(self) -> Path:
         d = self.phase_dir / "handoff"
@@ -784,6 +792,7 @@ class StepExecutor:
         self._validate_worktree_context()         # worktree·보호브랜치 검증
         self.mark_workflow_execution_in_progress()
         self.ensure_created_at()                  # created_at + execution{models} 1회 기록
+        self._clear_logstate_files()              # 이전 실행(blocked/error 등)의 stale logstate 정리
         self.write_marker()                       # ★ hook용 active-phase 마커
         self._setup_log_panes()                   # ★ tmux 3-pane (v2 그대로, phase_dir/logs tail)
         # init은 상태만 잡고 종료. 실제 진행은 메인 에이전트가 step을 반복 호출.
@@ -942,6 +951,7 @@ class StepExecutor:
         finally:
             self.clear_marker()
             self._teardown_log_panes()
+            self._clear_logstate_files()
         self._emit({"action": "finalized", "phase": self.phase_relpath})
 
     # ── 씨앗 ①: verify — verify_step_result_v3 호출 ──────────────────────────
