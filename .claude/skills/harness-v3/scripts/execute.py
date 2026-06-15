@@ -916,6 +916,11 @@ class StepExecutor:
                     r = self._retry_or_fail(index, step, review.get("message", "reviewer 재시도 요청"))
                     if r: self._emit(r)
                     continue
+                if decision != "approved":
+                    # 알 수 없는/빈 판정은 자동 승인하지 않고 재시도한다(reviewer 오작동 방어).
+                    r = self._retry_or_fail(index, step, f"올바르지 않은 reviewer 판정: {decision}")
+                    if r: self._emit(r)
+                    continue
                 # approved → commit 단계로. 커밋 전 HEAD를 기록(B안 _commit_was_made가 비교)
                 step["completed_at"] = self.stamp()
                 step["_pre_commit_head"] = self.run_git("rev-parse", "HEAD").stdout.strip()
