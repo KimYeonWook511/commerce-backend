@@ -141,7 +141,7 @@ PR review까지 코드가 확정된 시점에 루트 문서를 현재 상태로 
 - **handoff** (`<phase>/handoff/`): sub-agent → execute.py 결과 전달 통로(휘발성). developer는 `stepN-dev.json`{step, attempt, ok, summary, struggles}, reviewer는 `stepN-review.json`{step, decision, message}를 마지막 행동으로 쓴다. committer는 안 쓴다. `execute.py`가 각 호출 전 동적 프롬프트(`stepN-*-prompt.md`)도 여기 쓴다.
 - **`.harness/`** (worktree 루트): harness 실행 중에만 쓰는 내부 상태 폴더. `.gitignore`로 제외(`/.harness/`)되는 로컬 산출물이다. 세 가지를 둔다.
   - **`active-phase`** (마커): `init`이 현재 phase 상대경로를 한 줄 적고 `finalize`가 지운다(중단 시엔 남기고, 다음 `step`이 없으면 자가복구한다). 로깅 hook이 이걸 읽어 로그를 `<phase>/logs/`에 쓴다. **단, hook은 마커를 찾을 때 `$CLAUDE_PROJECT_DIR`(claude를 띄운 위치, develop 루트일 수 있음)가 아니라 그 도구 호출의 `cwd`에서 `git rev-parse --show-toplevel`로 worktree 루트를 먼저 찾고, 실패할 때만 `$CLAUDE_PROJECT_DIR`로 fallback한다.** 그래서 develop 루트에서 띄운 세션이 worktree에서 작업해도 로그가 worktree의 `<phase>/logs/`로 간다.
-  - **`logstate-<agent_id>.json`**: 증분 로깅의 북마크(이미 찍은 메시지 키 + 헤더 여부 + footer 여부). PostToolUse가 갱신한다. **SubagentStop은 이걸 지우지 않는다** — P3 오배달로 재기상한 agent의 재-stop에서 state가 비면 로그 전체가 재덤프되므로 보존해야 한다. 정리는 `execute.py`가 init/finalize/중단(blocked·error) 시 일괄로 한다. (claude code가 만드는 transcript와는 별개로 우리가 만드는 파일이다.)
+  - **`logstate-<agent_id>.json`**: 증분 로깅의 북마크(이미 찍은 메시지 키 + 헤더 여부 + footer 여부). PostToolUse가 갱신한다. **SubagentStop은 이걸 지우지 않는다** — 완료 알림 오배달로 재기상한 agent의 재-stop에서 state가 비면 로그 전체가 재덤프되므로 보존해야 한다. 정리는 `execute.py`가 init/finalize/중단(blocked·error) 시 일괄로 한다. (claude code가 만드는 transcript와는 별개로 우리가 만드는 파일이다.)
   - **`log-panes.json`**: `init`이 만든 tmux 로그 pane id와 메인 pane을 적어 둔다(`{"panes":[...], "main_pane":...}`). `finalize`(및 중단 경로)는 별도 프로세스라 메모리에 pane id가 없으므로, 이 파일을 읽어 pane을 `kill`하고 border-format을 원복한 뒤 파일을 지운다.
 
 ## 로그 산출물 (`logs/`) — 실시간 증분
