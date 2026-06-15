@@ -6,6 +6,19 @@
 
 ---
 
+## 핵심 원칙 (요약)
+
+- **port는 그것을 필요로 하는 안쪽 레이어에, 구현체는 기술에 의존하는 바깥 레이어에 둔다.** port와 구현은 항상 다른 레이어로 가른다.
+- **유스케이스를 깨우는 모든 진입점(HTTP·cron·batch·message)은 presentation의 inbound adapter이고, 얇게 위임만 한다.**
+- 레이어별로 **나누는 축이 다르다**: application=**책임**(tx/정책/조립), domain=**엔티티**, infrastructure=**외부 대상**(DB/PG/cache/messaging), presentation=**진입 방식**.
+- **처음부터 잘게 나누지 않는다.** 단순 CRUD 도메인(product/cart 등)은 평평하게 두고, 책임·경계가 실제로 공존하는 도메인(payment 등)만 분리한다. 분리는 맥락이 달라지는 시점에 한다.
+- **`@Transactional`은 `application/service/`에만 단다.** `usecase/`(orchestrator)는 tx를 열지 않고 흐름 조립·정책 선택만 한다 → self-invocation 함정을 구조로 차단한다.
+- 여러 tx 단위작업을 한 tx로 묶어야 하면, usecase에 tx를 달지 말고 **`service/`에 전용 메서드를 만들어 거기에만 tx를 단다.**
+- 충돌 반응(skip/retry)은 **한 곳에서만 쓰면 그 클래스의 private 메서드**, 여러 곳이 공유할 때만 별도 helper로 추출한다. 정식 `policy/` 레이어는 만들지 않는다.
+- **클래스 접미사가 패키지 역할과 일치한다**: `usecase/`→`…UseCase`(`@Component`), `service/`→`…Service`(`@Service`). retry 헬퍼는 메커니즘 이름(`OptimisticRetry`).
+
+---
+
 ## 0. 두 줄 원칙
 
 1. **인터페이스(port)는 그걸 필요로 하는 안쪽 레이어에, 구현체는 기술에 의존하는 바깥 레이어에 — 항상 다른 레이어로 갈라라.**
