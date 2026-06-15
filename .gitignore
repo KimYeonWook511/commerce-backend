@@ -53,6 +53,8 @@ __pycache__/
 .claude/settings.local.json
 
 ### harness 실행 산출물 ###
+/.harness/
+docs/tasks/**/phases/**/handoff/
 docs/tasks/**/phases/**/step*-output.json
 docs/tasks/**/phases/**/step*-ac-output.json
 docs/tasks/**/phases/**/step*-review-output.json
