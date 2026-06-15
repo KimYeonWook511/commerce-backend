@@ -114,9 +114,9 @@ worktree 안에서 Task 문서와 phase 구조를 작성한다. Task 문서는 �
 - **finalize**: `done`이면 `execute.py finalize <phase>`가 잔여 Task 문서 `docs:` 커밋, phase index 두 개 `chore:` 커밋, 원격 push(기본, `--no-push`로 생략)를 한다.
 - 이어서 PR 오픈(`gh pr create`)은 `execute.py` 바깥에서 메인 에이전트가 수행한다.
 
-각 agent의 모델은 SKILL.md Stage 6에서 `AskUserQuestion`으로 수집한 값이며 phase index의 `execution` 필드에 1회 기록된다. 기본값은 developer=`sonnet`, reviewer=`opus`, commit=`haiku`.
+각 agent의 모델은 SKILL.md Stage 6에서 `AskUserQuestion`으로 수집한 값이며 phase index의 `execution` 필드에 1회 기록된다(하위: `developer_model` / `reviewer_model` / `commit_model`, 기본값 `sonnet` / `opus` / `haiku`). push 여부(`--no-push`)도 같은 `execution.push`에 기록된다. init·step·finalize가 **별도 프로세스**라 CLI 인자가 매번 전달되지 않으므로, `step`은 `execution`에서 role별 모델을 읽어 invoke 지시에 반영하고, `finalize`는 `execution.push`를 읽어 push 여부를 정한다. (디스크가 init의 의도를 프로세스 간에 전달하는 통로다.)
 
-재시도(`retryable_error` 또는 검증 실패)는 `execute.py`가 같은 step을 최대 3회 다시 돌린다. `_stage`를 `need_developer`로 되돌리고 `_prev_error`를 다음 developer 프롬프트에 주입한다. 최종 `blocked`/`error`는 자동 복구하지 않고 사용자 승인을 기다린다.
+재시도(`retryable_error` 또는 검증 실패)는 `execute.py`가 같은 step을 최대 3회 다시 돌린다. `_stage`를 `need_developer`로 되돌리고 `_prev_error`를 다음 developer 프롬프트에 주입한다. 최종 `blocked`/`error`는 자동 복구하지 않고 사용자 승인을 기다린다. 정상 종료(finalize)뿐 아니라 **중단(blocked·error) 시에도 `execute.py`가 로그 pane과 logstate를 정리**한다(둘 다 `_teardown_runtime`으로 공통 처리) — tmux tail pane이 누수되지 않는다.
 
 ### 7. PR Review
 
@@ -139,18 +139,19 @@ PR review까지 코드가 확정된 시점에 루트 문서를 현재 상태로 
 `execute.py`는 sub-agent의 부모 프로세스가 아니므로, 결과를 디스크 파일로만 주고받는다.
 
 - **handoff** (`<phase>/handoff/`): sub-agent → execute.py 결과 전달 통로(휘발성). developer는 `stepN-dev.json`{step, attempt, ok, summary, struggles}, reviewer는 `stepN-review.json`{step, decision, message}를 마지막 행동으로 쓴다. committer는 안 쓴다. `execute.py`가 각 호출 전 동적 프롬프트(`stepN-*-prompt.md`)도 여기 쓴다.
-- **`.harness/`** (worktree 루트): harness 실행 중에만 쓰는 내부 상태 폴더. `.gitignore`로 제외(`/.harness/`)되는 로컬 산출물이다. 안에 두 가지를 둔다.
-  - **`active-phase`** (마커): `init`이 현재 phase 상대경로를 한 줄 적고 `finalize`가 지운다. 로깅 hook(PostToolUse·SubagentStop)이 이걸 읽어 로그를 `<phase>/logs/`에 쓴다.
-- **logstate** (`.harness/logstate-<agent_id>.json`): 증분 로깅의 북마크(이미 찍은 메시지 키 + 헤더 여부). PostToolUse가 갱신하고 SubagentStop이 sub-agent 종료 시 지운다. 지우는 이유: agent_id가 재사용돼도 옛 북마크가 새 실행 메시지를 '이미 찍었다'고 오인해 누락하는 걸 막고, `.harness/`에 파일이 쌓이지 않게 하기 위함. (claude code가 만드는 transcript와는 별개로 우리가 만드는 파일이다.)
+- **`.harness/`** (worktree 루트): harness 실행 중에만 쓰는 내부 상태 폴더. `.gitignore`로 제외(`/.harness/`)되는 로컬 산출물이다. 세 가지를 둔다.
+  - **`active-phase`** (마커): `init`이 현재 phase 상대경로를 한 줄 적고 `finalize`가 지운다(중단 시엔 남기고, 다음 `step`이 없으면 자가복구한다). 로깅 hook이 이걸 읽어 로그를 `<phase>/logs/`에 쓴다. **단, hook은 마커를 찾을 때 `$CLAUDE_PROJECT_DIR`(claude를 띄운 위치, develop 루트일 수 있음)가 아니라 그 도구 호출의 `cwd`에서 `git rev-parse --show-toplevel`로 worktree 루트를 먼저 찾고, 실패할 때만 `$CLAUDE_PROJECT_DIR`로 fallback한다.** 그래서 develop 루트에서 띄운 세션이 worktree에서 작업해도 로그가 worktree의 `<phase>/logs/`로 간다.
+  - **`logstate-<agent_id>.json`**: 증분 로깅의 북마크(이미 찍은 메시지 키 + 헤더 여부 + footer 여부). PostToolUse가 갱신한다. **SubagentStop은 이걸 지우지 않는다** — 완료 알림 오배달로 재기상한 agent의 재-stop에서 state가 비면 로그 전체가 재덤프되므로 보존해야 한다. 정리는 `execute.py`가 init/finalize/중단(blocked·error) 시 일괄로 한다. (claude code가 만드는 transcript와는 별개로 우리가 만드는 파일이다.)
+  - **`log-panes.json`**: `init`이 만든 tmux 로그 pane id와 메인 pane을 적어 둔다(`{"panes":[...], "main_pane":...}`). `finalize`(및 중단 경로)는 별도 프로세스라 메모리에 pane id가 없으므로, 이 파일을 읽어 pane을 `kill`하고 border-format을 원복한 뒤 파일을 지운다.
 
 ## 로그 산출물 (`logs/`) — 실시간 증분
 
 phase 폴더 아래 `logs/`에 sub-agent별 사람용 로그를 쌓는다: `harness-v3-developer.log` / `harness-v3-reviewer.log` / `harness-v3-committer.log`.
 
-실시간성은 **PostToolUse hook**으로 얻는다. sub-agent가 도구를 쓸 때마다 `log_progress.sh`가 그 sub-agent의 transcript(.jsonl)에서 **새로 확정된 부분만** 골라 로그에 append한다. 백그라운드 프로세스(tail)를 띄우지 않으므로 좀비 프로세스가 없고, 상태파일(`.harness/logstate-<id>.json`)의 '이미 찍은 키'로 재출력을 막아 중복이 없다. transcript는 스트리밍 중 같은 `requestId`로 누적 기록되는데, 포맷터가 키별 마지막(가장 완성된) 엔트리만 남겨 dedup한다. 마지막(진행 중일 수 있는) 메시지는 보류했다가 다음 PostToolUse나 SubagentStop에서 flush한다.
+실시간성은 **PostToolUse hook**으로 얻는다. sub-agent가 도구를 쓸 때마다 `log_progress.sh`가 그 sub-agent의 transcript(메인 세션 `.jsonl`의 `transcript_path`에서 확장자를 떼고 그 아래 `subagents/agent-<id>.jsonl`)를 읽어 **새로 확정된 부분만** 골라 로그에 append한다. 백그라운드 프로세스(tail)를 띄우지 않으므로 좀비 프로세스가 없고, 상태파일(`.harness/logstate-<id>.json`)의 '이미 찍은 키'로 재출력을 막아 중복이 없다. transcript는 스트리밍 중 같은 `requestId`로 누적 기록되는데, 포맷터가 키별 마지막(가장 완성된) 엔트리만 남겨 dedup한다. 마지막(진행 중일 수 있는) 메시지는 보류했다가 다음 PostToolUse나 SubagentStop에서 flush한다. **완료 박스(footer)가 한 번 찍히면 상태파일에 `footer` 플래그가 남아, 완료 알림 오배달로 같은 agent가 재기상해 hook이 다시 호출돼도 즉시 종료한다(전체 재덤프·footer 중복·재기상 노이즈 차단).**
 
 - **PostToolUse → `log_progress.sh`**: 도구 경계마다 증분 append (실시간)
-- **SubagentStop → `log_stop.sh`**: 보류분 마지막 flush + 완료 박스 + 상태파일 정리
+- **SubagentStop → `log_stop.sh`**: 보류분 마지막 flush + 완료 박스(footer). 상태파일은 **여기서 지우지 않는다**(재기상 대비 보존, 정리는 `execute.py`가).
 - tmux 3-pane이 이 로그를 `tail -f`해 실시간 표시
 
 내용 면에선 v2와 동일하게 사고·도구 입출력·결과가 다 남는다(누락 없음). 다른 점은 갱신 단위가 토큰이 아니라 **도구 경계**라는 것뿐이다. `logs/`는 `.gitignore`로 제외되는 로컬 산출물이다.
@@ -164,6 +165,15 @@ phase 폴더 아래 `logs/`에 sub-agent별 사람용 로그를 쌓는다: `harn
 - sub-agent 정의(`.claude/agents/harness-v3-*.md`)에 `permissionMode: bypassPermissions`가 있어 무인 실행된다. 단 **메인 세션이 `auto` 모드면 frontmatter가 무시**되므로, 메인 세션은 `default` 또는 `bypassPermissions`로 실행한다.
 - `CLAUDE_CODE_SUBAGENT_MODEL` 환경변수가 설정돼 있으면 init에서 고른 모델을 덮어쓴다. 모델 선택을 그대로 쓰려면 미설정 상태여야 한다(대부분 기본 미설정).
 - PreToolUse 차단이 sub-agent에서 무시될 수 있다(이슈 #40580, WSL 라벨). hook은 2차 방어(defense-in-depth)이고, 각 agent `.md`의 프롬프트 제약이 baseline이다.
+
+## 알려진 제약 — sub-agent 완료 알림 오배달 (#40580 계열)
+
+Claude Code 런타임이 sub-agent의 완료 `<task-notification>`을 부모(메인 셔틀)가 아니라 직전에 살아있던 다른 sub-agent로 오배달하는 경우가 있다(실측 확인). 이 때문에:
+
+- 셔틀은 완료 **알림에 의존하지 않는다.** Task 호출이 리턴되면 곧바로 `execute.py step`을 불러 **디스크 상태(handoff·`_stage`·git HEAD)로 완료를 판정**한다. 알림은 보조 신호일 뿐이다.
+- 오배달 알림을 받은 sub-agent가 재기상해 "더 진행할까요?" 식으로 돌아와도 셔틀은 무시하고 디스크 상태로 진행한다. 재기상해도 로그는 footer 가드로 증폭되지 않는다.
+- Claude Code UI에서 reviewer·committer가 developer 아래 계단(`└`)으로 묶여 보이는 것도 이 오배달의 **표시 artifact**다. 실제 호출 구조는 정상 — 세 sub-agent 모두 메인 세션이 순차 발행한 직접 자식이며(transcript의 `parentUuid`로 확인), developer는 Task/Agent 도구가 없어 다른 sub-agent를 호출할 수 없다.
+- 완료된 sub-agent는 `TaskStop`으로 종료되지 않고(`is not running`) 재기상만 가능하므로, **재기상 자체는 harness로 막을 수 없다.** 근본 해결은 업스트림(#40580) 몫이며, 기능·로그·자원 피해는 위 방어로 0이다(idle 에이전트가 UI에 보이는 코스메틱만 남는다).
 
 ## harness_version
 
