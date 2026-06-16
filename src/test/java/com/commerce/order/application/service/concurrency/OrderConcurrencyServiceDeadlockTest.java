@@ -27,16 +27,16 @@ import org.springframework.test.context.bean.override.mockito.MockitoSpyBean;
 
 import com.commerce.member.domain.Member;
 import com.commerce.member.infrastructure.persistence.support.MemberPersistenceTestSupport;
-import com.commerce.order.application.service.OrderCancelService;
-import com.commerce.order.application.service.OrderConcurrencyService;
-import com.commerce.order.application.service.OrderCreateService;
+import com.commerce.order.application.service.CancelOrderService;
+import com.commerce.order.application.service.OrderCreateConcurrencyService;
+import com.commerce.order.application.service.CreateOrderService;
 import com.commerce.order.application.dto.OrderCreateCommand;
 import com.commerce.order.application.dto.OrderCreateItem;
 import com.commerce.order.infrastructure.persistence.support.OrderPersistenceTestSupport;
 import com.commerce.product.domain.Product;
 import com.commerce.product.domain.ProductStatus;
 import com.commerce.product.infrastructure.persistence.support.ProductPersistenceTestSupport;
-import com.commerce.stock.application.service.StockInventoryService;
+import com.commerce.stock.application.service.DecreaseStockService;
 import com.commerce.stock.domain.Stock;
 import com.commerce.stock.infrastructure.persistence.support.StockPersistenceTestSupport;
 import com.commerce.support.PersistenceCleanupTestSupport;
@@ -54,10 +54,10 @@ import com.commerce.support.PersistenceCleanupTestSupport;
 class OrderConcurrencyServiceDeadlockTest {
 
 	@Autowired
-	private OrderConcurrencyService orderConcurrencyService;
+	private OrderCreateConcurrencyService orderCreateConcurrencyService;
 
 	@MockitoSpyBean
-	private StockInventoryService stockService;
+	private DecreaseStockService decreaseStockService;
 
 	@Autowired
 	private PersistenceCleanupTestSupport persistenceCleanup;
@@ -118,7 +118,7 @@ class OrderConcurrencyServiceDeadlockTest {
 			}
 			callCount.set(count + 1);
 			return result;
-		}).given(stockService).decrease(anyLong(), anyInt());
+		}).given(decreaseStockService).decrease(anyLong(), anyInt());
 
 		// when
 		ConcurrentLinkedQueue<Throwable> errors = new ConcurrentLinkedQueue<>();
@@ -127,15 +127,15 @@ class OrderConcurrencyServiceDeadlockTest {
 			runConcurrent(2, () -> {
 				int index = sequence.getAndIncrement();
 				if (index == 0) {
-					orderConcurrencyService.createOrderWithPessimisticLock(requestA);
+					orderCreateConcurrencyService.createOrderWithPessimisticLock(requestA);
 				} else {
-					orderConcurrencyService.createOrderWithPessimisticLock(requestB);
+					orderCreateConcurrencyService.createOrderWithPessimisticLock(requestB);
 				}
 			}, errors);
 		} finally {
 			// @SpringBootTest는 테스트 컨텍스트를 캐시함
 			// 다른 테스트에 영향이 남지 않게 스텁 제거하기
-			reset(stockService);
+			reset(decreaseStockService);
 		}
 
 		// then
@@ -181,9 +181,9 @@ class OrderConcurrencyServiceDeadlockTest {
 		runConcurrent(2, () -> {
 			int index = sequence.getAndIncrement();
 			if (index == 0) {
-				orderConcurrencyService.createOrderWithPessimisticLockOrdered(requestA);
+				orderCreateConcurrencyService.createOrderWithPessimisticLockOrdered(requestA);
 			} else {
-				orderConcurrencyService.createOrderWithPessimisticLockOrdered(requestB);
+				orderCreateConcurrencyService.createOrderWithPessimisticLockOrdered(requestB);
 			}
 		}, errors);
 

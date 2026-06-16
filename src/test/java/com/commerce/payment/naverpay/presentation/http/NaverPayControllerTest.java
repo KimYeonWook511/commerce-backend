@@ -24,7 +24,7 @@ import com.commerce.auth.application.usecase.TokenAuthenticationUseCase;
 import com.commerce.auth.application.dto.TokenAuthenticationResult;
 import com.commerce.security.resolver.AuthenticatedMemberIdArgumentResolver;
 import com.commerce.common.config.WebConfig;
-import com.commerce.payment.naverpay.application.usecase.NaverPayApprovalUseCase;
+import com.commerce.payment.naverpay.application.usecase.ApproveNaverPayUseCase;
 import com.commerce.payment.naverpay.application.dto.NaverPayApproveResponse;
 import com.commerce.payment.naverpay.application.dto.NaverPayApproveStatus;
 
@@ -44,7 +44,7 @@ class NaverPayControllerTest {
 	private MockMvc mockMvc;
 
 	@MockitoBean
-	private NaverPayApprovalUseCase naverPayApprovalUseCase;
+	private ApproveNaverPayUseCase approveNaverPayUseCase;
 
 	@MockitoBean
 	private TokenAuthenticationUseCase tokenAuthenticationUseCase;
@@ -70,7 +70,7 @@ class NaverPayControllerTest {
 			.pgPaymentId("pg-payment-id")
 			.status(NaverPayApproveStatus.SUCCESS)
 			.build();
-		given(naverPayApprovalUseCase.approve(1L, "PAY-1", "pg-payment-id")).willReturn(response);
+		given(approveNaverPayUseCase.approve(1L, "PAY-1", "pg-payment-id")).willReturn(response);
 
 		String requestBody = """
 			{
@@ -90,7 +90,7 @@ class NaverPayControllerTest {
 			.andExpect(jsonPath("$.data.pgPaymentId").value("pg-payment-id"))
 			.andExpect(jsonPath("$.data.status").value("SUCCESS"));
 
-		then(naverPayApprovalUseCase).should().approve(1L, "PAY-1", "pg-payment-id");
+		then(approveNaverPayUseCase).should().approve(1L, "PAY-1", "pg-payment-id");
 	}
 
 	@DisplayName("merchantPayKey가 비어있으면 요청 값 검증에 실패한다")

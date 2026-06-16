@@ -41,7 +41,7 @@ import com.commerce.payment.domain.PaymentStatus;
 import com.commerce.payment.domain.PaymentType;
 import com.commerce.payment.domain.exception.PaymentErrorCode;
 import com.commerce.payment.domain.exception.PaymentException;
-import com.commerce.payment.naverpay.application.usecase.NaverPayApprovalUseCase;
+import com.commerce.payment.naverpay.application.usecase.ApproveNaverPayUseCase;
 import com.commerce.payment.naverpay.application.dto.NaverPayApproveResponse;
 import com.commerce.payment.naverpay.application.dto.NaverPayApproveStatus;
 import com.commerce.payment.naverpay.application.port.NaverPayGateway;
@@ -70,7 +70,7 @@ import com.commerce.support.PersistenceCleanupTestSupport;
 class NaverPayApprovalUseCaseConcurrencyTest {
 
 	@Autowired
-	private NaverPayApprovalUseCase naverPayApprovalUseCase;
+	private ApproveNaverPayUseCase approveNaverPayUseCase;
 
 	@Autowired
 	private MemberPersistenceTestSupport memberPersistence;
@@ -125,7 +125,7 @@ class NaverPayApprovalUseCaseConcurrencyTest {
 		}).when(naverPayGateway).approve(pgPaymentId);
 
 		// when
-		runConcurrent(20, () -> results.add(naverPayApprovalUseCase.approve(member.getId(), merchantPayKey, pgPaymentId)), errors);
+		runConcurrent(20, () -> results.add(approveNaverPayUseCase.approve(member.getId(), merchantPayKey, pgPaymentId)), errors);
 
 		// then
 		// race window 발생 시 일부 요청은 unique 위반(DataIntegrityViolationException),
@@ -172,7 +172,7 @@ class NaverPayApprovalUseCaseConcurrencyTest {
 			.willReturn(NaverPayHistoryResult.approved(merchantPayKey, 1000));
 
 		// when
-		runConcurrent(20, () -> results.add(naverPayApprovalUseCase.approve(member.getId(), merchantPayKey, pgPaymentId)), errors);
+		runConcurrent(20, () -> results.add(approveNaverPayUseCase.approve(member.getId(), merchantPayKey, pgPaymentId)), errors);
 
 		// then
 		// race window 발생 시 일부 요청은 unique 위반(DataIntegrityViolationException),
@@ -205,7 +205,7 @@ class NaverPayApprovalUseCaseConcurrencyTest {
 			.willReturn(NaverPayApproveResult.success("OTHER-PAY", 1000));
 
 		// when
-		runConcurrent(20, () -> naverPayApprovalUseCase.approve(member.getId(), merchantPayKey, pgPaymentId), errors);
+		runConcurrent(20, () -> approveNaverPayUseCase.approve(member.getId(), merchantPayKey, pgPaymentId), errors);
 
 		// then
 		// race window 시 일부 요청은 unique 위반(안전망 500), 나머지는 도메인 예외(MERCHANT_KEY_MISMATCH 또는 NOT_FOUND).
@@ -241,7 +241,7 @@ class NaverPayApprovalUseCaseConcurrencyTest {
 			.willReturn(NaverPayCancelResult.processing());
 
 		// when
-		runConcurrent(20, () -> naverPayApprovalUseCase.approve(member.getId(), merchantPayKey, pgPaymentId), errors);
+		runConcurrent(20, () -> approveNaverPayUseCase.approve(member.getId(), merchantPayKey, pgPaymentId), errors);
 
 		// then
 		// race window 시 일부 요청은 unique 위반(안전망 500), 나머지는 도메인 AMOUNT_MISMATCH.
@@ -281,7 +281,7 @@ class NaverPayApprovalUseCaseConcurrencyTest {
 		ConcurrentLinkedQueue<Throwable> errors = new ConcurrentLinkedQueue<>();
 
 		// when
-		runConcurrent(20, () -> naverPayApprovalUseCase.approve(member.getId(), merchantPayKey, pgPaymentId), errors);
+		runConcurrent(20, () -> approveNaverPayUseCase.approve(member.getId(), merchantPayKey, pgPaymentId), errors);
 
 		// then: SUCCEEDED Payment 발견 → findApproveSucceeded 에서 조기 반환, 에러 없음
 		assertThat(errors).isEmpty();
@@ -314,7 +314,7 @@ class NaverPayApprovalUseCaseConcurrencyTest {
 			executor.submit(() -> {
 				try {
 					startLatch.await();
-					results.add(naverPayApprovalUseCase.approve(member.getId(), merchantPayKey, pgPaymentIdA));
+					results.add(approveNaverPayUseCase.approve(member.getId(), merchantPayKey, pgPaymentIdA));
 				} catch (Throwable ex) {
 					errors.add(ex);
 				} finally {
@@ -324,7 +324,7 @@ class NaverPayApprovalUseCaseConcurrencyTest {
 			executor.submit(() -> {
 				try {
 					startLatch.await();
-					results.add(naverPayApprovalUseCase.approve(member.getId(), merchantPayKey, pgPaymentIdB));
+					results.add(approveNaverPayUseCase.approve(member.getId(), merchantPayKey, pgPaymentIdB));
 				} catch (Throwable ex) {
 					errors.add(ex);
 				} finally {
@@ -373,7 +373,7 @@ class NaverPayApprovalUseCaseConcurrencyTest {
 			.willReturn(NaverPayHistoryResult.approved("OTHER-PAY", 1000));
 
 		// when
-		runConcurrent(20, () -> naverPayApprovalUseCase.approve(member.getId(), merchantPayKey, pgPaymentId), errors);
+		runConcurrent(20, () -> approveNaverPayUseCase.approve(member.getId(), merchantPayKey, pgPaymentId), errors);
 
 		// then
 		// race window 시 일부 요청은 unique 위반(안전망 500), 나머지는 도메인 mismatch 예외.

@@ -12,7 +12,7 @@ import org.springframework.web.bind.annotation.RestController;
 import com.commerce.common.ApiResponse;
 import com.commerce.common.exception.CommonErrorCode;
 import com.commerce.common.exception.CommonException;
-import com.commerce.product.application.service.ProductQueryService;
+import com.commerce.product.application.service.GetProductService;
 import com.commerce.product.application.dto.ProductDetailResult;
 import com.commerce.product.application.dto.ProductSummaryResult;
 
@@ -23,12 +23,12 @@ import lombok.RequiredArgsConstructor;
 @RequestMapping("/products")
 public class ProductController {
 
-	private final ProductQueryService productQueryService;
+	private final GetProductService getProductService;
 
 	@GetMapping
 	public ResponseEntity<ApiResponse<List<ProductSummaryResult>>> getProducts() {
 		return ResponseEntity.status(HttpStatus.OK)
-			.body(ApiResponse.of(productQueryService.getProducts()));
+			.body(ApiResponse.of(getProductService.getProducts()));
 	}
 
 	@GetMapping("/{productId}")
@@ -38,6 +38,6 @@ public class ProductController {
 		}
 
 		return ResponseEntity.status(HttpStatus.OK)
-			.body(ApiResponse.of(productQueryService.getProduct(productId)));
+			.body(ApiResponse.of(getProductService.getProduct(productId)));
 	}
 }

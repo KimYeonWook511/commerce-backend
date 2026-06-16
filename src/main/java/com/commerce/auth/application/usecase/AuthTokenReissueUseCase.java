@@ -10,7 +10,7 @@ import com.commerce.auth.application.dto.AuthTokenIssueResult;
 import com.commerce.auth.application.dto.AuthTokenReissueResult;
 import com.commerce.auth.domain.exception.AuthErrorCode;
 import com.commerce.auth.domain.exception.AuthException;
-import com.commerce.member.application.service.MemberQueryService;
+import com.commerce.member.application.service.FindMemberService;
 import com.commerce.member.domain.Member;
 
 import lombok.RequiredArgsConstructor;
@@ -19,7 +19,7 @@ import lombok.RequiredArgsConstructor;
 @RequiredArgsConstructor
 public class AuthTokenReissueUseCase {
 
-	private final MemberQueryService memberQueryService;
+	private final FindMemberService findMemberService;
 	private final AuthTokenIssueUseCase authTokenIssueUseCase;
 	private final TokenValidator tokenValidator;
 	private final RefreshTokenStore refreshTokenStore;
@@ -32,7 +32,7 @@ public class AuthTokenReissueUseCase {
 
 		validateStoredRefreshToken(memberId, refreshToken);
 
-		Member member = memberQueryService.findById(memberId)
+		Member member = findMemberService.findById(memberId)
 			.orElseThrow(() -> new AuthException(AuthErrorCode.TOKEN_INVALID));
 
 		AuthTokenIssueResult tokenIssueResult = authTokenIssueUseCase.issue(member);

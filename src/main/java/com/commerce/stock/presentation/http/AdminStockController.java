@@ -17,7 +17,10 @@ import com.commerce.common.ApiResponse;
 import com.commerce.common.exception.CommonErrorCode;
 import com.commerce.common.exception.CommonException;
 import com.commerce.member.domain.MemberRole;
-import com.commerce.stock.application.service.AdminStockService;
+import com.commerce.stock.application.service.AdminDecreaseStockService;
+import com.commerce.stock.application.service.AdminGetStockHistoryService;
+import com.commerce.stock.application.service.AdminIncreaseStockService;
+import com.commerce.stock.application.service.AdminInitializeStockService;
 import com.commerce.stock.application.dto.AdminStockResult;
 import com.commerce.stock.application.dto.StockHistoryResult;
 import com.commerce.stock.presentation.http.request.AdminStockAdjustRequest;
@@ -31,7 +34,10 @@ import lombok.RequiredArgsConstructor;
 @RequestMapping("/admin/products/{productId}/stock")
 public class AdminStockController {
 
-	private final AdminStockService adminStockService;
+	private final AdminInitializeStockService adminInitializeStockService;
+	private final AdminIncreaseStockService adminIncreaseStockService;
+	private final AdminDecreaseStockService adminDecreaseStockService;
+	private final AdminGetStockHistoryService adminGetStockHistoryService;
 
 	@PostMapping
 	@RequireRole(MemberRole.ROLE_ADMIN)
@@ -42,7 +48,7 @@ public class AdminStockController {
 	) {
 		validateProductId(productId);
 
-		AdminStockResult result = adminStockService.createInitialStock(request.toCommand(productId, adminMemberId));
+		AdminStockResult result = adminInitializeStockService.createInitialStock(request.toCommand(productId, adminMemberId));
 
 		return ResponseEntity.status(HttpStatus.CREATED)
 			.body(ApiResponse.of(result));
@@ -57,7 +63,7 @@ public class AdminStockController {
 	) {
 		validateProductId(productId);
 
-		AdminStockResult result = adminStockService.increaseByAdmin(request.toCommand(productId, adminMemberId));
+		AdminStockResult result = adminIncreaseStockService.increaseByAdmin(request.toCommand(productId, adminMemberId));
 
 		return ResponseEntity.ok(ApiResponse.of(result));
 	}
@@ -71,7 +77,7 @@ public class AdminStockController {
 	) {
 		validateProductId(productId);
 
-		AdminStockResult result = adminStockService.decreaseByAdmin(request.toCommand(productId, adminMemberId));
+		AdminStockResult result = adminDecreaseStockService.decreaseByAdmin(request.toCommand(productId, adminMemberId));
 
 		return ResponseEntity.ok(ApiResponse.of(result));
 	}
@@ -83,7 +89,7 @@ public class AdminStockController {
 	) {
 		validateProductId(productId);
 
-		List<StockHistoryResult> results = adminStockService.getHistoriesByProductId(productId);
+		List<StockHistoryResult> results = adminGetStockHistoryService.getHistoriesByProductId(productId);
 
 		return ResponseEntity.ok(ApiResponse.of(results));
 	}

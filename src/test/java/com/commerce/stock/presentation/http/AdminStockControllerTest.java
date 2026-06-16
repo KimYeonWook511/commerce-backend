@@ -33,7 +33,10 @@ import com.commerce.auth.application.dto.TokenAuthenticationResult;
 import com.commerce.security.resolver.AuthenticatedMemberIdArgumentResolver;
 import com.commerce.common.config.WebConfig;
 import com.commerce.stock.domain.StockAdjustmentReason;
-import com.commerce.stock.application.service.AdminStockService;
+import com.commerce.stock.application.service.AdminDecreaseStockService;
+import com.commerce.stock.application.service.AdminGetStockHistoryService;
+import com.commerce.stock.application.service.AdminIncreaseStockService;
+import com.commerce.stock.application.service.AdminInitializeStockService;
 import com.commerce.stock.application.dto.AdminStockAdjustCommand;
 import com.commerce.stock.application.dto.AdminStockCreateCommand;
 import com.commerce.stock.application.dto.AdminStockResult;
@@ -55,7 +58,16 @@ class AdminStockControllerTest {
 	private MockMvc mockMvc;
 
 	@MockitoBean
-	private AdminStockService stockService;
+	private AdminInitializeStockService adminInitializeStockService;
+
+	@MockitoBean
+	private AdminIncreaseStockService adminIncreaseStockService;
+
+	@MockitoBean
+	private AdminDecreaseStockService adminDecreaseStockService;
+
+	@MockitoBean
+	private AdminGetStockHistoryService adminGetStockHistoryService;
 
 	@MockitoBean
 	private TokenAuthenticationUseCase tokenAuthenticationUseCase;
@@ -65,7 +77,7 @@ class AdminStockControllerTest {
 	void createInitialStock_whenAdminRequest_returnCreated() throws Exception {
 		// given
 		stubForToken("ROLE_ADMIN");
-		given(stockService.createInitialStock(any(AdminStockCreateCommand.class)))
+		given(adminInitializeStockService.createInitialStock(any(AdminStockCreateCommand.class)))
 			.willReturn(AdminStockResult.builder()
 				.productId(1L)
 				.stockId(100L)
@@ -93,7 +105,7 @@ class AdminStockControllerTest {
 
 		ArgumentCaptor<AdminStockCreateCommand> commandCaptor =
 			ArgumentCaptor.forClass(AdminStockCreateCommand.class);
-		then(stockService).should().createInitialStock(commandCaptor.capture());
+		then(adminInitializeStockService).should().createInitialStock(commandCaptor.capture());
 		AdminStockCreateCommand command = commandCaptor.getValue();
 		assertThat(command.getProductId()).isEqualTo(1L);
 		assertThat(command.getQuantity()).isEqualTo(10);
@@ -123,7 +135,7 @@ class AdminStockControllerTest {
 			.andExpect(jsonPath("$.message").value("권한이 없습니다"))
 			.andExpect(jsonPath("$.data").value(Matchers.nullValue()));
 
-		then(stockService).should(never()).createInitialStock(any(AdminStockCreateCommand.class));
+		then(adminInitializeStockService).should(never()).createInitialStock(any(AdminStockCreateCommand.class));
 	}
 
 	@DisplayName("초기 재고 생성 경로 ID가 양수가 아니면 실패한다")
@@ -148,7 +160,7 @@ class AdminStockControllerTest {
 			.andExpect(jsonPath("$.message").value("요청 값이 올바르지 않습니다"))
 			.andExpect(jsonPath("$.data").value(Matchers.nullValue()));
 
-		then(stockService).should(never()).createInitialStock(any(AdminStockCreateCommand.class));
+		then(adminInitializeStockService).should(never()).createInitialStock(any(AdminStockCreateCommand.class));
 	}
 
 	@DisplayName("초기 재고 생성 요청 값이 유효하지 않으면 검증 오류를 반환한다")
@@ -174,7 +186,7 @@ class AdminStockControllerTest {
 			.andExpect(jsonPath("$.data.quantity").value("재고 수량은 0 이상이어야 합니다"))
 			.andExpect(jsonPath("$.data.reason").value("재고 변경 사유가 올바르지 않습니다"));
 
-		then(stockService).should(never()).createInitialStock(any(AdminStockCreateCommand.class));
+		then(adminInitializeStockService).should(never()).createInitialStock(any(AdminStockCreateCommand.class));
 	}
 
 	@DisplayName("초기 재고 생성 요청 필수 값이 없으면 검증 오류를 반환한다")
@@ -198,7 +210,7 @@ class AdminStockControllerTest {
 			.andExpect(jsonPath("$.data.quantity").value("재고 수량은 필수입니다"))
 			.andExpect(jsonPath("$.data.reason").value("재고 변경 사유는 필수입니다"));
 
-		then(stockService).should(never()).createInitialStock(any(AdminStockCreateCommand.class));
+		then(adminInitializeStockService).should(never()).createInitialStock(any(AdminStockCreateCommand.class));
 	}
 
 	@DisplayName("관리자는 재고를 증가시킬 수 있다")
@@ -206,7 +218,7 @@ class AdminStockControllerTest {
 	void increaseStock_whenAdminRequest_returnOk() throws Exception {
 		// given
 		stubForToken("ROLE_ADMIN");
-		given(stockService.increaseByAdmin(any(AdminStockAdjustCommand.class)))
+		given(adminIncreaseStockService.increaseByAdmin(any(AdminStockAdjustCommand.class)))
 			.willReturn(AdminStockResult.builder()
 				.productId(1L)
 				.stockId(100L)
@@ -234,7 +246,7 @@ class AdminStockControllerTest {
 
 		ArgumentCaptor<AdminStockAdjustCommand> commandCaptor =
 			ArgumentCaptor.forClass(AdminStockAdjustCommand.class);
-		then(stockService).should().increaseByAdmin(commandCaptor.capture());
+		then(adminIncreaseStockService).should().increaseByAdmin(commandCaptor.capture());
 		AdminStockAdjustCommand command = commandCaptor.getValue();
 		assertThat(command.getProductId()).isEqualTo(1L);
 		assertThat(command.getQuantity()).isEqualTo(5);
@@ -247,7 +259,7 @@ class AdminStockControllerTest {
 	void decreaseStock_whenAdminRequest_returnOk() throws Exception {
 		// given
 		stubForToken("ROLE_ADMIN");
-		given(stockService.decreaseByAdmin(any(AdminStockAdjustCommand.class)))
+		given(adminDecreaseStockService.decreaseByAdmin(any(AdminStockAdjustCommand.class)))
 			.willReturn(AdminStockResult.builder()
 				.productId(1L)
 				.stockId(100L)
@@ -275,7 +287,7 @@ class AdminStockControllerTest {
 
 		ArgumentCaptor<AdminStockAdjustCommand> commandCaptor =
 			ArgumentCaptor.forClass(AdminStockAdjustCommand.class);
-		then(stockService).should().decreaseByAdmin(commandCaptor.capture());
+		then(adminDecreaseStockService).should().decreaseByAdmin(commandCaptor.capture());
 		AdminStockAdjustCommand command = commandCaptor.getValue();
 		assertThat(command.getProductId()).isEqualTo(1L);
 		assertThat(command.getQuantity()).isEqualTo(3);
@@ -305,7 +317,7 @@ class AdminStockControllerTest {
 			.andExpect(jsonPath("$.message").value("권한이 없습니다"))
 			.andExpect(jsonPath("$.data").value(Matchers.nullValue()));
 
-		then(stockService).should(never()).increaseByAdmin(any(AdminStockAdjustCommand.class));
+		then(adminIncreaseStockService).should(never()).increaseByAdmin(any(AdminStockAdjustCommand.class));
 	}
 
 	@DisplayName("재고 조정 경로 ID가 양수가 아니면 실패한다")
@@ -330,7 +342,7 @@ class AdminStockControllerTest {
 			.andExpect(jsonPath("$.message").value("요청 값이 올바르지 않습니다"))
 			.andExpect(jsonPath("$.data").value(Matchers.nullValue()));
 
-		then(stockService).should(never()).increaseByAdmin(any(AdminStockAdjustCommand.class));
+		then(adminIncreaseStockService).should(never()).increaseByAdmin(any(AdminStockAdjustCommand.class));
 	}
 
 	@DisplayName("재고 조정 요청 값이 유효하지 않으면 검증 오류를 반환한다")
@@ -356,7 +368,7 @@ class AdminStockControllerTest {
 			.andExpect(jsonPath("$.data.quantity").value("재고 수량은 0보다 커야 합니다"))
 			.andExpect(jsonPath("$.data.reason").value("재고 변경 사유가 올바르지 않습니다"));
 
-		then(stockService).should(never()).decreaseByAdmin(any(AdminStockAdjustCommand.class));
+		then(adminDecreaseStockService).should(never()).decreaseByAdmin(any(AdminStockAdjustCommand.class));
 	}
 
 	@DisplayName("재고 조정 요청 필수 값이 없으면 검증 오류를 반환한다")
@@ -380,7 +392,7 @@ class AdminStockControllerTest {
 			.andExpect(jsonPath("$.data.quantity").value("재고 수량은 필수입니다"))
 			.andExpect(jsonPath("$.data.reason").value("재고 변경 사유는 필수입니다"));
 
-		then(stockService).should(never()).decreaseByAdmin(any(AdminStockAdjustCommand.class));
+		then(adminDecreaseStockService).should(never()).decreaseByAdmin(any(AdminStockAdjustCommand.class));
 	}
 
 	@DisplayName("관리자는 상품별 재고 이력을 조회할 수 있다")
@@ -388,7 +400,7 @@ class AdminStockControllerTest {
 	void getStockHistories_whenAdminRequest_returnOk() throws Exception {
 		// given
 		stubForToken("ROLE_ADMIN");
-		given(stockService.getHistoriesByProductId(1L))
+		given(adminGetStockHistoryService.getHistoriesByProductId(1L))
 			.willReturn(List.of(
 				StockHistoryResult.builder()
 					.historyId(2L)
@@ -425,7 +437,7 @@ class AdminStockControllerTest {
 			.andExpect(jsonPath("$.data[0].createdAt").value("2026-04-30T12:30:00"))
 			.andExpect(jsonPath("$.data[1].historyId").value(1L));
 
-		then(stockService).should().getHistoriesByProductId(1L);
+		then(adminGetStockHistoryService).should().getHistoriesByProductId(1L);
 	}
 
 	@DisplayName("관리자 권한이 없으면 재고 이력 조회가 실패한다")
@@ -442,7 +454,7 @@ class AdminStockControllerTest {
 			.andExpect(jsonPath("$.message").value("권한이 없습니다"))
 			.andExpect(jsonPath("$.data").value(Matchers.nullValue()));
 
-		then(stockService).should(never()).getHistoriesByProductId(any());
+		then(adminGetStockHistoryService).should(never()).getHistoriesByProductId(any());
 	}
 
 	@DisplayName("재고 이력 조회 경로 ID가 양수가 아니면 실패한다")
@@ -459,7 +471,7 @@ class AdminStockControllerTest {
 			.andExpect(jsonPath("$.message").value("요청 값이 올바르지 않습니다"))
 			.andExpect(jsonPath("$.data").value(Matchers.nullValue()));
 
-		then(stockService).should(never()).getHistoriesByProductId(any());
+		then(adminGetStockHistoryService).should(never()).getHistoriesByProductId(any());
 	}
 
 	private void stubForToken(String role) {

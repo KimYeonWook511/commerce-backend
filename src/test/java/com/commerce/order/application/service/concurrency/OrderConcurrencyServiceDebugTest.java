@@ -24,9 +24,9 @@ import org.springframework.context.annotation.Import;
 import org.springframework.test.context.ActiveProfiles;
 import org.springframework.test.context.TestPropertySource;
 
-import com.commerce.order.application.service.OrderCancelService;
-import com.commerce.order.application.service.OrderConcurrencyService;
-import com.commerce.order.application.service.OrderCreateService;
+import com.commerce.order.application.service.CancelOrderService;
+import com.commerce.order.application.service.OrderCreateConcurrencyService;
+import com.commerce.order.application.service.CreateOrderService;
 import com.commerce.member.domain.Member;
 import com.commerce.order.application.dto.OrderCreateItem;
 import com.commerce.order.application.dto.OrderCreateCommand;
@@ -55,7 +55,7 @@ import com.commerce.support.PersistenceCleanupTestSupport;
 class OrderConcurrencyServiceDebugTest {
 
 	@Autowired
-	private OrderConcurrencyService orderConcurrencyService;
+	private OrderCreateConcurrencyService orderCreateConcurrencyService;
 
 	@Autowired
 	private PersistenceCleanupTestSupport persistenceCleanup;
@@ -94,7 +94,7 @@ class OrderConcurrencyServiceDebugTest {
 
 		// when
 		ConcurrentLinkedQueue<Throwable> errors = new ConcurrentLinkedQueue<>();
-		runConcurrent(threadCount, () -> orderConcurrencyService.createOrderWithSynchronizedAndTransaction(command), errors);
+		runConcurrent(threadCount, () -> orderCreateConcurrencyService.createOrderWithSynchronizedAndTransaction(command), errors);
 
 		// then
 		Stock updated = stockPersistence.findByProductId(product.getId()).orElseThrow();

@@ -25,14 +25,14 @@ import com.commerce.auth.application.dto.AuthTokenReissueResult;
 import com.commerce.auth.domain.exception.AuthErrorCode;
 import com.commerce.auth.domain.exception.AuthException;
 import com.commerce.auth.infrastructure.RefreshTokenStoreUnavailableException;
-import com.commerce.member.application.service.MemberQueryService;
+import com.commerce.member.application.service.FindMemberService;
 import com.commerce.member.domain.Member;
 
 @ExtendWith(MockitoExtension.class)
 class AuthTokenReissueUseCaseTest {
 
 	@Mock
-	private MemberQueryService memberQueryService;
+	private FindMemberService findMemberService;
 
 	@Mock
 	private AuthTokenIssueUseCase authTokenIssueUseCase;
@@ -57,7 +57,7 @@ class AuthTokenReissueUseCaseTest {
 
 		given(tokenValidator.validateRefreshToken("refresh-token")).willReturn(claims);
 		given(refreshTokenStore.get(1L)).willReturn(Optional.of("refresh-token"));
-		given(memberQueryService.findById(1L)).willReturn(Optional.of(member));
+		given(findMemberService.findById(1L)).willReturn(Optional.of(member));
 		given(authTokenIssueUseCase.issue(member))
 			.willReturn(AuthTokenIssueResult.of("new-access-token", "new-refresh-token"));
 
@@ -167,7 +167,7 @@ class AuthTokenReissueUseCaseTest {
 
 		given(tokenValidator.validateRefreshToken("refresh-token")).willReturn(claims);
 		given(refreshTokenStore.get(1L)).willReturn(Optional.of("refresh-token"));
-		given(memberQueryService.findById(1L)).willReturn(Optional.empty());
+		given(findMemberService.findById(1L)).willReturn(Optional.empty());
 
 		AuthTokenReissueCommand command = AuthTokenReissueCommand.builder()
 			.refreshToken("refresh-token")

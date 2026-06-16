@@ -14,8 +14,8 @@ import com.commerce.security.annotation.AuthenticatedMemberId;
 import com.commerce.common.ApiResponse;
 import com.commerce.common.exception.CommonErrorCode;
 import com.commerce.common.exception.CommonException;
-import com.commerce.order.application.service.OrderCancelService;
-import com.commerce.order.application.usecase.OrderCreateUseCase;
+import com.commerce.order.application.service.CancelOrderService;
+import com.commerce.order.application.usecase.CreateOrderUseCase;
 import com.commerce.order.application.dto.OrderCreateCommand;
 import com.commerce.order.application.dto.OrderCreateItem;
 import com.commerce.order.application.dto.OrderCancelResult;
@@ -30,8 +30,8 @@ import lombok.RequiredArgsConstructor;
 @RequestMapping("/orders")
 public class OrderController {
 
-	private final OrderCreateUseCase orderCreateUseCase;
-	private final OrderCancelService orderCancelService;
+	private final CreateOrderUseCase createOrderUseCase;
+	private final CancelOrderService cancelOrderService;
 
 	@PostMapping
 	public ResponseEntity<ApiResponse<OrderCreateResult>> createOrder(
@@ -54,7 +54,7 @@ public class OrderController {
 					.build())
 				.toList())
 			.build();
-		OrderCreateResult result = orderCreateUseCase.createOrder(command);
+		OrderCreateResult result = createOrderUseCase.createOrder(command);
 
 		return ResponseEntity.status(HttpStatus.CREATED).body(ApiResponse.of(result));
 	}
@@ -64,7 +64,7 @@ public class OrderController {
 		@AuthenticatedMemberId Long memberId,
 		@PathVariable Long orderId
 	) {
-		OrderCancelResult result = orderCancelService.cancelOrder(memberId, orderId);
+		OrderCancelResult result = cancelOrderService.cancelOrder(memberId, orderId);
 		return ResponseEntity.status(HttpStatus.OK).body(ApiResponse.of(result));
 	}
 }

@@ -19,7 +19,7 @@ import com.commerce.outbox.domain.ProcessedEvent;
 import com.commerce.outbox.domain.ProcessedEventConsumerType;
 import com.commerce.outbox.domain.repository.ProcessedEventRepository;
 import com.commerce.outbox.stock.application.dto.StockRestoreConsumeCommand;
-import com.commerce.stock.application.service.StockInventoryService;
+import com.commerce.stock.application.service.IncreaseStockService;
 
 @ExtendWith(MockitoExtension.class)
 class StockRestoreOutboxConsumeServiceTest {
@@ -28,7 +28,7 @@ class StockRestoreOutboxConsumeServiceTest {
 	private ProcessedEventRepository processedEventRepository;
 
 	@Mock
-	private StockInventoryService stockService;
+	private IncreaseStockService increaseStockService;
 
 	@InjectMocks
 	private StockRestoreOutboxConsumeService stockRestoreOutboxConsumeService;
@@ -58,8 +58,8 @@ class StockRestoreOutboxConsumeServiceTest {
 		org.assertj.core.api.Assertions.assertThat(processedEvent.getConsumerType())
 			.isEqualTo(ProcessedEventConsumerType.STOCK_RESTORE);
 
-		then(stockService).should().increase(1L, 2);
-		then(stockService).should().increase(2L, 3);
+		then(increaseStockService).should().increase(1L, 2);
+		then(increaseStockService).should().increase(2L, 3);
 	}
 
 	@DisplayName("중복 소비면 사전 체크에서 걸러내고 저장과 재고 복구를 건너뛴다")
@@ -78,7 +78,7 @@ class StockRestoreOutboxConsumeServiceTest {
 
 		// then
 		then(processedEventRepository).should(never()).save(org.mockito.ArgumentMatchers.any(ProcessedEvent.class));
-		then(stockService).should(never()).increase(org.mockito.ArgumentMatchers.anyLong(),
+		then(increaseStockService).should(never()).increase(org.mockito.ArgumentMatchers.anyLong(),
 			org.mockito.ArgumentMatchers.anyInt());
 	}
 
@@ -91,7 +91,7 @@ class StockRestoreOutboxConsumeServiceTest {
 			.items(List.of(StockRestoreConsumeCommand.Item.builder().productId(1L).quantity(2).build()))
 			.build();
 		willThrow(new IllegalStateException("restore failed"))
-			.given(stockService)
+			.given(increaseStockService)
 			.increase(1L, 2);
 
 		// when & then

@@ -18,7 +18,7 @@ import com.commerce.auth.application.dto.AuthSignUpCommand;
 import com.commerce.auth.application.dto.AuthSignUpResult;
 import com.commerce.auth.application.dto.AuthTokenIssueResult;
 import com.commerce.auth.application.port.PasswordHasher;
-import com.commerce.member.application.service.MemberRegistrationService;
+import com.commerce.member.application.service.RegisterMemberService;
 import com.commerce.member.application.dto.MemberRegistrationCommand;
 import com.commerce.member.domain.Member;
 
@@ -26,7 +26,7 @@ import com.commerce.member.domain.Member;
 class AuthSignUpUseCaseTest {
 
 	@Mock
-	private MemberRegistrationService memberRegistrationService;
+	private RegisterMemberService registerMemberService;
 
 	@Mock
 	private AuthTokenIssueUseCase authTokenIssueUseCase;
@@ -51,7 +51,7 @@ class AuthSignUpUseCaseTest {
 		ReflectionTestUtils.setField(member, "id", 1L);
 
 		given(passwordHasher.hash("password123")).willReturn("hashed-password");
-		given(memberRegistrationService.register(any(MemberRegistrationCommand.class))).willReturn(member);
+		given(registerMemberService.register(any(MemberRegistrationCommand.class))).willReturn(member);
 		given(authTokenIssueUseCase.issue(member)).willReturn(AuthTokenIssueResult.of("access-token", "refresh-token"));
 
 		// when
@@ -59,7 +59,7 @@ class AuthSignUpUseCaseTest {
 
 		// then
 		ArgumentCaptor<MemberRegistrationCommand> commandCaptor = ArgumentCaptor.forClass(MemberRegistrationCommand.class);
-		then(memberRegistrationService).should().register(commandCaptor.capture());
+		then(registerMemberService).should().register(commandCaptor.capture());
 		then(authTokenIssueUseCase).should().issue(member);
 		assertThat(commandCaptor.getValue().getEmail()).isEqualTo("test@example.com");
 		assertThat(commandCaptor.getValue().getPasswordHash()).isEqualTo("hashed-password");

@@ -32,14 +32,16 @@ import com.commerce.order.application.dto.OrderCreateItem;
 import com.commerce.order.application.dto.OrderCreateCommand;
 import com.commerce.order.application.dto.OrderCancelResult;
 import com.commerce.order.application.dto.OrderCreateResult;
-import com.commerce.order.application.usecase.OrderCreateUseCase;
+import com.commerce.order.application.usecase.CreateOrderUseCase;
 import com.commerce.product.domain.Product;
 import com.commerce.product.domain.ProductStatus;
 import com.commerce.product.domain.repository.ProductRepository;
 import com.commerce.stock.domain.exception.StockErrorCode;
 import com.commerce.stock.domain.exception.StockException;
-import com.commerce.stock.application.service.StockInventoryService;
-import com.commerce.stock.application.service.StockConcurrencyService;
+import com.commerce.stock.application.service.DecreaseStockService;
+import com.commerce.stock.application.service.DecreaseStockBatchService;
+import com.commerce.stock.application.service.IncreaseStockService;
+import com.commerce.stock.application.service.StockDecreaseConcurrencyService;
 import com.commerce.stock.application.dto.StockDecreaseBatchCommand;
 
 @ExtendWith(MockitoExtension.class)
@@ -52,10 +54,16 @@ class OrderApplicationServiceTest {
 	private ProductRepository productRepository;
 
 	@Mock
-	private StockInventoryService stockInventoryService;
+	private DecreaseStockService decreaseStockService;
 
 	@Mock
-	private StockConcurrencyService stockConcurrencyService;
+	private DecreaseStockBatchService decreaseStockBatchService;
+
+	@Mock
+	private IncreaseStockService increaseStockService;
+
+	@Mock
+	private StockDecreaseConcurrencyService stockDecreaseConcurrencyService;
 
 	@Mock
 	private OrderRepository orderRepository;
@@ -64,16 +72,16 @@ class OrderApplicationServiceTest {
 	private OrderIdempotencyStore orderIdempotencyStore;
 
 	@Mock
-	private OrderCreateService orderCreateService;
+	private CreateOrderService createOrderService;
 
 	@InjectMocks
-	private OrderCreateUseCase orderCreateUseCase;
+	private CreateOrderUseCase createOrderUseCase;
 
 	@InjectMocks
-	private OrderCancelService orderCancelService;
+	private CancelOrderService cancelOrderService;
 
 	@InjectMocks
-	private OrderConcurrencyService orderConcurrencyService;
+	private OrderCreateConcurrencyService orderCreateConcurrencyService;
 
 	private final String idempotencyKey = "idempotency-key";
 
@@ -86,11 +94,11 @@ class OrderApplicationServiceTest {
 		OrderCreateResult expected = stubServiceSuccess(command);
 
 		// when
-		OrderCreateResult result = orderCreateUseCase.createOrder(command);
+		OrderCreateResult result = createOrderUseCase.createOrder(command);
 
 		// then
 		assertThat(result.getOrderId()).isEqualTo(expected.getOrderId());
-		then(orderCreateService).should().execute(eq(command));
+		then(createOrderService).should().execute(eq(command));
 		then(orderIdempotencyStore).should().clear(1L, idempotencyKey);
 	}
 
@@ -111,10 +119,10 @@ class OrderApplicationServiceTest {
 		stubServiceSuccess(command);
 
 		// when
-		orderCreateUseCase.createOrder(command);
+		createOrderUseCase.createOrder(command);
 
 		// then
-		then(orderCreateService).should().execute(eq(command));
+		then(createOrderService).should().execute(eq(command));
 		then(orderIdempotencyStore).should().clear(1L, idempotencyKey);
 	}
 
@@ -129,11 +137,11 @@ class OrderApplicationServiceTest {
 		stubForSuccess(member, product1, product2);
 
 		// when
-		orderConcurrencyService.createOrderWithoutLock(command);
+		orderCreateConcurrencyService.createOrderWithoutLock(command);
 
 		// then
-		then(stockConcurrencyService).should().decrease(10L, 2);
-		then(stockConcurrencyService).should().decrease(11L, 1);
+		then(stockDecreaseConcurrencyService).should().decrease(10L, 2);
+		then(stockDecreaseConcurrencyService).should().decrease(11L, 1);
 	}
 
 	@DisplayName("주문 취소를 요청하면 재고가 복구된다")
@@ -147,10 +155,10 @@ class OrderApplicationServiceTest {
 		given(orderRepository.findByIdAndMemberIdWithItems(100L, 1L)).willReturn(Optional.of(order));
 
 		// when
-		OrderCancelResult result = orderCancelService.cancelOrder(1L, 100L);
+		OrderCancelResult result = cancelOrderService.cancelOrder(1L, 100L);
 
 		// then
-		then(stockInventoryService).should().increase(10L, 2);
+		then(increaseStockService).should().increase(10L, 2);
 		assertThat(result.getOrderId()).isEqualTo(100L);
 		assertThat(result.getStatus()).isEqualTo(OrderStatus.CANCELED);
 	}
@@ -167,12 +175,12 @@ class OrderApplicationServiceTest {
 		given(orderRepository.findByIdAndMemberIdWithItems(100L, 1L)).willReturn(Optional.of(order));
 
 		// when
-		orderCancelService.cancelOrder(1L, 100L);
+		cancelOrderService.cancelOrder(1L, 100L);
 
 		// then
-		InOrder inOrder = org.mockito.Mockito.inOrder(stockInventoryService);
-		inOrder.verify(stockInventoryService).increase(2L, 1);
-		inOrder.verify(stockInventoryService).increase(5L, 1);
+		InOrder inOrder = org.mockito.Mockito.inOrder(increaseStockService);
+		inOrder.verify(increaseStockService).increase(2L, 1);
+		inOrder.verify(increaseStockService).increase(5L, 1);
 	}
 
 	@DisplayName("주문 상태가 초기 상태가 아니면 취소에 실패한다")
@@ -187,7 +195,7 @@ class OrderApplicationServiceTest {
 		given(orderRepository.findByIdAndMemberIdWithItems(100L, 1L)).willReturn(Optional.of(order));
 
 		// when & then
-		assertThatThrownBy(() -> orderCancelService.cancelOrder(1L, 100L))
+		assertThatThrownBy(() -> cancelOrderService.cancelOrder(1L, 100L))
 			.isInstanceOf(OrderException.class)
 			.satisfies(exception -> {
 				OrderException orderException = (OrderException) exception;
@@ -206,7 +214,7 @@ class OrderApplicationServiceTest {
 		given(orderRepository.findByIdAndMemberIdWithItems(100L, 1L)).willReturn(Optional.empty());
 
 		// when & then
-		assertThatThrownBy(() -> orderCancelService.cancelOrder(1L, 100L))
+		assertThatThrownBy(() -> cancelOrderService.cancelOrder(1L, 100L))
 			.isInstanceOf(OrderException.class)
 			.satisfies(exception -> {
 				OrderException orderException = (OrderException) exception;
@@ -225,11 +233,11 @@ class OrderApplicationServiceTest {
 		stubForSuccess(member, product1, product2);
 
 		// when
-		orderConcurrencyService.createOrderWithSynchronized(command);
+		orderCreateConcurrencyService.createOrderWithSynchronized(command);
 
 		// then
-		then(stockConcurrencyService).should().decreaseWithSynchronized(10L, 2);
-		then(stockConcurrencyService).should().decreaseWithSynchronized(11L, 1);
+		then(stockDecreaseConcurrencyService).should().decreaseWithSynchronized(10L, 2);
+		then(stockDecreaseConcurrencyService).should().decreaseWithSynchronized(11L, 1);
 	}
 
 	@DisplayName("동기화+트랜잭션 차감 방식을 사용해서 주문을 생성한다")
@@ -243,11 +251,11 @@ class OrderApplicationServiceTest {
 		stubForSuccess(member, product1, product2);
 
 		// when
-		orderConcurrencyService.createOrderWithSynchronizedAndTransaction(command);
+		orderCreateConcurrencyService.createOrderWithSynchronizedAndTransaction(command);
 
 		// then
-		then(stockConcurrencyService).should().decreaseWithSynchronizedAndTransaction(10L, 2);
-		then(stockConcurrencyService).should().decreaseWithSynchronizedAndTransaction(11L, 1);
+		then(stockDecreaseConcurrencyService).should().decreaseWithSynchronizedAndTransaction(10L, 2);
+		then(stockDecreaseConcurrencyService).should().decreaseWithSynchronizedAndTransaction(11L, 1);
 	}
 
 	@DisplayName("ReentrantLock+트랜잭션 차감 방식을 사용해서 주문을 생성한다")
@@ -261,11 +269,11 @@ class OrderApplicationServiceTest {
 		stubForSuccess(member, product1, product2);
 
 		// when
-		orderConcurrencyService.createOrderWithReentrantLockAndTransaction(command);
+		orderCreateConcurrencyService.createOrderWithReentrantLockAndTransaction(command);
 
 		// then
-		then(stockConcurrencyService).should().decreaseWithReentrantLockAndTransaction(10L, 2);
-		then(stockConcurrencyService).should().decreaseWithReentrantLockAndTransaction(11L, 1);
+		then(stockDecreaseConcurrencyService).should().decreaseWithReentrantLockAndTransaction(10L, 2);
+		then(stockDecreaseConcurrencyService).should().decreaseWithReentrantLockAndTransaction(11L, 1);
 	}
 
 	@DisplayName("낙관적 락 차감 방식을 사용해서 주문을 생성한다")
@@ -279,11 +287,11 @@ class OrderApplicationServiceTest {
 		stubForSuccess(member, product1, product2);
 
 		// when
-		orderConcurrencyService.createOrderWithOptimisticLock(command);
+		orderCreateConcurrencyService.createOrderWithOptimisticLock(command);
 
 		// then
-		then(stockConcurrencyService).should().decreaseWithOptimisticLock(10L, 2);
-		then(stockConcurrencyService).should().decreaseWithOptimisticLock(11L, 1);
+		then(stockDecreaseConcurrencyService).should().decreaseWithOptimisticLock(10L, 2);
+		then(stockDecreaseConcurrencyService).should().decreaseWithOptimisticLock(11L, 1);
 	}
 
 	@DisplayName("비관적 락 차감 방식을 사용해서 주문을 생성한다")
@@ -297,11 +305,11 @@ class OrderApplicationServiceTest {
 		stubForSuccess(member, product1, product2);
 
 		// when
-		orderConcurrencyService.createOrderWithPessimisticLock(command);
+		orderCreateConcurrencyService.createOrderWithPessimisticLock(command);
 
 		// then
-		then(stockInventoryService).should().decrease(10L, 2);
-		then(stockInventoryService).should().decrease(11L, 1);
+		then(decreaseStockService).should().decrease(10L, 2);
+		then(decreaseStockService).should().decrease(11L, 1);
 	}
 
 	@DisplayName("비관적 락 차감 방식(정렬)을 사용해서 주문을 생성한다")
@@ -315,11 +323,11 @@ class OrderApplicationServiceTest {
 		stubForSuccess(member, product1, product2);
 
 		// when
-		orderConcurrencyService.createOrderWithPessimisticLockOrdered(command);
+		orderCreateConcurrencyService.createOrderWithPessimisticLockOrdered(command);
 
 		// then
-		then(stockInventoryService).should().decrease(10L, 2);
-		then(stockInventoryService).should().decrease(11L, 1);
+		then(decreaseStockService).should().decrease(10L, 2);
+		then(decreaseStockService).should().decrease(11L, 1);
 	}
 
 	@DisplayName("비관적 락 차감 방식(배치)을 사용해서 주문을 생성한다")
@@ -333,12 +341,12 @@ class OrderApplicationServiceTest {
 		stubForSuccessBatch(member, product1, product2);
 
 		// when
-		orderConcurrencyService.createOrderWithPessimisticLockBatch(command);
+		orderCreateConcurrencyService.createOrderWithPessimisticLockBatch(command);
 
 		// then
 		ArgumentCaptor<StockDecreaseBatchCommand> requestCaptor =
 			ArgumentCaptor.forClass(StockDecreaseBatchCommand.class);
-		then(stockInventoryService).should().decreaseBatch(requestCaptor.capture());
+		then(decreaseStockBatchService).should().decreaseBatch(requestCaptor.capture());
 		assertThat(requestCaptor.getValue().getQuantitiesByProductId())
 			.containsEntry(10L, 2)
 			.containsEntry(11L, 1);
@@ -362,11 +370,11 @@ class OrderApplicationServiceTest {
 			.willReturn(Optional.of(existingOrder));
 
 		// when
-		OrderCreateResult result = orderCreateUseCase.createOrder(command);
+		OrderCreateResult result = createOrderUseCase.createOrder(command);
 
 		// then
 		assertThat(result.getOrderId()).isEqualTo(99L);
-		then(orderCreateService).shouldHaveNoInteractions();
+		then(createOrderService).shouldHaveNoInteractions();
 		then(orderIdempotencyStore).should().clear(1L, idempotencyKey);
 	}
 
@@ -383,12 +391,12 @@ class OrderApplicationServiceTest {
 		given(orderIdempotencyStore.reserve(anyLong(), anyString(), any())).willReturn(false);
 
 		// when & then
-		assertThatThrownBy(() -> orderCreateUseCase.createOrder(command))
+		assertThatThrownBy(() -> createOrderUseCase.createOrder(command))
 			.isInstanceOf(OrderException.class)
 			.satisfies(ex -> assertThat(((OrderException)ex).getErrorCode())
 				.isEqualTo(OrderErrorCode.ORDER_IDEMPOTENCY_IN_PROGRESS));
 
-		then(orderCreateService).shouldHaveNoInteractions();
+		then(createOrderService).shouldHaveNoInteractions();
 		then(orderIdempotencyStore).should(org.mockito.Mockito.never()).clear(anyLong(), anyString());
 	}
 
@@ -404,11 +412,11 @@ class OrderApplicationServiceTest {
 
 		stubForIdempotencyReserved();
 		willThrow(new StockException(StockErrorCode.STOCK_NOT_FOUND))
-			.given(orderCreateService)
+			.given(createOrderService)
 			.execute(eq(command));
 
 		// when & then
-		assertThatThrownBy(() -> orderCreateUseCase.createOrder(command))
+		assertThatThrownBy(() -> createOrderUseCase.createOrder(command))
 			.isInstanceOf(StockException.class);
 
 		then(orderIdempotencyStore).should().clear(1L, idempotencyKey);
@@ -454,7 +462,7 @@ class OrderApplicationServiceTest {
 		Order order = Order.create(1L);
 		ReflectionTestUtils.setField(order, "id", 100L);
 		OrderCreateResult result = OrderCreateResult.from(order);
-		given(orderCreateService.execute(eq(command))).willReturn(result);
+		given(createOrderService.execute(eq(command))).willReturn(result);
 		return result;
 	}
 

@@ -25,8 +25,9 @@ import com.commerce.member.domain.Member;
 import com.commerce.member.infrastructure.persistence.support.MemberPersistenceTestSupport;
 import com.commerce.order.domain.Order;
 import com.commerce.order.infrastructure.persistence.support.OrderPersistenceTestSupport;
-import com.commerce.payment.application.service.PaymentApprovalRecordService;
-import com.commerce.payment.application.service.PaymentApprovalService;
+import com.commerce.payment.application.service.SucceedPaymentApprovalService;
+import com.commerce.payment.application.service.MarkUnknownApprovePaymentService;
+import com.commerce.payment.application.service.FailApprovePaymentService;
 import com.commerce.payment.domain.Payment;
 import com.commerce.payment.domain.PaymentFailCode;
 import com.commerce.payment.domain.PaymentProvider;
@@ -63,10 +64,13 @@ class PaymentOptimisticLockConcurrencyTest {
 	}
 
 	@Autowired
-	private PaymentApprovalService paymentApprovalService;
+	private SucceedPaymentApprovalService succeedPaymentApprovalService;
 
 	@Autowired
-	private PaymentApprovalRecordService paymentApprovalRecordService;
+	private MarkUnknownApprovePaymentService markUnknownApprovePaymentService;
+
+	@Autowired
+	private FailApprovePaymentService failApprovePaymentService;
 
 	@Autowired
 	private PaymentPersistenceTestSupport paymentPersistence;
@@ -123,7 +127,7 @@ class PaymentOptimisticLockConcurrencyTest {
 			executor.submit(() -> {
 				try {
 					startLatch.await();
-					paymentApprovalService.succeedApproval(payment, now);
+					succeedPaymentApprovalService.succeedApproval(payment, now);
 				} catch (Throwable ex) {
 					succeedErrors.add(ex);
 				} finally {
@@ -133,7 +137,7 @@ class PaymentOptimisticLockConcurrencyTest {
 			executor.submit(() -> {
 				try {
 					startLatch.await();
-					paymentApprovalRecordService.markUnknown(
+					markUnknownApprovePaymentService.markUnknown(
 						merchantPayKey, PaymentProvider.NAVERPAY, pgPaymentId, "concurrent timeout", now
 					);
 				} catch (Throwable ex) {
@@ -187,7 +191,7 @@ class PaymentOptimisticLockConcurrencyTest {
 			executor.submit(() -> {
 				try {
 					startLatch.await();
-					paymentApprovalRecordService.fail(
+					failApprovePaymentService.fail(
 						merchantPayKey, PaymentProvider.NAVERPAY, pgPaymentId,
 						PaymentFailCode.PG_NETWORK_ERROR, "PG 네트워크 오류", now
 					);
@@ -200,7 +204,7 @@ class PaymentOptimisticLockConcurrencyTest {
 			executor.submit(() -> {
 				try {
 					startLatch.await();
-					paymentApprovalRecordService.markUnknown(
+					markUnknownApprovePaymentService.markUnknown(
 						merchantPayKey, PaymentProvider.NAVERPAY, pgPaymentId, "timeout", now
 					);
 				} catch (Throwable ex) {

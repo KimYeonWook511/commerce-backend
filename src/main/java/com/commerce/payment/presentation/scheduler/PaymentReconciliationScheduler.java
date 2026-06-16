@@ -4,7 +4,7 @@ import org.springframework.context.annotation.Profile;
 import org.springframework.scheduling.annotation.Scheduled;
 import org.springframework.stereotype.Component;
 
-import com.commerce.payment.application.usecase.PaymentReconciliationUseCase;
+import com.commerce.payment.application.usecase.ReconcilePaymentUseCase;
 
 import lombok.RequiredArgsConstructor;
 import lombok.extern.slf4j.Slf4j;
@@ -15,10 +15,10 @@ import lombok.extern.slf4j.Slf4j;
 @RequiredArgsConstructor
 public class PaymentReconciliationScheduler {
 
-	private final PaymentReconciliationUseCase paymentReconciliationUseCase;
+	private final ReconcilePaymentUseCase reconcilePaymentUseCase;
 
 	@Scheduled(cron = "${payment.reconciliation.cron:0 */1 * * * *}")
 	public void run() {
-		paymentReconciliationUseCase.reconcile();
+		reconcilePaymentUseCase.reconcile();
 	}
 }

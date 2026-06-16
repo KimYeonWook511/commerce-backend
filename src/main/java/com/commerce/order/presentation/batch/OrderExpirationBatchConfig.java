@@ -21,7 +21,7 @@ import org.springframework.dao.OptimisticLockingFailureException;
 import org.springframework.transaction.PlatformTransactionManager;
 
 import com.commerce.common.exception.CustomException;
-import com.commerce.order.application.service.OrderExpirationService;
+import com.commerce.order.application.service.ExpireOrderService;
 import com.commerce.order.application.port.BlockingPaymentChecker;
 import com.commerce.order.presentation.batch.listener.OrderExpirationJobListener;
 import com.commerce.order.presentation.batch.listener.OrderExpirationItemReadListener;
@@ -117,7 +117,7 @@ public class OrderExpirationBatchConfig {
 	}
 
 	@Bean
-	public ItemWriter<Order> expiredOrderWriter(OrderExpirationService orderExpirationService) {
+	public ItemWriter<Order> expiredOrderWriter(ExpireOrderService expireOrderService) {
 		// return new ItemWriter<Order>() {
 		// 	@Override
 		// 	public void write(@NonNull Chunk<? extends Order> chunk) throws Exception {
@@ -129,7 +129,7 @@ public class OrderExpirationBatchConfig {
 		// };
 		return chunk -> {
 			LocalDateTime requestedAt = LocalDateTime.now();
-			chunk.forEach(order -> orderExpirationService.expireOrder(order.getId(), requestedAt));
+			chunk.forEach(order -> expireOrderService.expireOrder(order.getId(), requestedAt));
 		};
 	}
 

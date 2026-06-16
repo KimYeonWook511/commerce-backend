@@ -1,0 +1,70 @@
+{
+  "project": "application-layer-rename",
+  "phase": "0-main",
+  "harness_version": "v3",
+  "steps": [
+    {
+      "step": 1,
+      "name": "rename-member-domain",
+      "status": "completed",
+      "started_at": "2026-06-16T14:46:30+0900",
+      "_attempt": 1,
+      "_stage": "done",
+      "summary": "MemberQueryService -> FindMemberService, MemberRegistrationService -> RegisterMemberService로 리네임하고, 모든 참조 파일(main 3개, test 4개) 업데이트 완료. 테스트 전체 통과.",
+      "completed_at": "2026-06-16T14:53:20+0900",
+      "_pre_commit_head": "b51b5bf6f92e70d88d04b3d176309dbe1df9fd75"
+    },
+    {
+      "step": 2,
+      "name": "rename-product-domain",
+      "status": "completed",
+      "started_at": "2026-06-16T15:17:32+0900",
+      "_attempt": 2,
+      "_stage": "done",
+      "summary": "ProductQueryService를 GetProductService로 리네임하고 AdminProductService를 CreateProductService/UpdateProductService/DeleteProductService 3개로 분리 완료, 구 클래스명 잔존 없음, 테스트 통과",
+      "completed_at": "2026-06-16T15:34:59+0900",
+      "_pre_commit_head": "4c52f43feebc2b9ee394cce4e97920c3bb9b8040"
+    },
+    {
+      "step": 3,
+      "name": "rename-stock-domain",
+      "status": "completed",
+      "started_at": "2026-06-16T15:36:02+0900",
+      "_attempt": 1,
+      "_stage": "done",
+      "summary": "stock 도메인 테스트 파일 5개에서 StockInventoryService 참조를 제거하고 분리된 서비스 클래스(IncreaseStockService, DecreaseStockService, DecreaseStockBatchService, StockDecreaseConcurrencyService)로 교체하여 전체 테스트 통과",
+      "completed_at": "2026-06-16T15:54:05+0900",
+      "_pre_commit_head": "1831397422d8e9c6d391410d0db19436bbef98a8"
+    },
+    {
+      "step": 4,
+      "name": "rename-order-domain",
+      "status": "completed",
+      "started_at": "2026-06-16T15:54:48+0900",
+      "_attempt": 1,
+      "_stage": "done",
+      "summary": "Order 도메인 서비스 5개(OrderCreateService→CreateOrderService, OrderCancelService→CancelOrderService, OrderExpirationService→ExpireOrderService, OrderConcurrencyService→OrderCreateConcurrencyService, OrderCreateUseCase→CreateOrderUseCase) 및 모든 참조 파일(main 2개, test 9개) 리네임 완료, 테스트 전체 통과",
+      "completed_at": "2026-06-16T16:06:10+0900",
+      "_pre_commit_head": "7343cb720539aa2f0637f1323c295026b75710f6"
+    },
+    {
+      "step": 5,
+      "name": "rename-payment-domain",
+      "status": "completed",
+      "started_at": "2026-06-16T16:06:54+0900",
+      "_attempt": 2,
+      "_stage": "done",
+      "summary": "SucceedCancelPaymentServiceTest, FailCancelPaymentServiceTest 생성 — 누락 테스트 이관 완료",
+      "completed_at": "2026-06-16T16:52:07+0900",
+      "_pre_commit_head": "9e3c9b5f41f75ff8a25659edb4eed791deec700e"
+    }
+  ],
+  "created_at": "2026-06-16T14:46:20+0900",
+  "execution": {
+    "developer_model": "sonnet",
+    "reviewer_model": "opus",
+    "commit_model": "haiku",
+    "push": true
+  },
+  "completed_at": "2026-06-16T17:03:41+0900"
+}

@@ -21,8 +21,8 @@ import org.springframework.test.web.servlet.MockMvc;
 import com.commerce.auth.application.usecase.TokenAuthenticationUseCase;
 import com.commerce.auth.application.dto.TokenAuthenticationResult;
 import com.commerce.common.config.WebConfig;
-import com.commerce.order.application.service.OrderCancelService;
-import com.commerce.order.application.usecase.OrderCreateUseCase;
+import com.commerce.order.application.service.CancelOrderService;
+import com.commerce.order.application.usecase.CreateOrderUseCase;
 import com.commerce.order.application.dto.OrderCreateCommand;
 import com.commerce.order.application.dto.OrderCancelResult;
 import com.commerce.order.application.dto.OrderCreateResult;
@@ -46,10 +46,10 @@ class OrderControllerTest {
 	private MockMvc mockMvc;
 
 	@MockitoBean
-	private OrderCreateUseCase orderCreateUseCase;
+	private CreateOrderUseCase createOrderUseCase;
 
 	@MockitoBean
-	private OrderCancelService orderCancelService;
+	private CancelOrderService cancelOrderService;
 
 	@MockitoBean
 	private TokenAuthenticationUseCase tokenAuthenticationUseCase;
@@ -58,7 +58,7 @@ class OrderControllerTest {
 	@Test
 	void createOrder_whenValidRequest_returnCreated() throws Exception {
 		stubForToken();
-		given(orderCreateUseCase.createOrder(any(OrderCreateCommand.class)))
+		given(createOrderUseCase.createOrder(any(OrderCreateCommand.class)))
 			.willReturn(OrderCreateResult.builder()
 				.orderId(1L)
 				.totalPrice(10000)
@@ -114,7 +114,7 @@ class OrderControllerTest {
 	@Test
 	void cancelOrder_whenValidRequest_returnOk() throws Exception {
 		stubForToken();
-		given(orderCancelService.cancelOrder(anyLong(), anyLong()))
+		given(cancelOrderService.cancelOrder(anyLong(), anyLong()))
 			.willReturn(OrderCancelResult.builder()
 				.orderId(1L)
 				.status(OrderStatus.CANCELED)
