@@ -259,8 +259,38 @@ def cmd_record_step(args) -> int:
     return 0
 
 
+def cmd_reset_step(args) -> int:
+    """blocked/error로 멈춘 step을 pending으로 되돌린다(사람이 원인을 고친 뒤 호출).
+
+    재시도/재개의 명시적 신호다. blocked/error 관련 잔여 필드를 모두 제거해 정본을
+    깨끗한 pending 상태로 만든다. 이렇게 해야 workflow 재실행 시 그 step이 다시 잡힌다.
+    (status를 바꾸지 않은 채 재실행하면 workflow가 자동 재개하지 않으므로, 안 고친 채
+    같은 실패를 반복하며 토큰을 낭비하는 일이 없다.)
+    """
+    p = resolve_paths(args.phase_dir)
+    if not p["phase_index"].exists():
+        emit({"ok": False, "error": f"phase index 없음: {p['phase_index']}"})
+        return 1
+    index = read_json(p["phase_index"])
+
+    target = next((s for s in index.get("steps", []) if s.get("step") == args.step), None)
+    if target is None:
+        emit({"ok": False, "error": f"step {args.step} not found in index"})
+        return 1
+
+    prev = target.get("status", "pending")
+    target["status"] = "pending"
+    for stale in ("summary", "error_message", "blocked_reason",
+                  "completed_at", "failed_at", "blocked_at"):
+        target.pop(stale, None)
+
+    write_json(p["phase_index"], index)
+    emit({"ok": True, "step": args.step, "status": "pending", "previous_status": prev})
+    return 0
+
+
 # ─────────────────────────────────────────────────────────────────────────────
-# finalize — phase 마무리 (finalizer 전용)
+# finalize — phase 마무리
 # ─────────────────────────────────────────────────────────────────────────────
 def cmd_finalize(args) -> int:
     """completed_at·task index 동기화 + phase index chore 커밋 + 선택적 push.
@@ -371,6 +401,11 @@ def build_parser() -> argparse.ArgumentParser:
     p_rec.add_argument("--summary", default="")
     p_rec.add_argument("--reason", default="")
     p_rec.set_defaults(func=cmd_record_step)
+
+    p_reset = sub.add_parser("reset-step", help="blocked/error step을 pending으로 되돌림(사람이 고친 뒤)")
+    p_reset.add_argument("phase_dir")
+    p_reset.add_argument("--step", type=int, required=True)
+    p_reset.set_defaults(func=cmd_reset_step)
 
     p_fin = sub.add_parser("finalize", help="phase 마무리(chore 커밋·push)")
     p_fin.add_argument("phase_dir")

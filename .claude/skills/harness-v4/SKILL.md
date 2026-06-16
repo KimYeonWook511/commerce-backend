@@ -56,8 +56,11 @@ preflight가 준 인자로 저장된 workflow 명령을 호출한다:
 
 workflow는 끝나면 결과 JSON을 메인 세션에 반환한다:
 - `outcome: "completed"` — 모든 step 완주 + finalize 완료. `finalize` 필드에 push 결과 등.
-- `outcome: "blocked"` / `"error"` — `stopped_at_step`·`reason`을 사람에게 전하고, 사람이 판단/수정 후
-  같은 명령으로 재실행하면 이미 `completed`로 기록된 step은 건너뛰고 이어서 진행한다.
+- `outcome: "blocked"` / `"error"` — `stopped_at_step`·`reason`을 사람에게 전한다. **workflow는 `pending`인 step만
+  실행한다**: `completed`인 step은 건너뛰고, `blocked`/`error`로 멈춘 step은 자동 재개하지 않는다.
+  사람이 원인을 고친 뒤 그 step을 pending으로 되돌려야(`execute.py reset-step <PHASE_DIR> --step N`) 재실행 시 다시 잡힌다.
+  (고치지 않은 채 재실행하면 같은 실패를 반복하며 토큰만 낭비하므로, reset이라는 명시적 신호를 요구한다.
+  결과에 `needs_reset: true`가 있으면 reset 후 재실행하라는 뜻이다.)
 
 ## 내부 구조 (요약)
 
@@ -78,7 +81,8 @@ JS는 shell/git/fs를 직접 못 하므로, 그 작업은 전부 agent가 `scrip
 
 ## scripts
 
-- `scripts/execute.py` — 서브커맨드 모음: `preflight` / `build-context` / `verify-ac` / `record-step` / `finalize`.
+- `scripts/execute.py` — 서브커맨드 모음: `preflight` / `build-context` / `verify-ac` / `record-step` / `reset-step` / `finalize`.
+  (`reset-step`은 사람이 blocked/error step을 고친 뒤 pending으로 되돌리는 수단.)
 - `scripts/acceptance_check.py` — AC 명령 실행·expectExit 비교·attempts 누적.
 - `scripts/git_ops.py`, `scripts/step_context.py` — git 헬퍼, 컨텍스트 조립.
 - `scripts/transcript_formatter.py`, `scripts/format_events.py` — agent transcript를 사람용 로그로 변환(hook이 사용).

@@ -63,9 +63,10 @@ python3 <EXECUTE> build-context <PHASE_DIR> --step <STEP>
 
 ## ★ 상태 파일 계약 (반드시 지킬 것)
 
-- **index.json, *-output.json 등 어떤 정본 상태 파일도 절대 수정하지 마라.** step의 status·summary·완료 기록은
+- **index.json 등 어떤 정본 상태 파일도 절대 수정하지 마라.** step의 status·summary·완료 기록은
   전부 harness(recorder/finalizer)가 검증 후 기록한다. 너는 정본에 손대지 않는다.
-- 핸드오프, 로그, output 등 실행 산출물은 커밋하지 마라.
+- **`stepN-ac-output.json`도 직접 건드리지 마라.** AC 결과는 `verify-ac` 서브커맨드가 기록한다.
+- 로그·AC 산출물 등 실행 산출물은 커밋하지 마라.
 
 ## ★ Acceptance Criteria 검증 (구현의 마지막 단계)
 

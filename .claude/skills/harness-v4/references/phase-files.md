@@ -23,8 +23,7 @@ docs/tasks/<task>/
 │       ├── index.json              # phase 레벨: steps(목차) + execution(설정) + step status
 │       ├── step1.md                # step 문서 (구현 지시 + ## Acceptance Criteria)
 │       ├── step2.md
-│       ├── step1-output.json       # (실행 산출) developer 작업 누적 — 감사용
-│       ├── step1-ac-output.json    # (실행 산출) AC 검증 결과 attempts 누적 — 감사용
+│       ├── step1-ac-output.json    # (실행 산출) AC 검증 결과 attempts 누적 — reviewer가 읽음
 │       └── logs/                   # (실행 산출) <role>.log 사람용 로그
 ├── adr.md                          # task ADR (이번 작업의 결정사항)
 └── ...                             # architecture.md, api-spec.md 등 task 문서
@@ -57,7 +56,10 @@ task 문서가 이번 작업의 구체 결정, 루트 문서가 전역 원칙이
 ```
 
 - `steps`: 이 phase의 step 목차. 각 step의 `status`(`pending`|`completed`|`blocked`|`error`)와 `summary`는
-  recorder/finalizer가 갱신한다. **재실행 시 `completed`인 step은 건너뛴다.**
+  recorder/finalizer가 갱신한다. **workflow는 `pending`인 step만 실행한다** — `completed`는 건너뛰고,
+  `blocked`/`error`로 멈춘 step은 자동 재개하지 않는다. 사람이 원인을 고친 뒤
+  `execute.py reset-step <PHASE_DIR> --step N`으로 그 step을 pending으로 되돌려야 재실행 시 다시 잡힌다.
+  (안 고친 채 재실행해 같은 실패를 반복하며 토큰을 낭비하지 않도록, reset을 명시적 신호로 요구한다.)
 - `execution`: agent별 모델과 push 여부. preflight가 이 값을 workflow 인자로 옮긴다.
 - `completed_at`: finalize가 채운다.
 
@@ -193,8 +195,10 @@ workflow(JS)는 각 agent의 반환 JSON으로 분기한다. agent는 **마지�
 |---|---|---|---|
 | **정본** | `phases/<phase>/index.json`, `phases/index.json` | recorder(step status) / finalizer(completed_at·task index) | finalizer가 chore 커밋 |
 | **정본** | 코드·task 문서 | developer | committer가 목적별 커밋 |
-| **실행 산출** | `stepN-output.json`, `stepN-ac-output.json` | execute.py 서브커맨드 | **커밋 안 함** (감사용 로컬) |
+| **실행 산출** | `stepN-ac-output.json` | verify-ac(attempt마다 append) | **커밋 안 함** (reviewer가 자기보고 대조에 읽음) |
 | **실행 산출** | `logs/<role>.log` | 로깅 hook | **커밋 안 함** |
 
 - developer/recorder/committer/finalizer는 자기 영역 밖의 정본을 건드리지 않는다(PreToolUse 정책으로도 강제).
 - 특히 phase index는 committer가 staging하지 않는다 — finalizer가 phase 끝에 chore 커밋으로 일괄 처리한다.
+- **`stepN-output.json`은 만들지 않는다.** v2/v3는 남겼으나(그땐 검증 로직이 읽었음), v4는 결과를 agent
+  반환값으로 받고 검증은 ac-output.json·git·log·index가 대신하므로 읽는 주체가 없다(dead artifact 회피).

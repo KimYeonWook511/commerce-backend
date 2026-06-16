@@ -214,14 +214,31 @@ const results = [];
 phase('Steps');
 let stopped = null;
 for (const step of a.steps) {
+  // v2 방식: pending인 step만 실행한다.
+  // - completed: 이미 끝남 → 건너뛰고 계속 진행(재실행 안전성).
+  // - blocked/error: 이전 실행에서 멈춘 step. 사람이 원인을 고치고 reset-step으로 pending으로
+  //   되돌려야 재개된다. 안 고친 채(=status 그대로) 재실행하면 같은 실패를 반복하고 토큰만
+  //   낭비하므로, 여기서 실행하지 않고 "reset이 필요하다"고 알리며 멈춘다.
   if (step.status === 'completed') {
-    results.push({ step: step.step, skipped: true });   // 재실행: 완료 step 건너뜀
+    results.push({ step: step.step, skipped: true });
     continue;
+  }
+  if (step.status !== 'pending') {
+    // blocked / error 등 — 사람의 reset을 기다리는 상태. 여기서 멈춘다.
+    stopped = {
+      stopped: step.status,            // 'blocked' | 'error' | 기타
+      step: step.step,
+      reason: `step ${step.step}이(가) '${step.status}' 상태다. 원인을 고친 뒤 `
+        + `\`execute.py reset-step <PHASE_DIR> --step ${step.step}\`로 pending으로 되돌리고 재실행하라. `
+        + `(고치지 않은 채 재실행하면 같은 실패가 반복되므로 자동 재개하지 않는다.)`,
+      needs_reset: true,
+    };
+    break;
   }
   const r = await runStep(a, step);
   results.push(r);
   if (r.stopped) {
-    // blocked/error → 그 상태를 정본에 남기고 중단
+    // 이번 실행에서 blocked/error 발생 → 그 상태를 정본에 기록하고 중단
     await callAgent('harness-v4-recorder', null,
       recorderPrompt(a, { step: r.step }, r.stopped, r.summary || '', r.reason), null,
       `step${r.step}:recorder`, 'Steps');
@@ -235,6 +252,7 @@ if (stopped) {
     outcome: stopped.stopped,            // 'blocked' | 'error'
     stopped_at_step: stopped.step,
     reason: stopped.reason,
+    needs_reset: stopped.needs_reset || false,
     completed_steps: results.filter(x => x.ok || x.skipped).map(x => x.step),
   };
 }
