@@ -50,10 +50,10 @@
     {
       "step": 5,
       "name": "rename-payment-domain",
-      "status": "in_progress",
+      "status": "completed",
       "started_at": "2026-06-16T16:06:54+0900",
       "_attempt": 2,
-      "_stage": "ran_commit",
+      "_stage": "done",
       "summary": "SucceedCancelPaymentServiceTest, FailCancelPaymentServiceTest 생성 — 누락 테스트 이관 완료",
       "completed_at": "2026-06-16T16:52:07+0900",
       "_pre_commit_head": "9e3c9b5f41f75ff8a25659edb4eed791deec700e"
@@ -65,5 +65,6 @@
     "reviewer_model": "opus",
     "commit_model": "haiku",
     "push": true
-  }
+  },
+  "completed_at": "2026-06-16T17:03:41+0900"
 }
