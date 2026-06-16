@@ -21,13 +21,13 @@ import com.commerce.member.domain.exception.MemberErrorCode;
 import com.commerce.member.domain.exception.MemberException;
 
 @ExtendWith(MockitoExtension.class)
-class MemberRegistrationServiceTest {
+class RegisterMemberServiceTest {
 
 	@Mock
 	private MemberRepository memberRepository;
 
 	@InjectMocks
-	private MemberRegistrationService memberRegistrationService;
+	private RegisterMemberService registerMemberService;
 
 	@DisplayName("회원 등록 시 이메일 중복을 확인하고 회원을 저장한다")
 	@Test
@@ -43,7 +43,7 @@ class MemberRegistrationServiceTest {
 		given(memberRepository.save(any(Member.class))).willAnswer(invocation -> invocation.getArgument(0));
 
 		// when
-		Member result = memberRegistrationService.register(command);
+		Member result = registerMemberService.register(command);
 
 		// then
 		ArgumentCaptor<Member> memberCaptor = ArgumentCaptor.forClass(Member.class);
@@ -67,7 +67,7 @@ class MemberRegistrationServiceTest {
 		given(memberRepository.existsByEmail("test@example.com")).willReturn(true);
 
 		// when & then
-		assertThatThrownBy(() -> memberRegistrationService.register(command))
+		assertThatThrownBy(() -> registerMemberService.register(command))
 			.isInstanceOf(MemberException.class)
 			.satisfies(exception -> {
 				MemberException memberException = (MemberException) exception;

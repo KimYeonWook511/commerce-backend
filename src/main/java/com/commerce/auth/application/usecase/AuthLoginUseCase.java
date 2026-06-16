@@ -8,7 +8,7 @@ import com.commerce.auth.application.dto.AuthLoginCommand;
 import com.commerce.auth.application.dto.AuthLoginResult;
 import com.commerce.auth.application.dto.AuthTokenIssueResult;
 import com.commerce.auth.application.port.PasswordHasher;
-import com.commerce.member.application.service.MemberQueryService;
+import com.commerce.member.application.service.FindMemberService;
 import com.commerce.member.domain.Member;
 
 import lombok.RequiredArgsConstructor;
@@ -19,12 +19,12 @@ import lombok.extern.slf4j.Slf4j;
 @RequiredArgsConstructor
 public class AuthLoginUseCase {
 
-	private final MemberQueryService memberQueryService;
+	private final FindMemberService findMemberService;
 	private final AuthTokenIssueUseCase authTokenIssueUseCase;
 	private final PasswordHasher passwordHasher;
 
 	public AuthLoginResult login(AuthLoginCommand command) {
-		Member member = memberQueryService.findByEmail(command.getEmail())
+		Member member = findMemberService.findByEmail(command.getEmail())
 			.orElseThrow(() -> new AuthException(AuthErrorCode.INVALID_CREDENTIALS));
 
 		if (!passwordHasher.matches(command.getPassword(), member.getPassword())) {

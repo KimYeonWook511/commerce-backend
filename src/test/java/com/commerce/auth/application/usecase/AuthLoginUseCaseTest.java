@@ -23,14 +23,14 @@ import com.commerce.auth.application.dto.AuthLoginCommand;
 import com.commerce.auth.application.dto.AuthLoginResult;
 import com.commerce.auth.application.dto.AuthTokenIssueResult;
 import com.commerce.auth.application.port.PasswordHasher;
-import com.commerce.member.application.service.MemberQueryService;
+import com.commerce.member.application.service.FindMemberService;
 import com.commerce.member.domain.Member;
 
 @ExtendWith(MockitoExtension.class)
 class AuthLoginUseCaseTest {
 
 	@Mock
-	private MemberQueryService memberQueryService;
+	private FindMemberService findMemberService;
 
 	@Mock
 	private AuthTokenIssueUseCase authTokenIssueUseCase;
@@ -48,7 +48,7 @@ class AuthLoginUseCaseTest {
 		Member member = Member.createUser("test@example.com", "hashed-password", "user1");
 		ReflectionTestUtils.setField(member, "id", 1L);
 
-		given(memberQueryService.findByEmail("test@example.com")).willReturn(Optional.of(member));
+		given(findMemberService.findByEmail("test@example.com")).willReturn(Optional.of(member));
 		given(passwordHasher.matches("password123", "hashed-password")).willReturn(true);
 		given(authTokenIssueUseCase.issue(member)).willReturn(AuthTokenIssueResult.of("access-token", "refresh-token"));
 
@@ -70,7 +70,7 @@ class AuthLoginUseCaseTest {
 	@Test
 	void login_whenMemberNotFound_throwException() {
 		// given
-		given(memberQueryService.findByEmail("test@example.com")).willReturn(Optional.empty());
+		given(findMemberService.findByEmail("test@example.com")).willReturn(Optional.empty());
 
 		AuthLoginCommand command = AuthLoginCommand.builder()
 			.email("test@example.com")
@@ -94,7 +94,7 @@ class AuthLoginUseCaseTest {
 		Member member = Member.createUser("test@example.com", "hashed-password", "user1");
 		ReflectionTestUtils.setField(member, "id", 1L);
 
-		given(memberQueryService.findByEmail("test@example.com")).willReturn(Optional.of(member));
+		given(findMemberService.findByEmail("test@example.com")).willReturn(Optional.of(member));
 		given(passwordHasher.matches("password123", "hashed-password")).willReturn(false);
 
 		AuthLoginCommand command = AuthLoginCommand.builder()

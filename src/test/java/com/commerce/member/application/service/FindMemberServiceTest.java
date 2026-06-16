@@ -19,13 +19,13 @@ import com.commerce.member.domain.exception.MemberErrorCode;
 import com.commerce.member.domain.exception.MemberException;
 
 @ExtendWith(MockitoExtension.class)
-class MemberQueryServiceTest {
+class FindMemberServiceTest {
 
 	@Mock
 	private MemberRepository memberRepository;
 
 	@InjectMocks
-	private MemberQueryService memberQueryService;
+	private FindMemberService findMemberService;
 
 	@DisplayName("회원 id로 조회하면 해당 회원을 반환한다")
 	@Test
@@ -35,7 +35,7 @@ class MemberQueryServiceTest {
 		given(memberRepository.findById(1L)).willReturn(Optional.of(member));
 
 		// when
-		Optional<Member> result = memberQueryService.findById(1L);
+		Optional<Member> result = findMemberService.findById(1L);
 
 		// then
 		assertThat(result).contains(member);
@@ -49,7 +49,7 @@ class MemberQueryServiceTest {
 		given(memberRepository.findByEmail("test@example.com")).willReturn(Optional.of(member));
 
 		// when
-		Optional<Member> result = memberQueryService.findByEmail("test@example.com");
+		Optional<Member> result = findMemberService.findByEmail("test@example.com");
 
 		// then
 		assertThat(result).contains(member);
@@ -62,7 +62,7 @@ class MemberQueryServiceTest {
 		given(memberRepository.findById(1L)).willReturn(Optional.empty());
 
 		// when & then
-		assertThatThrownBy(() -> memberQueryService.getById(1L))
+		assertThatThrownBy(() -> findMemberService.getById(1L))
 			.isInstanceOf(MemberException.class)
 			.satisfies(exception -> {
 				MemberException memberException = (MemberException) exception;

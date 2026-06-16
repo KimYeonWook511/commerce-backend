@@ -15,7 +15,7 @@ import lombok.extern.slf4j.Slf4j;
 @Slf4j
 @Service
 @RequiredArgsConstructor
-public class MemberRegistrationService {
+public class RegisterMemberService {
 
 	private final MemberRepository memberRepository;
 
