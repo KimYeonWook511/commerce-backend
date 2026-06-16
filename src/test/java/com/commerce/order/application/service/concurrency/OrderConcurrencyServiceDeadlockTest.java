@@ -36,7 +36,7 @@ import com.commerce.order.infrastructure.persistence.support.OrderPersistenceTes
 import com.commerce.product.domain.Product;
 import com.commerce.product.domain.ProductStatus;
 import com.commerce.product.infrastructure.persistence.support.ProductPersistenceTestSupport;
-import com.commerce.stock.application.service.StockInventoryService;
+import com.commerce.stock.application.service.DecreaseStockService;
 import com.commerce.stock.domain.Stock;
 import com.commerce.stock.infrastructure.persistence.support.StockPersistenceTestSupport;
 import com.commerce.support.PersistenceCleanupTestSupport;
@@ -57,7 +57,7 @@ class OrderConcurrencyServiceDeadlockTest {
 	private OrderConcurrencyService orderConcurrencyService;
 
 	@MockitoSpyBean
-	private StockInventoryService stockService;
+	private DecreaseStockService decreaseStockService;
 
 	@Autowired
 	private PersistenceCleanupTestSupport persistenceCleanup;
@@ -118,7 +118,7 @@ class OrderConcurrencyServiceDeadlockTest {
 			}
 			callCount.set(count + 1);
 			return result;
-		}).given(stockService).decrease(anyLong(), anyInt());
+		}).given(decreaseStockService).decrease(anyLong(), anyInt());
 
 		// when
 		ConcurrentLinkedQueue<Throwable> errors = new ConcurrentLinkedQueue<>();
@@ -135,7 +135,7 @@ class OrderConcurrencyServiceDeadlockTest {
 		} finally {
 			// @SpringBootTest는 테스트 컨텍스트를 캐시함
 			// 다른 테스트에 영향이 남지 않게 스텁 제거하기
-			reset(stockService);
+			reset(decreaseStockService);
 		}
 
 		// then

@@ -22,7 +22,7 @@ import com.commerce.product.domain.Product;
 import com.commerce.product.domain.repository.ProductRepository;
 import com.commerce.product.domain.exception.ProductErrorCode;
 import com.commerce.product.domain.exception.ProductException;
-import com.commerce.stock.application.service.StockInventoryService;
+import com.commerce.stock.application.service.DecreaseStockService;
 
 import lombok.RequiredArgsConstructor;
 import lombok.extern.slf4j.Slf4j;
@@ -35,7 +35,7 @@ public class OrderCreateService {
 	private final MemberRepository memberRepository;
 	private final ProductRepository productRepository;
 	private final OrderRepository orderRepository;
-	private final StockInventoryService stockInventoryService;
+	private final DecreaseStockService decreaseStockService;
 	private final CartItemRemover cartItemRemover;
 
 	@Transactional
@@ -75,7 +75,7 @@ public class OrderCreateService {
 				throw new ProductException(ProductErrorCode.PRODUCT_NOT_FOUND);
 			}
 
-			stockInventoryService.decrease(product.getId(), item.getQuantity());
+			decreaseStockService.decrease(product.getId(), item.getQuantity());
 			order.addOrderItem(product.getId(), item.getQuantity(), product.getPrice());
 		}
 

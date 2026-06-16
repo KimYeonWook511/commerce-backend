@@ -34,7 +34,7 @@ import com.commerce.product.domain.ProductStatus;
 import com.commerce.product.domain.repository.ProductRepository;
 import com.commerce.product.domain.exception.ProductErrorCode;
 import com.commerce.product.domain.exception.ProductException;
-import com.commerce.stock.application.service.StockInventoryService;
+import com.commerce.stock.application.service.DecreaseStockService;
 import com.commerce.stock.domain.exception.StockErrorCode;
 import com.commerce.stock.domain.exception.StockException;
 
@@ -51,7 +51,7 @@ class OrderCreateServiceTest {
 	private OrderRepository orderRepository;
 
 	@Mock
-	private StockInventoryService stockInventoryService;
+	private DecreaseStockService decreaseStockService;
 
 	@Mock
 	private CartItemRemover cartItemRemover;
@@ -81,7 +81,7 @@ class OrderCreateServiceTest {
 
 		// then
 		assertThat(result.getOrderId()).isEqualTo(100L);
-		then(stockInventoryService).should().decrease(10L, 2);
+		then(decreaseStockService).should().decrease(10L, 2);
 		then(cartItemRemover).should().removeByMemberAndProducts(1L, List.of(10L));
 	}
 
@@ -132,7 +132,7 @@ class OrderCreateServiceTest {
 		given(memberRepository.findById(1L)).willReturn(Optional.of(member));
 		given(productRepository.findAllById(List.of(10L))).willReturn(List.of(product));
 		willThrow(new StockException(StockErrorCode.STOCK_NOT_FOUND))
-			.given(stockInventoryService).decrease(10L, 2);
+			.given(decreaseStockService).decrease(10L, 2);
 
 		// when & then
 		assertThatThrownBy(() -> orderCreateService.execute(command))

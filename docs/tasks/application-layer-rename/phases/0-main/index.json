@@ -6,10 +6,10 @@
     {
       "step": 1,
       "name": "rename-member-domain",
-      "status": "in_progress",
+      "status": "completed",
       "started_at": "2026-06-16T14:46:30+0900",
       "_attempt": 1,
-      "_stage": "ran_commit",
+      "_stage": "done",
       "summary": "MemberQueryService -> FindMemberService, MemberRegistrationService -> RegisterMemberService로 리네임하고, 모든 참조 파일(main 3개, test 4개) 업데이트 완료. 테스트 전체 통과.",
       "completed_at": "2026-06-16T14:53:20+0900",
       "_pre_commit_head": "b51b5bf6f92e70d88d04b3d176309dbe1df9fd75"
@@ -17,12 +17,24 @@
     {
       "step": 2,
       "name": "rename-product-domain",
-      "status": "pending"
+      "status": "completed",
+      "started_at": "2026-06-16T15:17:32+0900",
+      "_attempt": 2,
+      "_stage": "done",
+      "summary": "ProductQueryService를 GetProductService로 리네임하고 AdminProductService를 CreateProductService/UpdateProductService/DeleteProductService 3개로 분리 완료, 구 클래스명 잔존 없음, 테스트 통과",
+      "completed_at": "2026-06-16T15:34:59+0900",
+      "_pre_commit_head": "4c52f43feebc2b9ee394cce4e97920c3bb9b8040"
     },
     {
       "step": 3,
       "name": "rename-stock-domain",
-      "status": "pending"
+      "status": "in_progress",
+      "started_at": "2026-06-16T15:36:02+0900",
+      "_attempt": 1,
+      "_stage": "ran_commit",
+      "summary": "stock 도메인 테스트 파일 5개에서 StockInventoryService 참조를 제거하고 분리된 서비스 클래스(IncreaseStockService, DecreaseStockService, DecreaseStockBatchService, StockDecreaseConcurrencyService)로 교체하여 전체 테스트 통과",
+      "completed_at": "2026-06-16T15:54:05+0900",
+      "_pre_commit_head": "1831397422d8e9c6d391410d0db19436bbef98a8"
     },
     {
       "step": 4,

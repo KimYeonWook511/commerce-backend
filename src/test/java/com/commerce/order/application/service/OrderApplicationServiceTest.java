@@ -38,8 +38,10 @@ import com.commerce.product.domain.ProductStatus;
 import com.commerce.product.domain.repository.ProductRepository;
 import com.commerce.stock.domain.exception.StockErrorCode;
 import com.commerce.stock.domain.exception.StockException;
-import com.commerce.stock.application.service.StockInventoryService;
-import com.commerce.stock.application.service.StockConcurrencyService;
+import com.commerce.stock.application.service.DecreaseStockService;
+import com.commerce.stock.application.service.DecreaseStockBatchService;
+import com.commerce.stock.application.service.IncreaseStockService;
+import com.commerce.stock.application.service.StockDecreaseConcurrencyService;
 import com.commerce.stock.application.dto.StockDecreaseBatchCommand;
 
 @ExtendWith(MockitoExtension.class)
@@ -52,10 +54,16 @@ class OrderApplicationServiceTest {
 	private ProductRepository productRepository;
 
 	@Mock
-	private StockInventoryService stockInventoryService;
+	private DecreaseStockService decreaseStockService;
 
 	@Mock
-	private StockConcurrencyService stockConcurrencyService;
+	private DecreaseStockBatchService decreaseStockBatchService;
+
+	@Mock
+	private IncreaseStockService increaseStockService;
+
+	@Mock
+	private StockDecreaseConcurrencyService stockDecreaseConcurrencyService;
 
 	@Mock
 	private OrderRepository orderRepository;
@@ -132,8 +140,8 @@ class OrderApplicationServiceTest {
 		orderConcurrencyService.createOrderWithoutLock(command);
 
 		// then
-		then(stockConcurrencyService).should().decrease(10L, 2);
-		then(stockConcurrencyService).should().decrease(11L, 1);
+		then(stockDecreaseConcurrencyService).should().decrease(10L, 2);
+		then(stockDecreaseConcurrencyService).should().decrease(11L, 1);
 	}
 
 	@DisplayName("주문 취소를 요청하면 재고가 복구된다")
@@ -150,7 +158,7 @@ class OrderApplicationServiceTest {
 		OrderCancelResult result = orderCancelService.cancelOrder(1L, 100L);
 
 		// then
-		then(stockInventoryService).should().increase(10L, 2);
+		then(increaseStockService).should().increase(10L, 2);
 		assertThat(result.getOrderId()).isEqualTo(100L);
 		assertThat(result.getStatus()).isEqualTo(OrderStatus.CANCELED);
 	}
@@ -170,9 +178,9 @@ class OrderApplicationServiceTest {
 		orderCancelService.cancelOrder(1L, 100L);
 
 		// then
-		InOrder inOrder = org.mockito.Mockito.inOrder(stockInventoryService);
-		inOrder.verify(stockInventoryService).increase(2L, 1);
-		inOrder.verify(stockInventoryService).increase(5L, 1);
+		InOrder inOrder = org.mockito.Mockito.inOrder(increaseStockService);
+		inOrder.verify(increaseStockService).increase(2L, 1);
+		inOrder.verify(increaseStockService).increase(5L, 1);
 	}
 
 	@DisplayName("주문 상태가 초기 상태가 아니면 취소에 실패한다")
@@ -228,8 +236,8 @@ class OrderApplicationServiceTest {
 		orderConcurrencyService.createOrderWithSynchronized(command);
 
 		// then
-		then(stockConcurrencyService).should().decreaseWithSynchronized(10L, 2);
-		then(stockConcurrencyService).should().decreaseWithSynchronized(11L, 1);
+		then(stockDecreaseConcurrencyService).should().decreaseWithSynchronized(10L, 2);
+		then(stockDecreaseConcurrencyService).should().decreaseWithSynchronized(11L, 1);
 	}
 
 	@DisplayName("동기화+트랜잭션 차감 방식을 사용해서 주문을 생성한다")
@@ -246,8 +254,8 @@ class OrderApplicationServiceTest {
 		orderConcurrencyService.createOrderWithSynchronizedAndTransaction(command);
 
 		// then
-		then(stockConcurrencyService).should().decreaseWithSynchronizedAndTransaction(10L, 2);
-		then(stockConcurrencyService).should().decreaseWithSynchronizedAndTransaction(11L, 1);
+		then(stockDecreaseConcurrencyService).should().decreaseWithSynchronizedAndTransaction(10L, 2);
+		then(stockDecreaseConcurrencyService).should().decreaseWithSynchronizedAndTransaction(11L, 1);
 	}
 
 	@DisplayName("ReentrantLock+트랜잭션 차감 방식을 사용해서 주문을 생성한다")
@@ -264,8 +272,8 @@ class OrderApplicationServiceTest {
 		orderConcurrencyService.createOrderWithReentrantLockAndTransaction(command);
 
 		// then
-		then(stockConcurrencyService).should().decreaseWithReentrantLockAndTransaction(10L, 2);
-		then(stockConcurrencyService).should().decreaseWithReentrantLockAndTransaction(11L, 1);
+		then(stockDecreaseConcurrencyService).should().decreaseWithReentrantLockAndTransaction(10L, 2);
+		then(stockDecreaseConcurrencyService).should().decreaseWithReentrantLockAndTransaction(11L, 1);
 	}
 
 	@DisplayName("낙관적 락 차감 방식을 사용해서 주문을 생성한다")
@@ -282,8 +290,8 @@ class OrderApplicationServiceTest {
 		orderConcurrencyService.createOrderWithOptimisticLock(command);
 
 		// then
-		then(stockConcurrencyService).should().decreaseWithOptimisticLock(10L, 2);
-		then(stockConcurrencyService).should().decreaseWithOptimisticLock(11L, 1);
+		then(stockDecreaseConcurrencyService).should().decreaseWithOptimisticLock(10L, 2);
+		then(stockDecreaseConcurrencyService).should().decreaseWithOptimisticLock(11L, 1);
 	}
 
 	@DisplayName("비관적 락 차감 방식을 사용해서 주문을 생성한다")
@@ -300,8 +308,8 @@ class OrderApplicationServiceTest {
 		orderConcurrencyService.createOrderWithPessimisticLock(command);
 
 		// then
-		then(stockInventoryService).should().decrease(10L, 2);
-		then(stockInventoryService).should().decrease(11L, 1);
+		then(decreaseStockService).should().decrease(10L, 2);
+		then(decreaseStockService).should().decrease(11L, 1);
 	}
 
 	@DisplayName("비관적 락 차감 방식(정렬)을 사용해서 주문을 생성한다")
@@ -318,8 +326,8 @@ class OrderApplicationServiceTest {
 		orderConcurrencyService.createOrderWithPessimisticLockOrdered(command);
 
 		// then
-		then(stockInventoryService).should().decrease(10L, 2);
-		then(stockInventoryService).should().decrease(11L, 1);
+		then(decreaseStockService).should().decrease(10L, 2);
+		then(decreaseStockService).should().decrease(11L, 1);
 	}
 
 	@DisplayName("비관적 락 차감 방식(배치)을 사용해서 주문을 생성한다")
@@ -338,7 +346,7 @@ class OrderApplicationServiceTest {
 		// then
 		ArgumentCaptor<StockDecreaseBatchCommand> requestCaptor =
 			ArgumentCaptor.forClass(StockDecreaseBatchCommand.class);
-		then(stockInventoryService).should().decreaseBatch(requestCaptor.capture());
+		then(decreaseStockBatchService).should().decreaseBatch(requestCaptor.capture());
 		assertThat(requestCaptor.getValue().getQuantitiesByProductId())
 			.containsEntry(10L, 2)
 			.containsEntry(11L, 1);

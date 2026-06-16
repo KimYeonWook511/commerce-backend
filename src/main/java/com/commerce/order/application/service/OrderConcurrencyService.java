@@ -22,8 +22,9 @@ import com.commerce.product.domain.Product;
 import com.commerce.product.domain.exception.ProductErrorCode;
 import com.commerce.product.domain.exception.ProductException;
 import com.commerce.product.domain.repository.ProductRepository;
-import com.commerce.stock.application.service.StockConcurrencyService;
-import com.commerce.stock.application.service.StockInventoryService;
+import com.commerce.stock.application.service.StockDecreaseConcurrencyService;
+import com.commerce.stock.application.service.DecreaseStockService;
+import com.commerce.stock.application.service.DecreaseStockBatchService;
 import com.commerce.stock.application.dto.StockDecreaseBatchCommand;
 
 import lombok.RequiredArgsConstructor;
@@ -37,37 +38,38 @@ public class OrderConcurrencyService {
 	private final MemberRepository memberRepository;
 	private final ProductRepository productRepository;
 	private final OrderRepository orderRepository;
-	private final StockInventoryService stockInventoryService;
-	private final StockConcurrencyService stockConcurrencyService;
+	private final DecreaseStockService decreaseStockService;
+	private final DecreaseStockBatchService decreaseStockBatchService;
+	private final StockDecreaseConcurrencyService stockDecreaseConcurrencyService;
 
 	@Transactional
 	public OrderCreateResult createOrderWithoutLock(OrderCreateCommand command) {
-		return createOrderWithStockDecrease(command, stockConcurrencyService::decrease, "without-lock");
+		return createOrderWithStockDecrease(command, stockDecreaseConcurrencyService::decrease, "without-lock");
 	}
 
 	@Transactional
 	public OrderCreateResult createOrderWithSynchronized(OrderCreateCommand command) {
-		return createOrderWithStockDecrease(command, stockConcurrencyService::decreaseWithSynchronized, "synchronized");
+		return createOrderWithStockDecrease(command, stockDecreaseConcurrencyService::decreaseWithSynchronized, "synchronized");
 	}
 
 	@Transactional
 	public OrderCreateResult createOrderWithSynchronizedAndTransaction(OrderCreateCommand command) {
-		return createOrderWithStockDecrease(command, stockConcurrencyService::decreaseWithSynchronizedAndTransaction, "synchronized-tx");
+		return createOrderWithStockDecrease(command, stockDecreaseConcurrencyService::decreaseWithSynchronizedAndTransaction, "synchronized-tx");
 	}
 
 	@Transactional
 	public OrderCreateResult createOrderWithReentrantLockAndTransaction(OrderCreateCommand command) {
-		return createOrderWithStockDecrease(command, stockConcurrencyService::decreaseWithReentrantLockAndTransaction, "reentrant-tx");
+		return createOrderWithStockDecrease(command, stockDecreaseConcurrencyService::decreaseWithReentrantLockAndTransaction, "reentrant-tx");
 	}
 
 	@Transactional
 	public OrderCreateResult createOrderWithOptimisticLock(OrderCreateCommand command) {
-		return createOrderWithStockDecrease(command, stockConcurrencyService::decreaseWithOptimisticLock, "optimistic");
+		return createOrderWithStockDecrease(command, stockDecreaseConcurrencyService::decreaseWithOptimisticLock, "optimistic");
 	}
 
 	@Transactional
 	public OrderCreateResult createOrderWithPessimisticLock(OrderCreateCommand command) {
-		return createOrderWithStockDecrease(command, stockInventoryService::decrease, "pessimistic");
+		return createOrderWithStockDecrease(command, decreaseStockService::decrease, "pessimistic");
 	}
 
 	@Transactional
@@ -79,7 +81,7 @@ public class OrderConcurrencyService {
 				.sorted((left, right) -> left.getProductId().compareTo(right.getProductId()))
 				.toList())
 			.build();
-		return createOrderWithStockDecrease(sortedCommand, stockInventoryService::decrease, "pessimistic-ordered");
+		return createOrderWithStockDecrease(sortedCommand, decreaseStockService::decrease, "pessimistic-ordered");
 	}
 
 	@Transactional
@@ -97,7 +99,7 @@ public class OrderConcurrencyService {
 			throw new ProductException(ProductErrorCode.PRODUCT_NOT_FOUND);
 		}
 
-		stockInventoryService.decreaseBatch(StockDecreaseBatchCommand.from(quantitiesByProductId));
+		decreaseStockBatchService.decreaseBatch(StockDecreaseBatchCommand.from(quantitiesByProductId));
 
 		Order order = Order.create(command.getMemberId());
 		for (OrderCreateItem item : command.getItems()) {

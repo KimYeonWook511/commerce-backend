@@ -18,13 +18,13 @@ import com.commerce.stock.domain.exception.StockErrorCode;
 import com.commerce.stock.domain.exception.StockException;
 
 @ExtendWith(MockitoExtension.class)
-class StockConcurrencyServiceTest {
+class StockDecreaseConcurrencyServiceTest {
 
 	@Mock
 	private StockRepository stockRepository;
 
 	@InjectMocks
-	private StockConcurrencyService stockConcurrencyService;
+	private StockDecreaseConcurrencyService stockDecreaseConcurrencyService;
 
 	@DisplayName("재고가 존재하면 차감된다")
 	@Test
@@ -34,7 +34,7 @@ class StockConcurrencyServiceTest {
 		given(stockRepository.findByProductId(1L)).willReturn(Optional.of(stock));
 
 		// when
-		stockConcurrencyService.decrease(1L, 3);
+		stockDecreaseConcurrencyService.decrease(1L, 3);
 
 		// then
 		assertThat(stock.getQuantity()).isEqualTo(7);
@@ -47,7 +47,7 @@ class StockConcurrencyServiceTest {
 		given(stockRepository.findByProductId(1L)).willReturn(Optional.empty());
 
 		// when & then
-		assertThatThrownBy(() -> stockConcurrencyService.decrease(1L, 1))
+		assertThatThrownBy(() -> stockDecreaseConcurrencyService.decrease(1L, 1))
 			.isInstanceOf(StockException.class)
 			.satisfies(exception -> {
 				StockException stockException = (StockException) exception;
@@ -63,7 +63,7 @@ class StockConcurrencyServiceTest {
 		given(stockRepository.findByProductId(1L)).willReturn(Optional.of(stock));
 
 		// when & then
-		assertThatThrownBy(() -> stockConcurrencyService.decrease(1L, 2))
+		assertThatThrownBy(() -> stockDecreaseConcurrencyService.decrease(1L, 2))
 			.isInstanceOf(StockException.class)
 			.satisfies(exception -> {
 				StockException stockException = (StockException) exception;

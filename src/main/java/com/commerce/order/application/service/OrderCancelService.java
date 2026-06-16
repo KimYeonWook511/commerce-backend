@@ -12,7 +12,7 @@ import com.commerce.order.domain.OrderItem;
 import com.commerce.order.domain.repository.OrderRepository;
 import com.commerce.order.domain.exception.OrderErrorCode;
 import com.commerce.order.domain.exception.OrderException;
-import com.commerce.stock.application.service.StockInventoryService;
+import com.commerce.stock.application.service.IncreaseStockService;
 
 import lombok.RequiredArgsConstructor;
 import lombok.extern.slf4j.Slf4j;
@@ -23,7 +23,7 @@ import lombok.extern.slf4j.Slf4j;
 public class OrderCancelService {
 
 	private final OrderRepository orderRepository;
-	private final StockInventoryService stockInventoryService;
+	private final IncreaseStockService increaseStockService;
 
 	@Transactional
 	public OrderCancelResult cancelOrder(Long memberId, Long orderId) {
@@ -37,7 +37,7 @@ public class OrderCancelService {
 			.toList();
 
 		sortedItems.forEach(item ->
-			stockInventoryService.increase(item.getProductId(), item.getQuantity())
+			increaseStockService.increase(item.getProductId(), item.getQuantity())
 		);
 
 		log.info("주문 취소 orderId={} memberId={} itemCount={}",

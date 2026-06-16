@@ -6,7 +6,6 @@ import static org.mockito.BDDMockito.*;
 
 import java.util.List;
 import java.util.Map;
-import java.util.Optional;
 
 import org.junit.jupiter.api.DisplayName;
 import org.junit.jupiter.api.Test;
@@ -26,41 +25,13 @@ import com.commerce.stock.domain.exception.StockErrorCode;
 import com.commerce.stock.domain.exception.StockException;
 
 @ExtendWith(MockitoExtension.class)
-class StockInventoryServiceTest {
+class DecreaseStockBatchServiceTest {
 
 	@Mock
 	private StockRepository stockRepository;
 
 	@InjectMocks
-	private StockInventoryService stockInventoryService;
-
-	@DisplayName("비관적 락으로 조회한 재고는 차감된다")
-	@Test
-	void decrease_whenStockExists_decreaseQuantity() {
-		// given
-		Stock stock = createStock(10);
-		given(stockRepository.findByProductIdWithPessimisticLock(1L)).willReturn(Optional.of(stock));
-
-		// when
-		stockInventoryService.decrease(1L, 4);
-
-		// then
-		assertThat(stock.getQuantity()).isEqualTo(6);
-	}
-
-	@DisplayName("비관적 락으로 조회한 재고는 증가한다")
-	@Test
-	void increase_whenStockExists_increaseQuantity() {
-		// given
-		Stock stock = createStock(5);
-		given(stockRepository.findByProductIdWithPessimisticLock(1L)).willReturn(Optional.of(stock));
-
-		// when
-		stockInventoryService.increase(1L, 3);
-
-		// then
-		assertThat(stock.getQuantity()).isEqualTo(8);
-	}
+	private DecreaseStockBatchService decreaseStockBatchService;
 
 	@DisplayName("비관적 락으로 여러 재고를 조회하면 모두 차감된다")
 	@Test
@@ -81,7 +52,7 @@ class StockInventoryServiceTest {
 			.willReturn(List.of(stock1, stock2));
 
 		// when
-		stockInventoryService.decreaseBatch(command);
+		decreaseStockBatchService.decreaseBatch(command);
 
 		// then
 		assertThat(stock1.getQuantity()).isEqualTo(9);
@@ -107,7 +78,7 @@ class StockInventoryServiceTest {
 			.willReturn(List.of(stock1, stock2));
 
 		// when
-		StockDecreaseBatchResult result = stockInventoryService.decreaseBatch(command);
+		StockDecreaseBatchResult result = decreaseStockBatchService.decreaseBatch(command);
 
 		// then
 		assertThat(stock1.getQuantity()).isEqualTo(8);
@@ -133,18 +104,12 @@ class StockInventoryServiceTest {
 			.willReturn(List.of(stock1));
 
 		// when & then
-		assertThatThrownBy(() -> stockInventoryService.decreaseBatch(command))
+		assertThatThrownBy(() -> decreaseStockBatchService.decreaseBatch(command))
 			.isInstanceOf(StockException.class)
 			.satisfies(exception -> {
 				StockException stockException = (StockException) exception;
 				assertThat(stockException.getErrorCode()).isEqualTo(StockErrorCode.STOCK_NOT_FOUND);
 			});
-	}
-
-	private Stock createStock(int quantity) {
-		return Stock.builder()
-			.quantity(quantity)
-			.build();
 	}
 
 	private Stock createStock(Product product, int quantity) {

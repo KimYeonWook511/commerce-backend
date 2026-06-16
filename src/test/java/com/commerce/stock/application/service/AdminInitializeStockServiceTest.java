@@ -3,8 +3,6 @@ package com.commerce.stock.application.service;
 import static org.assertj.core.api.Assertions.*;
 import static org.mockito.BDDMockito.*;
 
-import java.time.LocalDateTime;
-import java.util.List;
 import java.util.Optional;
 
 import org.junit.jupiter.api.DisplayName;
@@ -21,10 +19,8 @@ import com.commerce.product.domain.ProductStatus;
 import com.commerce.product.domain.exception.ProductErrorCode;
 import com.commerce.product.domain.exception.ProductException;
 import com.commerce.product.domain.repository.ProductRepository;
-import com.commerce.stock.application.dto.AdminStockAdjustCommand;
 import com.commerce.stock.application.dto.AdminStockCreateCommand;
 import com.commerce.stock.application.dto.AdminStockResult;
-import com.commerce.stock.application.dto.StockHistoryResult;
 import com.commerce.stock.domain.Stock;
 import com.commerce.stock.domain.StockAdjustmentReason;
 import com.commerce.stock.domain.StockHistory;
@@ -34,7 +30,7 @@ import com.commerce.stock.domain.exception.StockErrorCode;
 import com.commerce.stock.domain.exception.StockException;
 
 @ExtendWith(MockitoExtension.class)
-class AdminStockServiceTest {
+class AdminInitializeStockServiceTest {
 
 	@Mock
 	private StockRepository stockRepository;
@@ -46,7 +42,7 @@ class AdminStockServiceTest {
 	private ProductRepository productRepository;
 
 	@InjectMocks
-	private AdminStockService adminStockService;
+	private AdminInitializeStockService adminInitializeStockService;
 
 	@DisplayName("관리자 초기 재고 생성은 재고와 양수 이력을 저장한다")
 	@Test
@@ -69,7 +65,7 @@ class AdminStockServiceTest {
 		});
 
 		// when
-		AdminStockResult result = adminStockService.createInitialStock(command);
+		AdminStockResult result = adminInitializeStockService.createInitialStock(command);
 
 		// then
 		assertThat(result.getProductId()).isEqualTo(1L);
@@ -99,7 +95,7 @@ class AdminStockServiceTest {
 		given(productRepository.findNotDeletedProduct(1L)).willReturn(Optional.empty());
 
 		// when & then
-		assertThatThrownBy(() -> adminStockService.createInitialStock(command))
+		assertThatThrownBy(() -> adminInitializeStockService.createInitialStock(command))
 			.isInstanceOf(ProductException.class)
 			.satisfies(exception -> {
 				ProductException productException = (ProductException) exception;
@@ -128,7 +124,7 @@ class AdminStockServiceTest {
 		});
 
 		// when
-		AdminStockResult result = adminStockService.createInitialStock(command);
+		AdminStockResult result = adminInitializeStockService.createInitialStock(command);
 
 		// then
 		assertThat(result.getProductId()).isEqualTo(1L);
@@ -161,7 +157,7 @@ class AdminStockServiceTest {
 		given(stockRepository.findByProductId(1L)).willReturn(Optional.of(stock));
 
 		// when & then
-		assertThatThrownBy(() -> adminStockService.createInitialStock(command))
+		assertThatThrownBy(() -> adminInitializeStockService.createInitialStock(command))
 			.isInstanceOf(StockException.class)
 			.satisfies(exception -> {
 				StockException stockException = (StockException) exception;
@@ -169,141 +165,11 @@ class AdminStockServiceTest {
 			});
 	}
 
-	@DisplayName("관리자 재고 증가는 비관적 락으로 조회하고 양수 이력을 저장한다")
-	@Test
-	void increaseByAdmin_whenStockExists_increaseQuantityAndSavePositiveHistory() {
-		// given
-		Product product = createProduct(1L, "product-1", 1000);
-		Stock stock = createStock(product, 10);
-		ReflectionTestUtils.setField(stock, "id", 100L);
-		AdminStockAdjustCommand command = AdminStockAdjustCommand.builder()
-			.productId(1L)
-			.quantity(5)
-			.reason(StockAdjustmentReason.INBOUND)
-			.adminMemberId(10L)
-			.build();
-
-		given(stockRepository.findByProductIdWithPessimisticLock(1L)).willReturn(Optional.of(stock));
-
-		// when
-		AdminStockResult result = adminStockService.increaseByAdmin(command);
-
-		// then
-		assertThat(stock.getQuantity()).isEqualTo(15);
-		assertThat(result.getQuantity()).isEqualTo(15);
-
-		ArgumentCaptor<StockHistory> historyCaptor = ArgumentCaptor.forClass(StockHistory.class);
-		then(stockHistoryRepository).should().save(historyCaptor.capture());
-		assertThat(historyCaptor.getValue().getQuantityChange()).isEqualTo(5);
-		assertThat(historyCaptor.getValue().getReason()).isEqualTo(StockAdjustmentReason.INBOUND);
-	}
-
-	@DisplayName("관리자 재고 감소는 비관적 락으로 조회하고 음수 이력을 저장한다")
-	@Test
-	void decreaseByAdmin_whenStockExists_decreaseQuantityAndSaveNegativeHistory() {
-		// given
-		Product product = createProduct(1L, "product-1", 1000);
-		Stock stock = createStock(product, 10);
-		ReflectionTestUtils.setField(stock, "id", 100L);
-		AdminStockAdjustCommand command = AdminStockAdjustCommand.builder()
-			.productId(1L)
-			.quantity(3)
-			.reason(StockAdjustmentReason.DISPOSAL)
-			.adminMemberId(10L)
-			.build();
-
-		given(stockRepository.findByProductIdWithPessimisticLock(1L)).willReturn(Optional.of(stock));
-
-		// when
-		AdminStockResult result = adminStockService.decreaseByAdmin(command);
-
-		// then
-		assertThat(stock.getQuantity()).isEqualTo(7);
-		assertThat(result.getQuantity()).isEqualTo(7);
-
-		ArgumentCaptor<StockHistory> historyCaptor = ArgumentCaptor.forClass(StockHistory.class);
-		then(stockHistoryRepository).should().save(historyCaptor.capture());
-		assertThat(historyCaptor.getValue().getQuantityChange()).isEqualTo(-3);
-		assertThat(historyCaptor.getValue().getReason()).isEqualTo(StockAdjustmentReason.DISPOSAL);
-	}
-
-	@DisplayName("관리자 재고 감소 수량이 현재 재고보다 크면 예외가 발생한다")
-	@Test
-	void decreaseByAdmin_whenOutOfStock_throwException() {
-		// given
-		Product product = createProduct(1L, "product-1", 1000);
-		Stock stock = createStock(product, 1);
-		AdminStockAdjustCommand command = AdminStockAdjustCommand.builder()
-			.productId(1L)
-			.quantity(2)
-			.reason(StockAdjustmentReason.DISPOSAL)
-			.adminMemberId(10L)
-			.build();
-
-		given(stockRepository.findByProductIdWithPessimisticLock(1L)).willReturn(Optional.of(stock));
-
-		// when & then
-		assertThatThrownBy(() -> adminStockService.decreaseByAdmin(command))
-			.isInstanceOf(StockException.class)
-			.satisfies(exception -> {
-				StockException stockException = (StockException) exception;
-				assertThat(stockException.getErrorCode()).isEqualTo(StockErrorCode.OUT_OF_STOCK);
-			});
-		then(stockHistoryRepository).should(never()).save(any(StockHistory.class));
-	}
-
-	@DisplayName("상품별 재고 이력은 최신순 결과로 반환된다")
-	@Test
-	void getHistoriesByProductId_whenStockExists_returnHistoriesOrderByCreatedAtDesc() {
-		// given
-		Product product = createProduct(1L, "product-1", 1000);
-		Stock stock = createStock(product, 10);
-		ReflectionTestUtils.setField(stock, "id", 100L);
-		StockHistory latestHistory = createStockHistory(2L, stock, -3, StockAdjustmentReason.DISPOSAL,
-			LocalDateTime.of(2026, 4, 30, 12, 30));
-		StockHistory firstHistory = createStockHistory(1L, stock, 10, StockAdjustmentReason.INBOUND,
-			LocalDateTime.of(2026, 4, 30, 12, 0));
-
-		given(stockRepository.findByProductId(1L)).willReturn(Optional.of(stock));
-		given(stockHistoryRepository.findAllByStockIdOrderByCreatedAtDesc(100L))
-			.willReturn(List.of(latestHistory, firstHistory));
-
-		// when
-		List<StockHistoryResult> results = adminStockService.getHistoriesByProductId(1L);
-
-		// then
-		assertThat(results).hasSize(2);
-		assertThat(results.get(0).getHistoryId()).isEqualTo(2L);
-		assertThat(results.get(0).getQuantityChange()).isEqualTo(-3);
-		assertThat(results.get(0).getCreatedAt()).isEqualTo(LocalDateTime.of(2026, 4, 30, 12, 30));
-		assertThat(results.get(1).getHistoryId()).isEqualTo(1L);
-		assertThat(results.get(1).getQuantityChange()).isEqualTo(10);
-		assertThat(results.get(1).getCreatedAt()).isEqualTo(LocalDateTime.of(2026, 4, 30, 12, 0));
-	}
-
 	private Stock createStock(Product product, int quantity) {
 		return Stock.builder()
 			.productId(product.getId())
 			.quantity(quantity)
 			.build();
-	}
-
-	private StockHistory createStockHistory(
-		Long id,
-		Stock stock,
-		int quantityChange,
-		StockAdjustmentReason reason,
-		LocalDateTime createdAt
-	) {
-		StockHistory history = StockHistory.builder()
-			.stockId(stock.getId())
-			.quantityChange(quantityChange)
-			.reason(reason)
-			.adminMemberId(10L)
-			.build();
-		ReflectionTestUtils.setField(history, "id", id);
-		ReflectionTestUtils.setField(history, "createdAt", createdAt);
-		return history;
 	}
 
 	private Product createProduct(Long id, String name, int price) {

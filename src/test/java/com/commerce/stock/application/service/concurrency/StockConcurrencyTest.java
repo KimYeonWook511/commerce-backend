@@ -20,8 +20,9 @@ import org.springframework.test.context.ActiveProfiles;
 import com.commerce.product.domain.Product;
 import com.commerce.product.domain.ProductStatus;
 import com.commerce.product.infrastructure.persistence.support.ProductPersistenceTestSupport;
-import com.commerce.stock.application.service.StockConcurrencyService;
-import com.commerce.stock.application.service.StockInventoryService;
+import com.commerce.stock.application.service.StockDecreaseConcurrencyService;
+import com.commerce.stock.application.service.DecreaseStockService;
+import com.commerce.stock.application.service.DecreaseStockBatchService;
 import com.commerce.stock.application.dto.StockDecreaseBatchCommand;
 import com.commerce.stock.domain.Stock;
 import com.commerce.stock.infrastructure.persistence.support.StockPersistenceTestSupport;
@@ -34,10 +35,13 @@ import com.commerce.support.PersistenceCleanupTestSupport;
 class StockConcurrencyTest {
 
 	@Autowired
-	private StockConcurrencyService stockConcurrencyService;
+	private StockDecreaseConcurrencyService stockConcurrencyService;
 
 	@Autowired
-	private StockInventoryService stockInventoryService;
+	private DecreaseStockService decreaseStockService;
+
+	@Autowired
+	private DecreaseStockBatchService decreaseStockBatchService;
 
 	@Autowired
 	private StockPersistenceTestSupport stockPersistence;
@@ -178,7 +182,7 @@ class StockConcurrencyTest {
 		measureConcurrent(
 			"pessimistic-lock",
 			threadCount,
-			() -> stockInventoryService.decrease(product.getId(), 1),
+			() -> decreaseStockService.decrease(product.getId(), 1),
 			errors
 		);
 
@@ -201,7 +205,7 @@ class StockConcurrencyTest {
 		measureConcurrent(
 			"pessimistic-lock-batch",
 			threadCount,
-			() -> stockInventoryService.decreaseBatch(
+			() -> decreaseStockBatchService.decreaseBatch(
 				StockDecreaseBatchCommand.from(java.util.Map.of(product.getId(), 1))
 			),
 			errors
