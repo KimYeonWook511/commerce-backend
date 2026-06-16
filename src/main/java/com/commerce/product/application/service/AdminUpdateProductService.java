@@ -3,10 +3,8 @@ package com.commerce.product.application.service;
 import org.springframework.stereotype.Service;
 import org.springframework.transaction.annotation.Transactional;
 
-import com.commerce.product.application.dto.AdminProductCreateCommand;
-import com.commerce.product.application.dto.AdminProductUpdateCommand;
-import com.commerce.product.application.dto.AdminProductDeleteResult;
 import com.commerce.product.application.dto.AdminProductResult;
+import com.commerce.product.application.dto.AdminProductUpdateCommand;
 import com.commerce.product.domain.Product;
 import com.commerce.product.domain.repository.ProductRepository;
 import com.commerce.product.domain.exception.ProductErrorCode;
@@ -18,24 +16,9 @@ import lombok.extern.slf4j.Slf4j;
 @Slf4j
 @Service
 @RequiredArgsConstructor
-public class AdminProductService {
+public class AdminUpdateProductService {
 
 	private final ProductRepository productRepository;
-
-	@Transactional
-	public AdminProductResult createProduct(AdminProductCreateCommand command) {
-		Product product = Product.builder()
-			.name(command.getName())
-			.price(command.getPrice())
-			.description(command.getDescription())
-			.imageUrl(command.getImageUrl())
-			.status(command.getStatus())
-			.build();
-
-		Product savedProduct = productRepository.save(product);
-		log.info("상품 생성 productId={} name={}", savedProduct.getId(), savedProduct.getName());
-		return AdminProductResult.from(savedProduct);
-	}
 
 	@Transactional
 	public AdminProductResult updateProduct(AdminProductUpdateCommand command) {
@@ -51,15 +34,6 @@ public class AdminProductService {
 
 		log.info("상품 수정 productId={}", product.getId());
 		return AdminProductResult.from(product);
-	}
-
-	@Transactional
-	public AdminProductDeleteResult deleteProduct(Long productId) {
-		Product product = findNotDeletedProduct(productId);
-		product.softDelete();
-
-		log.info("상품 삭제 productId={}", product.getId());
-		return AdminProductDeleteResult.of(product.getId());
 	}
 
 	private Product findNotDeletedProduct(Long productId) {

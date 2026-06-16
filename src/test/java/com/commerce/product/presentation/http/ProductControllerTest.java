@@ -25,7 +25,7 @@ import com.commerce.security.interceptor.AuthorizationInterceptor;
 import com.commerce.auth.application.usecase.TokenAuthenticationUseCase;
 import com.commerce.security.resolver.AuthenticatedMemberIdArgumentResolver;
 import com.commerce.common.config.WebConfig;
-import com.commerce.product.application.service.ProductQueryService;
+import com.commerce.product.application.service.GetProductService;
 import com.commerce.product.application.dto.ProductDetailResult;
 import com.commerce.product.application.dto.ProductSummaryResult;
 import com.commerce.product.domain.exception.ProductErrorCode;
@@ -46,7 +46,7 @@ class ProductControllerTest {
 	private MockMvc mockMvc;
 
 	@MockitoBean
-	private ProductQueryService productQueryService;
+	private GetProductService getProductService;
 
 	@MockitoBean
 	private TokenAuthenticationUseCase tokenAuthenticationUseCase;
@@ -55,7 +55,7 @@ class ProductControllerTest {
 	@Test
 	void getProducts_whenAnonymousRequest_returnOk() throws Exception {
 		// given
-		given(productQueryService.getProducts()).willReturn(List.of(
+		given(getProductService.getProducts()).willReturn(List.of(
 			ProductSummaryResult.builder()
 				.productId(2L)
 				.name("latest-product")
@@ -88,7 +88,7 @@ class ProductControllerTest {
 	@Test
 	void getProduct_whenAnonymousRequest_returnOk() throws Exception {
 		// given
-		given(productQueryService.getProduct(2L)).willReturn(ProductDetailResult.builder()
+		given(getProductService.getProduct(2L)).willReturn(ProductDetailResult.builder()
 			.productId(2L)
 			.name("latest-product")
 			.price(3000)
@@ -110,7 +110,7 @@ class ProductControllerTest {
 	@Test
 	void getProduct_whenProductMissing_returnNotFound() throws Exception {
 		// given
-		given(productQueryService.getProduct(999L))
+		given(getProductService.getProduct(999L))
 			.willThrow(new ProductException(ProductErrorCode.PRODUCT_NOT_FOUND));
 
 		// when & then
@@ -120,7 +120,7 @@ class ProductControllerTest {
 			.andExpect(jsonPath("$.message").value("상품을 찾을 수 없습니다"))
 			.andExpect(jsonPath("$.data").value(Matchers.nullValue()));
 
-		then(productQueryService).should(never()).getProducts();
+		then(getProductService).should(never()).getProducts();
 	}
 
 	@DisplayName("상품 ID가 양수가 아니면 잘못된 요청을 반환한다")
@@ -133,6 +133,6 @@ class ProductControllerTest {
 			.andExpect(jsonPath("$.message").value("요청 값이 올바르지 않습니다"))
 			.andExpect(jsonPath("$.data").value(Matchers.nullValue()));
 
-		then(productQueryService).should(never()).getProduct(0L);
+		then(getProductService).should(never()).getProduct(0L);
 	}
 }

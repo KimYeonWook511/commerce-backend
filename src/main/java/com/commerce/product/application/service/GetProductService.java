@@ -18,7 +18,7 @@ import lombok.RequiredArgsConstructor;
 
 @Service
 @RequiredArgsConstructor
-public class ProductQueryService {
+public class GetProductService {
 
 	private final ProductRepository productRepository;
 	private final StockRepository stockRepository;

@@ -28,7 +28,9 @@ import com.commerce.auth.application.usecase.TokenAuthenticationUseCase;
 import com.commerce.auth.application.dto.TokenAuthenticationResult;
 import com.commerce.security.resolver.AuthenticatedMemberIdArgumentResolver;
 import com.commerce.common.config.WebConfig;
-import com.commerce.product.application.service.AdminProductService;
+import com.commerce.product.application.service.AdminCreateProductService;
+import com.commerce.product.application.service.AdminUpdateProductService;
+import com.commerce.product.application.service.AdminDeleteProductService;
 import com.commerce.product.application.dto.AdminProductCreateCommand;
 import com.commerce.product.application.dto.AdminProductUpdateCommand;
 import com.commerce.product.application.dto.AdminProductDeleteResult;
@@ -51,7 +53,13 @@ class AdminProductControllerTest {
 	private MockMvc mockMvc;
 
 	@MockitoBean
-	private AdminProductService adminProductService;
+	private AdminCreateProductService adminCreateProductService;
+
+	@MockitoBean
+	private AdminUpdateProductService adminUpdateProductService;
+
+	@MockitoBean
+	private AdminDeleteProductService adminDeleteProductService;
 
 	@MockitoBean
 	private TokenAuthenticationUseCase tokenAuthenticationUseCase;
@@ -61,7 +69,7 @@ class AdminProductControllerTest {
 	void createProduct_whenAdminRequest_returnCreated() throws Exception {
 		// given
 		stubForToken("ROLE_ADMIN");
-		given(adminProductService.createProduct(any(AdminProductCreateCommand.class)))
+		given(adminCreateProductService.createProduct(any(AdminProductCreateCommand.class)))
 			.willReturn(AdminProductResult.builder()
 				.productId(1L)
 				.name("product")
@@ -102,7 +110,7 @@ class AdminProductControllerTest {
 	void updateProduct_whenAdminRequest_returnOk() throws Exception {
 		// given
 		stubForToken("ROLE_ADMIN");
-		given(adminProductService.updateProduct(any(AdminProductUpdateCommand.class)))
+		given(adminUpdateProductService.updateProduct(any(AdminProductUpdateCommand.class)))
 			.willReturn(AdminProductResult.builder()
 				.productId(1L)
 				.name("updated-product")
@@ -143,7 +151,7 @@ class AdminProductControllerTest {
 	void deleteProduct_whenAdminRequest_returnOk() throws Exception {
 		// given
 		stubForToken("ROLE_ADMIN");
-		given(adminProductService.deleteProduct(1L))
+		given(adminDeleteProductService.deleteProduct(1L))
 			.willReturn(AdminProductDeleteResult.of(1L));
 
 		// when & then
@@ -179,7 +187,7 @@ class AdminProductControllerTest {
 			.andExpect(jsonPath("$.message").value("권한이 없습니다"))
 			.andExpect(jsonPath("$.data").value(Matchers.nullValue()));
 
-		then(adminProductService).should(never()).createProduct(any(AdminProductCreateCommand.class));
+		then(adminCreateProductService).should(never()).createProduct(any(AdminProductCreateCommand.class));
 	}
 
 	@DisplayName("상품 등록 요청 값이 유효하지 않으면 검증 오류를 반환한다")
@@ -206,7 +214,7 @@ class AdminProductControllerTest {
 			.andExpect(jsonPath("$.data.price").value("가격은 양수여야 합니다"))
 			.andExpect(jsonPath("$.data.status").value("판매 상태는 필수입니다"));
 
-		then(adminProductService).should(never()).createProduct(any(AdminProductCreateCommand.class));
+		then(adminCreateProductService).should(never()).createProduct(any(AdminProductCreateCommand.class));
 	}
 
 	@DisplayName("상품 등록 요청의 판매 상태가 enum 값이 아니면 잘못된 요청을 반환한다")
@@ -232,7 +240,7 @@ class AdminProductControllerTest {
 			.andExpect(jsonPath("$.message").value("요청 값이 올바르지 않습니다"))
 			.andExpect(jsonPath("$.data").value(Matchers.nullValue()));
 
-		then(adminProductService).should(never()).createProduct(any(AdminProductCreateCommand.class));
+		then(adminCreateProductService).should(never()).createProduct(any(AdminProductCreateCommand.class));
 	}
 
 	@DisplayName("상품 수정 경로 ID가 양수가 아니면 실패한다")
@@ -258,7 +266,7 @@ class AdminProductControllerTest {
 			.andExpect(jsonPath("$.message").value("요청 값이 올바르지 않습니다"))
 			.andExpect(jsonPath("$.data").value(Matchers.nullValue()));
 
-		then(adminProductService).should(never()).updateProduct(any(AdminProductUpdateCommand.class));
+		then(adminUpdateProductService).should(never()).updateProduct(any(AdminProductUpdateCommand.class));
 	}
 
 	private void stubForToken(String role) {

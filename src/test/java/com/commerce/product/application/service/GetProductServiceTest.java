@@ -27,7 +27,7 @@ import com.commerce.stock.domain.Stock;
 import com.commerce.stock.domain.repository.StockRepository;
 
 @ExtendWith(MockitoExtension.class)
-class ProductQueryServiceTest {
+class GetProductServiceTest {
 
 	@Mock
 	private ProductRepository productRepository;
@@ -36,7 +36,7 @@ class ProductQueryServiceTest {
 	private StockRepository stockRepository;
 
 	@InjectMocks
-	private ProductQueryService productQueryService;
+	private GetProductService getProductService;
 
 	@DisplayName("상품 목록은 최신 등록순으로 반환한다")
 	@Test
@@ -61,7 +61,7 @@ class ProductQueryServiceTest {
 			.willReturn(List.of(latestProduct, oldProduct));
 
 		// when
-		List<ProductSummaryResult> results = productQueryService.getProducts();
+		List<ProductSummaryResult> results = getProductService.getProducts();
 
 		// then
 		assertThat(results).hasSize(2);
@@ -91,7 +91,7 @@ class ProductQueryServiceTest {
 		given(stockRepository.findByProductId(1L)).willReturn(Optional.of(stock));
 
 		// when
-		ProductDetailResult result = productQueryService.getProduct(1L);
+		ProductDetailResult result = getProductService.getProduct(1L);
 
 		// then
 		assertThat(result.getProductId()).isEqualTo(1L);
@@ -117,7 +117,7 @@ class ProductQueryServiceTest {
 		given(stockRepository.findByProductId(1L)).willReturn(Optional.empty());
 
 		// when
-		ProductDetailResult result = productQueryService.getProduct(1L);
+		ProductDetailResult result = getProductService.getProduct(1L);
 
 		// then
 		assertThat(result.getStockQuantity()).isEqualTo(0);
@@ -131,7 +131,7 @@ class ProductQueryServiceTest {
 			.willReturn(Optional.empty());
 
 		// when & then
-		assertThatThrownBy(() -> productQueryService.getProduct(1L))
+		assertThatThrownBy(() -> getProductService.getProduct(1L))
 			.isInstanceOf(ProductException.class)
 			.satisfies(exception -> {
 				ProductException productException = (ProductException)exception;
@@ -147,7 +147,7 @@ class ProductQueryServiceTest {
 			.willReturn(Optional.empty());
 
 		// when & then
-		assertThatThrownBy(() -> productQueryService.getProduct(1L))
+		assertThatThrownBy(() -> getProductService.getProduct(1L))
 			.isInstanceOf(ProductException.class)
 			.satisfies(exception -> {
 				ProductException productException = (ProductException)exception;

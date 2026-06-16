@@ -15,7 +15,9 @@ import com.commerce.common.ApiResponse;
 import com.commerce.common.exception.CommonErrorCode;
 import com.commerce.common.exception.CommonException;
 import com.commerce.member.domain.MemberRole;
-import com.commerce.product.application.service.AdminProductService;
+import com.commerce.product.application.service.AdminCreateProductService;
+import com.commerce.product.application.service.AdminUpdateProductService;
+import com.commerce.product.application.service.AdminDeleteProductService;
 import com.commerce.product.application.dto.AdminProductDeleteResult;
 import com.commerce.product.application.dto.AdminProductResult;
 import com.commerce.product.presentation.http.request.AdminProductCreateRequest;
@@ -29,14 +31,16 @@ import lombok.RequiredArgsConstructor;
 @RequestMapping("/admin/products")
 public class AdminProductController {
 
-	private final AdminProductService adminProductService;
+	private final AdminCreateProductService adminCreateProductService;
+	private final AdminUpdateProductService adminUpdateProductService;
+	private final AdminDeleteProductService adminDeleteProductService;
 
 	@PostMapping
 	@RequireRole(MemberRole.ROLE_ADMIN)
 	public ResponseEntity<ApiResponse<AdminProductResult>> createProduct(
 		@Valid @RequestBody AdminProductCreateRequest request
 	) {
-		AdminProductResult result = adminProductService.createProduct(request.toCommand());
+		AdminProductResult result = adminCreateProductService.createProduct(request.toCommand());
 
 		return ResponseEntity.status(HttpStatus.CREATED)
 			.body(ApiResponse.of(result));
@@ -50,7 +54,7 @@ public class AdminProductController {
 	) {
 		validateProductId(productId);
 
-		AdminProductResult result = adminProductService.updateProduct(request.toCommand(productId));
+		AdminProductResult result = adminUpdateProductService.updateProduct(request.toCommand(productId));
 
 		return ResponseEntity.status(HttpStatus.OK)
 			.body(ApiResponse.of(result));
@@ -61,7 +65,7 @@ public class AdminProductController {
 	public ResponseEntity<ApiResponse<AdminProductDeleteResult>> deleteProduct(@PathVariable Long productId) {
 		validateProductId(productId);
 
-		AdminProductDeleteResult result = adminProductService.deleteProduct(productId);
+		AdminProductDeleteResult result = adminDeleteProductService.deleteProduct(productId);
 
 		return ResponseEntity.status(HttpStatus.OK)
 			.body(ApiResponse.of(result));
