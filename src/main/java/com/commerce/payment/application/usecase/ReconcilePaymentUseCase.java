@@ -12,8 +12,10 @@ import com.commerce.order.domain.repository.OrderRepository;
 import com.commerce.order.domain.exception.OrderErrorCode;
 import com.commerce.order.domain.exception.OrderException;
 import com.commerce.payment.application.port.NotificationPort;
-import com.commerce.payment.application.service.PaymentApprovalRecordService;
-import com.commerce.payment.application.service.PaymentApprovalService;
+import com.commerce.payment.application.service.FailApprovePaymentService;
+import com.commerce.payment.application.service.SucceedPaymentApprovalService;
+import com.commerce.payment.application.service.SucceedPaymentApprovalRecordService;
+import com.commerce.payment.application.service.EscalateApprovePaymentService;
 import com.commerce.payment.application.port.result.CancelOutcome;
 import com.commerce.payment.domain.Payment;
 import com.commerce.payment.domain.PaymentFailCode;
@@ -35,7 +37,7 @@ import lombok.extern.slf4j.Slf4j;
 @Slf4j
 @Component
 @RequiredArgsConstructor
-public class PaymentReconciliationUseCase {
+public class ReconcilePaymentUseCase {
 
 	// 한 주기 처리 상한. 운영 config 승격 전제.
 	private static final int RECONCILE_BATCH_SIZE = 100;
@@ -51,9 +53,11 @@ public class PaymentReconciliationUseCase {
 
 	private final PaymentRepository paymentRepository;
 	private final OrderRepository orderRepository;
-	private final PaymentApprovalService paymentApprovalService;
-	private final PaymentApprovalRecordService paymentApprovalRecordService;
-	private final PaymentApprovalCompensationUseCase paymentApprovalCompensationUseCase;
+	private final SucceedPaymentApprovalService succeedPaymentApprovalService;
+	private final SucceedPaymentApprovalRecordService succeedPaymentApprovalRecordService;
+	private final FailApprovePaymentService failApprovePaymentService;
+	private final EscalateApprovePaymentService escalateApprovePaymentService;
+	private final CompensateApprovalUseCase compensateApprovalUseCase;
 	private final NaverPayGateway naverPayGateway;
 	private final PaymentPostProcessTargetPolicy targetPolicy;
 	private final PaymentPostProcessFlowPolicy flowPolicy;
@@ -130,7 +134,7 @@ public class PaymentReconciliationUseCase {
 	 */
 	private boolean escalateSkippable(Payment payment, LocalDateTime now) {
 		try {
-			return paymentApprovalRecordService.escalate(
+			return escalateApprovePaymentService.escalate(
 				payment.getMerchantPayKey(), payment.getProvider(), payment.getPgPaymentId(), now);
 		} catch (PaymentException ex) {
 			if (ex.getErrorCode() == PaymentErrorCode.PAYMENT_CONCURRENTLY_MODIFIED) {
@@ -211,7 +215,7 @@ public class PaymentReconciliationUseCase {
 		try {
 			// 대사도 실시간 승인과 동일하게 PG history의 merchantPayKey/금액을 검증한다 (M1, 비대칭 제거)
 			payment.verifyApprovedResponse(historyResult.getMerchantPayKey(), historyResult.getTotalPayAmount());
-			paymentApprovalService.succeedApproval(payment, now);
+			succeedPaymentApprovalService.succeedApproval(payment, now);
 			log.info("대사 승인 확정 paymentId={} orderId={} merchantPayKey={}",
 				payment.getId(), payment.getOrderId(), payment.getMerchantPayKey());
 			return PaymentReconcileOutcome.SUCCEEDED;
@@ -228,13 +232,13 @@ public class PaymentReconciliationUseCase {
 			}
 			// M1: PG history와 merchantPayKey/금액 불일치 → 실시간과 동일하게 보상하고 FAILED로 종착
 			if (ex.getErrorCode() == PaymentErrorCode.PAYMENT_MERCHANT_KEY_MISMATCH) {
-				paymentApprovalCompensationUseCase.compensateMerchantKeyMismatch(payment);
+				compensateApprovalUseCase.compensateMerchantKeyMismatch(payment);
 				log.warn("대사 승인 - merchantPayKey 불일치 보상 paymentId={} orderId={} merchantPayKey={}",
 					payment.getId(), payment.getOrderId(), payment.getMerchantPayKey());
 				return PaymentReconcileOutcome.FAILED;
 			}
 			if (ex.getErrorCode() == PaymentErrorCode.PAYMENT_AMOUNT_MISMATCH) {
-				paymentApprovalCompensationUseCase.compensateAmountMismatch(
+				compensateApprovalUseCase.compensateAmountMismatch(
 					payment, historyResult.getTotalPayAmount(), this::pgCancelForReconciliation);
 				log.warn("대사 승인 - 금액 불일치 보상 paymentId={} orderId={} merchantPayKey={}",
 					payment.getId(), payment.getOrderId(), payment.getMerchantPayKey());
@@ -253,7 +257,7 @@ public class PaymentReconciliationUseCase {
 			// 주문 자체가 없음 — 정합성 깨짐. 재시도해도 복구 불가이므로 종착시킨다.
 			log.error("대사 - 주문 없음(정합성 오류) paymentId={} orderId={} merchantPayKey={}",
 				payment.getId(), payment.getOrderId(), payment.getMerchantPayKey());
-			paymentApprovalRecordService.fail(
+			failApprovePaymentService.fail(
 				payment.getMerchantPayKey(), payment.getProvider(), payment.getPgPaymentId(),
 				PaymentFailCode.APPROVE_PROCESS_FAILED, "주문 없음 - 정합성 오류", now
 			);
@@ -263,7 +267,7 @@ public class PaymentReconciliationUseCase {
 
 		if (order.getStatus() == OrderStatus.CANCELED) {
 			// C: CANCELED 주문 — 보상 취소(환불) + 통지
-			paymentApprovalCompensationUseCase.compensateCanceledOrderApproval(payment, this::pgCancelForReconciliation);
+			compensateApprovalUseCase.compensateCanceledOrderApproval(payment, this::pgCancelForReconciliation);
 			// 정상 복구 동작(예외 아님)이므로 운영 주목 수준 WARN (모니터링 false-positive 방지)
 			log.warn("대사 보상 취소 실행 paymentId={} orderId={} merchantPayKey={}",
 				payment.getId(), payment.getOrderId(), payment.getMerchantPayKey());
@@ -277,7 +281,7 @@ public class PaymentReconciliationUseCase {
 				// 다른 SUCCEEDED APPROVE가 이미 있음 — 이 건은 중복 결제, 보상(환불)한다.
 				log.warn("대사 PAID 주문 중복 결제 - 보상 paymentId={} orderId={} merchantPayKey={}",
 					payment.getId(), payment.getOrderId(), payment.getMerchantPayKey());
-				paymentApprovalCompensationUseCase.compensateDuplicatePayment(
+				compensateApprovalUseCase.compensateDuplicatePayment(
 					payment,
 					new RuntimeException("PAID 주문에 중복 결제 확인"),
 					this::pgCancelForReconciliation
@@ -285,7 +289,7 @@ public class PaymentReconciliationUseCase {
 				return PaymentReconcileOutcome.FAILED;
 			}
 			// 이 건이 성공 주체 — 주문은 이미 PAID이므로 결제 기록만 SUCCEEDED로 맞춘다.
-			paymentApprovalService.succeedApprovalRecordOnly(payment, now);
+			succeedPaymentApprovalRecordService.succeedApprovalRecordOnly(payment, now);
 			log.info("대사 PAID 주문 성공 주체 - 결제 기록 SUCCEEDED 확정 paymentId={} orderId={} merchantPayKey={}",
 				payment.getId(), payment.getOrderId(), payment.getMerchantPayKey());
 			return PaymentReconcileOutcome.SUCCEEDED;
@@ -294,7 +298,7 @@ public class PaymentReconciliationUseCase {
 		// 그 외 비-INIT 상태(RECEIVED/COMPLETED 등) — 자동 대사로 해소 불가, 종착시킨다.
 		log.error("대사 - 비-INIT 주문 상태로 종착 paymentId={} orderId={} orderStatus={} merchantPayKey={}",
 			payment.getId(), payment.getOrderId(), order.getStatus(), payment.getMerchantPayKey());
-		paymentApprovalRecordService.fail(
+		failApprovePaymentService.fail(
 			payment.getMerchantPayKey(), payment.getProvider(), payment.getPgPaymentId(),
 			PaymentFailCode.APPROVE_PROCESS_FAILED, "비-INIT 주문 상태: " + order.getStatus(), now
 		);
@@ -314,7 +318,7 @@ public class PaymentReconciliationUseCase {
 	}
 
 	private void executeAlreadyCanceled(Payment payment, LocalDateTime now) {
-		paymentApprovalRecordService.fail(
+		failApprovePaymentService.fail(
 			payment.getMerchantPayKey(), payment.getProvider(), payment.getPgPaymentId(),
 			PaymentFailCode.ALREADY_CANCELED, "PG 이미 취소 확인", now
 		);

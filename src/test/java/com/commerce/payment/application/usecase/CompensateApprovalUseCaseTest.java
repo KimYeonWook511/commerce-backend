@@ -18,9 +18,13 @@ import org.mockito.InjectMocks;
 import org.mockito.Mock;
 import org.mockito.junit.jupiter.MockitoExtension;
 
+import com.commerce.payment.application.port.NotificationPort;
 import com.commerce.payment.application.port.PgCanceller;
-import com.commerce.payment.application.service.PaymentApprovalRecordService;
-import com.commerce.payment.application.service.PaymentCancellationService;
+import com.commerce.payment.application.service.FailApprovePaymentService;
+import com.commerce.payment.application.service.FailCancelPaymentService;
+import com.commerce.payment.application.service.GetOrCreateCancelPaymentService;
+import com.commerce.payment.application.service.MarkUnknownCancelPaymentService;
+import com.commerce.payment.application.service.SucceedCancelPaymentService;
 import com.commerce.payment.application.port.result.CancelOutcome;
 import com.commerce.payment.domain.Payment;
 import com.commerce.payment.domain.PaymentFailCode;
@@ -31,19 +35,31 @@ import com.commerce.payment.domain.exception.PaymentErrorCode;
 import com.commerce.payment.domain.exception.PaymentException;
 
 @ExtendWith(MockitoExtension.class)
-class PaymentApprovalCompensationUseCaseTest {
+class CompensateApprovalUseCaseTest {
 
 	@Mock
-	private PaymentApprovalRecordService paymentApprovalRecordService;
+	private FailApprovePaymentService failApprovePaymentService;
 
 	@Mock
-	private PaymentCancellationService paymentCancellationService;
+	private GetOrCreateCancelPaymentService getOrCreateCancelPaymentService;
+
+	@Mock
+	private SucceedCancelPaymentService succeedCancelPaymentService;
+
+	@Mock
+	private FailCancelPaymentService failCancelPaymentService;
+
+	@Mock
+	private MarkUnknownCancelPaymentService markUnknownCancelPaymentService;
+
+	@Mock
+	private NotificationPort notificationPort;
 
 	@Mock
 	private PgCanceller pgCanceller;
 
 	@InjectMocks
-	private PaymentApprovalCompensationUseCase compensationUseCase;
+	private CompensateApprovalUseCase compensationUseCase;
 
 	@DisplayName("merchantKeyMismatch 보상: fail 호출, pgCanceller.cancel 미호출")
 	@Test
@@ -52,7 +68,7 @@ class PaymentApprovalCompensationUseCaseTest {
 
 		compensationUseCase.compensateMerchantKeyMismatch(approvePayment);
 
-		then(paymentApprovalRecordService).should().fail(
+		then(failApprovePaymentService).should().fail(
 			eq("PAY-1"), eq(PaymentProvider.NAVERPAY), eq("pg-id"),
 			eq(PaymentFailCode.MERCHANT_PAY_KEY_MISMATCH), any(), any()
 		);
@@ -64,7 +80,7 @@ class PaymentApprovalCompensationUseCaseTest {
 	void failSkippable_whenTransitionConflict_absorbed() {
 		Payment approvePayment = createApprovePayment("PAY-1", "pg-id", 1000);
 		willThrow(new PaymentException(PaymentErrorCode.PAYMENT_CONCURRENTLY_MODIFIED))
-			.given(paymentApprovalRecordService).fail(any(), any(), any(), any(), any(), any());
+			.given(failApprovePaymentService).fail(any(), any(), any(), any(), any(), any());
 
 		// transition이 충돌을 던져도 보상 useCase는 skip하고 정상 종료한다
 		assertThatCode(() -> compensationUseCase.compensateMerchantKeyMismatch(approvePayment))
@@ -76,7 +92,7 @@ class PaymentApprovalCompensationUseCaseTest {
 	void failSkippable_whenNonSkippableError_rethrown() {
 		Payment approvePayment = createApprovePayment("PAY-1", "pg-id", 1000);
 		willThrow(new PaymentException(PaymentErrorCode.PAYMENT_AMOUNT_MISMATCH))
-			.given(paymentApprovalRecordService).fail(any(), any(), any(), any(), any(), any());
+			.given(failApprovePaymentService).fail(any(), any(), any(), any(), any(), any());
 
 		assertThatThrownBy(() -> compensationUseCase.compensateMerchantKeyMismatch(approvePayment))
 			.isInstanceOf(PaymentException.class)
@@ -90,13 +106,13 @@ class PaymentApprovalCompensationUseCaseTest {
 		Payment approvePayment = createApprovePayment("PAY-1", "pg-id", 1000);
 		Payment cancelPayment = Payment.createCancelRequested(1L, "PAY-1", "pg-id", 2000, PaymentProvider.NAVERPAY);
 
-		given(paymentCancellationService.getOrCreate(eq(1L), eq("PAY-1"), eq(PaymentProvider.NAVERPAY), eq("pg-id"), eq(2000)))
+		given(getOrCreateCancelPaymentService.getOrCreate(eq(1L), eq("PAY-1"), eq(PaymentProvider.NAVERPAY), eq("pg-id"), eq(2000)))
 			.willReturn(cancelPayment);
 		given(pgCanceller.cancel(eq(cancelPayment), any())).willReturn(CancelOutcome.success());
 
 		compensationUseCase.compensateAmountMismatch(approvePayment, 2000, pgCanceller);
 
-		then(paymentCancellationService).should().succeed(
+		then(succeedCancelPaymentService).should().succeed(
 			eq("PAY-1"), eq(PaymentProvider.NAVERPAY), eq("pg-id"), any()
 		);
 	}
@@ -107,14 +123,14 @@ class PaymentApprovalCompensationUseCaseTest {
 		Payment approvePayment = createApprovePayment("PAY-1", "pg-id", 1000);
 		Payment cancelPayment = Payment.createCancelRequested(1L, "PAY-1", "pg-id", 2000, PaymentProvider.NAVERPAY);
 
-		given(paymentCancellationService.getOrCreate(eq(1L), eq("PAY-1"), eq(PaymentProvider.NAVERPAY), eq("pg-id"), eq(2000)))
+		given(getOrCreateCancelPaymentService.getOrCreate(eq(1L), eq("PAY-1"), eq(PaymentProvider.NAVERPAY), eq("pg-id"), eq(2000)))
 			.willReturn(cancelPayment);
 		given(pgCanceller.cancel(eq(cancelPayment), any())).willReturn(CancelOutcome.processing());
 
 		compensationUseCase.compensateAmountMismatch(approvePayment, 2000, pgCanceller);
 
-		then(paymentCancellationService).should(never()).succeed(any(), any(), any(), any());
-		then(paymentCancellationService).should(never()).fail(any(), any(), any(), any(), any(), any());
+		then(succeedCancelPaymentService).should(never()).succeed(any(), any(), any(), any());
+		then(failCancelPaymentService).should(never()).fail(any(), any(), any(), any(), any(), any());
 	}
 
 	@DisplayName("amountMismatch 보상: PG cancel 실패 시 fail 호출")
@@ -123,14 +139,14 @@ class PaymentApprovalCompensationUseCaseTest {
 		Payment approvePayment = createApprovePayment("PAY-1", "pg-id", 1000);
 		Payment cancelPayment = Payment.createCancelRequested(1L, "PAY-1", "pg-id", 2000, PaymentProvider.NAVERPAY);
 
-		given(paymentCancellationService.getOrCreate(eq(1L), eq("PAY-1"), eq(PaymentProvider.NAVERPAY), eq("pg-id"), eq(2000)))
+		given(getOrCreateCancelPaymentService.getOrCreate(eq(1L), eq("PAY-1"), eq(PaymentProvider.NAVERPAY), eq("pg-id"), eq(2000)))
 			.willReturn(cancelPayment);
 		given(pgCanceller.cancel(eq(cancelPayment), any()))
 			.willReturn(CancelOutcome.failed(PaymentFailCode.PG_REQUEST_REJECTED, "reject"));
 
 		compensationUseCase.compensateAmountMismatch(approvePayment, 2000, pgCanceller);
 
-		then(paymentCancellationService).should().fail(
+		then(failCancelPaymentService).should().fail(
 			eq("PAY-1"), eq(PaymentProvider.NAVERPAY), eq("pg-id"),
 			eq(PaymentFailCode.PG_REQUEST_REJECTED), eq("reject"), any()
 		);
@@ -143,17 +159,17 @@ class PaymentApprovalCompensationUseCaseTest {
 		Payment approvePayment = createApprovePayment("PAY-1", "pg-id", 1000);
 		Payment cancelPayment = Payment.createCancelRequested(1L, "PAY-1", "pg-id", 2000, PaymentProvider.NAVERPAY);
 
-		given(paymentCancellationService.getOrCreate(eq(1L), eq("PAY-1"), eq(PaymentProvider.NAVERPAY), eq("pg-id"), eq(2000)))
+		given(getOrCreateCancelPaymentService.getOrCreate(eq(1L), eq("PAY-1"), eq(PaymentProvider.NAVERPAY), eq("pg-id"), eq(2000)))
 			.willReturn(cancelPayment);
 		given(pgCanceller.cancel(eq(cancelPayment), any()))
 			.willReturn(CancelOutcome.unknown("취소 결과 불명: 네트워크 오류"));
 
 		compensationUseCase.compensateAmountMismatch(approvePayment, 2000, pgCanceller);
 
-		then(paymentCancellationService).should().markUnknown(
+		then(markUnknownCancelPaymentService).should().markUnknown(
 			eq("PAY-1"), eq(PaymentProvider.NAVERPAY), eq("pg-id"), any(), any()
 		);
-		then(paymentCancellationService).should(never()).fail(any(), any(), any(), any(), any(), any());
+		then(failCancelPaymentService).should(never()).fail(any(), any(), any(), any(), any(), any());
 	}
 
 	@DisplayName("amountMismatch 보상: cancelPayment 상태가 REQUESTED가 아니면 pgCanceller.cancel 미호출")
@@ -163,7 +179,7 @@ class PaymentApprovalCompensationUseCaseTest {
 		Payment cancelPayment = Payment.createCancelRequested(1L, "PAY-1", "pg-id", 2000, PaymentProvider.NAVERPAY);
 		cancelPayment.succeed(LocalDateTime.now());
 
-		given(paymentCancellationService.getOrCreate(eq(1L), eq("PAY-1"), eq(PaymentProvider.NAVERPAY), eq("pg-id"), eq(2000)))
+		given(getOrCreateCancelPaymentService.getOrCreate(eq(1L), eq("PAY-1"), eq(PaymentProvider.NAVERPAY), eq("pg-id"), eq(2000)))
 			.willReturn(cancelPayment);
 
 		compensationUseCase.compensateAmountMismatch(approvePayment, 2000, pgCanceller);
@@ -177,7 +193,7 @@ class PaymentApprovalCompensationUseCaseTest {
 		Payment approvePayment = createApprovePayment("PAY-1", "pg-id", 1000);
 		Payment cancelPayment = Payment.createCancelRequested(1L, "PAY-1", "pg-id", 2000, PaymentProvider.NAVERPAY);
 
-		given(paymentCancellationService.getOrCreate(eq(1L), eq("PAY-1"), eq(PaymentProvider.NAVERPAY), eq("pg-id"), eq(2000)))
+		given(getOrCreateCancelPaymentService.getOrCreate(eq(1L), eq("PAY-1"), eq(PaymentProvider.NAVERPAY), eq("pg-id"), eq(2000)))
 			.willReturn(cancelPayment);
 		given(pgCanceller.cancel(any(), any()))
 			.willThrow(new PaymentException(PaymentErrorCode.PAYMENT_PG_NETWORK_ERROR));
@@ -192,13 +208,13 @@ class PaymentApprovalCompensationUseCaseTest {
 		Payment cancelPayment = Payment.createCancelRequested(1L, "PAY-1", "pg-id", 1000, PaymentProvider.NAVERPAY);
 		Exception ex = new PaymentException(PaymentErrorCode.PAYMENT_DUPLICATE);
 
-		given(paymentCancellationService.getOrCreate(eq(1L), eq("PAY-1"), eq(PaymentProvider.NAVERPAY), eq("pg-id"), eq(1000)))
+		given(getOrCreateCancelPaymentService.getOrCreate(eq(1L), eq("PAY-1"), eq(PaymentProvider.NAVERPAY), eq("pg-id"), eq(1000)))
 			.willReturn(cancelPayment);
 		given(pgCanceller.cancel(eq(cancelPayment), any())).willReturn(CancelOutcome.success());
 
 		compensationUseCase.compensateDuplicatePayment(approvePayment, ex, pgCanceller);
 
-		then(paymentCancellationService).should().succeed(
+		then(succeedCancelPaymentService).should().succeed(
 			eq("PAY-1"), eq(PaymentProvider.NAVERPAY), eq("pg-id"), any()
 		);
 	}
@@ -210,14 +226,14 @@ class PaymentApprovalCompensationUseCaseTest {
 		Payment cancelPayment = Payment.createCancelRequested(1L, "PAY-1", "pg-id", 1000, PaymentProvider.NAVERPAY);
 		Exception ex = new PaymentException(PaymentErrorCode.PAYMENT_DUPLICATE);
 
-		given(paymentCancellationService.getOrCreate(eq(1L), eq("PAY-1"), eq(PaymentProvider.NAVERPAY), eq("pg-id"), eq(1000)))
+		given(getOrCreateCancelPaymentService.getOrCreate(eq(1L), eq("PAY-1"), eq(PaymentProvider.NAVERPAY), eq("pg-id"), eq(1000)))
 			.willReturn(cancelPayment);
 		given(pgCanceller.cancel(eq(cancelPayment), any()))
 			.willReturn(CancelOutcome.failed(PaymentFailCode.CANCEL_PROCESS_FAILED, "취소 실패"));
 
 		compensationUseCase.compensateDuplicatePayment(approvePayment, ex, pgCanceller);
 
-		then(paymentCancellationService).should().fail(
+		then(failCancelPaymentService).should().fail(
 			eq("PAY-1"), eq(PaymentProvider.NAVERPAY), eq("pg-id"),
 			eq(PaymentFailCode.CANCEL_PROCESS_FAILED), eq("취소 실패"), any()
 		);

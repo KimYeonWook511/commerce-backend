@@ -21,7 +21,7 @@ import org.springframework.test.context.ActiveProfiles;
 import org.springframework.test.context.DynamicPropertyRegistry;
 import org.springframework.test.context.DynamicPropertySource;
 
-import com.commerce.payment.application.service.PaymentApprovalRecordService;
+import com.commerce.payment.application.service.EscalateApprovePaymentService;
 import com.commerce.payment.domain.Payment;
 import com.commerce.payment.domain.PaymentProvider;
 import com.commerce.payment.domain.PaymentReservation;
@@ -56,7 +56,7 @@ class PaymentEscalationConcurrencyTest {
 	}
 
 	@Autowired
-	private PaymentApprovalRecordService paymentApprovalRecordService;
+	private EscalateApprovePaymentService escalateApprovePaymentService;
 
 	@Autowired
 	private PaymentPersistenceTestSupport paymentPersistence;
@@ -110,7 +110,7 @@ class PaymentEscalationConcurrencyTest {
 				executor.submit(() -> {
 					try {
 						startLatch.await();
-						boolean notificationSubject = paymentApprovalRecordService.escalate(
+						boolean notificationSubject = escalateApprovePaymentService.escalate(
 							"ESC-CON-1", PaymentProvider.NAVERPAY, "pg-esc-con-1", escalationTime);
 						if (notificationSubject) {
 							successCount.incrementAndGet();

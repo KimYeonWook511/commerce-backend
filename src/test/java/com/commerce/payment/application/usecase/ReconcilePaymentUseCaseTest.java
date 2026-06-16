@@ -27,8 +27,10 @@ import com.commerce.order.domain.exception.OrderErrorCode;
 import com.commerce.order.domain.exception.OrderException;
 import com.commerce.payment.application.port.NotificationPort;
 import com.commerce.payment.application.port.PgCanceller;
-import com.commerce.payment.application.service.PaymentApprovalRecordService;
-import com.commerce.payment.application.service.PaymentApprovalService;
+import com.commerce.payment.application.service.EscalateApprovePaymentService;
+import com.commerce.payment.application.service.FailApprovePaymentService;
+import com.commerce.payment.application.service.SucceedPaymentApprovalService;
+import com.commerce.payment.application.service.SucceedPaymentApprovalRecordService;
 import com.commerce.payment.domain.Payment;
 import com.commerce.payment.domain.PaymentFailCode;
 import com.commerce.payment.domain.PaymentProvider;
@@ -44,7 +46,7 @@ import com.commerce.payment.postprocess.flow.PaymentPostProcessFlowPolicy;
 import com.commerce.payment.postprocess.target.PaymentPostProcessTargetPolicy;
 
 @ExtendWith(MockitoExtension.class)
-class PaymentReconciliationUseCaseTest {
+class ReconcilePaymentUseCaseTest {
 
 	@Mock
 	private PaymentRepository paymentRepository;
@@ -53,13 +55,19 @@ class PaymentReconciliationUseCaseTest {
 	private OrderRepository orderRepository;
 
 	@Mock
-	private PaymentApprovalService paymentApprovalService;
+	private SucceedPaymentApprovalService succeedPaymentApprovalService;
 
 	@Mock
-	private PaymentApprovalRecordService paymentApprovalRecordService;
+	private SucceedPaymentApprovalRecordService succeedPaymentApprovalRecordService;
 
 	@Mock
-	private PaymentApprovalCompensationUseCase paymentApprovalCompensationUseCase;
+	private FailApprovePaymentService failApprovePaymentService;
+
+	@Mock
+	private EscalateApprovePaymentService escalateApprovePaymentService;
+
+	@Mock
+	private CompensateApprovalUseCase compensateApprovalUseCase;
 
 	@Mock
 	private NaverPayGateway naverPayGateway;
@@ -68,15 +76,15 @@ class PaymentReconciliationUseCaseTest {
 	private NotificationPort notificationPort;
 
 	@InjectMocks
-	private PaymentReconciliationUseCase reconciliationUseCase;
+	private ReconcilePaymentUseCase reconcilePaymentUseCase;
 
 	// PaymentPostProcessTargetPolicy, PaymentPostProcessFlowPolicy는 @InjectMocks가 주입하지 못하므로 실 인스턴스 직접 주입
 	private final PaymentPostProcessTargetPolicy realTargetPolicy = new PaymentPostProcessTargetPolicy();
 	private final PaymentPostProcessFlowPolicy realFlowPolicy = new PaymentPostProcessFlowPolicy();
 
 	private void injectPolicies() {
-		ReflectionTestUtils.setField(reconciliationUseCase, "targetPolicy", realTargetPolicy);
-		ReflectionTestUtils.setField(reconciliationUseCase, "flowPolicy", realFlowPolicy);
+		ReflectionTestUtils.setField(reconcilePaymentUseCase, "targetPolicy", realTargetPolicy);
+		ReflectionTestUtils.setField(reconcilePaymentUseCase, "flowPolicy", realFlowPolicy);
 	}
 
 	// --- APPROVE_RECONCILE: PG_APPROVED → SUCCEEDED ---
@@ -93,9 +101,9 @@ class PaymentReconciliationUseCaseTest {
 		given(naverPayGateway.getApprovalHistory("pg-1"))
 			.willReturn(NaverPayHistoryResult.approved("PAY-1", 1000));
 
-		reconciliationUseCase.reconcile();
+		reconcilePaymentUseCase.reconcile();
 
-		then(paymentApprovalService).should().succeedApproval(eq(payment), any(LocalDateTime.class));
+		then(succeedPaymentApprovalService).should().succeedApproval(eq(payment), any(LocalDateTime.class));
 	}
 
 	// --- APPROVE_RECONCILE: PG_CANCELED → FAILED(ALREADY_CANCELED) ---
@@ -112,13 +120,13 @@ class PaymentReconciliationUseCaseTest {
 		given(naverPayGateway.getApprovalHistory("pg-1"))
 			.willReturn(NaverPayHistoryResult.canceled());
 
-		reconciliationUseCase.reconcile();
+		reconcilePaymentUseCase.reconcile();
 
-		then(paymentApprovalRecordService).should().fail(
+		then(failApprovePaymentService).should().fail(
 			eq("PAY-1"), eq(PaymentProvider.NAVERPAY), eq("pg-1"),
 			eq(PaymentFailCode.ALREADY_CANCELED), any(String.class), any(LocalDateTime.class)
 		);
-		then(paymentApprovalService).should(never()).succeedApproval(any(), any());
+		then(succeedPaymentApprovalService).should(never()).succeedApproval(any(), any());
 	}
 
 	// --- APPROVE_RECONCILE: PENDING/HISTORY_NOT_FOUND → KEEP_WAITING ---
@@ -135,10 +143,10 @@ class PaymentReconciliationUseCaseTest {
 		given(naverPayGateway.getApprovalHistory("pg-1"))
 			.willReturn(NaverPayHistoryResult.unknown("timeout"));
 
-		reconciliationUseCase.reconcile();
+		reconcilePaymentUseCase.reconcile();
 
-		then(paymentApprovalService).should(never()).succeedApproval(any(), any());
-		then(paymentApprovalRecordService).should(never()).fail(any(), any(), any(), any(), any(), any());
+		then(succeedPaymentApprovalService).should(never()).succeedApproval(any(), any());
+		then(failApprovePaymentService).should(never()).fail(any(), any(), any(), any(), any(), any());
 	}
 
 	@DisplayName("PG 이력조회 결과가 FAILED(이력 없음)이면 아무 상태 전이도 하지 않는다")
@@ -153,10 +161,10 @@ class PaymentReconciliationUseCaseTest {
 		given(naverPayGateway.getApprovalHistory("pg-1"))
 			.willReturn(NaverPayHistoryResult.failed(com.commerce.payment.domain.exception.PaymentErrorCode.PAYMENT_NOT_FOUND));
 
-		reconciliationUseCase.reconcile();
+		reconcilePaymentUseCase.reconcile();
 
-		then(paymentApprovalService).should(never()).succeedApproval(any(), any());
-		then(paymentApprovalRecordService).should(never()).fail(any(), any(), any(), any(), any(), any());
+		then(succeedPaymentApprovalService).should(never()).succeedApproval(any(), any());
+		then(failApprovePaymentService).should(never()).fail(any(), any(), any(), any(), any(), any());
 	}
 
 	// --- escalation: 6시간 초과는 로그만 남기고 상태 변경 없음 (ADR-L5, 후속 #238) ---
@@ -171,10 +179,10 @@ class PaymentReconciliationUseCaseTest {
 		given(paymentRepository.findStaleApprovePaymentsForReconciliation(any(), any(), any(), any(Pageable.class)))
 			.willReturn(List.of(payment));
 
-		reconciliationUseCase.reconcile();
+		reconcilePaymentUseCase.reconcile();
 
 		then(naverPayGateway).should(never()).getApprovalHistory(any());
-		then(paymentApprovalService).should(never()).succeedApproval(any(), any());
+		then(succeedPaymentApprovalService).should(never()).succeedApproval(any(), any());
 	}
 
 	@DisplayName("stale REQUESTED 결제가 6시간 escalation 임계를 넘으면 상태 변경 없이 PG 조회도 하지 않는다")
@@ -187,7 +195,7 @@ class PaymentReconciliationUseCaseTest {
 		given(paymentRepository.findStaleApprovePaymentsForReconciliation(any(), any(), any(), any(Pageable.class)))
 			.willReturn(List.of(payment));
 
-		reconciliationUseCase.reconcile();
+		reconcilePaymentUseCase.reconcile();
 
 		then(naverPayGateway).should(never()).getApprovalHistory(any());
 	}
@@ -204,10 +212,10 @@ class PaymentReconciliationUseCaseTest {
 		given(paymentRepository.findStaleApprovePaymentsForReconciliation(any(), any(), any(), any(Pageable.class)))
 			.willReturn(List.of(payment));
 
-		reconciliationUseCase.reconcile();
+		reconcilePaymentUseCase.reconcile();
 
 		then(naverPayGateway).should(never()).getApprovalHistory(any());
-		then(paymentApprovalService).should(never()).succeedApproval(any(), any());
+		then(succeedPaymentApprovalService).should(never()).succeedApproval(any(), any());
 	}
 
 	// --- 주문 CANCELED → 보상 취소 (C) ---
@@ -225,12 +233,12 @@ class PaymentReconciliationUseCaseTest {
 		given(naverPayGateway.getApprovalHistory("pg-1"))
 			.willReturn(NaverPayHistoryResult.approved("PAY-1", 1000));
 		willThrow(new OrderException(OrderErrorCode.ORDER_PAID_NOT_ALLOWED))
-			.given(paymentApprovalService).succeedApproval(any(), any());
+			.given(succeedPaymentApprovalService).succeedApproval(any(), any());
 		given(orderRepository.findById(payment.getOrderId())).willReturn(Optional.of(canceledOrder));
 
-		reconciliationUseCase.reconcile();
+		reconcilePaymentUseCase.reconcile();
 
-		then(paymentApprovalCompensationUseCase).should()
+		then(compensateApprovalUseCase).should()
 			.compensateCanceledOrderApproval(eq(payment), any(PgCanceller.class));
 	}
 
@@ -247,16 +255,16 @@ class PaymentReconciliationUseCaseTest {
 		given(naverPayGateway.getApprovalHistory("pg-1"))
 			.willReturn(NaverPayHistoryResult.approved("PAY-1", 1000));
 		willThrow(new OrderException(OrderErrorCode.ORDER_PAID_NOT_ALLOWED))
-			.given(paymentApprovalService).succeedApproval(any(), any());
+			.given(succeedPaymentApprovalService).succeedApproval(any(), any());
 		given(orderRepository.findById(payment.getOrderId())).willReturn(Optional.of(paidOrder));
 		given(paymentRepository.existsApprovedByOrderId(payment.getOrderId())).willReturn(false);
 
-		reconciliationUseCase.reconcile();
+		reconcilePaymentUseCase.reconcile();
 
-		then(paymentApprovalService).should().succeedApprovalRecordOnly(eq(payment), any(LocalDateTime.class));
-		then(paymentApprovalCompensationUseCase).should(never())
+		then(succeedPaymentApprovalRecordService).should().succeedApprovalRecordOnly(eq(payment), any(LocalDateTime.class));
+		then(compensateApprovalUseCase).should(never())
 			.compensateCanceledOrderApproval(any(), any());
-		then(paymentApprovalCompensationUseCase).should(never())
+		then(compensateApprovalUseCase).should(never())
 			.compensateDuplicatePayment(any(), any(), any());
 	}
 
@@ -274,15 +282,15 @@ class PaymentReconciliationUseCaseTest {
 			.willReturn(NaverPayHistoryResult.approved("PAY-1", 1000));
 		// 중복 결제는 saveApproved의 uk 위반으로 PAYMENT_DUPLICATE로 진입한다(현실 경로, H1)
 		willThrow(new PaymentException(PaymentErrorCode.PAYMENT_DUPLICATE))
-			.given(paymentApprovalService).succeedApproval(any(), any());
+			.given(succeedPaymentApprovalService).succeedApproval(any(), any());
 		given(orderRepository.findById(payment.getOrderId())).willReturn(Optional.of(paidOrder));
 		given(paymentRepository.existsApprovedByOrderId(payment.getOrderId())).willReturn(true);
 
-		reconciliationUseCase.reconcile();
+		reconcilePaymentUseCase.reconcile();
 
-		then(paymentApprovalCompensationUseCase).should()
+		then(compensateApprovalUseCase).should()
 			.compensateDuplicatePayment(eq(payment), any(Exception.class), any(PgCanceller.class));
-		then(paymentApprovalService).should(never()).succeedApprovalRecordOnly(any(), any());
+		then(succeedPaymentApprovalRecordService).should(never()).succeedApprovalRecordOnly(any(), any());
 	}
 
 	@DisplayName("대사 APPROVED인데 merchantPayKey가 불일치하면 보상하고 승인 확정하지 않는다")
@@ -297,10 +305,10 @@ class PaymentReconciliationUseCaseTest {
 		given(naverPayGateway.getApprovalHistory("pg-1"))
 			.willReturn(NaverPayHistoryResult.approved("PAY-OTHER", 1000));
 
-		reconciliationUseCase.reconcile();
+		reconcilePaymentUseCase.reconcile();
 
-		then(paymentApprovalCompensationUseCase).should().compensateMerchantKeyMismatch(eq(payment));
-		then(paymentApprovalService).should(never()).succeedApproval(any(), any());
+		then(compensateApprovalUseCase).should().compensateMerchantKeyMismatch(eq(payment));
+		then(succeedPaymentApprovalService).should(never()).succeedApproval(any(), any());
 	}
 
 	@DisplayName("대사 APPROVED인데 금액이 불일치하면 보상하고 승인 확정하지 않는다")
@@ -315,11 +323,11 @@ class PaymentReconciliationUseCaseTest {
 		given(naverPayGateway.getApprovalHistory("pg-1"))
 			.willReturn(NaverPayHistoryResult.approved("PAY-1", 2000));
 
-		reconciliationUseCase.reconcile();
+		reconcilePaymentUseCase.reconcile();
 
-		then(paymentApprovalCompensationUseCase).should()
+		then(compensateApprovalUseCase).should()
 			.compensateAmountMismatch(eq(payment), eq(2000), any(PgCanceller.class));
-		then(paymentApprovalService).should(never()).succeedApproval(any(), any());
+		then(succeedPaymentApprovalService).should(never()).succeedApproval(any(), any());
 	}
 
 	@DisplayName("succeedApproval이 ORDER_PAID_NOT_ALLOWED이고 주문이 null이면 FAILED로 종착하고 재시도하지 않는다")
@@ -334,16 +342,16 @@ class PaymentReconciliationUseCaseTest {
 		given(naverPayGateway.getApprovalHistory("pg-1"))
 			.willReturn(NaverPayHistoryResult.approved("PAY-1", 1000));
 		willThrow(new OrderException(OrderErrorCode.ORDER_PAID_NOT_ALLOWED))
-			.given(paymentApprovalService).succeedApproval(any(), any());
+			.given(succeedPaymentApprovalService).succeedApproval(any(), any());
 		given(orderRepository.findById(payment.getOrderId())).willReturn(Optional.empty());
 
-		reconciliationUseCase.reconcile();
+		reconcilePaymentUseCase.reconcile();
 
-		then(paymentApprovalRecordService).should().fail(
+		then(failApprovePaymentService).should().fail(
 			eq("PAY-1"), eq(PaymentProvider.NAVERPAY), eq("pg-1"),
 			eq(PaymentFailCode.APPROVE_PROCESS_FAILED), any(String.class), any(LocalDateTime.class)
 		);
-		then(paymentApprovalCompensationUseCase).should(never()).compensateCanceledOrderApproval(any(), any());
+		then(compensateApprovalUseCase).should(never()).compensateCanceledOrderApproval(any(), any());
 	}
 
 	@DisplayName("succeedApproval이 ORDER_PAID_NOT_ALLOWED이고 주문이 null이면 fail 종착 후 운영자에게 통지한다")
@@ -358,12 +366,12 @@ class PaymentReconciliationUseCaseTest {
 		given(naverPayGateway.getApprovalHistory("pg-1"))
 			.willReturn(NaverPayHistoryResult.approved("PAY-1", 1000));
 		willThrow(new OrderException(OrderErrorCode.ORDER_PAID_NOT_ALLOWED))
-			.given(paymentApprovalService).succeedApproval(any(), any());
+			.given(succeedPaymentApprovalService).succeedApproval(any(), any());
 		given(orderRepository.findById(payment.getOrderId())).willReturn(Optional.empty());
 
-		reconciliationUseCase.reconcile();
+		reconcilePaymentUseCase.reconcile();
 
-		then(paymentApprovalRecordService).should().fail(
+		then(failApprovePaymentService).should().fail(
 			eq("PAY-1"), eq(PaymentProvider.NAVERPAY), eq("pg-1"),
 			eq(PaymentFailCode.APPROVE_PROCESS_FAILED), any(String.class), any(LocalDateTime.class)
 		);
@@ -385,16 +393,16 @@ class PaymentReconciliationUseCaseTest {
 		given(naverPayGateway.getApprovalHistory("pg-1"))
 			.willReturn(NaverPayHistoryResult.approved("PAY-1", 1000));
 		willThrow(new OrderException(OrderErrorCode.ORDER_PAID_NOT_ALLOWED))
-			.given(paymentApprovalService).succeedApproval(any(), any());
+			.given(succeedPaymentApprovalService).succeedApproval(any(), any());
 		given(orderRepository.findById(payment.getOrderId())).willReturn(Optional.of(receivedOrder));
 
-		reconciliationUseCase.reconcile();
+		reconcilePaymentUseCase.reconcile();
 
-		then(paymentApprovalRecordService).should().fail(
+		then(failApprovePaymentService).should().fail(
 			eq("PAY-1"), eq(PaymentProvider.NAVERPAY), eq("pg-1"),
 			eq(PaymentFailCode.APPROVE_PROCESS_FAILED), any(String.class), any(LocalDateTime.class)
 		);
-		then(paymentApprovalCompensationUseCase).should(never()).compensateCanceledOrderApproval(any(), any());
+		then(compensateApprovalUseCase).should(never()).compensateCanceledOrderApproval(any(), any());
 	}
 
 	// --- 건별 예외 격리 ---
@@ -414,10 +422,10 @@ class PaymentReconciliationUseCaseTest {
 		given(naverPayGateway.getApprovalHistory("pg-2"))
 			.willReturn(NaverPayHistoryResult.approved("PAY-2", 1000));
 
-		reconciliationUseCase.reconcile();
+		reconcilePaymentUseCase.reconcile();
 
 		// payment1 실패해도 payment2는 처리
-		then(paymentApprovalService).should().succeedApproval(eq(payment2), any(LocalDateTime.class));
+		then(succeedPaymentApprovalService).should().succeedApproval(eq(payment2), any(LocalDateTime.class));
 	}
 
 	// --- 후보 없음 ---
@@ -430,10 +438,10 @@ class PaymentReconciliationUseCaseTest {
 		given(paymentRepository.findStaleApprovePaymentsForReconciliation(any(), any(), any(), any(Pageable.class)))
 			.willReturn(List.of());
 
-		reconciliationUseCase.reconcile();
+		reconcilePaymentUseCase.reconcile();
 
 		then(naverPayGateway).should(never()).getApprovalHistory(any());
-		then(paymentApprovalService).should(never()).succeedApproval(any(), any());
+		then(succeedPaymentApprovalService).should(never()).succeedApproval(any(), any());
 	}
 
 	// --- helpers ---

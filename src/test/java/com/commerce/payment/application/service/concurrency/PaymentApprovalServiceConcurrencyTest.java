@@ -34,7 +34,7 @@ import org.springframework.dao.OptimisticLockingFailureException;
 
 import com.commerce.payment.domain.exception.PaymentErrorCode;
 import com.commerce.payment.domain.exception.PaymentException;
-import com.commerce.payment.application.service.PaymentApprovalService;
+import com.commerce.payment.application.service.SucceedPaymentApprovalService;
 import com.commerce.payment.infrastructure.persistence.support.PaymentPersistenceTestSupport;
 import com.commerce.payment.infrastructure.persistence.support.PaymentReservationPersistenceTestSupport;
 import com.commerce.member.infrastructure.persistence.support.MemberPersistenceTestSupport;
@@ -53,7 +53,7 @@ import com.commerce.support.PersistenceCleanupTestSupport;
 class PaymentApprovalServiceConcurrencyTest {
 
 	@Autowired
-	private PaymentApprovalService paymentApprovalService;
+	private SucceedPaymentApprovalService succeedPaymentApprovalService;
 
 	@Autowired
 	private PaymentPersistenceTestSupport paymentPersistence;
@@ -102,7 +102,7 @@ class PaymentApprovalServiceConcurrencyTest {
 		ConcurrentLinkedQueue<Throwable> errors = new ConcurrentLinkedQueue<>();
 
 		// when
-		runConcurrent(20, () -> paymentApprovalService.succeedApproval(payment, LocalDateTime.now()), errors);
+		runConcurrent(20, () -> succeedPaymentApprovalService.succeedApproval(payment, LocalDateTime.now()), errors);
 
 		// then
 		assertThat(paymentPersistence.countPaymentsByMerchantPayKey(merchantPayKey)).isEqualTo(1L);

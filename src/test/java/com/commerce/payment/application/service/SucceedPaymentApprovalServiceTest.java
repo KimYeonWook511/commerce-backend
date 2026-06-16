@@ -28,7 +28,7 @@ import com.commerce.payment.domain.PaymentType;
 import com.commerce.payment.domain.repository.PaymentRepository;
 
 @ExtendWith(MockitoExtension.class)
-class PaymentApprovalServiceTest {
+class SucceedPaymentApprovalServiceTest {
 
 	@Mock
 	private OrderRepository orderRepository;
@@ -37,7 +37,7 @@ class PaymentApprovalServiceTest {
 	private PaymentRepository paymentRepository;
 
 	@InjectMocks
-	private PaymentApprovalService paymentApprovalService;
+	private SucceedPaymentApprovalService succeedPaymentApprovalService;
 
 	@DisplayName("succeedApproval 호출 시 payment가 SUCCEEDED가 되고 order가 PAID가 된다")
 	@Test
@@ -59,7 +59,7 @@ class PaymentApprovalServiceTest {
 		given(orderRepository.findByIdForUpdate(orderId)).willReturn(Optional.of(order));
 
 		// when
-		Payment result = paymentApprovalService.succeedApproval(payment, now);
+		Payment result = succeedPaymentApprovalService.succeedApproval(payment, now);
 
 		// then
 		assertThat(result).isSameAs(payment);
@@ -86,7 +86,7 @@ class PaymentApprovalServiceTest {
 			.willReturn(Optional.of(payment));
 
 		// when
-		Payment result = paymentApprovalService.succeedApproval(payment, now);
+		Payment result = succeedPaymentApprovalService.succeedApproval(payment, now);
 
 		// then
 		assertThat(result).isSameAs(payment);

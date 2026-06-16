@@ -21,7 +21,7 @@ import org.springframework.test.context.DynamicPropertySource;
 
 import com.commerce.payment.domain.PaymentProvider;
 import com.commerce.payment.domain.PaymentType;
-import com.commerce.payment.application.service.PaymentCancellationService;
+import com.commerce.payment.application.service.GetOrCreateCancelPaymentService;
 import com.commerce.payment.domain.exception.PaymentErrorCode;
 import com.commerce.payment.domain.exception.PaymentException;
 import com.commerce.payment.infrastructure.persistence.support.PaymentPersistenceTestSupport;
@@ -39,7 +39,7 @@ import com.commerce.support.PersistenceCleanupTestSupport;
 class PaymentCancellationServiceConcurrencyTest {
 
 	@Autowired
-	private PaymentCancellationService paymentCancellationService;
+	private GetOrCreateCancelPaymentService getOrCreateCancelPaymentService;
 
 	@Autowired
 	private PaymentPersistenceTestSupport paymentPersistence;
@@ -74,12 +74,12 @@ class PaymentCancellationServiceConcurrencyTest {
 		// given: amount=1000으로 cancel payment 선행 생성
 		String merchantPayKey = "PAY-RECORD-CON-2";
 		String pgPaymentId = "pg-record-con-2";
-		paymentCancellationService.getOrCreate(
+		getOrCreateCancelPaymentService.getOrCreate(
 			1L, merchantPayKey, PaymentProvider.NAVERPAY, pgPaymentId, 1000);
 		ConcurrentLinkedQueue<Throwable> errors = new ConcurrentLinkedQueue<>();
 
 		// when: 20개 스레드가 동일한 amount로 동시 재요청
-		runConcurrent(20, () -> paymentCancellationService.getOrCreate(
+		runConcurrent(20, () -> getOrCreateCancelPaymentService.getOrCreate(
 			1L,
 			merchantPayKey,
 			PaymentProvider.NAVERPAY,
@@ -99,13 +99,13 @@ class PaymentCancellationServiceConcurrencyTest {
 		// given: amount=1000으로 cancel payment 선행 생성
 		String merchantPayKey = "PAY-RECORD-MISMATCH-2";
 		String pgPaymentId = "pg-record-mismatch-2";
-		paymentCancellationService.getOrCreate(
+		getOrCreateCancelPaymentService.getOrCreate(
 			1L, merchantPayKey, PaymentProvider.NAVERPAY, pgPaymentId, 1000);
 
 		ConcurrentLinkedQueue<Throwable> errors = new ConcurrentLinkedQueue<>();
 
 		// when: 20개 스레드가 amount=2000으로 동시 재요청 (mismatch)
-		runConcurrent(20, () -> paymentCancellationService.getOrCreate(
+		runConcurrent(20, () -> getOrCreateCancelPaymentService.getOrCreate(
 			1L, merchantPayKey, PaymentProvider.NAVERPAY, pgPaymentId, 2000), errors);
 
 		// then: payment는 1건, 재요청 20개 모두 mismatch 예외

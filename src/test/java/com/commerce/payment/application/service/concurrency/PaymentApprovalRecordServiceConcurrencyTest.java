@@ -23,7 +23,7 @@ import org.springframework.test.context.DynamicPropertySource;
 import com.commerce.payment.domain.PaymentProvider;
 import com.commerce.payment.domain.PaymentReservation;
 import com.commerce.payment.domain.PaymentType;
-import com.commerce.payment.application.service.PaymentApprovalRecordService;
+import com.commerce.payment.application.service.CreateApprovePaymentService;
 import com.commerce.payment.domain.exception.PaymentErrorCode;
 import com.commerce.payment.domain.exception.PaymentException;
 import com.commerce.payment.infrastructure.persistence.support.PaymentPersistenceTestSupport;
@@ -42,7 +42,7 @@ import com.commerce.support.PersistenceCleanupTestSupport;
 class PaymentApprovalRecordServiceConcurrencyTest {
 
 	@Autowired
-	private PaymentApprovalRecordService paymentApprovalRecordService;
+	private CreateApprovePaymentService createApprovePaymentService;
 
 	@Autowired
 	private PaymentPersistenceTestSupport paymentPersistence;
@@ -96,7 +96,7 @@ class PaymentApprovalRecordServiceConcurrencyTest {
 				try {
 					startLatch.await();
 					PaymentReservation r = reservationPersistence.findByMerchantPayKey(merchantPayKey).orElseThrow();
-					paymentApprovalRecordService.create(r, pgPaymentIdA);
+					createApprovePaymentService.create(r, pgPaymentIdA);
 				} catch (Throwable ex) {
 					errors.add(ex);
 				} finally {
@@ -107,7 +107,7 @@ class PaymentApprovalRecordServiceConcurrencyTest {
 				try {
 					startLatch.await();
 					PaymentReservation r = reservationPersistence.findByMerchantPayKey(merchantPayKey).orElseThrow();
-					paymentApprovalRecordService.create(r, pgPaymentIdB);
+					createApprovePaymentService.create(r, pgPaymentIdB);
 				} catch (Throwable ex) {
 					errors.add(ex);
 				} finally {
@@ -145,11 +145,11 @@ class PaymentApprovalRecordServiceConcurrencyTest {
 			PaymentReservation.createReserved(1L, 1L, 1000, PaymentProvider.NAVERPAY, merchantPayKey,
 				LocalDateTime.now().plusMinutes(15))
 		);
-		paymentApprovalRecordService.create(reservation, pgPaymentId);
+		createApprovePaymentService.create(reservation, pgPaymentId);
 		ConcurrentLinkedQueue<Throwable> errors = new ConcurrentLinkedQueue<>();
 
 		// when: 20개 스레드가 동일한 pgPaymentId로 동시 재요청
-		runConcurrent(20, () -> paymentApprovalRecordService.create(reservation, pgPaymentId), errors);
+		runConcurrent(20, () -> createApprovePaymentService.create(reservation, pgPaymentId), errors);
 
 		// then: 사전 find 분기로 모두 흡수되어 payment는 1건, 에러 없음
 		assertThat(paymentPersistence.countPayments(merchantPayKey, pgPaymentId, PaymentType.APPROVE))

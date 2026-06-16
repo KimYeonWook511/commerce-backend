@@ -20,9 +20,11 @@ import com.commerce.payment.domain.repository.PaymentRepository;
 import com.commerce.payment.domain.repository.PaymentReservationRepository;
 import com.commerce.payment.domain.exception.PaymentErrorCode;
 import com.commerce.payment.domain.exception.PaymentException;
-import com.commerce.payment.application.service.PaymentApprovalRecordService;
-import com.commerce.payment.application.usecase.PaymentApprovalCompensationUseCase;
-import com.commerce.payment.application.service.PaymentApprovalService;
+import com.commerce.payment.application.service.CreateApprovePaymentService;
+import com.commerce.payment.application.service.FailApprovePaymentService;
+import com.commerce.payment.application.service.MarkUnknownApprovePaymentService;
+import com.commerce.payment.application.service.SucceedPaymentApprovalService;
+import com.commerce.payment.application.usecase.CompensateApprovalUseCase;
 import com.commerce.payment.application.port.result.CancelOutcome;
 import com.commerce.payment.naverpay.application.dto.NaverPayApproveResponse;
 import com.commerce.payment.naverpay.application.dto.NaverPayApproveStatus;
@@ -37,7 +39,7 @@ import lombok.extern.slf4j.Slf4j;
 @Slf4j
 @Component
 @RequiredArgsConstructor
-public class NaverPayApprovalUseCase {
+public class ApproveNaverPayUseCase {
 
 	// transition(별도 빈)이 던지는 도메인 예외 중 best-effort 기록에서 skip할 코드 집합.
 	// 충돌(다른 주체가 먼저 종착) / 가드 위반(이미 종착) / 이력 없음은 단조 종착이므로 흡수한다. 흡수는 트랜잭션 경계 밖(useCase)에서만 한다.
@@ -50,9 +52,11 @@ public class NaverPayApprovalUseCase {
 	private final PaymentReservationRepository paymentReservationRepository;
 	private final PaymentRepository paymentRepository;
 	private final OrderRepository orderRepository;
-	private final PaymentApprovalService paymentApprovalService;
-	private final PaymentApprovalRecordService paymentApprovalRecordService;
-	private final PaymentApprovalCompensationUseCase paymentApprovalCompensationUseCase;
+	private final SucceedPaymentApprovalService succeedPaymentApprovalService;
+	private final CreateApprovePaymentService createApprovePaymentService;
+	private final FailApprovePaymentService failApprovePaymentService;
+	private final MarkUnknownApprovePaymentService markUnknownApprovePaymentService;
+	private final CompensateApprovalUseCase compensateApprovalUseCase;
 
 	public NaverPayApproveResponse approve(Long memberId, String merchantPayKey, String pgPaymentId) {
 		PaymentReservation reservation = paymentReservationRepository.findByMemberIdAndMerchantPayKey(memberId, merchantPayKey)
@@ -84,7 +88,7 @@ public class NaverPayApprovalUseCase {
 			throw new PaymentException(PaymentErrorCode.PAYMENT_DUPLICATE);
 		}
 
-		Payment payment = paymentApprovalRecordService.create(reservation, pgPaymentId);
+		Payment payment = createApprovePaymentService.create(reservation, pgPaymentId);
 		return processApprovePayment(payment);
 	}
 
@@ -170,7 +174,7 @@ public class NaverPayApprovalUseCase {
 		try {
 			payment.verifyApprovedResponse(responseMerchantPayKey, responseTotalAmount);
 
-			Payment completed = paymentApprovalService.succeedApproval(payment, LocalDateTime.now());
+			Payment completed = succeedPaymentApprovalService.succeedApproval(payment, LocalDateTime.now());
 			return toResponse(completed);
 		} catch (PaymentException ex) {
 			log.error(
@@ -184,11 +188,11 @@ public class NaverPayApprovalUseCase {
 			);
 			switch ((PaymentErrorCode)ex.getErrorCode()) {
 				case PAYMENT_MERCHANT_KEY_MISMATCH ->
-					paymentApprovalCompensationUseCase.compensateMerchantKeyMismatch(payment);
+					compensateApprovalUseCase.compensateMerchantKeyMismatch(payment);
 				case PAYMENT_AMOUNT_MISMATCH ->
-					paymentApprovalCompensationUseCase.compensateAmountMismatch(payment, responseTotalAmount, this::pgCancel);
+					compensateApprovalUseCase.compensateAmountMismatch(payment, responseTotalAmount, this::pgCancel);
 				case PAYMENT_DUPLICATE ->
-					paymentApprovalCompensationUseCase.compensateDuplicatePayment(payment, ex, this::pgCancel);
+					compensateApprovalUseCase.compensateDuplicatePayment(payment, ex, this::pgCancel);
 				// 정상 승인 후 기록 실패는 보상 없이 전파. approve REQUESTED 유지 → reconcile self-heal
 				default -> {}
 			}
@@ -222,7 +226,7 @@ public class NaverPayApprovalUseCase {
 		PaymentFailCode failCode, String failDetail, LocalDateTime respondedAt
 	) {
 		try {
-			paymentApprovalRecordService.fail(merchantPayKey, provider, pgPaymentId, failCode, failDetail, respondedAt);
+			failApprovePaymentService.fail(merchantPayKey, provider, pgPaymentId, failCode, failDetail, respondedAt);
 		} catch (PaymentException ex) {
 			if (SKIPPABLE.contains(ex.getErrorCode())) {
 				log.warn("결제 실패 마킹 skip - {} merchantPayKey={} pgPaymentId={}",
@@ -241,7 +245,7 @@ public class NaverPayApprovalUseCase {
 		String failDetail, LocalDateTime respondedAt
 	) {
 		try {
-			paymentApprovalRecordService.markUnknown(merchantPayKey, provider, pgPaymentId, failDetail, respondedAt);
+			markUnknownApprovePaymentService.markUnknown(merchantPayKey, provider, pgPaymentId, failDetail, respondedAt);
 		} catch (PaymentException ex) {
 			if (SKIPPABLE.contains(ex.getErrorCode())) {
 				log.warn("UNKNOWN 마킹 skip - {} merchantPayKey={} pgPaymentId={}",

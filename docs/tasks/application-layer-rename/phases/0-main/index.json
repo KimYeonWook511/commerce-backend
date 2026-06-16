@@ -28,10 +28,10 @@
     {
       "step": 3,
       "name": "rename-stock-domain",
-      "status": "in_progress",
+      "status": "completed",
       "started_at": "2026-06-16T15:36:02+0900",
       "_attempt": 1,
-      "_stage": "ran_commit",
+      "_stage": "done",
       "summary": "stock 도메인 테스트 파일 5개에서 StockInventoryService 참조를 제거하고 분리된 서비스 클래스(IncreaseStockService, DecreaseStockService, DecreaseStockBatchService, StockDecreaseConcurrencyService)로 교체하여 전체 테스트 통과",
       "completed_at": "2026-06-16T15:54:05+0900",
       "_pre_commit_head": "1831397422d8e9c6d391410d0db19436bbef98a8"
@@ -39,12 +39,24 @@
     {
       "step": 4,
       "name": "rename-order-domain",
-      "status": "pending"
+      "status": "completed",
+      "started_at": "2026-06-16T15:54:48+0900",
+      "_attempt": 1,
+      "_stage": "done",
+      "summary": "Order 도메인 서비스 5개(OrderCreateService→CreateOrderService, OrderCancelService→CancelOrderService, OrderExpirationService→ExpireOrderService, OrderConcurrencyService→OrderCreateConcurrencyService, OrderCreateUseCase→CreateOrderUseCase) 및 모든 참조 파일(main 2개, test 9개) 리네임 완료, 테스트 전체 통과",
+      "completed_at": "2026-06-16T16:06:10+0900",
+      "_pre_commit_head": "7343cb720539aa2f0637f1323c295026b75710f6"
     },
     {
       "step": 5,
       "name": "rename-payment-domain",
-      "status": "pending"
+      "status": "in_progress",
+      "started_at": "2026-06-16T16:06:54+0900",
+      "_attempt": 2,
+      "_stage": "ran_commit",
+      "summary": "SucceedCancelPaymentServiceTest, FailCancelPaymentServiceTest 생성 — 누락 테스트 이관 완료",
+      "completed_at": "2026-06-16T16:52:07+0900",
+      "_pre_commit_head": "9e3c9b5f41f75ff8a25659edb4eed791deec700e"
     }
   ],
   "created_at": "2026-06-16T14:46:20+0900",

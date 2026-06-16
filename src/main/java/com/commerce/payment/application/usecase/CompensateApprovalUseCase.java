@@ -8,8 +8,11 @@ import java.util.Set;
 import org.springframework.stereotype.Component;
 
 import com.commerce.payment.application.port.NotificationPort;
-import com.commerce.payment.application.service.PaymentApprovalRecordService;
-import com.commerce.payment.application.service.PaymentCancellationService;
+import com.commerce.payment.application.service.FailApprovePaymentService;
+import com.commerce.payment.application.service.GetOrCreateCancelPaymentService;
+import com.commerce.payment.application.service.SucceedCancelPaymentService;
+import com.commerce.payment.application.service.FailCancelPaymentService;
+import com.commerce.payment.application.service.MarkUnknownCancelPaymentService;
 import com.commerce.payment.application.port.PgCanceller;
 import com.commerce.payment.application.port.result.CancelOutcome;
 import com.commerce.payment.domain.Payment;
@@ -25,7 +28,7 @@ import lombok.extern.slf4j.Slf4j;
 @Slf4j
 @Component
 @RequiredArgsConstructor
-public class PaymentApprovalCompensationUseCase {
+public class CompensateApprovalUseCase {
 
 	// transition(별도 빈)이 던지는 도메인 예외 중 best-effort 보상에서 skip할 코드 집합.
 	// 충돌(다른 주체가 먼저 종착) / 가드 위반(이미 종착) / 이력 없음은 단조 종착이므로 흡수한다. 흡수는 트랜잭션 경계 밖(useCase)에서만 한다.
@@ -34,8 +37,11 @@ public class PaymentApprovalCompensationUseCase {
 		PaymentErrorCode.PAYMENT_STATUS_TRANSITION_NOT_ALLOWED,
 		PaymentErrorCode.PAYMENT_RECORD_NOT_FOUND);
 
-	private final PaymentApprovalRecordService paymentApprovalRecordService;
-	private final PaymentCancellationService paymentCancellationService;
+	private final FailApprovePaymentService failApprovePaymentService;
+	private final GetOrCreateCancelPaymentService getOrCreateCancelPaymentService;
+	private final SucceedCancelPaymentService succeedCancelPaymentService;
+	private final FailCancelPaymentService failCancelPaymentService;
+	private final MarkUnknownCancelPaymentService markUnknownCancelPaymentService;
 	private final NotificationPort notificationPort;
 
 	/**
@@ -104,7 +110,7 @@ public class PaymentApprovalCompensationUseCase {
 			failCode, failDetail, now
 		);
 
-		Payment cancelPayment = paymentCancellationService.getOrCreate(
+		Payment cancelPayment = getOrCreateCancelPaymentService.getOrCreate(
 			approvePayment.getOrderId(),
 			approvePayment.getMerchantPayKey(), approvePayment.getProvider(),
 			approvePayment.getPgPaymentId(), cancelAmount
@@ -117,12 +123,12 @@ public class PaymentApprovalCompensationUseCase {
 		try {
 			CancelOutcome outcome = pgCanceller.cancel(cancelPayment, cancelReason);
 			switch (outcome.status()) {
-				case SUCCESS -> paymentCancellationService.succeed(
+				case SUCCESS -> succeedCancelPaymentService.succeed(
 					cancelPayment.getMerchantPayKey(), cancelPayment.getProvider(),
 					cancelPayment.getPgPaymentId(), now
 				);
 				case PROCESSING -> {} // no-op
-				case FAILED -> paymentCancellationService.fail(
+				case FAILED -> failCancelPaymentService.fail(
 					cancelPayment.getMerchantPayKey(), cancelPayment.getProvider(),
 					cancelPayment.getPgPaymentId(), outcome.failCode(), outcome.failDetail(), now
 				);
@@ -150,7 +156,7 @@ public class PaymentApprovalCompensationUseCase {
 		PaymentFailCode failCode, String failDetail, LocalDateTime respondedAt
 	) {
 		try {
-			paymentApprovalRecordService.fail(merchantPayKey, provider, pgPaymentId, failCode, failDetail, respondedAt);
+			failApprovePaymentService.fail(merchantPayKey, provider, pgPaymentId, failCode, failDetail, respondedAt);
 		} catch (PaymentException ex) {
 			if (SKIPPABLE.contains(ex.getErrorCode())) {
 				log.warn("보상 실패 마킹 skip - {} merchantPayKey={} pgPaymentId={}",
@@ -169,7 +175,7 @@ public class PaymentApprovalCompensationUseCase {
 		String failDetail, LocalDateTime respondedAt
 	) {
 		try {
-			paymentCancellationService.markUnknown(merchantPayKey, provider, pgPaymentId, failDetail, respondedAt);
+			markUnknownCancelPaymentService.markUnknown(merchantPayKey, provider, pgPaymentId, failDetail, respondedAt);
 		} catch (PaymentException ex) {
 			if (SKIPPABLE.contains(ex.getErrorCode())) {
 				log.warn("취소 UNKNOWN 마킹 skip - {} merchantPayKey={} pgPaymentId={}",
