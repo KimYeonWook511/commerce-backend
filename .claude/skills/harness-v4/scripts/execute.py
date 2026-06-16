@@ -23,7 +23,7 @@ JavaScript workflow(harness-v4-execute)로 옮겨갔고, execute.py는 **workflo
 import argparse
 import json
 import sys
-from datetime import datetime, timezone
+from datetime import datetime, timezone, timedelta
 from pathlib import Path
 
 SCRIPT_DIR = Path(__file__).resolve().parent
@@ -46,8 +46,11 @@ def write_json(path: Path, data: dict) -> None:
     path.write_text(json.dumps(data, indent=2, ensure_ascii=False), encoding="utf-8")
 
 
+_KST = timezone(timedelta(hours=9))
+
+
 def stamp() -> str:
-    return datetime.now(timezone.utc).isoformat()
+    return datetime.now(_KST).isoformat()
 
 
 def emit(payload: dict) -> None:
