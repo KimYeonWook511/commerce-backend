@@ -328,7 +328,7 @@ def _update_task_index(p: dict, status: str) -> None:
     ts = stamp()
     key = {"completed": "completed_at", "error": "failed_at", "blocked": "blocked_at"}.get(status)
     for phase in task.get("phases", []):
-        if phase.get("dir") == p["phase_name"]:
+        if phase.get("phase") == p["phase_name"]:
             phase["status"] = status
             for stale in ("completed_at", "failed_at", "blocked_at"):
                 if stale != key:
