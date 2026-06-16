@@ -1,0 +1,12 @@
+{
+  "project": "application-layer-rename",
+  "phase": "0-main",
+  "harness_version": "v3",
+  "steps": [
+    { "step": 1, "name": "rename-member-domain", "status": "pending" },
+    { "step": 2, "name": "rename-product-domain", "status": "pending" },
+    { "step": 3, "name": "rename-stock-domain", "status": "pending" },
+    { "step": 4, "name": "rename-order-domain", "status": "pending" },
+    { "step": 5, "name": "rename-payment-domain", "status": "pending" }
+  ]
+}

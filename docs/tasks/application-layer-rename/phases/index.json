@@ -1,0 +1,5 @@
+{
+  "phases": [
+    { "dir": "0-main", "harness_version": "v3", "status": "pending" }
+  ]
+}
