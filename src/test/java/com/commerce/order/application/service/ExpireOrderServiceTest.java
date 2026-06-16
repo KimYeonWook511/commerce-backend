@@ -26,7 +26,7 @@ import com.commerce.outbox.stock.application.dto.StockRestoreOutboxCreateCommand
 import com.commerce.outbox.stock.application.service.StockRestoreOutboxCreateService;
 
 @ExtendWith(MockitoExtension.class)
-class OrderExpirationServiceTest {
+class ExpireOrderServiceTest {
 
 	@Mock
 	private OrderRepository orderRepository;
@@ -35,7 +35,7 @@ class OrderExpirationServiceTest {
 	private StockRestoreOutboxCreateService stockRestoreOutboxCreateService;
 
 	@InjectMocks
-	private OrderExpirationService orderExpirationService;
+	private ExpireOrderService expireOrderService;
 
 	@DisplayName("만료 주문을 취소하고 재고 복구 outbox 이벤트를 저장한다")
 	@Test
@@ -47,7 +47,7 @@ class OrderExpirationServiceTest {
 		given(orderRepository.findByIdWithItems(order.getId())).willReturn(Optional.of(order));
 
 		// when
-		orderExpirationService.expireOrder(order.getId(), requestedAt);
+		expireOrderService.expireOrder(order.getId(), requestedAt);
 
 		// then
 		assertThat(order.getStatus()).isEqualTo(OrderStatus.CANCELED);
@@ -69,7 +69,7 @@ class OrderExpirationServiceTest {
 		given(orderRepository.findByIdWithItems(100L)).willReturn(Optional.empty());
 
 		// when & then
-		assertThatThrownBy(() -> orderExpirationService.expireOrder(100L, requestedAt))
+		assertThatThrownBy(() -> expireOrderService.expireOrder(100L, requestedAt))
 			.isInstanceOf(OrderException.class)
 			.extracting("errorCode")
 			.isEqualTo(OrderErrorCode.ORDER_NOT_FOUND);
@@ -86,7 +86,7 @@ class OrderExpirationServiceTest {
 		given(orderRepository.findByIdWithItems(order.getId())).willReturn(Optional.of(order));
 
 		// when & then
-		assertThatThrownBy(() -> orderExpirationService.expireOrder(order.getId(), requestedAt))
+		assertThatThrownBy(() -> expireOrderService.expireOrder(order.getId(), requestedAt))
 			.isInstanceOf(OrderException.class)
 			.extracting("errorCode")
 			.isEqualTo(OrderErrorCode.ORDER_CANCEL_NOT_ALLOWED);

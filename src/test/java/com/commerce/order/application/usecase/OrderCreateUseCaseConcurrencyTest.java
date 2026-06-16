@@ -44,7 +44,7 @@ import com.commerce.support.TestcontainersSupport;
 class OrderCreateUseCaseConcurrencyTest {
 
 	@Autowired
-	private OrderCreateUseCase orderCreateUseCase;
+	private CreateOrderUseCase createOrderUseCase;
 
 	@Autowired
 	private PersistenceCleanupTestSupport persistenceCleanup;
@@ -105,7 +105,7 @@ class OrderCreateUseCaseConcurrencyTest {
 				ready.countDown();
 				try {
 					start.await();
-					OrderCreateResult result = orderCreateUseCase.createOrder(command);
+					OrderCreateResult result = createOrderUseCase.createOrder(command);
 					successResult.compareAndSet(null, result);
 					successCount.incrementAndGet();
 				} catch (OrderException ex) {

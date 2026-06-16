@@ -30,7 +30,7 @@ import lombok.extern.slf4j.Slf4j;
 @Slf4j
 @Service
 @RequiredArgsConstructor
-public class OrderCreateService {
+public class CreateOrderService {
 
 	private final MemberRepository memberRepository;
 	private final ProductRepository productRepository;

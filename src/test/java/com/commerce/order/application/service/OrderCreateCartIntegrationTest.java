@@ -21,7 +21,7 @@ import com.commerce.cart.infrastructure.persistence.support.CartPersistenceTestS
 import com.commerce.member.domain.Member;
 import com.commerce.member.infrastructure.persistence.support.MemberPersistenceTestSupport;
 import com.commerce.order.application.dto.OrderCreateCommand;
-import com.commerce.order.application.usecase.OrderCreateUseCase;
+import com.commerce.order.application.usecase.CreateOrderUseCase;
 import com.commerce.order.application.dto.OrderCreateItem;
 import com.commerce.order.application.dto.OrderCreateResult;
 import com.commerce.order.infrastructure.persistence.support.OrderPersistenceTestSupport;
@@ -48,7 +48,7 @@ import com.commerce.support.TestcontainersSupport;
 class OrderCreateCartIntegrationTest {
 
 	@Autowired
-	private OrderCreateUseCase orderCreateUseCase;
+	private CreateOrderUseCase createOrderUseCase;
 
 	@Autowired
 	private PersistenceCleanupTestSupport persistenceCleanup;
@@ -107,7 +107,7 @@ class OrderCreateCartIntegrationTest {
 			.build();
 
 		// when
-		OrderCreateResult result = orderCreateUseCase.createOrder(command);
+		OrderCreateResult result = createOrderUseCase.createOrder(command);
 
 		// then
 		assertThat(result.getOrderId()).isNotNull();
@@ -138,7 +138,7 @@ class OrderCreateCartIntegrationTest {
 			.build();
 
 		// when
-		OrderCreateResult result = orderCreateUseCase.createOrder(command);
+		OrderCreateResult result = createOrderUseCase.createOrder(command);
 
 		// then
 		assertThat(result.getOrderId()).isNotNull();
@@ -167,7 +167,7 @@ class OrderCreateCartIntegrationTest {
 			.build();
 
 		// when & then
-		assertThatThrownBy(() -> orderCreateUseCase.createOrder(command))
+		assertThatThrownBy(() -> createOrderUseCase.createOrder(command))
 			.isInstanceOf(StockException.class);
 
 		List<CartItem> remaining = cartPersistence.findAllByMemberIdOrderByCreatedAtDesc(member.getId());

@@ -27,9 +27,9 @@ import org.springframework.test.context.bean.override.mockito.MockitoSpyBean;
 
 import com.commerce.member.domain.Member;
 import com.commerce.member.infrastructure.persistence.support.MemberPersistenceTestSupport;
-import com.commerce.order.application.service.OrderCancelService;
-import com.commerce.order.application.service.OrderConcurrencyService;
-import com.commerce.order.application.service.OrderCreateService;
+import com.commerce.order.application.service.CancelOrderService;
+import com.commerce.order.application.service.OrderCreateConcurrencyService;
+import com.commerce.order.application.service.CreateOrderService;
 import com.commerce.order.application.dto.OrderCreateCommand;
 import com.commerce.order.application.dto.OrderCreateItem;
 import com.commerce.order.infrastructure.persistence.support.OrderPersistenceTestSupport;
@@ -54,7 +54,7 @@ import com.commerce.support.PersistenceCleanupTestSupport;
 class OrderConcurrencyServiceDeadlockTest {
 
 	@Autowired
-	private OrderConcurrencyService orderConcurrencyService;
+	private OrderCreateConcurrencyService orderCreateConcurrencyService;
 
 	@MockitoSpyBean
 	private DecreaseStockService decreaseStockService;
@@ -127,9 +127,9 @@ class OrderConcurrencyServiceDeadlockTest {
 			runConcurrent(2, () -> {
 				int index = sequence.getAndIncrement();
 				if (index == 0) {
-					orderConcurrencyService.createOrderWithPessimisticLock(requestA);
+					orderCreateConcurrencyService.createOrderWithPessimisticLock(requestA);
 				} else {
-					orderConcurrencyService.createOrderWithPessimisticLock(requestB);
+					orderCreateConcurrencyService.createOrderWithPessimisticLock(requestB);
 				}
 			}, errors);
 		} finally {
@@ -181,9 +181,9 @@ class OrderConcurrencyServiceDeadlockTest {
 		runConcurrent(2, () -> {
 			int index = sequence.getAndIncrement();
 			if (index == 0) {
-				orderConcurrencyService.createOrderWithPessimisticLockOrdered(requestA);
+				orderCreateConcurrencyService.createOrderWithPessimisticLockOrdered(requestA);
 			} else {
-				orderConcurrencyService.createOrderWithPessimisticLockOrdered(requestB);
+				orderCreateConcurrencyService.createOrderWithPessimisticLockOrdered(requestB);
 			}
 		}, errors);
 

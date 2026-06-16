@@ -23,7 +23,7 @@ import lombok.extern.slf4j.Slf4j;
 @Slf4j
 @Service
 @RequiredArgsConstructor
-public class OrderExpirationService {
+public class ExpireOrderService {
 
 	private final OrderRepository orderRepository;
 	private final StockRestoreOutboxCreateService stockRestoreOutboxCreateService;

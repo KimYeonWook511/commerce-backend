@@ -12,7 +12,7 @@ import com.commerce.common.exception.CommonException;
 import com.commerce.order.application.dto.OrderCreateCommand;
 import com.commerce.order.application.dto.OrderCreateResult;
 import com.commerce.order.application.port.OrderIdempotencyStore;
-import com.commerce.order.application.service.OrderCreateService;
+import com.commerce.order.application.service.CreateOrderService;
 import com.commerce.order.domain.Order;
 import com.commerce.order.domain.repository.OrderRepository;
 import com.commerce.order.domain.exception.OrderErrorCode;
@@ -25,11 +25,11 @@ import lombok.extern.slf4j.Slf4j;
 @Slf4j
 @Component
 @RequiredArgsConstructor
-public class OrderCreateUseCase {
+public class CreateOrderUseCase {
 
 	private final OrderRepository orderRepository;
 	private final OrderIdempotencyStore orderIdempotencyStore;
-	private final OrderCreateService orderCreateService;
+	private final CreateOrderService createOrderService;
 
 	@Value("${order.idempotency.ttl-seconds:60}")
 	private long idempotencyTtlSeconds;
@@ -60,7 +60,7 @@ public class OrderCreateUseCase {
 		try {
 			return findOrExecute(command, memberId, idempotencyKey);
 		} finally {
-			// UseCase 계층(tx 없음)이므로 finally 는 orderCreateService tx 종료 후에 실행된다.
+			// UseCase 계층(tx 없음)이므로 finally 는 createOrderService tx 종료 후에 실행된다.
 			orderIdempotencyStore.clear(memberId, idempotencyKey);
 		}
 	}
@@ -74,6 +74,6 @@ public class OrderCreateUseCase {
 				existing.get().getId(), memberId, idempotencyKey);
 			return OrderCreateResult.from(existing.get());
 		}
-		return orderCreateService.execute(command);
+		return createOrderService.execute(command);
 	}
 }

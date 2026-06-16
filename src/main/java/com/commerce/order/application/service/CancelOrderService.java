@@ -20,7 +20,7 @@ import lombok.extern.slf4j.Slf4j;
 @Slf4j
 @Service
 @RequiredArgsConstructor
-public class OrderCancelService {
+public class CancelOrderService {
 
 	private final OrderRepository orderRepository;
 	private final IncreaseStockService increaseStockService;

@@ -28,9 +28,9 @@ import org.springframework.test.context.ActiveProfiles;
 import org.springframework.test.context.TestPropertySource;
 import org.springframework.test.context.bean.override.mockito.MockitoBean;
 
-import com.commerce.order.application.service.OrderCancelService;
-import com.commerce.order.application.service.OrderConcurrencyService;
-import com.commerce.order.application.usecase.OrderCreateUseCase;
+import com.commerce.order.application.service.CancelOrderService;
+import com.commerce.order.application.service.OrderCreateConcurrencyService;
+import com.commerce.order.application.usecase.CreateOrderUseCase;
 import com.commerce.member.domain.Member;
 import com.commerce.order.application.port.OrderIdempotencyStore;
 import com.commerce.order.application.dto.OrderCreateItem;
@@ -64,13 +64,13 @@ import com.commerce.support.PersistenceCleanupTestSupport;
 class OrderConcurrencyServiceTest {
 
 	@Autowired
-	private OrderConcurrencyService orderConcurrencyService;
+	private OrderCreateConcurrencyService orderCreateConcurrencyService;
 
 	@Autowired
-	private OrderCreateUseCase orderCreateUseCase;
+	private CreateOrderUseCase createOrderUseCase;
 
 	@Autowired
-	private OrderCancelService orderCancelService;
+	private CancelOrderService cancelOrderService;
 
 	@Autowired
 	private PersistenceCleanupTestSupport persistenceCleanup;
@@ -115,7 +115,7 @@ class OrderConcurrencyServiceTest {
 
 		// when
 		ConcurrentLinkedQueue<Throwable> errors = new ConcurrentLinkedQueue<>();
-		runConcurrent(threadCount, () -> orderConcurrencyService.createOrderWithoutLock(command), errors);
+		runConcurrent(threadCount, () -> orderCreateConcurrencyService.createOrderWithoutLock(command), errors);
 
 		// then
 		Stock updated = stockPersistence.findByProductId(product.getId()).orElseThrow();
@@ -138,7 +138,7 @@ class OrderConcurrencyServiceTest {
 
 		// when
 		ConcurrentLinkedQueue<Throwable> errors = new ConcurrentLinkedQueue<>();
-		runConcurrent(threadCount, () -> orderConcurrencyService.createOrderWithSynchronizedAndTransaction(command), errors);
+		runConcurrent(threadCount, () -> orderCreateConcurrencyService.createOrderWithSynchronizedAndTransaction(command), errors);
 
 		// then
 		Stock updated = stockPersistence.findByProductId(product.getId()).orElseThrow();
@@ -159,7 +159,7 @@ class OrderConcurrencyServiceTest {
 
 		// when
 		ConcurrentLinkedQueue<Throwable> errors = new ConcurrentLinkedQueue<>();
-		runConcurrent(threadCount, () -> orderConcurrencyService.createOrderWithReentrantLockAndTransaction(command), errors);
+		runConcurrent(threadCount, () -> orderCreateConcurrencyService.createOrderWithReentrantLockAndTransaction(command), errors);
 
 		// then
 		Stock updated = stockPersistence.findByProductId(product.getId()).orElseThrow();
@@ -180,7 +180,7 @@ class OrderConcurrencyServiceTest {
 
 		// when
 		ConcurrentLinkedQueue<Throwable> errors = new ConcurrentLinkedQueue<>();
-		runConcurrent(threadCount, () -> orderConcurrencyService.createOrderWithOptimisticLock(command), errors);
+		runConcurrent(threadCount, () -> orderCreateConcurrencyService.createOrderWithOptimisticLock(command), errors);
 
 		// then
 		Stock updated = stockPersistence.findByProductId(product.getId()).orElseThrow();
@@ -204,7 +204,7 @@ class OrderConcurrencyServiceTest {
 
 		// when
 		ConcurrentLinkedQueue<Throwable> errors = new ConcurrentLinkedQueue<>();
-		runConcurrent(threadCount, () -> orderConcurrencyService.createOrderWithPessimisticLock(command), errors);
+		runConcurrent(threadCount, () -> orderCreateConcurrencyService.createOrderWithPessimisticLock(command), errors);
 
 		// then
 		Stock updated = stockPersistence.findByProductId(product.getId()).orElseThrow();
@@ -230,7 +230,7 @@ class OrderConcurrencyServiceTest {
 			String idempotencyKey = "idempotency-" + sequence.incrementAndGet();
 			OrderCreateCommand command =
 				createRequest(member.getId(), product.getId(), 1, idempotencyKey);
-			orderCreateUseCase.createOrder(command);
+			createOrderUseCase.createOrder(command);
 		}, errors);
 
 		// then
@@ -256,13 +256,13 @@ class OrderConcurrencyServiceTest {
 		Product product = productPersistence.save(createProduct("cancel-product", 1000));
 		stockPersistence.save(createStock(product, 5));
 
-		OrderCreateResult created = orderCreateUseCase.createOrder(
+		OrderCreateResult created = createOrderUseCase.createOrder(
 			createRequest(member.getId(), product.getId(), 2, "cancel-key")
 		);
 
 		// when
 		ConcurrentLinkedQueue<Throwable> errors = new ConcurrentLinkedQueue<>();
-		runConcurrent(threadCount, () -> orderCancelService.cancelOrder(member.getId(), created.getOrderId()), errors);
+		runConcurrent(threadCount, () -> cancelOrderService.cancelOrder(member.getId(), created.getOrderId()), errors);
 
 		// then
 		Stock updated = stockPersistence.findByProductId(product.getId()).orElseThrow();

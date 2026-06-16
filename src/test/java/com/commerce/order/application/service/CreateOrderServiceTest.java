@@ -39,7 +39,7 @@ import com.commerce.stock.domain.exception.StockErrorCode;
 import com.commerce.stock.domain.exception.StockException;
 
 @ExtendWith(MockitoExtension.class)
-class OrderCreateServiceTest {
+class CreateOrderServiceTest {
 
 	@Mock
 	private MemberRepository memberRepository;
@@ -57,7 +57,7 @@ class OrderCreateServiceTest {
 	private CartItemRemover cartItemRemover;
 
 	@InjectMocks
-	private OrderCreateService orderCreateService;
+	private CreateOrderService createOrderService;
 
 	@DisplayName("유효한 요청이면 주문을 생성한다")
 	@Test
@@ -77,7 +77,7 @@ class OrderCreateServiceTest {
 		});
 
 		// when
-		OrderCreateResult result = orderCreateService.execute(command);
+		OrderCreateResult result = createOrderService.execute(command);
 
 		// then
 		assertThat(result.getOrderId()).isEqualTo(100L);
@@ -94,7 +94,7 @@ class OrderCreateServiceTest {
 		given(memberRepository.findById(1L)).willReturn(Optional.empty());
 
 		// when & then
-		assertThatThrownBy(() -> orderCreateService.execute(command))
+		assertThatThrownBy(() -> createOrderService.execute(command))
 			.isInstanceOf(MemberException.class)
 			.satisfies(ex -> assertThat(((MemberException)ex).getErrorCode())
 				.isEqualTo(MemberErrorCode.MEMBER_NOT_FOUND));
@@ -114,7 +114,7 @@ class OrderCreateServiceTest {
 			.willReturn(List.of(createProduct(10L, "product-1", 1000)));
 
 		// when & then
-		assertThatThrownBy(() -> orderCreateService.execute(command))
+		assertThatThrownBy(() -> createOrderService.execute(command))
 			.isInstanceOf(ProductException.class)
 			.satisfies(ex -> assertThat(((ProductException)ex).getErrorCode())
 				.isEqualTo(ProductErrorCode.PRODUCT_NOT_FOUND));
@@ -135,7 +135,7 @@ class OrderCreateServiceTest {
 			.given(decreaseStockService).decrease(10L, 2);
 
 		// when & then
-		assertThatThrownBy(() -> orderCreateService.execute(command))
+		assertThatThrownBy(() -> createOrderService.execute(command))
 			.isInstanceOf(StockException.class)
 			.satisfies(ex -> assertThat(((StockException)ex).getErrorCode())
 				.isEqualTo(StockErrorCode.STOCK_NOT_FOUND));
