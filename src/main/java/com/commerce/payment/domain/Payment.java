@@ -28,7 +28,10 @@ import org.hibernate.type.SqlTypes;
 	name = "tbl_payment",
 	uniqueConstraints = {
 		// NULL trick: APPROVE+SUCCEEDED 일 때만 orderId 값이 채워져 unique 제약이 동작함
-		@UniqueConstraint(name = "uk_payment_approved_order_key", columnNames = {"approved_order_key"})
+		@UniqueConstraint(name = "uk_payment_approved_order_key", columnNames = {"approved_order_key"}),
+		// Flyway V6 기존 unique 미러링(ADR-L5): H2 test 스키마에도 CANCEL 멱등 제약이 생기도록. prod는 validate라 무해.
+		@UniqueConstraint(name = "uk_payment_merchant_pay_key_provider_pg_payment_id_type",
+			columnNames = {"merchant_pay_key", "provider", "pg_payment_id", "type"})
 	}
 )
 @NoArgsConstructor(access = AccessLevel.PROTECTED)

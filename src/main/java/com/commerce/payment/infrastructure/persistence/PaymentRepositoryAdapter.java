@@ -109,6 +109,13 @@ public class PaymentRepositoryAdapter implements PaymentRepository {
 	}
 
 	@Override
+	public Optional<Payment> findApproveSucceededByOrderId(Long orderId) {
+		return jpaPaymentRepository.findByOrderIdAndTypeAndStatus(
+			orderId, PaymentType.APPROVE, PaymentStatus.SUCCEEDED
+		);
+	}
+
+	@Override
 	public boolean existsUnknownByOrderId(Long orderId) {
 		return jpaPaymentRepository.existsByOrderIdAndTypeAndStatus(
 			orderId, PaymentType.APPROVE, PaymentStatus.UNKNOWN

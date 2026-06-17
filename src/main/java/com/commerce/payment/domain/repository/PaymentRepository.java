@@ -26,6 +26,9 @@ public interface PaymentRepository {
 
 	Optional<Payment> findApproveSucceeded(String merchantPayKey);
 
+	// 환불 대상 조회: orderId로 SUCCEEDED APPROVE 결제를 가져온다. 주문당 SUCCEEDED APPROVE는 유일하다.
+	Optional<Payment> findApproveSucceededByOrderId(Long orderId);
+
 	// APPROVE 타입 UNKNOWN 결제가 있는 주문은 reserve/approve 차단
 	boolean existsUnknownByOrderId(Long orderId);
 
