@@ -1,5 +1,9 @@
 {
   "phases": [
-    { "phase": "0-main", "status": "pending" }
+    {
+      "phase": "0-main",
+      "status": "completed",
+      "completed_at": "2026-06-18T01:01:32.799955+09:00"
+    }
   ]
 }

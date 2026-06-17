@@ -17,8 +17,9 @@
     {
       "step": 3,
       "name": "paid-order-cancel-orchestration",
-      "status": "pending",
-      "summary": null
+      "status": "completed",
+      "summary": "RefundExecutionUseCase.execute()가 CancelOutcome을 반환하도록 수정하고, CancelOrderUseCase가 in-memory cancelPayment 상태 대신 execute() 반환값으로 refundStatus를 산출하도록 수정한다.",
+      "completed_at": "2026-06-18T01:01:28.032084+09:00"
     }
   ],
   "execution": {
@@ -28,5 +29,5 @@
     "push": true
   },
   "created_at": "2026-06-17T00:00:00Z",
-  "completed_at": null
+  "completed_at": "2026-06-18T01:01:32.799025+09:00"
 }
