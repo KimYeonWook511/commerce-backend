@@ -1,20 +1,22 @@
 #!/usr/bin/env python3
 """
-Repo 전용 Claude Code PreToolUse 정책 스크립트.
+Repo 전용 Claude Code PreToolUse 정책 스크립트 (harness-v3 / harness-v4 공존).
 
-세 가지 정책을 agent_type 으로 갈라 적용한다:
+agent_type 으로 정책을 갈라 적용한다:
 
-  1. harness-v3-committer  (Bash)  → 화이트리스트: git status/diff/log/add/commit 외 모든 Bash 차단
-  2. harness-v3-reviewer   (Write) → 핸드오프(stepN-review.json) 외 경로 쓰기 차단
-  3. 그 외(메인/일반 작업)  (Bash)  → 블랙리스트: rm -rf, git reset --hard, git checkout --, force push 차단
+  1. committer (v3/v4, Bash)  → 화이트리스트: git status/diff/log/add/commit 외 모든 Bash 차단
+  2. reviewer  (v3/v4, Write) → 핸드오프(stepN-review.json) 외 경로 쓰기 차단
+  3. recorder  (v4, Write)    → phase index.json 외 경로 쓰기 차단
+  4. 그 외(developer/finalizer/메인 등, Bash) → 블랙리스트: rm -rf, git reset --hard, git checkout --, force push 차단
 
 설계 원칙:
   - fail-open: 입력 파싱 실패·형식 오류는 차단하지 않는다(정책 오류가 작업을 막으면 안 됨).
   - 차단은 최신 형식으로 응답한다: hookSpecificOutput.permissionDecision = "deny".
-  - agent_type 이 입력에 없으면(플랫폼/버전 차이) 3번(블랙리스트)으로 fallback 한다.
+  - agent_type 이 입력에 없으면(플랫폼/버전 차이) 4번(블랙리스트)으로 fallback 한다.
 
-주의: 일부 Claude Code 버전/플랫폼에서 sub-agent의 PreToolUse 차단이 무시될 수 있다(이슈 #40580, WSL 라벨).
-그 경우 이 hook은 '탐지'만 하고 실제 차단은 각 agent .md의 프롬프트 제약이 baseline으로 담당한다.
+주의: 일부 Claude Code 버전/플랫폼에서 sub-agent의 PreToolUse 차단이 무시될 수 있다.
+그 경우 이 hook은 '탐지'만 하고 실제 차단은 각 agent .md의 tools 제약·프롬프트가 baseline으로 담당한다.
+(workflow agent에서 PreToolUse 발동 여부는 trial로 확인 필요.)
 """
 
 from __future__ import annotations
@@ -207,13 +209,13 @@ def evaluate_committer_single(command: str) -> PolicyResult:
     if not tokens:
         return PolicyResult(False)  # 파싱 불가는 fail-open
     if tokens[0] != "git":
-        return PolicyResult(True, f"harness-v3-committer는 git 명령만 허용됩니다 (시도: `{tokens[0]}`).")
+        return PolicyResult(True, f"harness committer는 git 명령만 허용됩니다 (시도: `{tokens[0]}`).")
     if len(tokens) < 2 or tokens[1] not in _COMMITTER_ALLOWED_GIT:
         sub = tokens[1] if len(tokens) >= 2 else "(none)"
-        return PolicyResult(True, f"harness-v3-committer는 git status/diff/log/add/commit만 허용됩니다 (시도: `git {sub}`).")
+        return PolicyResult(True, f"harness committer는 git status/diff/log/add/commit만 허용됩니다 (시도: `git {sub}`).")
     # commit 서브커맨드라도 history 조작(--amend)은 차단
     if tokens[1] == "commit" and "--amend" in tokens[2:]:
-        return PolicyResult(True, "harness-v3-committer는 `git commit --amend`(history 조작)를 할 수 없습니다.")
+        return PolicyResult(True, "harness committer는 `git commit --amend`(history 조작)를 할 수 없습니다.")
     return PolicyResult(False)
 
 
@@ -225,17 +227,35 @@ def evaluate_reviewer_write(file_path: str) -> PolicyResult:
     normalized = file_path.replace("\\", "/")
     if "/handoff/" in normalized and normalized.endswith("-review.json"):
         return PolicyResult(False)
-    return PolicyResult(True, f"harness-v3-reviewer는 review 핸드오프 외 파일을 쓸 수 없습니다 (시도: `{file_path}`).")
+    return PolicyResult(True, f"reviewer는 review 핸드오프 외 파일을 쓸 수 없습니다 (시도: `{file_path}`).")
+
+
+# ─────────────────────────────────────────────────────────────────────────────
+# 3-b. recorder Write 가드 (harness-v4) — phase index.json 외 쓰기 차단
+#   recorder는 record-step을 Bash(python3)로 부르는 게 정상 경로라 Write 도구를 쓸 일이 없다.
+#   혹시 Write를 시도하면 phase index.json 외에는 막는다(정본 오염 방지).
+# ─────────────────────────────────────────────────────────────────────────────
+def evaluate_recorder_write(file_path: str) -> PolicyResult:
+    normalized = file_path.replace("\\", "/")
+    if normalized.endswith("/index.json") and "/phases/" in normalized:
+        return PolicyResult(False)
+    return PolicyResult(True, f"recorder는 phase index.json 외 파일을 쓸 수 없습니다 (시도: `{file_path}`).")
 
 
 # ─────────────────────────────────────────────────────────────────────────────
 # 디스패치
 # ─────────────────────────────────────────────────────────────────────────────
+_COMMITTER_AGENTS = frozenset({"harness-v3-committer", "harness-v4-committer"})
+_REVIEWER_AGENTS = frozenset({"harness-v3-reviewer", "harness-v4-reviewer"})
+
+
 def evaluate_bash(command: str, agent_type: str) -> PolicyResult:
     for sub in split_compound_commands(command):
-        if agent_type == "harness-v3-committer":
+        if agent_type in _COMMITTER_AGENTS:
             result = evaluate_committer_single(sub)
         else:
+            # developer / recorder / finalizer / 메인 등 → 블랙리스트(위험 명령만 차단).
+            # finalizer는 finalize가 내부에서 push까지 하므로 블랙리스트로 충분(force push 등만 차단).
             result = evaluate_blacklist_single(sub)
         if result.blocked:
             return result
@@ -269,13 +289,18 @@ def main() -> int:
     if not isinstance(tool_input, dict):
         return 0
 
-    # reviewer Write 가드
-    if agent_type == "harness-v3-reviewer" and tool_name == "Write":
+    # Write 가드: reviewer(핸드오프만) / recorder(phase index만)
+    if tool_name == "Write":
         file_path = tool_input.get("file_path", "")
         if isinstance(file_path, str) and file_path.strip():
-            result = evaluate_reviewer_write(file_path)
-            if result.blocked:
-                return emit_block(result.reason)
+            if agent_type in _REVIEWER_AGENTS:
+                result = evaluate_reviewer_write(file_path)
+                if result.blocked:
+                    return emit_block(result.reason)
+            elif agent_type == "harness-v4-recorder":
+                result = evaluate_recorder_write(file_path)
+                if result.blocked:
+                    return emit_block(result.reason)
         return 0
 
     # Bash 정책 (committer 화이트리스트 / 그 외 블랙리스트)

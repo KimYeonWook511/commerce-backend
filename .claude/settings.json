@@ -21,6 +21,15 @@
             "command": "\"$CLAUDE_PROJECT_DIR/.claude/skills/harness-v3/scripts/hooks/log_stop.sh\""
           }
         ]
+      },
+      {
+        "matcher": "harness-v4-developer|harness-v4-reviewer|harness-v4-committer|harness-v4-recorder|harness-v4-finalizer",
+        "hooks": [
+          {
+            "type": "command",
+            "command": "\"$CLAUDE_PROJECT_DIR/.claude/skills/harness-v4/scripts/hooks/log_stop.sh\""
+          }
+        ]
       }
     ],
     "PostToolUse": [
@@ -30,6 +39,10 @@
           {
             "type": "command",
             "command": "\"$CLAUDE_PROJECT_DIR/.claude/skills/harness-v3/scripts/hooks/log_progress.sh\""
+          },
+          {
+            "type": "command",
+            "command": "\"$CLAUDE_PROJECT_DIR/.claude/skills/harness-v4/scripts/hooks/log_progress.sh\""
           }
         ]
       }
