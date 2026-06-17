@@ -12,13 +12,18 @@ import com.commerce.order.domain.repository.OrderRepository;
 import com.commerce.order.domain.exception.OrderErrorCode;
 import com.commerce.order.domain.exception.OrderException;
 import com.commerce.payment.application.port.NotificationPort;
+import com.commerce.payment.application.service.EscalateApprovePaymentService;
+import com.commerce.payment.application.service.EscalateCancelPaymentService;
 import com.commerce.payment.application.service.FailApprovePaymentService;
+import com.commerce.payment.application.service.FailCancelPaymentService;
+import com.commerce.payment.application.service.MarkUnknownCancelPaymentService;
+import com.commerce.payment.application.service.SucceedCancelPaymentService;
 import com.commerce.payment.application.service.SucceedPaymentApprovalService;
 import com.commerce.payment.application.service.SucceedPaymentApprovalRecordService;
-import com.commerce.payment.application.service.EscalateApprovePaymentService;
 import com.commerce.payment.application.port.result.CancelOutcome;
 import com.commerce.payment.domain.Payment;
 import com.commerce.payment.domain.PaymentFailCode;
+import com.commerce.payment.domain.PaymentStatus;
 import com.commerce.payment.domain.repository.PaymentRepository;
 import com.commerce.payment.domain.exception.PaymentErrorCode;
 import com.commerce.payment.domain.exception.PaymentException;
@@ -57,6 +62,10 @@ public class ReconcilePaymentUseCase {
 	private final SucceedPaymentApprovalRecordService succeedPaymentApprovalRecordService;
 	private final FailApprovePaymentService failApprovePaymentService;
 	private final EscalateApprovePaymentService escalateApprovePaymentService;
+	private final EscalateCancelPaymentService escalateCancelPaymentService;
+	private final SucceedCancelPaymentService succeedCancelPaymentService;
+	private final FailCancelPaymentService failCancelPaymentService;
+	private final MarkUnknownCancelPaymentService markUnknownCancelPaymentService;
 	private final CompensateApprovalUseCase compensateApprovalUseCase;
 	private final NaverPayGateway naverPayGateway;
 	private final PaymentPostProcessTargetPolicy targetPolicy;
@@ -64,7 +73,7 @@ public class ReconcilePaymentUseCase {
 	private final NotificationPort notificationPort;
 
 	/**
-	 * stale APPROVE UNKNOWN/REQUESTED 결제를 PG 조회로 확정한다.
+	 * stale APPROVE UNKNOWN/REQUESTED 결제와 stale CANCEL UNKNOWN/REQUESTED 결제를 PG 조회로 확정한다.
 	 * PG 조회(외부 호출)는 트랜잭션 경계 밖에서 수행하고, 상태 확정은 건별 단건 트랜잭션으로 처리한다.
 	 */
 	public void reconcile() {
@@ -77,7 +86,7 @@ public class ReconcilePaymentUseCase {
 			staleCutoff, requestedStaleCutoff, escalationCutoff, PageRequest.of(0, RECONCILE_BATCH_SIZE));
 
 		if (!candidates.isEmpty()) {
-			log.info("대사 시작 candidates={} staleCutoff={} requestedStaleCutoff={} escalationCutoff={}",
+			log.info("APPROVE 대사 시작 candidates={} staleCutoff={} requestedStaleCutoff={} escalationCutoff={}",
 				candidates.size(), staleCutoff, requestedStaleCutoff, escalationCutoff);
 
 			int succeeded = 0, failed = 0, skipped = 0, errors = 0;
@@ -91,12 +100,39 @@ public class ReconcilePaymentUseCase {
 					}
 				} catch (Exception ex) {
 					errors++;
-					log.error("대사 처리 실패 paymentId={} merchantPayKey={} pgPaymentId={} status={}",
+					log.error("APPROVE 대사 처리 실패 paymentId={} merchantPayKey={} pgPaymentId={} status={}",
 						payment.getId(), payment.getMerchantPayKey(), payment.getPgPaymentId(), payment.getStatus(), ex);
 				}
 			}
 
-			log.info("대사 완료 succeeded={} failed={} skipped={} errors={}",
+			log.info("APPROVE 대사 완료 succeeded={} failed={} skipped={} errors={}",
+				succeeded, failed, skipped, errors);
+		}
+
+		// CANCEL 대사: standalone CANCEL(REQUESTED/UNKNOWN) 스캔 → PG 재조회 → 재시도/확정 (ADR-L4)
+		List<Payment> cancelCandidates = paymentRepository.findStaleCancelPaymentsForReconciliation(
+			staleCutoff, requestedStaleCutoff, escalationCutoff, PageRequest.of(0, RECONCILE_BATCH_SIZE));
+
+		if (!cancelCandidates.isEmpty()) {
+			log.info("CANCEL 대사 시작 candidates={}", cancelCandidates.size());
+
+			int succeeded = 0, failed = 0, skipped = 0, errors = 0;
+			for (Payment payment : cancelCandidates) {
+				try {
+					PaymentReconcileOutcome outcome = processCancelOne(payment, now);
+					switch (outcome) {
+						case SUCCEEDED -> succeeded++;
+						case FAILED -> failed++;
+						case SKIPPED -> skipped++;
+					}
+				} catch (Exception ex) {
+					errors++;
+					log.error("CANCEL 대사 처리 실패 paymentId={} merchantPayKey={} pgPaymentId={} status={}",
+						payment.getId(), payment.getMerchantPayKey(), payment.getPgPaymentId(), payment.getStatus(), ex);
+				}
+			}
+
+			log.info("CANCEL 대사 완료 succeeded={} failed={} skipped={} errors={}",
 				succeeded, failed, skipped, errors);
 		}
 
@@ -104,25 +140,43 @@ public class ReconcilePaymentUseCase {
 	}
 
 	private void processEscalations(LocalDateTime now, LocalDateTime escalationCutoff) {
+		// APPROVE escalation
 		List<Payment> candidates = paymentRepository.findEscalationCandidates(
 			escalationCutoff, PageRequest.of(0, RECONCILE_BATCH_SIZE));
 
-		if (candidates.isEmpty()) {
-			return;
+		if (!candidates.isEmpty()) {
+			log.info("APPROVE escalation 처리 시작 candidates={} escalationCutoff={}", candidates.size(), escalationCutoff);
+
+			// useCase(트랜잭션 없음): escalate transition은 별도 빈(public @Transactional)이라 충돌 시 그 트랜잭션만 rollback된다.
+			for (Payment payment : candidates) {
+				try {
+					if (escalateSkippable(payment, now)) {
+						// transition 성공 = 이 건이 통지 주체 → 커밋 이후 통지 (best-effort)
+						notifyEscalation(payment);
+					}
+				} catch (Exception ex) {
+					log.error("APPROVE escalation 처리 실패 paymentId={} orderId={} merchantPayKey={}",
+						payment.getId(), payment.getOrderId(), payment.getMerchantPayKey(), ex);
+				}
+			}
 		}
 
-		log.info("escalation 처리 시작 candidates={} escalationCutoff={}", candidates.size(), escalationCutoff);
+		// CANCEL escalation: 6시간 초과 UNKNOWN/REQUESTED + FAILED CANCEL (ADR-L4)
+		List<Payment> cancelCandidates = paymentRepository.findCancelEscalationCandidates(
+			escalationCutoff, PageRequest.of(0, RECONCILE_BATCH_SIZE));
 
-		// useCase(트랜잭션 없음): escalate transition은 별도 빈(public @Transactional)이라 충돌 시 그 트랜잭션만 rollback된다.
-		for (Payment payment : candidates) {
-			try {
-				if (escalateSkippable(payment, now)) {
-					// transition 성공 = 이 건이 통지 주체 → 커밋 이후 통지 (best-effort)
-					notifyEscalation(payment);
+		if (!cancelCandidates.isEmpty()) {
+			log.info("CANCEL escalation 처리 시작 candidates={}", cancelCandidates.size());
+
+			for (Payment payment : cancelCandidates) {
+				try {
+					if (escalateCancelSkippable(payment, now)) {
+						notifyCancelEscalation(payment);
+					}
+				} catch (Exception ex) {
+					log.error("CANCEL escalation 처리 실패 paymentId={} orderId={} merchantPayKey={}",
+						payment.getId(), payment.getOrderId(), payment.getMerchantPayKey(), ex);
 				}
-			} catch (Exception ex) {
-				log.error("escalation 처리 실패 paymentId={} orderId={} merchantPayKey={}",
-					payment.getId(), payment.getOrderId(), payment.getMerchantPayKey(), ex);
 			}
 		}
 	}
@@ -163,6 +217,168 @@ public class ReconcilePaymentUseCase {
 		} catch (Exception ex) {
 			log.warn("정합성 오류 통지 전송 실패 paymentId={} orderId={} merchantPayKey={}",
 				payment.getId(), payment.getOrderId(), payment.getMerchantPayKey(), ex);
+		}
+	}
+
+	/**
+	 * CANCEL escalation transition을 호출하되 PAYMENT_CONCURRENTLY_MODIFIED(다른 주체가 먼저 escalation)는 흡수해 통지 주체에서 빠진다(skip).
+	 * @return 이 건이 통지 주체이면 true, escalation 대상 아님(no-op)/충돌 skip이면 false.
+	 */
+	private boolean escalateCancelSkippable(Payment payment, LocalDateTime now) {
+		try {
+			return escalateCancelPaymentService.escalate(
+				payment.getMerchantPayKey(), payment.getProvider(), payment.getPgPaymentId(), now);
+		} catch (PaymentException ex) {
+			if (ex.getErrorCode() == PaymentErrorCode.PAYMENT_CONCURRENTLY_MODIFIED) {
+				log.info("CANCEL escalation skip - 낙관적 락 충돌, 이미 다른 주체가 처리 paymentId={} orderId={}",
+					payment.getId(), payment.getOrderId());
+				return false;
+			}
+			throw ex;
+		}
+	}
+
+	private void notifyCancelEscalation(Payment payment) {
+		String reason = payment.getStatus() == PaymentStatus.FAILED
+			? "escalation: CANCEL 확정 실패(환불 미집행)"
+			: "escalation: 6시간 초과 미확정 CANCEL";
+		try {
+			notificationPort.notifyManualReviewRequired(
+				payment.getOrderId(), payment.getMerchantPayKey(), reason);
+		} catch (Exception ex) {
+			log.warn("CANCEL escalation 통지 전송 실패 paymentId={} orderId={} merchantPayKey={}",
+				payment.getId(), payment.getOrderId(), payment.getMerchantPayKey(), ex);
+		}
+	}
+
+	/**
+	 * CANCEL 대사 단건 처리. resolvePostProcessTarget(null, cancelPayment, now) → CANCEL_RECONCILE → PG 조회 → 결과 반영.
+	 */
+	private PaymentReconcileOutcome processCancelOne(Payment cancelPayment, LocalDateTime now) {
+		PaymentPostProcessTarget target = targetPolicy.resolvePostProcessTarget(null, cancelPayment, now);
+
+		return switch (target) {
+			case CANCEL_RECONCILE -> processCancelReconcile(cancelPayment, now);
+			case MANUAL_REVIEW -> {
+				log.warn("CANCEL 대사 escalation 임계 초과 - 상태 변경 없이 건너뜀 paymentId={} orderId={} merchantPayKey={}",
+					cancelPayment.getId(), cancelPayment.getOrderId(), cancelPayment.getMerchantPayKey());
+				yield PaymentReconcileOutcome.SKIPPED;
+			}
+			default -> {
+				log.debug("CANCEL 대사 범위 밖 target={} paymentId={}", target, cancelPayment.getId());
+				yield PaymentReconcileOutcome.SKIPPED;
+			}
+		};
+	}
+
+	private PaymentReconcileOutcome processCancelReconcile(Payment cancelPayment, LocalDateTime now) {
+		// PG 조회: 트랜잭션 경계 밖에서 수행
+		NaverPayHistoryResult historyResult = naverPayGateway.getApprovalHistory(cancelPayment.getPgPaymentId());
+		PaymentVerificationStatus verificationStatus = toVerificationStatus(historyResult);
+		PaymentPostProcessFlow flow = flowPolicy.resolveFlow(PaymentPostProcessTarget.CANCEL_RECONCILE, verificationStatus);
+
+		switch (flow) {
+			case ALREADY_CANCELED_PAYMENT_PROCESS -> {
+				// PG에서 이미 취소됨 → CANCEL SUCCEEDED 확정
+				succeedCancelSkippable(cancelPayment, now);
+				log.info("CANCEL 대사 취소 확정 paymentId={} orderId={} merchantPayKey={}",
+					cancelPayment.getId(), cancelPayment.getOrderId(), cancelPayment.getMerchantPayKey());
+				return PaymentReconcileOutcome.SUCCEEDED;
+			}
+			case CANCEL_RETRY_PROCESS -> {
+				// PG에서 아직 승인 유지 → 취소 재시도
+				return executeCancelRetry(cancelPayment, now);
+			}
+			case KEEP_WAITING -> {
+				log.debug("CANCEL 대사 대기 paymentId={} status={} verificationStatus={}",
+					cancelPayment.getId(), cancelPayment.getStatus(), verificationStatus);
+				return PaymentReconcileOutcome.SKIPPED;
+			}
+			default -> {
+				log.warn("예상치 못한 CANCEL 대사 flow={} paymentId={}", flow, cancelPayment.getId());
+				return PaymentReconcileOutcome.SKIPPED;
+			}
+		}
+	}
+
+	private PaymentReconcileOutcome executeCancelRetry(Payment cancelPayment, LocalDateTime now) {
+		NaverPayCancelResult result = naverPayGateway.cancel(
+			cancelPayment.getPgPaymentId(), cancelPayment.getAmount(), "환불 재시도");
+		switch (result.getStatus()) {
+			case SUCCESS, ALREADY_CANCELED -> {
+				succeedCancelSkippable(cancelPayment, now);
+				log.info("CANCEL 대사 취소 재시도 성공 paymentId={} orderId={} merchantPayKey={}",
+					cancelPayment.getId(), cancelPayment.getOrderId(), cancelPayment.getMerchantPayKey());
+				return PaymentReconcileOutcome.SUCCEEDED;
+			}
+			case PROCESSING -> {
+				log.debug("CANCEL 대사 재시도 처리 중 paymentId={}", cancelPayment.getId());
+				return PaymentReconcileOutcome.SKIPPED;
+			}
+			case FAILED -> {
+				failCancelSkippable(cancelPayment, result.getFailCode(), result.getFailDetail(), now);
+				log.warn("CANCEL 대사 취소 재시도 실패 paymentId={} orderId={} merchantPayKey={}",
+					cancelPayment.getId(), cancelPayment.getOrderId(), cancelPayment.getMerchantPayKey());
+				return PaymentReconcileOutcome.FAILED;
+			}
+			case UNKNOWN -> {
+				markUnknownCancelSkippable(cancelPayment, result.getFailDetail(), now);
+				log.warn("CANCEL 대사 취소 재시도 결과 불명 paymentId={} orderId={} merchantPayKey={}",
+					cancelPayment.getId(), cancelPayment.getOrderId(), cancelPayment.getMerchantPayKey());
+				return PaymentReconcileOutcome.SKIPPED;
+			}
+			default -> {
+				log.warn("예상치 못한 CANCEL PG 결과 status={} paymentId={}", result.getStatus(), cancelPayment.getId());
+				return PaymentReconcileOutcome.SKIPPED;
+			}
+		}
+	}
+
+	private void succeedCancelSkippable(Payment cancelPayment, LocalDateTime now) {
+		try {
+			succeedCancelPaymentService.succeed(
+				cancelPayment.getMerchantPayKey(), cancelPayment.getProvider(),
+				cancelPayment.getPgPaymentId(), now);
+		} catch (PaymentException ex) {
+			if (ex.getErrorCode() == PaymentErrorCode.PAYMENT_CONCURRENTLY_MODIFIED
+				|| ex.getErrorCode() == PaymentErrorCode.PAYMENT_STATUS_TRANSITION_NOT_ALLOWED
+				|| ex.getErrorCode() == PaymentErrorCode.PAYMENT_RECORD_NOT_FOUND) {
+				log.info("CANCEL 대사 성공 마킹 skip - {} paymentId={}", ex.getErrorCode(), cancelPayment.getId());
+				return;
+			}
+			throw ex;
+		}
+	}
+
+	private void failCancelSkippable(Payment cancelPayment, PaymentFailCode failCode, String failDetail, LocalDateTime now) {
+		try {
+			failCancelPaymentService.fail(
+				cancelPayment.getMerchantPayKey(), cancelPayment.getProvider(),
+				cancelPayment.getPgPaymentId(), failCode, failDetail, now);
+		} catch (PaymentException ex) {
+			if (ex.getErrorCode() == PaymentErrorCode.PAYMENT_CONCURRENTLY_MODIFIED
+				|| ex.getErrorCode() == PaymentErrorCode.PAYMENT_STATUS_TRANSITION_NOT_ALLOWED
+				|| ex.getErrorCode() == PaymentErrorCode.PAYMENT_RECORD_NOT_FOUND) {
+				log.info("CANCEL 대사 실패 마킹 skip - {} paymentId={}", ex.getErrorCode(), cancelPayment.getId());
+				return;
+			}
+			throw ex;
+		}
+	}
+
+	private void markUnknownCancelSkippable(Payment cancelPayment, String failDetail, LocalDateTime now) {
+		try {
+			markUnknownCancelPaymentService.markUnknown(
+				cancelPayment.getMerchantPayKey(), cancelPayment.getProvider(),
+				cancelPayment.getPgPaymentId(), failDetail, now);
+		} catch (PaymentException ex) {
+			if (ex.getErrorCode() == PaymentErrorCode.PAYMENT_CONCURRENTLY_MODIFIED
+				|| ex.getErrorCode() == PaymentErrorCode.PAYMENT_STATUS_TRANSITION_NOT_ALLOWED
+				|| ex.getErrorCode() == PaymentErrorCode.PAYMENT_RECORD_NOT_FOUND) {
+				log.info("CANCEL 대사 UNKNOWN 마킹 skip - {} paymentId={}", ex.getErrorCode(), cancelPayment.getId());
+				return;
+			}
+			throw ex;
 		}
 	}
 
