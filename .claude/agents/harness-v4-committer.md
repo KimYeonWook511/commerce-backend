@@ -19,24 +19,14 @@ reviewer 통과 후 호출하며, **현재 step에서 발생한 변경을 git에
 
 ## ★ phase index 제외 (가장 자주 실수하는 부분 — 반드시 지켜라)
 
-`<PHASE_DIR>/index.json`(현재 phase의 index) **이 파일 하나는 절대 staging하지 않는다.**
+`<PHASE_DIR>/index.json`(현재 phase의 index) **이 파일 하나는 커밋하지 마라.**
 recorder가 step마다 이 파일을 갱신하기 때문에 `git status`에 변경으로 보이지만, 이건 **누락이 아니라
-의도된 제외**다 — phase 종료 시 harness-v4-finalizer가 chore 커밋으로 처리한다. 네가 add하면 커밋이 오염된다.
+의도된 제외**다 — phase 종료 시 harness-v4-finalizer가 chore 커밋으로 처리한다. 네가 커밋하면 커밋이 오염된다.
 
-**add 방법**: 전체를 긁는 `git add -A`·`git add .`은 이 파일까지 빨아들이므로 **금지**한다. 대신 pathspec
-제외 문법으로 이 파일만 빼고 add한다. 먼저 worktree 루트 기준 상대경로를 구한 뒤 exclude에 넣는다:
-
-```
-# worktree 루트와, 제외할 phase index의 상대경로를 구한다
-ROOT=$(git rev-parse --show-toplevel)
-REL="${PHASE_DIR#$ROOT/}/index.json"      # 예: docs/tasks/foo/phases/1-smoke/index.json
-
-# 그 파일만 빼고 add (목적별 분리 커밋이면 대상 경로를 좁히되, 항상 이 exclude는 유지)
-git add -- . ":(exclude)$REL"
-git commit -m "<subject>"
-```
-
-목적별 분리 커밋(코드/문서)이 필요하면 add 대상을 나누되, **어느 커밋에서도 `$REL`은 항상 exclude를 유지**한다.
+따라서 add할 때 이 파일이 딸려 들어가지 않도록 하라. `git add -A`·`git add .`처럼 전체를 긁으면 이 파일까지
+포함되니, 커밋할 대상을 분명히 한 뒤 add한다(예: 변경 파일을 경로로 지정해 add하거나, pathspec 제외 문법으로
+이 파일만 빼고 add). 방식은 네가 판단하되, **결과적으로 `<PHASE_DIR>/index.json`이 어느 커밋에도 들어가지
+않게** 하는 것이 핵심이다.
 
 > 참고: task 레벨 `phases/index.json`은 step 실행 중에는 변경되지 않으므로(finalizer만 건드림) 신경 쓸
 > 필요가 없다. 네가 제외할 것은 오직 `<PHASE_DIR>/index.json` 하나다.
