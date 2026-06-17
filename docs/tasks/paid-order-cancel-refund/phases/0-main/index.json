@@ -1,0 +1,15 @@
+{
+  "steps": [
+    { "step": 1, "name": "payment-refund-execution", "status": "pending", "summary": null },
+    { "step": 2, "name": "cancel-payment-reconciliation", "status": "pending", "summary": null },
+    { "step": 3, "name": "paid-order-cancel-orchestration", "status": "pending", "summary": null }
+  ],
+  "execution": {
+    "developer_model": "sonnet",
+    "reviewer_model": "opus",
+    "committer_model": "haiku",
+    "push": true
+  },
+  "created_at": "2026-06-17T00:00:00Z",
+  "completed_at": null
+}
