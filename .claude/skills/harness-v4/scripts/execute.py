@@ -3,7 +3,7 @@ from __future__ import annotations
 
 """harness-v4 execute.py — 서브커맨드 모음 (오케스트레이터가 아님).
 
-v2/v3에서 execute.py는 phase를 끝까지 도는 "오케스트레이터"였다. v4에서는 그 역할이
+이 스크립트의 서브커맨드들은 workflow(JS)가 직접 못 하는 shell/git/fs 작업을 대신 수행한다. 오케스트레이션 자체는
 JavaScript workflow(harness-v4-execute)로 옮겨갔고, execute.py는 **workflow 스크립트(JS)가
 직접 못 하는 일(파일시스템·shell 접근)을 agent가 CLI로 호출할 수 있게 노출한 입구 모음**이 된다.
 
@@ -60,6 +60,83 @@ def emit(payload: dict) -> None:
     sys.stdout.flush()
 
 
+_WORKFLOW_ITEMS = [
+    (1, "Explore"),
+    (2, "Discuss"),
+    (3, "Step Design"),
+    (4, "Worktree 생성 및 이동"),
+    (5, "File Drafting"),
+    (6, "Execution"),
+    (7, "PR Review"),
+    (8, "Root Sync"),
+    (9, "Retrospective"),
+]
+
+
+def validate_workflow_checklist(phase_dir: Path) -> dict:
+    """실행 전 게이트: 문서 검토·실행 승인 완료 여부를 강제한다.
+
+    Stage 1~5가 모두 completed이고 Stage 6가 pending/in_progress여야 통과.
+    통과하면 {"ok": True}, 아니면 {"ok": False, "error": ...}를 반환한다.
+    (v2는 SystemExit으로 멈췄으나, v4 preflight는 emit으로 알리고 종료한다.)
+    """
+    checklist_path = phase_dir / "workflow-checklist.json"
+    if not checklist_path.exists():
+        return {"ok": False, "error": f"workflow-checklist.json 없음: {checklist_path}. "
+                "Stage 1~5(Explore~File Drafting)를 마치고 실행 승인을 기록한 checklist를 만든 뒤 실행하라."}
+
+    checklist = read_json(checklist_path)
+    if checklist.get("workflow") != "harness":
+        return {"ok": False, "error": "workflow-checklist.json의 workflow가 'harness'가 아니다."}
+
+    items = checklist.get("items")
+    if not isinstance(items, list) or len(items) != len(_WORKFLOW_ITEMS):
+        return {"ok": False, "error": "workflow-checklist.json은 9개 harness workflow 항목을 가져야 한다."}
+
+    invalid, incomplete = [], []
+    for idx, (order, title) in enumerate(_WORKFLOW_ITEMS):
+        item = items[idx] if idx < len(items) else {}
+        if not isinstance(item, dict) or item.get("order") != order or item.get("title") != title:
+            invalid.append(f"{order}. {title}")
+            continue
+        status = item.get("status")
+        if order <= 5 and status != "completed":
+            incomplete.append(title)
+        if order == 6 and status not in {"pending", "in_progress"}:
+            invalid.append(f"{order}. {title} status must be pending or in_progress")
+
+    if invalid:
+        return {"ok": False, "error": "workflow-checklist.json 항목이 올바르지 않다.", "invalid": invalid}
+    observed = {it.get("order") for it in items if isinstance(it, dict)}
+    if {o for o, _ in _WORKFLOW_ITEMS} != observed:
+        return {"ok": False, "error": "workflow-checklist.json에 누락/중복된 order가 있다."}
+    if incomplete:
+        return {"ok": False, "error": "harness workflow가 실행 승인되지 않았다(Stage 1~5 미완).", "incomplete": incomplete}
+    return {"ok": True}
+
+
+def update_workflow_item(phase_dir: Path, title: str, status: str) -> None:
+    """workflow-checklist.json의 단일 항목 상태를 갱신한다. 파일 없으면 무시.
+
+    Execution(6)을 workflow 기동 시 in_progress, phase 완주 시 completed로 갱신하는 데 쓴다.
+    """
+    checklist_path = phase_dir / "workflow-checklist.json"
+    if not checklist_path.exists():
+        return
+    checklist = read_json(checklist_path)
+    ts = stamp()
+    for item in checklist.get("items", []):
+        if item.get("title") == title:
+            item["status"] = status
+            if status == "completed":
+                item["completed_at"] = ts
+            elif status == "in_progress":
+                item.setdefault("started_at", ts)
+                item.pop("completed_at", None)
+            break
+    write_json(checklist_path, checklist)
+
+
 def resolve_paths(phase_dir_arg: str) -> dict:
     """phase 디렉터리 경로로부터 자주 쓰는 경로들을 계산한다.
 
@@ -109,6 +186,15 @@ def cmd_preflight(args) -> int:
         emit({"ok": False, "error": f"phase index 없음: {p['phase_index']}"})
         return 1
     index = read_json(p["phase_index"])
+
+    # 실행 전 게이트: Stage 1~5 완료 + 실행 승인을 강제한다. 통과 못하면 여기서 멈춘다.
+    gate = validate_workflow_checklist(p["phase_dir"])
+    if not gate["ok"]:
+        emit(gate)
+        return 1
+
+    # 게이트 통과 → Execution(6)을 in_progress로. workflow가 곧 기동된다.
+    update_workflow_item(p["phase_dir"], "Execution", "in_progress")
 
     # hook이 phase별 로그 디렉터리(<phase>/logs)를 찾도록 active-phase 마커를 남긴다.
     # (v3는 execute.py 오케스트레이터가 썼으나, v4는 preflight가 쓴다. hook이 이 마커를 읽는다.)
@@ -287,15 +373,10 @@ def cmd_reset_step(args) -> int:
     write_json(p["phase_index"], index)
     emit({"ok": True, "step": args.step, "status": "pending", "previous_status": prev})
     return 0
-
-
-# ─────────────────────────────────────────────────────────────────────────────
-# finalize — phase 마무리
-# ─────────────────────────────────────────────────────────────────────────────
 def cmd_finalize(args) -> int:
     """completed_at·task index 동기화 + phase index chore 커밋 + 선택적 push.
 
-    finalizer agent가 phase 끝에 호출한다. v2/v3 finalize 로직을 함수형으로 이식.
+    finalizer agent가 phase 끝에 호출한다.
     push 의도는 index.execution.push에서 읽는다(인자 --no-push로도 강제 비활성 가능).
     """
     p = resolve_paths(args.phase_dir)
@@ -305,6 +386,9 @@ def cmd_finalize(args) -> int:
     # completed_at 기록
     index["completed_at"] = stamp()
     write_json(p["phase_index"], index)
+
+    # Execution(6) Stage를 completed로 갱신
+    update_workflow_item(p["phase_dir"], "Execution", "completed")
 
     # task index의 이 phase status=completed 동기화
     _update_task_index(p, "completed")

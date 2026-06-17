@@ -21,6 +21,7 @@ docs/tasks/<task>/
 │   ├── index.json                  # task 레벨: phase 목록과 각 phase status
 │   └── <phase>/                    # 예: 1-domain, 2-api
 │       ├── index.json              # phase 레벨: steps(목차) + execution(설정) + step status
+│       ├── workflow-checklist.json  # 9-Stage 진행 추적 + 실행 전 게이트(preflight가 검사)
 │       ├── step1.md                # step 문서 (구현 지시 + ## Acceptance Criteria)
 │       ├── step2.md
 │       ├── step1-ac-output.json    # (실행 산출) AC 검증 결과 attempts 누적 — reviewer가 읽음
@@ -79,6 +80,41 @@ finalizer가 phase 완료 시 해당 phase status를 `completed`로 동기화한
 > index.json은 **phase 입력 명세서**다(steps 목차 + execution 설정). status만 finalize로 미루지 않고
 > 매 step recorder가 기록하는 이유는, 중단 후 재실행에서 완료 step을 건너뛰려면 디스크 정본이 필요하기 때문이다.
 
+### workflow-checklist.json (9-Stage 진행 + 실행 전 게이트)
+
+`harness` workflow의 9-Stage 진행을 기록한다. phase를 만들 때(Stage 5 File Drafting) 반드시 생성하며,
+항목 제목은 `SKILL.md`의 Workflow 제목과 정확히 일치해야 한다.
+
+```json
+{
+  "workflow": "harness",
+  "status": "drafting",
+  "items": [
+    { "order": 1, "title": "Explore", "status": "completed" },
+    { "order": 2, "title": "Discuss", "status": "completed" },
+    { "order": 3, "title": "Step Design", "status": "completed" },
+    { "order": 4, "title": "Worktree 생성 및 이동", "status": "completed" },
+    { "order": 5, "title": "File Drafting", "status": "completed" },
+    { "order": 6, "title": "Execution", "status": "pending" },
+    { "order": 7, "title": "PR Review", "status": "pending" },
+    { "order": 8, "title": "Root Sync", "status": "pending" },
+    { "order": 9, "title": "Retrospective", "status": "pending" }
+  ]
+}
+```
+
+**실행 전 게이트**: `preflight`가 이 파일을 검사한다. **Stage 1~5가 모두 `completed`이고 Stage 6가
+`pending`/`in_progress`가 아니면 preflight가 거부**하여(`{"ok": false, ...}`) workflow가 기동되지 않는다.
+즉 탐색·논의·설계·문서작성을 건너뛰고 곧바로 구현에 돌입하는 것을 기계적으로 막는다.
+
+필드 규칙:
+- `workflow`: 항상 `harness`
+- `items`: `SKILL.md`의 1~9번 Stage 순서·제목을 그대로 사용(order/title 일치 필수).
+- `Execution`(6)은 workflow 기동 시 `in_progress`로, phase 완주 시 `completed`로 갱신한다.
+- `PR Review`(7)·`Root Sync`(8)·`Retrospective`(9)는 workflow 바깥에서 일어나며 agent가 수동으로 갱신한다.
+  단 8·9는 7이 `completed`된 뒤에만 갱신한다(리뷰 코멘트 부재를 7 완료로 보지 않는다).
+- 이 파일은 로컬 추적용이며 커밋하지 않는다(`.gitignore` 대상).
+
 ---
 
 ## 3. step 문서와 Acceptance Criteria 스키마
@@ -110,8 +146,7 @@ test -f src/main/java/legacy/OldMoney.java
 - 둘째 명령 `test -f ...OldMoney.java` + `# expect: 1`: **파일이 없어야** ok
   (있으면 `test -f`가 0을 반환하는데 기대는 1이므로 실패). "이 파일이 삭제됐어야 한다"를 표현.
 
-> v3는 "exit 0 = 성공"을 하드코딩해 위 둘째 같은 "없어야 한다" 류 AC를 표현하지 못했다.
-> v4는 `# expect:`로 기대 exit를 명시해 이 함정을 해소한다.
+> `# expect:`로 기대 exit를 명시하면 위 둘째처럼 "없어야 한다"(exit 1 기대) 류 AC도 표현된다.
 
 ---
 
@@ -200,5 +235,5 @@ workflow(JS)는 각 agent의 반환 JSON으로 분기한다. agent는 **마지�
 
 - developer/recorder/committer/finalizer는 자기 영역 밖의 정본을 건드리지 않는다(PreToolUse 정책으로도 강제).
 - 특히 phase index는 committer가 staging하지 않는다 — finalizer가 phase 끝에 chore 커밋으로 일괄 처리한다.
-- **`stepN-output.json`은 만들지 않는다.** v2/v3는 남겼으나(그땐 검증 로직이 읽었음), v4는 결과를 agent
+- **`stepN-output.json`은 만들지 않는다.** 결과를 agent
   반환값으로 받고 검증은 ac-output.json·git·log·index가 대신하므로 읽는 주체가 없다(dead artifact 회피).

@@ -9,6 +9,17 @@
 자동 완주시킨다. step마다 구현→검증→검토→커밋→기록이 돌고, 모든 step이 끝나면 phase를 마무리(finalize)한다.
 **한 번 기동하면 사람 개입 없이 phase 끝까지** 간다(막히면 멈추고 보고).
 
+### 전체 워크플로(9-Stage) 속에서의 위치
+
+harness skill은 v2부터 이어온 **9-Stage 워크플로** 전체를 담는다(SKILL.md 참고):
+Explore → Discuss → Step Design → Worktree → File Drafting → **Execution** → PR Review → Root Sync → Retrospective.
+이 문서가 설명하는 "phase 자동 실행"은 그중 **Stage 6(Execution)** 이다. v2/v3와 달라진 건 Stage 6의 실행
+메커니즘뿐이고(아래 9장 버전사), 나머지 Stage는 v2와 거의 같다.
+
+Stage 1~5(탐색·논의·설계·worktree·문서작성)를 건너뛰고 곧장 구현에 돌입하지 못하도록, **preflight가
+workflow-checklist.json을 검사하는 게이트**가 있다(아래 4장·7장). Stage 1~5가 모두 completed가 아니면
+preflight가 거부해 workflow가 아예 기동되지 않는다.
+
 ## 2. 구성 요소
 
 ```
@@ -17,7 +28,7 @@
 │   ├── SKILL.md                    # 진입점: "harness로 phase 실행" → preflight → workflow 기동
 │   ├── references/phase-files.md   # 파일 구조·AC 스키마·반환 JSON 계약
 │   └── scripts/
-│       ├── execute.py              # 서브커맨드: preflight/build-context/verify-ac/record-step/reset-step/finalize
+│       ├── execute.py              # 서브커맨드: preflight(게이트+args생성)/build-context/verify-ac/record-step/reset-step/finalize
 │       ├── acceptance_check.py     # AC 실행·expectExit 비교·attempts 누적
 │       ├── git_ops.py, step_context.py
 │       ├── transcript_formatter.py, format_events.py   # transcript → 사람용 로그
@@ -49,8 +60,10 @@
 ```
 사람: "이 phase를 harness로 실행"
   → SKILL.md 자동 invoke
-  → execute.py preflight <phase>   (index.json 읽어 workflow args(JSON) 생성 + active-phase 마커 기록)
-  → /harness-v4-execute <args>     (plan 승인 후 백그라운드 기동)
+  → [메인 세션이 직접] execute.py preflight <phase>
+        - workflow-checklist.json 게이트 검사(Stage 1~5 completed 아니면 거부하고 중단)
+        - 통과 시: index.json 읽어 workflow args(JSON) 생성 + active-phase 마커 + Execution=in_progress
+  → [메인 세션이 직접] /harness-v4-execute <args>     (plan 승인 후 백그라운드 기동)
         │
         │  phase('Steps')
         │  for step in args.steps:
@@ -62,10 +75,16 @@
         │
         │  모든 step 완료 시:
         │  phase('Finalize')
-        │  → finalizer (completed_at·task index·chore 커밋·push)
+        │  → [workflow가 띄운 finalizer agent가] execute.py finalize
+        │       completed_at·task index·chore 커밋·push·Execution=completed
         │
   → outcome 반환: completed | blocked | error
 ```
+
+**호출 주체 비대칭(중요)**: `preflight`는 **메인 세션의 Claude가 workflow 바깥에서** 직접 부른다(workflow에
+넘길 args를 만드는 준비라, workflow보다 먼저 와야 하므로). `finalize`는 **workflow가 끝에 띄운 finalizer
+agent가 workflow 안에서** 부른다(JS는 git을 직접 못 만지므로 agent가 대행). workflow가 자기 자신을
+기동하는 preflight를 부를 수는 없기에(닭-달걀), 입구(preflight)는 바깥, 마무리(finalize)는 안이 된다.
 
 진행 관찰은 `/workflows` 런타임 뷰. 사람용 포맷 로그는 `<phase>/logs/<role>.log`에 별도로 쌓인다.
 
@@ -102,7 +121,7 @@ recorder가 그 step을 `completed`로 phase index에 기록. → 다음 step으
 **요약**: 재시도하는 것 = AC 실패 / reviewer retryable / 파싱 실패 (전부 developer부터 다시). 즉시 멈추는 것 =
 developer blocked·error / reviewer blocked. 어느 경우든 **completed로 끝나지 않으면 결국 멈추고 사람에게 보고**한다.
 
-## 6. 재개 정책 (v2 방식: pending-only)
+## 6. 재개 정책 (pending-only)
 
 phase를 재실행하면 workflow는 **`pending`인 step만 실행**한다:
 - `completed` step → 건너뜀 (이미 끝남. 재실행 안전성)
@@ -128,11 +147,16 @@ JS 변수·런타임 저널은 실행 경계를 못 넘으므로, 어디까지 �
 |---|---|---|---|
 | `phases/<phase>/index.json` | recorder(step status)·finalizer(completed_at) | preflight·재실행 시 skip 판단 | finalizer가 chore 커밋 |
 | `phases/index.json` (task 레벨) | finalizer(phase status 동기화) | — | finalizer가 chore 커밋 |
+| `workflow-checklist.json` | File Drafting(생성)·preflight/finalize(Execution 갱신)·사람(7~9 Stage) | **preflight(실행 전 게이트)** | 커밋 안 함(.gitignore) |
 | `step{N}-ac-output.json` | verify-ac(attempt마다 append) | **reviewer**(자기보고 대조) | 커밋 안 함(감사용) |
 | `logs/<role>.log` | 로깅 hook | 사람(사후·회고) | 커밋 안 함 |
 | 코드·task 문서 | developer | reviewer | committer가 목적별 커밋 |
 
-- **output.json은 만들지 않는다.** v2/v3는 step{N}-output.json을 남겼으나(그땐 검증 로직이 읽었음),
+- **workflow-checklist.json = 9-Stage 진행 추적 + 실행 전 게이트.** preflight가 이걸 읽어 **Stage 1~5가 모두
+  completed이고 Stage 6가 pending/in_progress**인지 검사한다. 아니면 preflight가 `{"ok":false}`로 거부해
+  workflow가 기동되지 않는다(탐색·설계 없이 바로 구현 돌입 방지 — 핵심 안전장치). Execution(6) status는
+  preflight가 `in_progress`, finalize가 `completed`로 자동 갱신한다. 7~9 Stage는 사람이 수동 갱신.
+- **output.json은 만들지 않는다.**
   v4는 결과를 반환값으로 받고 검증은 ac-output.json·git·log·index가 대신하므로 읽는 주체가 없다.
 - **ac-output.json은 유지.** reviewer가 developer의 AC 자기보고가 정본과 맞는지 대조하는 데 읽는다(자기보고 가드).
 - 타임스탬프는 KST(+09:00).
