@@ -25,14 +25,16 @@ public interface JpaOrderRepository extends JpaRepository<Order, Long> {
 		""")
 	Optional<Order> findByIdForUpdate(@Param("id") Long id);
 
+	// 주문 행 하나만 잠근다(단일 행 락). orderItems는 호출처에서 aggregate를 통해 lazy 로드한다.
+	// join fetch + FOR UPDATE는 락이 자식(order_item)까지 plan·인덱스 순서로 번지고 distinct+FOR UPDATE의
+	// SQL 거동 의존을 낳으므로 쓰지 않는다(ADR-L6, 데드락 검증 후속 #259).
 	@Lock(LockModeType.PESSIMISTIC_WRITE)
 	@Query("""
-		select distinct o from Order o
-		join fetch o.orderItems
+		select o from Order o
 		where o.id = :orderId
 		and o.memberId = :memberId
 		""")
-	Optional<Order> findByIdAndMemberIdForUpdateWithItems(
+	Optional<Order> findByIdAndMemberIdForUpdate(
 		@Param("orderId") Long orderId,
 		@Param("memberId") Long memberId
 	);

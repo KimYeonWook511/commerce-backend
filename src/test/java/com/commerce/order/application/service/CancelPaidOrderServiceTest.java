@@ -60,7 +60,7 @@ class CancelPaidOrderServiceTest {
 		Payment approvePayment = createApproveSucceededPayment(order.getId());
 		Payment cancelPayment = createCancelRequestedPayment(order.getId());
 
-		given(orderRepository.findByIdAndMemberIdForUpdateWithItems(100L, 1L)).willReturn(Optional.of(order));
+		given(orderRepository.findByIdAndMemberIdForUpdate(100L, 1L)).willReturn(Optional.of(order));
 		given(paymentRepository.existsUnconfirmedApproveByOrderId(100L)).willReturn(false);
 		given(paymentRepository.findApproveSucceededByOrderId(100L)).willReturn(Optional.of(approvePayment));
 		given(getOrCreateCancelPaymentService.getOrCreate(anyLong(), anyString(), any(), anyString(), anyInt()))
@@ -89,7 +89,7 @@ class CancelPaidOrderServiceTest {
 		Payment approvePayment = createApproveSucceededPayment(100L);
 		Payment cancelPayment = createCancelRequestedPayment(100L);
 
-		given(orderRepository.findByIdAndMemberIdForUpdateWithItems(100L, 1L)).willReturn(Optional.of(order));
+		given(orderRepository.findByIdAndMemberIdForUpdate(100L, 1L)).willReturn(Optional.of(order));
 		given(paymentRepository.existsUnconfirmedApproveByOrderId(100L)).willReturn(false);
 		given(paymentRepository.findApproveSucceededByOrderId(100L)).willReturn(Optional.of(approvePayment));
 		given(getOrCreateCancelPaymentService.getOrCreate(anyLong(), anyString(), any(), anyString(), anyInt()))
@@ -108,7 +108,7 @@ class CancelPaidOrderServiceTest {
 	@Test
 	void cancelPaidOrder_whenOrderNotFound_throwException() {
 		// given
-		given(orderRepository.findByIdAndMemberIdForUpdateWithItems(100L, 1L)).willReturn(Optional.empty());
+		given(orderRepository.findByIdAndMemberIdForUpdate(100L, 1L)).willReturn(Optional.empty());
 
 		// when & then
 		assertThatThrownBy(() -> cancelPaidOrderService.cancelPaidOrder(1L, 100L))
@@ -125,7 +125,7 @@ class CancelPaidOrderServiceTest {
 		ReflectionTestUtils.setField(order, "id", 100L);
 		// INIT 상태는 CancelOrderService가 처리하므로 이 service에 들어오면 안 됨
 
-		given(orderRepository.findByIdAndMemberIdForUpdateWithItems(100L, 1L)).willReturn(Optional.of(order));
+		given(orderRepository.findByIdAndMemberIdForUpdate(100L, 1L)).willReturn(Optional.of(order));
 
 		// when & then
 		assertThatThrownBy(() -> cancelPaidOrderService.cancelPaidOrder(1L, 100L))
@@ -139,7 +139,7 @@ class CancelPaidOrderServiceTest {
 	void cancelPaidOrder_whenUnconfirmedApproveExists_throwException() {
 		// given
 		Order order = createPaidOrderWithItems();
-		given(orderRepository.findByIdAndMemberIdForUpdateWithItems(100L, 1L)).willReturn(Optional.of(order));
+		given(orderRepository.findByIdAndMemberIdForUpdate(100L, 1L)).willReturn(Optional.of(order));
 		given(paymentRepository.existsUnconfirmedApproveByOrderId(100L)).willReturn(true);
 
 		// when & then
@@ -154,7 +154,7 @@ class CancelPaidOrderServiceTest {
 	void cancelPaidOrder_whenApproveSucceededNotFound_throwException() {
 		// given
 		Order order = createPaidOrderWithItems();
-		given(orderRepository.findByIdAndMemberIdForUpdateWithItems(100L, 1L)).willReturn(Optional.of(order));
+		given(orderRepository.findByIdAndMemberIdForUpdate(100L, 1L)).willReturn(Optional.of(order));
 		given(paymentRepository.existsUnconfirmedApproveByOrderId(100L)).willReturn(false);
 		given(paymentRepository.findApproveSucceededByOrderId(100L)).willReturn(Optional.empty());
 
@@ -173,7 +173,7 @@ class CancelPaidOrderServiceTest {
 		Payment approvePayment = createApproveSucceededPayment(order.getId());
 		Payment cancelPayment = createCancelRequestedPayment(order.getId());
 
-		given(orderRepository.findByIdAndMemberIdForUpdateWithItems(100L, 1L)).willReturn(Optional.of(order));
+		given(orderRepository.findByIdAndMemberIdForUpdate(100L, 1L)).willReturn(Optional.of(order));
 		given(paymentRepository.existsUnconfirmedApproveByOrderId(100L)).willReturn(false);
 		given(paymentRepository.findApproveSucceededByOrderId(100L)).willReturn(Optional.of(approvePayment));
 		given(getOrCreateCancelPaymentService.getOrCreate(anyLong(), anyString(), any(), anyString(), anyInt()))

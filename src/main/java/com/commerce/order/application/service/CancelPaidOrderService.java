@@ -44,7 +44,8 @@ public class CancelPaidOrderService {
 	 */
 	@Transactional
 	public CancelPaidOrderTransactionResult cancelPaidOrder(Long memberId, Long orderId) {
-		Order order = orderRepository.findByIdAndMemberIdForUpdateWithItems(orderId, memberId)
+		// 주문 행만 잠근다(단일 행 락, ADR-L6). orderItems는 아래에서 aggregate를 통해 lazy 로드한다.
+		Order order = orderRepository.findByIdAndMemberIdForUpdate(orderId, memberId)
 			.orElseThrow(() -> new OrderException(OrderErrorCode.ORDER_NOT_FOUND));
 
 		// PAID 상태 검증: 이 service는 PAID 전용. INIT은 CancelOrderService 경유.
