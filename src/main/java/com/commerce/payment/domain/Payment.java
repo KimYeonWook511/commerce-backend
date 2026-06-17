@@ -191,6 +191,28 @@ public class Payment extends BaseTimeEntity {
 		return true;
 	}
 
+	/**
+	 * CANCEL 결제 전용 escalation. UNKNOWN/REQUESTED 외에 FAILED도 escalation 가능하다.
+	 * CANCEL FAILED는 확정적 환불 실패이므로 자동 재시도 없이 사람에게 넘긴다(ADR-L4).
+	 * 이미 escalation됐으면 false를 반환한다(멱등/skip).
+	 * 통지 주체 여부는 save 성공(@Version)으로 최종 확정한다.
+	 */
+	public boolean escalateCancelPayment(LocalDateTime now) {
+		if (this.type != PaymentType.CANCEL) {
+			throw new PaymentException(PaymentErrorCode.PAYMENT_STATUS_TRANSITION_NOT_ALLOWED);
+		}
+		if (this.status != PaymentStatus.UNKNOWN
+			&& this.status != PaymentStatus.REQUESTED
+			&& this.status != PaymentStatus.FAILED) {
+			return false;
+		}
+		if (this.escalatedAt != null) {
+			return false;
+		}
+		this.escalatedAt = now;
+		return true;
+	}
+
 	public void verifyApprovedResponse(String responseMerchantPayKey, int responseTotalAmount) {
 		if (!this.merchantPayKey.equals(responseMerchantPayKey)) {
 			throw new PaymentException(PaymentErrorCode.PAYMENT_MERCHANT_KEY_MISMATCH);

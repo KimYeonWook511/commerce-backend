@@ -39,4 +39,10 @@ public interface PaymentRepository {
 
 	// escalation 후보: escalatedAt IS NULL이고 6시간 초과 UNKNOWN/REQUESTED APPROVE 건 (대사 스캔 윈도우 밖).
 	List<Payment> findEscalationCandidates(LocalDateTime escalationCutoff, Pageable pageable);
+
+	// CANCEL 대사 후보: APPROVE 스캔과 동일 cutoff·페이징 정책. UNKNOWN은 staleCutoff(1분), REQUESTED는 requestedStaleCutoff(15분) 기준 (ADR-L4).
+	List<Payment> findStaleCancelPaymentsForReconciliation(LocalDateTime staleCutoff, LocalDateTime requestedStaleCutoff, LocalDateTime escalationCutoff, Pageable pageable);
+
+	// CANCEL escalation 후보: escalatedAt IS NULL이고 6시간 초과 UNKNOWN/REQUESTED CANCEL 건 + FAILED CANCEL(확정적 환불 실패).
+	List<Payment> findCancelEscalationCandidates(LocalDateTime escalationCutoff, Pageable pageable);
 }

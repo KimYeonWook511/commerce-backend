@@ -80,4 +80,43 @@ public interface JpaPaymentRepository extends JpaRepository<Payment, Long> {
 		Pageable pageable
 	);
 
+	// CANCEL 대사 후보: APPROVE 스캔과 동일 cutoff·페이징 정책을 따른다 (ADR-L4).
+	// UNKNOWN은 respondedAt, REQUESTED는 createdAt 기준으로 stale 윈도우 적용.
+	@Query("""
+		SELECT p FROM Payment p
+		WHERE p.type = 'CANCEL'
+		  AND (
+		    (p.status = 'UNKNOWN'    AND p.respondedAt < :staleCutoff          AND p.respondedAt > :escalationCutoff)
+		    OR
+		    (p.status = 'REQUESTED' AND p.createdAt   < :requestedStaleCutoff AND p.createdAt   > :escalationCutoff)
+		  )
+		ORDER BY p.id ASC
+		""")
+	List<Payment> findStaleCancelPaymentsForReconciliation(
+		@Param("staleCutoff") LocalDateTime staleCutoff,
+		@Param("requestedStaleCutoff") LocalDateTime requestedStaleCutoff,
+		@Param("escalationCutoff") LocalDateTime escalationCutoff,
+		Pageable pageable
+	);
+
+	// CANCEL escalation 후보: escalatedAt IS NULL이고 6시간 초과 UNKNOWN/REQUESTED CANCEL 건 (대사 스캔 윈도우 밖).
+	// FAILED CANCEL도 escalation 대상(ADR-L4: 확정적 환불 실패는 사람에게 넘긴다).
+	@Query("""
+		SELECT p FROM Payment p
+		WHERE p.type = 'CANCEL'
+		  AND p.escalatedAt IS NULL
+		  AND (
+		    (p.status = 'UNKNOWN'    AND p.respondedAt < :escalationCutoff)
+		    OR
+		    (p.status = 'REQUESTED' AND p.createdAt   < :escalationCutoff)
+		    OR
+		    (p.status = 'FAILED')
+		  )
+		ORDER BY p.id ASC
+		""")
+	List<Payment> findCancelEscalationCandidates(
+		@Param("escalationCutoff") LocalDateTime escalationCutoff,
+		Pageable pageable
+	);
+
 }
