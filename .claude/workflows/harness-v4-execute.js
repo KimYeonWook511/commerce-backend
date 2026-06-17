@@ -63,17 +63,23 @@ async function callAgent(agentType, model, prompt, schemaKey, label, phaseName) 
   return await agent(prompt, opts);
 }
 
-// agent 반환을 객체로. 이미 객체면 그대로, 문자열이면 코드펜스·앞뒤설명 벗겨 JSON.parse.
+// agent 반환을 객체로. 이미 객체면 그대로, 문자열이면 3단계 fallback으로 JSON.parse.
 function parseAgentJson(raw) {
   if (raw && typeof raw === 'object') return raw;
   if (typeof raw !== 'string') return null;
-  let text = raw.trim();
+  const text = raw.trim();
+  // 1) 전체 직접 파싱
+  try { return JSON.parse(text); } catch {}
+  // 2) 코드펜스 추출 후 파싱
   const fence = text.match(/```(?:json)?\s*([\s\S]*?)```/);
-  if (fence) text = fence[1].trim();
+  if (fence) { try { return JSON.parse(fence[1].trim()); } catch {} }
+  // 3) 첫 { ~ 마지막 } 슬라이싱 후 파싱
   const first = text.indexOf('{');
   const last = text.lastIndexOf('}');
-  if (first !== -1 && last !== -1 && last > first) text = text.slice(first, last + 1);
-  try { return JSON.parse(text); } catch { return null; }
+  if (first !== -1 && last !== -1 && last > first) {
+    try { return JSON.parse(text.slice(first, last + 1)); } catch {}
+  }
+  return null;
 }
 
 // ── 프롬프트 빌더 ───────────────────────────────────────────────
