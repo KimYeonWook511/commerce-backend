@@ -47,7 +47,7 @@ def extract_acceptance_commands(step_text: str) -> list[dict]:
         return []
 
     commands: list[dict] = []
-    for block in re.findall(r"```(?:bash|sh)\n(.*?)```", match.group("body"), re.DOTALL):
+    for block in re.findall(r"```(?:bash|sh)\r?\n(.*?)```", match.group("body"), re.DOTALL):
         pending_expect = DEFAULT_EXPECT_EXIT
         has_pending = False
         for raw_line in block.splitlines():
