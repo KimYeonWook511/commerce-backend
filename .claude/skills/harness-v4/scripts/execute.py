@@ -405,7 +405,9 @@ def cmd_finalize(args) -> int:
     committed = False
     if git_ops.run_git(root, "diff", "--cached", "--quiet").returncode != 0:
         message = f"chore: {p['phase_name']} 실행 상태를 기록한다"
-        r = git_ops.run_git(root, "commit", "-m", message)
+        r = git_ops.run_git(root, "commit", "-m", message, "--",
+                            f"{p['phase_relpath']}/index.json",
+                            f"{p['task_phases_relpath']}/index.json")
         if r.returncode != 0:
             emit({"ok": False, "error": f"실행 상태 커밋 실패: {r.stderr.strip()}"})
             return 1
