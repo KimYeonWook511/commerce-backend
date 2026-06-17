@@ -25,6 +25,18 @@ public interface JpaOrderRepository extends JpaRepository<Order, Long> {
 		""")
 	Optional<Order> findByIdForUpdate(@Param("id") Long id);
 
+	@Lock(LockModeType.PESSIMISTIC_WRITE)
+	@Query("""
+		select distinct o from Order o
+		join fetch o.orderItems
+		where o.id = :orderId
+		and o.memberId = :memberId
+		""")
+	Optional<Order> findByIdAndMemberIdForUpdateWithItems(
+		@Param("orderId") Long orderId,
+		@Param("memberId") Long memberId
+	);
+
 	@Query("""
 		select o
 		from Order o

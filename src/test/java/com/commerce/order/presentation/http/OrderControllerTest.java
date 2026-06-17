@@ -21,7 +21,7 @@ import org.springframework.test.web.servlet.MockMvc;
 import com.commerce.auth.application.usecase.TokenAuthenticationUseCase;
 import com.commerce.auth.application.dto.TokenAuthenticationResult;
 import com.commerce.common.config.WebConfig;
-import com.commerce.order.application.service.CancelOrderService;
+import com.commerce.order.application.usecase.CancelOrderUseCase;
 import com.commerce.order.application.usecase.CreateOrderUseCase;
 import com.commerce.order.application.dto.OrderCreateCommand;
 import com.commerce.order.application.dto.OrderCancelResult;
@@ -49,7 +49,7 @@ class OrderControllerTest {
 	private CreateOrderUseCase createOrderUseCase;
 
 	@MockitoBean
-	private CancelOrderService cancelOrderService;
+	private CancelOrderUseCase cancelOrderUseCase;
 
 	@MockitoBean
 	private TokenAuthenticationUseCase tokenAuthenticationUseCase;
@@ -114,7 +114,7 @@ class OrderControllerTest {
 	@Test
 	void cancelOrder_whenValidRequest_returnOk() throws Exception {
 		stubForToken();
-		given(cancelOrderService.cancelOrder(anyLong(), anyLong()))
+		given(cancelOrderUseCase.cancel(anyLong(), anyLong()))
 			.willReturn(OrderCancelResult.builder()
 				.orderId(1L)
 				.status(OrderStatus.CANCELED)

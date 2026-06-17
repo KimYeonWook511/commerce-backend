@@ -48,10 +48,12 @@ public class RefundExecutionUseCase {
 	 *
 	 * @param cancelPayment 환불 의도로 영속된 CANCEL 결제
 	 * @param pgCanceller   PG 취소 호출 콜백
+	 * @return PG 취소 결과 (호출자가 refundStatus 산출에 사용)
 	 */
-	public void execute(Payment cancelPayment, PgCanceller pgCanceller) {
+	public CancelOutcome execute(Payment cancelPayment, PgCanceller pgCanceller) {
 		if (cancelPayment.getStatus() != PaymentStatus.REQUESTED) {
-			return;
+			// 이미 종착/처리됐으므로 처리 중으로 반환 (대사가 최종 상태를 결정)
+			return CancelOutcome.processing();
 		}
 
 		LocalDateTime now = LocalDateTime.now();
@@ -62,7 +64,7 @@ public class RefundExecutionUseCase {
 			log.warn("환불 PG 취소 호출 실패 merchantPayKey={} pgPaymentId={}",
 				cancelPayment.getMerchantPayKey(), cancelPayment.getPgPaymentId(), ex);
 			markUnknownSkippable(cancelPayment, "PG 취소 호출 실패: " + ex.getMessage(), now);
-			return;
+			return CancelOutcome.unknown("PG 취소 호출 실패: " + ex.getMessage());
 		}
 
 		switch (outcome.status()) {
@@ -71,6 +73,7 @@ public class RefundExecutionUseCase {
 			case FAILED -> failSkippable(cancelPayment, outcome, now);
 			case UNKNOWN -> markUnknownSkippable(cancelPayment, outcome.failDetail(), now);
 		}
+		return outcome;
 	}
 
 	private void succeedSkippable(Payment cancelPayment, LocalDateTime respondedAt) {

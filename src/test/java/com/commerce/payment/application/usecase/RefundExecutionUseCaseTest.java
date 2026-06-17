@@ -1,5 +1,6 @@
 package com.commerce.payment.application.usecase;
 
+import static org.assertj.core.api.Assertions.assertThat;
 import static org.mockito.ArgumentMatchers.any;
 import static org.mockito.ArgumentMatchers.eq;
 import static org.mockito.BDDMockito.given;
@@ -45,17 +46,18 @@ class RefundExecutionUseCaseTest {
 	@InjectMocks
 	private RefundExecutionUseCase refundExecutionUseCase;
 
-	@DisplayName("CANCEL REQUESTED 상태에서 PG 취소 성공 시 succeed 호출")
+	@DisplayName("CANCEL REQUESTED 상태에서 PG 취소 성공 시 succeed 호출 후 SUCCESS 반환")
 	@Test
-	void execute_whenPgSucceeds_callsSucceed() {
+	void execute_whenPgSucceeds_callsSucceedAndReturnsSuccess() {
 		// given
 		Payment cancelPayment = Payment.createCancelRequested(1L, "PAY-1", "pg-id", 1000, PaymentProvider.NAVERPAY);
 		given(pgCanceller.cancel(eq(cancelPayment), any())).willReturn(CancelOutcome.success());
 
 		// when
-		refundExecutionUseCase.execute(cancelPayment, pgCanceller);
+		CancelOutcome result = refundExecutionUseCase.execute(cancelPayment, pgCanceller);
 
 		// then
+		assertThat(result.status()).isEqualTo(CancelOutcome.Status.SUCCESS);
 		then(succeedCancelPaymentService).should().succeed(
 			eq("PAY-1"), eq(PaymentProvider.NAVERPAY), eq("pg-id"), any()
 		);
@@ -63,17 +65,18 @@ class RefundExecutionUseCaseTest {
 		then(markUnknownCancelPaymentService).should(never()).markUnknown(any(), any(), any(), any(), any());
 	}
 
-	@DisplayName("CANCEL REQUESTED 상태에서 PG 취소 처리중이면 no-op")
+	@DisplayName("CANCEL REQUESTED 상태에서 PG 취소 처리중이면 no-op 후 PROCESSING 반환")
 	@Test
-	void execute_whenPgProcessing_noOp() {
+	void execute_whenPgProcessing_noOpAndReturnsProcessing() {
 		// given
 		Payment cancelPayment = Payment.createCancelRequested(1L, "PAY-1", "pg-id", 1000, PaymentProvider.NAVERPAY);
 		given(pgCanceller.cancel(eq(cancelPayment), any())).willReturn(CancelOutcome.processing());
 
 		// when
-		refundExecutionUseCase.execute(cancelPayment, pgCanceller);
+		CancelOutcome result = refundExecutionUseCase.execute(cancelPayment, pgCanceller);
 
 		// then
+		assertThat(result.status()).isEqualTo(CancelOutcome.Status.PROCESSING);
 		then(succeedCancelPaymentService).should(never()).succeed(any(), any(), any(), any());
 		then(failCancelPaymentService).should(never()).fail(any(), any(), any(), any(), any(), any());
 		then(markUnknownCancelPaymentService).should(never()).markUnknown(any(), any(), any(), any(), any());
@@ -116,17 +119,18 @@ class RefundExecutionUseCaseTest {
 		then(failCancelPaymentService).should(never()).fail(any(), any(), any(), any(), any(), any());
 	}
 
-	@DisplayName("CANCEL이 REQUESTED가 아니면 PG 호출 없이 no-op (멱등)")
+	@DisplayName("CANCEL이 REQUESTED가 아니면 PG 호출 없이 PROCESSING 반환 (멱등)")
 	@Test
-	void execute_whenCancelNotRequested_skipsPgCall() {
+	void execute_whenCancelNotRequested_skipsPgCallAndReturnsProcessing() {
 		// given: CANCEL을 SUCCEEDED 상태로 전이시킨다
 		Payment cancelPayment = Payment.createCancelRequested(1L, "PAY-1", "pg-id", 1000, PaymentProvider.NAVERPAY);
 		cancelPayment.succeed(LocalDateTime.now());
 
 		// when
-		refundExecutionUseCase.execute(cancelPayment, pgCanceller);
+		CancelOutcome result = refundExecutionUseCase.execute(cancelPayment, pgCanceller);
 
 		// then
+		assertThat(result.status()).isEqualTo(CancelOutcome.Status.PROCESSING);
 		then(pgCanceller).should(never()).cancel(any(), any());
 		then(succeedCancelPaymentService).should(never()).succeed(any(), any(), any(), any());
 	}

@@ -32,6 +32,9 @@ public interface PaymentRepository {
 	// APPROVE 타입 UNKNOWN 결제가 있는 주문은 reserve/approve 차단
 	boolean existsUnknownByOrderId(Long orderId);
 
+	// APPROVE 타입 미확정(UNKNOWN/REQUESTED) 결제가 있는 주문은 환불 불가(PG 상태 불확실)
+	boolean existsUnconfirmedApproveByOrderId(Long orderId);
+
 	boolean existsApprovedByOrderId(Long orderId);
 
 	// APPROVE 대사 후보: UNKNOWN은 staleCutoff(1분), REQUESTED는 requestedStaleCutoff(15분)보다 오래됐고 escalationCutoff(6시간)보다 최근인 건.

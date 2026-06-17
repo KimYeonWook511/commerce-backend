@@ -14,7 +14,7 @@ import com.commerce.security.annotation.AuthenticatedMemberId;
 import com.commerce.common.ApiResponse;
 import com.commerce.common.exception.CommonErrorCode;
 import com.commerce.common.exception.CommonException;
-import com.commerce.order.application.service.CancelOrderService;
+import com.commerce.order.application.usecase.CancelOrderUseCase;
 import com.commerce.order.application.usecase.CreateOrderUseCase;
 import com.commerce.order.application.dto.OrderCreateCommand;
 import com.commerce.order.application.dto.OrderCreateItem;
@@ -31,7 +31,7 @@ import lombok.RequiredArgsConstructor;
 public class OrderController {
 
 	private final CreateOrderUseCase createOrderUseCase;
-	private final CancelOrderService cancelOrderService;
+	private final CancelOrderUseCase cancelOrderUseCase;
 
 	@PostMapping
 	public ResponseEntity<ApiResponse<OrderCreateResult>> createOrder(
@@ -64,7 +64,7 @@ public class OrderController {
 		@AuthenticatedMemberId Long memberId,
 		@PathVariable Long orderId
 	) {
-		OrderCancelResult result = cancelOrderService.cancelOrder(memberId, orderId);
+		OrderCancelResult result = cancelOrderUseCase.cancel(memberId, orderId);
 		return ResponseEntity.status(HttpStatus.OK).body(ApiResponse.of(result));
 	}
 }

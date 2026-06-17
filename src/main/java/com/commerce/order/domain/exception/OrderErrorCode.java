@@ -10,7 +10,9 @@ public enum OrderErrorCode implements ErrorCode {
 	ORDER_IDEMPOTENCY_IN_PROGRESS(HttpStatus.CONFLICT, "ORDER-409-1", "주문 생성이 이미 처리 중입니다. 잠시 후 다시 시도해주세요."),
 	ORDER_CANCEL_NOT_ALLOWED(HttpStatus.CONFLICT, "ORDER-409-2", "주문을 취소할 수 없습니다"),
 	ORDER_PAID_NOT_ALLOWED(HttpStatus.CONFLICT, "ORDER-409-3", "주문 결제 완료로 변경할 수 없습니다"),
-	ORDER_PAYMENT_NOT_ALLOWED(HttpStatus.CONFLICT, "ORDER-409-4", "주문 결제를 진행할 수 없습니다");
+	ORDER_PAYMENT_NOT_ALLOWED(HttpStatus.CONFLICT, "ORDER-409-4", "주문 결제를 진행할 수 없습니다"),
+	ORDER_REFUND_NOT_AVAILABLE(HttpStatus.CONFLICT, "ORDER-409-5", "결제 확인 중인 주문은 지금 취소할 수 없습니다. 잠시 후 다시 시도해 주세요."),
+	ORDER_REFUND_TARGET_NOT_FOUND(HttpStatus.INTERNAL_SERVER_ERROR, "ORDER-500-1", "환불 대상 결제를 찾을 수 없습니다");
 
 	private final HttpStatus status;
 	private final String code;

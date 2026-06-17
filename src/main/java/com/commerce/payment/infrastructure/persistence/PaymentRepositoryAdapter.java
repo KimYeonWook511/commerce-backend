@@ -123,6 +123,11 @@ public class PaymentRepositoryAdapter implements PaymentRepository {
 	}
 
 	@Override
+	public boolean existsUnconfirmedApproveByOrderId(Long orderId) {
+		return jpaPaymentRepository.existsUnconfirmedApproveByOrderId(orderId);
+	}
+
+	@Override
 	public boolean existsApprovedByOrderId(Long orderId) {
 		return jpaPaymentRepository.existsByOrderIdAndTypeAndStatus(
 			orderId, PaymentType.APPROVE, PaymentStatus.SUCCEEDED

@@ -89,7 +89,7 @@ public class Order extends BaseTimeEntity {
 	}
 
 	public void cancel() {
-		if (this.status != OrderStatus.INIT) {
+		if (this.status != OrderStatus.INIT && this.status != OrderStatus.PAID) {
 			throw new OrderException(OrderErrorCode.ORDER_CANCEL_NOT_ALLOWED);
 		}
 

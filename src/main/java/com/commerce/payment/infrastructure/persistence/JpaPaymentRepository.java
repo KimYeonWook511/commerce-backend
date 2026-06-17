@@ -32,6 +32,14 @@ public interface JpaPaymentRepository extends JpaRepository<Payment, Long> {
 
 	boolean existsByOrderIdAndTypeAndStatus(Long orderId, PaymentType type, PaymentStatus status);
 
+	@Query("""
+		SELECT CASE WHEN COUNT(p) > 0 THEN TRUE ELSE FALSE END FROM Payment p
+		WHERE p.orderId = :orderId
+		  AND p.type = 'APPROVE'
+		  AND p.status IN ('UNKNOWN', 'REQUESTED')
+		""")
+	boolean existsUnconfirmedApproveByOrderId(@Param("orderId") Long orderId);
+
 	Optional<Payment> findByOrderIdAndTypeAndStatus(Long orderId, PaymentType type, PaymentStatus status);
 
 	// REQUESTED는 UNKNOWN보다 늦은 하한(requestedStaleCutoff)을 쓴다. 정책 진입 지연(REQUESTED 15분 / UNKNOWN 1분)과
