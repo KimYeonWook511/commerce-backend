@@ -109,10 +109,22 @@ public class PaymentRepositoryAdapter implements PaymentRepository {
 	}
 
 	@Override
+	public Optional<Payment> findApproveSucceededByOrderId(Long orderId) {
+		return jpaPaymentRepository.findByOrderIdAndTypeAndStatus(
+			orderId, PaymentType.APPROVE, PaymentStatus.SUCCEEDED
+		);
+	}
+
+	@Override
 	public boolean existsUnknownByOrderId(Long orderId) {
 		return jpaPaymentRepository.existsByOrderIdAndTypeAndStatus(
 			orderId, PaymentType.APPROVE, PaymentStatus.UNKNOWN
 		);
+	}
+
+	@Override
+	public boolean existsUnconfirmedApproveByOrderId(Long orderId) {
+		return jpaPaymentRepository.existsUnconfirmedApproveByOrderId(orderId);
 	}
 
 	@Override
@@ -130,5 +142,15 @@ public class PaymentRepositoryAdapter implements PaymentRepository {
 	@Override
 	public List<Payment> findEscalationCandidates(LocalDateTime escalationCutoff, Pageable pageable) {
 		return jpaPaymentRepository.findEscalationCandidates(escalationCutoff, pageable);
+	}
+
+	@Override
+	public List<Payment> findStaleCancelPaymentsForReconciliation(LocalDateTime staleCutoff, LocalDateTime requestedStaleCutoff, LocalDateTime escalationCutoff, Pageable pageable) {
+		return jpaPaymentRepository.findStaleCancelPaymentsForReconciliation(staleCutoff, requestedStaleCutoff, escalationCutoff, pageable);
+	}
+
+	@Override
+	public List<Payment> findCancelEscalationCandidates(LocalDateTime escalationCutoff, Pageable pageable) {
+		return jpaPaymentRepository.findCancelEscalationCandidates(escalationCutoff, pageable);
 	}
 }

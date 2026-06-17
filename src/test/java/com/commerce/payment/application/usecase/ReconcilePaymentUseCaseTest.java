@@ -28,7 +28,11 @@ import com.commerce.order.domain.exception.OrderException;
 import com.commerce.payment.application.port.NotificationPort;
 import com.commerce.payment.application.port.PgCanceller;
 import com.commerce.payment.application.service.EscalateApprovePaymentService;
+import com.commerce.payment.application.service.EscalateCancelPaymentService;
 import com.commerce.payment.application.service.FailApprovePaymentService;
+import com.commerce.payment.application.service.FailCancelPaymentService;
+import com.commerce.payment.application.service.MarkUnknownCancelPaymentService;
+import com.commerce.payment.application.service.SucceedCancelPaymentService;
 import com.commerce.payment.application.service.SucceedPaymentApprovalService;
 import com.commerce.payment.application.service.SucceedPaymentApprovalRecordService;
 import com.commerce.payment.domain.Payment;
@@ -65,6 +69,18 @@ class ReconcilePaymentUseCaseTest {
 
 	@Mock
 	private EscalateApprovePaymentService escalateApprovePaymentService;
+
+	@Mock
+	private EscalateCancelPaymentService escalateCancelPaymentService;
+
+	@Mock
+	private SucceedCancelPaymentService succeedCancelPaymentService;
+
+	@Mock
+	private FailCancelPaymentService failCancelPaymentService;
+
+	@Mock
+	private MarkUnknownCancelPaymentService markUnknownCancelPaymentService;
 
 	@Mock
 	private CompensateApprovalUseCase compensateApprovalUseCase;

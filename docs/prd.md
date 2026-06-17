@@ -17,7 +17,7 @@
 | 상품 관리 | 관리자 상품 등록·수정·soft delete | api-spec §관리자 상품 | `product-management` |
 | 재고 | 주문 경로 차감·복구, 관리자 초기 생성·수동 조정, 변경 이력 | api-spec §관리자 재고, ADR-003/004 | `stock-management` |
 | 장바구니 | 담기(UPSERT)·조회(최신가 재조립·구매불가 마킹)·수량 변경·삭제 | api-spec §장바구니, ADR-020 | `cart` |
-| 주문 | 생성·취소·만료 배치. `Idempotency-Key` 멱등 (Redis in-flight + DB unique) | api-spec §주문, ADR-002 | `order-idempotency`, `order-idempotency-cache-simplification` |
+| 주문 | 생성·취소·만료 배치. `Idempotency-Key` 멱등 (Redis in-flight + DB unique). PAID 주문 취소 시 전액 환불·재고 복구(환불 의도 단일 tx 영속화 + CANCEL 대사 보장) | api-spec §주문, ADR-002/056~061 | `order-idempotency`, `order-idempotency-cache-simplification`, `paid-order-cancel-refund` |
 | 결제 | 외부 PG(네이버페이) 예약(reserve)·승인(approve). 두 테이블 분리(Reservation + Payment append-only), UNKNOWN 마킹, 보상, 진입·예약 동시성 이중청구 가드 | api-spec §결제, ADR-026/010~015/036~038 | `payment-order-redesign`, `payment-attempt-idempotency`, `payment-attempt-service-split`, `payment-attempt-state-transition-policy`, `payment-compensation-policy`, `payment-compensation-to-domain`, `approval-concurrency-guard` |
 
 ## 기반 기술

@@ -26,8 +26,14 @@ public interface PaymentRepository {
 
 	Optional<Payment> findApproveSucceeded(String merchantPayKey);
 
+	// 환불 대상 조회: orderId로 SUCCEEDED APPROVE 결제를 가져온다. 주문당 SUCCEEDED APPROVE는 유일하다.
+	Optional<Payment> findApproveSucceededByOrderId(Long orderId);
+
 	// APPROVE 타입 UNKNOWN 결제가 있는 주문은 reserve/approve 차단
 	boolean existsUnknownByOrderId(Long orderId);
+
+	// APPROVE 타입 미확정(UNKNOWN/REQUESTED) 결제가 있는 주문은 환불 불가(PG 상태 불확실)
+	boolean existsUnconfirmedApproveByOrderId(Long orderId);
 
 	boolean existsApprovedByOrderId(Long orderId);
 
@@ -36,4 +42,10 @@ public interface PaymentRepository {
 
 	// escalation 후보: escalatedAt IS NULL이고 6시간 초과 UNKNOWN/REQUESTED APPROVE 건 (대사 스캔 윈도우 밖).
 	List<Payment> findEscalationCandidates(LocalDateTime escalationCutoff, Pageable pageable);
+
+	// CANCEL 대사 후보: APPROVE 스캔과 동일 cutoff·페이징 정책. UNKNOWN은 staleCutoff(1분), REQUESTED는 requestedStaleCutoff(15분) 기준 (ADR-L4).
+	List<Payment> findStaleCancelPaymentsForReconciliation(LocalDateTime staleCutoff, LocalDateTime requestedStaleCutoff, LocalDateTime escalationCutoff, Pageable pageable);
+
+	// CANCEL escalation 후보: escalatedAt IS NULL이고 6시간 초과 UNKNOWN/REQUESTED CANCEL 건 + FAILED CANCEL(확정적 환불 실패).
+	List<Payment> findCancelEscalationCandidates(LocalDateTime escalationCutoff, Pageable pageable);
 }

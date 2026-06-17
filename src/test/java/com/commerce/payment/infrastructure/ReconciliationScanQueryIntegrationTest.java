@@ -248,4 +248,90 @@ class ReconciliationScanQueryIntegrationTest {
 
 		assertThat(result).hasSize(2);
 	}
+
+	// --- CANCEL 대사 스캔 쿼리 ---
+
+	@DisplayName("CANCEL UNKNOWN 결제 중 respondedAt이 staleCutoff보다 과거이고 escalationCutoff보다 최근인 건이 CANCEL 대사 후보로 반환된다")
+	@Test
+	void findStaleCancelPayments_unknownBeforeCutoff_returned() {
+		LocalDateTime now = LocalDateTime.now();
+		LocalDateTime staleCutoff = now.minusMinutes(1);
+		LocalDateTime escalationCutoff = now.minusHours(6);
+		LocalDateTime requestedStaleCutoff = now.minusMinutes(15);
+
+		Payment cancelPayment = Payment.createCancelRequested(
+			++nextOrderId, "PAY-CSQ-1", "pg-csq-1", 1000, PaymentProvider.NAVERPAY);
+		cancelPayment.markUnknown("timeout", now.minusMinutes(2));
+		paymentRepository.save(cancelPayment);
+
+		List<Payment> result = paymentRepository.findStaleCancelPaymentsForReconciliation(
+			staleCutoff, requestedStaleCutoff, escalationCutoff, PageRequest.of(0, 10));
+
+		assertThat(result).hasSize(1);
+		assertThat(result.get(0).getMerchantPayKey()).isEqualTo("PAY-CSQ-1");
+		assertThat(result.get(0).getStatus()).isEqualTo(PaymentStatus.UNKNOWN);
+	}
+
+	@DisplayName("CANCEL REQUESTED 결제 중 createdAt이 requestedStaleCutoff보다 과거이고 escalationCutoff보다 최근인 건이 CANCEL 대사 후보로 반환된다")
+	@Test
+	void findStaleCancelPayments_requestedBeforeCutoff_returned() {
+		LocalDateTime now = LocalDateTime.now();
+		LocalDateTime staleCutoff = now.minusMinutes(1);
+		LocalDateTime escalationCutoff = now.minusHours(6);
+		LocalDateTime requestedStaleCutoff = now.minusMinutes(15);
+
+		Payment cancelPayment = Payment.createCancelRequested(
+			++nextOrderId, "PAY-CSQ-2", "pg-csq-2", 1000, PaymentProvider.NAVERPAY);
+		Payment saved = paymentRepository.save(cancelPayment);
+
+		em.createNativeQuery("UPDATE tbl_payment SET created_at = :createdAt WHERE id = :id")
+			.setParameter("createdAt", now.minusMinutes(16))
+			.setParameter("id", saved.getId())
+			.executeUpdate();
+		em.clear();
+
+		List<Payment> result = paymentRepository.findStaleCancelPaymentsForReconciliation(
+			staleCutoff, requestedStaleCutoff, escalationCutoff, PageRequest.of(0, 10));
+
+		assertThat(result).hasSize(1);
+		assertThat(result.get(0).getMerchantPayKey()).isEqualTo("PAY-CSQ-2");
+		assertThat(result.get(0).getStatus()).isEqualTo(PaymentStatus.REQUESTED);
+	}
+
+	@DisplayName("APPROVE 타입 결제는 CANCEL 대사 스캔에서 제외된다")
+	@Test
+	void findStaleCancelPayments_approveType_excluded() {
+		LocalDateTime now = LocalDateTime.now();
+		LocalDateTime staleCutoff = now.minusMinutes(1);
+		LocalDateTime escalationCutoff = now.minusHours(6);
+		LocalDateTime requestedStaleCutoff = now.minusMinutes(15);
+
+		Payment approvePayment = Payment.createRequested(reservation("PAY-CSQ-3"), PaymentType.APPROVE, "pg-csq-3");
+		approvePayment.markUnknown("timeout", now.minusMinutes(2));
+		paymentRepository.save(approvePayment);
+
+		List<Payment> result = paymentRepository.findStaleCancelPaymentsForReconciliation(
+			staleCutoff, requestedStaleCutoff, escalationCutoff, PageRequest.of(0, 10));
+
+		assertThat(result).isEmpty();
+	}
+
+	@DisplayName("escalationCutoff보다 오래된 CANCEL UNKNOWN 결제는 스캔 윈도우 상한 초과로 CANCEL 대사 후보에서 제외된다")
+	@Test
+	void findStaleCancelPayments_escalatedUnknown_excluded() {
+		LocalDateTime now = LocalDateTime.now();
+		LocalDateTime staleCutoff = now.minusMinutes(1);
+		LocalDateTime escalationCutoff = now.minusHours(6);
+		LocalDateTime requestedStaleCutoff = now.minusMinutes(15);
+
+		Payment cancelPayment = Payment.createCancelRequested(
+			++nextOrderId, "PAY-CSQ-ESC", "pg-csq-esc", 1000, PaymentProvider.NAVERPAY);
+		cancelPayment.markUnknown("timeout", now.minusHours(7));
+		paymentRepository.save(cancelPayment);
+
+		List<Payment> result = paymentRepository.findStaleCancelPaymentsForReconciliation(
+			staleCutoff, requestedStaleCutoff, escalationCutoff, PageRequest.of(0, 10));
+
+		assertThat(result).isEmpty();
+	}
 }

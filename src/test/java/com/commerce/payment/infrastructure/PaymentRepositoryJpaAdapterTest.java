@@ -15,11 +15,13 @@ import org.springframework.test.context.ActiveProfiles;
 import com.commerce.payment.domain.Payment;
 import com.commerce.payment.domain.PaymentProvider;
 import com.commerce.payment.domain.PaymentReservation;
+import com.commerce.payment.domain.PaymentStatus;
 import com.commerce.payment.domain.PaymentType;
 import com.commerce.payment.domain.repository.PaymentRepository;
 import com.commerce.payment.infrastructure.persistence.support.PaymentPersistenceTestSupport;
 import com.commerce.payment.infrastructure.persistence.support.PaymentReservationPersistenceTestSupport;
 
+import com.commerce.common.jpa.JpaConfig;
 import com.commerce.payment.infrastructure.persistence.PaymentRepositoryAdapter;
 import com.commerce.payment.infrastructure.persistence.PaymentReservationRepositoryAdapter;
 import jakarta.persistence.EntityManager;
@@ -27,6 +29,7 @@ import jakarta.persistence.EntityManager;
 @DataJpaTest
 @ActiveProfiles("test")
 @Import({
+	JpaConfig.class,
 	PaymentRepositoryAdapter.class,
 	PaymentReservationRepositoryAdapter.class,
 	PaymentPersistenceTestSupport.class,
@@ -106,6 +109,43 @@ class PaymentRepositoryJpaAdapterTest {
 		// then
 		assertThat(result).isPresent();
 		assertThat(result.get().getMerchantPayKey()).isEqualTo("PAY-3");
+	}
+
+	@DisplayName("orderId로 SUCCEEDED APPROVE 결제를 조회한다")
+	@Test
+	void findApproveSucceededByOrderId_whenSucceededExists_returnPayment() {
+		// given
+		long orderId = 42L;
+		PaymentReservation reservation = reservationPersistence.save(
+			PaymentReservation.createReserved(orderId, 1L, 3000, PaymentProvider.NAVERPAY, "PAY-ORDER-42",
+				LocalDateTime.now().plusMinutes(15)));
+		Payment payment = Payment.createRequested(reservation, PaymentType.APPROVE, "pg-order-42");
+		payment.succeed(LocalDateTime.now());
+		paymentRepository.save(payment);
+		em.flush();
+		em.clear();
+
+		// when
+		Optional<Payment> result = paymentRepository.findApproveSucceededByOrderId(orderId);
+
+		// then
+		assertThat(result).isPresent();
+		assertThat(result.get().getOrderId()).isEqualTo(orderId);
+		assertThat(result.get().getType()).isEqualTo(PaymentType.APPROVE);
+		assertThat(result.get().getStatus()).isEqualTo(PaymentStatus.SUCCEEDED);
+	}
+
+	@DisplayName("orderId에 해당하는 SUCCEEDED APPROVE 결제가 없으면 빈 Optional을 반환한다")
+	@Test
+	void findApproveSucceededByOrderId_whenNotExists_returnEmpty() {
+		// given: 해당 orderId의 APPROVE가 없는 상황
+		long orderId = 999L;
+
+		// when
+		Optional<Payment> result = paymentRepository.findApproveSucceededByOrderId(orderId);
+
+		// then
+		assertThat(result).isEmpty();
 	}
 
 }

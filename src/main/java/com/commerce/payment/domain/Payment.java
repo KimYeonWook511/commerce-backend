@@ -28,7 +28,10 @@ import org.hibernate.type.SqlTypes;
 	name = "tbl_payment",
 	uniqueConstraints = {
 		// NULL trick: APPROVE+SUCCEEDED 일 때만 orderId 값이 채워져 unique 제약이 동작함
-		@UniqueConstraint(name = "uk_payment_approved_order_key", columnNames = {"approved_order_key"})
+		@UniqueConstraint(name = "uk_payment_approved_order_key", columnNames = {"approved_order_key"}),
+		// Flyway V6 기존 unique 미러링(ADR-L5): H2 test 스키마에도 CANCEL 멱등 제약이 생기도록. prod는 validate라 무해.
+		@UniqueConstraint(name = "uk_payment_merchant_pay_key_provider_pg_payment_id_type",
+			columnNames = {"merchant_pay_key", "provider", "pg_payment_id", "type"})
 	}
 )
 @NoArgsConstructor(access = AccessLevel.PROTECTED)
@@ -179,6 +182,28 @@ public class Payment extends BaseTimeEntity {
 	 */
 	public boolean escalate(LocalDateTime now) {
 		if (this.status != PaymentStatus.UNKNOWN && this.status != PaymentStatus.REQUESTED) {
+			return false;
+		}
+		if (this.escalatedAt != null) {
+			return false;
+		}
+		this.escalatedAt = now;
+		return true;
+	}
+
+	/**
+	 * CANCEL 결제 전용 escalation. UNKNOWN/REQUESTED 외에 FAILED도 escalation 가능하다.
+	 * CANCEL FAILED는 확정적 환불 실패이므로 자동 재시도 없이 사람에게 넘긴다(ADR-L4).
+	 * 이미 escalation됐으면 false를 반환한다(멱등/skip).
+	 * 통지 주체 여부는 save 성공(@Version)으로 최종 확정한다.
+	 */
+	public boolean escalateCancelPayment(LocalDateTime now) {
+		if (this.type != PaymentType.CANCEL) {
+			throw new PaymentException(PaymentErrorCode.PAYMENT_STATUS_TRANSITION_NOT_ALLOWED);
+		}
+		if (this.status != PaymentStatus.UNKNOWN
+			&& this.status != PaymentStatus.REQUESTED
+			&& this.status != PaymentStatus.FAILED) {
 			return false;
 		}
 		if (this.escalatedAt != null) {

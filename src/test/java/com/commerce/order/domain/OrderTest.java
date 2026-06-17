@@ -86,9 +86,39 @@ class OrderTest {
 		assertThat(order.getStatus()).isEqualTo(OrderStatus.CANCELED);
 	}
 
-	@DisplayName("주문이 초기 상태가 아니면 취소에 실패한다")
+	@DisplayName("주문이 결제 완료 상태면 취소된다")
 	@Test
-	void cancel_whenStatusNotInit_throwException() {
+	void cancel_whenPaidStatus_changeToCanceled() {
+		// given
+		Order order = Order.create(1L);
+		setStatus(order, OrderStatus.PAID);
+
+		// when
+		order.cancel();
+
+		// then
+		assertThat(order.getStatus()).isEqualTo(OrderStatus.CANCELED);
+	}
+
+	@DisplayName("주문이 이미 취소된 상태면 취소에 실패한다")
+	@Test
+	void cancel_whenAlreadyCanceled_throwException() {
+		// given
+		Order order = Order.create(1L);
+		setStatus(order, OrderStatus.CANCELED);
+
+		// when & then
+		assertThatThrownBy(order::cancel)
+			.isInstanceOf(OrderException.class)
+			.satisfies(exception -> {
+				OrderException orderException = (OrderException) exception;
+				assertThat(orderException.getErrorCode()).isEqualTo(OrderErrorCode.ORDER_CANCEL_NOT_ALLOWED);
+			});
+	}
+
+	@DisplayName("취소 허용 상태(INIT·PAID) 외에는 취소에 실패한다")
+	@Test
+	void cancel_whenStatusNotInitOrPaid_throwException() {
 		// given
 		Order order = Order.create(1L);
 		order.addOrderItem(1L, 1, 1000);

@@ -163,10 +163,11 @@ Port 인터페이스 설계 원칙:
 - **`product`** — 공개 상품 조회와 관리자 상품 관리(등록·수정·soft delete). 상세는 상품 정보 + 현재 재고를 조합한다.
 - **`stock`** — 상품별 재고, 주문 경로의 차감·복구, 관리자 조정, 변경 이력. `Product : Stock = 1:1`. `StockHistory`는 별도 aggregate.
 - **`order`** — 주문 생성·취소·만료. 생성은 멱등 키로 중복 방어. 만료는 Spring Batch로 스케줄링하되, 미확정 결제(UNKNOWN/stale REQUESTED)가 걸린 주문은 `BlockingPaymentChecker` port로 만료 대상에서 제외해 만료-대사 경합(돈은 빠졌는데 주문 취소)을 막는다(ADR-042). 생성 tx 내에서 `CartItemRemover` port로 주문된 항목만 cart에서 제거한다.
+  - 사용자 취소: INIT은 재고만 복구하고, PAID는 환불까지 포함한다. 조율 usecase(tx 없음)가 단위작업 service(tx)를 호출해 한 tx 안에 `환불 의도(CANCEL REQUESTED) 영속화 + order.cancel() + 재고 복구`를 원자적으로 커밋하고, 커밋 후 best-effort PG 환불을 실행한다. 실패·불확실·중단은 결제 CANCEL 대사에 위임한다(환불 보장은 영속된 의도+대사). 주문 행은 fetch join 없이 단일 행 락으로 잠가 락 범위를 좁힌다(ADR-056~058·061). order.application이 stock·payment service에 의존(기존 order→stock 패턴과 동일).
 - **`cart`** — 장바구니 항목 추가(UPSERT)·조회(최신 가격 재조립·구매 불가 마킹)·수량 변경·삭제. 주문-cart 연동은 `CartItemRemover` port(order 소유)를 cart adapter가 구현해 의존 방향을 보존한다.
 - **`payment`** — 결제 예약(reserve)·승인·시도 이력. `naverpay`는 provider 서브패키지(PG 호출과 내부 상태 반영 분리). 도메인은 두 엔티티로 분리(ADR-026): `PaymentReservation`(결제창 준비물, `RESERVED→USED`) + `Payment`(PG 사건 append-only). 완료 판단은 *성공한 APPROVE 행 존재(EXISTS)* 기반(ADR-014/026). `status`는 일어난 사실만 담고 후처리 분류는 정책이 계산한다 — 보상·escalation 종착에 새 상태를 두지 않는다(ADR-039/044). 결과 불명 시 UNKNOWN으로 흔적을 보존하고 해당 주문의 reserve/approve를 `PAYMENT_RESULT_PENDING`(409)로 차단한다. 세부는 `docs/tasks/payment-order-redesign/`(ADR-026), 예외·충돌 처리는 `docs/exception-strategy.md`·`docs/optimistic-lock-design.md`.
   - 보상: 이중결제(uk 위반)는 adapter가 도메인 예외로 번역하고 application이 fail-first로 보상한다. 정상 승인 후 transient 기록 실패(@Version 충돌 포함)는 보상 없이 전파하고 approve를 REQUESTED로 두어 대사에 위임한다(완료 우선). 보상 흐름은 tx를 열지 않고 단계별 독립 commit으로 진행하며, 충돌은 tx 경계 밖에서 skip한다(ADR-008/015/032/033).
-  - 대사(reconciliation): `@Scheduled` 트리거(presentation/scheduler)가 깨우는 서비스가 stale 미확정 결제를 PG **이력 조회**(재요청 아님, 이중과금 방지)로 확정·보상하며, 건별 독립 tx로 한 건 실패가 루프를 멈추지 않는다(ADR-040/043/047/048). 운영자 통지는 `NotificationPort`로 hook만 확보(ADR-045).
+  - 대사(reconciliation): `@Scheduled` 트리거(presentation/scheduler)가 깨우는 서비스가 stale 미확정 결제를 PG **이력 조회**(재요청 아님, 이중과금 방지)로 확정·보상하며, 건별 독립 tx로 한 건 실패가 루프를 멈추지 않는다(ADR-040/043/047/048). 운영자 통지는 `NotificationPort`로 hook만 확보(ADR-045). 승인(APPROVE)뿐 아니라 **standalone CANCEL**(REQUESTED/UNKNOWN — 사용자 취소 환불 의도가 PG 호출 전/중 중단으로 남은 것)도 대사 대상이다. PG 상태를 조회해 이미 취소면 확정, 아직 승인이면 재시도하며, 확정적 환불 실패(FAILED)는 자동 재시도 대신 escalation으로 통지한다(ADR-059, 후속 #208).
 - **`outbox`** — 재고 복구 이벤트를 Outbox 패턴으로 처리(생성·Kafka 릴레이·소비를 분리).
 
 ---
