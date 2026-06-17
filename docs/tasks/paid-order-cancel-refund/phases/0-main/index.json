@@ -10,8 +10,9 @@
     {
       "step": 2,
       "name": "cancel-payment-reconciliation",
-      "status": "pending",
-      "summary": null
+      "status": "completed",
+      "summary": "CANCEL 대사 경로를 신설한다: CANCEL 스캔 쿼리(findStaleCancelPaymentsForReconciliation·findCancelEscalationCandidates) 추가, Payment.escalateCancelPayment() 도메인 메서드 추가, EscalateCancelPaymentService 신설, ReconcilePaymentUseCase에 CANCEL 스캔 루프·processCancelOne·processCancelReconcile·executeCancelRetry·CANCEL escalation 처리를 추가해 죽은 CANCEL_RECONCILE 정책 분기를 live화한다.",
+      "completed_at": "2026-06-18T00:46:04.064638+09:00"
     },
     {
       "step": 3,
