@@ -10,6 +10,7 @@ import com.commerce.order.application.dto.OrderCancelRefundStatus;
 import com.commerce.order.application.dto.OrderCancelResult;
 import com.commerce.order.domain.Order;
 import com.commerce.order.domain.OrderItem;
+import com.commerce.order.domain.OrderStatus;
 import com.commerce.order.domain.repository.OrderRepository;
 import com.commerce.order.domain.exception.OrderErrorCode;
 import com.commerce.order.domain.exception.OrderException;
@@ -49,7 +50,7 @@ public class CancelPaidOrderService {
 			.orElseThrow(() -> new OrderException(OrderErrorCode.ORDER_NOT_FOUND));
 
 		// PAID 상태 검증: 이 service는 PAID 전용. INIT은 CancelOrderService 경유.
-		if (order.getStatus() != com.commerce.order.domain.OrderStatus.PAID) {
+		if (order.getStatus() != OrderStatus.PAID) {
 			throw new OrderException(OrderErrorCode.ORDER_CANCEL_NOT_ALLOWED);
 		}
 
