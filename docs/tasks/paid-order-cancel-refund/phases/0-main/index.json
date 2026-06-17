@@ -1,8 +1,24 @@
 {
   "steps": [
-    { "step": 1, "name": "payment-refund-execution", "status": "pending", "summary": null },
-    { "step": 2, "name": "cancel-payment-reconciliation", "status": "pending", "summary": null },
-    { "step": 3, "name": "paid-order-cancel-orchestration", "status": "pending", "summary": null }
+    {
+      "step": 1,
+      "name": "payment-refund-execution",
+      "status": "completed",
+      "summary": "payment-refund-execution 구현 완료: (1) PaymentRepository에 orderId로 SUCCEEDED APPROVE 결제를 조회하는 findApproveSucceededByOrderId 추가, (2) Payment 엔티티 @Table에 uk_payment_merchant_pay_key_provider_pg_payment_id_type unique constraint 미러링(ADR-L5, H2 테스트 정합), (3) RefundExecutionUseCase 신설(영속된 CANCEL REQUESTED에 PG 취소 호출 후 결과 반영, best-effort SKIPPABLE 흡수), (4) 사전에 broken이던 PaymentRepositoryJpaAdapterTest에 JpaConfig import 추가(created_at NULL 오류 수정).",
+      "completed_at": "2026-06-18T00:35:24.879163+09:00"
+    },
+    {
+      "step": 2,
+      "name": "cancel-payment-reconciliation",
+      "status": "pending",
+      "summary": null
+    },
+    {
+      "step": 3,
+      "name": "paid-order-cancel-orchestration",
+      "status": "pending",
+      "summary": null
+    }
   ],
   "execution": {
     "developer_model": "sonnet",
