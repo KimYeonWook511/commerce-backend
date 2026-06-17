@@ -119,9 +119,9 @@ class RefundExecutionUseCaseTest {
 		then(failCancelPaymentService).should(never()).fail(any(), any(), any(), any(), any(), any());
 	}
 
-	@DisplayName("CANCEL이 REQUESTED가 아니면 PG 호출 없이 PROCESSING 반환 (멱등)")
+	@DisplayName("CANCEL이 이미 SUCCEEDED면 PG 호출 없이 SUCCESS 반환 (멱등 — 응답 COMPLETED 수렴)")
 	@Test
-	void execute_whenCancelNotRequested_skipsPgCallAndReturnsProcessing() {
+	void execute_whenCancelAlreadySucceeded_skipsPgCallAndReturnsSuccess() {
 		// given: CANCEL을 SUCCEEDED 상태로 전이시킨다
 		Payment cancelPayment = Payment.createCancelRequested(1L, "PAY-1", "pg-id", 1000, PaymentProvider.NAVERPAY);
 		cancelPayment.succeed(LocalDateTime.now());
@@ -129,8 +129,8 @@ class RefundExecutionUseCaseTest {
 		// when
 		CancelOutcome result = refundExecutionUseCase.execute(cancelPayment, pgCanceller);
 
-		// then
-		assertThat(result.status()).isEqualTo(CancelOutcome.Status.PROCESSING);
+		// then: 이미 환불 완료이므로 SUCCESS로 응답이 COMPLETED에 수렴한다
+		assertThat(result.status()).isEqualTo(CancelOutcome.Status.SUCCESS);
 		then(pgCanceller).should(never()).cancel(any(), any());
 		then(succeedCancelPaymentService).should(never()).succeed(any(), any(), any(), any());
 	}

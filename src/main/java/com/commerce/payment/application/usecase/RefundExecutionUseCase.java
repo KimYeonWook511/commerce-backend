@@ -52,7 +52,11 @@ public class RefundExecutionUseCase {
 	 */
 	public CancelOutcome execute(Payment cancelPayment, PgCanceller pgCanceller) {
 		if (cancelPayment.getStatus() != PaymentStatus.REQUESTED) {
-			// 이미 종착/처리됐으므로 처리 중으로 반환 (대사가 최종 상태를 결정)
+			if (cancelPayment.getStatus() == PaymentStatus.SUCCEEDED) {
+				// 이미 환불 완료 — 멱등 재요청에 성공 결과를 반영해 응답이 COMPLETED로 수렴하게 한다
+				return CancelOutcome.success();
+			}
+			// 그 외 종착/처리 중 — 대사가 최종 상태를 결정
 			return CancelOutcome.processing();
 		}
 
