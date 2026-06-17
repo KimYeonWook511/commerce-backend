@@ -48,6 +48,7 @@ task adr(`docs/tasks/<task>/adr.md`)의 역할은 harness 도입을 기점으로
 | payment-optimistic-lock | [`docs/tasks/payment-optimistic-lock/adr.md`](tasks/payment-optimistic-lock/adr.md) | `Payment`에 `@Version` 낙관 락 도입(같은 행 동시 전이 lost update 차단), 충돌 처리는 transition tx 안 전파 + useCase tx 밖 skip + adapter `saveChecked` 도메인 예외 변환, escalation 멱등을 조건부 UPDATE에서 `@Version`+`escalate()` 도메인 메서드로 환원 (ADR-050~052, ADR-049 멱등 메커니즘 supersede) |
 | structure-migration | [`docs/tasks/structure-migration/adr.md`](tasks/structure-migration/adr.md) | 전 도메인 헥사고날 목표 패키지 재배치(순수 이동·동작 불변, 리네임 없음), ArchUnit freeze→strict 전환·임시 산출물 제거, Spring Batch fault-tolerance의 DAO 예외 참조를 `GlobalExceptionHandler`처럼 규칙 예외처로 인정 (ADR-053) |
 | application-layer-relocate | [`docs/tasks/application-layer-relocate/adr.md`](tasks/application-layer-relocate/adr.md) | application 계층 역할별 접미사 이원화(usecase=`…UseCase`/`@Component`, service=`…Service`/`@Service`, ADR-006 supersede→ADR-054), class-level `@Transactional` 전 도메인 폐지(ADR-055) |
+| paid-order-cancel-refund | [`docs/tasks/paid-order-cancel-refund/adr.md`](tasks/paid-order-cancel-refund/adr.md) | PAID 주문 취소 시 환불 의도(CANCEL REQUESTED)를 주문 취소와 단일 tx 영속화 후 best-effort PG 환불(ADR-056), approve 불변·환불은 CANCEL 레코드로만(ADR-057), 응답은 취소 접수 시점(ADR-058), standalone CANCEL 대사 신설+FAILED escalation(ADR-059), CANCEL 멱등은 기존 4-col unique(ADR-060), 주문 락은 fetch join 대신 단일 행 락(ADR-061) |
 
 향후 task 추가 시 본 표에 한 줄을 갱신한다. task adr 위치는 모두 `docs/tasks/<task>/adr.md`로 고정한다.
 
@@ -576,3 +577,53 @@ task adr(`docs/tasks/<task>/adr.md`)의 역할은 harness 도입을 기점으로
 - **이유**: ADR-021의 근거(메서드별 tx 정책이 코드 표면에 명시됨, 누락이 silent readOnly가 아니라 "tx 없음"으로 즉시 드러남)는 신설 Service뿐 아니라 기존 도메인에도 동일하게 유효하다. ADR-021이 "기존 도메인 마이그레이션은 후속 트랙으로 분리"라고 예고한 그 후속 트랙이다.
 - **트레이드오프**: 메서드 수만큼 애너테이션이 반복된다(ADR-021 트레이드오프와 동일). 의도 명세 역할이라 가독성 손실이 아니다.
 - **연계**: ADR-021, ADR-008, #248.
+
+### ADR-056: PAID 주문 취소의 환불 의도를 주문 취소와 단일 tx로 영속화한다
+
+- **결정**: 사용자가 PAID 주문을 취소하면, 조율 service가 한 RDB tx 안에서 `CANCEL 결제 REQUESTED(환불 의도) 영속화 + order.cancel() + 재고 복구`를 함께 커밋한다. 실제 PG 환불 호출은 tx 밖(커밋 이후)에서 best-effort로 실행한다.
+- **배경**: PG 취소는 외부 I/O라 주문 취소 tx에 넣을 수 없다(ADR-015). "주문 CANCELED 커밋 → 그 다음 환불 트리거" 순서는 둘 사이 프로세스 중단 시 주문은 취소됐는데 환불 기록이 없는 상태를 낳는다.
+- **이유**: 환불 의도를 주문 취소와 원자적으로 영속화하면 어느 시점에 중단돼도 "환불해야 함"이라는 durable 기록이 남고, 그 마무리는 ADR-059(CANCEL 대사)가 진다. 단일 DB 조건을 활용해 이벤트/Outbox 없이 cross-aggregate 정합을 확보한다.
+- **트레이드오프**: 조율 service의 단일 tx가 order·payment 두 aggregate 테이블을 함께 쓴다. 결합이 커지면(부분취소·다채널) Outbox 이벤트로 승격할 수 있고, 그때 CANCEL REQUESTED 행이 이벤트와 같은 역할을 한다.
+- **연계**: ADR-015, ADR-059, ADR-060, PR #258.
+
+### ADR-057: 사용자 주도 환불은 approve 결제를 FAILED로 만들지 않고 CANCEL 레코드로만 표현한다
+
+- **결정**: PAID 취소 환불에서 대상 APPROVE 결제의 SUCCEEDED 상태는 그대로 두고, 환불은 별도 CANCEL 결제 레코드(append-only)로만 표현한다.
+- **배경**: 보상(compensation) 경로의 `runPgCancel`은 "애초에 승인되면 안 됐던" 결제를 되돌리므로 approve를 FAILED로 마킹한다. 사용자 주도 취소는 정당하게 성공한 결제를 환불하는 것이라 의미가 다르다.
+- **이유**: 결제 테이블은 사건을 쌓는 불변 원장이다. 승인 성공과 환불은 별개 사실이며, 승인 사실을 훼손하지 않아야 감사·분쟁 대응과 부분취소(미래) 확장에서 일관된다. "결제취소 했는가"는 CANCEL 레코드 존재·상태로 판단한다. 보상 경로 회귀 위험을 피하려 `runPgCancel`을 쪼개지 않고 별도 환불 실행 경로를 둔다.
+- **트레이드오프**: "이 주문 결제가 지금 유효한가"는 APPROVE·CANCEL 레코드를 집계해야 안다(append-only 원장의 일관된 비용).
+- **연계**: payment-order-redesign(append-only), ADR-015, PR #258.
+
+### ADR-058: 취소 응답은 취소 접수 시점에서 끊고 PG 환불 결과는 best-effort로 담는다
+
+- **결정**: 취소 API 응답은 조율 service tx 커밋(주문 CANCELED + 환불 의도 영속화) 시점에 보장되는 "취소 접수"를 기준으로 반환한다. 커밋 후 인라인 best-effort PG 환불을 시도해 happy path는 환불 결과까지, UNKNOWN/실패는 "환불 처리중"으로 응답하고 CANCEL 대사(ADR-059)가 마무리한다. 응답 DTO에 환불 진행 상태 필드를 둔다.
+- **이유**: 취소·환불 보장은 영속된 의도 + 대사가 책임지므로 사용자가 PG 왕복을 끝까지 기다릴 필요가 없다. 완전 비동기 인프라는 현재 불필요하며 필요해지면 가산적으로 도입한다.
+- **연계**: ADR-056, ADR-059, PR #258.
+
+### ADR-059: standalone CANCEL 결제 대사를 신설해 환불을 보장하고, FAILED는 escalation으로 surface한다
+
+- **결정**: `type=CANCEL ∧ status∈{REQUESTED, UNKNOWN}`인 stale CANCEL을 스캔해 PG 재조회·재실행으로 종착시키는 대사 경로를 신설한다. FAILED(확정적 환불 실패)는 자동 재시도하지 않고 escalation 통지로 사람에게 넘긴다.
+- **배경**: 기존 대사(`ReconcilePaymentUseCase`)는 `type='APPROVE'`만 스캔하고 `CANCEL_RECONCILE` target은 SKIP해, standalone CANCEL을 구동하는 경로가 없었다. ADR-056의 환불 의도가 SUCCEEDED APPROVE에 매달려 어떤 기존 스캔에도 안 걸렸다(안전망 부재).
+- **이유**: 정책 뼈대(target/flow policy의 CANCEL 분기)는 이미 있고 배선만 죽어 있어, 스캔 쿼리와 reconcile 루프의 CANCEL 처리만 추가하면 죽은 정책이 live가 된다. 새 정책·새 PG 로직 없이 기존 cancel 상태전이 service·`getApprovalHistory`를 재사용한다. FAILED는 같은 요청 재전송으로 안 풀리는 거절이라 자동 재시도가 아닌 통지가 맞다(자동 재처리 엔진은 #208 item-3으로 분리).
+- **트레이드오프**: 대사 스캔이 한 종류(CANCEL) 늘어 PG 조회 부하가 증가한다. APPROVE와 동일 cutoff·페이징 정책을 따른다.
+- **연계**: unknown-reconciliation, payment-escalation, ADR-056, #208, PR #258.
+
+### ADR-060: CANCEL 생성 멱등은 기존 `(merchantPayKey, provider, pgPaymentId, type)` unique로 하드 보장된다
+
+- **결정**: 사용자 취소 환불의 CANCEL 생성 멱등은 기존 unique `uk_payment_merchant_pay_key_provider_pg_payment_id_type`가 하드로 보장한다(`getOrCreate` find + unique → 동시 생성 시 한쪽이 unique 위반 안전망 500). order FOR UPDATE 잠금은 보조 직렬화다.
+- **배경**: 위 4-col unique의 `type`에 CANCEL도 포함되어 pgPaymentId당 CANCEL 행이 하나로 강제된다(APPROVE 행과는 type이 달라 충돌하지 않음). 전체취소 스코프에선 한 결제당 CANCEL이 하나(전액)라 이 unique가 정확한 멱등 키다.
+- **테스트 parity**: 이 unique는 Flyway(prod/local)엔 있으나 Payment 엔티티 `@Table`엔 없어 test(H2 `create-drop`)에는 제약이 없었다. 멱등을 H2 테스트로 검증하려 엔티티에 미러링했다(스키마 변경 아님, prod는 `validate`라 무해).
+- **트레이드오프**: 부분취소(한 결제에 CANCEL 여럿, 금액만 다름)가 오면 이 unique로 표현 불가다. 그때 취소 요청 단위 고유 키 + "Σ취소 ≤ 승인액" 한도 검증(잠금 하)으로 재설계한다(범위 밖).
+- **연계**: payment-order-redesign(4-col unique·NULL 트릭), PR #258.
+
+### ADR-061: PAID 취소의 주문 락은 fetch join 단일 쿼리 대신 단일 행 락 + 아이템 별도 로드로 분리한다
+
+- **결정**: 취소 흐름에서 주문을 잠글 때 `distinct … join fetch o.orderItems … FOR UPDATE`(부모+자식 한 쿼리)를 쓰지 않고, 주문 행 하나만 잠근 뒤 orderItems는 aggregate를 통해 lazy 로드한다.
+- **배경**: PR #258 review에서 distinct+join fetch+FOR UPDATE 조합의 락 안전성이 제기됐다.
+- **트레이드오프**:
+  - fetch join 1쿼리의 장점은 주문+아이템을 한 번의 DB 왕복(RTT)으로 가져와 네트워크 라운드트립을 아끼는 것이다.
+  - 2단계 분리의 비용은 아이템 로드 쿼리가 한 번 더 생겨 RTT가 1회 추가되는 것이다.
+  - fetch join+FOR UPDATE의 단점은 락이 부모를 넘어 자식(order_item) 행까지, 실행계획·인덱스 순서에 의존해 잡혀 락 범위가 넓어지는 것이다. 추후 order_item에 락을 거는 기능이 추가되면 겹치는 행을 다른 순서로 잠글 여지가 생겨 데드락 위험이 커진다.
+- **판단**: 취소는 사용자 단발 동작(hot path 아님)이라 RTT 1회 추가는 미미하다. 반면 락 범위를 주문 행 하나로 좁히는 것은 동시성 안전·미래 데드락 예방에서 큰 메리트다(돈 정합성 직렬화 락이라 더욱). "약간의 RTT < 좁은 락 범위"로 2단계 분리를 택한다.
+- **부수 효과**: distinct/NonUniqueResult, distinct+FOR UPDATE의 SQL 거동 의존, 자식 락 순서의 plan 의존성 같은 모호함이 사라져 락이 검증 가능하게 확실해진다(H2·MySQL·Hibernate 버전 무관).
+- **연계**: ADR-003(비관적 락 기본), 락 순서·데드락 검증 후속 #259, PR #258.

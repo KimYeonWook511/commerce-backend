@@ -713,13 +713,16 @@
 ### `POST /orders/{orderId}/cancel`
 
 설명:
-- 회원이 자신의 주문을 취소합니다.
+- 회원이 자신의 주문을 취소합니다. `INIT`(결제 전)과 `PAID`(결제 완료) 주문을 취소할 수 있습니다.
+- `INIT` 취소: 재고만 복구합니다(환불 없음).
+- `PAID` 취소: 주문을 `CANCELED`로 전이하고 재고를 전량 복구하며 전액 환불합니다. 환불 의도는 취소와 단일 tx로 영속화되고(취소 접수 시점에 보장), 실제 PG 환불은 best-effort로 실행되어 실패·불확실·중단은 CANCEL 대사가 마무리합니다.
 
 요청:
 - Path
   - `orderId`: 주문 ID
 
 응답:
+- `refundStatus`: 환불 진행 상태. `NONE`(INIT 취소, 환불 없음) / `COMPLETED`(PG 환불 완료) / `IN_PROGRESS`(환불 처리 중 — 대사가 마무리).
 
 ```json
 {
@@ -727,10 +730,17 @@
   "message": "OK",
   "data": {
     "orderId": 1,
-    "status": "CANCELED"
+    "status": "CANCELED",
+    "refundStatus": "COMPLETED"
   }
 }
 ```
+
+실패:
+- 본인 주문이 아니거나 없으면 주문을 찾을 수 없음으로 응답합니다.
+- 취소 불가 상태(이미 CANCELED 등)는 거부합니다.
+- `PAID`인데 미확정(UNKNOWN/REQUESTED) 승인 결제가 떠 있으면 환불 불가로 거부하며, 환불 대상(SUCCEEDED 승인)이 없는 정합성 오류도 거부합니다(취소를 강행하지 않음).
+- PG 환불 실행 실패·불확실은 취소 접수를 무르지 않습니다(`refundStatus=IN_PROGRESS`, 대사가 마무리).
 
 ## 결제
 
