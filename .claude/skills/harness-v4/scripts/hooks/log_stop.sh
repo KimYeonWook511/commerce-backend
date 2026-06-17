@@ -3,9 +3,9 @@
 # PostToolUse(log_progress.sh)가 보류해 둔 마지막 메시지까지 찍고 완료 박스(footer)를 붙인다.
 # 백그라운드 프로세스 없음. 항상 exit 0.
 #
-# v3와의 차이(실측 확정):
-#   - SubagentStop payload는 agent_transcript_path를 직접 제공한다 → 경로 손조립(v3 P2) 불필요.
-#     이 필드를 그대로 --input 으로 쓴다. (없을 때만 PostToolUse와 같은 glob fallback.)
+# transcript 경로(실측 확정):
+#   - SubagentStop payload는 agent_transcript_path를 직접 제공한다 → 이 필드를 그대로 --input 으로 쓴다.
+#     (없을 때만 PostToolUse와 같은 glob fallback.)
 set -uo pipefail
 
 HERE="$(cd "$(dirname "${BASH_SOURCE[0]}")" && pwd)"

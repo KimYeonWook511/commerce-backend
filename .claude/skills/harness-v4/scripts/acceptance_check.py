@@ -1,16 +1,13 @@
 from __future__ import annotations
 
-"""harness-v4 Acceptance Criteria 검사·판정 모듈 (v3 acceptance_runner 후신).
+"""harness-v4 Acceptance Criteria 검사·판정 모듈.
 
-v3 대비 변경점:
-  1. 이름: acceptance_runner → acceptance_check. 이 모듈의 본질은 "실행"이 아니라
-     "기대값과 실제값을 비교해 통과를 판정"하는 것이므로 check로 개명.
-  2. expectExit 비교: v3는 `returncode != 0`를 실패로 하드코딩했다. v4는 step 문서가
-     명령별 기대 exit code를 명시(`# expect: N`)할 수 있고, 명시가 없으면 0이 기본값이다.
-     → "이 파일이 없어야 한다"(exit 1 기대) 같은 역조건 AC를 자연스럽게 표현 가능.
-  3. 전 명령 실행: v3는 첫 실패에서 break 했다. v4는 모든 명령을 끝까지 돌려
-     어떤 명령이 왜 깨졌는지 전부 보고한다(developer가 한 번에 다 고치도록).
-  4. attempts 누적: ac-output.json을 덮어쓰지 않고 시도별로 append 한다(감사·회고 재료).
+이 모듈의 본질은 "실행"이 아니라 "기대값과 실제값을 비교해 통과를 판정"하는 것이다. 핵심 동작:
+  1. expectExit 비교: step 문서가 명령별 기대 exit code를 명시(`# expect: N`)할 수 있고,
+     명시가 없으면 0이 기본값이다. → "이 파일이 없어야 한다"(exit 1 기대) 같은 역조건 AC를 표현 가능.
+  2. 전 명령 실행: 첫 실패에서 멈추지 않고 모든 명령을 끝까지 돌려, 어떤 명령이 왜 깨졌는지
+     전부 보고한다(developer가 한 번에 다 고치도록).
+  3. attempts 누적: ac-output.json을 덮어쓰지 않고 시도별로 append 한다(감사·회고 재료).
 
 이 모듈은 LLM·claude 세션을 일절 생성하지 않는다. 순수 subprocess로 shell 명령을
 돌리고 결과를 비교할 뿐이다. (claude 세션을 띄우는 것은 별개의 agent 메커니즘이다.)
@@ -119,7 +116,7 @@ def check(root: str, phase_dir: Path, write_json, step: dict, step_text: str, at
         })
         if not ok:
             passed = False
-            # v3와 달리 break 하지 않는다 — 나머지 명령도 돌려 전체 실패 상황을 한 번에 보고.
+            # 첫 실패에서 멈추지 않는다 — 나머지 명령도 돌려 전체 실패 상황을 한 번에 보고.
 
     attempt_record = {
         "step": step["step"],

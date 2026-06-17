@@ -4,7 +4,7 @@ from __future__ import annotations
 
 v3는 executor 객체(.root, .run_git)를 받았으나, v4 execute.py는 클래스가 아니라
 함수 기반 서브커맨드 모음이므로 root(str)를 직접 받는 형태로 조정한다.
-로직 자체는 v3와 동일.
+로직 자체는 단순하다.
 """
 
 import subprocess

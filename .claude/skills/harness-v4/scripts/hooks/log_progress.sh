@@ -2,8 +2,8 @@
 # PostToolUse 훅 (harness-v4) — workflow agent가 도구를 쓸 때마다 transcript의 '새로 확정된'
 # 부분만 사람용 로그에 증분 append한다. 백그라운드 프로세스 없음 → 좀비/중복 없음.
 #
-# v3와의 차이(실측 확정):
-#   - PostToolUse payload에는 agent_transcript_path가 없고 transcript_path(메인 세션)와 agent_id만 온다.
+# transcript 경로(실측 확정):
+#   - PostToolUse payload에는 transcript_path(메인 세션)와 agent_id가 온다.
 #   - workflow agent의 transcript는 <main-transcript>/subagents/workflows/wf_<runid>/agent-<id>.jsonl 에 있다.
 #     runid를 모르므로 agent_id로 glob 탐색한다. (native Task 경로 .../subagents/agent-<id>.jsonl 도 fallback)
 set -uo pipefail
