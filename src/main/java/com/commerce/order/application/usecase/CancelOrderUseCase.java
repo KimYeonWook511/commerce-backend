@@ -14,6 +14,7 @@ import com.commerce.order.domain.exception.OrderErrorCode;
 import com.commerce.order.domain.exception.OrderException;
 import com.commerce.payment.application.port.result.CancelOutcome;
 import com.commerce.payment.application.usecase.RefundExecutionUseCase;
+import com.commerce.payment.domain.Payment;
 import com.commerce.payment.naverpay.application.port.NaverPayGateway;
 import com.commerce.payment.naverpay.application.port.result.NaverPayCancelResult;
 
@@ -73,7 +74,7 @@ public class CancelOrderUseCase {
 		return txResult.toResult(refundStatus);
 	}
 
-	private CancelOutcome pgCancel(com.commerce.payment.domain.Payment cancelPayment, String reason) {
+	private CancelOutcome pgCancel(Payment cancelPayment, String reason) {
 		NaverPayCancelResult result = naverPayGateway.cancel(
 			cancelPayment.getPgPaymentId(), cancelPayment.getAmount(), reason
 		);
