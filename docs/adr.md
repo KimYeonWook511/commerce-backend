@@ -49,6 +49,7 @@ task adr(`docs/tasks/<task>/adr.md`)의 역할은 harness 도입을 기점으로
 | structure-migration | [`docs/tasks/structure-migration/adr.md`](tasks/structure-migration/adr.md) | 전 도메인 헥사고날 목표 패키지 재배치(순수 이동·동작 불변, 리네임 없음), ArchUnit freeze→strict 전환·임시 산출물 제거, Spring Batch fault-tolerance의 DAO 예외 참조를 `GlobalExceptionHandler`처럼 규칙 예외처로 인정 (ADR-053) |
 | application-layer-relocate | [`docs/tasks/application-layer-relocate/adr.md`](tasks/application-layer-relocate/adr.md) | application 계층 역할별 접미사 이원화(usecase=`…UseCase`/`@Component`, service=`…Service`/`@Service`, ADR-006 supersede→ADR-054), class-level `@Transactional` 전 도메인 폐지(ADR-055) |
 | paid-order-cancel-refund | [`docs/tasks/paid-order-cancel-refund/adr.md`](tasks/paid-order-cancel-refund/adr.md) | PAID 주문 취소 시 환불 의도(CANCEL REQUESTED)를 주문 취소와 단일 tx 영속화 후 best-effort PG 환불(ADR-056), approve 불변·환불은 CANCEL 레코드로만(ADR-057), 응답은 취소 접수 시점(ADR-058), standalone CANCEL 대사 신설+FAILED escalation(ADR-059), CANCEL 멱등은 기존 4-col unique(ADR-060), 주문 락은 fetch join 대신 단일 행 락(ADR-061) |
+| payment-order-decouple | [`docs/tasks/payment-order-decouple/adr.md`](tasks/payment-order-decouple/adr.md) | 승인 확정을 provider 중립 facade로 통합(결제→주문 단방향, ADR-062), completePayment 거부 사유 errorCode 세분화로 주문 재조회 분기 제거(ADR-063), PAID 성공-주체 dead 분기 제거+비중복 PAID 통지+fail(ADR-064, ADR-048 supersede), gateway resolver·공통 승인 진입 UseCase는 2번째 provider 시 후속(ADR-065) |
 
 향후 task 추가 시 본 표에 한 줄을 갱신한다. task adr 위치는 모두 `docs/tasks/<task>/adr.md`로 고정한다.
 
@@ -511,6 +512,8 @@ task adr(`docs/tasks/<task>/adr.md`)의 역할은 harness 도입을 기점으로
 
 ### ADR-048: 대사 중 주문이 비-INIT이면 건너뛰지 않고 종착 상태로 전이한다
 
+> **본 결정의 PAID 성공-주체→SUCCEEDED 맞춤 분기와 `order.getStatus()` 상태 분기는 ADR-064로 superseded됨** (facade errorCode 분기로 전환, dead 분기 제거). 비-INIT 종착·취소/중복 보상 정신은 유지된다.
+
 - **결정**: 대사가 승인 확정을 시도할 때 주문 완료가 비-INIT 상태로 거부되면, 건너뛰지(미확정 유지) 않고 주문 상태별로 종착시킨다 — `CANCELED`→보상 환불(FAILED+failCode, ADR-043), `PAID`→이미 다른 성공 결제 존재 여부로 판별(있으면 중복 결제→보상, 없으면 이 건이 성공 주체→SUCCEEDED 맞춤), 주문 없음→ERROR 로그 + FAILED. 어떤 경로든 다음 주기에 재스캔되지 않게 한다.
 - **배경**: 비-INIT 거부를 그냥 건너뛰면 결제가 `UNKNOWN`으로 남아 매 주기 무한 재시도된다(PR #237 리뷰).
 - **이유**: 종착 상태(SUCCEEDED/FAILED)로 전이해야 스캔 대상에서 빠진다. `PAID`에서 중복 여부를 판별해 정당한 결제의 오환불을 막는다. 새 상태 없이 기존 상태+failCode로 표현한다(ADR-039).
@@ -627,3 +630,35 @@ task adr(`docs/tasks/<task>/adr.md`)의 역할은 harness 도입을 기점으로
 - **판단**: 취소는 사용자 단발 동작(hot path 아님)이라 RTT 1회 추가는 미미하다. 반면 락 범위를 주문 행 하나로 좁히는 것은 동시성 안전·미래 데드락 예방에서 큰 메리트다(돈 정합성 직렬화 락이라 더욱). "약간의 RTT < 좁은 락 범위"로 2단계 분리를 택한다.
 - **부수 효과**: distinct/NonUniqueResult, distinct+FOR UPDATE의 SQL 거동 의존, 자식 락 순서의 plan 의존성 같은 모호함이 사라져 락이 검증 가능하게 확실해진다(H2·MySQL·Hibernate 버전 무관).
 - **연계**: ADR-003(비관적 락 기본), 락 순서·데드락 검증 후속 #259, PR #258.
+
+### ADR-062: 결제 승인 확정 조율을 provider 중립 facade로 모으고 결제→주문 단방향 결합으로 정리한다
+
+- **결정**: 여러 도메인을 엮는 승인 확정 흐름(승인 사실 확정 + 거부 보상)을 `payment.application`의 provider 중립 조율 UseCase로 모은다. 실시간 승인·대사 두 진입점이 이 facade를 공유한다. facade는 tx를 열지 않고(orchestrator, ADR-054/055) tx 단위작업은 기존 service에 위임한다. 결합은 facade 한 점에만 격리한다 — `payment.domain`은 order를, `order.domain`은 payment를 모른다.
+- **배경**: 결제 대사·승인이 `order.getStatus()` 분기로 주문 상태머신을 결제 쪽에서 돌려, 주문 상태가 늘면 결제 분기가 폭발했다(PR #237 H1·M1·dead 분기의 산물).
+- **이유**: 조율자를 한 점에 두면 각 도메인은 자기 일만 한다. 트리거(PG 승인 응답·대사 스캔)가 모두 결제 쪽이라 조율자도 payment.application에 둔다. provider 중립 위치라 두 번째 provider 진입점도 같은 facade를 재사용한다.
+- **트레이드오프**: facade가 order errorCode에 의존하지만(거부 사유 해석) 그 의존은 한 점에 격리된다. 별도 조율 패키지는 흐름이 하나뿐이라 YAGNI — 적립·쿠폰 등이 더 엮이면 그때 승격한다.
+- **연계**: ADR-026, ADR-054/055, ADR-063/064/065, #240, #237.
+
+### ADR-063: order.completePayment 거부 사유를 errorCode로 세분화해 주문 상태 재조회 분기를 제거한다
+
+- **결정**: `Order.completePayment()`가 INIT이 아닐 때 단일 `ORDER_PAID_NOT_ALLOWED` 대신 상태별 errorCode를 던진다(`ORDER_ALREADY_PAID`/`ORDER_CANCELED_FOR_PAYMENT`/`ORDER_INVALID_STATE_FOR_PAYMENT`). facade는 이 errorCode로 분기하고 주문을 재조회해 `getStatus()`를 되묻지 않는다. "이 결제가 중복인가"는 주문 상태가 아니라 payment 질문(`existsApprovedByOrderId`)으로 판별한다. 주문 자체가 없는 경우는 `completePayment` 이전 단계에서 `ORDER_NOT_FOUND`로 나오며 facade가 환불 없이 통지+FAILED 종착으로 둔다(ADR-049 보존).
+- **배경**: 기존 대사 `handleOrderNotCompletable`은 거부를 받고 주문을 재조회해 `order.getStatus()`로 4분기했다. 주문 상태 해석이 결제 쪽에 흩어져 있었다.
+- **이유**: 주문 상태 해석을 주문 메서드 안에 가두고(Tell-Don't-Ask) 거부 결과만 errorCode로 전달하면 결제는 주문 상태머신을 알 필요가 없다. 실시간 승인이 이미 errorCode로 보상을 고르는 방식과 통일된다.
+- **트레이드오프**: OrderErrorCode가 늘어난다. 그러나 주문 상태가 늘어도 facade 분기는 errorCode 단위로만 늘고, 결제가 주문 상태를 재조회하는 결합은 사라진다.
+- **연계**: ADR-062, ADR-064, #240.
+
+### ADR-064: PAID 성공-주체 확정 분기를 제거하고 비중복 PAID는 통지+fail로 둔다 (ADR-048 supersede)
+
+- **결정**: 대사 PAID 분기에서 "성공-주체→SUCCEEDED 맞춤"을 제거한다. PAID 거부는 `existsApprovedByOrderId`로 판별해 **중복(true)이면 보상 환불**, **비중복(false)이면 환불하지 않고 정합성 통지 + FAILED 종착**으로 둔다. dead 코드 `SucceedPaymentApprovalRecordService`/`succeedApprovalRecordOnly`를 삭제한다.
+- **배경**: ADR-048은 PAID 분기를 "없으면 이 건이 성공 주체→SUCCEEDED 맞춤"으로 결정했다. 그러나 주문이 PAID가 되는 경로는 `succeedApproval`의 한 tx(`payment.succeed`+`saveApproved`+`order.completePayment`)뿐이고, `uk_payment_approved_order_key`(주문당 SUCCEEDED APPROVE 1개)가 두 번째 결제를 `completePayment` 도달 전 `PAYMENT_DUPLICATE`로 막는다. 따라서 "주문 PAID인데 SUCCEEDED APPROVE 없음"(성공-주체 분기 조건)은 모순 = 도달 불가능한 dead 코드다.
+- **이유**: dead 확정 경로를 남기면 코드가 거짓 의미를 갖는다. 동시에 만에 하나 그 상태에 도달하면 성공-주체를 환불해버리는 사고를 막아야 하므로(금전 정합성은 희박한 경합도 안전하게) 환불 대신 통지+fail로 종착시킨다. ADR-043(취소 보상 환불)·ADR-049(order==null 통지) 동작은 facade가 그대로 보존한다.
+- **supersedes**: ADR-048(대사 비-INIT 종착의 PAID 성공-주체 SUCCEEDED 맞춤 + `getStatus()` 분기 부분). 비-INIT 종착·취소/중복 보상 정신은 유지.
+- **연계**: ADR-039/044, ADR-043, ADR-048, ADR-062/063, #237, #240.
+
+### ADR-065: gateway resolver·공통 승인 진입 UseCase는 이번에 도입하지 않는다
+
+- **결정**: provider별 PG 프로토콜을 추상화하는 gateway resolver, 공통 승인 진입 UseCase, PG 결과 정규화 레이어는 이번 범위에서 만들지 않는다. provider 특화 진입점은 PG 프로토콜 흐름을 담는 진입점으로 유지하고, 그 안의 provider 공통 "confirm"만 facade로 추출한다.
+- **배경**: 결제 provider가 NaverPay 하나뿐이다. NaverPay 승인은 `ready→approve(redirect)`·`ALREADY_COMPLETE` 같은 특유의 상태머신을 갖고, 카카오/토스는 또 다르다.
+- **이유**: 정규화 경계는 두 번째 provider의 실제 모양을 봐야 제대로 그어진다. 가상의 provider로 추상화하면 한 곳에만 맞는 틀린 추상이 나온다(YAGNI, "맥락이 달라지는 시점에 분리"). 다만 facade를 provider 중립 위치에 둠으로써 두 번째 provider 진입점이 같은 facade를 재사용할 토대는 미리 깔아둔다.
+- **트레이드오프**: 두 번째 provider 도입 시 진입 UseCase 신설·gateway 추상화·결과 정규화가 후속 작업으로 남는다.
+- **연계**: ADR-062, ADR-045(채널 adapter 후속 분리 — 점진적 분리 동형), #240.
