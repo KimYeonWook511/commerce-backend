@@ -6,7 +6,6 @@ import java.util.Set;
 
 import org.springframework.stereotype.Component;
 
-import com.commerce.common.exception.CustomException;
 import com.commerce.order.domain.Order;
 import com.commerce.order.domain.repository.OrderRepository;
 import com.commerce.order.domain.exception.OrderErrorCode;
@@ -23,8 +22,7 @@ import com.commerce.payment.domain.exception.PaymentException;
 import com.commerce.payment.application.service.CreateApprovePaymentService;
 import com.commerce.payment.application.service.FailApprovePaymentService;
 import com.commerce.payment.application.service.MarkUnknownApprovePaymentService;
-import com.commerce.payment.application.service.SucceedPaymentApprovalService;
-import com.commerce.payment.application.usecase.CompensateApprovalUseCase;
+import com.commerce.payment.application.usecase.ConfirmApprovalUseCase;
 import com.commerce.payment.application.port.result.CancelOutcome;
 import com.commerce.payment.naverpay.application.dto.NaverPayApproveResponse;
 import com.commerce.payment.naverpay.application.dto.NaverPayApproveStatus;
@@ -52,11 +50,10 @@ public class ApproveNaverPayUseCase {
 	private final PaymentReservationRepository paymentReservationRepository;
 	private final PaymentRepository paymentRepository;
 	private final OrderRepository orderRepository;
-	private final SucceedPaymentApprovalService succeedPaymentApprovalService;
+	private final ConfirmApprovalUseCase confirmApprovalUseCase;
 	private final CreateApprovePaymentService createApprovePaymentService;
 	private final FailApprovePaymentService failApprovePaymentService;
 	private final MarkUnknownApprovePaymentService markUnknownApprovePaymentService;
-	private final CompensateApprovalUseCase compensateApprovalUseCase;
 
 	public NaverPayApproveResponse approve(Long memberId, String merchantPayKey, String pgPaymentId) {
 		PaymentReservation reservation = paymentReservationRepository.findByMemberIdAndMerchantPayKey(memberId, merchantPayKey)
@@ -171,50 +168,15 @@ public class ApproveNaverPayUseCase {
 		String responseMerchantPayKey,
 		int responseTotalAmount
 	) {
-		try {
-			payment.verifyApprovedResponse(responseMerchantPayKey, responseTotalAmount);
-
-			Payment completed = succeedPaymentApprovalService.succeedApproval(payment, LocalDateTime.now());
-			return toResponse(completed);
-		} catch (PaymentException ex) {
-			log.error(
-				"NaverPay approve complete failed by payment error: merchantPayKey={}, pgPaymentId={}, responseMerchantPayKey={}, responseTotalAmount={}, errorCode={}",
-				payment.getMerchantPayKey(),
-				payment.getPgPaymentId(),
-				responseMerchantPayKey,
-				responseTotalAmount,
-				ex.getErrorCode(),
-				ex
-			);
-			switch ((PaymentErrorCode)ex.getErrorCode()) {
-				case PAYMENT_MERCHANT_KEY_MISMATCH ->
-					compensateApprovalUseCase.compensateMerchantKeyMismatch(payment);
-				case PAYMENT_AMOUNT_MISMATCH ->
-					compensateApprovalUseCase.compensateAmountMismatch(payment, responseTotalAmount, this::pgCancel);
-				case PAYMENT_DUPLICATE ->
-					compensateApprovalUseCase.compensateDuplicatePayment(payment, ex, this::pgCancel);
-				// 정상 승인 후 기록 실패는 보상 없이 전파. approve REQUESTED 유지 → reconcile self-heal
-				default -> {}
-			}
-			throw ex;
-		} catch (CustomException ex) {
-			log.error(
-				"NaverPay approve complete failed by custom error: merchantPayKey={}, pgPaymentId={}, errorCode={}",
-				payment.getMerchantPayKey(),
-				payment.getPgPaymentId(),
-				ex.getErrorCode(),
-				ex
-			);
-			throw ex;
-		} catch (Exception ex) {
-			log.error(
-				"NaverPay approve complete failed by unexpected error: merchantPayKey={}, pgPaymentId={}",
-				payment.getMerchantPayKey(),
-				payment.getPgPaymentId(),
-				ex
-			);
-			throw ex;
-		}
+		ConfirmApprovalUseCase.Outcome outcome = confirmApprovalUseCase.confirm(
+			payment, LocalDateTime.now(), this::pgCancel, responseMerchantPayKey, responseTotalAmount
+		);
+		return switch (outcome.decision()) {
+			case SUCCEEDED -> toResponse(payment);
+			case REJECTED -> throw new PaymentException(outcome.errorCode());
+			// 보상 비대상 예외 전파. approve REQUESTED 유지 → reconcile self-heal
+			case PROPAGATE -> throw outcome.cause();
+		};
 	}
 
 	/**

@@ -131,8 +131,8 @@ Port 인터페이스 설계 원칙:
 4. [트랜잭션 밖] PG approve 호출
 5. 승인 시도 상태 반영 → 승인 완료 반영
    - saveApproved 의 uk_payment_approved_order_key 위반은 adapter 가 PAYMENT_DUPLICATE 로 번역 (ADR-033)
-6. 종착/보상 판단 (성공 APPROVE 행 존재 기반):
-   - 이중결제 → fail-first 단일 보상 (PG cancel)
+6. 승인 확정·종착·보상은 실시간·대사가 공유하는 provider 중립 조율 facade가 담당 (ADR-062). 거부는 주문 상태 재조회 없이 errorCode로 분기 (completePayment가 사유별 코드, ADR-063):
+   - 취소 주문·이중결제 → fail-first 보상 (PG cancel)
    - 정상 승인 후 transient 기록 실패(@Version 충돌 포함)는 보상 없이 전파·REQUESTED 유지로 reconcile 위임 (ADR-032)
 
 # 주문 만료 배치 — 경계
@@ -145,9 +145,9 @@ Port 인터페이스 설계 원칙:
 1. 스캔: stale 미확정 결제 후보 (UNKNOWN ≈1분 / REQUESTED ≈15분 하한, ≈6시간 상한 초과는 escalation 제외, ADR-047)
 2. [건별, 트랜잭션 밖] PG 이력 조회 (getApprovalHistory — 승인 재요청이 아니라 이미 일어난 결과 확인, 이중과금 방지)
 3. 후처리 정책(대상 식별·flow 결정 — src/main 단일 출처, ADR-046)으로 확정/보상/대기 결정
-4. 확정: PG 재호출 없이 우리 상태만 SUCCEEDED + Order PAID
-5. 이미 CANCELED / 중복: 보상 취소(PG cancel) + FAILED 종착 + NotificationPort 통지 (ADR-043)
-6. 건별 독립 트랜잭션으로 처리(한 건 실패가 루프를 멈추지 않음) — 비-INIT 주문은 종착 상태로 전이해 무한 재시도 차단 (ADR-048)
+4. 확정·종착·보상은 승인과 같은 provider 중립 facade를 공유 (ADR-062): 확정은 PG 재호출 없이 SUCCEEDED + Order PAID
+5. 이미 CANCELED / 중복: 보상 취소(PG cancel) + FAILED 종착 + NotificationPort 통지 (ADR-043). 비중복 PAID는 환불 없이 통지+FAILED (ADR-064)
+6. 건별 독립 트랜잭션으로 처리(한 건 실패가 루프를 멈추지 않음) — 비-INIT 주문 거부는 주문 상태 재조회 없이 errorCode로 분기해 종착시켜 무한 재시도 차단 (ADR-048→064)
 ```
 
 ---
@@ -166,6 +166,7 @@ Port 인터페이스 설계 원칙:
   - 사용자 취소: INIT은 재고만 복구하고, PAID는 환불까지 포함한다. 조율 usecase(tx 없음)가 단위작업 service(tx)를 호출해 한 tx 안에 `환불 의도(CANCEL REQUESTED) 영속화 + order.cancel() + 재고 복구`를 원자적으로 커밋하고, 커밋 후 best-effort PG 환불을 실행한다. 실패·불확실·중단은 결제 CANCEL 대사에 위임한다(환불 보장은 영속된 의도+대사). 주문 행은 fetch join 없이 단일 행 락으로 잠가 락 범위를 좁힌다(ADR-056~058·061). order.application이 stock·payment service에 의존(기존 order→stock 패턴과 동일).
 - **`cart`** — 장바구니 항목 추가(UPSERT)·조회(최신 가격 재조립·구매 불가 마킹)·수량 변경·삭제. 주문-cart 연동은 `CartItemRemover` port(order 소유)를 cart adapter가 구현해 의존 방향을 보존한다.
 - **`payment`** — 결제 예약(reserve)·승인·시도 이력. `naverpay`는 provider 서브패키지(PG 호출과 내부 상태 반영 분리). 도메인은 두 엔티티로 분리(ADR-026): `PaymentReservation`(결제창 준비물, `RESERVED→USED`) + `Payment`(PG 사건 append-only). 완료 판단은 *성공한 APPROVE 행 존재(EXISTS)* 기반(ADR-014/026). `status`는 일어난 사실만 담고 후처리 분류는 정책이 계산한다 — 보상·escalation 종착에 새 상태를 두지 않는다(ADR-039/044). 결과 불명 시 UNKNOWN으로 흔적을 보존하고 해당 주문의 reserve/approve를 `PAYMENT_RESULT_PENDING`(409)로 차단한다. 세부는 `docs/tasks/payment-order-redesign/`(ADR-026), 예외·충돌 처리는 `docs/exception-strategy.md`·`docs/optimistic-lock-design.md`.
+  - 승인 확정 조율: 실시간 승인·대사가 공유하는 provider 중립 facade(payment.application)가 승인 사실 확정과 거부 보상을 조율한다. 주문 거부는 `order.completePayment`의 errorCode로 받아 분기하며 주문 상태를 재조회하지 않는다(결제→주문 단방향). PAID 성공-주체 dead 분기를 제거하고 비중복 PAID는 통지+fail로 둔다. gateway resolver·공통 승인 진입 UseCase는 2번째 provider 도입 시 후속이다(ADR-062~065).
   - 보상: 이중결제(uk 위반)는 adapter가 도메인 예외로 번역하고 application이 fail-first로 보상한다. 정상 승인 후 transient 기록 실패(@Version 충돌 포함)는 보상 없이 전파하고 approve를 REQUESTED로 두어 대사에 위임한다(완료 우선). 보상 흐름은 tx를 열지 않고 단계별 독립 commit으로 진행하며, 충돌은 tx 경계 밖에서 skip한다(ADR-008/015/032/033).
   - 대사(reconciliation): `@Scheduled` 트리거(presentation/scheduler)가 깨우는 서비스가 stale 미확정 결제를 PG **이력 조회**(재요청 아님, 이중과금 방지)로 확정·보상하며, 건별 독립 tx로 한 건 실패가 루프를 멈추지 않는다(ADR-040/043/047/048). 운영자 통지는 `NotificationPort`로 hook만 확보(ADR-045). 승인(APPROVE)뿐 아니라 **standalone CANCEL**(REQUESTED/UNKNOWN — 사용자 취소 환불 의도가 PG 호출 전/중 중단으로 남은 것)도 대사 대상이다. PG 상태를 조회해 이미 취소면 확정, 아직 승인이면 재시도하며, 확정적 환불 실패(FAILED)는 자동 재시도 대신 escalation으로 통지한다(ADR-059, 후속 #208).
 - **`outbox`** — 재고 복구 이벤트를 Outbox 패턴으로 처리(생성·Kafka 릴레이·소비를 분리).

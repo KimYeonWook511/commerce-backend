@@ -20,7 +20,6 @@ import org.mockito.junit.jupiter.MockitoExtension;
 import org.springframework.data.domain.Pageable;
 import org.springframework.test.util.ReflectionTestUtils;
 
-import com.commerce.order.domain.repository.OrderRepository;
 import com.commerce.payment.application.port.NotificationPort;
 import com.commerce.payment.application.service.EscalateApprovePaymentService;
 import com.commerce.payment.application.service.EscalateCancelPaymentService;
@@ -28,8 +27,6 @@ import com.commerce.payment.application.service.FailApprovePaymentService;
 import com.commerce.payment.application.service.FailCancelPaymentService;
 import com.commerce.payment.application.service.MarkUnknownCancelPaymentService;
 import com.commerce.payment.application.service.SucceedCancelPaymentService;
-import com.commerce.payment.application.service.SucceedPaymentApprovalRecordService;
-import com.commerce.payment.application.service.SucceedPaymentApprovalService;
 import com.commerce.payment.domain.Payment;
 import com.commerce.payment.domain.PaymentFailCode;
 import com.commerce.payment.domain.PaymentProvider;
@@ -52,15 +49,6 @@ class CancelReconciliationUseCaseTest {
 	private PaymentRepository paymentRepository;
 
 	@Mock
-	private OrderRepository orderRepository;
-
-	@Mock
-	private SucceedPaymentApprovalService succeedPaymentApprovalService;
-
-	@Mock
-	private SucceedPaymentApprovalRecordService succeedPaymentApprovalRecordService;
-
-	@Mock
 	private FailApprovePaymentService failApprovePaymentService;
 
 	@Mock
@@ -79,7 +67,7 @@ class CancelReconciliationUseCaseTest {
 	private MarkUnknownCancelPaymentService markUnknownCancelPaymentService;
 
 	@Mock
-	private CompensateApprovalUseCase compensateApprovalUseCase;
+	private ConfirmApprovalUseCase confirmApprovalUseCase;
 
 	@Mock
 	private NaverPayGateway naverPayGateway;
@@ -313,7 +301,6 @@ class CancelReconciliationUseCaseTest {
 	void reconcileCancel_escalation_callsEscalateCancelService() {
 		injectPolicies();
 		LocalDateTime now = LocalDateTime.now();
-		LocalDateTime escalationCutoff = now.minusHours(6);
 
 		Payment cancelPayment = requestedCancelPayment("PAY-C-ESC", "pg-c-esc", now.minusHours(7));
 
@@ -363,9 +350,9 @@ class CancelReconciliationUseCaseTest {
 
 	// --- APPROVE 대사 동작 불변 검증 ---
 
-	@DisplayName("APPROVE 대사는 CANCEL 분기 추가 후에도 기존과 동일하게 동작한다")
+	@DisplayName("APPROVE 대사는 CANCEL 분기 추가 후에도 facade를 통해 확정을 시도한다")
 	@Test
-	void reconcileApprove_unaffectedByCancelChanges_stillSucceeds() {
+	void reconcileApprove_unaffectedByCancelChanges_callsConfirmFacade() {
 		injectPolicies();
 		LocalDateTime now = LocalDateTime.now();
 		Payment approvePayment = unknownApprovePayment("PAY-A-1", "pg-a-1", now.minusMinutes(2));
@@ -376,10 +363,12 @@ class CancelReconciliationUseCaseTest {
 			.willReturn(List.of());
 		given(naverPayGateway.getApprovalHistory("pg-a-1"))
 			.willReturn(NaverPayHistoryResult.approved("PAY-A-1", 1000));
+		given(confirmApprovalUseCase.confirm(eq(approvePayment), any(LocalDateTime.class), any(), eq("PAY-A-1"), eq(1000)))
+			.willReturn(ConfirmApprovalUseCase.Outcome.succeeded());
 
 		reconcilePaymentUseCase.reconcile();
 
-		then(succeedPaymentApprovalService).should().succeedApproval(eq(approvePayment), any(LocalDateTime.class));
+		then(confirmApprovalUseCase).should().confirm(eq(approvePayment), any(LocalDateTime.class), any(), eq("PAY-A-1"), eq(1000));
 		then(succeedCancelPaymentService).should(never()).succeed(any(), any(), any(), any());
 	}
 

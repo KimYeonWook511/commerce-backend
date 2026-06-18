@@ -97,8 +97,14 @@ public class Order extends BaseTimeEntity {
 	}
 
 	public void completePayment() {
+		if (this.status == OrderStatus.PAID) {
+			throw new OrderException(OrderErrorCode.ORDER_ALREADY_PAID);
+		}
+		if (this.status == OrderStatus.CANCELED) {
+			throw new OrderException(OrderErrorCode.ORDER_CANCELED_FOR_PAYMENT);
+		}
 		if (this.status != OrderStatus.INIT) {
-			throw new OrderException(OrderErrorCode.ORDER_PAID_NOT_ALLOWED);
+			throw new OrderException(OrderErrorCode.ORDER_INVALID_STATE_FOR_PAYMENT);
 		}
 
 		this.status = OrderStatus.PAID;
