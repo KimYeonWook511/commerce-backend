@@ -4,6 +4,7 @@ import java.time.LocalDateTime;
 
 import org.springframework.stereotype.Component;
 
+import com.commerce.common.exception.ErrorCode;
 import com.commerce.order.domain.exception.OrderErrorCode;
 import com.commerce.order.domain.exception.OrderException;
 import com.commerce.payment.application.port.NotificationPort;
@@ -60,7 +61,7 @@ public class ConfirmApprovalUseCase {
 	}
 
 	private Outcome handleOrderRejection(Payment payment, LocalDateTime now, PgCanceller pgCanceller, OrderException ex) {
-		OrderErrorCode code = (OrderErrorCode) ex.getErrorCode();
+		ErrorCode code = ex.getErrorCode();
 
 		if (code == OrderErrorCode.ORDER_CANCELED_FOR_PAYMENT) {
 			// CANCELED 주문 — 보상 환불 + 통지
