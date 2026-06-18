@@ -166,30 +166,26 @@ public class ConfirmApprovalUseCase {
 		}
 	}
 
+	/** facade 처리 결과 종류. */
+	public enum Decision { SUCCEEDED, REJECTED, PROPAGATE }
+
 	/**
 	 * facade 처리 결과. 진입점이 응답/종착으로 번역한다.
+	 * - REJECTED면 errorCode 보존 — 실시간 진입점이 이 errorCode로 PaymentException을 다시 throw한다.
+	 * - PROPAGATE면 보상 비대상 예외(예: 정상 승인 후 기록 실패) — 호출부가 cause를 그대로 rethrow한다.
 	 */
-	public sealed interface Outcome permits Outcome.Succeeded, Outcome.Rejected, Outcome.Propagate {
+	public record Outcome(Decision decision, PaymentErrorCode errorCode, RuntimeException cause) {
 
-		static Outcome succeeded() {
-			return new Succeeded();
+		public static Outcome succeeded() {
+			return new Outcome(Decision.SUCCEEDED, null, null);
 		}
 
-		static Outcome rejected(PaymentErrorCode errorCode) {
-			return new Rejected(errorCode);
+		public static Outcome rejected(PaymentErrorCode errorCode) {
+			return new Outcome(Decision.REJECTED, errorCode, null);
 		}
 
-		static Outcome propagate(RuntimeException cause) {
-			return new Propagate(cause);
+		public static Outcome propagate(RuntimeException cause) {
+			return new Outcome(Decision.PROPAGATE, null, cause);
 		}
-
-		/** 승인 확정 성공 */
-		record Succeeded() implements Outcome {}
-
-		/** 거부 — 원래 errorCode 보존. 실시간 진입점이 이 errorCode로 PaymentException을 다시 throw할 수 있다. */
-		record Rejected(PaymentErrorCode errorCode) implements Outcome {}
-
-		/** 보상 비대상 예외 전파. 호출부가 그대로 rethrow한다. */
-		record Propagate(RuntimeException cause) implements Outcome {}
 	}
 }

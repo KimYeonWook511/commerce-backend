@@ -413,14 +413,14 @@ public class ReconcilePaymentUseCase {
 			payment, now, this::pgCancelForReconciliation,
 			historyResult.getMerchantPayKey(), historyResult.getTotalPayAmount());
 
-		return switch (outcome) {
-			case ConfirmApprovalUseCase.Outcome.Succeeded ignored -> {
+		return switch (outcome.decision()) {
+			case SUCCEEDED -> {
 				log.info("대사 승인 확정 paymentId={} orderId={} merchantPayKey={}",
 					payment.getId(), payment.getOrderId(), payment.getMerchantPayKey());
 				yield PaymentReconcileOutcome.SUCCEEDED;
 			}
-			case ConfirmApprovalUseCase.Outcome.Rejected ignored -> PaymentReconcileOutcome.FAILED;
-			case ConfirmApprovalUseCase.Outcome.Propagate propagate -> throw propagate.cause();
+			case REJECTED -> PaymentReconcileOutcome.FAILED;
+			case PROPAGATE -> throw outcome.cause();
 		};
 	}
 

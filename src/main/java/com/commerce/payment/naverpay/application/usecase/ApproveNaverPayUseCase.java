@@ -171,11 +171,11 @@ public class ApproveNaverPayUseCase {
 		ConfirmApprovalUseCase.Outcome outcome = confirmApprovalUseCase.confirm(
 			payment, LocalDateTime.now(), this::pgCancel, responseMerchantPayKey, responseTotalAmount
 		);
-		return switch (outcome) {
-			case ConfirmApprovalUseCase.Outcome.Succeeded s -> toResponse(payment);
-			case ConfirmApprovalUseCase.Outcome.Rejected r -> throw new PaymentException(r.errorCode());
+		return switch (outcome.decision()) {
+			case SUCCEEDED -> toResponse(payment);
+			case REJECTED -> throw new PaymentException(outcome.errorCode());
 			// 보상 비대상 예외 전파. approve REQUESTED 유지 → reconcile self-heal
-			case ConfirmApprovalUseCase.Outcome.Propagate p -> throw p.cause();
+			case PROPAGATE -> throw outcome.cause();
 		};
 	}
 
