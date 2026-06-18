@@ -106,7 +106,7 @@ public class ConfirmApprovalUseCase {
 	private Outcome handlePaymentRejection(Payment payment, LocalDateTime now, PgCanceller pgCanceller,
 		int responseTotalAmount, PaymentException ex) {
 
-		PaymentErrorCode code = (PaymentErrorCode) ex.getErrorCode();
+		ErrorCode code = ex.getErrorCode();
 
 		if (code == PaymentErrorCode.PAYMENT_DUPLICATE) {
 			return handleAlreadyPaidRejection(payment, now, pgCanceller, ex);
@@ -116,14 +116,14 @@ public class ConfirmApprovalUseCase {
 			compensateApprovalUseCase.compensateMerchantKeyMismatch(payment);
 			log.warn("승인 확정 - merchantPayKey 불일치 보상 paymentId={} orderId={} merchantPayKey={}",
 				payment.getId(), payment.getOrderId(), payment.getMerchantPayKey());
-			return Outcome.rejected(code);
+			return Outcome.rejected(PaymentErrorCode.PAYMENT_MERCHANT_KEY_MISMATCH);
 		}
 
 		if (code == PaymentErrorCode.PAYMENT_AMOUNT_MISMATCH) {
 			compensateApprovalUseCase.compensateAmountMismatch(payment, responseTotalAmount, pgCanceller);
 			log.warn("승인 확정 - 금액 불일치 보상 paymentId={} orderId={} merchantPayKey={}",
 				payment.getId(), payment.getOrderId(), payment.getMerchantPayKey());
-			return Outcome.rejected(code);
+			return Outcome.rejected(PaymentErrorCode.PAYMENT_AMOUNT_MISMATCH);
 		}
 
 		// 보상 비대상 PaymentException(예: 정상 승인 후 기록 실패) — 보상 없이 전파
