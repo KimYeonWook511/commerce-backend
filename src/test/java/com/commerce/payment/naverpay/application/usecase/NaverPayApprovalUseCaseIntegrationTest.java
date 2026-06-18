@@ -13,6 +13,9 @@ import java.time.LocalDateTime;
 import java.util.UUID;
 
 import org.junit.jupiter.api.AfterEach;
+import org.springframework.transaction.PlatformTransactionManager;
+import org.springframework.transaction.TransactionDefinition;
+import org.springframework.transaction.support.TransactionTemplate;
 import org.junit.jupiter.api.DisplayName;
 import org.junit.jupiter.api.Test;
 import org.mockito.Mockito;
@@ -25,8 +28,6 @@ import org.springframework.test.context.bean.override.mockito.MockitoSpyBean;
 import com.commerce.member.domain.Member;
 import com.commerce.order.domain.Order;
 import com.commerce.order.domain.OrderStatus;
-import com.commerce.order.domain.exception.OrderErrorCode;
-import com.commerce.order.domain.exception.OrderException;
 import com.commerce.payment.domain.Payment;
 import com.commerce.payment.domain.PaymentFailCode;
 import com.commerce.payment.domain.PaymentProvider;
@@ -89,6 +90,9 @@ class NaverPayApprovalUseCaseIntegrationTest {
 
 	@MockitoSpyBean
 	private FailCancelPaymentService failCancelPaymentService;
+
+	@Autowired
+	private PlatformTransactionManager transactionManager;
 
 	@Autowired
 	private PersistenceCleanupTestSupport persistenceCleanup;
@@ -418,13 +422,22 @@ class NaverPayApprovalUseCaseIntegrationTest {
 		// given
 		Member member = memberPersistence.save(createMember());
 		persistOrder(member, "PAY-INT-6-2", 1000);
+		// facade의 existsApprovedByOrderId 판별을 위해, succeedApproval 호출 시 별도 트랜잭션으로 선행 SUCCEEDED APPROVE를 저장하고 예외를 던진다.
+		// (경쟁 조건 시뮬레이션: Thread A가 먼저 SUCCEEDED를 커밋한 뒤, Thread B의 succeedApproval이 PAYMENT_DUPLICATE를 받는 시나리오)
+		Mockito.doAnswer(invocation -> {
+			Payment approvePayment = invocation.getArgument(0);
+			// 별도 트랜잭션으로 커밋 — succeedApproval 트랜잭션 롤백과 무관하게 visible
+			saveInNewTransaction(createApproveSucceeded(
+				approvePayment.getOrderId(), approvePayment.getMerchantPayKey(),
+				"pg-int-6-2-prior", approvePayment.getAmount(), approvePayment.getProvider()
+			));
+			throw new PaymentException(PaymentErrorCode.PAYMENT_DUPLICATE);
+		}).when(succeedPaymentApprovalService).succeedApproval(any(Payment.class), any(LocalDateTime.class));
+
 		given(naverPayGateway.approve("pg-int-6-2"))
 			.willReturn(NaverPayApproveResult.success("PAY-INT-6-2", 1000));
 		given(naverPayGateway.cancel(any(), anyInt(), any()))
 			.willReturn(NaverPayCancelResult.success());
-		Mockito.doThrow(new PaymentException(PaymentErrorCode.PAYMENT_DUPLICATE))
-			.when(succeedPaymentApprovalService)
-			.succeedApproval(any(Payment.class), any(LocalDateTime.class));
 
 		// when & then
 		assertThatThrownBy(() -> approveNaverPayUseCase.approve(member.getId(), "PAY-INT-6-2", "pg-int-6-2"))
@@ -445,17 +458,25 @@ class NaverPayApprovalUseCaseIntegrationTest {
 		// given
 		Member member = memberPersistence.save(createMember());
 		persistOrder(member, "PAY-INT-6-3", 1000);
+		PaymentReservation reservation = reservationPersistence.findByMerchantPayKey("PAY-INT-6-3").orElseThrow();
+		// 이미 완료된 취소 기록 준비
 		Payment cancelPayment = Payment.createCancelRequested(
-			1L, "PAY-INT-6-3", "pg-int-6-3", 1000, PaymentProvider.NAVERPAY
+			reservation.getOrderId(), "PAY-INT-6-3", "pg-int-6-3", 1000, PaymentProvider.NAVERPAY
 		);
 		cancelPayment.succeed(LocalDateTime.now());
 		paymentPersistence.save(cancelPayment);
 
 		given(naverPayGateway.approve("pg-int-6-3"))
 			.willReturn(NaverPayApproveResult.success("PAY-INT-6-3", 1000));
-		Mockito.doThrow(new PaymentException(PaymentErrorCode.PAYMENT_DUPLICATE))
-			.when(succeedPaymentApprovalService)
-			.succeedApproval(any(Payment.class), any(LocalDateTime.class));
+		// facade의 existsApprovedByOrderId 판별을 위해, succeedApproval 호출 시 별도 트랜잭션으로 선행 SUCCEEDED APPROVE를 저장하고 예외를 던진다.
+		Mockito.doAnswer(invocation -> {
+			Payment approvePayment = invocation.getArgument(0);
+			saveInNewTransaction(createApproveSucceeded(
+				approvePayment.getOrderId(), approvePayment.getMerchantPayKey(),
+				"pg-int-6-3-prior", approvePayment.getAmount(), approvePayment.getProvider()
+			));
+			throw new PaymentException(PaymentErrorCode.PAYMENT_DUPLICATE);
+		}).when(succeedPaymentApprovalService).succeedApproval(any(Payment.class), any(LocalDateTime.class));
 
 		// when & then
 		assertThatThrownBy(() -> approveNaverPayUseCase.approve(member.getId(), "PAY-INT-6-3", "pg-int-6-3"))
@@ -477,9 +498,15 @@ class NaverPayApprovalUseCaseIntegrationTest {
 			.willReturn(NaverPayApproveResult.success("PAY-INT-6-4", 1000));
 		given(naverPayGateway.cancel(any(), anyInt(), any()))
 			.willReturn(NaverPayCancelResult.failed(PaymentFailCode.PG_REQUEST_REJECTED, "기타 실패"));
-		Mockito.doThrow(new PaymentException(PaymentErrorCode.PAYMENT_DUPLICATE))
-			.when(succeedPaymentApprovalService)
-			.succeedApproval(any(Payment.class), any(LocalDateTime.class));
+		// facade의 existsApprovedByOrderId 판별을 위해, succeedApproval 호출 시 별도 트랜잭션으로 선행 SUCCEEDED APPROVE를 저장하고 예외를 던진다.
+		Mockito.doAnswer(invocation -> {
+			Payment approvePayment = invocation.getArgument(0);
+			saveInNewTransaction(createApproveSucceeded(
+				approvePayment.getOrderId(), approvePayment.getMerchantPayKey(),
+				"pg-int-6-4-prior", approvePayment.getAmount(), approvePayment.getProvider()
+			));
+			throw new PaymentException(PaymentErrorCode.PAYMENT_DUPLICATE);
+		}).when(succeedPaymentApprovalService).succeedApproval(any(Payment.class), any(LocalDateTime.class));
 
 		// when & then
 		assertThatThrownBy(() -> approveNaverPayUseCase.approve(member.getId(), "PAY-INT-6-4", "pg-int-6-4"))
@@ -500,17 +527,24 @@ class NaverPayApprovalUseCaseIntegrationTest {
 		// given
 		Member member = memberPersistence.save(createMember());
 		persistOrder(member, "PAY-INT-6-5", 1000);
+		PaymentReservation reservation = reservationPersistence.findByMerchantPayKey("PAY-INT-6-5").orElseThrow();
 		paymentPersistence.save(
-			Payment.createCancelRequested(1L, "PAY-INT-6-5", "pg-int-6-5", 1000, PaymentProvider.NAVERPAY)
+			Payment.createCancelRequested(reservation.getOrderId(), "PAY-INT-6-5", "pg-int-6-5", 1000, PaymentProvider.NAVERPAY)
 		);
 
 		given(naverPayGateway.approve("pg-int-6-5"))
 			.willReturn(NaverPayApproveResult.success("PAY-INT-6-5", 1000));
 		given(naverPayGateway.cancel(any(), anyInt(), any()))
 			.willReturn(NaverPayCancelResult.processing());
-		Mockito.doThrow(new PaymentException(PaymentErrorCode.PAYMENT_DUPLICATE))
-			.when(succeedPaymentApprovalService)
-			.succeedApproval(any(Payment.class), any(LocalDateTime.class));
+		// facade의 existsApprovedByOrderId 판별을 위해, succeedApproval 호출 시 별도 트랜잭션으로 선행 SUCCEEDED APPROVE를 저장하고 예외를 던진다.
+		Mockito.doAnswer(invocation -> {
+			Payment approvePayment = invocation.getArgument(0);
+			saveInNewTransaction(createApproveSucceeded(
+				approvePayment.getOrderId(), approvePayment.getMerchantPayKey(),
+				"pg-int-6-5-prior", approvePayment.getAmount(), approvePayment.getProvider()
+			));
+			throw new PaymentException(PaymentErrorCode.PAYMENT_DUPLICATE);
+		}).when(succeedPaymentApprovalService).succeedApproval(any(Payment.class), any(LocalDateTime.class));
 
 		// when & then
 		assertThatThrownBy(() -> approveNaverPayUseCase.approve(member.getId(), "PAY-INT-6-5", "pg-int-6-5"))
@@ -662,11 +696,11 @@ class NaverPayApprovalUseCaseIntegrationTest {
 	 * 9. DB/서버 장애
 	 * ===================================================
 	 */
-	@DisplayName("succeedApproval 중 CustomException(주문 상태 예외)이 발생하면 보상 없이 예외를 전파하고 approve는 REQUESTED로 남는다")
+	@DisplayName("PAID 주문에 승인이 시도되고 중복 SUCCEEDED APPROVE가 없으면 비중복 PAID 안전망으로 종착한다 (ADR-L3)")
 	@Test
-	void approve_whenOrderAlreadyPaid_propagatesWithoutCompensation() {
-		// given: PG SUCCESS 후 order 상태 예외(CustomException) — transient/정상 반영 실패
-		// 정상 매출을 취소하지 않고 예외 전파, approve REQUESTED 유지 → reconcile self-heal (ADR-L1)
+	void approve_whenOrderAlreadyPaid_nonDuplicatePaidSafetyNetTerminates() {
+		// given: PG SUCCESS 후 order 상태가 PAID이지만 SUCCEEDED APPROVE payment가 없는 정합성 오류 시나리오 (ADR-L3)
+		// facade가 ORDER_ALREADY_PAID를 받아 existsApprovedByOrderId 판별 → 비중복 → 환불 없이 통지 + FAILED 종착
 		Member member = memberPersistence.save(createMember());
 		Order order = persistOrder(member, "PAY-INT-9-1", 1000);
 		order.completePayment();
@@ -675,16 +709,16 @@ class NaverPayApprovalUseCaseIntegrationTest {
 		given(naverPayGateway.approve("pg-int-9-1"))
 			.willReturn(NaverPayApproveResult.success("PAY-INT-9-1", 1000));
 
-		// when & then
+		// when & then: 비중복 PAID 안전망 — 환불 없이 PAYMENT_APPROVE_FAILED로 종착 (ADR-L3)
 		assertThatThrownBy(() -> approveNaverPayUseCase.approve(member.getId(), "PAY-INT-9-1", "pg-int-9-1"))
-			.isInstanceOf(OrderException.class)
-			.satisfies(exception -> assertThat(((OrderException)exception).getErrorCode())
-				.isEqualTo(OrderErrorCode.ORDER_ALREADY_PAID));
+			.isInstanceOf(PaymentException.class)
+			.satisfies(exception -> assertThat(((PaymentException)exception).getErrorCode())
+				.isEqualTo(PaymentErrorCode.PAYMENT_APPROVE_FAILED));
 		// 보상(PG cancel)이 없으므로 CANCEL payment는 생성되지 않는다
 		assertCancelPaymentEmpty("PAY-INT-9-1", "pg-int-9-1");
-		// approve payment는 REQUESTED로 남아 reconcile self-heal 대상이 된다
+		// approve payment는 FAILED로 종착한다 (ADR-L3 비중복 PAID 안전망)
 		assertThat(getPayment("PAY-INT-9-1", "pg-int-9-1", PaymentType.APPROVE).getStatus())
-			.isEqualTo(PaymentStatus.REQUESTED);
+			.isEqualTo(PaymentStatus.FAILED);
 		then(naverPayGateway).should(never()).cancel(any(), anyInt(), any());
 	}
 
@@ -937,6 +971,21 @@ class NaverPayApprovalUseCaseIntegrationTest {
 		assertThat(paymentPersistence.findPayment(
 			merchantPayKey, PaymentProvider.NAVERPAY, pgPaymentId, PaymentType.CANCEL
 		)).isEmpty();
+	}
+
+	/** 별도 커밋 트랜잭션으로 payment 저장. doAnswer 내 호출 시 외부 트랜잭션 롤백에 영향받지 않도록 REQUIRES_NEW로 분리한다. */
+	private Payment saveInNewTransaction(Payment payment) {
+		TransactionTemplate txTemplate = new TransactionTemplate(transactionManager);
+		txTemplate.setPropagationBehavior(TransactionDefinition.PROPAGATION_REQUIRES_NEW);
+		return txTemplate.execute(status -> paymentPersistence.save(payment));
+	}
+
+	/** 중복 경합 시뮬레이션용 APPROVE SUCCEEDED payment 생성. type 필드는 CANCEL로 생성되므로 APPROVE로 교체한다. */
+	private Payment createApproveSucceeded(Long orderId, String merchantPayKey, String pgPaymentId, int amount, PaymentProvider provider) {
+		Payment payment = Payment.createCancelRequested(orderId, merchantPayKey, pgPaymentId, amount, provider);
+		org.springframework.test.util.ReflectionTestUtils.setField(payment, "type", PaymentType.APPROVE);
+		payment.succeed(LocalDateTime.now());
+		return payment;
 	}
 
 }
