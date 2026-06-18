@@ -1,0 +1,14 @@
+{
+  "steps": [
+    { "step": 1, "name": "approval-orchestration-facade", "status": "pending", "summary": null },
+    { "step": 2, "name": "realtime-approval-delegate", "status": "pending", "summary": null }
+  ],
+  "execution": {
+    "developer_model": null,
+    "reviewer_model": null,
+    "committer_model": null,
+    "push": true
+  },
+  "created_at": "2026-06-18T00:00:00+09:00",
+  "completed_at": null
+}
