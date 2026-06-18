@@ -1,14 +1,26 @@
 {
   "steps": [
-    { "step": 1, "name": "approval-orchestration-facade", "status": "pending", "summary": null },
-    { "step": 2, "name": "realtime-approval-delegate", "status": "pending", "summary": null }
+    {
+      "step": 1,
+      "name": "approval-orchestration-facade",
+      "status": "completed",
+      "summary": "ConfirmApprovalUseCase.confirm()에 responseMerchantPayKey 파라미터를 추가하고 verifyApprovedResponse를 facade 내부 try/catch 안으로 이동하여 MERCHANT_KEY_MISMATCH/AMOUNT_MISMATCH 예외가 보상 분기로 흐르도록 수정하고, ReconcilePaymentUseCaseTest에서 real ConfirmApprovalUseCase 인스턴스로 실제 compensateMerchantKeyMismatch 호출을 검증하도록 갱신함",
+      "completed_at": "2026-06-18T17:08:23.813758+09:00"
+    },
+    {
+      "step": 2,
+      "name": "realtime-approval-delegate",
+      "status": "completed",
+      "summary": "ApproveNaverPayUseCase.completeVerifiedApproval()가 SucceedPaymentApprovalService/CompensateApprovalUseCase 직접 의존을 제거하고 ConfirmApprovalUseCase 파사드에 위임하도록 리팩터링 완료. Outcome sealed interface를 switch expression으로 처리해 Rejected는 PaymentException으로 변환, Propagate는 원본 예외 재전파. 통합 테스트의 PAYMENT_DUPLICATE 시나리오 4개는 TransactionTemplate(REQUIRES_NEW)으로 별도 커밋된 SUCCEEDED APPROVE를 사전 저장해 existsApprovedByOrderId 판별이 true를 반환하도록 수정.",
+      "completed_at": "2026-06-18T17:27:34.309816+09:00"
+    }
   ],
   "execution": {
-    "developer_model": null,
-    "reviewer_model": null,
-    "committer_model": null,
+    "developer_model": "sonnet",
+    "reviewer_model": "opus",
+    "committer_model": "haiku",
     "push": true
   },
   "created_at": "2026-06-18T00:00:00+09:00",
-  "completed_at": null
+  "completed_at": "2026-06-18T17:27:41.370419+09:00"
 }
