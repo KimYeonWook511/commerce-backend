@@ -679,7 +679,7 @@ class NaverPayApprovalUseCaseIntegrationTest {
 		assertThatThrownBy(() -> approveNaverPayUseCase.approve(member.getId(), "PAY-INT-9-1", "pg-int-9-1"))
 			.isInstanceOf(OrderException.class)
 			.satisfies(exception -> assertThat(((OrderException)exception).getErrorCode())
-				.isEqualTo(OrderErrorCode.ORDER_PAID_NOT_ALLOWED));
+				.isEqualTo(OrderErrorCode.ORDER_ALREADY_PAID));
 		// 보상(PG cancel)이 없으므로 CANCEL payment는 생성되지 않는다
 		assertCancelPaymentEmpty("PAY-INT-9-1", "pg-int-9-1");
 		// approve payment는 REQUESTED로 남아 reconcile self-heal 대상이 된다

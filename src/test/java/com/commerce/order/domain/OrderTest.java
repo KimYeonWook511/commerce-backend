@@ -146,9 +146,41 @@ class OrderTest {
 		assertThat(order.getStatus()).isEqualTo(OrderStatus.PAID);
 	}
 
-	@DisplayName("주문이 초기 상태가 아니면 결제 완료 처리에 실패한다")
+	@DisplayName("주문이 이미 PAID이면 결제 완료 처리 시 ORDER_ALREADY_PAID를 던진다")
 	@Test
-	void completePayment_whenStatusNotInit_throwException() {
+	void completePayment_whenStatusPaid_throwOrderAlreadyPaid() {
+		// given
+		Order order = Order.create(1L);
+		setStatus(order, OrderStatus.PAID);
+
+		// when & then
+		assertThatThrownBy(order::completePayment)
+			.isInstanceOf(OrderException.class)
+			.satisfies(exception -> {
+				OrderException orderException = (OrderException) exception;
+				assertThat(orderException.getErrorCode()).isEqualTo(OrderErrorCode.ORDER_ALREADY_PAID);
+			});
+	}
+
+	@DisplayName("주문이 CANCELED이면 결제 완료 처리 시 ORDER_CANCELED_FOR_PAYMENT를 던진다")
+	@Test
+	void completePayment_whenStatusCanceled_throwOrderCanceledForPayment() {
+		// given
+		Order order = Order.create(1L);
+		setStatus(order, OrderStatus.CANCELED);
+
+		// when & then
+		assertThatThrownBy(order::completePayment)
+			.isInstanceOf(OrderException.class)
+			.satisfies(exception -> {
+				OrderException orderException = (OrderException) exception;
+				assertThat(orderException.getErrorCode()).isEqualTo(OrderErrorCode.ORDER_CANCELED_FOR_PAYMENT);
+			});
+	}
+
+	@DisplayName("주문이 그 외 비-INIT 상태이면 결제 완료 처리 시 ORDER_INVALID_STATE_FOR_PAYMENT를 던진다")
+	@Test
+	void completePayment_whenStatusOtherNonInit_throwOrderInvalidStateForPayment() {
 		// given
 		Order order = Order.create(1L);
 		setStatus(order, OrderStatus.RECEIVED);
@@ -158,7 +190,7 @@ class OrderTest {
 			.isInstanceOf(OrderException.class)
 			.satisfies(exception -> {
 				OrderException orderException = (OrderException) exception;
-				assertThat(orderException.getErrorCode()).isEqualTo(OrderErrorCode.ORDER_PAID_NOT_ALLOWED);
+				assertThat(orderException.getErrorCode()).isEqualTo(OrderErrorCode.ORDER_INVALID_STATE_FOR_PAYMENT);
 			});
 	}
 
