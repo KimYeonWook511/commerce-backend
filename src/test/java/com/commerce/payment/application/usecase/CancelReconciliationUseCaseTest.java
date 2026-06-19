@@ -95,9 +95,9 @@ class CancelReconciliationUseCaseTest {
 		LocalDateTime now = LocalDateTime.now();
 		Payment cancelPayment = unknownCancelPayment("PAY-C-1", "pg-c-1", now.minusMinutes(2));
 
-		given(paymentRepository.findStaleApprovePaymentsForReconciliation(any(), any(), any(), any(Pageable.class)))
+		given(paymentRepository.findStaleApprovePaymentsForReconciliation(any(), any(), any(), any(), any(Pageable.class)))
 			.willReturn(List.of());
-		given(paymentRepository.findStaleCancelPaymentsForReconciliation(any(), any(), any(), any(Pageable.class)))
+		given(paymentRepository.findStaleCancelPaymentsForReconciliation(any(), any(), any(), any(), any(Pageable.class)))
 			.willReturn(List.of(cancelPayment));
 		given(naverPayGateway.getApprovalHistory("pg-c-1"))
 			.willReturn(NaverPayHistoryResult.canceled());
@@ -115,9 +115,9 @@ class CancelReconciliationUseCaseTest {
 		LocalDateTime now = LocalDateTime.now();
 		Payment cancelPayment = requestedCancelPayment("PAY-C-2", "pg-c-2", now.minusMinutes(20));
 
-		given(paymentRepository.findStaleApprovePaymentsForReconciliation(any(), any(), any(), any(Pageable.class)))
+		given(paymentRepository.findStaleApprovePaymentsForReconciliation(any(), any(), any(), any(), any(Pageable.class)))
 			.willReturn(List.of());
-		given(paymentRepository.findStaleCancelPaymentsForReconciliation(any(), any(), any(), any(Pageable.class)))
+		given(paymentRepository.findStaleCancelPaymentsForReconciliation(any(), any(), any(), any(), any(Pageable.class)))
 			.willReturn(List.of(cancelPayment));
 		given(naverPayGateway.getApprovalHistory("pg-c-2"))
 			.willReturn(NaverPayHistoryResult.canceled());
@@ -137,9 +137,9 @@ class CancelReconciliationUseCaseTest {
 		LocalDateTime now = LocalDateTime.now();
 		Payment cancelPayment = unknownCancelPayment("PAY-C-3", "pg-c-3", now.minusMinutes(2));
 
-		given(paymentRepository.findStaleApprovePaymentsForReconciliation(any(), any(), any(), any(Pageable.class)))
+		given(paymentRepository.findStaleApprovePaymentsForReconciliation(any(), any(), any(), any(), any(Pageable.class)))
 			.willReturn(List.of());
-		given(paymentRepository.findStaleCancelPaymentsForReconciliation(any(), any(), any(), any(Pageable.class)))
+		given(paymentRepository.findStaleCancelPaymentsForReconciliation(any(), any(), any(), any(), any(Pageable.class)))
 			.willReturn(List.of(cancelPayment));
 		given(naverPayGateway.getApprovalHistory("pg-c-3"))
 			.willReturn(NaverPayHistoryResult.approved("PAY-C-3", 1000));
@@ -160,9 +160,9 @@ class CancelReconciliationUseCaseTest {
 		LocalDateTime now = LocalDateTime.now();
 		Payment cancelPayment = unknownCancelPayment("PAY-C-4", "pg-c-4", now.minusMinutes(2));
 
-		given(paymentRepository.findStaleApprovePaymentsForReconciliation(any(), any(), any(), any(Pageable.class)))
+		given(paymentRepository.findStaleApprovePaymentsForReconciliation(any(), any(), any(), any(), any(Pageable.class)))
 			.willReturn(List.of());
-		given(paymentRepository.findStaleCancelPaymentsForReconciliation(any(), any(), any(), any(Pageable.class)))
+		given(paymentRepository.findStaleCancelPaymentsForReconciliation(any(), any(), any(), any(), any(Pageable.class)))
 			.willReturn(List.of(cancelPayment));
 		given(naverPayGateway.getApprovalHistory("pg-c-4"))
 			.willReturn(NaverPayHistoryResult.approved("PAY-C-4", 1000));
@@ -183,9 +183,9 @@ class CancelReconciliationUseCaseTest {
 		LocalDateTime now = LocalDateTime.now();
 		Payment cancelPayment = unknownCancelPayment("PAY-C-AC", "pg-c-ac", now.minusMinutes(2));
 
-		given(paymentRepository.findStaleApprovePaymentsForReconciliation(any(), any(), any(), any(Pageable.class)))
+		given(paymentRepository.findStaleApprovePaymentsForReconciliation(any(), any(), any(), any(), any(Pageable.class)))
 			.willReturn(List.of());
-		given(paymentRepository.findStaleCancelPaymentsForReconciliation(any(), any(), any(), any(Pageable.class)))
+		given(paymentRepository.findStaleCancelPaymentsForReconciliation(any(), any(), any(), any(), any(Pageable.class)))
 			.willReturn(List.of(cancelPayment));
 		given(naverPayGateway.getApprovalHistory("pg-c-ac"))
 			.willReturn(NaverPayHistoryResult.approved("PAY-C-AC", 1000));
@@ -205,9 +205,9 @@ class CancelReconciliationUseCaseTest {
 		LocalDateTime now = LocalDateTime.now();
 		Payment cancelPayment = unknownCancelPayment("PAY-C-5", "pg-c-5", now.minusMinutes(2));
 
-		given(paymentRepository.findStaleApprovePaymentsForReconciliation(any(), any(), any(), any(Pageable.class)))
+		given(paymentRepository.findStaleApprovePaymentsForReconciliation(any(), any(), any(), any(), any(Pageable.class)))
 			.willReturn(List.of());
-		given(paymentRepository.findStaleCancelPaymentsForReconciliation(any(), any(), any(), any(Pageable.class)))
+		given(paymentRepository.findStaleCancelPaymentsForReconciliation(any(), any(), any(), any(), any(Pageable.class)))
 			.willReturn(List.of(cancelPayment));
 		given(naverPayGateway.getApprovalHistory("pg-c-5"))
 			.willReturn(NaverPayHistoryResult.approved("PAY-C-5", 1000));
@@ -229,9 +229,9 @@ class CancelReconciliationUseCaseTest {
 		LocalDateTime now = LocalDateTime.now();
 		Payment cancelPayment = unknownCancelPayment("PAY-C-6", "pg-c-6", now.minusMinutes(2));
 
-		given(paymentRepository.findStaleApprovePaymentsForReconciliation(any(), any(), any(), any(Pageable.class)))
+		given(paymentRepository.findStaleApprovePaymentsForReconciliation(any(), any(), any(), any(), any(Pageable.class)))
 			.willReturn(List.of());
-		given(paymentRepository.findStaleCancelPaymentsForReconciliation(any(), any(), any(), any(Pageable.class)))
+		given(paymentRepository.findStaleCancelPaymentsForReconciliation(any(), any(), any(), any(), any(Pageable.class)))
 			.willReturn(List.of(cancelPayment));
 		given(naverPayGateway.getApprovalHistory("pg-c-6"))
 			.willReturn(NaverPayHistoryResult.approved("PAY-C-6", 1000));
@@ -254,9 +254,9 @@ class CancelReconciliationUseCaseTest {
 		LocalDateTime now = LocalDateTime.now();
 		Payment cancelPayment = unknownCancelPayment("PAY-C-7", "pg-c-7", now.minusMinutes(2));
 
-		given(paymentRepository.findStaleApprovePaymentsForReconciliation(any(), any(), any(), any(Pageable.class)))
+		given(paymentRepository.findStaleApprovePaymentsForReconciliation(any(), any(), any(), any(), any(Pageable.class)))
 			.willReturn(List.of());
-		given(paymentRepository.findStaleCancelPaymentsForReconciliation(any(), any(), any(), any(Pageable.class)))
+		given(paymentRepository.findStaleCancelPaymentsForReconciliation(any(), any(), any(), any(), any(Pageable.class)))
 			.willReturn(List.of(cancelPayment));
 		given(naverPayGateway.getApprovalHistory("pg-c-7"))
 			.willReturn(NaverPayHistoryResult.unknown("timeout"));
@@ -278,9 +278,9 @@ class CancelReconciliationUseCaseTest {
 		Payment cancelPayment1 = unknownCancelPayment("PAY-C-8", "pg-c-8", now.minusMinutes(2));
 		Payment cancelPayment2 = unknownCancelPayment("PAY-C-9", "pg-c-9", now.minusMinutes(2));
 
-		given(paymentRepository.findStaleApprovePaymentsForReconciliation(any(), any(), any(), any(Pageable.class)))
+		given(paymentRepository.findStaleApprovePaymentsForReconciliation(any(), any(), any(), any(), any(Pageable.class)))
 			.willReturn(List.of());
-		given(paymentRepository.findStaleCancelPaymentsForReconciliation(any(), any(), any(), any(Pageable.class)))
+		given(paymentRepository.findStaleCancelPaymentsForReconciliation(any(), any(), any(), any(), any(Pageable.class)))
 			.willReturn(List.of(cancelPayment1, cancelPayment2));
 		given(naverPayGateway.getApprovalHistory("pg-c-8"))
 			.willThrow(new RuntimeException("PG 장애"));
@@ -304,9 +304,9 @@ class CancelReconciliationUseCaseTest {
 
 		Payment cancelPayment = requestedCancelPayment("PAY-C-ESC", "pg-c-esc", now.minusHours(7));
 
-		given(paymentRepository.findStaleApprovePaymentsForReconciliation(any(), any(), any(), any(Pageable.class)))
+		given(paymentRepository.findStaleApprovePaymentsForReconciliation(any(), any(), any(), any(), any(Pageable.class)))
 			.willReturn(List.of());
-		given(paymentRepository.findStaleCancelPaymentsForReconciliation(any(), any(), any(), any(Pageable.class)))
+		given(paymentRepository.findStaleCancelPaymentsForReconciliation(any(), any(), any(), any(), any(Pageable.class)))
 			.willReturn(List.of());
 		given(paymentRepository.findEscalationCandidates(any(), any(Pageable.class)))
 			.willReturn(List.of());
@@ -330,9 +330,9 @@ class CancelReconciliationUseCaseTest {
 		injectPolicies();
 		Payment failedCancelPayment = failedCancelPayment("PAY-C-FAIL", "pg-c-fail");
 
-		given(paymentRepository.findStaleApprovePaymentsForReconciliation(any(), any(), any(), any(Pageable.class)))
+		given(paymentRepository.findStaleApprovePaymentsForReconciliation(any(), any(), any(), any(), any(Pageable.class)))
 			.willReturn(List.of());
-		given(paymentRepository.findStaleCancelPaymentsForReconciliation(any(), any(), any(), any(Pageable.class)))
+		given(paymentRepository.findStaleCancelPaymentsForReconciliation(any(), any(), any(), any(), any(Pageable.class)))
 			.willReturn(List.of());
 		given(paymentRepository.findEscalationCandidates(any(), any(Pageable.class)))
 			.willReturn(List.of());
@@ -357,9 +357,9 @@ class CancelReconciliationUseCaseTest {
 		LocalDateTime now = LocalDateTime.now();
 		Payment approvePayment = unknownApprovePayment("PAY-A-1", "pg-a-1", now.minusMinutes(2));
 
-		given(paymentRepository.findStaleApprovePaymentsForReconciliation(any(), any(), any(), any(Pageable.class)))
+		given(paymentRepository.findStaleApprovePaymentsForReconciliation(any(), any(), any(), any(), any(Pageable.class)))
 			.willReturn(List.of(approvePayment));
-		given(paymentRepository.findStaleCancelPaymentsForReconciliation(any(), any(), any(), any(Pageable.class)))
+		given(paymentRepository.findStaleCancelPaymentsForReconciliation(any(), any(), any(), any(), any(Pageable.class)))
 			.willReturn(List.of());
 		given(naverPayGateway.getApprovalHistory("pg-a-1"))
 			.willReturn(NaverPayHistoryResult.approved("PAY-A-1", 1000));
