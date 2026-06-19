@@ -7,6 +7,7 @@ import org.springframework.data.domain.PageRequest;
 import org.springframework.stereotype.Component;
 
 import com.commerce.payment.application.port.NotificationPort;
+import com.commerce.payment.application.service.DelayPaymentReconcileService;
 import com.commerce.payment.application.service.EscalateApprovePaymentService;
 import com.commerce.payment.application.service.EscalateCancelPaymentService;
 import com.commerce.payment.application.service.FailApprovePaymentService;
@@ -17,6 +18,7 @@ import com.commerce.payment.application.port.result.CancelOutcome;
 import com.commerce.payment.domain.Payment;
 import com.commerce.payment.domain.PaymentStatus;
 import com.commerce.payment.domain.PaymentFailCode;
+import com.commerce.payment.domain.PaymentType;
 import com.commerce.payment.domain.repository.PaymentRepository;
 import com.commerce.payment.domain.exception.PaymentErrorCode;
 import com.commerce.payment.domain.exception.PaymentException;
@@ -50,6 +52,7 @@ public class ReconcilePaymentUseCase {
 	private static final long ESCALATION_DELAY_HOURS = PaymentPostProcessTargetPolicy.ESCALATION_DELAY.toHours();
 
 	private final PaymentRepository paymentRepository;
+	private final DelayPaymentReconcileService delayPaymentReconcileService;
 	private final FailApprovePaymentService failApprovePaymentService;
 	private final EscalateApprovePaymentService escalateApprovePaymentService;
 	private final EscalateCancelPaymentService escalateCancelPaymentService;
@@ -73,7 +76,7 @@ public class ReconcilePaymentUseCase {
 		LocalDateTime escalationCutoff = now.minusHours(ESCALATION_DELAY_HOURS);
 
 		List<Payment> candidates = paymentRepository.findStaleApprovePaymentsForReconciliation(
-			staleCutoff, requestedStaleCutoff, escalationCutoff, PageRequest.of(0, RECONCILE_BATCH_SIZE));
+			staleCutoff, requestedStaleCutoff, escalationCutoff, now, PageRequest.of(0, RECONCILE_BATCH_SIZE));
 
 		if (!candidates.isEmpty()) {
 			log.info("APPROVE 대사 시작 candidates={} staleCutoff={} requestedStaleCutoff={} escalationCutoff={}",
@@ -101,7 +104,7 @@ public class ReconcilePaymentUseCase {
 
 		// CANCEL 대사: standalone CANCEL(REQUESTED/UNKNOWN) 스캔 → PG 재조회 → 재시도/확정 (ADR-L4)
 		List<Payment> cancelCandidates = paymentRepository.findStaleCancelPaymentsForReconciliation(
-			staleCutoff, requestedStaleCutoff, escalationCutoff, PageRequest.of(0, RECONCILE_BATCH_SIZE));
+			staleCutoff, requestedStaleCutoff, escalationCutoff, now, PageRequest.of(0, RECONCILE_BATCH_SIZE));
 
 		if (!cancelCandidates.isEmpty()) {
 			log.info("CANCEL 대사 시작 candidates={}", cancelCandidates.size());
@@ -272,6 +275,7 @@ public class ReconcilePaymentUseCase {
 			case KEEP_WAITING -> {
 				log.debug("CANCEL 대사 대기 paymentId={} status={} verificationStatus={}",
 					cancelPayment.getId(), cancelPayment.getStatus(), verificationStatus);
+				delayReconcileSkippable(cancelPayment, PaymentType.CANCEL, now);
 				return PaymentReconcileOutcome.SKIPPED;
 			}
 			default -> {
@@ -293,6 +297,7 @@ public class ReconcilePaymentUseCase {
 			}
 			case PROCESSING -> {
 				log.debug("CANCEL 대사 재시도 처리 중 paymentId={}", cancelPayment.getId());
+				delayReconcileSkippable(cancelPayment, PaymentType.CANCEL, now);
 				return PaymentReconcileOutcome.SKIPPED;
 			}
 			case FAILED -> {
@@ -362,6 +367,24 @@ public class ReconcilePaymentUseCase {
 		}
 	}
 
+	/**
+	 * backoff 기록을 best-effort로 수행한다. 낙관적 락 충돌·행 없음은 흡수해 대사 루프가 중단되지 않도록 한다.
+	 * backoff는 cadence 힌트이므로 충돌 시 건너뛰어도 다음 주기에 자연히 재시도된다(ADR-L3).
+	 */
+	private void delayReconcileSkippable(Payment payment, PaymentType type, LocalDateTime now) {
+		try {
+			delayPaymentReconcileService.delay(
+				payment.getMerchantPayKey(), payment.getProvider(), payment.getPgPaymentId(), type, now);
+		} catch (PaymentException ex) {
+			if (ex.getErrorCode() == PaymentErrorCode.PAYMENT_CONCURRENTLY_MODIFIED
+				|| ex.getErrorCode() == PaymentErrorCode.PAYMENT_RECORD_NOT_FOUND) {
+				log.info("대사 backoff 기록 skip - {} paymentId={}", ex.getErrorCode(), payment.getId());
+				return;
+			}
+			throw ex;
+		}
+	}
+
 	private PaymentReconcileOutcome processOne(Payment payment, LocalDateTime now) {
 		PaymentPostProcessTarget target = targetPolicy.resolvePostProcessTarget(payment, null, now);
 
@@ -398,6 +421,7 @@ public class ReconcilePaymentUseCase {
 			case KEEP_WAITING -> {
 				log.debug("대사 대기 paymentId={} status={} verificationStatus={}",
 					payment.getId(), payment.getStatus(), verificationStatus);
+				delayReconcileSkippable(payment, PaymentType.APPROVE, now);
 				return PaymentReconcileOutcome.SKIPPED;
 			}
 			default -> {

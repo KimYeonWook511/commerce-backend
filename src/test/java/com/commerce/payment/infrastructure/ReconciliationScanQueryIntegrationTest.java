@@ -69,7 +69,7 @@ class ReconciliationScanQueryIntegrationTest {
 		paymentRepository.save(payment);
 
 		List<Payment> result = paymentRepository.findStaleApprovePaymentsForReconciliation(
-			staleCutoff, requestedStaleCutoff, escalationCutoff, PageRequest.of(0, 10));
+			staleCutoff, requestedStaleCutoff, escalationCutoff, now, PageRequest.of(0, 10));
 
 		assertThat(result).hasSize(1);
 		assertThat(result.get(0).getMerchantPayKey()).isEqualTo("PAY-SQ-1");
@@ -95,7 +95,7 @@ class ReconciliationScanQueryIntegrationTest {
 		em.clear();
 
 		List<Payment> result = paymentRepository.findStaleApprovePaymentsForReconciliation(
-			staleCutoff, requestedStaleCutoff, escalationCutoff, PageRequest.of(0, 10));
+			staleCutoff, requestedStaleCutoff, escalationCutoff, now, PageRequest.of(0, 10));
 
 		assertThat(result).hasSize(1);
 		assertThat(result.get(0).getMerchantPayKey()).isEqualTo("PAY-SQ-2");
@@ -121,7 +121,7 @@ class ReconciliationScanQueryIntegrationTest {
 		em.clear();
 
 		List<Payment> result = paymentRepository.findStaleApprovePaymentsForReconciliation(
-			staleCutoff, requestedStaleCutoff, escalationCutoff, PageRequest.of(0, 10));
+			staleCutoff, requestedStaleCutoff, escalationCutoff, now, PageRequest.of(0, 10));
 
 		assertThat(result).isEmpty();
 	}
@@ -144,7 +144,7 @@ class ReconciliationScanQueryIntegrationTest {
 		paymentRepository.save(failed);
 
 		List<Payment> result = paymentRepository.findStaleApprovePaymentsForReconciliation(
-			staleCutoff, requestedStaleCutoff, escalationCutoff, PageRequest.of(0, 10));
+			staleCutoff, requestedStaleCutoff, escalationCutoff, now, PageRequest.of(0, 10));
 
 		assertThat(result).isEmpty();
 	}
@@ -162,7 +162,7 @@ class ReconciliationScanQueryIntegrationTest {
 		paymentRepository.save(cancelPayment);
 
 		List<Payment> result = paymentRepository.findStaleApprovePaymentsForReconciliation(
-			staleCutoff, requestedStaleCutoff, escalationCutoff, PageRequest.of(0, 10));
+			staleCutoff, requestedStaleCutoff, escalationCutoff, now, PageRequest.of(0, 10));
 
 		assertThat(result).isEmpty();
 	}
@@ -180,7 +180,7 @@ class ReconciliationScanQueryIntegrationTest {
 		paymentRepository.save(recentUnknown);
 
 		List<Payment> result = paymentRepository.findStaleApprovePaymentsForReconciliation(
-			staleCutoff, requestedStaleCutoff, escalationCutoff, PageRequest.of(0, 10));
+			staleCutoff, requestedStaleCutoff, escalationCutoff, now, PageRequest.of(0, 10));
 
 		assertThat(result).isEmpty();
 	}
@@ -199,7 +199,7 @@ class ReconciliationScanQueryIntegrationTest {
 		paymentRepository.save(escalatedUnknown);
 
 		List<Payment> result = paymentRepository.findStaleApprovePaymentsForReconciliation(
-			staleCutoff, requestedStaleCutoff, escalationCutoff, PageRequest.of(0, 10));
+			staleCutoff, requestedStaleCutoff, escalationCutoff, now, PageRequest.of(0, 10));
 
 		assertThat(result).isEmpty();
 	}
@@ -223,7 +223,7 @@ class ReconciliationScanQueryIntegrationTest {
 		em.clear();
 
 		List<Payment> result = paymentRepository.findStaleApprovePaymentsForReconciliation(
-			staleCutoff, requestedStaleCutoff, escalationCutoff, PageRequest.of(0, 10));
+			staleCutoff, requestedStaleCutoff, escalationCutoff, now, PageRequest.of(0, 10));
 
 		assertThat(result).isEmpty();
 	}
@@ -244,7 +244,7 @@ class ReconciliationScanQueryIntegrationTest {
 		}
 
 		List<Payment> result = paymentRepository.findStaleApprovePaymentsForReconciliation(
-			staleCutoff, requestedStaleCutoff, escalationCutoff, PageRequest.of(0, 2));
+			staleCutoff, requestedStaleCutoff, escalationCutoff, now, PageRequest.of(0, 2));
 
 		assertThat(result).hasSize(2);
 	}
@@ -265,7 +265,7 @@ class ReconciliationScanQueryIntegrationTest {
 		paymentRepository.save(cancelPayment);
 
 		List<Payment> result = paymentRepository.findStaleCancelPaymentsForReconciliation(
-			staleCutoff, requestedStaleCutoff, escalationCutoff, PageRequest.of(0, 10));
+			staleCutoff, requestedStaleCutoff, escalationCutoff, now, PageRequest.of(0, 10));
 
 		assertThat(result).hasSize(1);
 		assertThat(result.get(0).getMerchantPayKey()).isEqualTo("PAY-CSQ-1");
@@ -291,7 +291,7 @@ class ReconciliationScanQueryIntegrationTest {
 		em.clear();
 
 		List<Payment> result = paymentRepository.findStaleCancelPaymentsForReconciliation(
-			staleCutoff, requestedStaleCutoff, escalationCutoff, PageRequest.of(0, 10));
+			staleCutoff, requestedStaleCutoff, escalationCutoff, now, PageRequest.of(0, 10));
 
 		assertThat(result).hasSize(1);
 		assertThat(result.get(0).getMerchantPayKey()).isEqualTo("PAY-CSQ-2");
@@ -311,7 +311,7 @@ class ReconciliationScanQueryIntegrationTest {
 		paymentRepository.save(approvePayment);
 
 		List<Payment> result = paymentRepository.findStaleCancelPaymentsForReconciliation(
-			staleCutoff, requestedStaleCutoff, escalationCutoff, PageRequest.of(0, 10));
+			staleCutoff, requestedStaleCutoff, escalationCutoff, now, PageRequest.of(0, 10));
 
 		assertThat(result).isEmpty();
 	}
@@ -330,8 +330,154 @@ class ReconciliationScanQueryIntegrationTest {
 		paymentRepository.save(cancelPayment);
 
 		List<Payment> result = paymentRepository.findStaleCancelPaymentsForReconciliation(
-			staleCutoff, requestedStaleCutoff, escalationCutoff, PageRequest.of(0, 10));
+			staleCutoff, requestedStaleCutoff, escalationCutoff, now, PageRequest.of(0, 10));
 
 		assertThat(result).isEmpty();
+	}
+
+	// --- backoff 게이트 테스트 ---
+
+	@DisplayName("APPROVE UNKNOWN 결제의 nextReconcileAt이 미래이면 backoff 게이트로 스캔에서 제외된다")
+	@Test
+	void findStaleApprovePayments_futureNextReconcileAt_excluded() {
+		LocalDateTime now = LocalDateTime.now();
+		LocalDateTime staleCutoff = now.minusMinutes(1);
+		LocalDateTime escalationCutoff = now.minusHours(6);
+		LocalDateTime requestedStaleCutoff = now.minusMinutes(15);
+
+		Payment payment = Payment.createRequested(reservation("PAY-SQ-BK-1"), PaymentType.APPROVE, "pg-sq-bk-1");
+		payment.markUnknown("timeout", now.minusMinutes(2));
+		Payment saved = paymentRepository.save(payment);
+
+		// next_reconcile_at을 미래(5분 후)로 직접 세팅
+		em.createNativeQuery("UPDATE tbl_payment SET next_reconcile_at = :nextReconcileAt WHERE id = :id")
+			.setParameter("nextReconcileAt", now.plusMinutes(5))
+			.setParameter("id", saved.getId())
+			.executeUpdate();
+		em.clear();
+
+		List<Payment> result = paymentRepository.findStaleApprovePaymentsForReconciliation(
+			staleCutoff, requestedStaleCutoff, escalationCutoff, now, PageRequest.of(0, 10));
+
+		assertThat(result).isEmpty();
+	}
+
+	@DisplayName("APPROVE UNKNOWN 결제의 nextReconcileAt이 NULL이면 즉시 대사 대상에 포함된다")
+	@Test
+	void findStaleApprovePayments_nullNextReconcileAt_included() {
+		LocalDateTime now = LocalDateTime.now();
+		LocalDateTime staleCutoff = now.minusMinutes(1);
+		LocalDateTime escalationCutoff = now.minusHours(6);
+		LocalDateTime requestedStaleCutoff = now.minusMinutes(15);
+
+		Payment payment = Payment.createRequested(reservation("PAY-SQ-BK-2"), PaymentType.APPROVE, "pg-sq-bk-2");
+		payment.markUnknown("timeout", now.minusMinutes(2));
+		paymentRepository.save(payment);
+		// next_reconcile_at은 생성 시 NULL이므로 별도 세팅 불필요
+
+		List<Payment> result = paymentRepository.findStaleApprovePaymentsForReconciliation(
+			staleCutoff, requestedStaleCutoff, escalationCutoff, now, PageRequest.of(0, 10));
+
+		assertThat(result).hasSize(1);
+		assertThat(result.get(0).getMerchantPayKey()).isEqualTo("PAY-SQ-BK-2");
+	}
+
+	@DisplayName("APPROVE UNKNOWN 결제의 nextReconcileAt이 과거이면 대사 대상에 포함된다")
+	@Test
+	void findStaleApprovePayments_pastNextReconcileAt_included() {
+		LocalDateTime now = LocalDateTime.now();
+		LocalDateTime staleCutoff = now.minusMinutes(1);
+		LocalDateTime escalationCutoff = now.minusHours(6);
+		LocalDateTime requestedStaleCutoff = now.minusMinutes(15);
+
+		Payment payment = Payment.createRequested(reservation("PAY-SQ-BK-3"), PaymentType.APPROVE, "pg-sq-bk-3");
+		payment.markUnknown("timeout", now.minusMinutes(2));
+		Payment saved = paymentRepository.save(payment);
+
+		// next_reconcile_at을 과거(2분 전)로 세팅 → backoff 만료, 대사 대상
+		em.createNativeQuery("UPDATE tbl_payment SET next_reconcile_at = :nextReconcileAt WHERE id = :id")
+			.setParameter("nextReconcileAt", now.minusMinutes(2))
+			.setParameter("id", saved.getId())
+			.executeUpdate();
+		em.clear();
+
+		List<Payment> result = paymentRepository.findStaleApprovePaymentsForReconciliation(
+			staleCutoff, requestedStaleCutoff, escalationCutoff, now, PageRequest.of(0, 10));
+
+		assertThat(result).hasSize(1);
+		assertThat(result.get(0).getMerchantPayKey()).isEqualTo("PAY-SQ-BK-3");
+	}
+
+	@DisplayName("CANCEL UNKNOWN 결제의 nextReconcileAt이 미래이면 backoff 게이트로 CANCEL 스캔에서 제외된다")
+	@Test
+	void findStaleCancelPayments_futureNextReconcileAt_excluded() {
+		LocalDateTime now = LocalDateTime.now();
+		LocalDateTime staleCutoff = now.minusMinutes(1);
+		LocalDateTime escalationCutoff = now.minusHours(6);
+		LocalDateTime requestedStaleCutoff = now.minusMinutes(15);
+
+		Payment cancelPayment = Payment.createCancelRequested(
+			++nextOrderId, "PAY-CSQ-BK-1", "pg-csq-bk-1", 1000, PaymentProvider.NAVERPAY);
+		cancelPayment.markUnknown("timeout", now.minusMinutes(2));
+		Payment saved = paymentRepository.save(cancelPayment);
+
+		// next_reconcile_at을 미래(5분 후)로 세팅
+		em.createNativeQuery("UPDATE tbl_payment SET next_reconcile_at = :nextReconcileAt WHERE id = :id")
+			.setParameter("nextReconcileAt", now.plusMinutes(5))
+			.setParameter("id", saved.getId())
+			.executeUpdate();
+		em.clear();
+
+		List<Payment> result = paymentRepository.findStaleCancelPaymentsForReconciliation(
+			staleCutoff, requestedStaleCutoff, escalationCutoff, now, PageRequest.of(0, 10));
+
+		assertThat(result).isEmpty();
+	}
+
+	@DisplayName("CANCEL UNKNOWN 결제의 nextReconcileAt이 NULL이면 즉시 CANCEL 대사 대상에 포함된다")
+	@Test
+	void findStaleCancelPayments_nullNextReconcileAt_included() {
+		LocalDateTime now = LocalDateTime.now();
+		LocalDateTime staleCutoff = now.minusMinutes(1);
+		LocalDateTime escalationCutoff = now.minusHours(6);
+		LocalDateTime requestedStaleCutoff = now.minusMinutes(15);
+
+		Payment cancelPayment = Payment.createCancelRequested(
+			++nextOrderId, "PAY-CSQ-BK-2", "pg-csq-bk-2", 1000, PaymentProvider.NAVERPAY);
+		cancelPayment.markUnknown("timeout", now.minusMinutes(2));
+		paymentRepository.save(cancelPayment);
+
+		List<Payment> result = paymentRepository.findStaleCancelPaymentsForReconciliation(
+			staleCutoff, requestedStaleCutoff, escalationCutoff, now, PageRequest.of(0, 10));
+
+		assertThat(result).hasSize(1);
+		assertThat(result.get(0).getMerchantPayKey()).isEqualTo("PAY-CSQ-BK-2");
+	}
+
+	@DisplayName("CANCEL UNKNOWN 결제의 nextReconcileAt이 과거이면 CANCEL 대사 대상에 포함된다")
+	@Test
+	void findStaleCancelPayments_pastNextReconcileAt_included() {
+		LocalDateTime now = LocalDateTime.now();
+		LocalDateTime staleCutoff = now.minusMinutes(1);
+		LocalDateTime escalationCutoff = now.minusHours(6);
+		LocalDateTime requestedStaleCutoff = now.minusMinutes(15);
+
+		Payment cancelPayment = Payment.createCancelRequested(
+			++nextOrderId, "PAY-CSQ-BK-3", "pg-csq-bk-3", 1000, PaymentProvider.NAVERPAY);
+		cancelPayment.markUnknown("timeout", now.minusMinutes(2));
+		Payment saved = paymentRepository.save(cancelPayment);
+
+		// next_reconcile_at을 과거(2분 전)로 세팅 → backoff 만료, 대사 대상
+		em.createNativeQuery("UPDATE tbl_payment SET next_reconcile_at = :nextReconcileAt WHERE id = :id")
+			.setParameter("nextReconcileAt", now.minusMinutes(2))
+			.setParameter("id", saved.getId())
+			.executeUpdate();
+		em.clear();
+
+		List<Payment> result = paymentRepository.findStaleCancelPaymentsForReconciliation(
+			staleCutoff, requestedStaleCutoff, escalationCutoff, now, PageRequest.of(0, 10));
+
+		assertThat(result).hasSize(1);
+		assertThat(result.get(0).getMerchantPayKey()).isEqualTo("PAY-CSQ-BK-3");
 	}
 }

@@ -193,6 +193,7 @@ COLUMNS:
 - `approved_order_key BIGINT NULL` — APPROVE+SUCCEEDED 일 때만 `order_id`, 그 외 NULL (NULL 트릭)
 - `responded_at DATETIME(6) NULL`
 - `escalated_at DATETIME(6) NULL` — escalation(운영 위임) 시각. NULL 이면 미escalation. `status` 와 무관한 직교 필드 (V8, ADR-049)
+- `next_reconcile_at DATETIME(6) NULL` — 대사 재조회 backoff 시각. NULL 이면 한 번도 미뤄지지 않은 즉시 대사 대상. `status` 와 무관한 직교 필드 (V10, ADR-066)
 - `created_at DATETIME(6) NOT NULL`
 - `updated_at DATETIME(6) NOT NULL`
 
@@ -207,6 +208,7 @@ INDEX:
 - **append-only**: Payment 행은 한번 INSERT 후 상태 전이 (UPDATE) 만 일어남. 행 삭제 금지
 - unique key 대상 컬럼(`merchant_pay_key` 64, `provider` 32, `pg_payment_id` 64, `type` 32)은 `@Column(length=...)`을 명시한다. utf8mb4 + InnoDB unique key 한도 3072 bytes 안에 들어오도록 산정 (ADR-023 참조)
 - **escalation 멱등**: `escalated_at` set 은 도메인 메서드 `Payment.escalate(now)`(가드 `escalated_at IS NULL AND status IN (UNKNOWN,REQUESTED)`) + `@Version`(`version` 컬럼) 낙관 락으로 수행. transition 의 `saveChecked` 성공 1 건만 escalation 통지 주체가 되고 동시 race 의 진 쪽은 `PAYMENT_CONCURRENTLY_MODIFIED` 로 skip 된다 (동시 race 에서도 1회 보장). 조건부 UPDATE 영향 행 수 방식에서 환원 — `@Version` 도입(V9, ADR-050) 으로 전제 해소 (ADR-049 → ADR-052)
+- **대사 backoff**: 대사 스캔 쿼리는 `next_reconcile_at IS NULL OR next_reconcile_at <= now` 게이트로 backoff 중인 행을 제외한다. PG 가 아직 결론을 못 낸 `KEEP_WAITING` 건은 wait 분기에서 `next_reconcile_at = now + 고정 backoff(5분)` 로 미뤄, 같은 건의 매 주기 재스캔·재조회(starvation·PG 반복 조회)를 막는다. set 은 도메인 메서드 `Payment.delayReconcile(now, backoff)`(상태 전이 없음) + `@Version` 낙관 락으로 수행하며 충돌은 tx 밖 skip 이다(cadence 힌트라 best-effort). escalation 후보 조회는 이 게이트를 적용하지 않는다 (ADR-066~068)
 
 ### `tbl_outbox_event`
 

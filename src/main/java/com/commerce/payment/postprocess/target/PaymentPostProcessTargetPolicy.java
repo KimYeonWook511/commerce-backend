@@ -26,6 +26,10 @@ public class PaymentPostProcessTargetPolicy {
 	// 대사 스캔 윈도우 상한과 단일 출처를 공유하기 위해 public (ReconcilePaymentUseCase 참조)
 	public static final Duration ESCALATION_DELAY = Duration.ofHours(6);
 
+	// KEEP_WAITING 판정 후 다음 PG 재조회를 미루는 고정 backoff 간격. 운영 config 승격 전제(ADR-L2).
+	// null=즉시 대상(미뤄진 적 없음)이므로 NULL 백필 없이 기존 행은 즉시 스캔 대상이 된다(ADR-L1).
+	public static final Duration RECONCILE_BACKOFF = Duration.ofMinutes(5);
+
 	public PaymentPostProcessTarget resolvePostProcessTarget(Payment approvePayment, Payment cancelPayment, LocalDateTime now) {
 		if (approvePayment != null) {
 			if (approvePayment.getStatus() == PaymentStatus.UNKNOWN) {

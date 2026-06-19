@@ -1,5 +1,6 @@
 package com.commerce.payment.domain;
 
+import java.time.Duration;
 import java.time.LocalDateTime;
 
 import com.commerce.common.jpa.BaseTimeEntity;
@@ -79,6 +80,9 @@ public class Payment extends BaseTimeEntity {
 
 	@Column(name = "escalated_at")
 	private LocalDateTime escalatedAt;
+
+	@Column(name = "next_reconcile_at")
+	private LocalDateTime nextReconcileAt;
 
 	@Column(name = "order_id", nullable = false)
 	private Long orderId;
@@ -211,6 +215,14 @@ public class Payment extends BaseTimeEntity {
 		}
 		this.escalatedAt = now;
 		return true;
+	}
+
+	/**
+	 * 대사 재조회를 미룬다. next_reconcile_at = now + backoff 만 세팅하고 status·respondedAt 등 다른 필드는 바꾸지 않는다.
+	 * wait 판정 후 "다음 재조회를 미룬다"는 의도만 표현한다(ADR-L1, ADR-L3).
+	 */
+	public void delayReconcile(LocalDateTime now, Duration backoff) {
+		this.nextReconcileAt = now.plus(backoff);
 	}
 
 	public void verifyApprovedResponse(String responseMerchantPayKey, int responseTotalAmount) {

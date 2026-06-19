@@ -21,6 +21,7 @@ import org.springframework.data.domain.Pageable;
 import org.springframework.test.util.ReflectionTestUtils;
 
 import com.commerce.payment.application.port.NotificationPort;
+import com.commerce.payment.application.service.DelayPaymentReconcileService;
 import com.commerce.payment.application.service.EscalateApprovePaymentService;
 import com.commerce.payment.application.service.EscalateCancelPaymentService;
 import com.commerce.payment.application.service.FailApprovePaymentService;
@@ -31,10 +32,10 @@ import com.commerce.payment.application.service.SucceedPaymentApprovalService;
 import com.commerce.payment.domain.Payment;
 import com.commerce.payment.domain.PaymentFailCode;
 import com.commerce.payment.domain.PaymentProvider;
+import com.commerce.payment.domain.PaymentType;
 import com.commerce.payment.domain.exception.PaymentErrorCode;
 import com.commerce.payment.domain.exception.PaymentException;
 import com.commerce.payment.domain.PaymentReservation;
-import com.commerce.payment.domain.PaymentType;
 import com.commerce.payment.domain.repository.PaymentRepository;
 import com.commerce.payment.naverpay.application.port.NaverPayGateway;
 import com.commerce.payment.naverpay.application.port.result.NaverPayHistoryResult;
@@ -46,6 +47,9 @@ class ReconcilePaymentUseCaseTest {
 
 	@Mock
 	private PaymentRepository paymentRepository;
+
+	@Mock
+	private DelayPaymentReconcileService delayPaymentReconcileService;
 
 	@Mock
 	private FailApprovePaymentService failApprovePaymentService;
@@ -95,7 +99,7 @@ class ReconcilePaymentUseCaseTest {
 		LocalDateTime now = LocalDateTime.now();
 		Payment payment = unknownApprovePayment("PAY-1", "pg-1", now.minusMinutes(2));
 
-		given(paymentRepository.findStaleApprovePaymentsForReconciliation(any(), any(), any(), any(Pageable.class)))
+		given(paymentRepository.findStaleApprovePaymentsForReconciliation(any(), any(), any(), any(), any(Pageable.class)))
 			.willReturn(List.of(payment));
 		given(naverPayGateway.getApprovalHistory("pg-1"))
 			.willReturn(NaverPayHistoryResult.approved("PAY-1", 1000));
@@ -116,7 +120,7 @@ class ReconcilePaymentUseCaseTest {
 		LocalDateTime now = LocalDateTime.now();
 		Payment payment = unknownApprovePayment("PAY-1", "pg-1", now.minusMinutes(2));
 
-		given(paymentRepository.findStaleApprovePaymentsForReconciliation(any(), any(), any(), any(Pageable.class)))
+		given(paymentRepository.findStaleApprovePaymentsForReconciliation(any(), any(), any(), any(), any(Pageable.class)))
 			.willReturn(List.of(payment));
 		given(naverPayGateway.getApprovalHistory("pg-1"))
 			.willReturn(NaverPayHistoryResult.canceled());
@@ -139,7 +143,7 @@ class ReconcilePaymentUseCaseTest {
 		LocalDateTime now = LocalDateTime.now();
 		Payment payment = unknownApprovePayment("PAY-1", "pg-1", now.minusMinutes(2));
 
-		given(paymentRepository.findStaleApprovePaymentsForReconciliation(any(), any(), any(), any(Pageable.class)))
+		given(paymentRepository.findStaleApprovePaymentsForReconciliation(any(), any(), any(), any(), any(Pageable.class)))
 			.willReturn(List.of(payment));
 		given(naverPayGateway.getApprovalHistory("pg-1"))
 			.willReturn(NaverPayHistoryResult.unknown("timeout"));
@@ -157,7 +161,7 @@ class ReconcilePaymentUseCaseTest {
 		LocalDateTime now = LocalDateTime.now();
 		Payment payment = unknownApprovePayment("PAY-1", "pg-1", now.minusMinutes(2));
 
-		given(paymentRepository.findStaleApprovePaymentsForReconciliation(any(), any(), any(), any(Pageable.class)))
+		given(paymentRepository.findStaleApprovePaymentsForReconciliation(any(), any(), any(), any(), any(Pageable.class)))
 			.willReturn(List.of(payment));
 		given(naverPayGateway.getApprovalHistory("pg-1"))
 			.willReturn(NaverPayHistoryResult.failed(com.commerce.payment.domain.exception.PaymentErrorCode.PAYMENT_NOT_FOUND));
@@ -166,6 +170,43 @@ class ReconcilePaymentUseCaseTest {
 
 		then(confirmApprovalUseCase).should(never()).confirm(any(), any(), any(), anyString(), anyInt());
 		then(failApprovePaymentService).should(never()).fail(any(), any(), any(), any(), any(), any());
+	}
+
+	@DisplayName("APPROVE KEEP_WAITING(PG 결과 불명)이면 delayPaymentReconcileService를 호출해 backoff를 기록한다")
+	@Test
+	void reconcile_pgHistoryUnknown_callsDelayService() {
+		injectPolicies();
+		LocalDateTime now = LocalDateTime.now();
+		Payment payment = unknownApprovePayment("PAY-1", "pg-1", now.minusMinutes(2));
+
+		given(paymentRepository.findStaleApprovePaymentsForReconciliation(any(), any(), any(), any(), any(Pageable.class)))
+			.willReturn(List.of(payment));
+		given(naverPayGateway.getApprovalHistory("pg-1"))
+			.willReturn(NaverPayHistoryResult.unknown("timeout"));
+
+		reconcilePaymentUseCase.reconcile();
+
+		then(delayPaymentReconcileService).should().delay(
+			eq("PAY-1"), eq(PaymentProvider.NAVERPAY), eq("pg-1"), eq(PaymentType.APPROVE), any(LocalDateTime.class));
+	}
+
+	@DisplayName("APPROVE 대사 확정 분기(승인/취소 확정)에서는 delayPaymentReconcileService를 호출하지 않는다")
+	@Test
+	void reconcile_approveConfirmed_doesNotCallDelayService() {
+		injectPolicies();
+		LocalDateTime now = LocalDateTime.now();
+		Payment payment = unknownApprovePayment("PAY-1", "pg-1", now.minusMinutes(2));
+
+		given(paymentRepository.findStaleApprovePaymentsForReconciliation(any(), any(), any(), any(), any(Pageable.class)))
+			.willReturn(List.of(payment));
+		given(naverPayGateway.getApprovalHistory("pg-1"))
+			.willReturn(NaverPayHistoryResult.approved("PAY-1", 1000));
+		given(confirmApprovalUseCase.confirm(eq(payment), any(LocalDateTime.class), any(), eq("PAY-1"), eq(1000)))
+			.willReturn(ConfirmApprovalUseCase.Outcome.succeeded());
+
+		reconcilePaymentUseCase.reconcile();
+
+		then(delayPaymentReconcileService).should(never()).delay(any(), any(), any(), any(), any());
 	}
 
 	// --- escalation: 6시간 초과는 로그만 남기고 상태 변경 없음 (ADR-L5, 후속 #238) ---
@@ -177,7 +218,7 @@ class ReconcilePaymentUseCaseTest {
 		LocalDateTime now = LocalDateTime.now();
 		Payment payment = unknownApprovePayment("PAY-1", "pg-1", now.minusHours(7));
 
-		given(paymentRepository.findStaleApprovePaymentsForReconciliation(any(), any(), any(), any(Pageable.class)))
+		given(paymentRepository.findStaleApprovePaymentsForReconciliation(any(), any(), any(), any(), any(Pageable.class)))
 			.willReturn(List.of(payment));
 
 		reconcilePaymentUseCase.reconcile();
@@ -193,7 +234,7 @@ class ReconcilePaymentUseCaseTest {
 		LocalDateTime now = LocalDateTime.now();
 		Payment payment = requestedApprovePayment("PAY-1", "pg-1", now.minusHours(7));
 
-		given(paymentRepository.findStaleApprovePaymentsForReconciliation(any(), any(), any(), any(Pageable.class)))
+		given(paymentRepository.findStaleApprovePaymentsForReconciliation(any(), any(), any(), any(), any(Pageable.class)))
 			.willReturn(List.of(payment));
 
 		reconcilePaymentUseCase.reconcile();
@@ -210,7 +251,7 @@ class ReconcilePaymentUseCaseTest {
 		LocalDateTime now = LocalDateTime.now();
 		Payment payment = unknownApprovePayment("PAY-1", "pg-1", now.minusSeconds(30));
 
-		given(paymentRepository.findStaleApprovePaymentsForReconciliation(any(), any(), any(), any(Pageable.class)))
+		given(paymentRepository.findStaleApprovePaymentsForReconciliation(any(), any(), any(), any(), any(Pageable.class)))
 			.willReturn(List.of(payment));
 
 		reconcilePaymentUseCase.reconcile();
@@ -228,7 +269,7 @@ class ReconcilePaymentUseCaseTest {
 		LocalDateTime now = LocalDateTime.now();
 		Payment payment = unknownApprovePayment("PAY-1", "pg-1", now.minusMinutes(2));
 
-		given(paymentRepository.findStaleApprovePaymentsForReconciliation(any(), any(), any(), any(Pageable.class)))
+		given(paymentRepository.findStaleApprovePaymentsForReconciliation(any(), any(), any(), any(), any(Pageable.class)))
 			.willReturn(List.of(payment));
 		given(naverPayGateway.getApprovalHistory("pg-1"))
 			.willReturn(NaverPayHistoryResult.approved("PAY-1", 1000));
@@ -250,7 +291,7 @@ class ReconcilePaymentUseCaseTest {
 		LocalDateTime now = LocalDateTime.now();
 		Payment payment = unknownApprovePayment("PAY-1", "pg-1", now.minusMinutes(2));
 
-		given(paymentRepository.findStaleApprovePaymentsForReconciliation(any(), any(), any(), any(Pageable.class)))
+		given(paymentRepository.findStaleApprovePaymentsForReconciliation(any(), any(), any(), any(), any(Pageable.class)))
 			.willReturn(List.of(payment));
 		given(naverPayGateway.getApprovalHistory("pg-1"))
 			.willReturn(NaverPayHistoryResult.approved("PAY-1", 1000));
@@ -271,7 +312,7 @@ class ReconcilePaymentUseCaseTest {
 		LocalDateTime now = LocalDateTime.now();
 		Payment payment = unknownApprovePayment("PAY-1", "pg-1", now.minusMinutes(2));
 
-		given(paymentRepository.findStaleApprovePaymentsForReconciliation(any(), any(), any(), any(Pageable.class)))
+		given(paymentRepository.findStaleApprovePaymentsForReconciliation(any(), any(), any(), any(), any(Pageable.class)))
 			.willReturn(List.of(payment));
 		given(naverPayGateway.getApprovalHistory("pg-1"))
 			.willReturn(NaverPayHistoryResult.approved("PAY-1", 1000));
@@ -304,7 +345,7 @@ class ReconcilePaymentUseCaseTest {
 		);
 		ReflectionTestUtils.setField(reconcilePaymentUseCase, "confirmApprovalUseCase", realConfirmApprovalUseCase);
 
-		given(paymentRepository.findStaleApprovePaymentsForReconciliation(any(), any(), any(), any(Pageable.class)))
+		given(paymentRepository.findStaleApprovePaymentsForReconciliation(any(), any(), any(), any(), any(Pageable.class)))
 			.willReturn(List.of(payment));
 		// merchantPayKey 불일치 — payment.merchantPayKey="PAY-1", historyResult.merchantPayKey="PAY-OTHER"
 		given(naverPayGateway.getApprovalHistory("pg-1"))
@@ -326,7 +367,7 @@ class ReconcilePaymentUseCaseTest {
 		Payment payment1 = unknownApprovePayment("PAY-1", "pg-1", now.minusMinutes(2));
 		Payment payment2 = unknownApprovePayment("PAY-2", "pg-2", now.minusMinutes(2));
 
-		given(paymentRepository.findStaleApprovePaymentsForReconciliation(any(), any(), any(), any(Pageable.class)))
+		given(paymentRepository.findStaleApprovePaymentsForReconciliation(any(), any(), any(), any(), any(Pageable.class)))
 			.willReturn(List.of(payment1, payment2));
 		given(naverPayGateway.getApprovalHistory("pg-1"))
 			.willThrow(new RuntimeException("PG 장애"));
@@ -348,7 +389,7 @@ class ReconcilePaymentUseCaseTest {
 	void reconcile_noCandidates_doesNothing() {
 		injectPolicies();
 
-		given(paymentRepository.findStaleApprovePaymentsForReconciliation(any(), any(), any(), any(Pageable.class)))
+		given(paymentRepository.findStaleApprovePaymentsForReconciliation(any(), any(), any(), any(), any(Pageable.class)))
 			.willReturn(List.of());
 
 		reconcilePaymentUseCase.reconcile();

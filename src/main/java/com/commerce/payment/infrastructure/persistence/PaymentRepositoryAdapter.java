@@ -135,8 +135,8 @@ public class PaymentRepositoryAdapter implements PaymentRepository {
 	}
 
 	@Override
-	public List<Payment> findStaleApprovePaymentsForReconciliation(LocalDateTime staleCutoff, LocalDateTime requestedStaleCutoff, LocalDateTime escalationCutoff, Pageable pageable) {
-		return jpaPaymentRepository.findStaleApprovePaymentsForReconciliation(staleCutoff, requestedStaleCutoff, escalationCutoff, pageable);
+	public List<Payment> findStaleApprovePaymentsForReconciliation(LocalDateTime staleCutoff, LocalDateTime requestedStaleCutoff, LocalDateTime escalationCutoff, LocalDateTime now, Pageable pageable) {
+		return jpaPaymentRepository.findStaleApprovePaymentsForReconciliation(staleCutoff, requestedStaleCutoff, escalationCutoff, now, pageable);
 	}
 
 	@Override
@@ -145,8 +145,8 @@ public class PaymentRepositoryAdapter implements PaymentRepository {
 	}
 
 	@Override
-	public List<Payment> findStaleCancelPaymentsForReconciliation(LocalDateTime staleCutoff, LocalDateTime requestedStaleCutoff, LocalDateTime escalationCutoff, Pageable pageable) {
-		return jpaPaymentRepository.findStaleCancelPaymentsForReconciliation(staleCutoff, requestedStaleCutoff, escalationCutoff, pageable);
+	public List<Payment> findStaleCancelPaymentsForReconciliation(LocalDateTime staleCutoff, LocalDateTime requestedStaleCutoff, LocalDateTime escalationCutoff, LocalDateTime now, Pageable pageable) {
+		return jpaPaymentRepository.findStaleCancelPaymentsForReconciliation(staleCutoff, requestedStaleCutoff, escalationCutoff, now, pageable);
 	}
 
 	@Override

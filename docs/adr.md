@@ -50,6 +50,7 @@ task adr(`docs/tasks/<task>/adr.md`)의 역할은 harness 도입을 기점으로
 | application-layer-relocate | [`docs/tasks/application-layer-relocate/adr.md`](tasks/application-layer-relocate/adr.md) | application 계층 역할별 접미사 이원화(usecase=`…UseCase`/`@Component`, service=`…Service`/`@Service`, ADR-006 supersede→ADR-054), class-level `@Transactional` 전 도메인 폐지(ADR-055) |
 | paid-order-cancel-refund | [`docs/tasks/paid-order-cancel-refund/adr.md`](tasks/paid-order-cancel-refund/adr.md) | PAID 주문 취소 시 환불 의도(CANCEL REQUESTED)를 주문 취소와 단일 tx 영속화 후 best-effort PG 환불(ADR-056), approve 불변·환불은 CANCEL 레코드로만(ADR-057), 응답은 취소 접수 시점(ADR-058), standalone CANCEL 대사 신설+FAILED escalation(ADR-059), CANCEL 멱등은 기존 4-col unique(ADR-060), 주문 락은 fetch join 대신 단일 행 락(ADR-061) |
 | payment-order-decouple | [`docs/tasks/payment-order-decouple/adr.md`](tasks/payment-order-decouple/adr.md) | 승인 확정을 provider 중립 facade로 통합(결제→주문 단방향, ADR-062), completePayment 거부 사유 errorCode 세분화로 주문 재조회 분기 제거(ADR-063), PAID 성공-주체 dead 분기 제거+비중복 PAID 통지+fail(ADR-064, ADR-048 supersede), gateway resolver·공통 승인 진입 UseCase는 2번째 provider 시 후속(ADR-065) |
+| reconciliation-backoff | [`docs/tasks/reconciliation-backoff/adr.md`](tasks/reconciliation-backoff/adr.md) | 대사 KEEP_WAITING 재조회 backoff를 status-직교 `next_reconcile_at` 필드 + 스캔 게이트로 구현(ADR-066, ADR-049 패턴), 단일 고정 간격·지수 backoff 미도입(ADR-067), backoff write는 wait 분기에만·상태 확정 경로는 자기 cadence(ADR-068) |
 
 향후 task 추가 시 본 표에 한 줄을 갱신한다. task adr 위치는 모두 `docs/tasks/<task>/adr.md`로 고정한다.
 
@@ -662,3 +663,28 @@ task adr(`docs/tasks/<task>/adr.md`)의 역할은 harness 도입을 기점으로
 - **이유**: 정규화 경계는 두 번째 provider의 실제 모양을 봐야 제대로 그어진다. 가상의 provider로 추상화하면 한 곳에만 맞는 틀린 추상이 나온다(YAGNI, "맥락이 달라지는 시점에 분리"). 다만 facade를 provider 중립 위치에 둠으로써 두 번째 provider 진입점이 같은 facade를 재사용할 토대는 미리 깔아둔다.
 - **트레이드오프**: 두 번째 provider 도입 시 진입 UseCase 신설·gateway 추상화·결과 정규화가 후속 작업으로 남는다.
 - **연계**: ADR-062, ADR-045(채널 adapter 후속 분리 — 점진적 분리 동형), #240.
+
+### ADR-066: 대사 재조회 backoff를 status-직교 `next_reconcile_at` 필드 + 스캔 게이트로 구현한다
+
+- **결정**: `KEEP_WAITING`(PG가 아직 결론을 못 냄)으로 판정된 대사 후보의 재조회를 미루기 위해, `tbl_payment`에 `status`와 무관한 직교 필드 `next_reconcile_at`(V10)을 추가한다. 대사 스캔 쿼리(APPROVE·CANCEL stale)는 `next_reconcile_at IS NULL OR next_reconcile_at <= now` 게이트로 backoff 중인 행을 제외한다. set은 도메인 메서드 `Payment.delayReconcile(now, backoff)`(상태 전이 없음) + `@Version` 낙관 락으로 수행한다.
+- **배경**: 기존 `KEEP_WAITING` 분기는 행을 쓰지 않아 같은 행이 매 주기 `id ASC` 첫 페이지를 재점유(누적 시 새 UNKNOWN starvation)하고 매 주기 PG에 재조회됐다(PG API 낭비·Rate Limit, #239).
+- **이유**: `escalated_at`(ADR-049)이 이미 검증한 패턴 — `status` 상태머신을 건드리지 않는 직교 타임스탬프로 부가 시점을 표현한다. `responded_at`을 재사용하면 escalation·stale 윈도우 계산이 오염되므로 별도 필드가 안전하다. NULL을 "즉시 대상"으로 두면 기존 행·신규 행 동작이 보존된다(백필 불필요).
+- **트레이드오프**: 컬럼 1개와 wait 시 write 1회(기존 no-op 대비)가 추가된다. 그러나 그 write가 starvation·PG 반복 조회를 동시에 해소한다.
+- **고려한 대안**: 스캔 정렬을 시각 기준으로 교체 — 정렬만으로는 PG 반복 조회를 못 줄이고 게이트가 더 단순하다. `responded_at` 재사용 — 계산 오염으로 기각.
+- **연계**: ADR-049(`escalated_at` 직교 필드), ADR-040/047(대사 스캔 윈도우), ADR-050~052(`@Version` 충돌 처리), #239.
+
+### ADR-067: 대사 재조회 backoff 간격은 단일 고정 값으로 둔다 (지수 backoff 미도입)
+
+- **결정**: 재조회 backoff는 단일 고정 간격(초기값 5분, `PaymentPostProcessTargetPolicy` 단일 출처)으로 한다. 시도 횟수에 따라 간격을 늘리는 지수 backoff는 도입하지 않는다.
+- **이유**: 고정 간격만으로 두 목표(starvation 해소, PG 조회 빈도 감소)가 모두 충족된다. 스캔 윈도우 상한(6시간)이 무한 재시도를 이미 막아 한 건의 PG 조회는 `6h / 간격`으로 bound된다. 코드베이스 기조(과설계 방지·단일 값 우선·운영 config 승격 전제)에 맞춰 가장 작은 설계로 시작한다.
+- **트레이드오프**: 영구 정체 transient는 고정 간격으로 escalation 상한까지 `6h/간격`회 PG를 두드린다(지수보다 많음). 그러나 이는 PG 읽기 호출일 뿐 금전 변이가 아니고 상한으로 bound되어 허용 범위다.
+- **고려한 대안**: 지수 backoff(`next_reconcile_at` + 시도 카운터) — #239의 "점증"에 충실하나 컬럼·상태·테스트가 늘어 현재 스코프에 과하다. 필요해지면 가산적으로 도입.
+- **연계**: ADR-066, #239.
+
+### ADR-068: backoff write는 wait로 끝나는 분기에만 적용하고, 상태 확정 경로는 자기 cadence를 따른다
+
+- **결정**: `next_reconcile_at` backoff는 PG 조회가 "아직 대기"로 끝나는 분기(APPROVE `KEEP_WAITING`, CANCEL `KEEP_WAITING`·재시도 `PROCESSING`)에서만 기록한다. succeed/fail/markUnknown처럼 `status`를 쓰는 분기에는 추가하지 않는다.
+- **이유**: 상태를 확정하는 분기는 이미 행을 쓰며(예: markUnknown이 `responded_at=now` 갱신) 자기 cadence로 재진입을 늦춘다. 거기에 backoff까지 더하면 의미가 중복되고 두 시점 필드가 경합한다. `delayReconcile`은 `status`를 읽지도 바꾸지도 않으므로 wait 분기에 도달하는 어떤 status(UNKNOWN/REQUESTED, 일부 FAILED CANCEL 포함)에도 안전하다.
+- **동시성**: backoff write는 `@Version`을 거치며 동시 전이가 먼저 행을 바꿔 `PAYMENT_CONCURRENTLY_MODIFIED`·행 없음이 나면 tx 밖에서 skip한다. backoff는 best-effort cadence 힌트라 충돌 시 다음 주기에 자연히 재시도된다(기존 `*Skippable` 패턴 동일).
+- **고려한 대안**: 모든 대사 outcome에 일괄 backoff — 상태 확정 분기와 cadence가 중복돼 기각.
+- **연계**: ADR-066, ADR-067, `docs/optimistic-lock-design.md`.
