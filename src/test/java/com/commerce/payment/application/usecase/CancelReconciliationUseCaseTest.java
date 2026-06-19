@@ -21,6 +21,7 @@ import org.springframework.data.domain.Pageable;
 import org.springframework.test.util.ReflectionTestUtils;
 
 import com.commerce.payment.application.port.NotificationPort;
+import com.commerce.payment.application.service.DelayPaymentReconcileService;
 import com.commerce.payment.application.service.EscalateApprovePaymentService;
 import com.commerce.payment.application.service.EscalateCancelPaymentService;
 import com.commerce.payment.application.service.FailApprovePaymentService;
@@ -47,6 +48,9 @@ class CancelReconciliationUseCaseTest {
 
 	@Mock
 	private PaymentRepository paymentRepository;
+
+	@Mock
+	private DelayPaymentReconcileService delayPaymentReconcileService;
 
 	@Mock
 	private FailApprovePaymentService failApprovePaymentService;
@@ -266,6 +270,67 @@ class CancelReconciliationUseCaseTest {
 		then(succeedCancelPaymentService).should(never()).succeed(any(), any(), any(), any());
 		then(failCancelPaymentService).should(never()).fail(any(), any(), any(), any(), any(), any());
 		then(markUnknownCancelPaymentService).should(never()).markUnknown(any(), any(), any(), any(), any());
+	}
+
+	@DisplayName("CANCEL KEEP_WAITING(PG 결과 불명)이면 delayPaymentReconcileService를 호출해 backoff를 기록한다")
+	@Test
+	void reconcileCancel_pgHistoryUnknown_callsDelayService() {
+		injectPolicies();
+		LocalDateTime now = LocalDateTime.now();
+		Payment cancelPayment = unknownCancelPayment("PAY-C-D1", "pg-c-d1", now.minusMinutes(2));
+
+		given(paymentRepository.findStaleApprovePaymentsForReconciliation(any(), any(), any(), any(), any(Pageable.class)))
+			.willReturn(List.of());
+		given(paymentRepository.findStaleCancelPaymentsForReconciliation(any(), any(), any(), any(), any(Pageable.class)))
+			.willReturn(List.of(cancelPayment));
+		given(naverPayGateway.getApprovalHistory("pg-c-d1"))
+			.willReturn(NaverPayHistoryResult.unknown("timeout"));
+
+		reconcilePaymentUseCase.reconcile();
+
+		then(delayPaymentReconcileService).should().delay(
+			eq("PAY-C-D1"), eq(PaymentProvider.NAVERPAY), eq("pg-c-d1"), eq(PaymentType.CANCEL), any(LocalDateTime.class));
+	}
+
+	@DisplayName("CANCEL 재시도 결과가 PROCESSING이면 delayPaymentReconcileService를 호출해 backoff를 기록한다")
+	@Test
+	void reconcileCancel_retryProcessing_callsDelayService() {
+		injectPolicies();
+		LocalDateTime now = LocalDateTime.now();
+		Payment cancelPayment = unknownCancelPayment("PAY-C-D2", "pg-c-d2", now.minusMinutes(2));
+
+		given(paymentRepository.findStaleApprovePaymentsForReconciliation(any(), any(), any(), any(), any(Pageable.class)))
+			.willReturn(List.of());
+		given(paymentRepository.findStaleCancelPaymentsForReconciliation(any(), any(), any(), any(), any(Pageable.class)))
+			.willReturn(List.of(cancelPayment));
+		given(naverPayGateway.getApprovalHistory("pg-c-d2"))
+			.willReturn(NaverPayHistoryResult.approved("PAY-C-D2", 1000));
+		given(naverPayGateway.cancel(eq("pg-c-d2"), anyInt(), anyString()))
+			.willReturn(NaverPayCancelResult.processing());
+
+		reconcilePaymentUseCase.reconcile();
+
+		then(delayPaymentReconcileService).should().delay(
+			eq("PAY-C-D2"), eq(PaymentProvider.NAVERPAY), eq("pg-c-d2"), eq(PaymentType.CANCEL), any(LocalDateTime.class));
+	}
+
+	@DisplayName("CANCEL 대사 확정 분기(취소 확정)에서는 delayPaymentReconcileService를 호출하지 않는다")
+	@Test
+	void reconcileCancel_confirmed_doesNotCallDelayService() {
+		injectPolicies();
+		LocalDateTime now = LocalDateTime.now();
+		Payment cancelPayment = unknownCancelPayment("PAY-C-D3", "pg-c-d3", now.minusMinutes(2));
+
+		given(paymentRepository.findStaleApprovePaymentsForReconciliation(any(), any(), any(), any(), any(Pageable.class)))
+			.willReturn(List.of());
+		given(paymentRepository.findStaleCancelPaymentsForReconciliation(any(), any(), any(), any(), any(Pageable.class)))
+			.willReturn(List.of(cancelPayment));
+		given(naverPayGateway.getApprovalHistory("pg-c-d3"))
+			.willReturn(NaverPayHistoryResult.canceled());
+
+		reconcilePaymentUseCase.reconcile();
+
+		then(delayPaymentReconcileService).should(never()).delay(any(), any(), any(), any(), any());
 	}
 
 	// --- 건별 예외 격리 ---
