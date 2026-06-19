@@ -92,6 +92,6 @@
 
 ```bash
 ./gradlew compileJava compileTestJava
-./gradlew test --tests "*ReconciliationScanQueryIntegrationTest"
+./gradlew integrationTest --tests "*ReconciliationScanQueryIntegrationTest"
 ./gradlew test --tests "*ReconcilePaymentUseCaseTest" --tests "*CancelReconciliationUseCaseTest"
 ```
