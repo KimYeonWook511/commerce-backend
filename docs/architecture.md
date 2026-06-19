@@ -142,7 +142,7 @@ Port 인터페이스 설계 원칙:
   (이벤트 유실 방지를 위해 in-process 이벤트가 아닌 Outbox + Kafka, 5장 참고)
 
 # 결제 대사 (reconciliation) — 순서·경계 (ADR-040)
-1. 스캔: stale 미확정 결제 후보 (UNKNOWN ≈1분 / REQUESTED ≈15분 하한, ≈6시간 상한 초과는 escalation 제외, ADR-047)
+1. 스캔: stale 미확정 결제 후보 (UNKNOWN ≈1분 / REQUESTED ≈15분 하한, ≈6시간 상한 초과는 escalation 제외, ADR-047). `KEEP_WAITING`으로 끝난 건은 `next_reconcile_at` 직교 필드로 고정 backoff를 걸어 스캔 게이트가 제외 → 누적 wait 건이 새 후보를 굶기지 않고 같은 건의 PG 반복 조회를 줄인다 (ADR-066~068)
 2. [건별, 트랜잭션 밖] PG 이력 조회 (getApprovalHistory — 승인 재요청이 아니라 이미 일어난 결과 확인, 이중과금 방지)
 3. 후처리 정책(대상 식별·flow 결정 — src/main 단일 출처, ADR-046)으로 확정/보상/대기 결정
 4. 확정·종착·보상은 승인과 같은 provider 중립 facade를 공유 (ADR-062): 확정은 PG 재호출 없이 SUCCEEDED + Order PAID
