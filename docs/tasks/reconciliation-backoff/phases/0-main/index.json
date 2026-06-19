@@ -1,7 +1,19 @@
 {
   "steps": [
-    { "step": 1, "name": "add-next-reconcile-at-scan-gate", "status": "pending", "summary": null },
-    { "step": 2, "name": "wire-backoff-on-wait", "status": "pending", "summary": null }
+    {
+      "step": 1,
+      "name": "add-next-reconcile-at-scan-gate",
+      "status": "completed",
+      "summary": "Payment에 nextReconcileAt 필드 및 delayReconcile 메서드 추가, V10 마이그레이션, 스캔 쿼리 backoff 게이트(now 파라미터), 포트/어댑터/usecase 시그니처 정합, backoff 게이트 통합 테스트 및 도메인 단위 테스트 완성",
+      "completed_at": "2026-06-19T15:31:06.545093+09:00"
+    },
+    {
+      "step": 2,
+      "name": "wire-backoff-on-wait",
+      "status": "completed",
+      "summary": "DelayPaymentReconcileService 신설, PaymentPostProcessTargetPolicy에 RECONCILE_BACKOFF 상수 추가, ReconcilePaymentUseCase의 APPROVE/CANCEL KEEP_WAITING 및 retry PROCESSING 분기에 delayReconcileSkippable 배선, 단위 테스트 추가",
+      "completed_at": "2026-06-19T15:36:41.480483+09:00"
+    }
   ],
   "execution": {
     "developer_model": "sonnet",
@@ -10,5 +22,5 @@
     "push": true
   },
   "created_at": "2026-06-19T00:00:00+09:00",
-  "completed_at": null
+  "completed_at": "2026-06-19T15:36:48.200975+09:00"
 }
