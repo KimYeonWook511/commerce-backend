@@ -73,7 +73,7 @@ public class ReconcilePaymentUseCase {
 		LocalDateTime escalationCutoff = now.minusHours(ESCALATION_DELAY_HOURS);
 
 		List<Payment> candidates = paymentRepository.findStaleApprovePaymentsForReconciliation(
-			staleCutoff, requestedStaleCutoff, escalationCutoff, PageRequest.of(0, RECONCILE_BATCH_SIZE));
+			staleCutoff, requestedStaleCutoff, escalationCutoff, now, PageRequest.of(0, RECONCILE_BATCH_SIZE));
 
 		if (!candidates.isEmpty()) {
 			log.info("APPROVE 대사 시작 candidates={} staleCutoff={} requestedStaleCutoff={} escalationCutoff={}",
@@ -101,7 +101,7 @@ public class ReconcilePaymentUseCase {
 
 		// CANCEL 대사: standalone CANCEL(REQUESTED/UNKNOWN) 스캔 → PG 재조회 → 재시도/확정 (ADR-L4)
 		List<Payment> cancelCandidates = paymentRepository.findStaleCancelPaymentsForReconciliation(
-			staleCutoff, requestedStaleCutoff, escalationCutoff, PageRequest.of(0, RECONCILE_BATCH_SIZE));
+			staleCutoff, requestedStaleCutoff, escalationCutoff, now, PageRequest.of(0, RECONCILE_BATCH_SIZE));
 
 		if (!cancelCandidates.isEmpty()) {
 			log.info("CANCEL 대사 시작 candidates={}", cancelCandidates.size());
