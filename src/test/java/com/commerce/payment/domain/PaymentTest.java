@@ -4,6 +4,7 @@ import static org.assertj.core.api.Assertions.assertThat;
 import static org.assertj.core.api.Assertions.assertThatCode;
 import static org.assertj.core.api.Assertions.assertThatThrownBy;
 
+import java.time.Duration;
 import java.time.LocalDateTime;
 
 import org.junit.jupiter.api.DisplayName;
@@ -212,5 +213,24 @@ class PaymentTest {
 			.isInstanceOf(PaymentException.class)
 			.satisfies(e -> assertThat(((PaymentException)e).getErrorCode())
 				.isEqualTo(PaymentErrorCode.PAYMENT_AMOUNT_MISMATCH));
+	}
+
+	@DisplayName("delayReconcile 호출 시 nextReconcileAt이 now + backoff로 세팅되고 status는 변경되지 않는다")
+	@Test
+	void delayReconcile_setsNextReconcileAtAndDoesNotChangeStatus() {
+		// given
+		PaymentReservation reservation = PaymentReservation.createReserved(
+			1L, 1L, 1000, PaymentProvider.NAVERPAY, "PAY-1", LocalDateTime.now().plusMinutes(15));
+		Payment payment = Payment.createRequested(reservation, PaymentType.APPROVE, "pg-payment-id");
+		payment.markUnknown("timeout", LocalDateTime.now().minusMinutes(2));
+		LocalDateTime now = LocalDateTime.of(2026, 6, 19, 12, 0);
+		Duration backoff = Duration.ofMinutes(5);
+
+		// when
+		payment.delayReconcile(now, backoff);
+
+		// then
+		assertThat(payment.getNextReconcileAt()).isEqualTo(now.plus(backoff));
+		assertThat(payment.getStatus()).isEqualTo(PaymentStatus.UNKNOWN);
 	}
 }
