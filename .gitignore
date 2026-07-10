@@ -79,3 +79,6 @@ worktrees/
 ### 부하 테스트 도커 볼륨 ###
 load-test/influxdb-data-local/
 load-test/grafana-data-local/
+
+### log4brains (ADR 정적 사이트 빌드 산출물) ###
+.log4brains/
