@@ -9,9 +9,9 @@ Java, Spring Boot, Gradle, MySQL, JPA(Hibernate) 백엔드 프로젝트.
 이 다섯 가지는 다른 어떤 규칙보다 우선하며 예외 없이 지킨다.
 
 1. **언어**: 답변·설명은 한국어. 코드 식별자(클래스·메서드·변수·패키지·테스트명)는 영어. 코드 식별자에 한국어를 섞지 않는다.
-2. **승인 게이트**: 사용자 승인 전에는 파일을 생성·수정하지 않는다. 일반 구현은 Plan Mode로 계획을 제시하고 `ExitPlanMode`로 승인을 받은 뒤 실행한다. harness 계열 skill(`/harness`, `/harness-v2`, `/harness-v3` 등)은 각 skill이 정의한 자체 승인 절차를 따르며, 그 절차대로 승인받기 전에는 실행기(`execute.py`)를 실행하지 않는다.
+2. **승인 게이트**: 사용자 승인 전에는 파일을 생성·수정하지 않는다. 일반 구현은 Plan Mode로 계획을 제시하고 `ExitPlanMode`로 승인을 받은 뒤 실행한다. `spec-harness-v1` skill은 자체 승인 절차(Analyze 통과 후 중단·보고 → 사용자 진행 확인)를 따르며, 그 절차대로 승인받기 전에는 실행기(`execute.py`)·workflow를 실행하지 않는다.
 3. **불명확하면 멈춤**: 임의로 판단하지 않고 구현 전에 사용자에게 먼저 확인한다. 근거 없이 기존 컨벤션을 무시하거나 사용처 없는 코드를 추가하지 않는다.
-4. **완료 task 문서 불변**: 머지된 `docs/tasks/<task-name>/` 문서는 이후 수정하지 않는다. 머지 후 발생한 변경은 루트 `docs/` 문서로만 표현한다. 상세는 `docs/tasks/README.md`의 "완료된 tasks 불변 원칙".
+4. **완료 산출물 불변**: 작업 산출물은 두 체계로 남는다. 레거시 `docs/tasks/<task-name>/`는 동결이며 수정하지 않는다. 신규 작업은 `docs/specs/<spec-name>/`(작업 중 `.gitignore` 휘발)에서 진행하고, 머지 시 정본만 `docs/specs/_archive/pr-<번호>-<spec명>/`로 승격되며 이후 수정하지 않는다. 두 체계 모두 머지 후 발생한 변경은 루트 `docs/` 문서로만 표현한다. 상세는 `docs/tasks/README.md`·`docs/claude/skills/spec-harness-v1.md`.
 5. **컨벤션 준수**: commit / PR / issue / 브랜치 생성은 예외 없이 해당 컨벤션을 따른다. 어떤 문서를 언제 읽을지는 아래 "시점별 규칙" 표를 따른다.
 
 ---
@@ -40,14 +40,16 @@ Java, Spring Boot, Gradle, MySQL, JPA(Hibernate) 백엔드 프로젝트.
 | DB 스키마 (테이블·컬럼·인덱스·제약) | `docs/db-schema.md` | 현재 상태로 갱신 (실제 DDL은 Flyway V스크립트가 단일 출처) |
 | 구조 (모듈·레이어·책임 이동, 서비스 신설/이동) | `docs/architecture.md` | 현재 상태로 갱신 |
 | 설계 결정 (정책·트레이드오프) | `docs/adr/` | **새 파일 추가** (기존 ADR 수정 금지, supersede 시 옛 ADR의 Status만 갱신) |
-| 정책 문서 내용 (예외/충돌/로깅/패키지 배치 규칙) | `docs/exception-strategy.md`, `docs/optimistic-lock-design.md`, `docs/logging-conventions.md`, `docs/package-structure-conventions.md`, `docs/test-code-conventions.md` 중 해당 문서 | 그 정책이 바뀌면 해당 문서 갱신 |
 | 내부 구현만 (이름 정리·로직 리팩터) | 없음 | 동기화 불필요 |
+
+> 규칙 문서(`exception-strategy`·`optimistic-lock-design`·`logging-conventions`·`package-structure-conventions`·`persistence-conventions`·`test-code-conventions`)는 이 표(코드→상태 문서 동기화) 대상이 아니다. 규칙 변경은 코드 동기화의 부산물이 아니라 의도된 결정이므로, ADR로 방침을 정한 뒤 해당 규칙 문서를 갱신하는 별도 트랙으로 다룬다.
 
 동기화 규율:
 - 갱신은 기억으로 재작성하지 말고 **루트 현재 파일 + 변경된 코드를 둘 다 보고** 이번 변경분만 반영한다. 안 바뀐 부분은 보존한다.
 - 갱신 후 무엇을 바꿨는지 한 줄로 보고한다.
 - 루트 문서는 **개념**을 기술하고, 클래스·메서드 이름은 최소로만 박는다. 이름을 박으면 그 코드를 리팩터(이름 변경 등)할 때 문서도 같이 고쳐야 하며, 안 고치면 문서가 코드와 안 맞게 된다. 정확한 클래스·메서드 목록은 코드가 기준이다.
-- AI와의 자유 작업이든 harness Stage 8이든, 코드 작업을 마칠 때 이 표를 한 번 대조하는 것을 기본 절차로 한다.
+- 자유 작업(harness 밖)에서는 코드 작업을 마칠 때 이 표를 한 번 대조하는 것을 기본 절차로 한다.
+- `spec-harness-v1`로 작업할 때는 실행(Stage 6) 중에는 루트 동기화를 유예하고, Stage 8(Root Sync)에서 이 표대로 일괄 반영한다(실행 중 spec 폴더의 설계 문서만 as-built로 갱신).
 
 ---
 
@@ -56,7 +58,7 @@ Java, Spring Boot, Gradle, MySQL, JPA(Hibernate) 백엔드 프로젝트.
 - 도메인 중심 네이밍을 우선하고 기존 프로젝트 패턴을 따른다.
 - 비즈니스 로직은 Domain 또는 application 계층에 둔다. Controller는 요청 수신·입력 검증·서비스 위임·응답 반환만 담당한다.
 - 외부 시스템 연동(Redis, 이메일, 결제 PG 등)은 `application/port/` 인터페이스로만 의존한다.
-- application service 클래스는 유스케이스 단위 단일 행위만 담당한다. **역할별 접미사**(→ PR#248): `application/usecase/`는 `…UseCase`(흐름 조립·정책 선택, tx 없음), `application/service/`는 `…Service`(tx 단위작업, `@Transactional`). 예: `NaverPayApprovalUseCase`, `CreateOrderService`. `@Transactional`은 `service` 패키지에만 둔다. 여러 단위작업을 한 tx로 묶을 땐 usecase가 아니라 묶는 메서드를 `service`에 만들어 거기에 tx를 단다. 단순 작업(조율 없음)은 usecase 없이 Controller가 service를 직접 호출한다. 배치 기준은 `docs/package-structure-conventions.md`.
+- application service는 유스케이스 단위 단일 행위만 담당한다. 역할별 접미사(`…UseCase`는 흐름 조립·tx 없음 / `…Service`는 tx 단위작업)와 `@Transactional` 위치(`service` 패키지만) 등 배치 규칙은 `docs/package-structure-conventions.md`를 따른다.
 - DB 무결성 위반은 Application/Adapter에서 catch 하지 않고 `GlobalExceptionHandler` 안전망(500)으로 위임한다.
 - 낙관 락(@Version) 충돌은 tx 경계 안에서 catch하지 않고(도메인 예외로 전파시켜 깨끗이 rollback), skip/retry/전파는 tx 경계 밖에서 정한다. 변환은 `infrastructure/persistence/` adapter가 한다. 상세는 `docs/optimistic-lock-design.md`.
 - 위 구조 규칙(@Transactional 위치, 예외 격리 등) 중 기계로 검증 가능한 것은 `ArchitectureRulesTest`(ArchUnit)가 강제한다.
@@ -70,6 +72,7 @@ Java, Spring Boot, Gradle, MySQL, JPA(Hibernate) 백엔드 프로젝트.
 - 한국어 문장에서 영문 용어 뒤 조사는 붙여 쓴다 (`race가`, `mock으로`, `latch는`, `stub한다`). 의존명사(`자체`, `간`, `등`)나 일반 명사는 띄어 쓴다 (`mock 응답`, `thread 간`).
 - 문서 용어: 개발자에게 익숙한 표준 기술 용어(멱등, 낙관 락, 단일 출처 등)는 그대로 쓰고, 일반적이지 않은 비유·축약 표현(예: "심볼", "부패")은 풀어쓴다. 누가 읽어도 바로 이해되는 쪽을 택한다. 단어 목록(사전)을 만들지 말고 이 기준으로 그때그때 판단한다.
 - 커밋 메시지에 `Co-Authored-By` 줄을 붙이지 않는다.
+- 보호 브랜치(main/develop)에는 직접 push·commit하지 않는다(피처 브랜치 → PR 머지). agent는 어떤 경우에도 merge하지 않는다 — merge는 사람이 수동으로 한다. 로컬 1차 방어는 `.claude/hooks/pre_tool_use_policy.py`가, 진짜 강제는 서버 branch protection이 담당한다.
 
 ---
 
@@ -84,11 +87,14 @@ Java, Spring Boot, Gradle, MySQL, JPA(Hibernate) 백엔드 프로젝트.
 - 예외 처리 정책: `docs/exception-strategy.md`
 - 낙관 락(@Version) 충돌 처리 설계: `docs/optimistic-lock-design.md`
 - 패키지 배치 기준: `docs/package-structure-conventions.md`
+- 영속성 규약: `docs/persistence-conventions.md`
+- 명세 불가침 원칙(위험영역): `docs/spec-constitution.md`
 
 컨벤션
 - 브랜치 / 커밋 / PR / 테스트 / 로깅: `docs/branch-conventions.md`, `docs/commit-conventions.md`, `docs/pr-conventions.md`, `docs/test-code-conventions.md`, `docs/logging-conventions.md`
 
-task·하네스 운영
-- task별 문서 운영 가이드: `docs/tasks/README.md`
+spec·하네스 운영
+- spec 작업 체계·8-Stage 흐름: `docs/claude/skills/spec-harness-v1.md` (skill 본문: `.claude/skills/spec-harness-v1/SKILL.md`)
+- 레거시 task 문서 운영 가이드(동결): `docs/tasks/README.md`
 - Claude Code hook 구조: `docs/claude/hooks/overview.md`
 - Claude Code skill 문서: `docs/claude/skills/*`
