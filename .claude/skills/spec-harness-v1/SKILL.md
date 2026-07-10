@@ -123,9 +123,9 @@ spec 문서와 `phases` 문서로 부족한 공통 맥락이 있을 때만 `CLAU
 #### 작업 공간 준비 (Specify 맨 앞 — 한 번)
 
 1. **slug·type 확정**: 사용자의 한 줄 작업 설명에서 `<spec-name>` slug와 type을 정한다. type과 브랜치 형식은 `docs/branch-conventions.md`를 단일 출처로 따른다(harness가 값을 하드코딩하지 않는다). spec 내용을 다 채우기 전에 *이름만* 먼저 정하는 것이다(slug는 폴더·브랜치 이름일 뿐, 명세의 완성이 아니다). 모호하면 사용자에게 짧게 확인한다.
-2. **worktree 생성·이동**: 브랜치·worktree 생성은 `docs/branch-conventions.md`의 "worktree로 브랜치 생성하기"를 그대로 따른다(형식 `<type>/<name>`, 디렉토리 `worktrees/<type>-<name>`, `develop` 기준). `<name>`은 여기서 `<spec-name>`이다. 메인 repo 루트로 이동한 뒤 그 규칙대로 worktree를 만들고 그 안으로 이동한다.
+2. **worktree 생성·이동**: 브랜치·worktree 생성은 `docs/branch-conventions.md`의 "worktree로 브랜치 생성하기" 규칙을 그대로 따른다. `<name>`은 여기서 `<spec-name>`으로 대응한다. 메인 repo 루트로 이동한 뒤 그 규칙대로 worktree를 만들고 그 안으로 이동한다.
 
-   이동 직후 `pwd`(또는 `git branch --show-current`)로 worktree 안인지 반드시 확인한다 — `worktrees/<type>-<spec-name>` 경로 / `<type>/<spec-name>` 브랜치여야 한다. 이후 모든 문서 작성·`execute.py` 실행은 이 worktree 루트 기준이다.
+   이동 직후 `pwd`(또는 `git branch --show-current`)로 방금 만든 worktree 경로·브랜치 안에 있는지 반드시 확인한다. 이후 모든 문서 작성·`execute.py` 실행은 이 worktree 루트 기준이다.
 3. **스캐폴딩(checklist 생성)**: worktree 안에 `docs/specs/<spec-name>/` 폴더를 만들고, `docs/specs/_template/workflow-checklist.json`을 `docs/specs/<spec-name>/workflow-checklist.json`으로 복사한다. 이 시점에 8-Stage 진행 추적 checklist가 존재한다(실행 게이트가 이를 읽는다). **설계 문서(plan·architecture·data-model 등)는 지금 복사하지 않는다 — Plan(4)에서 필요한 것만 `_template`에서 꺼내 만든다.** `spec.md`도 아래에서 새로 만든다.
 
 > worktree·checklist는 spec당 한 번만 만든다. 재실행이면 이미 있으므로 건너뛴다.
