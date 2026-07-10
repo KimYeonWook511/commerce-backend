@@ -107,7 +107,7 @@ spec 문서와 `phases` 문서로 부족한 공통 맥락이 있을 때만 `CLAU
 - **외부 기능 명세가 있으면 읽는다** — 이 작업이 더 큰 명세의 한 조각이면 그 부분을 Specify의 출발점으로 넘긴다. (명세가 없으면 생략한다. 리팩터링·버그 수정·탐색적 작업은 사전 명세가 없는 게 정상이다 — 그 경우 대화가 출발점이다.)
 - 작업 범위에 직접 연결된 **코드와 테스트를 읽어** 현재 구조와 변경 범위를 파악한다.
 - 공통 아키텍처, 다른 도메인 ERD, 전역 ADR 같은 루트 `docs/` 기준 문서는 *더 필요할 때만* 추가로 읽는다.
-- 이 작업이 무엇인지 윤곽이 잡히면 **slug 후보**(예: `payment-webhook`)와 type(feat/fix/refactor 등)을 머릿속에 떠올려 둔다 — 확정은 Specify 초반에 사용자와 한다.
+- 이 작업이 무엇인지 윤곽이 잡히면 **slug 후보**와 type을 머릿속에 떠올려 둔다(허용 타입·형식은 `docs/branch-conventions.md`를 따른다) — 확정은 Specify 초반에 사용자와 한다.
 - **재실행이라 이미 worktree·`spec.md`가 있으면** 그 worktree로 이동해 현재 진행 상태를 읽는다(신규 작업엔 해당 없음).
 - 이미 답할 수 있는 질문은 하지 않는다.
 - 병렬 탐색이 가능한 환경이면 관련 영역을 나눠 추가 탐색할 수 있다.
@@ -122,16 +122,10 @@ spec 문서와 `phases` 문서로 부족한 공통 맥락이 있을 때만 `CLAU
 
 #### 작업 공간 준비 (Specify 맨 앞 — 한 번)
 
-1. **slug·type 확정**: 사용자의 한 줄 작업 설명에서 `<spec-name>` slug(예: `payment-webhook`)와 type(feat/fix/refactor 등)을 정한다. spec 내용을 다 채우기 전에 *이름만* 먼저 정하는 것이다(slug는 폴더·브랜치 이름일 뿐, 명세의 완성이 아니다). 모호하면 사용자에게 짧게 확인한다.
-2. **worktree 생성·이동**: 작업 브랜치 worktree를 만들고 그 안으로 이동한다.
+1. **slug·type 확정**: 사용자의 한 줄 작업 설명에서 `<spec-name>` slug와 type을 정한다. type과 브랜치 형식은 `docs/branch-conventions.md`를 단일 출처로 따른다(harness가 값을 하드코딩하지 않는다). spec 내용을 다 채우기 전에 *이름만* 먼저 정하는 것이다(slug는 폴더·브랜치 이름일 뿐, 명세의 완성이 아니다). 모호하면 사용자에게 짧게 확인한다.
+2. **worktree 생성·이동**: 브랜치·worktree 생성은 `docs/branch-conventions.md`의 "worktree로 브랜치 생성하기" 규칙을 그대로 따른다. `<name>`은 여기서 `<spec-name>`으로 대응한다. 메인 repo 루트로 이동한 뒤 그 규칙대로 worktree를 만들고 그 안으로 이동한다.
 
-   ```bash
-   cd "$(git rev-parse --git-common-dir)/.."
-   git worktree add worktrees/<type>-<spec-name> -b <type>/<spec-name> develop
-   cd worktrees/<type>-<spec-name>
-   ```
-
-   이동 직후 `pwd`(또는 `git branch --show-current`)로 worktree 안인지 반드시 확인한다 — `worktrees/<type>-<spec-name>` 경로 / `<type>/<spec-name>` 브랜치여야 한다. 이후 모든 문서 작성·`execute.py` 실행은 이 worktree 루트 기준이다.
+   이동 직후 `pwd`(또는 `git branch --show-current`)로 방금 만든 worktree 경로·브랜치 안에 있는지 반드시 확인한다. 이후 모든 문서 작성·`execute.py` 실행은 이 worktree 루트 기준이다.
 3. **스캐폴딩(checklist 생성)**: worktree 안에 `docs/specs/<spec-name>/` 폴더를 만들고, `docs/specs/_template/workflow-checklist.json`을 `docs/specs/<spec-name>/workflow-checklist.json`으로 복사한다. 이 시점에 8-Stage 진행 추적 checklist가 존재한다(실행 게이트가 이를 읽는다). **설계 문서(plan·architecture·data-model 등)는 지금 복사하지 않는다 — Plan(4)에서 필요한 것만 `_template`에서 꺼내 만든다.** `spec.md`도 아래에서 새로 만든다.
 
 > worktree·checklist는 spec당 한 번만 만든다. 재실행이면 이미 있으므로 건너뛴다.
