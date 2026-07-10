@@ -339,19 +339,11 @@ class OrderExpirationBatchTest {
 
 	private Member createMember() {
 		String suffix = UUID.randomUUID().toString().substring(0, 8);
-		return Member.builder()
-			.email("batch-expire-" + suffix + "@example.com")
-			.password("password123")
-			.username("u" + suffix)
-			.build();
+		return Member.createUser("batch-expire-" + suffix + "@example.com", "password123", "u" + suffix);
 	}
 
 	private Product createProduct() {
-		return Product.builder()
-			.name("batch-product")
-			.price(1000)
-			.status(ProductStatus.ON_SALE)
-			.build();
+		return Product.create("batch-product", 1000, null, null, ProductStatus.ON_SALE);
 	}
 
 	private Order createOrder(Member member, Product product) {

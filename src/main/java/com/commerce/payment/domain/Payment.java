@@ -18,7 +18,6 @@ import jakarta.persistence.Table;
 import jakarta.persistence.UniqueConstraint;
 import jakarta.persistence.Version;
 import lombok.AccessLevel;
-import lombok.Builder;
 import lombok.Getter;
 import lombok.NoArgsConstructor;
 import org.hibernate.annotations.JdbcTypeCode;
@@ -91,7 +90,6 @@ public class Payment extends BaseTimeEntity {
 	@Column(name = "approved_order_key")
 	private Long approvedOrderKey;
 
-	@Builder(access = AccessLevel.PRIVATE)
 	private Payment(
 		String merchantPayKey,
 		String pgPaymentId,
@@ -119,15 +117,19 @@ public class Payment extends BaseTimeEntity {
 	}
 
 	public static Payment createRequested(PaymentReservation reservation, PaymentType type, String pgPaymentId) {
-		return Payment.builder()
-			.merchantPayKey(reservation.getMerchantPayKey())
-			.pgPaymentId(pgPaymentId)
-			.amount(reservation.getAmount())
-			.provider(reservation.getProvider())
-			.type(type)
-			.status(PaymentStatus.REQUESTED)
-			.orderId(reservation.getOrderId())
-			.build();
+		return new Payment(
+			reservation.getMerchantPayKey(),
+			pgPaymentId,
+			reservation.getAmount(),
+			reservation.getProvider(),
+			type,
+			PaymentStatus.REQUESTED,
+			null,
+			null,
+			null,
+			reservation.getOrderId(),
+			null
+		);
 	}
 
 	public static Payment createCancelRequested(
@@ -137,15 +139,19 @@ public class Payment extends BaseTimeEntity {
 		int amount,
 		PaymentProvider provider
 	) {
-		return Payment.builder()
-			.orderId(orderId)
-			.merchantPayKey(merchantPayKey)
-			.pgPaymentId(pgPaymentId)
-			.amount(amount)
-			.provider(provider)
-			.type(PaymentType.CANCEL)
-			.status(PaymentStatus.REQUESTED)
-			.build();
+		return new Payment(
+			merchantPayKey,
+			pgPaymentId,
+			amount,
+			provider,
+			PaymentType.CANCEL,
+			PaymentStatus.REQUESTED,
+			null,
+			null,
+			null,
+			orderId,
+			null
+		);
 	}
 
 	public void succeed(LocalDateTime respondedAt) {

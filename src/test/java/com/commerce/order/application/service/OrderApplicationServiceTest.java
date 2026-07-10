@@ -423,21 +423,13 @@ class OrderApplicationServiceTest {
 	}
 
 	private Member createMember(Long memberId) {
-		Member member = Member.builder()
-			.email("test@example.com")
-			.password("password123")
-			.username("user1")
-			.build();
+		Member member = Member.createUser("test@example.com", "password123", "user1");
 		ReflectionTestUtils.setField(member, "id", memberId);
 		return member;
 	}
 
 	private Product createProduct(Long productId, String name, int price) {
-		Product product = Product.builder()
-			.name(name)
-			.price(price)
-			.status(ProductStatus.ON_SALE)
-			.build();
+		Product product = Product.create(name, price, null, null, ProductStatus.ON_SALE);
 		ReflectionTestUtils.setField(product, "id", productId);
 		return product;
 	}

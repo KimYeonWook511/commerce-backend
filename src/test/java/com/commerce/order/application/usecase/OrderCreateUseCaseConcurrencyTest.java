@@ -135,25 +135,14 @@ class OrderCreateUseCaseConcurrencyTest {
 	}
 
 	private Member createMember(String emailPrefix) {
-		return Member.builder()
-			.email(emailPrefix + "@example.com")
-			.password("password123")
-			.username("conc-user")
-			.build();
+		return Member.createUser(emailPrefix + "@example.com", "password123", "conc-user");
 	}
 
 	private Product createProduct(String name, int price) {
-		return Product.builder()
-			.name(name)
-			.price(price)
-			.status(ProductStatus.ON_SALE)
-			.build();
+		return Product.create(name, price, null, null, ProductStatus.ON_SALE);
 	}
 
 	private Stock createStock(Product product, int quantity) {
-		return Stock.builder()
-			.productId(product.getId())
-			.quantity(quantity)
-			.build();
+		return Stock.create(product.getId(), quantity);
 	}
 }

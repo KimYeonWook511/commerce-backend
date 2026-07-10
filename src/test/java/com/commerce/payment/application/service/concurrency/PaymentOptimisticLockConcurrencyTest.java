@@ -236,19 +236,11 @@ class PaymentOptimisticLockConcurrencyTest {
 
 	private Member createMember() {
 		String suffix = UUID.randomUUID().toString().substring(0, 8);
-		return Member.builder()
-			.email("optlock-" + suffix + "@example.com")
-			.password("password123")
-			.username("u" + suffix)
-			.build();
+		return Member.createUser("optlock-" + suffix + "@example.com", "password123", "u" + suffix);
 	}
 
 	private Product createProduct() {
-		return Product.builder()
-			.name("test-product-" + UUID.randomUUID().toString().substring(0, 8))
-			.price(1000)
-			.status(ProductStatus.ON_SALE)
-			.build();
+		return Product.create("test-product-" + UUID.randomUUID().toString().substring(0, 8), 1000, null, null, ProductStatus.ON_SALE);
 	}
 
 	private Order createOrder(Member member, Product product) {

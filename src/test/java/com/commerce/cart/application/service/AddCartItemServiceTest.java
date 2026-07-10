@@ -168,11 +168,7 @@ class AddCartItemServiceTest {
 	}
 
 	private Product createProduct(ProductStatus status) {
-		return Product.builder()
-			.name("test-product")
-			.price(1000)
-			.status(status)
-			.build();
+		return Product.create("test-product", 1000, null, null, status);
 	}
 
 	private CartItemAddRequest createRequest(Long productId, int quantity) {

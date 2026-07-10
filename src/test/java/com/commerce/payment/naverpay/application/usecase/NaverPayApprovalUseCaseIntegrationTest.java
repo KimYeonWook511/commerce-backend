@@ -927,11 +927,7 @@ class NaverPayApprovalUseCaseIntegrationTest {
 
 	private Member createMember() {
 		String suffix = UUID.randomUUID().toString().substring(0, 8);
-		return Member.builder()
-			.email("naverpay-int-" + suffix + "@example.com")
-			.password("password123")
-			.username("u" + suffix)
-			.build();
+		return Member.createUser("naverpay-int-" + suffix + "@example.com", "password123", "u" + suffix);
 	}
 
 	private Order persistOrder(Member member, String merchantPayKey, int totalPrice) {
@@ -945,11 +941,7 @@ class NaverPayApprovalUseCaseIntegrationTest {
 	}
 
 	private Product createProduct(String name, int price) {
-		return Product.builder()
-			.name(name)
-			.price(price)
-			.status(ProductStatus.ON_SALE)
-			.build();
+		return Product.create(name, price, null, null, ProductStatus.ON_SALE);
 	}
 
 	private Order createOrder(Member member, Product product) {

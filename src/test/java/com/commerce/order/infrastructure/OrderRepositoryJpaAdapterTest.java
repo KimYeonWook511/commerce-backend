@@ -130,19 +130,11 @@ class OrderRepositoryJpaAdapterTest {
 
 	private Member createMember() {
 		String suffix = UUID.randomUUID().toString().substring(0, 8);
-		return Member.builder()
-			.email("order-repo-" + suffix + "@example.com")
-			.password("password123")
-			.username("u" + suffix)
-			.build();
+		return Member.createUser("order-repo-" + suffix + "@example.com", "password123", "u" + suffix);
 	}
 
 	private Product createProduct() {
 		String suffix = UUID.randomUUID().toString().substring(0, 8);
-		return Product.builder()
-			.name("order-repo-product-" + suffix)
-			.price(1000)
-			.status(ProductStatus.ON_SALE)
-			.build();
+		return Product.create("order-repo-product-" + suffix, 1000, null, null, ProductStatus.ON_SALE);
 	}
 }

@@ -48,11 +48,7 @@ class ProductTest {
 	@Test
 	void createProduct_whenPriceIsNotPositive_throwIllegalArgumentException() {
 		// when & then
-		assertThatThrownBy(() -> Product.builder()
-			.name("product")
-			.price(0)
-			.status(ProductStatus.ON_SALE)
-			.build())
+		assertThatThrownBy(() -> Product.create("product", 0, null, null, ProductStatus.ON_SALE))
 			.isInstanceOf(IllegalArgumentException.class)
 			.hasMessage("Product price must be greater than 0.");
 	}
@@ -61,11 +57,7 @@ class ProductTest {
 	@Test
 	void createProduct_whenStatusIsNull_throwIllegalArgumentException() {
 		// when & then
-		assertThatThrownBy(() -> Product.builder()
-			.name("product")
-			.price(1000)
-			.status(null)
-			.build())
+		assertThatThrownBy(() -> Product.create("product", 1000, null, null, null))
 			.isInstanceOf(IllegalArgumentException.class)
 			.hasMessage("Product status is required.");
 	}
@@ -94,12 +86,6 @@ class ProductTest {
 	}
 
 	private Product createProduct(ProductStatus status) {
-		return Product.builder()
-			.name("product")
-			.price(1000)
-			.description("description")
-			.imageUrl("https://example.com/product.png")
-			.status(status)
-			.build();
+		return Product.create("product", 1000, "description", "https://example.com/product.png", status);
 	}
 }

@@ -20,7 +20,6 @@ import jakarta.persistence.Table;
 import jakarta.persistence.UniqueConstraint;
 import jakarta.persistence.Version;
 import lombok.AccessLevel;
-import lombok.Builder;
 import lombok.Getter;
 import lombok.NoArgsConstructor;
 import org.hibernate.annotations.JdbcTypeCode;
@@ -59,7 +58,6 @@ public class Order extends BaseTimeEntity {
 	@OneToMany(mappedBy = "order", cascade = CascadeType.ALL, orphanRemoval = true)
 	private List<OrderItem> orderItems = new ArrayList<>();
 
-	@Builder
 	private Order(Long memberId, OrderStatus status, String idempotencyKey) {
 		this.memberId = memberId;
 		this.status = status;
@@ -68,18 +66,11 @@ public class Order extends BaseTimeEntity {
 	}
 
 	public static Order create(Long memberId) {
-		return Order.builder()
-			.memberId(memberId)
-			.status(OrderStatus.INIT)
-			.build();
+		return new Order(memberId, OrderStatus.INIT, null);
 	}
 
 	public static Order create(Long memberId, String idempotencyKey) {
-		return Order.builder()
-			.memberId(memberId)
-			.status(OrderStatus.INIT)
-			.idempotencyKey(idempotencyKey)
-			.build();
+		return new Order(memberId, OrderStatus.INIT, idempotencyKey);
 	}
 
 	public void addOrderItem(Long productId, int quantity, int unitPrice) {

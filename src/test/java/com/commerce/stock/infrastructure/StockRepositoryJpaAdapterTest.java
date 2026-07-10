@@ -92,17 +92,10 @@ class StockRepositoryJpaAdapterTest {
 	}
 
 	private Stock createStock(Product product, int quantity) {
-		return Stock.builder()
-			.productId(product.getId())
-			.quantity(quantity)
-			.build();
+		return Stock.create(product.getId(), quantity);
 	}
 
 	private Product createProduct(String name) {
-		return Product.builder()
-			.name(name)
-			.price(1000)
-			.status(ProductStatus.ON_SALE)
-			.build();
+		return Product.create(name, 1000, null, null, ProductStatus.ON_SALE);
 	}
 }

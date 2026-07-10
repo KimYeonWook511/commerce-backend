@@ -38,12 +38,7 @@ public class AdminDecreaseStockService {
 	}
 
 	private void saveHistory(Long stockId, int quantityChange, StockAdjustmentReason reason, Long adminMemberId) {
-		StockHistory history = StockHistory.builder()
-			.stockId(stockId)
-			.quantityChange(quantityChange)
-			.reason(reason)
-			.adminMemberId(adminMemberId)
-			.build();
+		StockHistory history = StockHistory.create(stockId, quantityChange, reason, adminMemberId);
 
 		stockHistoryRepository.save(history);
 	}
