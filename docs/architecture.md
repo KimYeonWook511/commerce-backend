@@ -224,7 +224,7 @@ application Filter는 `FilterRegistrationBean`으로 명시 등록하고 `Ordere
 
 순서가 구조적으로 중요하다: `TraceIdFilter`·`AccessLogFilter`가 `JwtAuthenticationFilter`보다 바깥(먼저)에 있어, 인증 실패(401) 요청에도 traceId와 접근 로그가 남는다.
 
-인증된 요청의 `memberId`는 MDC로 전파되어 이후 도메인 로그와 접근 로그에 자동 포함된다. 각 Filter는 자신이 push한 MDC 키만 제거한다(`MDC.clear()` 금지 — 다른 Filter의 키를 함께 날림). 구체 전파·정리 메커니즘은 `docs/logging-conventions.md`와 `docs/tasks/memberid-mdc-propagation/architecture.md`가 단일 출처다.
+인증된 요청의 `memberId`는 인증 Filter가 MDC에 넣고(populate) 이후 도메인 로그와 접근 로그에 자동 포함된다. MDC 정리는 스코프 경계 기준 두 규칙을 따른다: (a) 최외곽 요청 Filter가 요청 끝 `finally`에서 `MDC.clear()`로 스레드 스코프를 통째 비우고(모든 안쪽 스코프가 풀린 지점이라 안전, 스레드 풀 잔류 방지), (b) 최외곽이 아닌 nested 스코프(도메인 유스케이스 키, 비동기 경계 복원분)는 자신이 push한 키만 제거한다(운영 코드에서 nested `MDC.clear()` 금지 — 바깥·형제 스코프 키를 함께 날림). 이 모델은 최외곽 Filter가 MDC를 만지는 가장 바깥으로 유지됨을 전제한다. 구체 정리 규칙은 `docs/logging-conventions.md`가 단일 출처다.
 
 ### 비동기 경계 traceId 전파
 

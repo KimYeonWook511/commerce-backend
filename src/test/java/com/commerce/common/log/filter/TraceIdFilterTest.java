@@ -136,4 +136,19 @@ class TraceIdFilterTest {
 
 		assertThat(LogContext.getTraceId()).isNull();
 	}
+
+	@DisplayName("doFilter 완료 후 clear()가 traceId뿐 아니라 memberId 등 다른 MDC 키도 함께 지운다")
+	@Test
+	void afterDoFilter_clearRemovesMemberIdToo() throws Exception {
+		MockHttpServletRequest request = new MockHttpServletRequest();
+		MockHttpServletResponse response = new MockHttpServletResponse();
+		MockFilterChain chain = new MockFilterChain();
+
+		LogContext.putMemberId(42L);
+
+		filter.doFilter(request, response, chain);
+
+		assertThat(LogContext.getMemberId()).isNull();
+		assertThat(LogContext.getTraceId()).isNull();
+	}
 }

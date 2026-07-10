@@ -38,7 +38,7 @@ public final class LogContext {
 		return MDC.get(MEMBER_ID);
 	}
 
-	public static void removeMemberId() {
-		MDC.remove(MEMBER_ID);
+	public static void clear() {
+		MDC.clear();
 	}
 }
