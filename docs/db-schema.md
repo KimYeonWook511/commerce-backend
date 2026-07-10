@@ -1,14 +1,13 @@
 # DB 스키마
 
-## 마이그레이션
+이 문서는 테이블·컬럼·제약의 의도를 설명하는 reference다. 실제 DDL의 단일 출처는 Flyway 마이그레이션 스크립트(`src/main/resources/db/migration/V*__*.sql`)다. 이 문서는 스키마를 복제하지 않고, "이 테이블·컬럼이 무엇인지"와 관련 결정을 가리킨다.
 
-DB 스키마 변경은 Flyway 마이그레이션 스크립트로 관리한다 (→ PR#184).
+마이그레이션 관리 규칙(Flyway, `ddl-auto: validate`, enum·unique 컬럼 매핑 등)은 `docs/persistence-conventions.md`를 따른다.
 
-- 위치: `src/main/resources/db/migration/`
-- 네이밍: `V{번호}__{snake_case_설명}.sql`
-- 본 문서는 테이블/컬럼/제약의 의도를 설명하는 reference이고, 실제 DDL은 `V*__*.sql`이 단일 출처다.
-- 엔티티(@Entity) 변경 PR은 같은 PR에서 대응되는 V 스크립트를 함께 작성한다. ddl-auto: validate라 누락 시 부팅 실패.
-- 적용된 V 스크립트는 수정하지 말고 새 V로 보정한다 (Flyway checksum).
+## 마이그레이션 이력
+
+주요 스키마 변경 이력만 남긴다. 마이그레이션 운영 규칙 자체는 `docs/persistence-conventions.md`에 있다.
+
 - **cross-aggregate ID 참조 결정(→ PR#166)의 후속 트랙 FK 정비**: `V4__drop_cross_aggregate_fk_constraints.sql` 으로 cross-aggregate FK 5건을 일괄 제거했다 (2026-06-03). UNIQUE 제약 (`uk_stock_product_id`, `uk_payment_order_id`) 과 same-aggregate FK (`fk_order_item_order_id`) 는 유지한다. 세부 결정은 `docs/tasks/cross-aggregate-fk-cleanup/adr.md` 참조.
 - **결제 시점 가격 snapshot**: `V5__add_order_item_unit_price.sql` 으로 `tbl_order_item.unit_price INT NOT NULL` 컬럼을 신설했다 (2026-06-03). 기존 row 는 `tbl_product.price` JOIN backfill 후 NOT NULL 전환. 세부 결정은 `docs/tasks/order-item-price-snapshot/adr.md` 참조.
 - **결제 도메인 재설계**: `V6__redesign_payment_to_reservation_and_attempt.sql` 으로 (1) 기존 `tbl_payment` (성공 1:1) DROP, (2) `tbl_payment_attempt` → `tbl_payment` RENAME + 컬럼 정리 (order_id 신규, approved_order_key 신규, pg_payment_id NOT NULL 복원), (3) `tbl_payment_reservation` CREATE, (4) `tbl_order.merchant_pay_key` + `uk_order_merchant_pay_key` DROP. 세부 결정은 `docs/tasks/payment-order-redesign/db-schema.md` 참조 (→ PR#205).
@@ -25,6 +24,24 @@ DB 스키마 변경은 Flyway 마이그레이션 스크립트로 관리한다 (�
 - `tbl_payment_reservation`
 - `idx_outbox_event_type_status_next_retry_id`
 - `uk_payment_reservation_reserved_key`
+
+## 작성 형식
+
+각 테이블은 아래 형식으로 기술한다. 컬럼의 "왜"(설계 결정)는 이 문서에 길게 적지 않고 관련 ADR을 가리킨다(→ PR#\<번호\>).
+
+```
+### `tbl_<domain>`
+
+COLUMNS:
+- `id (PK)`
+- `<column> (<제약>)`
+
+INDEX:
+- `<index>`
+
+비고:
+- <테이블/컬럼의 의도 한 줄> (→ PR#<번호>)
+```
 
 ## 테이블 요약
 
