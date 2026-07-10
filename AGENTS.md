@@ -31,7 +31,7 @@
 - DB 스키마: `docs/db-schema.md`
 - 태스크별 문서 운영 가이드: `docs/tasks/README.md`
 - 브랜치 컨벤션: `docs/branch-conventions.md`
-- 테스트 컨벤션: `docs/testing-conventions.md`
+- 테스트 컨벤션: `docs/test-code-conventions.md`
 - 커밋 컨벤션: `docs/commit-conventions.md`
 - Codex 하네스 원칙: `docs/codex-harness.md`
 - Codex hook 구조: `docs/hooks/README.md`

@@ -166,7 +166,7 @@ flowchart TD
 
 ### 설계 원칙
 
-catch 안에서 호출하는 skip 로직은 가급적 예외를 던지지 않게 설계한다. "조건 안 맞으면 조용히 skip"이라는 의도를 캡슐화해 호출처가 try-catch 없이 평탄하게 보상을 진행하도록 한다. **이 skip 로직은 보통 그것을 쓰는 흐름 하나에만 의미가 있으므로, 별도 클래스가 아니라 그 흐름을 가진 Service 안의 private 메서드로 둔다**(여러 Service가 공유할 때만 추출). 자세한 배치 기준은 `docs/optimistic-lock-design.md`·`docs/package-structure-guide.md` 참조. Composite Exception은 catch 안 로직을 도저히 예외 없이 설계할 수 없는 치명적 경우에만 사용한다.
+catch 안에서 호출하는 skip 로직은 가급적 예외를 던지지 않게 설계한다. "조건 안 맞으면 조용히 skip"이라는 의도를 캡슐화해 호출처가 try-catch 없이 평탄하게 보상을 진행하도록 한다. **이 skip 로직은 보통 그것을 쓰는 흐름 하나에만 의미가 있으므로, 별도 클래스가 아니라 그 흐름을 가진 Service 안의 private 메서드로 둔다**(여러 Service가 공유할 때만 추출). 자세한 배치 기준은 `docs/optimistic-lock-design.md`·`docs/package-structure-conventions.md` 참조. Composite Exception은 catch 안 로직을 도저히 예외 없이 설계할 수 없는 치명적 경우에만 사용한다.
 
 ### 적용 예
 
