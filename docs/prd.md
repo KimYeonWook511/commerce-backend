@@ -25,7 +25,7 @@
 제품 기능은 아니지만 정합성·운영성을 떠받치는 기반이다. 카테고리별로 묶으며, 개별 task를 나열하지 않고 대표 결정의 PR을 가리킨다. 상세·이력은 `docs/adr/`의 결정별 파일이 단일 출처다.
 
 - **아키텍처 정책**: cross-aggregate는 ID 참조, same-aggregate만 객체 참조 (→ PR#166). 응용 트랜잭션은 method-level `@Transactional`, 영속화 명시 호출 (→ PR#166), DB unique 위반은 find-first + 안전망 500 (→ PR#109).
-- **마이그레이션·스키마**: Flyway 도입, `ddl-auto: validate` (→ PR#184). enum은 `@JdbcTypeCode(VARCHAR)` (→ PR#155), enum CHECK 제약 미사용 (→ PR#184), multi-column unique 컬럼 길이 명시 (→ PR#179).
+- **마이그레이션·스키마**: Flyway 도입, `ddl-auto: validate` (→ PR#184). enum은 `@JdbcTypeCode(VARCHAR)` (→ PR#155), enum CHECK 제약 미사용 (→ PR#184), multi-column unique 컬럼 길이 명시 (→ PR#179). 규칙 상세는 `docs/persistence-conventions.md`.
 - **관측성**: 요청 단위 traceId 전파(HTTP·Kafka·Outbox 경계), MDC 키 통합, 도메인 이벤트/경계 로깅 표준. 상세는 `docs/logging-conventions.md` 및 관련 ADR(→ PR#149·PR#157).
 - **이벤트·비동기**: 재고 복구는 Outbox 패턴 + Kafka 전달.
 

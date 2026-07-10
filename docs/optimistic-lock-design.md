@@ -22,7 +22,7 @@ catch 자체는 없앨 수 없고(없애면 보상 흐름이 끊긴다), **위�
 3. catch가 경계 **안**이면 `REQUIRES_NEW`를 붙여도 `UnexpectedRollbackException`이 난다.
 
 > 용어: 이 문서의 "orchestrator"는 `application/usecase/`에 사는 클래스의 역할 이름이고, "tx 단위작업"은
-> `application/service/`(클래스명 `…Service`)다. 패키지 배치 기준은 `package-structure-guide.md` 참조.
+> `application/service/`(클래스명 `…Service`)다. 패키지 배치 기준은 `package-structure-conventions.md` 참조.
 
 ---
 

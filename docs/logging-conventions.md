@@ -278,4 +278,4 @@ MDC 키는 공통 로그 컨텍스트 유틸(`common.log`)에서 단일 관리�
 
 - 예외 처리 정책 (find-first, 안전망 계층, 보상 catch 2차 예외 처리): [exception-strategy.md](exception-strategy.md)
 - 백엔드 구조와 의존성: [architecture.md](architecture.md)
-- 테스트 컨벤션: [testing-conventions.md](testing-conventions.md)
+- 테스트 컨벤션: [test-code-conventions.md](test-code-conventions.md)

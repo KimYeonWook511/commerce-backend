@@ -1,5 +1,9 @@
 # 아키텍처
 
+이 문서는 백엔드가 전체적으로 어떻게 구성되고 요청이 어떻게 흐르는지를 보여주는 지도다. "코드를 어디에 둘까"의 배치 규칙은 `docs/package-structure-conventions.md`가 정의하고, 이 문서는 "무엇이 어디에 있고 요청이 어떻게 흐르는가"를 다룬다.
+
+구조는 4계층 레이어드(`presentation → application → domain ← infrastructure`)이며, 모든 의존은 안쪽 domain을 향한다. 계층 간 경계는 port/adapter로 다스린다.
+
 ## 패키지 구조
 
 ```
@@ -45,7 +49,7 @@ src/main/java/com/commerce/
     └── notification/    # 알림 채널 구현
 ```
 
-배치 기준 요약(상세·근거는 `docs/package-structure-guide.md` 단일 출처):
+배치 기준 요약(상세·근거는 `docs/package-structure-conventions.md` 단일 출처):
 
 - **무엇이 유스케이스를 깨우든(HTTP·cron·batch·message) 진입점은 전부 inbound adapter** → `presentation/` 아래에 두고 얇게 위임한다. `@Scheduled`/배치 Job/`@KafkaListener`를 application Service에 직접 달지 않는다.
 - **인터페이스(port)는 안쪽 레이어에, 구현체는 바깥 레이어에** — 항상 다른 레이어로 가른다. 캐시·messaging producer 등 "외부 기능"은 `application/port/` + `infrastructure/`, "도메인 모델 영속성"은 `domain/repository/` + `infrastructure/persistence/`.
