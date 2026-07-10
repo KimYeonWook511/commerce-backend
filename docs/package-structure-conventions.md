@@ -1,8 +1,8 @@
 # 패키지 배치 기준
 
-> 헥사고날(포트앤어댑터) 구조에서 각 요소를 **어느 레이어·어느 패키지에 두는가**의 기준 정리.
+> 4계층 레이어드 구조(`presentation`·`application`·`domain`·`infrastructure`)에서 각 요소를 **어느 레이어·어느 패키지에 두는가**의 기준 정리. 계층 간 경계는 port/adapter로 다스린다 — 나가는 인터페이스(port)는 그것을 필요로 하는 안쪽 레이어에, 그 구현(adapter)은 기술에 의존하는 바깥 레이어에 둔다.
 > 기준 스택: Java 21, Spring Boot 3.x, JPA, MySQL.
-> 기존 레이어: `presentation → application → domain ← infrastructure`.
+> 레이어 의존 방향: `presentation → application → domain ← infrastructure`. 모든 의존은 안쪽 domain을 향한다.
 
 ---
 
@@ -98,6 +98,8 @@ payment/domain/
 주의: **도메인 정책 ≠ 동시성/기술 정책.**
 - `domain/policy/` = 상태로 분류를 계산하는 **순수 도메인 규칙**(`PaymentPostProcessTargetPolicy` 등). tx를 모른다.
 - 동시성 정책(skip/retry)은 별도 `application/policy/` 같은 패키지로 만들지 **않는다**: skip은 흐름 Service의 private 메서드, retry는 `support/` helper로 둔다(1장). 둘을 domain에 섞으면 domain이 tx를 알게 되는 오염이 생긴다.
+
+**Aggregate 경계 — cross-aggregate는 ID로 참조한다** (→ PR#166): 다른 Aggregate는 객체가 아니라 ID(`Long`)로 참조하고, same-aggregate 관계만 객체로 참조한다. (예: `tbl_order_item`은 Order와 한 Aggregate라 객체 참조하지만, Payment·Stock·Product는 각각 별개 Aggregate이므로 `order_id`·`product_id` 같은 ID로만 참조한다.) 이 경계는 DB에서 cross-aggregate FK를 두지 않는 것과 짝을 이룬다(상세는 `docs/db-schema.md`). ArchUnit은 layer 의존 방향까지만 강제하므로(7장), 이 Aggregate 경계는 코드 리뷰로 지킨다.
 
 ---
 
