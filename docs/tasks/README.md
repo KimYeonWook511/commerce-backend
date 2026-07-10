@@ -2,6 +2,8 @@
 
 이 문서는 태스크 단위 작업을 `docs/tasks/<task-name>/` 아래에서 어떻게 관리할지 정의한다.
 
+> **동결 안내**: `docs/tasks/` 체계는 레거시로 **동결**됐다. 기존 폴더는 역사 기록으로 보존하며 수정하지 않는다. 신규 작업은 `docs/specs/<spec-name>/` 체계(`spec-harness-v1`)에서 진행하고, 머지 시 정본만 `docs/specs/_archive/pr-<번호>-<spec명>/`로 승격된다. 상세는 `docs/claude/skills/spec-harness-v1.md`.
+
 ## 기본 원칙
 
 - 루트 `docs/` 문서는 프로젝트 전체의 기준 문서다.

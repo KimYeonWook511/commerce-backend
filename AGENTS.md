@@ -1,38 +1,22 @@
 # AGENTS.md
 
-## 프로젝트 컨텍스트
+## Review guidelines
 
-- Java, Spring Boot, Gradle, MySQL, JPA(Hibernate)를 사용하는 백엔드 프로젝트입니다.
+Codex가 이 저장소의 PR을 리뷰할 때 따르는 지침이다. 리뷰 코멘트는 참고용이며 머지를 차단하지 않는다.
 
-## 언어 규칙
+전제: Java 21 / Spring Boot 3.5 / JPA / MySQL / Flyway, 루트 `com.commerce`(`presentation` → `application` → `domain` ← `infrastructure`). 리뷰는 심각도 높은 위험에 집중한다. 각 항목은 리뷰 전에 반드시 해당 참조 문서 본문을 읽고 그 기준으로 대조하라. 문서와 이 파일이 어긋나면 문서가 옳다.
 
-- 모든 설명과 답변은 반드시 한국어로 작성합니다.
-- 클래스, 메서드, 변수, 패키지, 테스트 메서드명 같은 코드 식별자는 반드시 영어로 작성합니다.
-- 코드 식별자에는 한국어를 섞지 않습니다.
+- **코멘트 언어**: 리뷰 코멘트 본문은 한국어로 작성하며, 지적은 근거(`docs/*` 규칙)와 함께 남긴다.
+- **비밀 값**: 자격 증명·API 키 등 비밀 값을 리뷰 코멘트에 남기지 않는다.
+- P0/P1급 문제가 없으면 요약 코멘트 첫 줄에 "LGTM"을 명시하고, 확인한 범위를 한 문장으로 요약한다.
 
-## 구현 규칙
+### 참조 문서 (단일 출처)
 
-- 도메인 중심 네이밍을 우선하고, 기존 프로젝트 패턴을 따릅니다.
-- 비즈니스 로직은 Domain 또는 Service 계층에 둡니다.
-- Controller는 요청 수신, 입력 검증, 서비스 위임, 응답 반환만 담당합니다.
-- 불필요한 추상화와 과한 설계를 피합니다.
-
-## 안전 규칙
-
-- 근거 없이 기존 컨벤션을 무시하거나 사용하지 않는 코드를 추가하지 않습니다.
-- 불명확한 점은 임의로 판단하지 않고 구현 전에 사용자에게 먼저 확인합니다.
-
-## 참고 문서
-
-- 기능 범위: `docs/prd.md`
-- 설계 결정: `docs/adr/` (작성 규칙: `docs/adr-conventions.md`)
-- 백엔드 구조와 의존성: `docs/architecture.md`
-- API 스펙: `docs/api-spec.md`
-- DB 스키마: `docs/db-schema.md`
-- 태스크별 문서 운영 가이드: `docs/tasks/README.md`
-- 브랜치 컨벤션: `docs/branch-conventions.md`
-- 테스트 컨벤션: `docs/test-code-conventions.md`
-- 커밋 컨벤션: `docs/commit-conventions.md`
-- Codex 하네스 원칙: `docs/codex-harness.md`
-- Codex hook 구조: `docs/hooks/README.md`
-- Codex 에이전트 목록: `docs/agents/README.md`
+- **민감정보 노출·로깅** — `docs/logging-conventions.md`
+- **레이어 경계·의존 방향** — `docs/package-structure-conventions.md`
+- **도메인 모델링** — `docs/package-structure-conventions.md` (정적 팩토리·setter 금지·Rich 엔티티·Aggregate ID 참조)
+- **트랜잭션 위치·역할 접미사** — `docs/package-structure-conventions.md`
+- **예외 처리·find-first** — `docs/exception-strategy.md`
+- **낙관 락(@Version) 충돌 처리** — `docs/optimistic-lock-design.md`
+- **영속성·마이그레이션** — `docs/persistence-conventions.md`
+- **테스트 코드** — `docs/test-code-conventions.md`

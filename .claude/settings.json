@@ -2,7 +2,7 @@
   "hooks": {
     "PreToolUse": [
       {
-        "matcher": "Bash|Write",
+        "matcher": "Bash",
         "hooks": [
           {
             "type": "command",
@@ -14,20 +14,11 @@
     ],
     "SubagentStop": [
       {
-        "matcher": "harness-v3-developer|harness-v3-reviewer|harness-v3-committer",
+        "matcher": "spec-harness-v1-developer|spec-harness-v1-reviewer|spec-harness-v1-committer|spec-harness-v1-recorder|spec-harness-v1-finalizer",
         "hooks": [
           {
             "type": "command",
-            "command": "\"$CLAUDE_PROJECT_DIR/.claude/skills/harness-v3/scripts/hooks/log_stop.sh\""
-          }
-        ]
-      },
-      {
-        "matcher": "harness-v4-developer|harness-v4-reviewer|harness-v4-committer|harness-v4-recorder|harness-v4-finalizer",
-        "hooks": [
-          {
-            "type": "command",
-            "command": "\"$CLAUDE_PROJECT_DIR/.claude/skills/harness-v4/scripts/hooks/log_stop.sh\""
+            "command": "\"$CLAUDE_PROJECT_DIR/.claude/skills/spec-harness-v1/scripts/hooks/log_stop.sh\""
           }
         ]
       }
@@ -38,11 +29,7 @@
         "hooks": [
           {
             "type": "command",
-            "command": "\"$CLAUDE_PROJECT_DIR/.claude/skills/harness-v3/scripts/hooks/log_progress.sh\""
-          },
-          {
-            "type": "command",
-            "command": "\"$CLAUDE_PROJECT_DIR/.claude/skills/harness-v4/scripts/hooks/log_progress.sh\""
+            "command": "\"$CLAUDE_PROJECT_DIR/.claude/skills/spec-harness-v1/scripts/hooks/log_progress.sh\""
           }
         ]
       }

@@ -1,37 +1,82 @@
 #!/usr/bin/env python3
 """
-Repo 전용 Claude Code PreToolUse 정책 스크립트 (harness-v3 / harness-v4 공존).
+Repo 전용 Claude Code PreToolUse 정책 스크립트.
 
-agent_type 으로 정책을 갈라 적용한다:
+Bash 명령을 브랜치 인식 정책으로 검사한다 (agent_type 분기 없음).
 
-  1. committer (v3/v4, Bash)  → 화이트리스트: git status/diff/log/add/commit 외 모든 Bash 차단
-  2. reviewer  (v3/v4, Write) → 핸드오프(stepN-review.json) 외 경로 쓰기 차단
-  3. recorder  (v4, Write)    → phase index.json 외 경로 쓰기 차단
-  4. 그 외(developer/finalizer/메인 등, Bash) → 블랙리스트: rm -rf, git reset --hard, git checkout --, force push 차단
+보호 브랜치(main/develop)에 대한 정책 — "변경은 PR 머지로만 반영":
+  1. 직접 push 전면 금지 (force 여부 무관). 일반 push·delete·--all·--mirror 모두 차단.
+     (PR 머지는 원격 서버에서 일어나므로 로컬 push 차단의 영향을 받지 않는다.)
+  2. 보호 브랜치에 체크아웃된 상태에서 커밋/히스토리 작성 금지:
+     commit / merge / rebase / cherry-pick / revert / am 차단.
+     (복구용 --abort/--quit, 읽기용 --dry-run 은 허용.)
+  3. 기존 파괴적 명령도 계속 차단: reset --hard / checkout -- <file> / restore(워킹트리) / rm -rf.
+
+그 외 브랜치에서는 위 명령들을 모두 허용한다(force push 포함).
+force push/삭제·push 대상 판단은 "현재 브랜치"가 아니라 push 대상 브랜치(refspec)를 기준으로 한다.
+(피처 브랜치에서 `git push origin develop` 도 차단됨)
 
 설계 원칙:
   - fail-open: 입력 파싱 실패·형식 오류는 차단하지 않는다(정책 오류가 작업을 막으면 안 됨).
   - 차단은 최신 형식으로 응답한다: hookSpecificOutput.permissionDecision = "deny".
-  - agent_type 이 입력에 없으면(플랫폼/버전 차이) 4번(블랙리스트)으로 fallback 한다.
+  - 현재 브랜치 탐지 실패(레포 아님 / git 미설치 등) 시 현재-브랜치 의존 검사는 fail-open.
+    단, refspec 으로 명시된 보호 브랜치 대상 push 는 브랜치 탐지와 무관하게 항상 차단된다.
 
-주의: 일부 Claude Code 버전/플랫폼에서 sub-agent의 PreToolUse 차단이 무시될 수 있다.
-그 경우 이 hook은 '탐지'만 하고 실제 차단은 각 agent .md의 tools 제약·프롬프트가 baseline으로 담당한다.
-(workflow agent에서 PreToolUse 발동 여부는 trial로 확인 필요.)
+주의 (중요):
+  - 이 hook 은 로컬 1차 방어선일 뿐, 강제 장치가 아니다. hook 을 끄거나 다른 환경에서
+    push 하면 무력화된다. "무조건 PR 로만"을 진짜 강제하려면 GitHub/GitLab 의
+    브랜치 보호 규칙(branch protection / ruleset)을 서버 쪽에 설정해야 한다.
+  - push 가 스크립트 내부에서 일어나면 hook 은 바깥 명령만 보므로 잡지 못한다.
 """
 
 from __future__ import annotations
 
 import json
 import shlex
+import subprocess
 import sys
 from dataclasses import dataclass
-from typing import Iterable
+from typing import Optional
 
 
 @dataclass(frozen=True)
 class PolicyResult:
     blocked: bool
     reason: str = ""
+
+
+# ─────────────────────────────────────────────────────────────────────────────
+# 보호 브랜치 정의 (필요 시 "master", "release" 등을 추가)
+# ─────────────────────────────────────────────────────────────────────────────
+PROTECTED_BRANCHES = frozenset({"main", "develop"})
+
+# 보호 브랜치에서 차단할 "커밋/히스토리 작성" git 서브커맨드
+_PROTECTED_WRITE_SUBCMDS = frozenset({"commit", "merge", "rebase", "cherry-pick", "revert", "am"})
+# 위 서브커맨드라도 커밋을 만들지 않는 안전 동작은 허용 (복구/조회)
+_NONMUTATING_SUBCMD_FLAGS = frozenset({"--abort", "--quit", "--dry-run"})
+
+
+# ─────────────────────────────────────────────────────────────────────────────
+# 현재 브랜치 탐지 (hook 1회 실행 = 1회만 호출)
+# ─────────────────────────────────────────────────────────────────────────────
+def detect_current_branch() -> str:
+    """현재 체크아웃된 브랜치명. detached HEAD 면 "HEAD", 실패 시 "" (fail-open)."""
+    try:
+        proc = subprocess.run(
+            ["git", "rev-parse", "--abbrev-ref", "HEAD"],
+            capture_output=True,
+            text=True,
+            timeout=5,
+        )
+    except Exception:
+        return ""
+    if proc.returncode != 0:
+        return ""
+    return proc.stdout.strip()
+
+
+def _protected_label() -> str:
+    return ", ".join(sorted(PROTECTED_BRANCHES))
 
 
 # ─────────────────────────────────────────────────────────────────────────────
@@ -115,10 +160,6 @@ def normalize_git_tokens(tokens: list[str]) -> list[str]:
     return normalized + remainder
 
 
-def has_flag(tokens: Iterable[str], *flags: str) -> bool:
-    return any(token == flag for token in tokens for flag in flags)
-
-
 # ─────────────────────────────────────────────────────────────────────────────
 # 복합 명령 분리 (&&, ||, ;, &, | 로 연결된 것을 각각 검사)
 # ─────────────────────────────────────────────────────────────────────────────
@@ -147,7 +188,32 @@ def split_compound_commands(command: str) -> list[str]:
 
 
 # ─────────────────────────────────────────────────────────────────────────────
-# 1. 블랙리스트 (메인/일반 작업) — 위험한 명령만 차단
+# 복합 명령 내 브랜치 전환 추적 (예: `git checkout main && git reset --hard`)
+# ─────────────────────────────────────────────────────────────────────────────
+def branch_switch_target(tokens: list[str]) -> Optional[str]:
+    if len(tokens) < 2 or tokens[0] != "git":
+        return None
+    sub = tokens[1]
+    rest = tokens[2:]
+    if sub == "switch":
+        for t in rest:
+            if t == "--" or t.startswith("-"):
+                continue
+            return t
+        return None
+    if sub == "checkout":
+        if "--" in rest:
+            return None  # `git checkout -- <file>` 은 파일 복원(전환 아님)
+        for t in rest:
+            if t.startswith("-"):
+                continue
+            return t
+        return None
+    return None
+
+
+# ─────────────────────────────────────────────────────────────────────────────
+# 파괴적 명령 탐지기 (브랜치 게이트는 호출부에서 적용)
 # ─────────────────────────────────────────────────────────────────────────────
 def blocks_rm_rf(tokens: list[str]) -> bool:
     if not tokens or tokens[0] != "rm":
@@ -177,91 +243,165 @@ def blocks_git_checkout_restore(tokens: list[str]) -> bool:
     return len(tokens) >= 3 and tokens[0] == "git" and tokens[1] == "checkout" and "--" in tokens[2:]
 
 
-def blocks_force_push(tokens: list[str]) -> bool:
-    if len(tokens) < 2 or tokens[0] != "git" or tokens[1] != "push":
+def blocks_git_restore_worktree(tokens: list[str]) -> bool:
+    # `git restore <file>` 는 워킹트리 변경을 버린다(checkout -- 의 현대식 등가물).
+    # `--staged` 단독(인덱스만 복원)은 워킹트리를 건드리지 않으므로 안전으로 본다.
+    if len(tokens) < 2 or tokens[0] != "git" or tokens[1] != "restore":
         return False
-    return has_flag(tokens[2:], "--force", "--force-with-lease", "-f")
+    rest = tokens[2:]
+    staged = any(t in {"--staged", "-S"} for t in rest)
+    worktree = any(t in {"--worktree", "-W"} for t in rest)
+    if staged and not worktree:
+        return False
+    return True
 
 
-def evaluate_blacklist_single(command: str) -> PolicyResult:
-    tokens = normalize_tokens(command)
+def is_protected_write_subcmd(tokens: list[str]) -> bool:
+    """보호 브랜치에서 막아야 할 커밋/히스토리 작성 명령인가 (복구·dry-run 제외)."""
+    if len(tokens) < 2 or tokens[0] != "git":
+        return False
+    if tokens[1] not in _PROTECTED_WRITE_SUBCMDS:
+        return False
+    rest = tokens[2:]
+    if any(flag in rest for flag in _NONMUTATING_SUBCMD_FLAGS):
+        return False
+    return True
+
+
+# ─────────────────────────────────────────────────────────────────────────────
+# git push 파싱 — 보호 브랜치로의 모든 push 차단
+# ─────────────────────────────────────────────────────────────────────────────
+_PUSH_VALUE_OPTS = frozenset({"-o", "--push-option", "--receive-pack", "--exec", "--repo"})
+
+
+def _push_positionals(args: list[str]) -> list[str]:
+    positional: list[str] = []
+    i = 0
+    n = len(args)
+    while i < n:
+        tok = args[i]
+        if tok == "--":
+            positional.extend(args[i + 1:])
+            break
+        if tok.startswith("-"):
+            if tok in _PUSH_VALUE_OPTS:
+                i += 2
+                continue
+            i += 1
+            continue
+        positional.append(tok)
+        i += 1
+    return positional
+
+
+def _refspec_target(rs: str, current: str) -> str:
+    """refspec 에서 대상(원격) 브랜치명을 뽑아낸다. (+, refs/heads/, HEAD, :delete 처리)"""
+    if rs.startswith("+"):
+        rs = rs[1:]
+    dst = rs.split(":", 1)[1] if ":" in rs else rs
+    if dst.startswith("refs/heads/"):
+        dst = dst[len("refs/heads/"):]
+    if dst == "HEAD":
+        dst = current
+    return dst
+
+
+def _blocked_push(branch: str) -> PolicyResult:
+    return PolicyResult(
+        True,
+        f"Repo 정책: 보호 브랜치(`{branch}`)로의 직접 push 는 금지됩니다. "
+        f"변경은 피처 브랜치 → PR 머지로만 반영하세요. (보호 브랜치: {_protected_label()})",
+    )
+
+
+def evaluate_push(tokens: list[str], current: str) -> PolicyResult:
+    args = tokens[2:]
+
+    # 여러 브랜치를 한 번에 올리는 형태는 보호 브랜치를 포함할 수 있어 차단
+    if "--mirror" in args:
+        return PolicyResult(True, "Repo 정책: `git push --mirror`는 보호 브랜치를 덮어쓸 수 있어 차단됩니다.")
+    if "--all" in args:
+        return PolicyResult(True, "Repo 정책: `git push --all`은 보호 브랜치를 포함하므로 차단됩니다.")
+
+    positional = _push_positionals(args)
+    refspecs = positional[1:] if positional else []
+
+    if not refspecs:
+        # refspec 없음 → 현재 브랜치를 push
+        if current in PROTECTED_BRANCHES:
+            return _blocked_push(current)
+        return PolicyResult(False)
+
+    for rs in refspecs:
+        dst = _refspec_target(rs, current)
+        if dst in PROTECTED_BRANCHES:
+            return _blocked_push(dst)
+    return PolicyResult(False)
+
+
+# ─────────────────────────────────────────────────────────────────────────────
+# 브랜치 인식 정책
+# ─────────────────────────────────────────────────────────────────────────────
+def evaluate_blacklist_tokens(tokens: list[str], current: str) -> PolicyResult:
     if not tokens:
         return PolicyResult(False)
+
+    # push 는 대상 브랜치 기준으로 판단(현재 브랜치와 무관)
+    if len(tokens) >= 2 and tokens[0] == "git" and tokens[1] == "push":
+        return evaluate_push(tokens, current)
+
+    protected = current in PROTECTED_BRANCHES
+
+    # 보호 브랜치에서 커밋/머지/리베이스 등 직접 변경 금지
+    if protected and is_protected_write_subcmd(tokens):
+        return PolicyResult(
+            True,
+            f"Repo 정책: 보호 브랜치(`{current}`)에서 `git {tokens[1]}`(직접 변경)은 금지됩니다. "
+            f"피처 브랜치에서 작업한 뒤 PR 로 머지하세요.",
+        )
+
     if blocks_git_reset_hard(tokens):
-        return PolicyResult(True, "Repo 정책: `git reset --hard`는 차단됩니다.")
+        if protected:
+            return PolicyResult(True, f"Repo 정책: 보호 브랜치(`{current}`)에서 `git reset --hard`는 차단됩니다.")
+        return PolicyResult(False)
+
     if blocks_git_checkout_restore(tokens):
-        return PolicyResult(True, "Repo 정책: `git checkout --`는 로컬 변경을 버리므로 차단됩니다.")
+        if protected:
+            return PolicyResult(True, f"Repo 정책: 보호 브랜치(`{current}`)에서 `git checkout --`는 차단됩니다.")
+        return PolicyResult(False)
+
+    if blocks_git_restore_worktree(tokens):
+        if protected:
+            return PolicyResult(True, f"Repo 정책: 보호 브랜치(`{current}`)에서 `git restore`(워킹트리)는 차단됩니다.")
+        return PolicyResult(False)
+
     if blocks_rm_rf(tokens):
-        return PolicyResult(True, "Repo 정책: `rm -rf` 계열 명령은 차단됩니다.")
-    if blocks_force_push(tokens):
-        return PolicyResult(True, "Repo 정책: 강제 push는 차단됩니다.")
+        if protected:
+            return PolicyResult(True, f"Repo 정책: 보호 브랜치(`{current}`)에서 `rm -rf` 계열 명령은 차단됩니다.")
+        return PolicyResult(False)
+
     return PolicyResult(False)
 
 
-# ─────────────────────────────────────────────────────────────────────────────
-# 2. committer 화이트리스트 — git status/diff/log/add/commit 외 모든 Bash 차단
-# ─────────────────────────────────────────────────────────────────────────────
-_COMMITTER_ALLOWED_GIT = frozenset({"status", "diff", "log", "add", "commit"})
-
-
-def evaluate_committer_single(command: str) -> PolicyResult:
-    tokens = normalize_tokens(command)
-    if not tokens:
-        return PolicyResult(False)  # 파싱 불가는 fail-open
-    if tokens[0] != "git":
-        return PolicyResult(True, f"harness committer는 git 명령만 허용됩니다 (시도: `{tokens[0]}`).")
-    if len(tokens) < 2 or tokens[1] not in _COMMITTER_ALLOWED_GIT:
-        sub = tokens[1] if len(tokens) >= 2 else "(none)"
-        return PolicyResult(True, f"harness committer는 git status/diff/log/add/commit만 허용됩니다 (시도: `git {sub}`).")
-    # commit 서브커맨드라도 history 조작(--amend)은 차단
-    if tokens[1] == "commit" and "--amend" in tokens[2:]:
-        return PolicyResult(True, "harness committer는 `git commit --amend`(history 조작)를 할 수 없습니다.")
-    return PolicyResult(False)
-
-
-# ─────────────────────────────────────────────────────────────────────────────
-# 3. reviewer Write 가드 — 핸드오프 외 경로 쓰기 차단
-# ─────────────────────────────────────────────────────────────────────────────
-def evaluate_reviewer_write(file_path: str) -> PolicyResult:
-    # 허용: .../handoff/stepN-review.json (review 핸드오프만)
-    normalized = file_path.replace("\\", "/")
-    if "/handoff/" in normalized and normalized.endswith("-review.json"):
-        return PolicyResult(False)
-    return PolicyResult(True, f"reviewer는 review 핸드오프 외 파일을 쓸 수 없습니다 (시도: `{file_path}`).")
-
-
-# ─────────────────────────────────────────────────────────────────────────────
-# 3-b. recorder Write 가드 (harness-v4) — phase index.json 외 쓰기 차단
-#   recorder는 record-step을 Bash(python3)로 부르는 게 정상 경로라 Write 도구를 쓸 일이 없다.
-#   혹시 Write를 시도하면 phase index.json 외에는 막는다(정본 오염 방지).
-# ─────────────────────────────────────────────────────────────────────────────
-def evaluate_recorder_write(file_path: str) -> PolicyResult:
-    normalized = file_path.replace("\\", "/")
-    if normalized.endswith("/index.json") and "/phases/" in normalized:
-        return PolicyResult(False)
-    return PolicyResult(True, f"recorder는 phase index.json 외 파일을 쓸 수 없습니다 (시도: `{file_path}`).")
-
-
-# ─────────────────────────────────────────────────────────────────────────────
-# 디스패치
-# ─────────────────────────────────────────────────────────────────────────────
-_COMMITTER_AGENTS = frozenset({"harness-v3-committer", "harness-v4-committer"})
-_REVIEWER_AGENTS = frozenset({"harness-v3-reviewer", "harness-v4-reviewer"})
-
-
-def evaluate_bash(command: str, agent_type: str) -> PolicyResult:
+def evaluate_bash(command: str) -> PolicyResult:
+    branch = detect_current_branch()
     for sub in split_compound_commands(command):
-        if agent_type in _COMMITTER_AGENTS:
-            result = evaluate_committer_single(sub)
-        else:
-            # developer / recorder / finalizer / 메인 등 → 블랙리스트(위험 명령만 차단).
-            # finalizer는 finalize가 내부에서 push까지 하므로 블랙리스트로 충분(force push 등만 차단).
-            result = evaluate_blacklist_single(sub)
+        tokens = normalize_tokens(sub)
+        if not tokens:
+            continue
+        result = evaluate_blacklist_tokens(tokens, branch)
         if result.blocked:
             return result
+        # 같은 줄에서 브랜치를 전환하면 이후 명령은 전환된 브랜치 기준으로 판단
+        switched = branch_switch_target(tokens)
+        if switched is not None:
+            branch = switched
     return PolicyResult(False)
 
 
+# ─────────────────────────────────────────────────────────────────────────────
+# 진입점
+# ─────────────────────────────────────────────────────────────────────────────
 def emit_block(reason: str) -> int:
     payload = {
         "hookSpecificOutput": {
@@ -283,32 +423,16 @@ def main() -> int:
     if not isinstance(payload, dict):
         return 0
 
-    agent_type = payload.get("agent_type", "") or ""
     tool_name = payload.get("tool_name", "") or ""
     tool_input = payload.get("tool_input", {})
     if not isinstance(tool_input, dict):
         return 0
 
-    # Write 가드: reviewer(핸드오프만) / recorder(phase index만)
-    if tool_name == "Write":
-        file_path = tool_input.get("file_path", "")
-        if isinstance(file_path, str) and file_path.strip():
-            if agent_type in _REVIEWER_AGENTS:
-                result = evaluate_reviewer_write(file_path)
-                if result.blocked:
-                    return emit_block(result.reason)
-            elif agent_type == "harness-v4-recorder":
-                result = evaluate_recorder_write(file_path)
-                if result.blocked:
-                    return emit_block(result.reason)
-        return 0
-
-    # Bash 정책 (committer 화이트리스트 / 그 외 블랙리스트)
     if tool_name == "Bash":
         command = tool_input.get("command", "")
         if not isinstance(command, str) or not command.strip():
             return 0
-        result = evaluate_bash(command, agent_type)
+        result = evaluate_bash(command)
         if result.blocked:
             return emit_block(result.reason)
     return 0
