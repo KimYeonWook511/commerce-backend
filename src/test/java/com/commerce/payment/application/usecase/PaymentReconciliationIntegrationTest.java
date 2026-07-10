@@ -174,7 +174,7 @@ class PaymentReconciliationIntegrationTest {
 		// when: 1회 reconcile
 		reconciliationUseCase.reconcile();
 
-		// then: approve payment → FAILED (보상 취소로 인한 ORDER_CANCELED, ADR-039 + ADR-L4)
+		// then: approve payment → FAILED (보상 취소로 인한 ORDER_CANCELED — 보상된 APPROVE 는 새 상태 없이 FAILED 로 유지한다)
 		Payment approvePayment = paymentPersistence.getPayment(
 			"PAY-RECN-3", PaymentProvider.NAVERPAY, "pg-recn-3", PaymentType.APPROVE);
 		assertThat(approvePayment.getStatus()).isEqualTo(PaymentStatus.FAILED);
