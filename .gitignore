@@ -62,6 +62,11 @@ docs/tasks/**/phases/**/step*-raw-output.txt
 docs/tasks/**/phases/**/step*-commit-output.txt
 docs/tasks/**/phases/**/workflow-checklist.json
 
+### spec-harness 작업 공간 (작업 중 휘발, _template·_archive만 추적) ###
+docs/specs/*
+!docs/specs/_template
+!docs/specs/_archive
+
 ### 운영 서버 환경변수 ###
 .env.prod
 ### 로컬 환경변수 ###
