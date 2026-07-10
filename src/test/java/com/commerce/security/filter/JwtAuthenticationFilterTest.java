@@ -1,7 +1,6 @@
 package com.commerce.security.filter;
 
 import static org.assertj.core.api.Assertions.assertThat;
-import static org.assertj.core.api.Assertions.assertThatThrownBy;
 import static org.mockito.ArgumentMatchers.any;
 import static org.mockito.Mockito.doAnswer;
 import static org.mockito.Mockito.doThrow;
@@ -24,7 +23,6 @@ import com.commerce.auth.application.dto.TokenAuthenticationResult;
 import com.commerce.auth.domain.exception.AuthErrorCode;
 import com.commerce.auth.domain.exception.AuthException;
 import com.commerce.common.log.LogContext;
-import com.commerce.common.log.filter.AccessLogFilter;
 import com.fasterxml.jackson.databind.ObjectMapper;
 
 import jakarta.servlet.FilterChain;
@@ -68,31 +66,9 @@ class JwtAuthenticationFilterTest {
 		assertThat(mdcDuringChain.get()).isEqualTo("42");
 	}
 
-	@DisplayName("인증 성공 시 chain.doFilter 실행 중 request attribute에 memberId가 set된다")
+	@DisplayName("doFilter 완료 후에도 Jwt가 지우지 않아 populate된 memberId가 MDC에 남는다")
 	@Test
-	void authSuccess_requestAttributeSetDuringChain() throws Exception {
-		MockHttpServletRequest request = new MockHttpServletRequest("GET", "/orders");
-		request.addHeader("Authorization", "Bearer valid-token");
-		MockHttpServletResponse response = new MockHttpServletResponse();
-
-		when(tokenAuthenticationUseCase.authenticateAccessToken("valid-token"))
-			.thenReturn(TokenAuthenticationResult.of(42L, "ROLE_USER"));
-
-		AtomicReference<Object> attributeDuringChain = new AtomicReference<>();
-		FilterChain chain = mock(FilterChain.class);
-		doAnswer(invocation -> {
-			attributeDuringChain.set(request.getAttribute(AccessLogFilter.MEMBER_ID_ATTRIBUTE));
-			return null;
-		}).when(chain).doFilter(any(), any());
-
-		filter.doFilter(request, response, chain);
-
-		assertThat(attributeDuringChain.get()).isEqualTo(42L);
-	}
-
-	@DisplayName("doFilter 완료 후 MDC에서 memberId가 제거된다")
-	@Test
-	void afterDoFilter_mdcMemberIdIsNull() throws Exception {
+	void afterDoFilter_mdcMemberIdRemainsPopulated() throws Exception {
 		MockHttpServletRequest request = new MockHttpServletRequest("GET", "/orders");
 		request.addHeader("Authorization", "Bearer valid-token");
 		MockHttpServletResponse response = new MockHttpServletResponse();
@@ -103,12 +79,12 @@ class JwtAuthenticationFilterTest {
 
 		filter.doFilter(request, response, chain);
 
-		assertThat(LogContext.getMemberId()).isNull();
+		assertThat(LogContext.getMemberId()).isEqualTo("42");
 	}
 
-	@DisplayName("토큰 누락 시 401을 반환하고 MDC와 attribute에 memberId가 없다")
+	@DisplayName("토큰 누락 시 401을 반환하고 MDC에 memberId가 없다")
 	@Test
-	void tokenMissing_unauthorizedAndNoMdcOrAttribute() throws Exception {
+	void tokenMissing_unauthorizedAndNoMdc() throws Exception {
 		MockHttpServletRequest request = new MockHttpServletRequest("GET", "/orders");
 		MockHttpServletResponse response = new MockHttpServletResponse();
 		MockFilterChain chain = new MockFilterChain();
@@ -117,7 +93,6 @@ class JwtAuthenticationFilterTest {
 
 		assertThat(response.getStatus()).isEqualTo(401);
 		assertThat(LogContext.getMemberId()).isNull();
-		assertThat(request.getAttribute(AccessLogFilter.MEMBER_ID_ATTRIBUTE)).isNull();
 	}
 
 	@DisplayName("인증 실패(CustomException) 시 401을 반환하고 MDC 잔류가 없다")
@@ -137,31 +112,28 @@ class JwtAuthenticationFilterTest {
 		assertThat(LogContext.getMemberId()).isNull();
 	}
 
-	@DisplayName("WHITELIST 경로(/products)는 MDC.put을 호출하지 않고 attribute를 set하지 않는다")
+	@DisplayName("WHITELIST 경로(/products)는 MDC.put을 호출하지 않는다")
 	@Test
-	void whitelistPath_noMdcPutAndNoAttribute() throws Exception {
+	void whitelistPath_noMdcPut() throws Exception {
 		MockHttpServletRequest request = new MockHttpServletRequest("GET", "/products");
 		MockHttpServletResponse response = new MockHttpServletResponse();
 
 		AtomicReference<String> mdcDuringChain = new AtomicReference<>();
-		AtomicReference<Object> attributeDuringChain = new AtomicReference<>();
 		FilterChain chain = mock(FilterChain.class);
 		doAnswer(invocation -> {
 			mdcDuringChain.set(LogContext.getMemberId());
-			attributeDuringChain.set(request.getAttribute(AccessLogFilter.MEMBER_ID_ATTRIBUTE));
 			return null;
 		}).when(chain).doFilter(any(), any());
 
 		filter.doFilter(request, response, chain);
 
 		assertThat(mdcDuringChain.get()).isNull();
-		assertThat(attributeDuringChain.get()).isNull();
 		assertThat(LogContext.getMemberId()).isNull();
 	}
 
-	@DisplayName("chain.doFilter에서 예외가 발생해도 finally에서 MDC.remove가 보장된다")
+	@DisplayName("chain.doFilter에서 예외가 발생해도 Jwt가 지우지 않아 populate된 memberId가 남는다")
 	@Test
-	void chainException_mdcRemovedInFinally() throws Exception {
+	void chainException_mdcMemberIdRemainsPopulated() throws Exception {
 		MockHttpServletRequest request = new MockHttpServletRequest("GET", "/orders");
 		request.addHeader("Authorization", "Bearer valid-token");
 		MockHttpServletResponse response = new MockHttpServletResponse();
@@ -174,12 +146,12 @@ class JwtAuthenticationFilterTest {
 
 		filter.doFilter(request, response, chain);
 
-		assertThat(LogContext.getMemberId()).isNull();
+		assertThat(LogContext.getMemberId()).isEqualTo("42");
 	}
 
-	@DisplayName("스레드 풀 재사용 시나리오: 이전 요청의 MDC 값이 잔류해도 새 값으로 덮어쓰고 완료 후 제거된다")
+	@DisplayName("스레드 풀 재사용 시나리오: 이전 요청의 MDC 값이 잔류해도 새 값으로 덮어쓰고 완료 후에도 새 값이 남는다")
 	@Test
-	void threadPoolReuse_prevMdcValueIsOverwrittenAndRemovedAfterRequest() throws Exception {
+	void threadPoolReuse_prevMdcValueIsOverwrittenAndRemainsPopulated() throws Exception {
 		LogContext.putMemberId(999L);
 
 		MockHttpServletRequest request = new MockHttpServletRequest("GET", "/orders");
@@ -199,6 +171,6 @@ class JwtAuthenticationFilterTest {
 		filter.doFilter(request, response, chain);
 
 		assertThat(mdcDuringChain.get()).isEqualTo("99");
-		assertThat(LogContext.getMemberId()).isNull();
+		assertThat(LogContext.getMemberId()).isEqualTo("99");
 	}
 }

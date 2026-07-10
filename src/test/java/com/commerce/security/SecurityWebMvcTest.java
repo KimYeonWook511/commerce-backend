@@ -26,6 +26,7 @@ import org.springframework.http.ResponseEntity;
 import org.springframework.web.bind.annotation.GetMapping;
 import org.springframework.web.bind.annotation.RestController;
 
+import com.commerce.common.log.filter.TraceIdFilterConfig;
 import com.commerce.security.filter.JwtAuthenticationFilterConfig;
 import com.commerce.security.interceptor.AuthorizationInterceptor;
 import com.commerce.auth.application.usecase.TokenAuthenticationUseCase;
@@ -45,6 +46,7 @@ import com.commerce.security.annotation.RequireRole;
 	WebConfig.class,
 	AuthenticatedMemberIdArgumentResolver.class,
 	AuthorizationInterceptor.class,
+	TraceIdFilterConfig.class,
 	JwtAuthenticationFilterConfig.class,
 	SecurityWebMvcTest.TestController.class
 })
