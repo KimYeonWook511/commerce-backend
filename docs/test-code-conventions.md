@@ -7,6 +7,7 @@
 - **항상 테스트 동반**: 기능 추가 시 테스트 작성, 동작 수정 시 관련 테스트 갱신. 명시 지시 없으면 생략 금지.
 - **레이어별 종류**: Domain=단위(Mock 금지, 순수 객체). Application=단위(Repository·Port만 Mock)+통합 병행. Presentation=`@WebMvcTest` 슬라이스(Service는 `@MockitoBean`). Infrastructure=`@DataJpaTest` 슬라이스+통합. `@SpringBootTest`(전체 컨텍스트)는 지양.
 - **우선순위**: 단위·슬라이스를 두텁게, 통합은 핵심 경로만(느리고 비쌈).
+- **범위**: 테스트 코드(JUnit/Spring)는 단위·슬라이스·통합까지 다룬다. 시스템 테스트(E2E)·부하 테스트는 테스트 코드가 아니라 k6 등 전용 도구의 별도 트랙에서 다룬다(맨 아래 "시스템·부하 테스트" 참고).
 - **Mock**: `@ExtendWith(MockitoExtension.class)` + BDD 스타일(`given`/`then().should()`). Spring 빈 Mock은 `@MockitoBean`/`@MockitoSpyBean`(구 `@MockBean`/`@SpyBean` 금지).
 - **네이밍**: 영어 메서드명 `행위_조건_결과` + 한국어 `@DisplayName`. Infra 테스트 클래스명은 구현체(Adapter)명 따름.
 - **구조**: 모든 테스트 Given-When-Then. 한 테스트 한 행위. AssertJ `assertThat` 체이닝, 예외는 `assertThatThrownBy`.
@@ -452,6 +453,17 @@ Spring Boot 3.4 부터 `@MockBean` / `@SpyBean` 이 deprecated 되었고 `@Mocki
 
 타이밍에 따라 결과가 달라진다는 건 그 로직이 race에 노출돼 있다는 신호다. 답은 "모든 타이밍을 테스트하자" 가 아니라 **"타이밍과 무관하게 만들자"** 다. 낙관 락(`@Version`) / 비관 락(`FOR UPDATE`) / 유니크 제약 / 원자적·조건부 UPDATE(`SET qty = qty - 1 WHERE qty >= 1`, `SET status='X' WHERE status='Y'`) / 트랜잭션 경계 재설계로 위험한 인터리빙을 **불가능하게 설계**한다(이 선택 기준은 `docs/optimistic-lock-design.md`). 테스트는 그 설계가 작동하는지 불변식으로 확인하는 역할이다.
 
-### stress / soak 테스트
+---
 
-JUnit / Spring 영역이 아니다. 부하 / 성능 측정은 k6, Gatling 같은 전용 도구로 별도 트랙에서 다룬다. 이 컨벤션은 결정론적 동시성 검증만 다룬다.
+## 시스템·부하 테스트 — 범위 밖 (k6 트랙)
+
+다음 두 가지는 테스트 코드(JUnit/Spring)로 하지 않고 k6, Gatling 같은 전용 도구의 별도 트랙에서 다룬다.
+
+- **시스템 테스트(E2E)**: 전체 애플리케이션을 띄우고 사용자 경로를 끝에서 끝까지 검증(예: 주문 생성 → 결제 승인 → 재고 차감).
+- **부하·성능 테스트(stress/soak)**: 처리량·응답시간·포화 한계 측정.
+
+이렇게 분리하는 이유:
+- 세밀한 단언(특정 필드 값, 예외 코드)은 단위·슬라이스가 이미 커버한다. 시스템 테스트는 "전체 경로가 한 흐름으로 살아 동작하는가"만 확인하므로 실제 HTTP로 때리는 k6가 더 적합하다.
+- 전체 컨텍스트 테스트는 느리고 깨지기 쉬워, 테스트 코드 트랙에 두면 테스트 피라미드 상단이 비대해진다.
+
+이 컨벤션(테스트 코드)은 단위·슬라이스·통합과 결정론적 동시성 검증까지만 다룬다.
