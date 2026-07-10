@@ -87,3 +87,6 @@ load-test/grafana-data-local/
 
 ### log4brains (ADR 정적 사이트 빌드 산출물) ###
 .log4brains/
+
+### commerce-brain 연결 (side-repo skill이 brain repo를 찾는 로컬 설정) ###
+.brain
