@@ -189,7 +189,7 @@ skip("충돌이면 조용히 넘어감")은 보통 **그것을 쓰는 흐름 하
 맥락이 코드에 남고, 클래스·빈·주입이 안 늘어난다.
 
 ```java
-// application/usecase/ — 보상 orchestrator, tx 없음 (ADR-8: 외부 호출은 tx 밖, DB 쓰기만 짧은 tx)
+// application/usecase/ — 보상 orchestrator, tx 없음 (외부 호출은 tx 밖, DB 쓰기만 짧은 tx — → PR#97)
 @Component
 class PaymentApprovalCompensationUseCase {
 
@@ -389,7 +389,7 @@ T1: saveUsed → version=5로 UPDATE 시도 → 충돌
    - 디시플린은 "무조건 1애그리거트"가 아니라 **"원자성이 필요한 최소 집합까지만 묶고, 그 이상(많은
      애그리거트, 외부 호출)으로 번지지 않게 한다"**.
 
-2. **orchestrator는 트랜잭션을 절대 열지 않는다.** (ADR-8/014/015 그대로)
+2. **orchestrator는 트랜잭션을 절대 열지 않는다.** (기존 보상 경계 결정 그대로, → PR#97·PR#118·PR#125)
    외부 호출과 단계별 독립 commit을 순서대로 호출만 하고, 한 단계 실패가 이전 단계를 롤백하지 못하게 한다.
 
 3. **충돌 정책은 orchestrator에서만 결정.** tx 단위작업은 정책을 모른다.
@@ -406,7 +406,7 @@ T1: saveUsed → version=5로 UPDATE 시도 → 충돌
 class NaverPayApprovalUseCase {   // application/usecase/
     @Transactional                  // ← usecase가 tx를 열게 됨
     public void approve(...) {
-        pgGateway.approve(...);     // ← 외부 호출이 tx 안으로 빨려들어감 (ADR-8 위반!)
+        pgGateway.approve(...);     // ← 외부 호출이 tx 안으로 빨려들어감 ("외부 호출은 tx 밖" 규칙 위반!)
         paymentTxService.succeed(...);
         orderTxService.complete(...);
     }
@@ -414,7 +414,7 @@ class NaverPayApprovalUseCase {   // application/usecase/
 ```
 
 문제 둘: (1) "usecase는 tx를 안 연다"는 규칙(ArchUnit 강제)이 깨진다. (2) usecase엔 보통 PG 호출 같은
-외부 호출이 섞여 있어, tx를 달면 그 외부 호출이 트랜잭션 안으로 들어가 행 락을 잡은 채 PG를 기다린다(ADR-8 위반).
+외부 호출이 섞여 있어, tx를 달면 그 외부 호출이 트랜잭션 안으로 들어가 행 락을 잡은 채 PG를 기다린다("외부 호출은 tx 밖" 규칙 위반).
 
 대신 **함께 커밋할 둘을 감싸는 전용 메서드를 `service` 패키지에 만들고 거기에만 tx를 단다.**
 
@@ -532,7 +532,7 @@ T2: unblock → 최신 커밋본을 재평가(UPDATE는 스냅샷이 아닌 late
 #### 주의 3가지
 
 - **짧게.** 행 X-lock은 holder가 commit할 때까지 잡힌다. 그 사이 PG 같은 외부 호출을 끼우면
-  대기자가 `innodb_lock_wait_timeout`에 걸린다 → 다시 ADR-8(외부 호출은 tx 밖).
+  대기자가 `innodb_lock_wait_timeout`에 걸린다 → 다시 "외부 호출은 tx 밖" 규칙(→ PR#97).
 - **managed @Version 엔티티와 섞지 마라.** 같은 영속성 컨텍스트에 그 Payment를 managed로 로드해두고
   bulk `@Modifying`을 날리면 이후 stale version 불일치가 날 수 있다 →
   `@Modifying(clearAutomatically=true, flushAutomatically=true)` 또는 managed 인스턴스를 들고 있지 말 것.

@@ -50,7 +50,7 @@ DataAccessException (부모 핸들러, COMMON-500-2)
 ```
 
 - Spring `@ExceptionHandler` 는 가장 구체적인 타입을 먼저 매칭한다. 두 구체 핸들러(`DataIntegrityViolationException`, `OptimisticLockingFailureException`) 가 우선 매칭되고, 부모 `DataAccessException` 핸들러는 그 외 DAO 예외(`BadSqlGrammarException`, `CannotAcquireLockException`, `DataAccessResourceFailureException` 등) 만 받는다.
-- unique 위반은 `DataIntegrityViolationException`(cause=Hibernate `ConstraintViolationException`) 으로 올라와 같은 핸들러에 흡수된다 (ADR-034 의 translator 빈 제거 후 형태).
+- unique 위반은 `DataIntegrityViolationException`(cause=Hibernate `ConstraintViolationException`) 으로 올라와 같은 핸들러에 흡수된다 (translator 빈 제거 후 형태, → PR#228).
 - `DataIntegrityViolationException` 핸들러는 unique race window 와 NOT NULL/FK/CHECK 위반을 모두 잡아 500 + stack trace 로그(`COMMON-500-1`) 를 남긴다.
 - `DataAccessException` 부모 핸들러는 DAO 카테고리 fallback 으로 500 + stack trace + `COMMON-500-2` 를 남겨 운영 모니터링에서 일반 `Exception` fallback 과 구분 가능하게 한다.
 - `OptimisticLockingFailureException` 핸들러는 낙관적 락 충돌(정상 시나리오) 을 409 로 유지한다.
@@ -60,9 +60,9 @@ DataAccessException (부모 핸들러, COMMON-500-2)
 > 가시화(500)한다. 낙관 락 충돌은 같은 행을 동시 전이할 때 *정상적으로 발생할 수 있는* 것이라 재시도/대기를
 > 유도하는 409로 둔다. 즉 "안 나야 정상 → 500", "날 수 있는 정상 → 409".
 
-### unique 위반 제약명 식별 (ADR-034)
+### unique 위반 제약명 식별 (→ PR#228)
 
-`JpaConfig` 의 `SQLErrorCodeSQLExceptionTranslator` 빈은 제거됐다 (ADR-034). 이 빈은 `db-constraint-violation-handling` 에서 application 의 `DuplicateKeyException` catch 를 위해 등록됐으나 그 catch 는 ADR-011(find-first)로 폐기됐고, 남은 정당화("운영 로그에서 `DuplicateKeyException` 타입 구분")는 무가치했다 — 빈 유무와 무관하게 unique 위반은 같은 핸들러·같은 `COMMON-500-1` 로 분류되고 `Duplicate entry ... for key ...` `SQLException` 메시지가 cause 체인에 남는다.
+`JpaConfig` 의 `SQLErrorCodeSQLExceptionTranslator` 빈은 제거됐다. 이 빈은 `db-constraint-violation-handling` 에서 application 의 `DuplicateKeyException` catch 를 위해 등록됐으나 그 catch 는 find-first 전환(→ PR#109)으로 폐기됐고, 남은 정당화("운영 로그에서 `DuplicateKeyException` 타입 구분")는 무가치했다 — 빈 유무와 무관하게 unique 위반은 같은 핸들러·같은 `COMMON-500-1` 로 분류되고 `Duplicate entry ... for key ...` `SQLException` 메시지가 cause 체인에 남는다.
 
 빈 제거 후 unique 위반은 `DataIntegrityViolationException`(cause=Hibernate `ConstraintViolationException`(cause=`SQLException`)) 으로 올라온다. 제약명이 필요한 곳(`PaymentRepositoryAdapter.isApprovedOrderKeyViolation`, 이중결제 식별) 은 Hibernate `ConstraintViolationException.getConstraintName()` 을 사용한다. MySQL 환경에서 이 값은 테이블 prefix 를 포함하므로(`tbl_payment.uk_payment_approved_order_key`) 전체 제약명을 대소문자 무시(`equalsIgnoreCase`)로 비교한다. 제약명을 소비하는 adapter 는 이미 JPA 전용이라 Hibernate API 의존이 자연스럽다.
 
@@ -185,23 +185,23 @@ catch 안에서 호출하는 skip 로직은 가급적 예외를 던지지 않게
 
 ## 결제 결과 UNKNOWN 처리
 
-PG 호출 결과가 확인되지 않아 결제 상태가 불명확한 경우의 처리 정책이다 (ADR-026, ADR-027 참조).
+PG 호출 결과가 확인되지 않아 결제 상태가 불명확한 경우의 처리 정책이다 (→ PR#205·PR#218).
 
 ### 마킹 정책
 
 - PG approve API 호출 timeout 또는 IOException 발생 시 → `Payment.markUnknown(failDetail, respondedAt)` — `status=UNKNOWN` 흔적 보존
 - PG approve 응답 OK 후 DB 반영 실패 시에도 가능한 경우 UNKNOWN 흔적 보존
 - UNKNOWN 은 "결과를 알 수 없다" 는 사실을 DB 에 남기는 것이 목적이다. 사용자 재시도를 허용하면 이중결제 위험이 있으므로 차단한다
-- 어떤 예외를 UNKNOWN 으로 분류하는가의 경계는 *요청 전송 시점* 을 따른다 (ADR-027):
+- 어떤 예외를 UNKNOWN 으로 분류하는가의 경계는 *요청 전송 시점* 을 따른다:
   - 전송 전 버그 → 전파(안전망 500)
   - 전송 후 / 불명 예외 → UNKNOWN 보존
   - `Success` 응답인데 `detail` 누락 → UNKNOWN 보존
-- `AlreadyComplete` 응답 후 이력조회(`getApprovalHistory`)로 재확인하는 경로도 동일하다 (ADR-028, #218 일관화):
+- `AlreadyComplete` 응답 후 이력조회(`getApprovalHistory`)로 재확인하는 경로도 동일하다 (→ PR#220, #218 일관화):
   - 결과 불명류(NETWORK/SERVER_ERROR/INVALID_RESPONSE)나 외부 응답 이상(이력 목록·상세 누락, 승인 이력인데 `merchantPayKey` 누락)으로 확정 못 하면 → `FAILED`가 아니라 UNKNOWN 보존 + `PAYMENT_RESULT_PENDING`(409)
   - 외부 응답 이상은 명시적 null 체크로 가르고, 예상 못 한 NPE는 안전망(500)으로 전파
   - 명시적 실패(InvalidMerchant 등)·이력 없음(빈 목록)은 결과가 확정적 → FAILED 유지
   - `merchantPayKey`가 누락이 아니라 존재하나 우리 키와 다르면 확정적 키 불일치 → FAILED
-- cancel(보상 취소) 호출이 결과 불명류 예외로 실패하면 cancel 기록(CANCEL 타입)을 UNKNOWN 으로 보존한다 (ADR-028). CANCEL 타입 UNKNOWN 은 차단 정책(`existsUnknownByOrderId`, APPROVE 한정)에 잡히지 않아 주문 재결제를 차단하지 않으며, 대사 대상으로만 남는다 (자동 해소는 Epic #208)
+- cancel(보상 취소) 호출이 결과 불명류 예외로 실패하면 cancel 기록(CANCEL 타입)을 UNKNOWN 으로 보존한다. CANCEL 타입 UNKNOWN 은 차단 정책(`existsUnknownByOrderId`, APPROVE 한정)에 잡히지 않아 주문 재결제를 차단하지 않으며, 대사 대상으로만 남는다 (자동 해소는 Epic #208)
 
 ### 차단 정책
 
@@ -218,7 +218,7 @@ PG 호출 결과가 확인되지 않아 결제 상태가 불명확한 경우의 
 
 ## 결제 redirect 멱등 응답
 
-같은 merchantPayKey 의 PG redirect 가 중복 도착한 경우의 처리 정책이다 (ADR-026 참조).
+같은 merchantPayKey 의 PG redirect 가 중복 도착한 경우의 처리 정책이다 (→ PR#205).
 
 ### 정책
 

@@ -39,7 +39,7 @@ Java, Spring Boot, Gradle, MySQL, JPA(Hibernate) 백엔드 프로젝트.
 | API 계약 (엔드포인트·요청·응답·실패코드) | `docs/api-spec.md` | 현재 상태로 갱신 |
 | DB 스키마 (테이블·컬럼·인덱스·제약) | `docs/db-schema.md` | 현재 상태로 갱신 (실제 DDL은 Flyway V스크립트가 단일 출처) |
 | 구조 (모듈·레이어·책임 이동, 서비스 신설/이동) | `docs/architecture.md` | 현재 상태로 갱신 |
-| 설계 결정 (정책·트레이드오프) | `docs/adr.md` | **append** (기존 ADR 수정 금지, 새 번호 추가 + supersede 표시) |
+| 설계 결정 (정책·트레이드오프) | `docs/adr/` | **새 파일 추가** (기존 ADR 수정 금지, supersede 시 옛 ADR의 Status만 갱신) |
 | 정책 문서 내용 (예외/충돌/로깅/패키지 배치 규칙) | `docs/exception-strategy.md`, `docs/optimistic-lock-design.md`, `docs/logging-conventions.md`, `docs/package-structure-guide.md`, `docs/testing-conventions.md` 중 해당 문서 | 그 정책이 바뀌면 해당 문서 갱신 |
 | 내부 구현만 (이름 정리·로직 리팩터) | 없음 | 동기화 불필요 |
 
@@ -56,7 +56,7 @@ Java, Spring Boot, Gradle, MySQL, JPA(Hibernate) 백엔드 프로젝트.
 - 도메인 중심 네이밍을 우선하고 기존 프로젝트 패턴을 따른다.
 - 비즈니스 로직은 Domain 또는 application 계층에 둔다. Controller는 요청 수신·입력 검증·서비스 위임·응답 반환만 담당한다.
 - 외부 시스템 연동(Redis, 이메일, 결제 PG 등)은 `application/port/` 인터페이스로만 의존한다.
-- application service 클래스는 유스케이스 단위 단일 행위만 담당한다. **역할별 접미사**(ADR-006 supersede): `application/usecase/`는 `…UseCase`(흐름 조립·정책 선택, tx 없음), `application/service/`는 `…Service`(tx 단위작업, `@Transactional`). 예: `NaverPayApprovalUseCase`, `CreateOrderService`. `@Transactional`은 `service` 패키지에만 둔다. 여러 단위작업을 한 tx로 묶을 땐 usecase가 아니라 묶는 메서드를 `service`에 만들어 거기에 tx를 단다. 단순 작업(조율 없음)은 usecase 없이 Controller가 service를 직접 호출한다. 배치 기준은 `docs/package-structure-guide.md`.
+- application service 클래스는 유스케이스 단위 단일 행위만 담당한다. **역할별 접미사**(→ PR#248): `application/usecase/`는 `…UseCase`(흐름 조립·정책 선택, tx 없음), `application/service/`는 `…Service`(tx 단위작업, `@Transactional`). 예: `NaverPayApprovalUseCase`, `CreateOrderService`. `@Transactional`은 `service` 패키지에만 둔다. 여러 단위작업을 한 tx로 묶을 땐 usecase가 아니라 묶는 메서드를 `service`에 만들어 거기에 tx를 단다. 단순 작업(조율 없음)은 usecase 없이 Controller가 service를 직접 호출한다. 배치 기준은 `docs/package-structure-guide.md`.
 - DB 무결성 위반은 Application/Adapter에서 catch 하지 않고 `GlobalExceptionHandler` 안전망(500)으로 위임한다.
 - 낙관 락(@Version) 충돌은 tx 경계 안에서 catch하지 않고(도메인 예외로 전파시켜 깨끗이 rollback), skip/retry/전파는 tx 경계 밖에서 정한다. 변환은 `infrastructure/persistence/` adapter가 한다. 상세는 `docs/optimistic-lock-design.md`.
 - 위 구조 규칙(@Transactional 위치, 예외 격리 등) 중 기계로 검증 가능한 것은 `ArchitectureRulesTest`(ArchUnit)가 강제한다.
@@ -77,7 +77,7 @@ Java, Spring Boot, Gradle, MySQL, JPA(Hibernate) 백엔드 프로젝트.
 
 핵심 설계·스펙
 - 기능 범위: `docs/prd.md`
-- 설계 결정: `docs/adr.md`
+- 설계 결정: `docs/adr/` (작성 규칙: `docs/adr-conventions.md`)
 - 백엔드 구조와 의존성: `docs/architecture.md`
 - API 스펙: `docs/api-spec.md`
 - DB 스키마: `docs/db-schema.md`

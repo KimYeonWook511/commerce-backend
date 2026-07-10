@@ -52,7 +52,7 @@ src/main/java/com/commerce/
 - **메시징 방향이 위치를 가른다**: producer(보내기)는 outbound → `application/port/` + `infrastructure/messaging/`, consumer(받기)는 inbound → `presentation/consumer/`.
 - **`ApplicationEventPublisher`는 외부 브로커가 아닌 in-process 디커플링** → port로 감싸지 않고 application이 직접 발행하되, 리스너의 트랜잭션 시점(동기 / `@TransactionalEventListener(AFTER_COMMIT)` / `REQUIRES_NEW`)을 명시 관리한다. 프로세스 경계를 넘고 유실 불가한 이벤트는 in-process가 아닌 Outbox + Kafka 를 쓴다.
 - **도메인 예외는 `domain/exception/`**(엔티티 가드와 adapter 변환이 함께 던지고 모든 레이어가 의존). 인프라 fallback용 기술 예외(예: `OrderIdempotencyStoreUnavailableException`)만 `infrastructure/`에 둔다.
-- **엔티티는 `domain/`에 두고 JPA 매핑 애너테이션(`@Entity`/`@Id`/`@Version` 등) 사용을 허용한다.** 순수 POJO 도메인 객체 + 별도 매핑 클래스(JpaEntity)와 변환 코드를 두는 비용이 현재 규모에서 비효율적이라 판단해, domain 은 "선언적 매핑 메타데이터"까지만 허용한다(Spring 생태계 관습 일관성, ADR-006). 단 동작하는 JPA 런타임(`EntityManager` 로 직접 쿼리·flush 등)은 domain 에 두지 않는다 — 이 경계는 ArchUnit 으로 강제한다(아래 "아키텍처 규칙 강제" 참고).
+- **엔티티는 `domain/`에 두고 JPA 매핑 애너테이션(`@Entity`/`@Id`/`@Version` 등) 사용을 허용한다.** 순수 POJO 도메인 객체 + 별도 매핑 클래스(JpaEntity)와 변환 코드를 두는 비용이 현재 규모에서 비효율적이라 판단해, domain 은 "선언적 매핑 메타데이터"까지만 허용한다(Spring 생태계 관습 일관성, → PR#91). 단 동작하는 JPA 런타임(`EntityManager` 로 직접 쿼리·flush 등)은 domain 에 두지 않는다 — 이 경계는 ArchUnit 으로 강제한다(아래 "아키텍처 규칙 강제" 참고).
 
 ---
 
@@ -90,7 +90,7 @@ Port 인터페이스 설계 원칙:
 
 하나의 application service 클래스는 하나의 유스케이스 행위만 담당한다.
 
-- 네이밍은 **역할별 접미사**를 따른다 (ADR-006 supersede):
+- 네이밍은 **역할별 접미사**를 따른다 (→ PR#248):
   - `application/usecase/`(흐름 조립·정책 선택, tx 없음) → **`{행위}{도메인}UseCase`** (`NaverPayApprovalUseCase`, `PaymentReconciliationUseCase`)
   - `application/service/`(tx 단위작업, `@Transactional`) → **`{행위}{도메인}Service`** (`PaymentTransitionService`, `CreateOrderService`)
 - 접미사가 패키지(역할)와 일치하므로 import·스택 트레이스·로그처럼 패키지 경로가 안 보이는 곳에서도 흐름(UseCase)인지 tx 단위작업(Service)인지 드러난다. 빈 등록 stereotype도 역할별로 가른다 — UseCase는 `@Component`, Service는 `@Service`로 등록해 역할을 한 번 더 드러낸다(둘은 기능 동일).
@@ -120,34 +120,34 @@ Port 인터페이스 설계 원칙:
 
 # 결제 승인 (네이버페이) — 순서·경계
 1. (memberId, merchantPayKey) 로 Reservation 역조회 (Order 안 거침)
-   - 남의/없는 키는 PAYMENT_RESERVATION_NOT_FOUND 로 존재 비노출 (ADR-038)
+   - 남의/없는 키는 PAYMENT_RESERVATION_NOT_FOUND 로 존재 비노출
 2. PG 호출 전 차단 검사:
    - UNKNOWN 행 차단
    - USED Reservation: 같은 pgPaymentId 는 멱등 200 / 다른 pgPaymentId 는 ALREADY_USED 차단
-   - 이미 성공한 주문은 PAYMENT_DUPLICATE 차단 (approved_order_key 존재, ADR-037)
+   - 이미 성공한 주문은 PAYMENT_DUPLICATE 차단 (approved_order_key 존재)
 3. [트랜잭션 안] Reservation 사용 처리(@Version) + Payment(APPROVE, REQUESTED) INSERT
-   - 동시 이중 use 진 쪽은 saveUsed 에서 ALREADY_USED 로 PG 호출 전 차단 (ADR-036)
+   - 동시 이중 use 진 쪽은 saveUsed 에서 ALREADY_USED 로 PG 호출 전 차단
    - 이 충돌→ALREADY_USED 번역은 use 가 그 행의 유일한 동시 쓰기 경로임을 전제 (5장 예외 정책 참고)
 4. [트랜잭션 밖] PG approve 호출
 5. 승인 시도 상태 반영 → 승인 완료 반영
-   - saveApproved 의 uk_payment_approved_order_key 위반은 adapter 가 PAYMENT_DUPLICATE 로 번역 (ADR-033)
-6. 승인 확정·종착·보상은 실시간·대사가 공유하는 provider 중립 조율 facade가 담당 (ADR-062). 거부는 주문 상태 재조회 없이 errorCode로 분기 (completePayment가 사유별 코드, ADR-063):
+   - saveApproved 의 uk_payment_approved_order_key 위반은 adapter 가 PAYMENT_DUPLICATE 로 번역
+6. 승인 확정·종착·보상은 실시간·대사가 공유하는 provider 중립 조율 facade가 담당 (→ PR#262). 거부는 주문 상태 재조회 없이 errorCode로 분기 (completePayment가 사유별 코드):
    - 취소 주문·이중결제 → fail-first 보상 (PG cancel)
-   - 정상 승인 후 transient 기록 실패(@Version 충돌 포함)는 보상 없이 전파·REQUESTED 유지로 reconcile 위임 (ADR-032)
+   - 정상 승인 후 transient 기록 실패(@Version 충돌 포함)는 보상 없이 전파·REQUESTED 유지로 reconcile 위임
 
 # 주문 만료 배치 — 경계
 - 미확정 APPROVE 결제(UNKNOWN/stale REQUESTED) 걸린 주문은 BlockingPaymentChecker port 로
-  만료 대상에서 제외 → 만료-대사 경합(돈은 빠졌는데 주문 취소) 방지 (order 소유 port·payment adapter 구현, ADR-042)
+  만료 대상에서 제외 → 만료-대사 경합(돈은 빠졌는데 주문 취소) 방지 (order 소유 port·payment adapter 구현)
 - 만료 → 주문 취소 → 재고 복구 이벤트 생성 → Outbox relay → Kafka consumer 가 재고 복구
   (이벤트 유실 방지를 위해 in-process 이벤트가 아닌 Outbox + Kafka, 5장 참고)
 
-# 결제 대사 (reconciliation) — 순서·경계 (ADR-040)
-1. 스캔: stale 미확정 결제 후보 (UNKNOWN ≈1분 / REQUESTED ≈15분 하한, ≈6시간 상한 초과는 escalation 제외, ADR-047). `KEEP_WAITING`으로 끝난 건은 `next_reconcile_at` 직교 필드로 고정 backoff를 걸어 스캔 게이트가 제외 → 누적 wait 건이 새 후보를 굶기지 않고 같은 건의 PG 반복 조회를 줄인다 (ADR-066~068)
+# 결제 대사 (reconciliation) — 순서·경계 (→ PR#237)
+1. 스캔: stale 미확정 결제 후보 (UNKNOWN ≈1분 / REQUESTED ≈15분 하한, ≈6시간 상한 초과는 escalation 제외). `KEEP_WAITING`으로 끝난 건은 `next_reconcile_at` 직교 필드로 고정 backoff를 걸어 스캔 게이트가 제외 → 누적 wait 건이 새 후보를 굶기지 않고 같은 건의 PG 반복 조회를 줄인다 (→ PR#263)
 2. [건별, 트랜잭션 밖] PG 이력 조회 (getApprovalHistory — 승인 재요청이 아니라 이미 일어난 결과 확인, 이중과금 방지)
-3. 후처리 정책(대상 식별·flow 결정 — src/main 단일 출처, ADR-046)으로 확정/보상/대기 결정
-4. 확정·종착·보상은 승인과 같은 provider 중립 facade를 공유 (ADR-062): 확정은 PG 재호출 없이 SUCCEEDED + Order PAID
-5. 이미 CANCELED / 중복: 보상 취소(PG cancel) + FAILED 종착 + NotificationPort 통지 (ADR-043). 비중복 PAID는 환불 없이 통지+FAILED (ADR-064)
-6. 건별 독립 트랜잭션으로 처리(한 건 실패가 루프를 멈추지 않음) — 비-INIT 주문 거부는 주문 상태 재조회 없이 errorCode로 분기해 종착시켜 무한 재시도 차단 (ADR-048→064)
+3. 후처리 정책(대상 식별·flow 결정 — src/main 단일 출처)으로 확정/보상/대기 결정
+4. 확정·종착·보상은 승인과 같은 provider 중립 facade를 공유 (→ PR#262): 확정은 PG 재호출 없이 SUCCEEDED + Order PAID
+5. 이미 CANCELED / 중복: 보상 취소(PG cancel) + FAILED 종착 + NotificationPort 통지. 비중복 PAID는 환불 없이 통지+FAILED (→ PR#262)
+6. 건별 독립 트랜잭션으로 처리(한 건 실패가 루프를 멈추지 않음) — 비-INIT 주문 거부는 주문 상태 재조회 없이 errorCode로 분기해 종착시켜 무한 재시도 차단
 ```
 
 ---
@@ -156,19 +156,19 @@ Port 인터페이스 설계 원칙:
 
 각 도메인이 **무엇을 책임지나**와 핵심 설계 결정만 기록한다. 구체 클래스·메서드·상태값·트랙 이력은 코드(`com.commerce.<domain>`)와 ADR이 단일 출처다.
 
-> 공통 원칙(ADR-020, 모든 도메인에 적용): cross-aggregate 참조는 객체가 아니라 `Long` ID(또는 값)로 한다. same-aggregate 관계만 객체 참조를 유지한다. cross-aggregate FK는 제거됐고(운영 DB 적용은 별도 결정), 조회는 사용처별 batch composition 또는 컬럼 직접 사용으로 대체한다. 도메인별 적용 세부는 각 `docs/tasks/*-jpa-association-decouple/` 참조.
+> 공통 원칙(모든 도메인에 적용, → PR#166): cross-aggregate 참조는 객체가 아니라 `Long` ID(또는 값)로 한다. same-aggregate 관계만 객체 참조를 유지한다. cross-aggregate FK는 제거됐고(운영 DB 적용은 별도 결정), 조회는 사용처별 batch composition 또는 컬럼 직접 사용으로 대체한다. 도메인별 적용 세부는 각 `docs/tasks/*-jpa-association-decouple/` 참조.
 
 - **`auth`** — 인증 유스케이스의 owner. 비밀번호 검증, JWT 발급·검증, refresh token 저장. 회원 생성·조회는 `member`에 위임한다.
 - **`security`** — HTTP 요청 인증/인가 adapter. 토큰을 검증해 인증 컨텍스트에 싣고, 인가 인터셉터·argument resolver가 이를 사용한다.
 - **`product`** — 공개 상품 조회와 관리자 상품 관리(등록·수정·soft delete). 상세는 상품 정보 + 현재 재고를 조합한다.
 - **`stock`** — 상품별 재고, 주문 경로의 차감·복구, 관리자 조정, 변경 이력. `Product : Stock = 1:1`. `StockHistory`는 별도 aggregate.
-- **`order`** — 주문 생성·취소·만료. 생성은 멱등 키로 중복 방어. 만료는 Spring Batch로 스케줄링하되, 미확정 결제(UNKNOWN/stale REQUESTED)가 걸린 주문은 `BlockingPaymentChecker` port로 만료 대상에서 제외해 만료-대사 경합(돈은 빠졌는데 주문 취소)을 막는다(ADR-042). 생성 tx 내에서 `CartItemRemover` port로 주문된 항목만 cart에서 제거한다.
-  - 사용자 취소: INIT은 재고만 복구하고, PAID는 환불까지 포함한다. 조율 usecase(tx 없음)가 단위작업 service(tx)를 호출해 한 tx 안에 `환불 의도(CANCEL REQUESTED) 영속화 + order.cancel() + 재고 복구`를 원자적으로 커밋하고, 커밋 후 best-effort PG 환불을 실행한다. 실패·불확실·중단은 결제 CANCEL 대사에 위임한다(환불 보장은 영속된 의도+대사). 주문 행은 fetch join 없이 단일 행 락으로 잠가 락 범위를 좁힌다(ADR-056~058·061). order.application이 stock·payment service에 의존(기존 order→stock 패턴과 동일).
+- **`order`** — 주문 생성·취소·만료. 생성은 멱등 키로 중복 방어. 만료는 Spring Batch로 스케줄링하되, 미확정 결제(UNKNOWN/stale REQUESTED)가 걸린 주문은 `BlockingPaymentChecker` port로 만료 대상에서 제외해 만료-대사 경합(돈은 빠졌는데 주문 취소)을 막는다(→ PR#237). 생성 tx 내에서 `CartItemRemover` port로 주문된 항목만 cart에서 제거한다.
+  - 사용자 취소: INIT은 재고만 복구하고, PAID는 환불까지 포함한다. 조율 usecase(tx 없음)가 단위작업 service(tx)를 호출해 한 tx 안에 `환불 의도(CANCEL REQUESTED) 영속화 + order.cancel() + 재고 복구`를 원자적으로 커밋하고, 커밋 후 best-effort PG 환불을 실행한다. 실패·불확실·중단은 결제 CANCEL 대사에 위임한다(환불 보장은 영속된 의도+대사). 주문 행은 fetch join 없이 단일 행 락으로 잠가 락 범위를 좁힌다(→ PR#258). order.application이 stock·payment service에 의존(기존 order→stock 패턴과 동일).
 - **`cart`** — 장바구니 항목 추가(UPSERT)·조회(최신 가격 재조립·구매 불가 마킹)·수량 변경·삭제. 주문-cart 연동은 `CartItemRemover` port(order 소유)를 cart adapter가 구현해 의존 방향을 보존한다.
-- **`payment`** — 결제 예약(reserve)·승인·시도 이력. `naverpay`는 provider 서브패키지(PG 호출과 내부 상태 반영 분리). 도메인은 두 엔티티로 분리(ADR-026): `PaymentReservation`(결제창 준비물, `RESERVED→USED`) + `Payment`(PG 사건 append-only). 완료 판단은 *성공한 APPROVE 행 존재(EXISTS)* 기반(ADR-014/026). `status`는 일어난 사실만 담고 후처리 분류는 정책이 계산한다 — 보상·escalation 종착에 새 상태를 두지 않는다(ADR-039/044). 결과 불명 시 UNKNOWN으로 흔적을 보존하고 해당 주문의 reserve/approve를 `PAYMENT_RESULT_PENDING`(409)로 차단한다. 세부는 `docs/tasks/payment-order-redesign/`(ADR-026), 예외·충돌 처리는 `docs/exception-strategy.md`·`docs/optimistic-lock-design.md`.
-  - 승인 확정 조율: 실시간 승인·대사가 공유하는 provider 중립 facade(payment.application)가 승인 사실 확정과 거부 보상을 조율한다. 주문 거부는 `order.completePayment`의 errorCode로 받아 분기하며 주문 상태를 재조회하지 않는다(결제→주문 단방향). PAID 성공-주체 dead 분기를 제거하고 비중복 PAID는 통지+fail로 둔다. gateway resolver·공통 승인 진입 UseCase는 2번째 provider 도입 시 후속이다(ADR-062~065).
-  - 보상: 이중결제(uk 위반)는 adapter가 도메인 예외로 번역하고 application이 fail-first로 보상한다. 정상 승인 후 transient 기록 실패(@Version 충돌 포함)는 보상 없이 전파하고 approve를 REQUESTED로 두어 대사에 위임한다(완료 우선). 보상 흐름은 tx를 열지 않고 단계별 독립 commit으로 진행하며, 충돌은 tx 경계 밖에서 skip한다(ADR-008/015/032/033).
-  - 대사(reconciliation): `@Scheduled` 트리거(presentation/scheduler)가 깨우는 서비스가 stale 미확정 결제를 PG **이력 조회**(재요청 아님, 이중과금 방지)로 확정·보상하며, 건별 독립 tx로 한 건 실패가 루프를 멈추지 않는다(ADR-040/043/047/048). 운영자 통지는 `NotificationPort`로 hook만 확보(ADR-045). 승인(APPROVE)뿐 아니라 **standalone CANCEL**(REQUESTED/UNKNOWN — 사용자 취소 환불 의도가 PG 호출 전/중 중단으로 남은 것)도 대사 대상이다. PG 상태를 조회해 이미 취소면 확정, 아직 승인이면 재시도하며, 확정적 환불 실패(FAILED)는 자동 재시도 대신 escalation으로 통지한다(ADR-059, 후속 #208).
+- **`payment`** — 결제 예약(reserve)·승인·시도 이력. `naverpay`는 provider 서브패키지(PG 호출과 내부 상태 반영 분리). 도메인은 두 엔티티로 분리(→ PR#205): `PaymentReservation`(결제창 준비물, `RESERVED→USED`) + `Payment`(PG 사건 append-only). 완료 판단은 *성공한 APPROVE 행 존재(EXISTS)* 기반(→ PR#118·PR#205). `status`는 일어난 사실만 담고 후처리 분류는 정책이 계산한다 — 보상·escalation 종착에 새 상태를 두지 않는다(→ PR#236·PR#237). 결과 불명 시 UNKNOWN으로 흔적을 보존하고 해당 주문의 reserve/approve를 `PAYMENT_RESULT_PENDING`(409)로 차단한다. 세부는 `docs/tasks/payment-order-redesign/`, 예외·충돌 처리는 `docs/exception-strategy.md`·`docs/optimistic-lock-design.md`.
+  - 승인 확정 조율: 실시간 승인·대사가 공유하는 provider 중립 facade(payment.application)가 승인 사실 확정과 거부 보상을 조율한다. 주문 거부는 `order.completePayment`의 errorCode로 받아 분기하며 주문 상태를 재조회하지 않는다(결제→주문 단방향). PAID 성공-주체 dead 분기를 제거하고 비중복 PAID는 통지+fail로 둔다. gateway resolver·공통 승인 진입 UseCase는 2번째 provider 도입 시 후속이다(→ PR#262).
+  - 보상: 이중결제(uk 위반)는 adapter가 도메인 예외로 번역하고 application이 fail-first로 보상한다. 정상 승인 후 transient 기록 실패(@Version 충돌 포함)는 보상 없이 전파하고 approve를 REQUESTED로 두어 대사에 위임한다(완료 우선). 보상 흐름은 tx를 열지 않고 단계별 독립 commit으로 진행하며, 충돌은 tx 경계 밖에서 skip한다(→ PR#97·PR#125·PR#226).
+  - 대사(reconciliation): `@Scheduled` 트리거(presentation/scheduler)가 깨우는 서비스가 stale 미확정 결제를 PG **이력 조회**(재요청 아님, 이중과금 방지)로 확정·보상하며, 건별 독립 tx로 한 건 실패가 루프를 멈추지 않는다(→ PR#237). 운영자 통지는 `NotificationPort`로 hook만 확보. 승인(APPROVE)뿐 아니라 **standalone CANCEL**(REQUESTED/UNKNOWN — 사용자 취소 환불 의도가 PG 호출 전/중 중단으로 남은 것)도 대사 대상이다. PG 상태를 조회해 이미 취소면 확정, 아직 승인이면 재시도하며, 확정적 환불 실패(FAILED)는 자동 재시도 대신 escalation으로 통지한다(→ PR#258, 후속 #208).
 - **`outbox`** — 재고 복구 이벤트를 Outbox 패턴으로 처리(생성·Kafka 릴레이·소비를 분리).
 
 ---
@@ -196,14 +196,14 @@ log.info("결제 승인 완료 merchantPayKey={} provider={} pgPaymentId={} orde
 
 ## Application 계층 트랜잭션·영속화 컨벤션
 
-Application Service의 트랜잭션 경계와 영속화 호출 방식은 ADR-021(method-level `@Transactional`)과 ADR-022(`repository.save(entity)` 명시 호출)를 따른다. 정책 본문·근거·트레이드오프는 ADR을 단일 출처로 한다.
+Application Service의 트랜잭션 경계와 영속화 호출 방식은 method-level `@Transactional`과 `repository.save(entity)` 명시 호출 원칙을 따른다(→ PR#166). 정책 본문·근거·트레이드오프는 ADR을 단일 출처로 한다.
 
 낙관적 락(@Version) 충돌 처리는 아래 경계 규칙을 따른다. 근거·상세는 `docs/optimistic-lock-design.md`(또는 해당 ADR)를 단일 출처로 한다.
 
 - **트랜잭션 경계 안에서는 충돌을 catch하지 않는다.** 변환된 도메인 예외를 전파시켜 깨끗이 rollback한다. 경계 안에서 catch하면 `REQUIRES_NEW`라도 `UnexpectedRollbackException`이 난다.
 - **충돌의 skip/retry/전파 결정(정책)은 트랜잭션 경계 밖**(usecase)에서 한다. 같은 tx 단위작업(`service` 패키지)을 호출 맥락에 따라 전파(→409)·skip(보상)·retry(고경합)로 재사용한다. skip·retry 모두 **한 곳이면 그 Service의 private 메서드, 여러 곳이면 helper**(`OptimisticRetry`, `support`/`common`)로 둔다 — 별도 `policy` 패키지는 만들지 않는다.
 - **여러 tx 단위작업을 한 tx로 묶을 때**는 usecase에 `@Transactional`을 달지 않고(외부 호출이 tx에 빨려들고 규칙 위반), 둘을 감싸는 전용 메서드를 `service` 패키지에 만들어 거기에만 tx를 단다(`PaymentApprovalService.succeedApproval` — order+payment 한 tx). 묶음 메서드는 리포지토리/도메인 객체를 직접 다뤄 한 메서드 안에서 완결한다.
-- **충돌을 도메인 예외로 변환하는 전용 저장 경로**(`saveUsed`/`saveApproved`/`saveChecked` 류)는 flush 시점을 adapter 프레임 안으로 당기기 위해 ADR-022의 기본(`save`) 대신 `saveAndFlush`를 쓴다. 이 변환은 `infrastructure/persistence/` adapter에서만 한다.
+- **충돌을 도메인 예외로 변환하는 전용 저장 경로**(`saveUsed`/`saveApproved`/`saveChecked` 류)는 flush 시점을 adapter 프레임 안으로 당기기 위해 영속화 명시 호출 원칙의 기본(`save`, → PR#166) 대신 `saveAndFlush`를 쓴다. 이 변환은 `infrastructure/persistence/` adapter에서만 한다.
 - 충돌은 의미가 1:1로 떨어지는 전용 경로(예: reservation use)에서만 의미 코드(`ALREADY_USED`)로 번역하고, 그렇지 않으면 일반 충돌 코드(`CONCURRENTLY_MODIFIED`)로 두고 필요 시 재조회로 상태를 판정한다.
 
 ---
@@ -224,13 +224,13 @@ application Filter는 `FilterRegistrationBean`으로 명시 등록하고 `Ordere
 
 ### 비동기 경계 traceId 전파
 
-HTTP 요청 traceId는 스레드 로컬 MDC라 비동기 경계에서 자동 전파되지 않으므로, 경계마다 명시적으로 전달한다(ADR-017, ADR-019):
+HTTP 요청 traceId는 스레드 로컬 MDC라 비동기 경계에서 자동 전파되지 않으므로, 경계마다 명시적으로 전달한다(→ PR#149·PR#157):
 
 - **Kafka**: producer가 traceId를 헤더 `X-Trace-Id`에 부착하고 consumer가 MDC로 복원한다.
 - **Outbox**: 원본 traceId를 `tbl_outbox_event.trace_id`에 저장한 뒤 relay 시 MDC로 복원해 Kafka 헤더로 전파한다.
 - **`@TransactionalEventListener`**: 이벤트 객체에 traceId를 동봉한다. 현재 사용처 0건(`order-idempotency-cache-simplification`에서 제거, 향후 도입 시 갱신).
 
-각 경계의 의사코드 수준 흐름과 운영 정책(스케줄러 로그 제외 범위 등)은 `docs/logging-conventions.md`와 ADR-017/019, 관련 task architecture가 출처다.
+각 경계의 의사코드 수준 흐름과 운영 정책(스케줄러 로그 제외 범위 등)은 `docs/logging-conventions.md`와 해당 ADR(→ PR#149·PR#157), 관련 task architecture가 출처다.
 
 ---
 

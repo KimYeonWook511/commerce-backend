@@ -2,16 +2,16 @@
 
 ## 마이그레이션
 
-DB 스키마 변경은 Flyway 마이그레이션 스크립트로 관리한다 (ADR-024).
+DB 스키마 변경은 Flyway 마이그레이션 스크립트로 관리한다 (→ PR#184).
 
 - 위치: `src/main/resources/db/migration/`
 - 네이밍: `V{번호}__{snake_case_설명}.sql`
 - 본 문서는 테이블/컬럼/제약의 의도를 설명하는 reference이고, 실제 DDL은 `V*__*.sql`이 단일 출처다.
 - 엔티티(@Entity) 변경 PR은 같은 PR에서 대응되는 V 스크립트를 함께 작성한다. ddl-auto: validate라 누락 시 부팅 실패.
 - 적용된 V 스크립트는 수정하지 말고 새 V로 보정한다 (Flyway checksum).
-- **ADR-020 후속 트랙 FK 정비**: `V4__drop_cross_aggregate_fk_constraints.sql` 으로 cross-aggregate FK 5건을 일괄 제거했다 (2026-06-03). UNIQUE 제약 (`uk_stock_product_id`, `uk_payment_order_id`) 과 same-aggregate FK (`fk_order_item_order_id`) 는 유지한다. 세부 결정은 `docs/tasks/cross-aggregate-fk-cleanup/adr.md` 참조.
+- **cross-aggregate ID 참조 결정(→ PR#166)의 후속 트랙 FK 정비**: `V4__drop_cross_aggregate_fk_constraints.sql` 으로 cross-aggregate FK 5건을 일괄 제거했다 (2026-06-03). UNIQUE 제약 (`uk_stock_product_id`, `uk_payment_order_id`) 과 same-aggregate FK (`fk_order_item_order_id`) 는 유지한다. 세부 결정은 `docs/tasks/cross-aggregate-fk-cleanup/adr.md` 참조.
 - **결제 시점 가격 snapshot**: `V5__add_order_item_unit_price.sql` 으로 `tbl_order_item.unit_price INT NOT NULL` 컬럼을 신설했다 (2026-06-03). 기존 row 는 `tbl_product.price` JOIN backfill 후 NOT NULL 전환. 세부 결정은 `docs/tasks/order-item-price-snapshot/adr.md` 참조.
-- **결제 도메인 재설계**: `V6__redesign_payment_to_reservation_and_attempt.sql` 으로 (1) 기존 `tbl_payment` (성공 1:1) DROP, (2) `tbl_payment_attempt` → `tbl_payment` RENAME + 컬럼 정리 (order_id 신규, approved_order_key 신규, pg_payment_id NOT NULL 복원), (3) `tbl_payment_reservation` CREATE, (4) `tbl_order.merchant_pay_key` + `uk_order_merchant_pay_key` DROP. 세부 결정은 `docs/tasks/payment-order-redesign/db-schema.md` 참조 (ADR-026).
+- **결제 도메인 재설계**: `V6__redesign_payment_to_reservation_and_attempt.sql` 으로 (1) 기존 `tbl_payment` (성공 1:1) DROP, (2) `tbl_payment_attempt` → `tbl_payment` RENAME + 컬럼 정리 (order_id 신규, approved_order_key 신규, pg_payment_id NOT NULL 복원), (3) `tbl_payment_reservation` CREATE, (4) `tbl_order.merchant_pay_key` + `uk_order_merchant_pay_key` DROP. 세부 결정은 `docs/tasks/payment-order-redesign/db-schema.md` 참조 (→ PR#205).
 
 ## 네이밍 규칙
 
@@ -66,7 +66,7 @@ INDEX:
 - `product_id (UNIQUE)`
 
 비고:
-- `product_id` 는 FK 제약을 두지 않는다. `fk_stock_product_id` 가 V4 migration 으로 제거됐다 (ADR-020 후속 트랙). `uk_stock_product_id` UNIQUE 제약은 Stock 1:1 Product 도메인 invariant 로 유지된다.
+- `product_id` 는 FK 제약을 두지 않는다. `fk_stock_product_id` 가 V4 migration 으로 제거됐다 (→ PR#166 후속 트랙). `uk_stock_product_id` UNIQUE 제약은 Stock 1:1 Product 도메인 invariant 로 유지된다.
 
 ### `tbl_stock_history`
 
@@ -83,7 +83,7 @@ INDEX:
 - 없음
 
 비고:
-- `stock_id` 는 FK 제약을 두지 않는다. `fk_stock_history_stock_id` 가 V4 migration 으로 제거됐다 (ADR-020 후속 트랙). 동명 KEY index (`KEY fk_stock_history_stock_id (stock_id)`) 는 조회 보조용으로 유지된다.
+- `stock_id` 는 FK 제약을 두지 않는다. `fk_stock_history_stock_id` 가 V4 migration 으로 제거됐다 (→ PR#166 후속 트랙). 동명 KEY index (`KEY fk_stock_history_stock_id (stock_id)`) 는 조회 보조용으로 유지된다.
 - 상품별 재고 이력 최신순 조회가 커지면 `idx_stock_history_stock_id_created_at (stock_id, created_at)` 추가를 검토한다.
 
 ### `tbl_order`
@@ -100,9 +100,9 @@ INDEX:
 - `uk_order_member_idempotency (member_id, idempotency_key) UNIQUE`
 
 비고:
-- `member_id` 는 FK 제약을 두지 않는다. `fk_order_member_id` 가 V4 migration 으로 제거됐다 (ADR-020 후속 트랙).
+- `member_id` 는 FK 제약을 두지 않는다. `fk_order_member_id` 가 V4 migration 으로 제거됐다 (→ PR#166 후속 트랙).
 - `idempotency_key`는 기존 데이터 및 멱등성 없는 경로와의 호환을 위해 NULL 허용. MySQL에서 NULL 값은 unique 제약 대상에서 제외된다.
-- `merchant_pay_key` 컬럼과 `uk_order_merchant_pay_key` 는 V6 migration 으로 제거됐다 (ADR-026). merchantPayKey 책임은 `tbl_payment_reservation` 으로 이동했다. Order 는 결제 식별자를 모른다.
+- `merchant_pay_key` 컬럼과 `uk_order_merchant_pay_key` 는 V6 migration 으로 제거됐다 (→ PR#205). merchantPayKey 책임은 `tbl_payment_reservation` 으로 이동했다. Order 는 결제 식별자를 모른다.
 
 ### `tbl_order_item`
 
@@ -117,8 +117,8 @@ INDEX:
 - 없음
 
 비고:
-- `product_id` 는 FK 제약을 두지 않는다. `fk_order_item_product_id` 가 V4 migration 으로 제거됐다 (ADR-020 후속 트랙). 동명 KEY index (`KEY fk_order_item_product_id (product_id)`) 는 조회 보조용으로 유지된다.
-- `order_id (FK -> tbl_order.id)` 는 same-aggregate FK 로 유지된다. ADR-020 적용 범위 밖 (Order ↔ OrderItem 은 같은 aggregate).
+- `product_id` 는 FK 제약을 두지 않는다. `fk_order_item_product_id` 가 V4 migration 으로 제거됐다 (→ PR#166 후속 트랙). 동명 KEY index (`KEY fk_order_item_product_id (product_id)`) 는 조회 보조용으로 유지된다.
+- `order_id (FK -> tbl_order.id)` 는 same-aggregate FK 로 유지된다. cross-aggregate ID 참조 결정(→ PR#166)의 적용 범위 밖 (Order ↔ OrderItem 은 같은 aggregate).
 - `unit_price` 는 V5 migration 으로 신설된 결제 시점 가격 snapshot 컬럼이다. Product.price 변동 후에도 결제 시점 단가가 보존된다. 세부 결정은 `docs/tasks/order-item-price-snapshot/adr.md` 참조.
 
 ### `tbl_cart_item`
@@ -136,10 +136,10 @@ INDEX:
 - `uk_cart_item_member_product (member_id, product_id) UNIQUE`
 
 비고:
-- `member_id`, `product_id`는 FK 제약을 두지 않는다. cart 도메인은 다른 aggregate를 `Long` ID로만 참조한다(ADR-020).
+- `member_id`, `product_id`는 FK 제약을 두지 않는다. cart 도메인은 다른 aggregate를 `Long` ID로만 참조한다.
 - `(member_id, product_id)` UNIQUE 복합 인덱스가 같은 회원의 같은 상품 중복 row를 차단하고, `findAllByMemberIdOrderByCreatedAtDesc`·`findByMemberIdAndProductId`·`deleteByMemberIdAndProductIdIn` 조회 인덱스도 함께 제공한다. 별도의 단독 `member_id` 인덱스는 두지 않는다(복합 인덱스 prefix가 동일 커버).
 - `version` 컬럼은 cart phase ADR 결정 8(낙관적 락 + retry + Processor 분리)을 따른다. JPA `@Version`이 UPDATE 시점에 version 비교로 update race를 감지하고, 응용 Service의 retry loop가 `ObjectOptimisticLockingFailureException`을 흡수한다.
-- 신규 항목 동시 insert race window의 UNIQUE 충돌은 ADR-011 find-first 패턴 + 안전망 500으로 위임한다. retry catch에는 포함하지 않는다.
+- 신규 항목 동시 insert race window의 UNIQUE 충돌은 find-first 패턴(→ PR#109) + 안전망 500으로 위임한다. retry catch에는 포함하지 않는다.
 - `quantity`는 도메인 invariant(`MIN=1, MAX=99`)와 DTO Bean Validation(`@Min(1) @Max(99)`)이 이중 가드한다.
 
 ### `tbl_payment_reservation` (신규 — V6)
@@ -168,7 +168,7 @@ INDEX:
 비고:
 - **NULL 트릭 캡슐화**: `reserved_key` 값 set 은 *반드시* `status=RESERVED` 와 같은 INSERT 안에서. status 가 USED/EXPIRED 로 가면 *같은 UPDATE* 에서 NULL 로 비움. 도메인 계층을 통해서만 변경하며 직접 UPDATE 금지
 - **상태 전이**: `RESERVED → USED` (승인 시작) 또는 `RESERVED → EXPIRED` (만료/무효 회수) 한 번 전이만 허용. 만료/무효 예약은 reserve 진입 시 `reserved_key` 를 NULL 로 회수해 재예약 허용 (박제 자동 복구)
-- **동시 이중 use 차단**: `version` `@Version` 낙관적 락이 같은 예약을 다른 pgPaymentId 로 동시에 `USED` 전이하려는 경합에서 진 쪽을 차단한다. 승인 기록 전용 저장 경로(`saveUsed`)가 `saveAndFlush` 조기 flush 로 충돌을 PG 호출 전에 확정해 `PAYMENT_RESERVATION_ALREADY_USED` 도메인 예외로 번역한다. cart 의 retry 흡수와 달리 진 쪽은 재시도 없이 차단된다 (다른 pgPaymentId 는 별개 결제이므로). 세부 결정은 ADR-036
+- **동시 이중 use 차단**: `version` `@Version` 낙관적 락이 같은 예약을 다른 pgPaymentId 로 동시에 `USED` 전이하려는 경합에서 진 쪽을 차단한다. 승인 기록 전용 저장 경로(`saveUsed`)가 `saveAndFlush` 조기 flush 로 충돌을 PG 호출 전에 확정해 `PAYMENT_RESERVATION_ALREADY_USED` 도메인 예외로 번역한다. cart 의 retry 흡수와 달리 진 쪽은 재시도 없이 차단된다 (다른 pgPaymentId 는 별개 결제이므로). 세부 결정은 해당 ADR 참조 (→ PR#235)
 - **amount 불변**: 결제 예정 금액이 바뀌면 새 Reservation 발급. 기존 행 amount UPDATE 금지
 - **FK**: `order_id`, `member_id` 는 FK 제약 없음 (참조용 값)
 
@@ -180,7 +180,7 @@ PG 에 실제로 보낸 요청 사건. type ∈ `{APPROVE, CANCEL}`. append-only
 
 COLUMNS:
 - `id (PK)`
-- `version BIGINT NOT NULL DEFAULT 0` — `@Version` 낙관적 락 (V9). 같은 행 동시 종착 전이 lost update 차단 (ADR-050)
+- `version BIGINT NOT NULL DEFAULT 0` — `@Version` 낙관적 락 (V9). 같은 행 동시 종착 전이 lost update 차단 (→ PR#245)
 - `order_id BIGINT NOT NULL` — 소속 Order PK 값. FK 제약 없음 (참조용 값)
 - `merchant_pay_key VARCHAR(64) NOT NULL` — 어느 Reservation 에서 비롯됐는지 (값으로 연결)
 - `pg_payment_id VARCHAR(64) NOT NULL` — PG 가 발급한 외부 결제 ID. NOT NULL (RESERVE 가 빠져 항상 존재)
@@ -192,8 +192,8 @@ COLUMNS:
 - `fail_detail VARCHAR(255) NULL`
 - `approved_order_key BIGINT NULL` — APPROVE+SUCCEEDED 일 때만 `order_id`, 그 외 NULL (NULL 트릭)
 - `responded_at DATETIME(6) NULL`
-- `escalated_at DATETIME(6) NULL` — escalation(운영 위임) 시각. NULL 이면 미escalation. `status` 와 무관한 직교 필드 (V8, ADR-049)
-- `next_reconcile_at DATETIME(6) NULL` — 대사 재조회 backoff 시각. NULL 이면 한 번도 미뤄지지 않은 즉시 대사 대상. `status` 와 무관한 직교 필드 (V10, ADR-066)
+- `escalated_at DATETIME(6) NULL` — escalation(운영 위임) 시각. NULL 이면 미escalation. `status` 와 무관한 직교 필드 (V8, → PR#242)
+- `next_reconcile_at DATETIME(6) NULL` — 대사 재조회 backoff 시각. NULL 이면 한 번도 미뤄지지 않은 즉시 대사 대상. `status` 와 무관한 직교 필드 (V10, → PR#263)
 - `created_at DATETIME(6) NOT NULL`
 - `updated_at DATETIME(6) NOT NULL`
 
@@ -206,9 +206,9 @@ INDEX:
 - **NULL 트릭 캡슐화**: `approved_order_key` 값 set 은 *반드시* `status=SUCCEEDED AND type=APPROVE` 와 같은 UPDATE 안에서. 그 외 모든 상태/타입에선 NULL. 도메인 메서드 (`succeed`) 안에 캡슐화. 우회 setter 금지
 - **FK**: `order_id` 는 FK 제약 없음 (참조용 값)
 - **append-only**: Payment 행은 한번 INSERT 후 상태 전이 (UPDATE) 만 일어남. 행 삭제 금지
-- unique key 대상 컬럼(`merchant_pay_key` 64, `provider` 32, `pg_payment_id` 64, `type` 32)은 `@Column(length=...)`을 명시한다. utf8mb4 + InnoDB unique key 한도 3072 bytes 안에 들어오도록 산정 (ADR-023 참조)
-- **escalation 멱등**: `escalated_at` set 은 도메인 메서드 `Payment.escalate(now)`(가드 `escalated_at IS NULL AND status IN (UNKNOWN,REQUESTED)`) + `@Version`(`version` 컬럼) 낙관 락으로 수행. transition 의 `saveChecked` 성공 1 건만 escalation 통지 주체가 되고 동시 race 의 진 쪽은 `PAYMENT_CONCURRENTLY_MODIFIED` 로 skip 된다 (동시 race 에서도 1회 보장). 조건부 UPDATE 영향 행 수 방식에서 환원 — `@Version` 도입(V9, ADR-050) 으로 전제 해소 (ADR-049 → ADR-052)
-- **대사 backoff**: 대사 스캔 쿼리는 `next_reconcile_at IS NULL OR next_reconcile_at <= now` 게이트로 backoff 중인 행을 제외한다. PG 가 아직 결론을 못 낸 `KEEP_WAITING` 건은 wait 분기에서 `next_reconcile_at = now + 고정 backoff(5분)` 로 미뤄, 같은 건의 매 주기 재스캔·재조회(starvation·PG 반복 조회)를 막는다. set 은 도메인 메서드 `Payment.delayReconcile(now, backoff)`(상태 전이 없음) + `@Version` 낙관 락으로 수행하며 충돌은 tx 밖 skip 이다(cadence 힌트라 best-effort). escalation 후보 조회는 이 게이트를 적용하지 않는다 (ADR-066~068)
+- unique key 대상 컬럼(`merchant_pay_key` 64, `provider` 32, `pg_payment_id` 64, `type` 32)은 `@Column(length=...)`을 명시한다. utf8mb4 + InnoDB unique key 한도 3072 bytes 안에 들어오도록 산정 (→ PR#179)
+- **escalation 멱등**: `escalated_at` set 은 도메인 메서드 `Payment.escalate(now)`(가드 `escalated_at IS NULL AND status IN (UNKNOWN,REQUESTED)`) + `@Version`(`version` 컬럼) 낙관 락으로 수행. transition 의 `saveChecked` 성공 1 건만 escalation 통지 주체가 되고 동시 race 의 진 쪽은 `PAYMENT_CONCURRENTLY_MODIFIED` 로 skip 된다 (동시 race 에서도 1회 보장). 조건부 UPDATE 영향 행 수 방식에서 환원 — `@Version` 도입(V9)으로 전제 해소 (결정 이력 → PR#242·PR#245)
+- **대사 backoff**: 대사 스캔 쿼리는 `next_reconcile_at IS NULL OR next_reconcile_at <= now` 게이트로 backoff 중인 행을 제외한다. PG 가 아직 결론을 못 낸 `KEEP_WAITING` 건은 wait 분기에서 `next_reconcile_at = now + 고정 backoff(5분)` 로 미뤄, 같은 건의 매 주기 재스캔·재조회(starvation·PG 반복 조회)를 막는다. set 은 도메인 메서드 `Payment.delayReconcile(now, backoff)`(상태 전이 없음) + `@Version` 낙관 락으로 수행하며 충돌은 tx 밖 skip 이다(cadence 힌트라 best-effort). escalation 후보 조회는 이 게이트를 적용하지 않는다 (→ PR#263)
 
 ### `tbl_outbox_event`
 
@@ -254,4 +254,4 @@ INDEX:
 - `tbl_payment_reservation` 1:N `tbl_payment` (merchantPayKey 값 참조, FK 제약 없음)
 - `tbl_order` 1:N `tbl_payment` (orderId 값 참조, FK 제약 없음)
 
-> **V6 이전 관계**: `tbl_order` 1:1 `tbl_payment` (성공 결제 1:1 모델) 는 ADR-026 결제 도메인 재설계로 폐기됐다.
+> **V6 이전 관계**: `tbl_order` 1:1 `tbl_payment` (성공 결제 1:1 모델) 는 결제 도메인 재설계(→ PR#205)로 폐기됐다.

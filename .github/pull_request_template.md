@@ -74,14 +74,14 @@ feat, fix, refactor, test, docs, chore
 - API 계약(엔드포인트·요청·응답·실패코드) 변경 → docs/api-spec.md 갱신
 - DB 스키마(테이블·컬럼·인덱스·제약) 변경 → docs/db-schema.md 갱신 (실제 DDL은 Flyway V스크립트)
 - 구조(모듈·레이어·책임·서비스 신설/이동) 변경 → docs/architecture.md 갱신
-- 설계 결정(정책·트레이드오프) → docs/adr.md append (기존 ADR 수정 금지, 새 번호 + supersede)
+- 설계 결정(정책·트레이드오프) → docs/adr/에 새 ADR 파일 추가 (기존 ADR 수정 없이, supersede 시 옛 ADR Status만 갱신)
 - 내부 구현만(이름 정리·로직 리팩터) → 동기화 불필요 → "해당 없음"
 -->
 
 - [ ] 해당 없음 (내부 구현만 변경)
 - [ ] Task 문서(`docs/tasks/**`)를 함께 수정했습니다.
 - [ ] 루트 기준 문서(`docs/prd.md`, `docs/api-spec.md`, `docs/architecture.md`, `docs/db-schema.md`)를 변경 종류에 맞게 갱신했습니다.
-- [ ] `docs/adr.md`에 새 결정을 append 했습니다 (기존 ADR 수정 없이).
+- [ ] `docs/adr/`에 새 ADR 파일을 추가했습니다 (기존 ADR 수정 없이, supersede 시 옛 ADR Status만 갱신).
 - [ ] Claude Code 하네스, hook, skill 문서를 함께 수정했습니다.
 
 ## 테스트

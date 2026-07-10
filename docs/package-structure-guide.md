@@ -76,7 +76,7 @@ support/   또는 common/
 - **self-invocation 함정 소멸.** `usecase → service`는 항상 패키지를 넘는 호출 → 프록시 적용 보장. (skip private 메서드가 호출하는 `service` Service도 별도 빈이라 프록시를 탄다.)
 - **충돌 반응이 흐름 옆에 명시된다.** skip이 private이라 그 흐름을 읽으면 "충돌을 어떻게 다루는지"가 바로 보인다.
 
-네이밍 주의 (ADR-006 supersede — 역할별 접미사 이원화):
+네이밍 주의 (역할별 접미사 이원화, → PR#248):
 - **클래스 접미사가 패키지(역할)와 일치한다**: `usecase/`의 클래스는 `…UseCase`, `service/`의 클래스는 `…Service`. 예: `usecase/NaverPayApprovalUseCase`, `service/PaymentTransitionService`.
 - 접미사가 역할을 직접 드러내므로 import·스택 트레이스·로그처럼 패키지 경로가 안 보이는 곳에서도 흐름(UseCase)인지 tx 단위작업(Service)인지 구분된다. 빈 등록 stereotype도 역할별로 가른다 — UseCase는 `@Component`, Service는 `@Service`(둘은 기능 동일하나 역할 신호로 분리).
 - 패키지명 대안: `usecase`→`flow`/`orchestration`, `service`→`transaction`/`tx`(다만 접미사 이원화로 의도가 이미 드러나므로 평이한 `service`로 충분).
