@@ -88,7 +88,7 @@ public class ConfirmApprovalUseCase {
 		}
 
 		if (code == OrderErrorCode.ORDER_NOT_FOUND) {
-			// 주문 자체 없음 — 정합성 오류, 환불 없이 통지 + FAILED 종착 (ADR-049 보존)
+			// 주문 자체 없음 — 정합성 오류, 환불 없이 통지 + FAILED 종착 (새 상태를 도입하지 않는 escalation 종착·통지 결정을 따른다)
 			log.error("승인 확정 - 주문 없음(정합성 오류) paymentId={} orderId={} merchantPayKey={}",
 				payment.getId(), payment.getOrderId(), payment.getMerchantPayKey());
 			failApprovePaymentService.fail(

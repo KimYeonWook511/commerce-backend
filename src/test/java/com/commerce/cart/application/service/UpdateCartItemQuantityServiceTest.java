@@ -33,7 +33,7 @@ class UpdateCartItemQuantityServiceTest {
 	@InjectMocks
 	private UpdateCartItemQuantityService processor;
 
-	@DisplayName("기존 항목의 수량을 절대값으로 변경하고 save를 명시 호출한다 (ADR-022)")
+	@DisplayName("기존 항목의 수량을 절대값으로 변경하고 save를 명시 호출한다")
 	@Test
 	void execute_whenExists_changeQuantityAndSave() {
 		Long memberId = 1L;

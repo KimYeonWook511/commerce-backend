@@ -46,7 +46,7 @@ class BlockingPaymentCheckerAdapterIntegrationTest {
 	@Autowired
 	private PaymentRepository paymentRepository;
 
-	// tbl_payment.order_id 는 FK 없는 단순 컬럼이므로 실제 주문 없이 가상 ID를 사용한다 (ADR-020).
+	// tbl_payment.order_id 는 cross-aggregate 참조를 ID로만 하는 설계라 FK 없는 단순 컬럼이므로, 실제 주문 없이 가상 ID를 사용한다.
 	private static long nextOrderId = 8000L;
 
 	private PaymentReservation reservation(long orderId, String merchantPayKey) {

@@ -1,6 +1,6 @@
 # 부하 테스트
 
-이커머스 백엔드 주요 API에 대한 k6 기반 부하 테스트 환경 및 시나리오. Epic [#137](https://github.com/KimYeonWook511/commerce-backend/issues/137) 및 ADR-016 참조.
+이커머스 백엔드 주요 API에 대한 k6 기반 부하 테스트 환경 및 시나리오. Epic [#137](https://github.com/KimYeonWook511/commerce-backend/issues/137) 및 부하 테스트 도구 선택 결정(→ PR#141) 참조.
 
 ## 개요
 
@@ -142,6 +142,6 @@ k6 native InfluxDB v1 output은 현재 유효하다. 향후 deprecation 시 `xk6
 ## 참고
 
 - Epic: [#137](https://github.com/KimYeonWook511/commerce-backend/issues/137)
-- 도구 선택 결정: [`docs/adr.md`](../docs/adr.md) ADR-016
+- 도구 선택 결정: 부하 테스트 도구로 k6 + InfluxDB + Grafana 채택 (→ PR#141)
 - k6 문서: <https://grafana.com/docs/k6/latest/>
 - Grafana 공식 k6 대시보드: <https://grafana.com/grafana/dashboards/2587-k6-load-testing-results/>

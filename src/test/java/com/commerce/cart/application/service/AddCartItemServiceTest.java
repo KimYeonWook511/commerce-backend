@@ -59,7 +59,7 @@ class AddCartItemServiceTest {
 		then(cartItemRepository).should().save(any(CartItem.class));
 	}
 
-	@DisplayName("기존 항목이 있으면 수량을 합산하고 save를 명시 호출한다 (ADR-022)")
+	@DisplayName("기존 항목이 있으면 수량을 합산하고 save를 명시 호출한다")
 	@Test
 	void execute_whenExists_increaseQuantityAndSave() {
 		Long memberId = 1L;

@@ -658,9 +658,9 @@
 - 잘못된 수량 입력: `CART-400-1`
 - 비인증/잘못된 토큰: `AUTH-401`
 - 검증 실패: `COMMON-400`
-- 동시 추가/수정 race window UNIQUE 충돌: `COMMON-500` 안전망(ADR-011)
+- 동시 추가/수정 race window UNIQUE 충돌: `COMMON-500` 안전망
 
-동시성 처리는 ADR-021(`@Transactional` method-level) + 본 cart phase ADR 결정 8(낙관적 락 `@Version` + retry + Processor 분리)을 따릅니다. update race는 retry로 흡수되어 정상 응답을 받지만, 새 항목 동시 insert race(같은 사용자가 같은 productId를 cart에 없는 상태에서 ms 단위로 두 번 요청)는 `COMMON-500` 안전망으로 위임됩니다.
+동시성 처리는 method-level `@Transactional`(→ PR#166) + 본 cart phase ADR 결정 8(낙관적 락 `@Version` + retry + Processor 분리)을 따릅니다. update race는 retry로 흡수되어 정상 응답을 받지만, 새 항목 동시 insert race(같은 사용자가 같은 productId를 cart에 없는 상태에서 ms 단위로 두 번 요청)는 `COMMON-500` 안전망으로 위임됩니다.
 
 주문 생성 흐름의 cart 자동 제거는 별도 API가 아니며, `POST /orders` 성공 시 주문된 productId만 cart에서 자동 제거됩니다.
 
@@ -811,11 +811,11 @@
 
 설명:
 - PG redirect 후 승인 처리. `PaymentReservation.merchantPayKey` 기반으로 역조회하여 승인을 진행합니다. Order 를 거치지 않습니다.
-- **조회 단일화**: Reservation 은 `(memberId, merchantPayKey)` 로 역조회합니다. 다른 회원의/없는 `merchantPayKey` 는 모두 `PAYMENT_RESERVATION_NOT_FOUND` (404) 가 되어 키 존재 여부를 노출하지 않습니다 (ADR-038).
+- **조회 단일화**: Reservation 은 `(memberId, merchantPayKey)` 로 역조회합니다. 다른 회원의/없는 `merchantPayKey` 는 모두 `PAYMENT_RESERVATION_NOT_FOUND` (404) 가 되어 키 존재 여부를 노출하지 않습니다.
 - **멱등 응답**: 같은 `merchantPayKey`·**같은 `pgPaymentId`** 의 redirect 가 중복 도착하고 `status=USED` Reservation 이 발견되면, 차단이 아닌 *기존 결제 결과 200 응답* 으로 흡수합니다. USED 예약에 **다른 `pgPaymentId`** 로 들어오면 이미 소비된 예약 재사용이므로 `PAYMENT_RESERVATION_ALREADY_USED` (409) 로 차단합니다.
 - UNKNOWN 행 있는 주문 요청은 `PAYMENT_RESULT_PENDING` (409) 으로 차단합니다.
-- 이미 성공(APPROVE·SUCCEEDED)한 결제가 있는 주문에 새 승인이 진입하면 PG 호출 전에 `PAYMENT_DUPLICATE` (409) 로 차단합니다 (ADR-037).
-- 같은 예약에 다른 `pgPaymentId` 승인이 동시에 들어오면 한쪽만 진행하고 진 쪽은 PG 호출 전에 `PAYMENT_RESERVATION_ALREADY_USED` (409) 로 차단됩니다 (ADR-036).
+- 이미 성공(APPROVE·SUCCEEDED)한 결제가 있는 주문에 새 승인이 진입하면 PG 호출 전에 `PAYMENT_DUPLICATE` (409) 로 차단합니다.
+- 같은 예약에 다른 `pgPaymentId` 승인이 동시에 들어오면 한쪽만 진행하고 진 쪽은 PG 호출 전에 `PAYMENT_RESERVATION_ALREADY_USED` (409) 로 차단됩니다.
 
 요청:
 - Body
@@ -845,7 +845,7 @@
 
 멱등 응답 동작:
 - USED Reservation 발견 시 기존 `Payment(type=APPROVE, status=SUCCEEDED)` 의 결과를 그대로 반환합니다.
-- 차단/에러 응답이 아닙니다. PG redirect 의 *한 번 = 한 번* 정신에 따라 같은 키 중복은 *동일 결과 재반환* 으로 처리합니다 (ADR-026 참조).
+- 차단/에러 응답이 아닙니다. PG redirect 의 *한 번 = 한 번* 정신에 따라 같은 키 중복은 *동일 결과 재반환* 으로 처리합니다 (→ PR#205).
 
 실패 응답:
 - `PAYMENT_RESULT_PENDING` (409): 해당 주문에 UNKNOWN 상태의 Payment 시도가 있어 차단
@@ -858,5 +858,5 @@
 | 코드 | HTTP | 의미 |
 |---|---|---|
 | `PAYMENT_RESULT_PENDING` | 409 | 해당 주문에 UNKNOWN 상태의 Payment 시도가 있어 reserve/approve 차단. 사용자에게 "결제 결과 확인 중" 안내 |
-| `PAYMENT_DUPLICATE` | 409 | 이미 성공(APPROVE·SUCCEEDED)한 결제가 있는 주문에 새 승인 진입 — PG 호출 전 진입 가드 차단(ADR-037) 또는 `uk_payment_approved_order_key` 위반(최종 보루) |
-| `PAYMENT_RESERVATION_ALREADY_USED` | 409 | 같은 예약(merchantPayKey)을 다른 pgPaymentId 로 동시/순차 재사용 — PG 호출 전 차단 (ADR-036) |
+| `PAYMENT_DUPLICATE` | 409 | 이미 성공(APPROVE·SUCCEEDED)한 결제가 있는 주문에 새 승인 진입 — PG 호출 전 진입 가드 차단 또는 `uk_payment_approved_order_key` 위반(최종 보루) |
+| `PAYMENT_RESERVATION_ALREADY_USED` | 409 | 같은 예약(merchantPayKey)을 다른 pgPaymentId 로 동시/순차 재사용 — PG 호출 전 차단 |
