@@ -58,6 +58,7 @@
 - 각 bullet은 한 줄 이내로 작성한다. 한 줄로 표현하기 어려우면 항목을 더 잘게 나누거나, 자세한 설명은 PR 본문으로 옮긴다.
 - body 어미는 자유(`~다`/`~이다`/서술체 등). subject의 `~한다` 규칙은 body에 강제하지 않는다.
 - footer(`Closes #N`, `Refs #N` 등)는 commit message에 적지 않는다. 이슈 연결은 PR 본문의 `## 관련 이슈` 섹션에서만 관리한다.
+- 커밋 메시지에 `Co-Authored-By` 줄을 붙이지 않는다.
 - agent가 자동으로 작성하는 commit(harness `commit_agent`, `pr-review-resolve` 등)은 body를 작성하지 않는다(subject만). 자동화는 깊은 의도나 컨텍스트를 정확히 추출하기 어려워 부정확하거나 hallucinated body를 만들 위험이 있다. 변경 의도는 PR 본문에서 단일 관리한다.
 
 ## 예시
