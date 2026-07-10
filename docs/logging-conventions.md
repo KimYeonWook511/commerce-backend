@@ -13,7 +13,7 @@
 - **레이어 책임**: Controller·Domain은 로그 없음. Application은 유스케이스 INFO. Infrastructure는 외부 호출 실패·retry. 예외 로깅은 `GlobalExceptionHandler`가 일괄(Application/Adapter는 직접 안 남김, 보상 catch 1·2차는 예외).
 - **마스킹**: 식별자는 `memberId`로 통일. 이메일은 원칙적 무로그(불가피하면 `a***@b.com`). password·token은 평문·해시 모두 금지. `Authorization` 헤더는 제거 또는 `Bearer ***`.
 - **로거·메시지**: `@Slf4j`(Lombok) 사용, 로거명은 클래스 FQN. 메시지 본문은 한국어, 식별자(`orderId` 등)는 영어. 이벤트는 "명사형+상태"(`주문 생성`, `결제 승인 완료`).
-- **MDC**: Filter가 `traceId`·`memberId` push, 요청 종료 시 `finally`에서 정리(자신이 push한 키만 remove, `MDC.clear()` 주의). 비동기 경계(Kafka/Outbox)는 명시 전파.
+- **MDC**: Filter가 `traceId`·`memberId` push. 정리는 스코프 경계에 따라 2-규칙이다 — 최외곽 요청 필터가 요청 끝에 `MDC.clear()`로 스레드 스코프를 통째 정리하고, 그 안쪽 nested 스코프(도메인 키·비동기 경계 복원분)는 자신이 push한 키만 remove한다. 비동기 경계(Kafka/Outbox)는 명시 전파.
 
 ---
 
@@ -213,7 +213,13 @@ Filter가 요청 진입 시 다음을 MDC에 push한다.
 MDC 키는 공통 로그 컨텍스트 유틸(`common.log`)에서 단일 관리한다(키 문자열을 산발적으로 하드코딩하지 않는다). 정확한 클래스는 코드가 단일 출처다.
 
 ### 정리
-요청 종료 시 **반드시 `MDC.clear()`를 호출**한다. Filter의 `finally` 블록 책임이다. 안 하면 스레드 풀에서 다음 요청에 누적되어 잘못된 traceId·memberId가 남는다.
+
+정리 책임은 "내가 스레드의 요청 스코프 경계인가?"를 기준으로 2-규칙으로 나뉜다.
+
+- **(a) 최외곽 요청 필터 = 스레드 스코프 정리.** 요청 스레드의 가장 바깥 필터가 `finally`에서 `MDC.clear()`로 그 스레드의 MDC를 통째 비운다. 모든 안쪽 스코프가 풀린 요청 종료 지점이라 남의 키를 조기 삭제하지 않으며, 스레드 풀 반납 전 잔류를 막는 최종 보루다. 이 규칙은 그 필터가 MDC를 만지는 최외곽으로 유지될 때 성립한다(더 바깥에 MDC 키를 push하는 필터를 두면 재검토).
+- **(b) nested 스코프 = 자신이 push한 키만 remove.** 최외곽이 아닌 곳에서 push한 키(유스케이스의 `orderId`·`pgPaymentId`, 비동기 경계(Kafka/Outbox)에서 복원한 `traceId`)는 자신이 push한 키만 `finally`에서 remove한다. 여기서 `clear()`를 부르면 바깥·형제 스코프의 살아있는 키를 날린다.
+
+운영 코드에서 nested 스코프의 `MDC.clear()`는 금지한다. `clear()`는 (a)의 최외곽 필터에서만 쓴다. 단 테스트 격리용 `MDC.clear()`(`@BeforeEach`/`@AfterEach`)는 허용한다 — 겹침 계약을 지킬 필요 없이 스레드 로컬을 비우는 용도다.
 
 ### 도메인 확장
 `orderId`, `pgPaymentId` 등 도메인 식별자는 유스케이스 진입 시 push하고 종료 시 remove한다. 도메인별로 후속 작업에서 확장된다.
