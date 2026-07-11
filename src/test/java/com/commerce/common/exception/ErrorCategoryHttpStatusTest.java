@@ -18,6 +18,7 @@ class ErrorCategoryHttpStatusTest {
 		assertThat(ErrorCategoryHttpStatus.of(ErrorCategory.NOT_FOUND)).isEqualTo(HttpStatus.NOT_FOUND);
 		assertThat(ErrorCategoryHttpStatus.of(ErrorCategory.CONFLICT)).isEqualTo(HttpStatus.CONFLICT);
 		assertThat(ErrorCategoryHttpStatus.of(ErrorCategory.UPSTREAM_ERROR)).isEqualTo(HttpStatus.BAD_GATEWAY);
+		assertThat(ErrorCategoryHttpStatus.of(ErrorCategory.UNAVAILABLE)).isEqualTo(HttpStatus.SERVICE_UNAVAILABLE);
 		assertThat(ErrorCategoryHttpStatus.of(ErrorCategory.INTERNAL)).isEqualTo(HttpStatus.INTERNAL_SERVER_ERROR);
 	}
 }
