@@ -123,28 +123,36 @@ class ArchitectureRulesTest {
     }
 
     // ────────────────────────────────────────────────────────────
-    // 3. 예외 변환 격리 — JPA/DAO 예외 타입은 persistence 밖에서 모른다
-    //    근거: 기술 예외 → 도메인 예외 변환은 adapter 에서만 한다 (충돌 설계 문서 docs/optimistic-lock-design.md)
+    // 3. 예외 노출 경계 — 예외의 추상 수준으로 긋는다
+    //    구현체에 묶인 구체 예외(org.springframework.orm·org.hibernate·jakarta.persistence)는
+    //    application·domain·presentation 에 노출 금지. 특정 구현에 묶이지 않은 DAO 추상 예외
+    //    (org.springframework.dao)는 application 허용, domain 은 그조차 금지.
+    //    번역은 안쪽이 그 예외에 따라 다르게 처리할 때만 (docs/exception-strategy.md·docs/optimistic-lock-design.md).
     // ────────────────────────────────────────────────────────────
 
     @Test
-    @DisplayName("JPA/DAO 예외 타입은 infrastructure.persistence 밖에서 참조하지 않는다")
-    void daoExceptionsConfinedToPersistence() {
-        // GlobalExceptionHandler: HTTP 매핑을 위해 Spring DAO 예외를 직접 다뤄야 하는 영구 예외처.
-        // OrderExpirationBatchConfig: Spring Batch fault-tolerance(.retry/.skip)는 프레임워크에 예외 타입을
-        // 선언적으로 신고하는 경계라 변환 대상이 없다. GlobalExceptionHandler 와 같은 부류의 영구 예외처.
+    @DisplayName("domain 은 DAO 추상 예외(org.springframework.dao)조차 참조하지 않는다 (가장 안쪽, 순수)")
+    void domainReferencesNoDaoExceptions() {
+        // domain 은 가장 안쪽이라 어떤 영속성 예외도 모른다. application 은 특정 구현에 묶이지 않은
+        // DAO 추상 예외(org.springframework.dao.*)를 다뤄도 되지만, domain 은 그조차 참조하지 않는다.
         ArchRule rule = noClasses()
-                .that().resideOutsideOfPackage("..infrastructure.persistence..")
-                .and().areNotAssignableTo("com.commerce.common.exception.GlobalExceptionHandler")
-                .and().areNotAssignableTo("com.commerce.order.presentation.batch.OrderExpirationBatchConfig")
-                .should().dependOnClassesThat()
-                .haveFullyQualifiedName("org.springframework.orm.ObjectOptimisticLockingFailureException")
-                .orShould().dependOnClassesThat()
-                .haveFullyQualifiedName("org.springframework.dao.OptimisticLockingFailureException")
-                .orShould().dependOnClassesThat()
-                .haveFullyQualifiedName("org.springframework.dao.DataIntegrityViolationException")
-                .orShould().dependOnClassesThat()
-                .haveFullyQualifiedName("jakarta.persistence.OptimisticLockException");
+                .that().resideInAPackage("..domain..")
+                .should().dependOnClassesThat().resideInAPackage("org.springframework.dao..");
+        check(rule);
+    }
+
+    @Test
+    @DisplayName("구현체에 묶인 예외(org.springframework.orm·org.hibernate·jakarta.persistence)는 application·domain·presentation 에 노출되지 않는다")
+    void implementationExceptionsDoNotLeakInward() {
+        // 구현체에 묶인 구체 예외는 안쪽으로 새지 않는다. DAO 추상 상위
+        // (org.springframework.dao.OptimisticLockingFailureException 등)를 잡으면 그 하위 구현체 타입이
+        // 다형적으로 걸리므로, 안쪽 코드가 구현체 타입 이름을 부를 일이 없다.
+        // (엔티티의 jakarta.persistence·org.hibernate 매핑 애너테이션은 예외 타입이 아니라 걸리지 않는다.)
+        ArchRule rule = noClasses()
+                .that().resideInAnyPackage("..application..", "..domain..", "..presentation..")
+                .should().dependOnClassesThat().resideInAPackage("org.springframework.orm..")
+                .orShould().dependOnClassesThat().areAssignableTo("org.hibernate.HibernateException")
+                .orShould().dependOnClassesThat().areAssignableTo("jakarta.persistence.PersistenceException");
         check(rule);
     }
 
@@ -233,18 +241,19 @@ class ArchitectureRulesTest {
     }
 
     @Test
-    @DisplayName("Controller 는 충돌 예외를 직접 catch 하지 않는다 (GlobalExceptionHandler 위임)")
+    @DisplayName("presentation 은 낙관 락 충돌 예외 계층을 catch 하지 않는다 (전파 → application 재시도 / 끝단 409)")
     void controllersDoNotCatchConflictExceptions() {
-        // ArchUnit 은 catch 블록 자체를 직접 매칭하기 어렵다.
-        // 차선책: presentation 이 충돌/낙관락 예외 타입에 의존하지 않음을 검사.
-        // OrderExpirationBatchConfig: Spring Batch fault-tolerance(.retry/.skip)는 선언적 신고라 변환 대상이 없다.
+        // presentation 은 충돌을 직접 다루지 않고 전파한다 — 재시도는 application(usecase), 최종 409 매핑은
+        // GlobalExceptionHandler(common)의 몫이다. 정확 타입이 아니라 계층 전체
+        // (OptimisticLockingFailureException 및 하위 ObjectOptimisticLockingFailureException 등)를 대상으로 한다.
+        // ArchUnit 은 catch 블록 자체는 직접 매칭하기 어려워, 충돌 예외 타입에 대한 의존으로 대신 검사한다.
+        // OrderExpirationBatchConfig: Spring Batch fault-tolerance(.retry/.skip)는 충돌 타입을 프레임워크에
+        // 선언적으로 신고하는 경계라 business catch 가 아니다. 좁게 이 한 클래스만 예외처로 둔다.
         ArchRule rule = noClasses()
                 .that().resideInAPackage("..presentation..")
                 .and().areNotAssignableTo("com.commerce.order.presentation.batch.OrderExpirationBatchConfig")
                 .should().dependOnClassesThat()
-                .haveFullyQualifiedName("org.springframework.orm.ObjectOptimisticLockingFailureException")
-                .orShould().dependOnClassesThat()
-                .haveFullyQualifiedName("org.springframework.dao.OptimisticLockingFailureException");
+                .areAssignableTo("org.springframework.dao.OptimisticLockingFailureException");
         check(rule);
     }
 }
