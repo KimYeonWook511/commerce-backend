@@ -63,7 +63,7 @@ class ArchitectureRulesTest {
     }
 
     @Test
-    @DisplayName("domain 은 Spring 트랜잭션·기술 클라이언트를 참조하지 않는다 (순수 도메인 로직)")
+    @DisplayName("domain 은 Spring 트랜잭션·web(HTTP)·기술 클라이언트를 참조하지 않는다 (순수 도메인 로직)")
     void domainDoesNotDependOnSpringTech() {
         ArchRule rule = noClasses()
                 .that().resideInAPackage("..domain..")
@@ -71,7 +71,9 @@ class ArchitectureRulesTest {
                 .resideInAnyPackage(
                         "org.springframework.transaction..",
                         "org.springframework.kafka..",
-                        "org.springframework.data.redis..")
+                        "org.springframework.data.redis..",
+                        "org.springframework.http..",
+                        "org.springframework.web..")
                 // 엔티티 매핑 애너테이션(@Entity/@Id/@Version/@Column 등)은 허용한다(입장 B).
                 // 순수 POJO 도메인 객체 + 별도 매핑 클래스 도입 비용이 비효율적이라 판단해,
                 // domain 은 "선언적 매핑 메타데이터"까지만 허용한다.
