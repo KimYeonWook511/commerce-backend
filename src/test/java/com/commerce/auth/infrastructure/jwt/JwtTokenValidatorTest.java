@@ -21,8 +21,12 @@ import com.commerce.common.security.context.AuthenticationContext;
 import com.commerce.member.domain.MemberRole;
 
 import io.jsonwebtoken.Jwts;
+import io.jsonwebtoken.security.Keys;
 
 class JwtTokenValidatorTest {
+
+	private static final SecretKey WRONG_KEY =
+		Keys.hmacShaKeyFor("completelyDifferentWrongKey0123456789abcdef!!".getBytes());
 
 	private final JwtProperties jwtProperties = jwtProperties();
 	private final JwtTokenIssuer jwtTokenIssuer = new JwtTokenIssuer(jwtProperties);
@@ -62,6 +66,13 @@ class JwtTokenValidatorTest {
 		assertAuthErrorCode(() -> jwtTokenValidator.validate(token), AuthErrorCode.TOKEN_INVALID);
 	}
 
+	@DisplayName("access token 서명이 위조되면(다른 키로 서명) TOKEN_INVALID 예외가 발생한다")
+	@Test
+	void validate_whenSignatureTampered_throwException() {
+		String token = signedToken("1", JwtType.ACCESS_TOKEN, "ROLE_USER", WRONG_KEY);
+		assertAuthErrorCode(() -> jwtTokenValidator.validate(token), AuthErrorCode.TOKEN_INVALID);
+	}
+
 	// ── refresh (RefreshTokenValidator) ──
 
 	@DisplayName("유효한 refresh token이면 회원 id를 반환한다")
@@ -83,6 +94,13 @@ class JwtTokenValidatorTest {
 	@Test
 	void validateRefreshToken_whenSubjectInvalid_throwException() {
 		String token = signedToken("not-a-number", JwtType.REFRESH_TOKEN, "ROLE_USER", jwtProperties.getRefreshSecretKey());
+		assertAuthErrorCode(() -> jwtTokenValidator.validateRefreshToken(token), AuthErrorCode.TOKEN_INVALID);
+	}
+
+	@DisplayName("refresh token 서명이 위조되면(다른 키로 서명) TOKEN_INVALID 예외가 발생한다")
+	@Test
+	void validateRefreshToken_whenSignatureTampered_throwException() {
+		String token = signedToken("1", JwtType.REFRESH_TOKEN, "ROLE_USER", WRONG_KEY);
 		assertAuthErrorCode(() -> jwtTokenValidator.validateRefreshToken(token), AuthErrorCode.TOKEN_INVALID);
 	}
 

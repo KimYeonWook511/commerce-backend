@@ -13,9 +13,8 @@ import com.commerce.common.security.port.TokenValidator;
 
 import io.jsonwebtoken.Claims;
 import io.jsonwebtoken.ExpiredJwtException;
+import io.jsonwebtoken.JwtException;
 import io.jsonwebtoken.Jwts;
-import io.jsonwebtoken.MalformedJwtException;
-import io.jsonwebtoken.UnsupportedJwtException;
 import lombok.RequiredArgsConstructor;
 import lombok.extern.slf4j.Slf4j;
 
@@ -61,7 +60,9 @@ public class JwtTokenValidator implements TokenValidator, RefreshTokenValidator 
 		} catch (ExpiredJwtException e) {
 			log.warn("JWT expired");
 			throw new AuthException(AuthErrorCode.TOKEN_EXPIRED);
-		} catch (UnsupportedJwtException | MalformedJwtException | SecurityException e) {
+		} catch (JwtException e) {
+			// 서명 위조·형식 오류·미지원 타입 등 나머지 JWT 오류(jjwt의 SignatureException 포함).
+			// 만료는 위에서 먼저 잡는다.
 			log.warn("Invalid JWT");
 			throw new AuthException(AuthErrorCode.TOKEN_INVALID);
 		} catch (IllegalArgumentException e) {
