@@ -58,21 +58,26 @@ public class TokenAuthenticationFilter extends OncePerRequestFilter {
 			return;
 		}
 
-		// 토큰 처리
+		// 토큰 인증 — 인증 실패만 401로 응답한다. doFilter(후속 체인·컨트롤러)는 이 catch 밖에 둬,
+		// 후속 비즈니스 로직 예외가 401로 오처리되지 않고 정상 전파(GlobalExceptionHandler 등)되게 한다.
+		AuthenticationContext context;
 		try {
-			AuthenticationContext context = tokenAuthenticator.authenticate(token);
+			context = tokenAuthenticator.authenticate(token);
+		} catch (CustomException e) {
+			// 토큰 만료·무효 등 auth가 판정한 코드를 공통 베이스로 받아 그대로 전파한다.
+			unauthorized(response, e.getErrorCode());
+			return;
+		} catch (Exception e) {
+			unauthorized(response, SecurityErrorCode.UNAUTHORIZED);
+			return;
+		}
 
+		try {
 			// memberId, role Context에 저장
 			AuthenticationContextHolder.set(context);
 			LogContext.putMemberId(context.memberId());
 
 			filterChain.doFilter(request, response);
-
-		} catch (CustomException e) {
-			// 토큰 만료·무효 등 auth가 판정한 코드를 공통 베이스로 받아 그대로 전파한다.
-			unauthorized(response, e.getErrorCode());
-		} catch (Exception e) {
-			unauthorized(response, SecurityErrorCode.UNAUTHORIZED);
 		} finally {
 			// 반드시 정리
 			AuthenticationContextHolder.clear();

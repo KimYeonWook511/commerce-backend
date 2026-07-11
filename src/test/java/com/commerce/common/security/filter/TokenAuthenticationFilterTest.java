@@ -1,6 +1,7 @@
 package com.commerce.common.security.filter;
 
 import static org.assertj.core.api.Assertions.assertThat;
+import static org.assertj.core.api.Assertions.assertThatThrownBy;
 import static org.mockito.ArgumentMatchers.any;
 import static org.mockito.Mockito.doAnswer;
 import static org.mockito.Mockito.doThrow;
@@ -131,9 +132,9 @@ class TokenAuthenticationFilterTest {
 		assertThat(LogContext.getMemberId()).isNull();
 	}
 
-	@DisplayName("chain.doFilter에서 예외가 발생해도 필터가 지우지 않아 populate된 memberId가 남는다")
+	@DisplayName("chain.doFilter에서 예외가 발생하면 401로 삼키지 않고 그대로 전파하며, populate된 memberId는 남는다")
 	@Test
-	void chainException_mdcMemberIdRemainsPopulated() throws Exception {
+	void chainException_propagatesAndMdcMemberIdRemainsPopulated() throws Exception {
 		MockHttpServletRequest request = new MockHttpServletRequest("GET", "/orders");
 		request.addHeader("Authorization", "Bearer valid-token");
 		MockHttpServletResponse response = new MockHttpServletResponse();
@@ -144,7 +145,9 @@ class TokenAuthenticationFilterTest {
 		FilterChain chain = mock(FilterChain.class);
 		doThrow(new RuntimeException("체인 내부 예외")).when(chain).doFilter(any(), any());
 
-		filter.doFilter(request, response, chain);
+		assertThatThrownBy(() -> filter.doFilter(request, response, chain))
+			.isInstanceOf(RuntimeException.class)
+			.hasMessage("체인 내부 예외");
 
 		assertThat(LogContext.getMemberId()).isEqualTo("42");
 	}
