@@ -11,8 +11,8 @@
 - **낙관 락(@Version) 충돌**: tx 경계 밖에서 정책(전파/skip/retry)을 정한다. **순수 재시도**면 usecase가 DAO 추상 예외 `OptimisticLockingFailureException`을 직접 잡아 새 tx로 재시도한다(번역·`saveAndFlush` 불필요). **충돌에 따라 다르게 처리**해야 하면 `infrastructure/persistence/` adapter가 `saveAndFlush`로 감지를 당겨 도메인 예외로 번역한다. 상세·근거는 `docs/optimistic-lock-design.md`가 단일 출처. (unique 위반과 달리 충돌은 정상 시나리오라 409 — 아래 "왜 500 vs 409" 참고.)
 - **보상 catch (catch 안 2차 작업)**: 1차 예외는 진입 즉시 `log.error()`(근본 원인 보존). 2차 성공 시 1차만 전파. 2차 실패·덜 중요하면 `log.warn()`+1차 전파. 2차 실패·치명적이면 `addSuppressed`로 둘 다 전파. **레벨: 1차=ERROR. 2차 실패는 덜 중요하면 WARN+1차 전파, 치명적이면 addSuppressed로 둘 다 전파.**
 - **catch 안 메서드는 가급적 예외를 안 던지게 설계**하고 의도를 메서드명에 캡슐화한다. Composite Exception은 도저히 안 될 때만.
-- **외부 캐시(Redis) 장애**: infra adapter가 `DataAccessException`을 잡아 도메인 예외(`*StoreUnavailableException`)로 변환(port에 DAO 예외 노출 금지). 정책 결정(fallback/응답 매핑)은 application/presentation이 한다. 도메인 예외는 `RuntimeException` 직접 상속.
-- **도메인 예외는 전송 계층을 모른다(transport-agnostic)**: 도메인 예외가 든 `ErrorCode`는 HTTP 상태 대신 의미 분류 `ErrorCategory`(`INVALID`·`UNAUTHORIZED`·`FORBIDDEN`·`NOT_FOUND`·`CONFLICT`·`UPSTREAM_ERROR`·`INTERNAL`)만 든다. 카테고리→HttpStatus 매핑은 HTTP를 아는 경계(`GlobalExceptionHandler`·인증 필터·인가 인터셉터)가 `ErrorCategoryHttpStatus`로 소유한다. domain을 HTTP-free로 유지해 추후 모듈 분리 시 web 의존이 새지 않게 하며, ArchUnit이 domain의 `org.springframework.http`·`web` 의존을 금지해 강제한다.
+- **외부 캐시(Redis) 장애**: infra adapter가 `DataAccessException`을 잡아 도메인 예외로 변환한다(port에 DAO 예외 노출 금지). 던지는 예외 타입은 application이 그 장애를 catch해 처리하느냐로 갈린다 — **catch해서 fallback**하면 자동 매핑을 피하는 `RuntimeException` 직접 상속(전용 타입), **catch하지 않으면** 공통 `CustomException` 계열(`AuthException` 등)로 던져 `UNAVAILABLE`(503) 자동 매핑에 맡긴다.
+- **도메인 예외는 전송 계층을 모른다(transport-agnostic)**: 도메인 예외가 든 `ErrorCode`는 HTTP 상태 대신 의미 분류 `ErrorCategory`(`INVALID`·`UNAUTHORIZED`·`FORBIDDEN`·`NOT_FOUND`·`CONFLICT`·`UPSTREAM_ERROR`·`UNAVAILABLE`·`INTERNAL`)만 든다. 카테고리→HttpStatus 매핑은 HTTP를 아는 경계(`GlobalExceptionHandler`·인증 필터·인가 인터셉터)가 `ErrorCategoryHttpStatus`로 소유한다. domain을 HTTP-free로 유지해 추후 모듈 분리 시 web 의존이 새지 않게 하며, ArchUnit이 domain의 `org.springframework.http`·`web` 의존을 금지해 강제한다.
 - **PG 결과 불명(UNKNOWN)**: 전송 후/불명 예외는 UNKNOWN 보존, 전송 전 버그는 안전망 500. UNKNOWN 행 있는 주문은 `PAYMENT_RESULT_PENDING`(409)로 차단.
 
 ---
@@ -81,16 +81,17 @@ DataAccessException (부모 핸들러, COMMON-500-2)
 - **skip / retry / 전파 결정(정책)은 tx 경계 밖에서** 한다. 같은 tx 단위작업을 호출 맥락에 따라 전파(→409)·skip(보상)·retry(고경합)로 재사용한다.
 - **번역은 선별적이다.** 순수 재시도면 usecase가 tx 경계 밖에서 DAO 추상 예외 `OptimisticLockingFailureException`을 직접 잡아 새 tx로 재시도한다 — 번역도 `saveAndFlush`도 필요 없다(커밋 시점 예외가 tx 경계 밖으로 그대로 전파되므로 usecase에서 잡힌다). 반대로 충돌에 따라 *다르게 처리*해야 하면, adapter가 `saveAndFlush`로 감지를 커밋 전으로 당겨 `infrastructure/persistence/`에서 도메인 예외로 번역한다(그래야 예외가 adapter 메서드 안에서 터져 잡을 수 있다). 즉 `saveAndFlush`는 **번역이 필요할 때만** 쓴다.
 
-### 충돌 도메인 예외의 상속 전략 — Redis 장애와 반대다
+### 도메인 예외의 상속 전략 — 자동 매핑을 원하느냐로 갈린다
 
-같은 "도메인 예외"라도 **자동 응답 매핑을 원하느냐**에 따라 상속 전략이 갈린다. 이 대비를 혼동하면 안 된다.
+같은 "도메인 예외"라도 **`GlobalExceptionHandler`의 자동 응답 매핑을 원하느냐**에 따라 상속 전략이 갈린다. 판단축은 도메인(충돌이냐 인프라 장애냐)이 아니라 **application이 그 예외를 catch해서 삼키느냐**다.
 
-| | 상속 | 이유 |
+| 상황 | 상속 | 이유 |
 |---|---|---|
-| 충돌(`PAYMENT_CONCURRENTLY_MODIFIED` 등) | `CustomException` 류 | GlobalExceptionHandler가 **409로 자동 매핑되길 원함**(전파 정책) |
-| Redis 장애(`*StoreUnavailableException`) | `RuntimeException` 직접 | 자동 매핑을 **회피**해야 함(application catch / 도메인별 매핑 의도 보존) |
+| 충돌(`PAYMENT_CONCURRENTLY_MODIFIED` 등) | `CustomException` 류 | 409로 **자동 매핑되길 원함**(catch 안 하고 전파) |
+| 인프라 장애 — catch 안 함(Auth Redis) | `CustomException` 류(`AuthException`) | `UNAVAILABLE`(503)로 **자동 매핑되길 원함** |
+| 인프라 장애 — catch해서 fallback(Order Redis) | `RuntimeException` 직접(전용 타입) | 자동 매핑을 **회피**해야 함(application이 삼켜 fallback) |
 
-→ "도메인 예외는 RuntimeException 직접 상속"은 Redis 장애 한정 규칙이지 일반 규칙이 아니다. 충돌 예외는 정반대로 자동 매핑을 활용한다.
+→ `RuntimeException` 직접 상속은 "인프라 장애 한정" 규칙이 아니라 **"catch해서 삼킬 예외 한정"** 규칙이다. catch하지 않고 끝단 응답으로 흘려보낼 예외는 충돌이든 인프라 장애든 `CustomException` 자동 매핑을 활용한다.
 
 ### 의미 코드 vs 일반 코드
 
@@ -110,40 +111,38 @@ DataAccessException (부모 핸들러, COMMON-500-2)
 
 ## Redis 캐시 장애 처리
 
-외부 캐시(Redis) 장애는 fallback 가능 여부와 무관하게 *infra adapter의 도메인 예외 매핑 + application/presentation의 정책 결정* 으로 처리한다. 캐시는 커스텀 아웃바운드 port(`application/port/`)이고 그 계약이 Spring·영속성 예외 타입을 노출하면 안 되므로 adapter가 도메인 예외로 변환한다 — 낙관 락과 달리 실패가 adapter 메서드 안에서 동기적으로 잡히므로 그 자리에서 변환할 수 있다.
+외부 캐시(Redis) 장애는 *infra adapter의 도메인 예외 변환 + 끝단 정책 결정(application catch fallback 또는 GlobalExceptionHandler 자동 매핑)* 으로 처리한다. 캐시는 커스텀 아웃바운드 port(`application/port/`)이고 그 계약이 Spring·영속성 예외 타입을 노출하면 안 되므로 adapter가 도메인 예외로 변환한다 — 낙관 락과 달리 실패가 adapter 메서드 안에서 동기적으로 잡히므로 그 자리에서 변환할 수 있다.
 
 ### 본질 흐름
 
 ```
-Infra adapter: DataAccessException catch → *StoreUnavailableException 도메인 예외 변환 (log.error)
-Application/Presentation: 도메인 예외를 받아 정책 결정 (fallback 진입 또는 응답 매핑)
+Infra adapter: DataAccessException catch → 도메인 예외 변환 (log.error)
+끝단: 도메인 예외를 받아 정책 결정 (application catch fallback 또는 GlobalExceptionHandler 자동 매핑)
 ```
 
-- Infra 는 *기술적 사실* (어떤 예외인지) 만 알면 되고, *어떻게 대응할지* 는 application/presentation 의 정책.
+- Infra 는 *기술적 사실* (어떤 예외인지) 만 알면 되고, *어떻게 대응할지* 는 끝단의 정책이다.
 - port 시그니처에 Spring `DataAccessException` 이 노출되지 않아 port 추상화가 보존된다.
-- 도메인 예외는 `RuntimeException` 직접 상속 (`CustomException` 상속 시 `GlobalExceptionHandler.handleCustomException` 가 자동 응답 매핑되어 *책임 분리* 또는 *application catch 의도* 가 우회됨).
+- 변환한 도메인 예외의 상속은 *application이 catch해서 삼키느냐* 로 갈린다(위 "도메인 예외의 상속 전략" 참고). catch해서 fallback하면 자동 매핑을 피하는 `RuntimeException` 직접 상속 전용 타입, catch하지 않으면 공통 `CustomException` 계열로 던져 `UNAVAILABLE`(503) 자동 매핑에 맡긴다.
 - 적용처:
-  - `OrderIdempotencyStore` ↔ `OrderCreateService` (`order-idempotency-cache-simplification`, application catch + fallback).
-  - `RefreshTokenStore` ↔ `RedisRefreshTokenStore` ↔ `AuthExceptionHandler` (`auth-refresh-token-store-unavailable`, presentation 위임 + 응답 매핑).
+  - `OrderIdempotencyStore` ↔ `CreateOrderUseCase` (application catch + DB unique 안전망 fallback, 전용 `RuntimeException` 타입).
+  - `RefreshTokenStore` ↔ `RedisRefreshTokenStore` (catch 없이 `AuthException(REFRESH_STORE_UNAVAILABLE)`로 던져 `UNAVAILABLE` 503 자동 매핑).
 
-### catch 위치 분기 — application vs presentation
+### 정책 결정 위치 — catch 여부로 갈린다
 
-매핑 단계(infra adapter)는 어느 도메인이든 동일하다. 변환 이후 *정책 결정 위치* 는 fallback 가능 여부에 따라 두 갈래로 분기한다.
+매핑 단계(infra adapter)는 어느 도메인이든 동일하다. 변환 이후 *정책 결정* 은 application이 그 예외를 catch하느냐로 두 갈래로 분기한다.
 
-- **fallback 가능 (Order)** — application이 도메인 예외를 catch해 DB unique 안전망 경로로 fallback 진입. fallback 진입이라는 *정책 결정 사실* 이 있어 WARN 로그 가치도 있다.
-- **fallback 불가 (Auth)** — application은 catch하지 않는다. 도메인 모듈의 `@RestControllerAdvice` (`AuthExceptionHandler`)가 도메인 예외를 받아 `AUTH-500-1` 500 응답으로 매핑. *단순 변환 보일러플레이트* 와 *중복 로그* 가 모두 사라진다.
+- **catch해서 fallback (Order)** — application이 전용 예외를 catch해 DB unique 안전망 경로로 fallback 진입. fallback 진입이라는 *정책 결정 사실* 이 있어 WARN 로그 가치도 있다. 이 예외는 삼켜야 하므로 자동 매핑을 피하는 `RuntimeException` 직접 상속 전용 타입이다.
+- **catch 안 함 (Auth)** — application은 catch하지 않는다. `AuthException(REFRESH_STORE_UNAVAILABLE)`(공통 `CustomException` 계열)이 그대로 전파되어 `GlobalExceptionHandler`가 `UNAVAILABLE`(503)로 자동 매핑한다. 전용 예외 클래스도 도메인 전용 advice도 필요 없다.
 
-패턴 선택의 분기점은 fallback 가능 여부가 아니라 *application 정책 결정 내용* 이다. 매핑 구조(infra adapter → 도메인 예외) 자체는 공통 규약이다.
+과거에는 catch 안 하는 케이스를 도메인 모듈의 전용 `@RestControllerAdvice`가 받았으나(도메인마다 advice·`@Order`·테스트가 늘어나는 부담), 인프라 일시 장애용 `UNAVAILABLE`(503) 카테고리를 도입하면서 공통 `CustomException` 자동 매핑으로 대체하고 그 advice는 폐기했다.
 
-**도메인-specific `@RestControllerAdvice`** 는 *도메인 모듈 안에* 둔다 (`common`이 도메인을 import하는 역의존 회피). 우선순위/범위 한정은 사용처가 늘어났을 때 재검토.
-
-**베이스 클래스** (`StoreUnavailableException`) 추출은 Payment/Stock 등 3곳 이상 사용처가 등장하고 공통 catch 시나리오가 실제로 필요해진 시점에 별도 검토 (현재 YAGNI).
+**공통 인프라 장애 베이스 예외는 만들지 않는다.** catch 안 하는 케이스는 도메인 예외 클래스(`AuthException`)로 `UNAVAILABLE` 자동 매핑을 쓰므로 베이스가 불필요하고, catch해서 삼키는 fallback 케이스는 현재 Order 한 곳뿐이라 전용 타입으로 충분하다. fallback 케이스가 3곳 이상으로 늘고 공통 catch 시나리오가 실제로 필요해지면 그때 전용 타입의 베이스 추출을 재검토한다.
 
 ### 로깅 규약
 
-- infra adapter (저장소 실패 자체): ERROR + stack — 운영자가 외부 시스템 장애를 즉시 인지.
-- application (fallback 분기 결정): WARN + 메타데이터 — 정상 흐름의 fallback 진입 사실 기록.
-- fallback 불가 케이스 (Auth): application과 presentation 모두 로그를 남기지 않는다. infra ERROR + stack으로 운영 인지가 보장되며, 정책 결정 사실 (`AUTH-500-1` 응답 매핑)은 운영 로그에서 별도 식별 가치가 없다.
+- infra adapter (저장소 실패 자체): ERROR + stack — 운영자가 외부 시스템 장애를 즉시 인지. 원인 예외는 도메인 예외의 cause로도 실어 전파한다.
+- application (fallback 분기 결정, Order): WARN + 메타데이터 — 정상 흐름의 fallback 진입 사실 기록.
+- catch 안 하는 케이스 (Auth): adapter가 ERROR + stack(memberId 등 컨텍스트)을 남기고, 전파된 예외가 5xx이므로 `GlobalExceptionHandler`도 ERROR(code + cause stack)를 남긴다. 이중이지만 각각 *기술 원인* 과 *응답 매핑* 이라는 다른 관점이라 유지한다.
 
 ---
 
