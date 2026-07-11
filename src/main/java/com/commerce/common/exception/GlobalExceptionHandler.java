@@ -2,6 +2,7 @@ package com.commerce.common.exception;
 
 import org.springframework.dao.DataAccessException;
 import org.springframework.dao.DataIntegrityViolationException;
+import org.springframework.http.HttpStatus;
 import org.springframework.http.ResponseEntity;
 import org.springframework.http.converter.HttpMessageNotReadableException;
 import org.springframework.dao.OptimisticLockingFailureException;
@@ -20,15 +21,19 @@ import java.util.Map;
 @Slf4j
 public class GlobalExceptionHandler {
 
+	private HttpStatus statusOf(ErrorCode errorCode) {
+		return ErrorCategoryHttpStatus.of(errorCode.getCategory());
+	}
+
 	@ExceptionHandler(CustomException.class)
 	public ResponseEntity<ApiResponse<Void>> handleCustomException(
 		CustomException ex
 	) {
 		ErrorCode errorCode = ex.getErrorCode();
-		if (errorCode.getStatus().is5xxServerError()) {
+		if (statusOf(errorCode).is5xxServerError()) {
 			log.error("커스텀 예외 발생 code={}", errorCode.getCode(), ex);
 		}
-		return ResponseEntity.status(errorCode.getStatus())
+		return ResponseEntity.status(statusOf(errorCode))
 			.body(ApiResponse.error(errorCode));
 	}
 
@@ -37,7 +42,7 @@ public class GlobalExceptionHandler {
 		Exception ex
 	) {
 		log.error("처리되지 않은 예외 발생", ex);
-		return ResponseEntity.status(CommonErrorCode.INTERNAL_ERROR.getStatus())
+		return ResponseEntity.status(statusOf(CommonErrorCode.INTERNAL_ERROR))
 			.body(ApiResponse.error(CommonErrorCode.INTERNAL_ERROR));
 	}
 
@@ -48,7 +53,7 @@ public class GlobalExceptionHandler {
 		Map<String, String> errors = new LinkedHashMap<>();
 		ex.getBindingResult().getFieldErrors()
 			.forEach(error -> errors.put(error.getField(), error.getDefaultMessage()));
-		return ResponseEntity.status(CommonErrorCode.INVALID_REQUEST.getStatus())
+		return ResponseEntity.status(statusOf(CommonErrorCode.INVALID_REQUEST))
 			.body(ApiResponse.error(CommonErrorCode.INVALID_REQUEST, errors));
 	}
 
@@ -56,7 +61,7 @@ public class GlobalExceptionHandler {
 	public ResponseEntity<ApiResponse<Void>> handleHttpMessageNotReadableException(
 		HttpMessageNotReadableException ex
 	) {
-		return ResponseEntity.status(CommonErrorCode.INVALID_REQUEST.getStatus())
+		return ResponseEntity.status(statusOf(CommonErrorCode.INVALID_REQUEST))
 			.body(ApiResponse.error(CommonErrorCode.INVALID_REQUEST));
 	}
 
@@ -65,7 +70,7 @@ public class GlobalExceptionHandler {
 		OptimisticLockingFailureException ex
 	) {
 		log.warn("낙관적 락 충돌 발생: {}", ex.getMessage());
-		return ResponseEntity.status(CommonErrorCode.OPTIMISTIC_LOCK_CONFLICT.getStatus())
+		return ResponseEntity.status(statusOf(CommonErrorCode.OPTIMISTIC_LOCK_CONFLICT))
 			.body(ApiResponse.error(CommonErrorCode.OPTIMISTIC_LOCK_CONFLICT));
 	}
 
@@ -76,7 +81,7 @@ public class GlobalExceptionHandler {
 		DataIntegrityViolationException ex
 	) {
 		log.error("데이터 무결성 위반 (안전망)", ex);
-		return ResponseEntity.status(CommonErrorCode.DATA_INTEGRITY_VIOLATION.getStatus())
+		return ResponseEntity.status(statusOf(CommonErrorCode.DATA_INTEGRITY_VIOLATION))
 			.body(ApiResponse.error(CommonErrorCode.DATA_INTEGRITY_VIOLATION));
 	}
 
@@ -88,7 +93,7 @@ public class GlobalExceptionHandler {
 		DataAccessException ex
 	) {
 		log.error("DAO 예외 (안전망)", ex);
-		return ResponseEntity.status(CommonErrorCode.DATA_ACCESS_ERROR.getStatus())
+		return ResponseEntity.status(statusOf(CommonErrorCode.DATA_ACCESS_ERROR))
 			.body(ApiResponse.error(CommonErrorCode.DATA_ACCESS_ERROR));
 	}
 }

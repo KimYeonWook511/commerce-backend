@@ -9,6 +9,7 @@ import org.springframework.web.bind.annotation.RestControllerAdvice;
 import com.commerce.auth.domain.exception.AuthErrorCode;
 import com.commerce.auth.infrastructure.RefreshTokenStoreUnavailableException;
 import com.commerce.common.ApiResponse;
+import com.commerce.common.exception.ErrorCategoryHttpStatus;
 
 @Order(Ordered.HIGHEST_PRECEDENCE)
 @RestControllerAdvice
@@ -18,7 +19,7 @@ public class AuthExceptionHandler {
 	public ResponseEntity<ApiResponse<Void>> handleRefreshTokenStoreUnavailable(
 		RefreshTokenStoreUnavailableException ex
 	) {
-		return ResponseEntity.status(AuthErrorCode.INTERNAL_ERROR.getStatus())
+		return ResponseEntity.status(ErrorCategoryHttpStatus.of(AuthErrorCode.INTERNAL_ERROR.getCategory()))
 			.body(ApiResponse.error(AuthErrorCode.INTERNAL_ERROR));
 	}
 }

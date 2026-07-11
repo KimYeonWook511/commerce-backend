@@ -1,10 +1,8 @@
 package com.commerce.common.exception;
 
-import org.springframework.http.HttpStatus;
-
 public interface ErrorCode {
 	
-	HttpStatus getStatus();
+	ErrorCategory getCategory();
 
 	String getCode();
 
