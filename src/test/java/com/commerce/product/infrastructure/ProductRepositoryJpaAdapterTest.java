@@ -74,10 +74,6 @@ class ProductRepositoryJpaAdapterTest {
 	}
 
 	private Product createProduct(String name, ProductStatus status) {
-		return Product.builder()
-			.name(name)
-			.price(1000)
-			.status(status)
-			.build();
+		return Product.create(name, 1000, null, null, status);
 	}
 }

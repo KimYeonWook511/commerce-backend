@@ -166,18 +166,11 @@ class AdminInitializeStockServiceTest {
 	}
 
 	private Stock createStock(Product product, int quantity) {
-		return Stock.builder()
-			.productId(product.getId())
-			.quantity(quantity)
-			.build();
+		return Stock.create(product.getId(), quantity);
 	}
 
 	private Product createProduct(Long id, String name, int price) {
-		Product product = Product.builder()
-			.name(name)
-			.price(price)
-			.status(ProductStatus.ON_SALE)
-			.build();
+		Product product = Product.create(name, price, null, null, ProductStatus.ON_SALE);
 		ReflectionTestUtils.setField(product, "id", id);
 		return product;
 	}

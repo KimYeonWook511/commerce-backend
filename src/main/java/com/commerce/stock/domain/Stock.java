@@ -13,7 +13,6 @@ import jakarta.persistence.Table;
 import jakarta.persistence.UniqueConstraint;
 import jakarta.persistence.Version;
 import lombok.AccessLevel;
-import lombok.Builder;
 import lombok.Getter;
 import lombok.NoArgsConstructor;
 
@@ -39,10 +38,13 @@ public class Stock extends BaseTimeEntity {
 	@Column(nullable = false)
 	private int quantity;
 
-	@Builder
 	private Stock(Long productId, int quantity) {
 		this.productId = productId;
 		this.quantity = quantity;
+	}
+
+	public static Stock create(Long productId, int quantity) {
+		return new Stock(productId, quantity);
 	}
 
 	public void decrease(int quantity) {

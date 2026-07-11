@@ -202,19 +202,11 @@ class PaymentReconciliationIntegrationTest {
 	}
 
 	private Member createMember(String suffix) {
-		return Member.builder()
-			.email("recn-int-" + suffix + "-" + UUID.randomUUID().toString().substring(0, 6) + "@example.com")
-			.password("password123")
-			.username("u-recn-" + suffix)
-			.build();
+		return Member.createUser("recn-int-" + suffix + "-" + UUID.randomUUID().toString().substring(0, 6) + "@example.com", "password123", "u-recn-" + suffix);
 	}
 
 	private Product createProduct(String name, int price) {
-		return Product.builder()
-			.name(name)
-			.price(price)
-			.status(ProductStatus.ON_SALE)
-			.build();
+		return Product.create(name, price, null, null, ProductStatus.ON_SALE);
 	}
 
 	private Order createOrder(Member member, Product product) {

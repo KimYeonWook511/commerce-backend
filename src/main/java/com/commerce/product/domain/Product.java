@@ -12,7 +12,6 @@ import jakarta.persistence.GenerationType;
 import jakarta.persistence.Id;
 import jakarta.persistence.Table;
 import lombok.AccessLevel;
-import lombok.Builder;
 import lombok.Getter;
 import lombok.NoArgsConstructor;
 import org.hibernate.annotations.JdbcTypeCode;
@@ -45,7 +44,6 @@ public class Product extends BaseTimeEntity {
 
 	private LocalDateTime deletedAt;
 
-	@Builder
 	private Product(String name, int price, String description, String imageUrl, ProductStatus status) {
 		validateName(name);
 		validatePrice(price);
@@ -56,6 +54,10 @@ public class Product extends BaseTimeEntity {
 		this.description = description;
 		this.imageUrl = imageUrl;
 		this.status = status;
+	}
+
+	public static Product create(String name, int price, String description, String imageUrl, ProductStatus status) {
+		return new Product(name, price, description, imageUrl, status);
 	}
 
 	public void update(String name, int price, String description, String imageUrl, ProductStatus status) {

@@ -12,7 +12,6 @@ import jakarta.persistence.Id;
 import jakarta.persistence.Table;
 import jakarta.persistence.UniqueConstraint;
 import lombok.AccessLevel;
-import lombok.Builder;
 import lombok.Getter;
 import lombok.NoArgsConstructor;
 import org.hibernate.annotations.JdbcTypeCode;
@@ -44,7 +43,6 @@ public class Member extends BaseTimeEntity {
 	@Column(nullable = false)
 	private MemberRole role;
 
-	@Builder
 	private Member(String email, String password, String username) {
 		this.email = email;
 		this.password = password;
@@ -57,11 +55,7 @@ public class Member extends BaseTimeEntity {
 		validateRequired(passwordHash, "Member password hash is required.");
 		validateRequired(username, "Member username is required.");
 
-		return Member.builder()
-			.email(email)
-			.password(passwordHash)
-			.username(username)
-			.build();
+		return new Member(email, passwordHash, username);
 	}
 
 	private static void validateRequired(String value, String message) {

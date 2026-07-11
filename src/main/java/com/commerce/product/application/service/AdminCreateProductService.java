@@ -20,13 +20,13 @@ public class AdminCreateProductService {
 
 	@Transactional
 	public AdminProductResult createProduct(AdminProductCreateCommand command) {
-		Product product = Product.builder()
-			.name(command.getName())
-			.price(command.getPrice())
-			.description(command.getDescription())
-			.imageUrl(command.getImageUrl())
-			.status(command.getStatus())
-			.build();
+		Product product = Product.create(
+			command.getName(),
+			command.getPrice(),
+			command.getDescription(),
+			command.getImageUrl(),
+			command.getStatus()
+		);
 
 		Product savedProduct = productRepository.save(product);
 		log.info("상품 생성 productId={} name={}", savedProduct.getId(), savedProduct.getName());

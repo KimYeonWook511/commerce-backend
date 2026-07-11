@@ -12,7 +12,6 @@ import jakarta.persistence.Id;
 import jakarta.persistence.Index;
 import jakarta.persistence.Table;
 import lombok.AccessLevel;
-import lombok.Builder;
 import lombok.Getter;
 import lombok.NoArgsConstructor;
 import org.hibernate.annotations.JdbcTypeCode;
@@ -42,17 +41,13 @@ public class ProcessedEvent extends BaseTimeEntity {
 	@Column(nullable = false)
 	private ProcessedEventConsumerType consumerType;
 
-	@Builder
 	private ProcessedEvent(String eventId, ProcessedEventConsumerType consumerType) {
 		this.eventId = eventId;
 		this.consumerType = consumerType;
 	}
 
 	public static ProcessedEvent create(String eventId, ProcessedEventConsumerType consumerType) {
-		return ProcessedEvent.builder()
-			.eventId(eventId)
-			.consumerType(consumerType)
-			.build();
+		return new ProcessedEvent(eventId, consumerType);
 	}
 
 }

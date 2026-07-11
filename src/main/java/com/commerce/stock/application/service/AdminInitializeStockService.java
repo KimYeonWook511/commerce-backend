@@ -42,10 +42,7 @@ public class AdminInitializeStockService {
 			throw new StockException(StockErrorCode.STOCK_ALREADY_EXISTS);
 		}
 
-		Stock stock = Stock.builder()
-			.productId(product.getId())
-			.quantity(command.getQuantity())
-			.build();
+		Stock stock = Stock.create(product.getId(), command.getQuantity());
 		Stock savedStock = stockRepository.save(stock);
 		saveHistory(savedStock.getId(), command.getQuantity(), command.getReason(), command.getAdminMemberId());
 		log.info("재고 초기 설정 productId={} quantity={} reason={} adminMemberId={}",
@@ -55,12 +52,7 @@ public class AdminInitializeStockService {
 	}
 
 	private void saveHistory(Long stockId, int quantityChange, StockAdjustmentReason reason, Long adminMemberId) {
-		StockHistory history = StockHistory.builder()
-			.stockId(stockId)
-			.quantityChange(quantityChange)
-			.reason(reason)
-			.adminMemberId(adminMemberId)
-			.build();
+		StockHistory history = StockHistory.create(stockId, quantityChange, reason, adminMemberId);
 
 		stockHistoryRepository.save(history);
 	}

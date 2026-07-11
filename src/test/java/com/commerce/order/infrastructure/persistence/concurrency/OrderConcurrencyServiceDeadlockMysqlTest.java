@@ -300,26 +300,15 @@ class OrderConcurrencyServiceDeadlockMysqlTest {
 
 	private Member createMember() {
 		String suffix = UUID.randomUUID().toString().substring(0, 8);
-		return Member.builder()
-			.email("mysql-deadlock-" + suffix + "@example.com")
-			.password("password123")
-			.username("u" + suffix)
-			.build();
+		return Member.createUser("mysql-deadlock-" + suffix + "@example.com", "password123", "u" + suffix);
 	}
 
 	private Product createProduct(String name, int price) {
-		return Product.builder()
-			.name(name)
-			.price(price)
-			.status(ProductStatus.ON_SALE)
-			.build();
+		return Product.create(name, price, null, null, ProductStatus.ON_SALE);
 	}
 
 	private Stock createStock(Product product, int quantity) {
-		return Stock.builder()
-			.productId(product.getId())
-			.quantity(quantity)
-			.build();
+		return Stock.create(product.getId(), quantity);
 	}
 
 	private OrderCreateCommand createRequest(Long memberId, List<Long> productIds) {

@@ -150,12 +150,7 @@ class GetMyCartServiceTest {
 
 	private Product createProduct(Long id, String name, int price, String imageUrl, ProductStatus status,
 		LocalDateTime deletedAt) {
-		Product product = Product.builder()
-			.name(name)
-			.price(price)
-			.imageUrl(imageUrl)
-			.status(status)
-			.build();
+		Product product = Product.create(name, price, null, imageUrl, status);
 		ReflectionTestUtils.setField(product, "id", id);
 		if (deletedAt != null) {
 			ReflectionTestUtils.setField(product, "deletedAt", deletedAt);

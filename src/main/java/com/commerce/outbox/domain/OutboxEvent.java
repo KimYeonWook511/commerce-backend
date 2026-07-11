@@ -15,7 +15,6 @@ import jakarta.persistence.Index;
 import jakarta.persistence.Table;
 import jakarta.persistence.UniqueConstraint;
 import lombok.AccessLevel;
-import lombok.Builder;
 import lombok.Getter;
 import lombok.NoArgsConstructor;
 import org.hibernate.annotations.JdbcTypeCode;
@@ -78,7 +77,6 @@ public class OutboxEvent extends BaseTimeEntity {
 	@Column(length = 64)
 	private String traceId;
 
-	@Builder
 	private OutboxEvent(
 		String eventId,
 		OutboxEventType eventType,
@@ -114,17 +112,19 @@ public class OutboxEvent extends BaseTimeEntity {
 		Long aggregateId,
 		String traceId
 	) {
-		return OutboxEvent.builder()
-			.eventId(eventId)
-			.eventType(eventType)
-			.payload(payload)
-			.status(OutboxEventStatus.PENDING)
-			.attemptCount(0)
-			.nextRetryAt(nextRetryAt)
-			.aggregateType(aggregateType)
-			.aggregateId(aggregateId)
-			.traceId(traceId)
-			.build();
+		return new OutboxEvent(
+			eventId,
+			eventType,
+			payload,
+			OutboxEventStatus.PENDING,
+			0,
+			nextRetryAt,
+			null,
+			null,
+			aggregateType,
+			aggregateId,
+			traceId
+		);
 	}
 
 }

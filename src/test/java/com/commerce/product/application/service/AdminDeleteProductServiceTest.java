@@ -69,11 +69,7 @@ class AdminDeleteProductServiceTest {
 	}
 
 	private Product createProduct(Long id, String name, int price, ProductStatus status, LocalDateTime createdAt) {
-		Product product = Product.builder()
-			.name(name)
-			.price(price)
-			.status(status)
-			.build();
+		Product product = Product.create(name, price, null, null, status);
 		ReflectionTestUtils.setField(product, "id", id);
 		ReflectionTestUtils.setField(product, "createdAt", createdAt);
 		return product;

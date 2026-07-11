@@ -101,6 +101,14 @@ payment/domain/
 
 **Aggregate 경계 — cross-aggregate는 ID로 참조한다** (→ PR#166): 다른 Aggregate는 객체가 아니라 ID(`Long`)로 참조하고, same-aggregate 관계만 객체로 참조한다. (예: `tbl_order_item`은 Order와 한 Aggregate라 객체 참조하지만, Payment·Stock·Product는 각각 별개 Aggregate이므로 `order_id`·`product_id` 같은 ID로만 참조한다.) 이 경계는 DB에서 cross-aggregate FK를 두지 않는 것과 짝을 이룬다(상세는 `docs/db-schema.md`). ArchUnit은 layer 의존 방향까지만 강제하므로(7장), 이 Aggregate 경계는 코드 리뷰로 지킨다.
 
+**엔티티 생성 — 이름 있는 정적 팩토리로만 만든다.** 도메인 엔티티는 `create`·`createPending`·`createReserved` 처럼 **의도를 드러내는 정적 팩토리**로 생성하고, 생성자는 `private`로 닫는다. 불변식 검증을 생성의 단일 관문에 모으고, 필수 필드 누락을 컴파일 타임에 막기 위함이다.
+
+- **lombok `@Builder`를 엔티티에 붙이지 않는다.** 빌더는 누락을 컴파일 타임에 못 막고 생성 의도가 이름에 드러나지 않는다. 빌더는 필드가 많고 선택적인 객체(요청/응답 DTO·Command·테스트 픽스처)에만 쓰며, 그때도 엔티티가 아니라 그 DTO/픽스처에 붙는다.
+- **public setter를 두지 않는다.** 상태 변경은 규칙을 품은 도메인 메서드로만 표현한다.
+- **JPA 기본 생성자는 `@NoArgsConstructor(access = PROTECTED)`로 닫는다.** 프레임워크만 쓰고 애플리케이션 코드는 팩토리를 거치게 한다.
+
+이 규칙은 코드 리뷰로 지킨다(`@Builder`는 컴파일 후 사라져 ArchUnit이 직접 잡지 못한다).
+
 ---
 
 ## 3. infrastructure — 외부 대상으로 나눈다

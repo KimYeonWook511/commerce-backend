@@ -11,12 +11,7 @@ class StockHistoryTest {
 	@Test
 	void create_whenQuantityChangePositive_createStockHistory() {
 		// when
-		StockHistory stockHistory = StockHistory.builder()
-			.stockId(1L)
-			.quantityChange(10)
-			.reason(StockAdjustmentReason.INBOUND)
-			.adminMemberId(1L)
-			.build();
+		StockHistory stockHistory = StockHistory.create(1L, 10, StockAdjustmentReason.INBOUND, 1L);
 
 		// then
 		assertThat(stockHistory.getStockId()).isEqualTo(1L);
@@ -29,12 +24,7 @@ class StockHistoryTest {
 	@Test
 	void create_whenQuantityChangeNegative_createStockHistory() {
 		// when
-		StockHistory stockHistory = StockHistory.builder()
-			.stockId(1L)
-			.quantityChange(-3)
-			.reason(StockAdjustmentReason.DISPOSAL)
-			.adminMemberId(1L)
-			.build();
+		StockHistory stockHistory = StockHistory.create(1L, -3, StockAdjustmentReason.DISPOSAL, 1L);
 
 		// then
 		assertThat(stockHistory.getStockId()).isEqualTo(1L);
@@ -47,12 +37,7 @@ class StockHistoryTest {
 	@Test
 	void create_whenQuantityChangeZero_createStockHistory() {
 		// when
-		StockHistory stockHistory = StockHistory.builder()
-			.stockId(1L)
-			.quantityChange(0)
-			.reason(StockAdjustmentReason.ADMIN_ADJUSTMENT)
-			.adminMemberId(1L)
-			.build();
+		StockHistory stockHistory = StockHistory.create(1L, 0, StockAdjustmentReason.ADMIN_ADJUSTMENT, 1L);
 
 		// then
 		assertThat(stockHistory.getStockId()).isEqualTo(1L);

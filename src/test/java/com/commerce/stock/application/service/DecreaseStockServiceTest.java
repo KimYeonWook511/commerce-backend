@@ -39,8 +39,6 @@ class DecreaseStockServiceTest {
 	}
 
 	private Stock createStock(int quantity) {
-		return Stock.builder()
-			.quantity(quantity)
-			.build();
+		return Stock.create(1L, quantity);
 	}
 }

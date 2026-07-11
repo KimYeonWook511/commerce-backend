@@ -15,7 +15,6 @@ import jakarta.persistence.Table;
 import jakarta.persistence.UniqueConstraint;
 import jakarta.persistence.Version;
 import lombok.AccessLevel;
-import lombok.Builder;
 import lombok.Getter;
 import lombok.NoArgsConstructor;
 
@@ -47,7 +46,6 @@ public class CartItem extends BaseTimeEntity {
 	@Column(nullable = false)
 	private int quantity;
 
-	@Builder
 	private CartItem(Long memberId, Long productId, int quantity) {
 		this.memberId = memberId;
 		this.productId = productId;
@@ -58,11 +56,7 @@ public class CartItem extends BaseTimeEntity {
 		Objects.requireNonNull(memberId, "memberId must not be null");
 		Objects.requireNonNull(productId, "productId must not be null");
 		validateQuantity(quantity);
-		return CartItem.builder()
-			.memberId(memberId)
-			.productId(productId)
-			.quantity(quantity)
-			.build();
+		return new CartItem(memberId, productId, quantity);
 	}
 
 	public void changeQuantity(int quantity) {

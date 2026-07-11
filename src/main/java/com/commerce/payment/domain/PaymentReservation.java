@@ -17,7 +17,6 @@ import jakarta.persistence.Table;
 import jakarta.persistence.UniqueConstraint;
 import jakarta.persistence.Version;
 import lombok.AccessLevel;
-import lombok.Builder;
 import lombok.Getter;
 import lombok.NoArgsConstructor;
 import org.hibernate.annotations.JdbcTypeCode;
@@ -72,7 +71,6 @@ public class PaymentReservation extends BaseTimeEntity {
 	@Column(length = 96)
 	private String reservedKey;
 
-	@Builder(access = AccessLevel.PRIVATE)
 	private PaymentReservation(
 		Long orderId,
 		Long memberId,
@@ -101,16 +99,16 @@ public class PaymentReservation extends BaseTimeEntity {
 		String merchantPayKey,
 		LocalDateTime expiresAt
 	) {
-		return PaymentReservation.builder()
-			.orderId(orderId)
-			.memberId(memberId)
-			.amount(amount)
-			.provider(provider)
-			.merchantPayKey(merchantPayKey)
-			.status(PaymentReservationStatus.RESERVED)
-			.expiresAt(expiresAt)
-			.reservedKey(orderId + ":" + provider.name())
-			.build();
+		return new PaymentReservation(
+			orderId,
+			memberId,
+			amount,
+			provider,
+			merchantPayKey,
+			PaymentReservationStatus.RESERVED,
+			expiresAt,
+			orderId + ":" + provider.name()
+		);
 	}
 
 	public boolean isReusableFor(Long memberId, PaymentProvider provider, int amount, LocalDateTime now) {

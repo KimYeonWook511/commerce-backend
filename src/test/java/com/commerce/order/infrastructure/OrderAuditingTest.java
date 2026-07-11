@@ -80,18 +80,10 @@ class OrderAuditingTest {
 	}
 
 	private Member createMember() {
-		return Member.builder()
-			.email("auditing@example.com")
-			.password("password123")
-			.username("auditor")
-			.build();
+		return Member.createUser("auditing@example.com", "password123", "auditor");
 	}
 
 	private Product createProduct() {
-		return Product.builder()
-			.name("auditing-product")
-			.price(1000)
-			.status(ProductStatus.ON_SALE)
-			.build();
+		return Product.create("auditing-product", 1000, null, null, ProductStatus.ON_SALE);
 	}
 }

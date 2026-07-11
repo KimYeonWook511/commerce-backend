@@ -97,18 +97,11 @@ class StockHistoryRepositoryJpaAdapterTest {
 	}
 
 	private Product createProduct(String name) {
-		return Product.builder()
-			.name(name)
-			.price(1000)
-			.status(ProductStatus.ON_SALE)
-			.build();
+		return Product.create(name, 1000, null, null, ProductStatus.ON_SALE);
 	}
 
 	private Stock createStock(Product product, int quantity) {
-		return Stock.builder()
-			.productId(product.getId())
-			.quantity(quantity)
-			.build();
+		return Stock.create(product.getId(), quantity);
 	}
 
 	private StockHistory createHistory(Stock stock, int quantityChange) {
@@ -116,11 +109,6 @@ class StockHistoryRepositoryJpaAdapterTest {
 	}
 
 	private StockHistory createHistory(Stock stock, int quantityChange, StockAdjustmentReason reason) {
-		return StockHistory.builder()
-			.stockId(stock.getId())
-			.quantityChange(quantityChange)
-			.reason(reason)
-			.adminMemberId(10L)
-			.build();
+		return StockHistory.create(stock.getId(), quantityChange, reason, 10L);
 	}
 }
