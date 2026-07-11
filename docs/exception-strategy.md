@@ -11,7 +11,7 @@
 - **낙관 락(@Version) 충돌**: tx 경계 밖에서 정책(전파/skip/retry)을 정한다. **순수 재시도**면 usecase가 DAO 추상 예외 `OptimisticLockingFailureException`을 직접 잡아 새 tx로 재시도한다(번역·`saveAndFlush` 불필요). **충돌에 따라 다르게 처리**해야 하면 `infrastructure/persistence/` adapter가 `saveAndFlush`로 감지를 당겨 도메인 예외로 번역한다. 상세·근거는 `docs/optimistic-lock-design.md`가 단일 출처. (unique 위반과 달리 충돌은 정상 시나리오라 409 — 아래 "왜 500 vs 409" 참고.)
 - **보상 catch (catch 안 2차 작업)**: 1차 예외는 진입 즉시 `log.error()`(근본 원인 보존). 2차 성공 시 1차만 전파. 2차 실패·덜 중요하면 `log.warn()`+1차 전파. 2차 실패·치명적이면 `addSuppressed`로 둘 다 전파. **레벨: 1차=ERROR. 2차 실패는 덜 중요하면 WARN+1차 전파, 치명적이면 addSuppressed로 둘 다 전파.**
 - **catch 안 메서드는 가급적 예외를 안 던지게 설계**하고 의도를 메서드명에 캡슐화한다. Composite Exception은 도저히 안 될 때만.
-- **외부 캐시(Redis) 장애**: infra adapter가 `DataAccessException`을 잡아 도메인 예외로 변환한다(port에 DAO 예외 노출 금지). 던지는 예외 타입은 application이 그 장애를 catch해 처리하느냐로 갈린다 — **catch해서 fallback**하면 자동 매핑을 피하는 `RuntimeException` 직접 상속(전용 타입), **catch하지 않으면** 공통 `CustomException` 계열(`AuthException` 등)로 던져 `UNAVAILABLE`(503) 자동 매핑에 맡긴다.
+- **외부 캐시(Redis) 장애**: infra adapter가 `DataAccessException`을 잡아 도메인 예외로 변환한다(port에 DAO 예외 노출 금지). 던지는 예외 타입은 application이 그 장애를 catch해 삼키느냐로 갈린다 — **catch해서 fallback**하면 자동 매핑을 피하는 `RuntimeException` 직접 상속 전용 예외, **catch하지 않으면** 공통 예외 베이스(`CustomException`)로 던져 `UNAVAILABLE`(503) 자동 매핑에 맡긴다.
 - **도메인 예외는 전송 계층을 모른다(transport-agnostic)**: 도메인 예외가 든 `ErrorCode`는 HTTP 상태 대신 의미 분류 `ErrorCategory`(`INVALID`·`UNAUTHORIZED`·`FORBIDDEN`·`NOT_FOUND`·`CONFLICT`·`UPSTREAM_ERROR`·`UNAVAILABLE`·`INTERNAL`)만 든다. 카테고리→HttpStatus 매핑은 HTTP를 아는 경계(`GlobalExceptionHandler`·인증 필터·인가 인터셉터)가 `ErrorCategoryHttpStatus`로 소유한다. domain을 HTTP-free로 유지해 추후 모듈 분리 시 web 의존이 새지 않게 하며, ArchUnit이 domain의 `org.springframework.http`·`web` 의존을 금지해 강제한다.
 - **PG 결과 불명(UNKNOWN)**: 전송 후/불명 예외는 UNKNOWN 보존, 전송 전 버그는 안전망 500. UNKNOWN 행 있는 주문은 `PAYMENT_RESULT_PENDING`(409)로 차단.
 
@@ -87,9 +87,8 @@ DataAccessException (부모 핸들러, COMMON-500-2)
 
 | 상황 | 상속 | 이유 |
 |---|---|---|
-| 충돌(`PAYMENT_CONCURRENTLY_MODIFIED` 등) | `CustomException` 류 | 409로 **자동 매핑되길 원함**(catch 안 하고 전파) |
-| 인프라 장애 — catch 안 함(Auth Redis) | `CustomException` 류(`AuthException`) | `UNAVAILABLE`(503)로 **자동 매핑되길 원함** |
-| 인프라 장애 — catch해서 fallback(Order Redis) | `RuntimeException` 직접(전용 타입) | 자동 매핑을 **회피**해야 함(application이 삼켜 fallback) |
+| catch 안 하고 끝단 응답으로 전파 | `CustomException` 류 | 카테고리→상태코드로 **자동 매핑되길 원함**(예: 낙관 락 충돌 409, 인프라 일시 장애 503) |
+| catch해서 삼킴(fallback·보상) | `RuntimeException` 직접(전용 타입) | 자동 매핑을 **회피**해야 함(application이 잡아 처리하므로) |
 
 → `RuntimeException` 직접 상속은 "인프라 장애 한정" 규칙이 아니라 **"catch해서 삼킬 예외 한정"** 규칙이다. catch하지 않고 끝단 응답으로 흘려보낼 예외는 충돌이든 인프라 장애든 `CustomException` 자동 매핑을 활용한다.
 
@@ -122,27 +121,27 @@ Infra adapter: DataAccessException catch → 도메인 예외 변환 (log.error)
 
 - Infra 는 *기술적 사실* (어떤 예외인지) 만 알면 되고, *어떻게 대응할지* 는 끝단의 정책이다.
 - port 시그니처에 Spring `DataAccessException` 이 노출되지 않아 port 추상화가 보존된다.
-- 변환한 도메인 예외의 상속은 *application이 catch해서 삼키느냐* 로 갈린다(위 "도메인 예외의 상속 전략" 참고). catch해서 fallback하면 자동 매핑을 피하는 `RuntimeException` 직접 상속 전용 타입, catch하지 않으면 공통 `CustomException` 계열로 던져 `UNAVAILABLE`(503) 자동 매핑에 맡긴다.
-- 적용처:
-  - `OrderIdempotencyStore` ↔ `CreateOrderUseCase` (application catch + DB unique 안전망 fallback, 전용 `RuntimeException` 타입).
-  - `RefreshTokenStore` ↔ `RedisRefreshTokenStore` (catch 없이 `AuthException(REFRESH_STORE_UNAVAILABLE)`로 던져 `UNAVAILABLE` 503 자동 매핑).
+- 변환한 도메인 예외의 상속은 *application이 catch해서 삼키느냐* 로 갈린다(위 "도메인 예외의 상속 전략" 참고). catch해서 fallback하면 자동 매핑을 피하는 `RuntimeException` 직접 상속 전용 예외, catch하지 않으면 공통 예외 베이스로 던져 `UNAVAILABLE`(503) 자동 매핑에 맡긴다.
+- 두 패턴으로 갈린다(정확한 적용처는 코드가 단일 출처):
+  - **catch해서 fallback** — 캐시가 latency 최적화 레이어이고 원본(DB)으로 대체 가능한 경로. application이 전용 예외를 잡아 안전망 경로로 진행한다.
+  - **catch 없이 자동 매핑** — 캐시가 저장소 자체라 대체 불가한 경로. 공통 예외로 던져 `UNAVAILABLE`(503)로 응답한다.
 
 ### 정책 결정 위치 — catch 여부로 갈린다
 
 매핑 단계(infra adapter)는 어느 도메인이든 동일하다. 변환 이후 *정책 결정* 은 application이 그 예외를 catch하느냐로 두 갈래로 분기한다.
 
-- **catch해서 fallback (Order)** — application이 전용 예외를 catch해 DB unique 안전망 경로로 fallback 진입. fallback 진입이라는 *정책 결정 사실* 이 있어 WARN 로그 가치도 있다. 이 예외는 삼켜야 하므로 자동 매핑을 피하는 `RuntimeException` 직접 상속 전용 타입이다.
-- **catch 안 함 (Auth)** — application은 catch하지 않는다. `AuthException(REFRESH_STORE_UNAVAILABLE)`(공통 `CustomException` 계열)이 그대로 전파되어 `GlobalExceptionHandler`가 `UNAVAILABLE`(503)로 자동 매핑한다. 전용 예외 클래스도 도메인 전용 advice도 필요 없다.
+- **catch해서 fallback** — application이 전용 예외를 catch해 안전망 경로로 진입. fallback 진입이라는 *정책 결정 사실* 이 있어 WARN 로그 가치도 있다. 삼켜야 하므로 자동 매핑을 피하는 `RuntimeException` 직접 상속 전용 예외다.
+- **catch 안 함** — application은 catch하지 않는다. 공통 예외(`UNAVAILABLE` 코드)가 그대로 전파되어 끝단 핸들러가 503으로 자동 매핑한다. 전용 예외 클래스도 도메인 전용 advice도 필요 없다.
 
-과거에는 catch 안 하는 케이스를 도메인 모듈의 전용 `@RestControllerAdvice`가 받았으나(도메인마다 advice·`@Order`·테스트가 늘어나는 부담), 인프라 일시 장애용 `UNAVAILABLE`(503) 카테고리를 도입하면서 공통 `CustomException` 자동 매핑으로 대체하고 그 advice는 폐기했다.
+과거에는 catch 안 하는 케이스를 도메인 모듈의 전용 `@RestControllerAdvice`가 받았으나(도메인마다 advice·`@Order`·테스트가 늘어나는 부담), 인프라 일시 장애용 `UNAVAILABLE`(503) 카테고리를 도입하면서 공통 예외 자동 매핑으로 대체하고 그 advice는 폐기했다.
 
-**공통 인프라 장애 베이스 예외는 만들지 않는다.** catch 안 하는 케이스는 도메인 예외 클래스(`AuthException`)로 `UNAVAILABLE` 자동 매핑을 쓰므로 베이스가 불필요하고, catch해서 삼키는 fallback 케이스는 현재 Order 한 곳뿐이라 전용 타입으로 충분하다. fallback 케이스가 3곳 이상으로 늘고 공통 catch 시나리오가 실제로 필요해지면 그때 전용 타입의 베이스 추출을 재검토한다.
+**공통 인프라 장애 베이스 예외는 만들지 않는다.** catch 안 하는 케이스는 도메인 예외 클래스로 `UNAVAILABLE` 자동 매핑을 쓰므로 베이스가 불필요하고, catch해서 삼키는 fallback 케이스는 현재 한 곳뿐이라 전용 타입으로 충분하다. fallback 케이스가 3곳 이상으로 늘고 공통 catch 시나리오가 실제로 필요해지면 그때 전용 타입의 베이스 추출을 재검토한다.
 
 ### 로깅 규약
 
 - infra adapter (저장소 실패 자체): ERROR + stack — 운영자가 외부 시스템 장애를 즉시 인지. 원인 예외는 도메인 예외의 cause로도 실어 전파한다.
-- application (fallback 분기 결정, Order): WARN + 메타데이터 — 정상 흐름의 fallback 진입 사실 기록.
-- catch 안 하는 케이스 (Auth): adapter가 ERROR + stack(memberId 등 컨텍스트)을 남기고, 전파된 예외가 5xx이므로 `GlobalExceptionHandler`도 ERROR(code + cause stack)를 남긴다. 이중이지만 각각 *기술 원인* 과 *응답 매핑* 이라는 다른 관점이라 유지한다.
+- application (fallback 분기 결정): WARN + 메타데이터 — 정상 흐름의 fallback 진입 사실 기록.
+- catch 안 하는 케이스: adapter가 요청 컨텍스트와 함께 ERROR를 남기고, 전파된 예외가 5xx이므로 끝단 핸들러도 ERROR(원인 stack 포함)를 남긴다. 이중이지만 각각 *기술 원인* 과 *응답 매핑* 이라는 다른 관점이라 유지한다.
 
 ---
 
