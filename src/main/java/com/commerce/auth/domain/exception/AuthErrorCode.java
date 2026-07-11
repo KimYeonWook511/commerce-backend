@@ -11,7 +11,8 @@ public enum AuthErrorCode implements ErrorCode {
 	TOKEN_EMPTY(ErrorCategory.UNAUTHORIZED, "AUTH-401-4", "토큰이 비어있습니다"),
 	REFRESH_TOKEN_NOT_FOUND(ErrorCategory.UNAUTHORIZED, "AUTH-401-5", "리프레시 토큰이 유효하지 않습니다"),
 	FORBIDDEN(ErrorCategory.FORBIDDEN, "AUTH-403", "권한이 없습니다"),
-	INTERNAL_ERROR(ErrorCategory.INTERNAL, "AUTH-500-1", "인증 처리 중 오류가 발생했습니다");
+	INTERNAL_ERROR(ErrorCategory.INTERNAL, "AUTH-500-1", "인증 처리 중 오류가 발생했습니다"),
+	REFRESH_STORE_UNAVAILABLE(ErrorCategory.UNAVAILABLE, "AUTH-503-1", "인증 저장소를 일시적으로 사용할 수 없습니다");
 
 	private final ErrorCategory category;
 	private final String code;

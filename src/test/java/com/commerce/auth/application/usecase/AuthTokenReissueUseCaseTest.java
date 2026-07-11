@@ -23,7 +23,6 @@ import com.commerce.auth.application.dto.AuthTokenIssueResult;
 import com.commerce.auth.application.dto.AuthTokenReissueResult;
 import com.commerce.auth.domain.exception.AuthErrorCode;
 import com.commerce.auth.domain.exception.AuthException;
-import com.commerce.auth.infrastructure.RefreshTokenStoreUnavailableException;
 import com.commerce.member.application.service.FindMemberService;
 import com.commerce.member.domain.Member;
 
@@ -152,12 +151,12 @@ class AuthTokenReissueUseCaseTest {
 			});
 	}
 
-	@DisplayName("refresh token 조회 실패 시 RefreshTokenStoreUnavailableException을 그대로 propagate한다")
+	@DisplayName("refresh token 조회 실패 시 AuthException을 그대로 propagate한다")
 	@Test
 	void reissue_whenRedisGetFails_propagatesStoreUnavailable() {
 		// given
 		given(refreshTokenValidator.validateRefreshToken("refresh-token")).willReturn(1L);
-		willThrow(new RefreshTokenStoreUnavailableException(new RuntimeException("boom"))).given(refreshTokenStore).get(1L);
+		willThrow(new AuthException(AuthErrorCode.REFRESH_STORE_UNAVAILABLE)).given(refreshTokenStore).get(1L);
 
 		AuthTokenReissueCommand command = AuthTokenReissueCommand.builder()
 			.refreshToken("refresh-token")
@@ -165,6 +164,6 @@ class AuthTokenReissueUseCaseTest {
 
 		// when & then
 		assertThatThrownBy(() -> authTokenReissueUseCase.reissue(command))
-			.isInstanceOf(RefreshTokenStoreUnavailableException.class);
+			.isInstanceOf(AuthException.class);
 	}
 }

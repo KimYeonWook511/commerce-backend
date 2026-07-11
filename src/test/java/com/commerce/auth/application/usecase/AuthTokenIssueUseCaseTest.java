@@ -22,7 +22,8 @@ import com.commerce.auth.application.port.RefreshTokenStore;
 import com.commerce.auth.application.port.TokenIssuer;
 import com.commerce.auth.application.port.vo.TokenClaims;
 import com.commerce.auth.application.dto.AuthTokenIssueResult;
-import com.commerce.auth.infrastructure.RefreshTokenStoreUnavailableException;
+import com.commerce.auth.domain.exception.AuthErrorCode;
+import com.commerce.auth.domain.exception.AuthException;
 import com.commerce.member.domain.Member;
 
 @ExtendWith(MockitoExtension.class)
@@ -78,7 +79,7 @@ class AuthTokenIssueUseCaseTest {
 		assertThat(refreshClaimsCaptor.getValue().memberRole()).isEqualTo(member.getRole());
 	}
 
-	@DisplayName("refresh token 저장 실패 시 RefreshTokenStoreUnavailableException을 그대로 propagate한다")
+	@DisplayName("refresh token 저장 실패 시 AuthException을 그대로 propagate한다")
 	@Test
 	void issue_whenRefreshTokenStoreSaveFails_propagatesStoreUnavailable() {
 		// given
@@ -87,10 +88,10 @@ class AuthTokenIssueUseCaseTest {
 
 		given(tokenIssuer.createAccessToken(any(TokenClaims.class))).willReturn("access-token");
 		given(tokenIssuer.createRefreshToken(any(TokenClaims.class))).willReturn("refresh-token");
-		willThrow(new RefreshTokenStoreUnavailableException(new RuntimeException("boom"))).given(refreshTokenStore).save(anyLong(), anyString());
+		willThrow(new AuthException(AuthErrorCode.REFRESH_STORE_UNAVAILABLE)).given(refreshTokenStore).save(anyLong(), anyString());
 
 		// when & then
 		assertThatThrownBy(() -> authTokenIssueUseCase.issue(member))
-			.isInstanceOf(RefreshTokenStoreUnavailableException.class);
+			.isInstanceOf(AuthException.class);
 	}
 }

@@ -22,6 +22,7 @@ public final class ErrorCategoryHttpStatus {
 			case NOT_FOUND -> HttpStatus.NOT_FOUND;
 			case CONFLICT -> HttpStatus.CONFLICT;
 			case UPSTREAM_ERROR -> HttpStatus.BAD_GATEWAY;
+			case UNAVAILABLE -> HttpStatus.SERVICE_UNAVAILABLE;
 			case INTERNAL -> HttpStatus.INTERNAL_SERVER_ERROR;
 		};
 	}

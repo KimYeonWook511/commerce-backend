@@ -20,7 +20,8 @@ import org.springframework.dao.QueryTimeoutException;
 import org.springframework.data.redis.core.StringRedisTemplate;
 import org.springframework.data.redis.core.ValueOperations;
 
-import com.commerce.auth.infrastructure.RefreshTokenStoreUnavailableException;
+import com.commerce.auth.domain.exception.AuthErrorCode;
+import com.commerce.auth.domain.exception.AuthException;
 import com.commerce.auth.infrastructure.jwt.JwtProperties;
 
 @ExtendWith(MockitoExtension.class)
@@ -61,7 +62,7 @@ class RedisRefreshTokenStoreTest {
 		);
 	}
 
-	@DisplayName("save 시 DataAccessException이 발생하면 RefreshTokenStoreUnavailableException으로 변환한다")
+	@DisplayName("save 시 DataAccessException이 발생하면 AuthException(REFRESH_STORE_UNAVAILABLE)으로 변환한다")
 	@Test
 	void save_whenDataAccessException_throwsStoreUnavailable() {
 		// given
@@ -71,7 +72,8 @@ class RedisRefreshTokenStoreTest {
 
 		// when & then
 		assertThatThrownBy(() -> store.save(1L, "refresh-token"))
-			.isInstanceOf(RefreshTokenStoreUnavailableException.class)
+			.isInstanceOf(AuthException.class)
+			.satisfies(e -> assertThat(((AuthException) e).getErrorCode()).isEqualTo(AuthErrorCode.REFRESH_STORE_UNAVAILABLE))
 			.hasCauseInstanceOf(QueryTimeoutException.class);
 	}
 
@@ -89,7 +91,7 @@ class RedisRefreshTokenStoreTest {
 		assertThat(result).isPresent().contains("refresh-token");
 	}
 
-	@DisplayName("get 시 DataAccessException이 발생하면 RefreshTokenStoreUnavailableException으로 변환한다")
+	@DisplayName("get 시 DataAccessException이 발생하면 AuthException(REFRESH_STORE_UNAVAILABLE)으로 변환한다")
 	@Test
 	void get_whenDataAccessException_throwsStoreUnavailable() {
 		// given
@@ -98,7 +100,8 @@ class RedisRefreshTokenStoreTest {
 
 		// when & then
 		assertThatThrownBy(() -> store.get(1L))
-			.isInstanceOf(RefreshTokenStoreUnavailableException.class)
+			.isInstanceOf(AuthException.class)
+			.satisfies(e -> assertThat(((AuthException) e).getErrorCode()).isEqualTo(AuthErrorCode.REFRESH_STORE_UNAVAILABLE))
 			.hasCauseInstanceOf(QueryTimeoutException.class);
 	}
 }

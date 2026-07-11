@@ -12,5 +12,6 @@ public enum ErrorCategory {
 	NOT_FOUND,
 	CONFLICT,
 	UPSTREAM_ERROR,
+	UNAVAILABLE,
 	INTERNAL
 }

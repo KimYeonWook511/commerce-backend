@@ -8,7 +8,8 @@ import org.springframework.data.redis.core.StringRedisTemplate;
 import org.springframework.stereotype.Component;
 
 import com.commerce.auth.application.port.RefreshTokenStore;
-import com.commerce.auth.infrastructure.RefreshTokenStoreUnavailableException;
+import com.commerce.auth.domain.exception.AuthErrorCode;
+import com.commerce.auth.domain.exception.AuthException;
 import com.commerce.auth.infrastructure.jwt.JwtProperties;
 
 import lombok.RequiredArgsConstructor;
@@ -29,8 +30,8 @@ public class RedisRefreshTokenStore implements RefreshTokenStore {
 		try {
 			redisTemplate.opsForValue().set(buildKey(memberId), refreshToken, ttl);
 		} catch (DataAccessException e) {
-			log.error("refresh token 저장 실패: memberId={}", memberId, e);
-			throw new RefreshTokenStoreUnavailableException(e);
+			log.warn("refresh token 저장 실패: memberId={}, error={}", memberId, e.getMessage());
+			throw new AuthException(AuthErrorCode.REFRESH_STORE_UNAVAILABLE, e);
 		}
 	}
 
@@ -39,8 +40,8 @@ public class RedisRefreshTokenStore implements RefreshTokenStore {
 		try {
 			return Optional.ofNullable(redisTemplate.opsForValue().get(buildKey(memberId)));
 		} catch (DataAccessException e) {
-			log.error("refresh token 조회 실패: memberId={}", memberId, e);
-			throw new RefreshTokenStoreUnavailableException(e);
+			log.warn("refresh token 조회 실패: memberId={}, error={}", memberId, e.getMessage());
+			throw new AuthException(AuthErrorCode.REFRESH_STORE_UNAVAILABLE, e);
 		}
 	}
 
