@@ -12,6 +12,7 @@
 - **보상 catch (catch 안 2차 작업)**: 1차 예외는 진입 즉시 `log.error()`(근본 원인 보존). 2차 성공 시 1차만 전파. 2차 실패·덜 중요하면 `log.warn()`+1차 전파. 2차 실패·치명적이면 `addSuppressed`로 둘 다 전파. **레벨: 1차=ERROR. 2차 실패는 덜 중요하면 WARN+1차 전파, 치명적이면 addSuppressed로 둘 다 전파.**
 - **catch 안 메서드는 가급적 예외를 안 던지게 설계**하고 의도를 메서드명에 캡슐화한다. Composite Exception은 도저히 안 될 때만.
 - **외부 캐시(Redis) 장애**: infra adapter가 `DataAccessException`을 잡아 도메인 예외(`*StoreUnavailableException`)로 변환(port에 DAO 예외 노출 금지). 정책 결정(fallback/응답 매핑)은 application/presentation이 한다. 도메인 예외는 `RuntimeException` 직접 상속.
+- **도메인 예외는 전송 계층을 모른다(transport-agnostic)**: 도메인 예외가 든 `ErrorCode`는 HTTP 상태 대신 의미 분류 `ErrorCategory`(`INVALID`·`UNAUTHORIZED`·`FORBIDDEN`·`NOT_FOUND`·`CONFLICT`·`UPSTREAM_ERROR`·`INTERNAL`)만 든다. 카테고리→HttpStatus 매핑은 HTTP를 아는 경계(`GlobalExceptionHandler`·인증 필터·인가 인터셉터)가 `ErrorCategoryHttpStatus`로 소유한다. domain을 HTTP-free로 유지해 추후 모듈 분리 시 web 의존이 새지 않게 하며, ArchUnit이 domain의 `org.springframework.http`·`web` 의존을 금지해 강제한다.
 - **PG 결과 불명(UNKNOWN)**: 전송 후/불명 예외는 UNKNOWN 보존, 전송 전 버그는 안전망 500. UNKNOWN 행 있는 주문은 `PAYMENT_RESULT_PENDING`(409)로 차단.
 
 ---
@@ -103,6 +104,7 @@ DataAccessException (부모 핸들러, COMMON-500-2)
 - **domain은 `org.springframework.dao.*` 추상 예외도 참조 금지**(가장 안쪽, 순수). application은 DAO 추상 예외를 허용.
 - `saveAndFlush`는 `infrastructure.persistence`에서만 호출.
 - presentation Controller는 낙관 락 충돌 예외를 catch하지 않는다(전파 → application 재시도 또는 끝단 409 매핑).
+- **domain은 `org.springframework.http`·`org.springframework.web`(HTTP/web 타입) 참조 금지** — 도메인 예외가 상태코드 대신 `ErrorCategory`만 들도록.
 
 ---
 

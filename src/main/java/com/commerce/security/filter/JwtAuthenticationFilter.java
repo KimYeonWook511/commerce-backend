@@ -11,6 +11,7 @@ import com.commerce.auth.domain.exception.AuthErrorCode;
 import com.commerce.auth.domain.exception.AuthException;
 import com.commerce.common.ApiResponse;
 import com.commerce.common.exception.CustomException;
+import com.commerce.common.exception.ErrorCategoryHttpStatus;
 import com.commerce.common.exception.ErrorCode;
 import com.commerce.common.log.LogContext;
 import com.commerce.security.context.AuthenticationContext;
@@ -89,7 +90,7 @@ public class JwtAuthenticationFilter extends OncePerRequestFilter {
 
 	private void unauthorized(HttpServletResponse response, CustomException ex) throws IOException {
 		ErrorCode errorCode = ex.getErrorCode();
-		response.setStatus(errorCode.getStatus().value());
+		response.setStatus(ErrorCategoryHttpStatus.of(errorCode.getCategory()).value());
 		response.setCharacterEncoding("UTF-8");
 		response.setContentType("application/json");
 		ApiResponse<Void> body = ApiResponse.error(errorCode);
@@ -98,7 +99,7 @@ public class JwtAuthenticationFilter extends OncePerRequestFilter {
 
 	private void unauthorized(HttpServletResponse response) throws IOException {
 		ErrorCode errorCode = AuthErrorCode.UNAUTHORIZED; // 필요시 커스텀 ErrorCode 생성하기
-		response.setStatus(errorCode.getStatus().value());
+		response.setStatus(ErrorCategoryHttpStatus.of(errorCode.getCategory()).value());
 		response.setCharacterEncoding("UTF-8");
 		response.setContentType("application/json");
 		ApiResponse<Void> body = ApiResponse.error(errorCode);

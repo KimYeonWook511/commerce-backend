@@ -8,6 +8,7 @@ import com.commerce.security.annotation.RequireRole;
 import com.commerce.security.context.AuthenticationContext;
 import com.commerce.auth.domain.exception.AuthErrorCode;
 import com.commerce.common.ApiResponse;
+import com.commerce.common.exception.ErrorCategoryHttpStatus;
 import com.commerce.common.exception.ErrorCode;
 import com.fasterxml.jackson.databind.ObjectMapper;
 
@@ -42,7 +43,7 @@ public class AuthorizationInterceptor implements HandlerInterceptor {
 		String role = AuthenticationContext.getRole();
 		if (role == null || !role.equals(requireRole.value().name())) {
 			ErrorCode errorCode = AuthErrorCode.FORBIDDEN;
-			response.setStatus(errorCode.getStatus().value());
+			response.setStatus(ErrorCategoryHttpStatus.of(errorCode.getCategory()).value());
 			response.setCharacterEncoding("UTF-8");
 			response.setContentType("application/json");
 			ApiResponse<Void> body = ApiResponse.error(errorCode);

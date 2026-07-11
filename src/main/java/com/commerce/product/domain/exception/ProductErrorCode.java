@@ -1,25 +1,24 @@
 package com.commerce.product.domain.exception;
 
-import org.springframework.http.HttpStatus;
-
+import com.commerce.common.exception.ErrorCategory;
 import com.commerce.common.exception.ErrorCode;
 
 public enum ProductErrorCode implements ErrorCode {
-	PRODUCT_NOT_FOUND(HttpStatus.NOT_FOUND, "PRODUCT-404", "상품을 찾을 수 없습니다");
+	PRODUCT_NOT_FOUND(ErrorCategory.NOT_FOUND, "PRODUCT-404", "상품을 찾을 수 없습니다");
 
-	private final HttpStatus status;
+	private final ErrorCategory category;
 	private final String code;
 	private final String message;
 
-	ProductErrorCode(HttpStatus status, String code, String message) {
-		this.status = status;
+	ProductErrorCode(ErrorCategory category, String code, String message) {
+		this.category = category;
 		this.code = code;
 		this.message = message;
 	}
 
 	@Override
-	public HttpStatus getStatus() {
-		return status;
+	public ErrorCategory getCategory() {
+		return category;
 	}
 
 	@Override
