@@ -32,10 +32,10 @@ git fetch -p
 
 ### 3. 정리 대상 브랜치 자동 감지
 
-`git fetch -p` 이후 원격이 삭제된 브랜치는 `git branch -vv`에서 `: gone]`으로 표시된다.
+`git fetch -p` 이후 원격이 삭제된 브랜치는 upstream이 사라진 상태(`[gone]`)가 된다. 스크립트에서는 porcelain인 `git branch -vv`(로케일에 따라 `gone`이 `없음`으로 번역되고, 앞에 `*`/`+` 마커가 붙는다) 대신, plumbing인 `git for-each-ref`로 감지한다 — 출력이 로케일·마커에 무관하게 고정돼 파싱이 안정적이다.
 
 ```bash
-git branch -vv | grep ': gone]' | awk '{print ($1 == "*" || $1 == "+" ? $2 : $1)}'
+git for-each-ref --format='%(refname:short) %(upstream:track)' refs/heads/ | grep '\[gone\]' | awk '{print $1}'
 ```
 
 출력된 브랜치 목록이 정리 대상이다.
