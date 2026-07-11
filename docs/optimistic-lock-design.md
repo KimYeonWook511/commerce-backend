@@ -162,7 +162,7 @@ class PaymentRepositoryAdapter implements PaymentRepository {
 
     private final PaymentJpaRepository jpa;
 
-    // 분기(skip/retry)가 필요한 경로 전용 — flush를 adapter 프레임 안으로 당겨와 충돌을 변환
+    // 충돌을 skip 등으로 처리해야 하는 경로 전용 — flush를 adapter 프레임 안으로 당겨와 충돌을 도메인 예외로 번역
     @Override
     public Payment saveChecked(Payment p) {
         try {
@@ -174,7 +174,9 @@ class PaymentRepositoryAdapter implements PaymentRepository {
         }
     }
 
-    // 순수 전파→409 경로는 변환 없이 plain save로 두고 GlobalExceptionHandler에 맡겨도 된다.
+    // 순수 전파→409 경로와 순수 재시도 경로는 변환하지 않는다 — plain save로 두면 커밋 시점 충돌이
+    // tx 경계 밖으로 그대로 전파되어, usecase가 DAO 추상 예외(OptimisticLockingFailureException)를
+    // 직접 잡거나(재시도) GlobalExceptionHandler가 받는다(→409). saveAndFlush·번역은 skip 분기 때만.
     @Override
     public Payment save(Payment p) {
         return jpa.save(p);
@@ -247,7 +249,7 @@ class StockDecreaseUseCase {   // application/usecase/
             try {
                 txService.decrement(id, qty);   // 매 시도 새 tx (별도 빈 → 프록시 → 새 tx → fresh read)
                 return;
-            } catch (PaymentConcurrencyConflictException e) {
+            } catch (OptimisticLockingFailureException e) {   // 순수 재시도 — DAO 추상 예외를 직접 키로(번역 안 함)
                 if (attempt >= maxAttempts) throw e;
                 // 짧은 backoff + jitter
             }
@@ -271,7 +273,7 @@ class OptimisticRetry {   // support/ 또는 common/
         for (int attempt = 1; ; attempt++) {
             try {
                 return txUnit.get();                  // 매번 새 tx (txService 호출)
-            } catch (PaymentConcurrencyConflictException e) {  // 도메인 충돌 예외를 키로
+            } catch (OptimisticLockingFailureException e) {  // 순수 재시도 — DAO 추상 예외를 키로(번역 없이 전파된 것)
                 if (attempt >= maxAttempts) throw e;
             }
         }
@@ -311,20 +313,21 @@ retry는 skip과 같은 기준으로 배치한다(한 곳이면 private, 여러 
 1. 죽은(rollback-only) tx 안에서는 재시도 못 한다 → **반드시 새 tx로 재진입**(단위작업 통째로 재호출).
 2. 엔티티도 **시도마다 새로 find**(stale 엔티티 재사용 금지).
 
-> **주의**: adapter가 `ObjectOptimisticLockingFailureException`을 도메인 예외로 변환하면
-> `@Retryable(ObjectOptimisticLockingFailureException.class)`는 안 먹는다(이미 변환됨).
-> retry는 **도메인 충돌 예외/코드**를 키로 해야 한다. 그래서 orchestrator가
-> "재시도 가능한 충돌"과 "비즈니스 규칙 위반"을 구분하도록 **충돌 전용 코드가 필요**하다.
+> **주의**: retry가 무엇을 키로 잡는지는 그 경로가 번역을 하느냐에 달렸다.
+> - **순수 재시도**(번역 없음): DAO 추상 예외 `OptimisticLockingFailureException`을 tx 경계 밖에서 직접 잡는다(Stock·Cart). `saveAndFlush`·번역이 없다.
+> - **skip 분기를 위해 번역하는 경로**: adapter가 이미 도메인 예외로 변환했으므로 `@Retryable(ObjectOptimisticLockingFailureException.class)`는 안 먹는다(이미 변환됨) — 재시도한다면 도메인 충돌 코드를 키로 삼는다.
+> 어느 쪽이든 orchestrator가 "재시도 가능한 충돌"과 "비즈니스 규칙 위반"을 구분한다.
 
 ---
 
 ## 5. 도메인 예외 매핑 — 일반 코드 vs 의미 코드
 
-### 5.1 변환 자체는 맞다, 단 분기 경로에서만
+### 5.1 변환은 충돌을 구분해 처리하는 경로에서만
 
 adapter에서 `OptimisticLockException`을 도메인 예외로 변환하는 것은 코드베이스 패턴(선례 saveUsed/saveApproved)과
-일관되며 "application/domain은 Spring DAO 타입에 의존 안 함"을 지킨다. **단, skip/retry 분기가 필요한
-경로에서만 변환**한다. 순수 전파→409 경로는 변환 없이 GlobalExceptionHandler까지 올려보낸다.
+일관되며 경계를 지킨다 — domain은 어떤 영속성 예외도 모르고, application은 구현체 예외에 의존하지 않는다(DAO 추상 예외는 허용).
+**단, 변환은 충돌을 skip 등으로 처리해야 하는 경로에서만** 한다. 순수 전파→409 경로와 순수 재시도 경로는 변환 없이,
+usecase가 DAO 추상 예외(`OptimisticLockingFailureException`)를 직접 잡거나 GlobalExceptionHandler까지 올려보낸다.
 
 ### 5.2 @Version은 행 단위지 컬럼 단위가 아니다
 
@@ -559,7 +562,7 @@ T2: unblock → 최신 커밋본을 재평가(UPDATE는 스냅샷이 아닌 late
 
 | # | #243의 문제 | 위반한 패턴 | 본 설계의 교정 |
 |---|------------|------------|---------------|
-| 1 | application이 DAO 예외를 직접 catch | adapter 변환 / application은 DAO 타입 의존 금지 | adapter가 도메인 예외로 변환, **상위는 도메인 예외만** catch |
+| 1 | application이 구현체 충돌 예외를 직접 catch | 구현체 예외는 안쪽에 노출 안 함(DAO 추상 예외는 허용) | adapter가 도메인 예외로 번역(충돌을 구분해 처리할 때만), **상위는 도메인 예외 또는 DAO 추상 예외**로 다룬다 |
 | 2 | `@Transactional` 제거 | 단계별 독립 commit | tx 단위작업에 `@Transactional` 유지, **catch는 tx 밖**으로 이동 |
 | 3 | 흡수(skip)를 tx 안에 도입 | 충돌=전파, 흡수 안 함(rollback-only) | 흡수는 유지하되 **orchestrator 레이어(tx 밖)로 재배치** |
 
@@ -572,7 +575,7 @@ T2: unblock → 최신 커밋본을 재평가(UPDATE는 스냅샷이 아닌 late
 ## 9. 배경 지식 — 무엇을 공부하면 되나
 
 이 코드베이스는 **이미 헥사고날(포트앤어댑터)**이다("domain에 repository 인터페이스(port),
-infrastructure에 구현(adapter)", "application은 Spring DAO 타입에 의존 안 함"). 새 패러다임이 아니라
+infrastructure에 구현(adapter)", "application은 구현체 예외에 의존 안 함 — DAO 추상 예외는 허용"). 새 패러다임이 아니라
 **이미 쓰는 것의 이름·원리 정리** 차원이라 짧게 봐도 된다.
 
 다만 헥사고날은 **트랜잭션 경계나 동시성 충돌 정책을 직접 다뤄주지 않는다.** 이번 문제의 알맹이는:

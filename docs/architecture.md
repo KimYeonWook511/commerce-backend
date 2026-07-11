@@ -256,7 +256,7 @@ HTTP 요청 traceId는 스레드 로컬 MDC라 비동기 경계에서 자동 전
 
 - 의존 방향: `domain`은 `application`·`infrastructure`·`presentation`·Spring 런타임(`@Transactional`, `KafkaTemplate`, `EntityManager` 등)을 참조하지 않는다. 단 엔티티의 JPA 매핑 애너테이션(`@Entity`/`@Version` 등 선언적 메타데이터)은 허용한다(위 패키지 구조의 결정 근거 참고).
 - 트랜잭션 경계: `@Transactional`은 `application.service` 패키지에만 둔다. `application.usecase`·`presentation`에는 두지 않는다(usecase의 private skip 메서드도 tx를 열지 않는다).
-- 예외 변환 격리: JPA/DAO 예외 타입(`ObjectOptimisticLockingFailureException`, `DataIntegrityViolationException` 등)은 `infrastructure.persistence` 밖에서 참조하지 않는다.
+- 예외 노출 경계: 구현체에 묶인 구체 예외(`org.springframework.orm`·`org.hibernate`·`jakarta.persistence` 예외)는 `application`·`domain`·`presentation`에서 참조하지 않는다. 특정 구현에 묶이지 않은 DAO 추상 예외(`org.springframework.dao`)는 application이 다뤄도 되나 `domain`은 그조차 참조하지 않는다. presentation은 낙관 락 충돌 예외 계층을 catch하지 않고 전파한다.
 - flush 경로: `saveAndFlush` 호출은 `infrastructure.persistence` adapter에서만 한다.
 - 진입점 격리: `@Scheduled`·`@KafkaListener`·Spring Batch Job 정의는 `presentation` 하위에만 둔다(application Service에 직접 달지 않는다).
 - 기술 누수 차단: `application`은 `KafkaTemplate`·Redis 클라이언트 등 기술 타입을 직접 참조하지 않는다(`application.port` 인터페이스로만).

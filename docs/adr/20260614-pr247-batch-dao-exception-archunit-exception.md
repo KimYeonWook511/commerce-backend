@@ -1,6 +1,6 @@
 # Spring Batch fault-tolerance의 DAO 예외 참조를 ArchUnit 규칙 예외처로 인정한다
 
-- Status: accepted
+- Status: superseded by [20260711-pr281-persistence-exception-exposure-boundary](20260711-pr281-persistence-exception-exposure-boundary.md)
 - Date: 2026-06-14
 
 ## Context
