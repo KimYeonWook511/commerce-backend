@@ -4,10 +4,11 @@
 
 > 코딩 시 반드시 지킬 보편 원칙이다. 도메인별 사례·상세는 아래 본문이 단일 출처다.
 
-- **DAO 예외 catch 금지**: Application/Adapter는 Spring DAO 예외(`DuplicateKeyException`, `DataIntegrityViolationException` 등)를 catch하지 않는다. 인프라 예외 타입에 직접 의존하지 않는다.
-- **find-first 패턴**: 정상 흐름은 사전 `find`로 처리(멱등/중복 흡수). DB 무결성 위반(unique race, NOT NULL/FK/CHECK)은 catch하지 말고 `GlobalExceptionHandler` 안전망(500)에 위임한다.
-- **충돌이 잦은 시나리오**는 예외적으로 try-save-catch가 더 적합하나, 이때도 인프라 예외 타입에 직접 의존하지 않는다.
-- **낙관 락(@Version) 충돌**: tx 경계 안에서는 충돌을 catch하지 않고(변환된 도메인 예외를 전파시켜 깨끗이 rollback), skip/retry/전파 결정은 tx 경계 밖에서 한다. 변환은 `infrastructure/persistence/` adapter가 `saveAndFlush` + catch로 한다. 상세·근거는 `docs/optimistic-lock-design.md`가 단일 출처. (unique 위반과 달리 충돌은 정상 시나리오라 409 — 아래 "왜 500 vs 409" 참고.)
+- **예외 노출 경계는 예외의 추상 수준으로 긋는다**: application·domain·presentation은 특정 구현체(JPA·Hibernate)에 묶인 구체 예외(`org.springframework.orm.*`, `org.hibernate.*`, `jakarta.persistence` 예외)를 참조하지 않는다. 반면 특정 영속성 구현에 묶이지 않은 Spring DAO 추상 예외(`org.springframework.dao.*`, 예: `OptimisticLockingFailureException`·`DataIntegrityViolationException`)는 application이 다뤄도 된다 — Spring은 교체 대상이 아니고 이 계층은 JDBC/JPA/MyBatis를 가리지 않는 추상이기 때문이다. 추상 상위 타입을 잡으면 그 하위 구현체 타입이 다형적으로 걸리므로, 상위 계층이 구현체 타입 이름을 부를 일이 없다. **domain은 추상·구체 어느 영속성 예외도 모른다.**
+- **번역은 의무가 아니라 선별적이다**: 기술 예외 → 도메인 예외 번역은 **안쪽이 그 예외에 따라 다르게 처리해야 할 때만** `infrastructure/persistence/` adapter가 한다(유니크 위반 → 이미 존재/이중결제 차단 등). 순수 재시도처럼 그 예외를 따로 처리하지 않으면 번역하지 않고 DAO 추상 예외를 그대로 usecase가 잡거나 끝단 핸들러로 흘려보낸다. 판단축은 "안쪽이 그 예외를 실제로 다루는가"다.
+- **find-first 패턴**: 정상 흐름은 사전 `find`로 처리(멱등/중복 흡수). DB 무결성 위반(unique race, NOT NULL/FK/CHECK)은 catch하지 말고 `GlobalExceptionHandler` 안전망(500)에 위임한다. (단 그 위반을 특정 상황으로 구분해 처리해야 하면 adapter에서 도메인 예외로 번역해 4xx로 다룰 수 있다.)
+- **충돌이 잦은 시나리오**는 예외적으로 try-save-catch가 더 적합하다. 이때 DAO 추상 예외(`DuplicateKeyException` 등)를 잡는 건 허용되지만, 구현체에 묶인 구체 타입(`org.hibernate.*`·`org.springframework.orm.*`)은 직접 잡지 않는다 — 추상 상위를 잡으면 구체 하위가 다형적으로 걸린다.
+- **낙관 락(@Version) 충돌**: tx 경계 밖에서 정책(전파/skip/retry)을 정한다. **순수 재시도**면 usecase가 DAO 추상 예외 `OptimisticLockingFailureException`을 직접 잡아 새 tx로 재시도한다(번역·`saveAndFlush` 불필요). **충돌에 따라 다르게 처리**해야 하면 `infrastructure/persistence/` adapter가 `saveAndFlush`로 감지를 당겨 도메인 예외로 번역한다. 상세·근거는 `docs/optimistic-lock-design.md`가 단일 출처. (unique 위반과 달리 충돌은 정상 시나리오라 409 — 아래 "왜 500 vs 409" 참고.)
 - **보상 catch (catch 안 2차 작업)**: 1차 예외는 진입 즉시 `log.error()`(근본 원인 보존). 2차 성공 시 1차만 전파. 2차 실패·덜 중요하면 `log.warn()`+1차 전파. 2차 실패·치명적이면 `addSuppressed`로 둘 다 전파. **레벨: 1차=ERROR. 2차 실패는 덜 중요하면 WARN+1차 전파, 치명적이면 addSuppressed로 둘 다 전파.**
 - **catch 안 메서드는 가급적 예외를 안 던지게 설계**하고 의도를 메서드명에 캡슐화한다. Composite Exception은 도저히 안 될 때만.
 - **외부 캐시(Redis) 장애**: infra adapter가 `DataAccessException`을 잡아 도메인 예외(`*StoreUnavailableException`)로 변환(port에 DAO 예외 노출 금지). 정책 결정(fallback/응답 매핑)은 application/presentation이 한다. 도메인 예외는 `RuntimeException` 직접 상속.
@@ -17,8 +18,9 @@
 
 ## DB 무결성 위반 흐름
 
-Infrastructure 레벨 예외는 Application Layer를 넘어가지 않는다.  
-Application 과 Adapter 어디서도 Spring DAO 예외(`DuplicateKeyException`, `DataIntegrityViolationException` 등) 를 catch 하지 않으며, 정상 흐름은 사전 `find` 로 처리하고 DB 무결성 위반은 `GlobalExceptionHandler` 안전망에 위임한다.
+무결성 위반은 정상 흐름을 사전 `find` 로 처리하고, 실제 발생하면 `GlobalExceptionHandler` 안전망에 위임한다. `insert` 시점의 unique race는 DAO 추상 예외 `DataIntegrityViolationException` 으로 안전망까지 흘려 500으로 가시화한다(아래 본질 흐름).
+
+**안쪽이 그 위반에 따라 다르게 처리해야 하면 예외적으로 번역한다**: 특정 유니크 제약이 명확한 비즈니스 개념에 1:1 대응하고 안쪽이 그에 따라 처리를 달리하면, `infrastructure/persistence/` adapter가 제약을 식별해 도메인 예외로 번역한다. 이때도 adapter는 DAO 추상 상위(`DataIntegrityViolationException`)를 잡지, 구현체에 묶인 구체 타입(`org.hibernate.*`·`jakarta.persistence.*`)을 잡지 않는다. (commerce의 예: `PaymentRepositoryAdapter`가 `uk_payment_approved_order_key` 위반을 이중결제 신호로 식별 — 아래 "unique 위반 제약명 식별".)
 
 ### 본질 흐름 — find-first 패턴
 
@@ -39,7 +41,7 @@ DB find → 없으면 insert → 충돌 시 500
 
 위 두 조건(짧은 트랜잭션 + 낮은 동시 충돌 확률)을 만족하는 서비스에 적용한다. 적용되는 서비스의 정확한 목록은 코드(`com.commerce.<domain>`)가 단일 출처이며, 본 문서는 하나하나 다 적지 않는다(클래스명이 바뀌면 문서가 안 맞게 되므로). 대표적으로 회원 가입·결제 승인/이력·주문 생성 등 사용자 입력 식별자나 idempotency key 기반 unique를 쓰는 경로가 해당한다.
 
-**비적용 상황**: 충돌이 잦을 것으로 예상되는 시나리오(예: 캐시 미스 후 동시 다발 insert, 대규모 일괄 처리 race) 에는 본 정책을 적용하지 않고 **try-save-catch** 패턴이 더 적합하다. 향후 새 unique 제약을 도입할 때 위 두 조건으로 패턴을 선택하며, try-save-catch 를 선택하더라도 인프라 예외 타입(`DuplicateKeyException` 등) 에 직접 의존하지 않도록 처리한다.
+**비적용 상황**: 충돌이 잦을 것으로 예상되는 시나리오(예: 캐시 미스 후 동시 다발 insert, 대규모 일괄 처리 race) 에는 본 정책을 적용하지 않고 **try-save-catch** 패턴이 더 적합하다. 향후 새 unique 제약을 도입할 때 위 두 조건으로 패턴을 선택하며, try-save-catch 를 선택하더라도 DAO 추상 예외(`DuplicateKeyException` 등)를 잡는 건 허용되지만 구현체에 묶인 구체 타입(`org.hibernate.*`·`org.springframework.orm.*`)은 직접 잡지 않는다 — 추상 상위를 잡으면 구체 하위가 다형적으로 걸린다.
 
 ### GlobalExceptionHandler 안전망 계층
 
@@ -76,7 +78,7 @@ DataAccessException (부모 핸들러, COMMON-500-2)
 
 - **tx 경계 안에서는 충돌을 catch하지 않는다.** 변환된 도메인 예외를 전파시켜 트랜잭션을 깨끗이 rollback한다. 경계 안에서 catch하면 `REQUIRES_NEW`라도 커밋 시 `UnexpectedRollbackException`이 난다(충돌 후 tx는 rollback-only).
 - **skip / retry / 전파 결정(정책)은 tx 경계 밖에서** 한다. 같은 tx 단위작업을 호출 맥락에 따라 전파(→409)·skip(보상)·retry(고경합)로 재사용한다.
-- **변환은 `infrastructure/persistence/` adapter에서** `saveAndFlush` + catch로 한다(flush를 adapter 프레임 안으로 당겨야 충돌을 잡을 수 있다). 이는 DAO 예외 catch 금지 원칙과 모순되지 않는다 — adapter가 도메인 예외로 *변환*하는 것이지 application이 catch하는 게 아니다.
+- **번역은 선별적이다.** 순수 재시도면 usecase가 tx 경계 밖에서 DAO 추상 예외 `OptimisticLockingFailureException`을 직접 잡아 새 tx로 재시도한다 — 번역도 `saveAndFlush`도 필요 없다(커밋 시점 예외가 tx 경계 밖으로 그대로 전파되므로 usecase에서 잡힌다). 반대로 충돌에 따라 *다르게 처리*해야 하면, adapter가 `saveAndFlush`로 감지를 커밋 전으로 당겨 `infrastructure/persistence/`에서 도메인 예외로 번역한다(그래야 예외가 adapter 메서드 안에서 터져 잡을 수 있다). 즉 `saveAndFlush`는 **번역이 필요할 때만** 쓴다.
 
 ### 충돌 도메인 예외의 상속 전략 — Redis 장애와 반대다
 
@@ -95,13 +97,18 @@ DataAccessException (부모 핸들러, COMMON-500-2)
 
 ### 기계 검증
 
-위 규칙 중 "DAO 예외 타입은 `infrastructure/persistence/` 밖에서 참조 금지", "`saveAndFlush`는 persistence에서만", "Controller는 충돌 예외를 catch하지 않음"은 ArchUnit 테스트(`ArchitectureRulesTest`)로 강제한다. 문서는 "왜"의 포인터, 테스트는 "무엇이 강제되나"의 단일 출처다.
+다음 규칙은 ArchUnit 테스트(`ArchitectureRulesTest`)로 강제한다. 문서는 "왜"의 포인터, 테스트는 "무엇이 강제되나"의 단일 출처다.
+
+- **구현체에 묶인 구체 예외**(`org.springframework.orm.*`, `org.hibernate.*`, `jakarta.persistence` 예외)는 **application·domain·presentation에 노출 금지**. 추상 상위(`org.springframework.dao.*`)를 잡으면 하위 구현체 타입이 다형적으로 걸리므로 상위 계층이 구현체 타입 이름을 쓸 일이 없다.
+- **domain은 `org.springframework.dao.*` 추상 예외도 참조 금지**(가장 안쪽, 순수). application은 DAO 추상 예외를 허용.
+- `saveAndFlush`는 `infrastructure.persistence`에서만 호출.
+- presentation Controller는 낙관 락 충돌 예외를 catch하지 않는다(전파 → application 재시도 또는 끝단 409 매핑).
 
 ---
 
 ## Redis 캐시 장애 처리
 
-외부 캐시(Redis) 장애는 fallback 가능 여부와 무관하게 *infra adapter의 도메인 예외 매핑 + application/presentation의 정책 결정* 으로 처리한다. application이 Spring `DataAccessException`에 직접 의존하지 않아 port 추상화가 보존된다.
+외부 캐시(Redis) 장애는 fallback 가능 여부와 무관하게 *infra adapter의 도메인 예외 매핑 + application/presentation의 정책 결정* 으로 처리한다. 캐시는 커스텀 아웃바운드 port(`application/port/`)이고 그 계약이 Spring·영속성 예외 타입을 노출하면 안 되므로 adapter가 도메인 예외로 변환한다 — 낙관 락과 달리 실패가 adapter 메서드 안에서 동기적으로 잡히므로 그 자리에서 변환할 수 있다.
 
 ### 본질 흐름
 
