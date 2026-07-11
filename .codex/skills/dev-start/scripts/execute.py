@@ -435,7 +435,7 @@ class StepExecutor:
             if not path.startswith(f"{self.phase_relpath}/")
             and not path.startswith(f"{self.task_phases_relpath}/")
         ]
-        if code_paths and all(path.startswith((".codex/", ".github/", "gradle", "docs/hooks/", "docs/agents/", "docs/skills/")) for path in code_paths):
+        if code_paths and all(path.startswith((".codex/", ".github/", "gradle", "docs/codex/hooks/", "docs/codex/skills/")) for path in code_paths):
             return "chore"
         if code_paths and all(path.startswith("docs/") for path in code_paths):
             return "docs"
