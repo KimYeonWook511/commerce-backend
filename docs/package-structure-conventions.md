@@ -127,7 +127,7 @@ payment/infrastructure/
 근거 — 충돌 규칙과 직결:
 - **기술 예외 → 도메인 예외 변환은 `persistence/` adapter에만.** PG 경계(`pg/`)의 변환은 성격이 다르다
   (HTTP 타임아웃·PG 에러코드를 변환하지, `OptimisticLockException`을 다루지 않음).
-  → "`persistence` 밖에서는 JPA/DAO 예외 타입을 모른다" 를 ArchUnit으로 강제 가능.
+  → "구현체에 묶인 예외 타입은 `persistence` 밖(application·domain·presentation)에서 모른다(DAO 추상 예외는 application 허용)" 를 ArchUnit으로 강제 가능.
 - **`saveAndFlush` 사용처가 한곳에 모인다.** 충돌 변환 전용 경로(`saveChecked/saveUsed/saveApproved`)가
   전부 `persistence/`에 → "saveAndFlush는 persistence에서만 허용" 강제 가능.
   (기본 컨벤션은 `save`, 충돌을 tx 내부에서 변환해야 하는 전용 경로만 `saveAndFlush`.)
@@ -294,7 +294,7 @@ Redis 타임아웃이 raw로 application까지 새면 안 되고, 구현체가 �
 패키지 분리의 진짜 값어치는 "걸 수 있는 경계가 생긴다"는 것. 권장 규칙 예:
 
 - `usecase` 패키지의 클래스에는 `@Transactional` 금지 (tx는 `service`만). skip은 usecase의 private 메서드라 이 규칙에 자연히 포함된다.
-- `persistence` 밖에서는 JPA/DAO 예외 타입(`ObjectOptimisticLockingFailureException` 등) 참조 금지.
+- 구현체에 묶인 구체 예외(`org.springframework.orm`·`org.hibernate`·`jakarta.persistence` 예외)는 `application`·`domain`·`presentation`에서 참조 금지. DAO 추상 예외(`org.springframework.dao`)는 application 허용, `domain`은 금지.
 - `saveAndFlush` 호출은 `persistence`에서만.
 - Controller(presentation)는 충돌 예외를 catch하지 않는다.
 - `domain`은 `infrastructure`·Spring(`@Transactional`, `KafkaTemplate` 등)을 참조하지 않는다.

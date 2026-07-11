@@ -51,6 +51,6 @@ unique 제약을 다루는 작업은 "사전 조회 후 분기(find-first)"를 �
 DB find → 없으면 insert → 충돌 시 안전망 500 (catch 하지 않음)
 ```
 
-**이유**: application이 `DuplicateKeyException` 같은 인프라 예외 타입을 catch하면 그 계층이 `org.springframework.dao.*`에 의존하게 되어 의존 방향(domain을 향함)이 깨진다.
+**이유**: find-first 전제상 unique 위반은 정상 흐름에서 거의 발생하지 않으므로, 도메인 예외로 우아하게 처리할 가치가 없고 끝단 안전망(500)으로 코드 버그처럼 가시화하는 게 맞다. (충돌이 잦은 경우엔 try-save-catch가 더 적합하고, 이때 DAO 추상 예외 `DuplicateKeyException` 등을 잡는 건 허용되지만 구현체에 묶인 구체 타입은 잡지 않는다 — `docs/exception-strategy.md`.)
 
 find-first의 적용 조건·비적용 상황(충돌이 잦으면 try-save-catch), unique 위반과 낙관 락 충돌의 처리 차이(500 vs 409), 안전망 계층 구조는 `docs/exception-strategy.md`가 단일 출처다. 낙관 락(@Version) 충돌의 tx 경계·변환·정책은 `docs/optimistic-lock-design.md`를 따른다.
