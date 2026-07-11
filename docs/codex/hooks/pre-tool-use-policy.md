@@ -39,7 +39,7 @@
 
 - `ls -la`
 - `rg hooks .codex`
-- `sed -n '1,80p' docs/hooks/pre-tool-use-policy.md`
+- `sed -n '1,80p' docs/codex/hooks/pre-tool-use-policy.md`
 - `./gradlew test`
 
 ## 동작 방식
