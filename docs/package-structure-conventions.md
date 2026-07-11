@@ -297,5 +297,5 @@ Redis 타임아웃이 raw로 application까지 새면 안 되고, 구현체가 �
 - 구현체에 묶인 구체 예외(`org.springframework.orm`·`org.hibernate`·`jakarta.persistence` 예외)는 `application`·`domain`·`presentation`에서 참조 금지. DAO 추상 예외(`org.springframework.dao`)는 application 허용, `domain`은 금지.
 - `saveAndFlush` 호출은 `persistence`에서만.
 - Controller(presentation)는 충돌 예외를 catch하지 않는다.
-- `domain`은 `infrastructure`·Spring(`@Transactional`, `KafkaTemplate` 등)을 참조하지 않는다.
+- `domain`은 `infrastructure`·Spring(`@Transactional`, `KafkaTemplate`, HTTP/web 등)을 참조하지 않는다.
 - application은 `Kafka`/`Redis` 등 기술 타입을 직접 참조하지 않는다(port로만).
