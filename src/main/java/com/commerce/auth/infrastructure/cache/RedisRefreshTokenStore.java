@@ -30,7 +30,7 @@ public class RedisRefreshTokenStore implements RefreshTokenStore {
 		try {
 			redisTemplate.opsForValue().set(buildKey(memberId), refreshToken, ttl);
 		} catch (DataAccessException e) {
-			log.error("refresh token 저장 실패: memberId={}", memberId, e);
+			log.warn("refresh token 저장 실패: memberId={}, error={}", memberId, e.getMessage());
 			throw new AuthException(AuthErrorCode.REFRESH_STORE_UNAVAILABLE, e);
 		}
 	}
@@ -40,7 +40,7 @@ public class RedisRefreshTokenStore implements RefreshTokenStore {
 		try {
 			return Optional.ofNullable(redisTemplate.opsForValue().get(buildKey(memberId)));
 		} catch (DataAccessException e) {
-			log.error("refresh token 조회 실패: memberId={}", memberId, e);
+			log.warn("refresh token 조회 실패: memberId={}, error={}", memberId, e.getMessage());
 			throw new AuthException(AuthErrorCode.REFRESH_STORE_UNAVAILABLE, e);
 		}
 	}

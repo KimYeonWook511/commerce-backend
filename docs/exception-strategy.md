@@ -139,9 +139,9 @@ Infra adapter: DataAccessException catch → 도메인 예외 변환 (log.error)
 
 ### 로깅 규약
 
-- infra adapter (저장소 실패 자체): ERROR + stack — 운영자가 외부 시스템 장애를 즉시 인지. 원인 예외는 도메인 예외의 cause로도 실어 전파한다.
-- application (fallback 분기 결정): WARN + 메타데이터 — 정상 흐름의 fallback 진입 사실 기록.
-- catch 안 하는 케이스: adapter가 요청 컨텍스트와 함께 ERROR를 남기고, 전파된 예외가 5xx이므로 끝단 핸들러도 ERROR(원인 stack 포함)를 남긴다. 이중이지만 각각 *기술 원인* 과 *응답 매핑* 이라는 다른 관점이라 유지한다.
+- infra adapter (저장소 실패 자체): 장애 사실을 로그로 남기고 도메인 예외의 cause로 원인을 실어 전파한다. 스택을 남기는 위치는 catch 여부로 갈린다.
+- catch해서 fallback: fallback 진입을 WARN + 메타데이터로 남긴다(정상 흐름의 분기 결정 기록).
+- catch 안 함: adapter는 요청 컨텍스트만 WARN으로 남기고(스택 제외), 전파된 예외가 5xx이므로 끝단 핸들러가 ERROR로 원인 stack을 한 번 남긴다(스택 중복 회피).
 
 ---
 

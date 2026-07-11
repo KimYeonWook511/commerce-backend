@@ -21,6 +21,6 @@ refresh token 저장소 장애는 adapter가 `DataAccessException`을 잡아 `Au
 
 PR#97의 strict 즉시 실패 정책 자체는 유지되나, 응답이 500에서 503으로 바뀌고 던지는 방식이 전용 예외+advice에서 공통 `AuthException` 자동 매핑으로 바뀐다(그 부분을 이 결정이 갱신한다).
 
-도메인이 늘어도 인프라 일시 장애용 advice를 새로 만들 필요가 없다. 로깅은 adapter가 원인(memberId 포함)을 ERROR로, `GlobalExceptionHandler`가 5xx를 ERROR로 남겨 이중이 되나, 각각 기술 원인과 응답 매핑이라는 다른 관점이라 의도된 선택이다.
+도메인이 늘어도 인프라 일시 장애용 advice를 새로 만들 필요가 없다. 로깅은 adapter가 요청 컨텍스트를 WARN으로 남기고 상세 스택은 끝단 핸들러가 ERROR로 한 번 남겨 역할을 나눈다(스택 중복 회피).
 
 향후 fallback 없는 인프라 일시 장애가 늘면 같은 패턴(`UNAVAILABLE` + 공통 예외)을 재사용한다. catch해서 삼키는 fallback 케이스가 3곳 이상으로 늘면 그때 전용 타입의 공통 베이스 추출을 재검토한다.
