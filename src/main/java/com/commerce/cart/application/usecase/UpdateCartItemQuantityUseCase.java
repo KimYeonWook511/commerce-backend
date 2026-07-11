@@ -1,6 +1,6 @@
 package com.commerce.cart.application.usecase;
 
-import org.springframework.orm.ObjectOptimisticLockingFailureException;
+import org.springframework.dao.OptimisticLockingFailureException;
 import org.springframework.stereotype.Component;
 
 import com.commerce.cart.application.dto.CartItemSummaryResult;
@@ -24,7 +24,7 @@ public class UpdateCartItemQuantityUseCase {
 		for (int attempt = 1; attempt < MAX_RETRY; attempt++) {
 			try {
 				return processor.execute(memberId, productId, request);
-			} catch (ObjectOptimisticLockingFailureException ignored) {
+			} catch (OptimisticLockingFailureException ignored) {
 				// retry
 			}
 		}
