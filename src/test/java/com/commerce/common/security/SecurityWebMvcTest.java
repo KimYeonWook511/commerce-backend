@@ -34,7 +34,7 @@ import com.commerce.common.security.config.SecurityWebMvcConfig;
 import com.commerce.common.security.context.AuthenticationContext;
 import com.commerce.common.security.filter.TokenAuthenticationFilterConfig;
 import com.commerce.common.security.interceptor.AuthorizationInterceptor;
-import com.commerce.common.security.port.TokenAuthenticator;
+import com.commerce.common.security.port.TokenValidator;
 import com.commerce.common.security.resolver.AuthenticatedMemberIdArgumentResolver;
 
 
@@ -55,7 +55,7 @@ class SecurityWebMvcTest {
 	private MockMvc mockMvc;
 
 	@MockitoBean
-	private TokenAuthenticator tokenAuthenticator;
+	private TokenValidator tokenValidator;
 
 	@AfterEach
 	void tearDown() {
@@ -77,7 +77,7 @@ class SecurityWebMvcTest {
 	@Test
 	void secureEndpoint_whenTokenValid_returnOk() throws Exception {
 		// given
-		given(tokenAuthenticator.authenticate("access-token"))
+		given(tokenValidator.validate("access-token"))
 			.willReturn(new AuthenticationContext(1L, Role.ROLE_USER));
 
 		// when & then
@@ -90,7 +90,7 @@ class SecurityWebMvcTest {
 	@Test
 	void adminEndpoint_whenRoleMismatch_returnForbidden() throws Exception {
 		// given
-		given(tokenAuthenticator.authenticate("access-token"))
+		given(tokenValidator.validate("access-token"))
 			.willReturn(new AuthenticationContext(1L, Role.ROLE_USER));
 
 		// when & then
@@ -106,7 +106,7 @@ class SecurityWebMvcTest {
 	@Test
 	void memberIdEndpoint_whenAuthenticated_returnMemberId() throws Exception {
 		// given
-		given(tokenAuthenticator.authenticate("access-token"))
+		given(tokenValidator.validate("access-token"))
 			.willReturn(new AuthenticationContext(10L, Role.ROLE_USER));
 
 		// when & then
@@ -123,7 +123,7 @@ class SecurityWebMvcTest {
 		mockMvc.perform(get("/products"))
 			.andExpect(status().isOk());
 
-		then(tokenAuthenticator).should(never()).authenticate(any());
+		then(tokenValidator).should(never()).validate(any());
 		assertThat(LogContext.getMemberId()).isNull();
 	}
 
@@ -131,7 +131,7 @@ class SecurityWebMvcTest {
 	@Test
 	void authenticatedRequest_mdcMemberIdSetInControllerAndRemovedAfter() throws Exception {
 		// given
-		given(tokenAuthenticator.authenticate("access-token"))
+		given(tokenValidator.validate("access-token"))
 			.willReturn(new AuthenticationContext(42L, Role.ROLE_USER));
 
 		// when & then

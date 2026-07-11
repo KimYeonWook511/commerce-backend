@@ -7,7 +7,7 @@ import com.commerce.common.security.context.AuthenticationContext;
  * (구현이 common을 의존하는 한 방향). 검증 실패 시 공통 {@code CustomException}(auth의 AuthException 등)을
  * 던지고, 필터가 그 예외를 공통 베이스로 받아 코드를 전파한다.
  */
-public interface TokenAuthenticator {
+public interface TokenValidator {
 
-	AuthenticationContext authenticate(String accessToken);
+	AuthenticationContext validate(String accessToken);
 }

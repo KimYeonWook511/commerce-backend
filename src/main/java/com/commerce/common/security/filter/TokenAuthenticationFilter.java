@@ -13,7 +13,7 @@ import com.commerce.common.log.LogContext;
 import com.commerce.common.security.context.AuthenticationContext;
 import com.commerce.common.security.context.AuthenticationContextHolder;
 import com.commerce.common.security.exception.SecurityErrorCode;
-import com.commerce.common.security.port.TokenAuthenticator;
+import com.commerce.common.security.port.TokenValidator;
 import com.fasterxml.jackson.databind.ObjectMapper;
 
 import jakarta.servlet.FilterChain;
@@ -34,7 +34,7 @@ public class TokenAuthenticationFilter extends OncePerRequestFilter {
 		"/payments/naverpay/return"
 	);
 
-	private final TokenAuthenticator tokenAuthenticator;
+	private final TokenValidator tokenValidator;
 	private final ObjectMapper objectMapper;
 
 	@Override
@@ -62,7 +62,7 @@ public class TokenAuthenticationFilter extends OncePerRequestFilter {
 		// 후속 비즈니스 로직 예외가 401로 오처리되지 않고 정상 전파(GlobalExceptionHandler 등)되게 한다.
 		AuthenticationContext context;
 		try {
-			context = tokenAuthenticator.authenticate(token);
+			context = tokenValidator.validate(token);
 		} catch (CustomException e) {
 			// 토큰 만료·무효 등 auth가 판정한 코드를 공통 베이스로 받아 그대로 전파한다.
 			unauthorized(response, e.getErrorCode());

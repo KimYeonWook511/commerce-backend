@@ -24,16 +24,16 @@ import com.commerce.auth.domain.exception.AuthException;
 import com.commerce.common.log.LogContext;
 import com.commerce.common.security.Role;
 import com.commerce.common.security.context.AuthenticationContext;
-import com.commerce.common.security.port.TokenAuthenticator;
+import com.commerce.common.security.port.TokenValidator;
 import com.fasterxml.jackson.databind.ObjectMapper;
 
 import jakarta.servlet.FilterChain;
 
 class TokenAuthenticationFilterTest {
 
-	private final TokenAuthenticator tokenAuthenticator = mock(TokenAuthenticator.class);
+	private final TokenValidator tokenValidator = mock(TokenValidator.class);
 	private final ObjectMapper objectMapper = new ObjectMapper();
-	private final TokenAuthenticationFilter filter = new TokenAuthenticationFilter(tokenAuthenticator, objectMapper);
+	private final TokenAuthenticationFilter filter = new TokenAuthenticationFilter(tokenValidator, objectMapper);
 
 	@BeforeEach
 	void setUp() {
@@ -52,7 +52,7 @@ class TokenAuthenticationFilterTest {
 		request.addHeader("Authorization", "Bearer valid-token");
 		MockHttpServletResponse response = new MockHttpServletResponse();
 
-		when(tokenAuthenticator.authenticate("valid-token"))
+		when(tokenValidator.validate("valid-token"))
 			.thenReturn(new AuthenticationContext(42L, Role.ROLE_USER));
 
 		AtomicReference<String> mdcDuringChain = new AtomicReference<>();
@@ -75,7 +75,7 @@ class TokenAuthenticationFilterTest {
 		MockHttpServletResponse response = new MockHttpServletResponse();
 		MockFilterChain chain = new MockFilterChain();
 
-		when(tokenAuthenticator.authenticate("valid-token"))
+		when(tokenValidator.validate("valid-token"))
 			.thenReturn(new AuthenticationContext(42L, Role.ROLE_USER));
 
 		filter.doFilter(request, response, chain);
@@ -104,7 +104,7 @@ class TokenAuthenticationFilterTest {
 		MockHttpServletResponse response = new MockHttpServletResponse();
 		MockFilterChain chain = new MockFilterChain();
 
-		when(tokenAuthenticator.authenticate("invalid-token"))
+		when(tokenValidator.validate("invalid-token"))
 			.thenThrow(new AuthException(AuthErrorCode.TOKEN_INVALID));
 
 		filter.doFilter(request, response, chain);
@@ -139,7 +139,7 @@ class TokenAuthenticationFilterTest {
 		request.addHeader("Authorization", "Bearer valid-token");
 		MockHttpServletResponse response = new MockHttpServletResponse();
 
-		when(tokenAuthenticator.authenticate("valid-token"))
+		when(tokenValidator.validate("valid-token"))
 			.thenReturn(new AuthenticationContext(42L, Role.ROLE_USER));
 
 		FilterChain chain = mock(FilterChain.class);
@@ -161,7 +161,7 @@ class TokenAuthenticationFilterTest {
 		request.addHeader("Authorization", "Bearer valid-token");
 		MockHttpServletResponse response = new MockHttpServletResponse();
 
-		when(tokenAuthenticator.authenticate("valid-token"))
+		when(tokenValidator.validate("valid-token"))
 			.thenReturn(new AuthenticationContext(99L, Role.ROLE_USER));
 
 		AtomicReference<String> mdcDuringChain = new AtomicReference<>();

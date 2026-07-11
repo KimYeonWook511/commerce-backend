@@ -28,7 +28,7 @@ import org.springframework.test.context.ActiveProfiles;
 import org.springframework.test.context.bean.override.mockito.MockitoBean;
 import org.springframework.test.web.servlet.MockMvc;
 
-import com.commerce.common.security.port.TokenAuthenticator;
+import com.commerce.common.security.port.TokenValidator;
 import com.commerce.common.security.Role;
 import com.commerce.common.security.context.AuthenticationContext;
 import com.commerce.cart.application.usecase.AddCartItemUseCase;
@@ -74,7 +74,7 @@ class CartControllerTest {
 	private RemoveCartItemService removeCartItemService;
 
 	@MockitoBean
-	private TokenAuthenticator tokenAuthenticator;
+	private TokenValidator tokenValidator;
 
 	@DisplayName("유효한 장바구니 담기 요청이면 201을 반환한다")
 	@Test
@@ -283,7 +283,7 @@ class CartControllerTest {
 	}
 
 	private void stubForToken() {
-		given(tokenAuthenticator.authenticate("access-token"))
+		given(tokenValidator.validate("access-token"))
 			.willReturn(new AuthenticationContext(1L, Role.ROLE_USER));
 	}
 }

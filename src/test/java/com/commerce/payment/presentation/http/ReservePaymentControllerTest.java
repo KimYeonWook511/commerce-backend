@@ -19,7 +19,7 @@ import org.springframework.test.web.servlet.MockMvc;
 
 import com.commerce.common.security.filter.TokenAuthenticationFilter;
 import com.commerce.common.security.interceptor.AuthorizationInterceptor;
-import com.commerce.common.security.port.TokenAuthenticator;
+import com.commerce.common.security.port.TokenValidator;
 import com.commerce.common.security.Role;
 import com.commerce.common.security.context.AuthenticationContext;
 import com.commerce.common.security.resolver.AuthenticatedMemberIdArgumentResolver;
@@ -47,7 +47,7 @@ class ReservePaymentControllerTest {
 	private ReservePaymentService reservePaymentService;
 
 	@MockitoBean
-	private TokenAuthenticator tokenAuthenticator;
+	private TokenValidator tokenValidator;
 
 	@DisplayName("결제 예약 요청이 유효하면 결제 예약 응답을 반환한다")
 	@Test
@@ -162,7 +162,7 @@ class ReservePaymentControllerTest {
 	}
 
 	private void stubForValidToken() {
-		given(tokenAuthenticator.authenticate("access-token"))
+		given(tokenValidator.validate("access-token"))
 			.willReturn(new AuthenticationContext(1L, Role.ROLE_USER));
 	}
 }

@@ -28,7 +28,7 @@ import org.springframework.test.web.servlet.MockMvc;
 
 import com.commerce.common.security.filter.TokenAuthenticationFilter;
 import com.commerce.common.security.interceptor.AuthorizationInterceptor;
-import com.commerce.common.security.port.TokenAuthenticator;
+import com.commerce.common.security.port.TokenValidator;
 import com.commerce.common.security.Role;
 import com.commerce.common.security.context.AuthenticationContext;
 import com.commerce.common.security.resolver.AuthenticatedMemberIdArgumentResolver;
@@ -71,7 +71,7 @@ class AdminStockControllerTest {
 	private AdminGetStockHistoryService adminGetStockHistoryService;
 
 	@MockitoBean
-	private TokenAuthenticator tokenAuthenticator;
+	private TokenValidator tokenValidator;
 
 	@DisplayName("관리자는 초기 재고를 생성할 수 있다")
 	@Test
@@ -476,7 +476,7 @@ class AdminStockControllerTest {
 	}
 
 	private void stubForToken(String role) {
-		given(tokenAuthenticator.authenticate("access-token"))
+		given(tokenValidator.validate("access-token"))
 			.willReturn(new AuthenticationContext(1L, Role.valueOf(role)));
 	}
 }
