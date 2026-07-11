@@ -15,7 +15,7 @@ import com.commerce.payment.domain.PaymentProvider;
 import com.commerce.payment.domain.exception.PaymentErrorCode;
 import com.commerce.payment.domain.exception.PaymentException;
 import com.commerce.payment.presentation.http.request.ReservePaymentRequest;
-import com.commerce.security.annotation.AuthenticatedMemberId;
+import com.commerce.common.security.annotation.AuthenticatedMemberId;
 
 import jakarta.validation.Valid;
 import lombok.RequiredArgsConstructor;

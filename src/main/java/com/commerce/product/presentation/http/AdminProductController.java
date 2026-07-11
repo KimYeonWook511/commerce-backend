@@ -10,11 +10,11 @@ import org.springframework.web.bind.annotation.RequestBody;
 import org.springframework.web.bind.annotation.RequestMapping;
 import org.springframework.web.bind.annotation.RestController;
 
-import com.commerce.security.annotation.RequireRole;
+import com.commerce.common.security.annotation.RequireRole;
 import com.commerce.common.ApiResponse;
 import com.commerce.common.exception.CommonErrorCode;
 import com.commerce.common.exception.CommonException;
-import com.commerce.member.domain.MemberRole;
+import com.commerce.common.security.Role;
 import com.commerce.product.application.service.AdminCreateProductService;
 import com.commerce.product.application.service.AdminUpdateProductService;
 import com.commerce.product.application.service.AdminDeleteProductService;
@@ -36,7 +36,7 @@ public class AdminProductController {
 	private final AdminDeleteProductService adminDeleteProductService;
 
 	@PostMapping
-	@RequireRole(MemberRole.ROLE_ADMIN)
+	@RequireRole(Role.ROLE_ADMIN)
 	public ResponseEntity<ApiResponse<AdminProductResult>> createProduct(
 		@Valid @RequestBody AdminProductCreateRequest request
 	) {
@@ -47,7 +47,7 @@ public class AdminProductController {
 	}
 
 	@PatchMapping("/{productId}")
-	@RequireRole(MemberRole.ROLE_ADMIN)
+	@RequireRole(Role.ROLE_ADMIN)
 	public ResponseEntity<ApiResponse<AdminProductResult>> updateProduct(
 		@PathVariable Long productId,
 		@Valid @RequestBody AdminProductUpdateRequest request
@@ -61,7 +61,7 @@ public class AdminProductController {
 	}
 
 	@DeleteMapping("/{productId}")
-	@RequireRole(MemberRole.ROLE_ADMIN)
+	@RequireRole(Role.ROLE_ADMIN)
 	public ResponseEntity<ApiResponse<AdminProductDeleteResult>> deleteProduct(@PathVariable Long productId) {
 		validateProductId(productId);
 

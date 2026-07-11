@@ -9,6 +9,7 @@ import org.junit.jupiter.api.BeforeAll;
 import org.junit.jupiter.api.DisplayName;
 import org.junit.jupiter.api.Test;
 
+import static com.tngtech.archunit.core.domain.JavaClass.Predicates.resideInAPackage;
 import static com.tngtech.archunit.lang.syntax.ArchRuleDefinition.classes;
 import static com.tngtech.archunit.lang.syntax.ArchRuleDefinition.methods;
 import static com.tngtech.archunit.lang.syntax.ArchRuleDefinition.noClasses;
@@ -256,6 +257,23 @@ class ArchitectureRulesTest {
                 .and().areNotAssignableTo("com.commerce.order.presentation.batch.OrderExpirationBatchConfig")
                 .should().dependOnClassesThat()
                 .areAssignableTo("org.springframework.dao.OptimisticLockingFailureException");
+        check(rule);
+    }
+
+    // ────────────────────────────────────────────────────────────
+    // 9. common 은 leaf — 웹 인프라·authz shared kernel 을 담되 어떤 도메인·auth 도 의존하지 않는다.
+    //    근거: 많은 도메인이 common(예: common.security 의 @RequireRole·AuthenticationContext)을 의존하므로,
+    //          common 이 leaf 여야 안정적이다(안정 의존성 원칙). 역참조가 생기면 패키지 사이클로 번진다.
+    // ────────────────────────────────────────────────────────────
+
+    @Test
+    @DisplayName("common 은 leaf 다 (com.commerce 하위의 다른 도메인·auth 패키지를 의존하지 않는다)")
+    void commonIsLeaf() {
+        ArchRule rule = noClasses()
+                .that().resideInAPackage("com.commerce.common..")
+                .should().dependOnClassesThat(
+                        resideInAPackage("com.commerce..")
+                                .and(DescribedPredicate.not(resideInAPackage("com.commerce.common.."))));
         check(rule);
     }
 }

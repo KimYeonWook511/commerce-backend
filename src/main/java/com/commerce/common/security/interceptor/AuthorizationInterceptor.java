@@ -1,15 +1,17 @@
-package com.commerce.security.interceptor;
+package com.commerce.common.security.interceptor;
 
 import org.springframework.stereotype.Component;
 import org.springframework.web.method.HandlerMethod;
 import org.springframework.web.servlet.HandlerInterceptor;
 
-import com.commerce.security.annotation.RequireRole;
-import com.commerce.security.context.AuthenticationContext;
-import com.commerce.auth.domain.exception.AuthErrorCode;
 import com.commerce.common.ApiResponse;
 import com.commerce.common.exception.ErrorCategoryHttpStatus;
 import com.commerce.common.exception.ErrorCode;
+import com.commerce.common.security.Role;
+import com.commerce.common.security.annotation.RequireRole;
+import com.commerce.common.security.context.AuthenticationContext;
+import com.commerce.common.security.context.AuthenticationContextHolder;
+import com.commerce.common.security.exception.SecurityErrorCode;
 import com.fasterxml.jackson.databind.ObjectMapper;
 
 import jakarta.servlet.http.HttpServletRequest;
@@ -40,9 +42,10 @@ public class AuthorizationInterceptor implements HandlerInterceptor {
 			return true;
 		}
 
-		String role = AuthenticationContext.getRole();
-		if (role == null || !role.equals(requireRole.value().name())) {
-			ErrorCode errorCode = AuthErrorCode.FORBIDDEN;
+		AuthenticationContext context = AuthenticationContextHolder.get();
+		Role role = context == null ? null : context.role();
+		if (role == null || role != requireRole.value()) {
+			ErrorCode errorCode = SecurityErrorCode.FORBIDDEN;
 			response.setStatus(ErrorCategoryHttpStatus.of(errorCode.getCategory()).value());
 			response.setCharacterEncoding("UTF-8");
 			response.setContentType("application/json");

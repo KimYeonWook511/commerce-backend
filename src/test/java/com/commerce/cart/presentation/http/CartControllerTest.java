@@ -28,8 +28,9 @@ import org.springframework.test.context.ActiveProfiles;
 import org.springframework.test.context.bean.override.mockito.MockitoBean;
 import org.springframework.test.web.servlet.MockMvc;
 
-import com.commerce.auth.application.usecase.TokenAuthenticationUseCase;
-import com.commerce.auth.application.dto.TokenAuthenticationResult;
+import com.commerce.common.security.port.TokenValidator;
+import com.commerce.common.security.Role;
+import com.commerce.common.security.context.AuthenticationContext;
 import com.commerce.cart.application.usecase.AddCartItemUseCase;
 import com.commerce.cart.application.service.GetMyCartService;
 import com.commerce.cart.application.service.RemoveCartItemService;
@@ -41,19 +42,19 @@ import com.commerce.cart.application.dto.CartItemResult;
 import com.commerce.cart.application.dto.CartResult;
 import com.commerce.cart.presentation.http.request.CartItemAddRequest;
 import com.commerce.cart.presentation.http.request.CartItemUpdateRequest;
-import com.commerce.common.config.WebConfig;
-import com.commerce.security.filter.JwtAuthenticationFilter;
-import com.commerce.security.interceptor.AuthorizationInterceptor;
-import com.commerce.security.resolver.AuthenticatedMemberIdArgumentResolver;
+import com.commerce.common.security.config.SecurityWebMvcConfig;
+import com.commerce.common.security.filter.TokenAuthenticationFilter;
+import com.commerce.common.security.interceptor.AuthorizationInterceptor;
+import com.commerce.common.security.resolver.AuthenticatedMemberIdArgumentResolver;
 
 @WebMvcTest(CartController.class)
 @AutoConfigureMockMvc(addFilters = true)
 @ActiveProfiles("test")
 @Import({
-	WebConfig.class,
+	SecurityWebMvcConfig.class,
 	AuthenticatedMemberIdArgumentResolver.class,
 	AuthorizationInterceptor.class,
-	JwtAuthenticationFilter.class
+	TokenAuthenticationFilter.class
 })
 class CartControllerTest {
 
@@ -73,7 +74,7 @@ class CartControllerTest {
 	private RemoveCartItemService removeCartItemService;
 
 	@MockitoBean
-	private TokenAuthenticationUseCase tokenAuthenticationUseCase;
+	private TokenValidator tokenValidator;
 
 	@DisplayName("유효한 장바구니 담기 요청이면 201을 반환한다")
 	@Test
@@ -282,7 +283,7 @@ class CartControllerTest {
 	}
 
 	private void stubForToken() {
-		given(tokenAuthenticationUseCase.authenticateAccessToken("access-token"))
-			.willReturn(TokenAuthenticationResult.of(1L, "ROLE_USER"));
+		given(tokenValidator.validate("access-token"))
+			.willReturn(new AuthenticationContext(1L, Role.ROLE_USER));
 	}
 }

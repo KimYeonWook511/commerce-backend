@@ -23,12 +23,12 @@ import org.springframework.web.bind.annotation.GetMapping;
 import org.springframework.web.bind.annotation.RestController;
 
 import com.commerce.common.log.LogContext;
-import com.commerce.security.filter.JwtAuthenticationFilter;
+import com.commerce.common.security.filter.TokenAuthenticationFilter;
 
 @WebMvcTest(
 	controllers = TraceIdFilterIntegrationTest.TestController.class,
 	excludeAutoConfiguration = {SecurityAutoConfiguration.class, SecurityFilterAutoConfiguration.class},
-	excludeFilters = @Filter(type = FilterType.ASSIGNABLE_TYPE, classes = JwtAuthenticationFilter.class)
+	excludeFilters = @Filter(type = FilterType.ASSIGNABLE_TYPE, classes = TokenAuthenticationFilter.class)
 )
 @AutoConfigureMockMvc(addFilters = true)
 @ActiveProfiles("test")

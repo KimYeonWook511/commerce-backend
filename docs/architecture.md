@@ -9,8 +9,8 @@
 ```
 src/main/java/com/commerce/
 ├── common/            # 공통 설정, 예외, JPA base entity, Kafka, 유틸
-├── security/          # JWT 인증 필터, 인가 인터셉터, 인증 컨텍스트, argument resolver
-├── auth/              # 인증 유스케이스 (회원가입·로그인·토큰 재발급), JWT 구현, refresh token
+│   └── security/      # 인증/인가 웹 진입점(필터·인가 인터셉터·인증 컨텍스트·resolver) — leaf, 도메인·auth 무의존
+├── auth/              # 인증 유스케이스 (회원가입·로그인·토큰 재발급), JWT 구현(토큰 인증 port 구현), refresh token
 ├── member/            # 회원 등록·조회
 ├── product/           # 상품 공개 조회, 관리자 상품 관리
 ├── stock/             # 재고 차감·복구·관리자 조정, 변경 이력
@@ -162,8 +162,8 @@ Port 인터페이스 설계 원칙:
 
 > 공통 원칙(모든 도메인에 적용, → PR#166): cross-aggregate 참조는 객체가 아니라 `Long` ID(또는 값)로 한다. same-aggregate 관계만 객체 참조를 유지한다. cross-aggregate FK는 제거됐고(운영 DB 적용은 별도 결정), 조회는 사용처별 batch composition 또는 컬럼 직접 사용으로 대체한다. 도메인별 적용 세부는 각 `docs/tasks/*-jpa-association-decouple/` 참조.
 
-- **`auth`** — 인증 유스케이스의 owner. 비밀번호 검증, JWT 발급·검증, refresh token 저장. 회원 생성·조회는 `member`에 위임한다.
-- **`security`** — HTTP 요청 인증/인가 adapter. 토큰을 검증해 인증 컨텍스트에 싣고, 인가 인터셉터·argument resolver가 이를 사용한다.
+- **`auth`** — 인증 유스케이스의 owner. 비밀번호 검증, JWT 발급·검증, refresh token 저장. 회원 생성·조회는 `member`에 위임한다. `common.security`가 정의한 토큰 인증 port를 JWT로 구현한다(auth → common 한 방향).
+- **`common.security`** — HTTP 요청 인증/인가를 웹 진입점에 강제하는 authz shared kernel. 자기 웹 구성을 스스로 등록하는 **leaf**로, 도메인도 auth도 토큰 기술(JWT)도 모른다. "토큰 → 누구인가"라는 단 하나의 호출만 port로 뒤집어 auth가 구현한다. 인가 어휘(`Role`)를 소유하고 도메인·auth가 이를 위로 의존한다.
 - **`product`** — 공개 상품 조회와 관리자 상품 관리(등록·수정·soft delete). 상세는 상품 정보 + 현재 재고를 조합한다.
 - **`stock`** — 상품별 재고, 주문 경로의 차감·복구, 관리자 조정, 변경 이력. `Product : Stock = 1:1`. `StockHistory`는 별도 aggregate.
 - **`order`** — 주문 생성·취소·만료. 생성은 멱등 키로 중복 방어. 만료는 Spring Batch로 스케줄링하되, 미확정 결제(UNKNOWN/stale REQUESTED)가 걸린 주문은 `BlockingPaymentChecker` port로 만료 대상에서 제외해 만료-대사 경합(돈은 빠졌는데 주문 취소)을 막는다(→ PR#237). 생성 tx 내에서 `CartItemRemover` port로 주문된 항목만 cart에서 제거한다.
@@ -220,9 +220,9 @@ application Filter는 `FilterRegistrationBean`으로 명시 등록하고 `Ordere
 |---|---|---|
 | 1 | `TraceIdFilter` | 모든 요청에 UUID traceId 발급 → MDC push, 응답 헤더 `X-Trace-Id` 부착 |
 | 2 | `AccessLogFilter` | 모든 요청에 시작/종료 접근 로그 |
-| 3 | `JwtAuthenticationFilter` | 인증 필요 경로의 Bearer 토큰 검증 → 인증 컨텍스트 저장 |
+| 3 | `TokenAuthenticationFilter` | 인증 필요 경로의 Bearer 토큰 검증 → 인증 컨텍스트 저장 |
 
-순서가 구조적으로 중요하다: `TraceIdFilter`·`AccessLogFilter`가 `JwtAuthenticationFilter`보다 바깥(먼저)에 있어, 인증 실패(401) 요청에도 traceId와 접근 로그가 남는다.
+순서가 구조적으로 중요하다: `TraceIdFilter`·`AccessLogFilter`가 `TokenAuthenticationFilter`보다 바깥(먼저)에 있어, 인증 실패(401) 요청에도 traceId와 접근 로그가 남는다.
 
 인증된 요청의 `memberId`는 인증 Filter가 MDC에 넣고(populate) 이후 도메인 로그와 접근 로그에 자동 포함된다. MDC 정리는 스코프 경계 기준 두 규칙을 따른다: (a) 최외곽 요청 Filter가 요청 끝 `finally`에서 `MDC.clear()`로 스레드 스코프를 통째 비우고(모든 안쪽 스코프가 풀린 지점이라 안전, 스레드 풀 잔류 방지), (b) 최외곽이 아닌 nested 스코프(도메인 유스케이스 키, 비동기 경계 복원분)는 자신이 push한 키만 제거한다(운영 코드에서 nested `MDC.clear()` 금지 — 바깥·형제 스코프 키를 함께 날림). 이 모델은 최외곽 Filter가 MDC를 만지는 가장 바깥으로 유지됨을 전제한다. 구체 정리 규칙은 `docs/logging-conventions.md`가 단일 출처다.
 

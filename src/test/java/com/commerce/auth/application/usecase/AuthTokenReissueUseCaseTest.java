@@ -18,8 +18,7 @@ import org.springframework.test.util.ReflectionTestUtils;
 
 import com.commerce.auth.application.dto.AuthTokenReissueCommand;
 import com.commerce.auth.application.port.RefreshTokenStore;
-import com.commerce.auth.application.port.TokenValidator;
-import com.commerce.auth.application.port.vo.ParsedTokenClaims;
+import com.commerce.auth.application.port.RefreshTokenValidator;
 import com.commerce.auth.application.dto.AuthTokenIssueResult;
 import com.commerce.auth.application.dto.AuthTokenReissueResult;
 import com.commerce.auth.domain.exception.AuthErrorCode;
@@ -38,7 +37,7 @@ class AuthTokenReissueUseCaseTest {
 	private AuthTokenIssueUseCase authTokenIssueUseCase;
 
 	@Mock
-	private TokenValidator tokenValidator;
+	private RefreshTokenValidator refreshTokenValidator;
 
 	@Mock
 	private RefreshTokenStore refreshTokenStore;
@@ -53,9 +52,7 @@ class AuthTokenReissueUseCaseTest {
 		Member member = Member.createUser("test@example.com", "hashed-password", "user1");
 		ReflectionTestUtils.setField(member, "id", 1L);
 
-		ParsedTokenClaims claims = refreshTokenClaims("1");
-
-		given(tokenValidator.validateRefreshToken("refresh-token")).willReturn(claims);
+		given(refreshTokenValidator.validateRefreshToken("refresh-token")).willReturn(1L);
 		given(refreshTokenStore.get(1L)).willReturn(Optional.of("refresh-token"));
 		given(findMemberService.findById(1L)).willReturn(Optional.of(member));
 		given(authTokenIssueUseCase.issue(member))
@@ -78,9 +75,7 @@ class AuthTokenReissueUseCaseTest {
 	@Test
 	void reissue_whenRefreshTokenMismatch_throwException() {
 		// given
-		ParsedTokenClaims claims = refreshTokenClaims("1");
-
-		given(tokenValidator.validateRefreshToken("refresh-token")).willReturn(claims);
+		given(refreshTokenValidator.validateRefreshToken("refresh-token")).willReturn(1L);
 		given(refreshTokenStore.get(1L)).willReturn(Optional.of("other-token"));
 
 		AuthTokenReissueCommand command = AuthTokenReissueCommand.builder()
@@ -100,29 +95,8 @@ class AuthTokenReissueUseCaseTest {
 	@Test
 	void reissue_whenRefreshTokenInvalid_throwException() {
 		// given
-		given(tokenValidator.validateRefreshToken("refresh-token"))
+		given(refreshTokenValidator.validateRefreshToken("refresh-token"))
 			.willThrow(new AuthException(AuthErrorCode.TOKEN_INVALID));
-
-		AuthTokenReissueCommand command = AuthTokenReissueCommand.builder()
-			.refreshToken("refresh-token")
-			.build();
-
-		// when & then
-		assertThatThrownBy(() -> authTokenReissueUseCase.reissue(command))
-			.isInstanceOf(AuthException.class)
-			.satisfies(exception -> {
-				AuthException authException = (AuthException) exception;
-				assertThat(authException.getErrorCode()).isEqualTo(AuthErrorCode.TOKEN_INVALID);
-			});
-	}
-
-	@DisplayName("리프레시 토큰 subject가 회원 id 형식이 아니면 예외가 발생한다")
-	@Test
-	void reissue_whenSubjectIsNotMemberId_throwException() {
-		// given
-		ParsedTokenClaims claims = refreshTokenClaims("invalid-member-id");
-
-		given(tokenValidator.validateRefreshToken("refresh-token")).willReturn(claims);
 
 		AuthTokenReissueCommand command = AuthTokenReissueCommand.builder()
 			.refreshToken("refresh-token")
@@ -141,9 +115,7 @@ class AuthTokenReissueUseCaseTest {
 	@Test
 	void reissue_whenStoredRefreshTokenNotFound_throwException() {
 		// given
-		ParsedTokenClaims claims = refreshTokenClaims("1");
-
-		given(tokenValidator.validateRefreshToken("refresh-token")).willReturn(claims);
+		given(refreshTokenValidator.validateRefreshToken("refresh-token")).willReturn(1L);
 		given(refreshTokenStore.get(1L)).willReturn(Optional.empty());
 
 		AuthTokenReissueCommand command = AuthTokenReissueCommand.builder()
@@ -163,9 +135,7 @@ class AuthTokenReissueUseCaseTest {
 	@Test
 	void reissue_whenMemberNotFound_throwException() {
 		// given
-		ParsedTokenClaims claims = refreshTokenClaims("1");
-
-		given(tokenValidator.validateRefreshToken("refresh-token")).willReturn(claims);
+		given(refreshTokenValidator.validateRefreshToken("refresh-token")).willReturn(1L);
 		given(refreshTokenStore.get(1L)).willReturn(Optional.of("refresh-token"));
 		given(findMemberService.findById(1L)).willReturn(Optional.empty());
 
@@ -186,9 +156,7 @@ class AuthTokenReissueUseCaseTest {
 	@Test
 	void reissue_whenRedisGetFails_propagatesStoreUnavailable() {
 		// given
-		ParsedTokenClaims claims = refreshTokenClaims("1");
-
-		given(tokenValidator.validateRefreshToken("refresh-token")).willReturn(claims);
+		given(refreshTokenValidator.validateRefreshToken("refresh-token")).willReturn(1L);
 		willThrow(new RefreshTokenStoreUnavailableException(new RuntimeException("boom"))).given(refreshTokenStore).get(1L);
 
 		AuthTokenReissueCommand command = AuthTokenReissueCommand.builder()
@@ -198,9 +166,5 @@ class AuthTokenReissueUseCaseTest {
 		// when & then
 		assertThatThrownBy(() -> authTokenReissueUseCase.reissue(command))
 			.isInstanceOf(RefreshTokenStoreUnavailableException.class);
-	}
-
-	private ParsedTokenClaims refreshTokenClaims(String subject) {
-		return ParsedTokenClaims.of(subject, "USER");
 	}
 }

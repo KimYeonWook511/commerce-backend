@@ -18,27 +18,28 @@ import org.springframework.test.context.ActiveProfiles;
 import org.springframework.test.context.bean.override.mockito.MockitoBean;
 import org.springframework.test.web.servlet.MockMvc;
 
-import com.commerce.auth.application.usecase.TokenAuthenticationUseCase;
-import com.commerce.auth.application.dto.TokenAuthenticationResult;
-import com.commerce.common.config.WebConfig;
+import com.commerce.common.security.port.TokenValidator;
+import com.commerce.common.security.Role;
+import com.commerce.common.security.context.AuthenticationContext;
+import com.commerce.common.security.config.SecurityWebMvcConfig;
 import com.commerce.order.application.usecase.CancelOrderUseCase;
 import com.commerce.order.application.usecase.CreateOrderUseCase;
 import com.commerce.order.application.dto.OrderCreateCommand;
 import com.commerce.order.application.dto.OrderCancelResult;
 import com.commerce.order.application.dto.OrderCreateResult;
 import com.commerce.order.domain.OrderStatus;
-import com.commerce.security.filter.JwtAuthenticationFilter;
-import com.commerce.security.interceptor.AuthorizationInterceptor;
-import com.commerce.security.resolver.AuthenticatedMemberIdArgumentResolver;
+import com.commerce.common.security.filter.TokenAuthenticationFilter;
+import com.commerce.common.security.interceptor.AuthorizationInterceptor;
+import com.commerce.common.security.resolver.AuthenticatedMemberIdArgumentResolver;
 
 @WebMvcTest(OrderController.class)
 @AutoConfigureMockMvc(addFilters = true)
 @ActiveProfiles("test")
 @Import({
-	WebConfig.class,
+	SecurityWebMvcConfig.class,
 	AuthenticatedMemberIdArgumentResolver.class,
 	AuthorizationInterceptor.class,
-	JwtAuthenticationFilter.class
+	TokenAuthenticationFilter.class
 })
 class OrderControllerTest {
 
@@ -52,7 +53,7 @@ class OrderControllerTest {
 	private CancelOrderUseCase cancelOrderUseCase;
 
 	@MockitoBean
-	private TokenAuthenticationUseCase tokenAuthenticationUseCase;
+	private TokenValidator tokenValidator;
 
 	@DisplayName("유효한 주문 생성 요청이면 201을 반환한다")
 	@Test
@@ -129,7 +130,7 @@ class OrderControllerTest {
 	}
 
 	private void stubForToken() {
-		given(tokenAuthenticationUseCase.authenticateAccessToken("access-token"))
-			.willReturn(TokenAuthenticationResult.of(1L, "ROLE_USER"));
+		given(tokenValidator.validate("access-token"))
+			.willReturn(new AuthenticationContext(1L, Role.ROLE_USER));
 	}
 }

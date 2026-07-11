@@ -20,11 +20,11 @@ import org.springframework.test.context.ActiveProfiles;
 import org.springframework.test.context.bean.override.mockito.MockitoBean;
 import org.springframework.test.web.servlet.MockMvc;
 
-import com.commerce.security.filter.JwtAuthenticationFilter;
-import com.commerce.security.interceptor.AuthorizationInterceptor;
-import com.commerce.auth.application.usecase.TokenAuthenticationUseCase;
-import com.commerce.security.resolver.AuthenticatedMemberIdArgumentResolver;
-import com.commerce.common.config.WebConfig;
+import com.commerce.common.security.filter.TokenAuthenticationFilter;
+import com.commerce.common.security.interceptor.AuthorizationInterceptor;
+import com.commerce.common.security.port.TokenValidator;
+import com.commerce.common.security.resolver.AuthenticatedMemberIdArgumentResolver;
+import com.commerce.common.security.config.SecurityWebMvcConfig;
 import com.commerce.product.application.service.GetProductService;
 import com.commerce.product.application.dto.ProductDetailResult;
 import com.commerce.product.application.dto.ProductSummaryResult;
@@ -35,10 +35,10 @@ import com.commerce.product.domain.exception.ProductException;
 @AutoConfigureMockMvc(addFilters = true)
 @ActiveProfiles("test")
 @Import({
-	WebConfig.class,
+	SecurityWebMvcConfig.class,
 	AuthenticatedMemberIdArgumentResolver.class,
 	AuthorizationInterceptor.class,
-	JwtAuthenticationFilter.class
+	TokenAuthenticationFilter.class
 })
 class ProductControllerTest {
 
@@ -49,7 +49,7 @@ class ProductControllerTest {
 	private GetProductService getProductService;
 
 	@MockitoBean
-	private TokenAuthenticationUseCase tokenAuthenticationUseCase;
+	private TokenValidator tokenValidator;
 
 	@DisplayName("상품 목록 조회는 인증 없이 성공한다")
 	@Test

@@ -20,7 +20,7 @@ import com.commerce.cart.application.dto.CartResult;
 import com.commerce.cart.presentation.http.request.CartItemAddRequest;
 import com.commerce.cart.presentation.http.request.CartItemUpdateRequest;
 import com.commerce.common.ApiResponse;
-import com.commerce.security.annotation.AuthenticatedMemberId;
+import com.commerce.common.security.annotation.AuthenticatedMemberId;
 
 import jakarta.validation.Valid;
 import lombok.RequiredArgsConstructor;
