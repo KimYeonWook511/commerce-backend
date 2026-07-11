@@ -8,13 +8,13 @@ Codex가 이 저장소의 PR을 리뷰할 때 따르는 지침이다. 리뷰 코
 
 - **코멘트 언어**: 리뷰 코멘트 본문은 한국어로 작성하며, 지적은 근거(`docs/*` 규칙)와 함께 남긴다.
 - **비밀 값**: 자격 증명·API 키 등 비밀 값을 리뷰 코멘트에 남기지 않는다.
-- P0/P1급 문제가 없으면 요약 코멘트 첫 줄에 "LGTM"을 명시하고, 확인한 범위를 한 문장으로 요약한다.
+- **LGTM 명시**: 심각한(장애·데이터 정합성·보안 직결) 문제가 없으면 요약 코멘트 첫 줄에 `LGTM`을 명시하고, 확인한 범위를 한 문장으로 요약한다.
 
 ### 참조 문서 (단일 출처)
 
 - **민감정보 노출·로깅** — `docs/logging-conventions.md`
 - **레이어 경계·의존 방향** — `docs/package-structure-conventions.md`
-- **도메인 모델링** — `docs/package-structure-conventions.md` (정적 팩토리·setter 금지·Rich 엔티티·Aggregate ID 참조)
+- **도메인 모델링** — `docs/package-structure-conventions.md` (정적 팩토리로만 생성·public setter 금지·상태 변경은 도메인 메서드·cross-aggregate는 ID 참조)
 - **트랜잭션 위치·역할 접미사** — `docs/package-structure-conventions.md`
 - **예외 처리·find-first** — `docs/exception-strategy.md`
 - **낙관 락(@Version) 충돌 처리** — `docs/optimistic-lock-design.md`
