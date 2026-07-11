@@ -22,12 +22,13 @@ import org.springframework.test.context.ActiveProfiles;
 import org.springframework.test.context.bean.override.mockito.MockitoBean;
 import org.springframework.test.web.servlet.MockMvc;
 
-import com.commerce.security.filter.JwtAuthenticationFilter;
-import com.commerce.security.interceptor.AuthorizationInterceptor;
-import com.commerce.auth.application.usecase.TokenAuthenticationUseCase;
-import com.commerce.auth.application.dto.TokenAuthenticationResult;
-import com.commerce.security.resolver.AuthenticatedMemberIdArgumentResolver;
-import com.commerce.common.config.WebConfig;
+import com.commerce.common.security.filter.TokenAuthenticationFilter;
+import com.commerce.common.security.interceptor.AuthorizationInterceptor;
+import com.commerce.common.security.port.TokenAuthenticator;
+import com.commerce.common.security.Role;
+import com.commerce.common.security.context.AuthenticationContext;
+import com.commerce.common.security.resolver.AuthenticatedMemberIdArgumentResolver;
+import com.commerce.common.security.config.SecurityWebMvcConfig;
 import com.commerce.product.application.service.AdminCreateProductService;
 import com.commerce.product.application.service.AdminUpdateProductService;
 import com.commerce.product.application.service.AdminDeleteProductService;
@@ -42,10 +43,10 @@ import com.commerce.product.domain.ProductStatus;
 @AutoConfigureMockMvc(addFilters = true)
 @ActiveProfiles("test")
 @Import({
-	WebConfig.class,
+	SecurityWebMvcConfig.class,
 	AuthenticatedMemberIdArgumentResolver.class,
 	AuthorizationInterceptor.class,
-	JwtAuthenticationFilter.class
+	TokenAuthenticationFilter.class
 })
 class AdminProductControllerTest {
 
@@ -62,7 +63,7 @@ class AdminProductControllerTest {
 	private AdminDeleteProductService adminDeleteProductService;
 
 	@MockitoBean
-	private TokenAuthenticationUseCase tokenAuthenticationUseCase;
+	private TokenAuthenticator tokenAuthenticator;
 
 	@DisplayName("관리자는 상품을 등록할 수 있다")
 	@Test
@@ -270,7 +271,7 @@ class AdminProductControllerTest {
 	}
 
 	private void stubForToken(String role) {
-		given(tokenAuthenticationUseCase.authenticateAccessToken("access-token"))
-			.willReturn(TokenAuthenticationResult.of(1L, role));
+		given(tokenAuthenticator.authenticate("access-token"))
+			.willReturn(new AuthenticationContext(1L, Role.valueOf(role)));
 	}
 }

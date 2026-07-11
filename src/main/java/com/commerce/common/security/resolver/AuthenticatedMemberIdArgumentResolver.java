@@ -1,9 +1,10 @@
-package com.commerce.security.resolver;
+package com.commerce.common.security.resolver;
 
-import com.commerce.security.annotation.AuthenticatedMemberId;
-import com.commerce.security.context.AuthenticationContext;
-import com.commerce.auth.domain.exception.AuthErrorCode;
-import com.commerce.auth.domain.exception.AuthException;
+import com.commerce.common.security.annotation.AuthenticatedMemberId;
+import com.commerce.common.security.context.AuthenticationContext;
+import com.commerce.common.security.context.AuthenticationContextHolder;
+import com.commerce.common.security.exception.SecurityErrorCode;
+import com.commerce.common.security.exception.SecurityException;
 import org.springframework.core.MethodParameter;
 import org.springframework.stereotype.Component;
 import org.springframework.web.bind.support.WebDataBinderFactory;
@@ -27,9 +28,10 @@ public class AuthenticatedMemberIdArgumentResolver
 		NativeWebRequest webRequest,
 		WebDataBinderFactory binderFactory
 	) {
-		Long memberId = AuthenticationContext.getMemberId();
+		AuthenticationContext context = AuthenticationContextHolder.get();
+		Long memberId = context == null ? null : context.memberId();
 		if (memberId == null) {
-			throw new AuthException(AuthErrorCode.UNAUTHORIZED);
+			throw new SecurityException(SecurityErrorCode.UNAUTHORIZED);
 		}
 		return memberId;
 	}

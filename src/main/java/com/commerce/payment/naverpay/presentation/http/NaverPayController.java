@@ -9,7 +9,7 @@ import org.springframework.web.bind.annotation.RequestMapping;
 import org.springframework.web.bind.annotation.RequestParam;
 import org.springframework.web.bind.annotation.RestController;
 
-import com.commerce.security.annotation.AuthenticatedMemberId;
+import com.commerce.common.security.annotation.AuthenticatedMemberId;
 import com.commerce.common.ApiResponse;
 import com.commerce.payment.naverpay.application.usecase.ApproveNaverPayUseCase;
 import com.commerce.payment.naverpay.application.dto.NaverPayApproveResponse;

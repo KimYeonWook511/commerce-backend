@@ -4,8 +4,6 @@ import javax.crypto.SecretKey;
 
 import org.springframework.stereotype.Component;
 
-import com.commerce.auth.application.port.TokenValidator;
-import com.commerce.auth.application.port.vo.ParsedTokenClaims;
 import com.commerce.auth.domain.exception.AuthErrorCode;
 import com.commerce.auth.domain.exception.AuthException;
 
@@ -14,31 +12,31 @@ import io.jsonwebtoken.ExpiredJwtException;
 import io.jsonwebtoken.Jwts;
 import io.jsonwebtoken.MalformedJwtException;
 import io.jsonwebtoken.UnsupportedJwtException;
-import lombok.RequiredArgsConstructor;
 import lombok.extern.slf4j.Slf4j;
 
+/**
+ * JWT 서명·만료·형식·타입을 검증하고 Claims를 추출하는 공통 파싱기.
+ * access·refresh 어댑터가 공유해 파싱·예외 매핑 중복을 없앤다.
+ */
 @Slf4j
 @Component
-@RequiredArgsConstructor
-public class JwtTokenValidator implements TokenValidator {
+class JwtClaimsReader {
 
-	private final JwtProperties jwtProperties;
-
-	@Override
-	public ParsedTokenClaims validateAccessToken(String token) {
-		Claims claims = validate(token, jwtProperties.getAccessSecretKey());
-		validateTokenType(claims, JwtType.ACCESS_TOKEN);
-		return ParsedTokenClaims.of(claims.getSubject(), claims.get("role", String.class));
+	Claims read(String token, SecretKey secretKey, JwtType expectedType) {
+		Claims claims = parse(token, secretKey);
+		validateType(claims, expectedType);
+		return claims;
 	}
 
-	@Override
-	public ParsedTokenClaims validateRefreshToken(String token) {
-		Claims claims = validate(token, jwtProperties.getRefreshSecretKey());
-		validateTokenType(claims, JwtType.REFRESH_TOKEN);
-		return ParsedTokenClaims.of(claims.getSubject(), claims.get("role", String.class));
+	Long parseMemberId(String subject) {
+		try {
+			return Long.parseLong(subject);
+		} catch (NumberFormatException ex) {
+			throw new AuthException(AuthErrorCode.TOKEN_INVALID);
+		}
 	}
 
-	private Claims validate(String token, SecretKey secretKey) {
+	private Claims parse(String token, SecretKey secretKey) {
 		try {
 			return Jwts.parserBuilder()
 				.setSigningKey(secretKey)
@@ -57,12 +55,10 @@ public class JwtTokenValidator implements TokenValidator {
 		}
 	}
 
-	private void validateTokenType(Claims claims, JwtType expectedType) {
+	private void validateType(Claims claims, JwtType expectedType) {
 		String tokenType = claims.get("type", String.class);
-
 		if (!expectedType.name().equals(tokenType)) {
 			throw new AuthException(AuthErrorCode.TOKEN_INVALID);
 		}
 	}
-
 }

@@ -11,12 +11,12 @@ import org.springframework.web.bind.annotation.RequestBody;
 import org.springframework.web.bind.annotation.RequestMapping;
 import org.springframework.web.bind.annotation.RestController;
 
-import com.commerce.security.annotation.RequireRole;
-import com.commerce.security.annotation.AuthenticatedMemberId;
+import com.commerce.common.security.annotation.RequireRole;
+import com.commerce.common.security.annotation.AuthenticatedMemberId;
 import com.commerce.common.ApiResponse;
 import com.commerce.common.exception.CommonErrorCode;
 import com.commerce.common.exception.CommonException;
-import com.commerce.member.domain.MemberRole;
+import com.commerce.common.security.Role;
 import com.commerce.stock.application.service.AdminDecreaseStockService;
 import com.commerce.stock.application.service.AdminGetStockHistoryService;
 import com.commerce.stock.application.service.AdminIncreaseStockService;
@@ -40,7 +40,7 @@ public class AdminStockController {
 	private final AdminGetStockHistoryService adminGetStockHistoryService;
 
 	@PostMapping
-	@RequireRole(MemberRole.ROLE_ADMIN)
+	@RequireRole(Role.ROLE_ADMIN)
 	public ResponseEntity<ApiResponse<AdminStockResult>> createInitialStock(
 		@PathVariable Long productId,
 		@AuthenticatedMemberId Long adminMemberId,
@@ -55,7 +55,7 @@ public class AdminStockController {
 	}
 
 	@PostMapping("/increase")
-	@RequireRole(MemberRole.ROLE_ADMIN)
+	@RequireRole(Role.ROLE_ADMIN)
 	public ResponseEntity<ApiResponse<AdminStockResult>> increaseStock(
 		@PathVariable Long productId,
 		@AuthenticatedMemberId Long adminMemberId,
@@ -69,7 +69,7 @@ public class AdminStockController {
 	}
 
 	@PostMapping("/decrease")
-	@RequireRole(MemberRole.ROLE_ADMIN)
+	@RequireRole(Role.ROLE_ADMIN)
 	public ResponseEntity<ApiResponse<AdminStockResult>> decreaseStock(
 		@PathVariable Long productId,
 		@AuthenticatedMemberId Long adminMemberId,
@@ -83,7 +83,7 @@ public class AdminStockController {
 	}
 
 	@GetMapping("/histories")
-	@RequireRole(MemberRole.ROLE_ADMIN)
+	@RequireRole(Role.ROLE_ADMIN)
 	public ResponseEntity<ApiResponse<List<StockHistoryResult>>> getStockHistories(
 		@PathVariable Long productId
 	) {

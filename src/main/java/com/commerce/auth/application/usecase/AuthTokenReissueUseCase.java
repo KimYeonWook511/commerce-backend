@@ -4,8 +4,7 @@ import org.springframework.stereotype.Component;
 
 import com.commerce.auth.application.dto.AuthTokenReissueCommand;
 import com.commerce.auth.application.port.RefreshTokenStore;
-import com.commerce.auth.application.port.TokenValidator;
-import com.commerce.auth.application.port.vo.ParsedTokenClaims;
+import com.commerce.auth.application.port.RefreshTokenValidator;
 import com.commerce.auth.application.dto.AuthTokenIssueResult;
 import com.commerce.auth.application.dto.AuthTokenReissueResult;
 import com.commerce.auth.domain.exception.AuthErrorCode;
@@ -21,14 +20,12 @@ public class AuthTokenReissueUseCase {
 
 	private final FindMemberService findMemberService;
 	private final AuthTokenIssueUseCase authTokenIssueUseCase;
-	private final TokenValidator tokenValidator;
+	private final RefreshTokenValidator refreshTokenValidator;
 	private final RefreshTokenStore refreshTokenStore;
 
 	public AuthTokenReissueResult reissue(AuthTokenReissueCommand command) {
 		String refreshToken = command.getRefreshToken();
-		ParsedTokenClaims claims = tokenValidator.validateRefreshToken(refreshToken);
-
-		Long memberId = parseMemberId(claims.subject());
+		Long memberId = refreshTokenValidator.validateRefreshToken(refreshToken);
 
 		validateStoredRefreshToken(memberId, refreshToken);
 
@@ -41,14 +38,6 @@ public class AuthTokenReissueUseCase {
 			tokenIssueResult.getAccessToken(),
 			tokenIssueResult.getRefreshToken()
 		);
-	}
-
-	private Long parseMemberId(String subject) {
-		try {
-			return Long.parseLong(subject);
-		} catch (NumberFormatException ex) {
-			throw new AuthException(AuthErrorCode.TOKEN_INVALID);
-		}
 	}
 
 	private void validateStoredRefreshToken(Long memberId, String refreshToken) {

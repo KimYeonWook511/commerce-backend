@@ -1,4 +1,4 @@
-package com.commerce.security;
+package com.commerce.common.security;
 
 import static org.assertj.core.api.Assertions.assertThat;
 import static org.mockito.BDDMockito.given;
@@ -27,27 +27,26 @@ import org.springframework.web.bind.annotation.GetMapping;
 import org.springframework.web.bind.annotation.RestController;
 
 import com.commerce.common.log.filter.TraceIdFilterConfig;
-import com.commerce.security.filter.JwtAuthenticationFilterConfig;
-import com.commerce.security.interceptor.AuthorizationInterceptor;
-import com.commerce.auth.application.usecase.TokenAuthenticationUseCase;
-import com.commerce.auth.application.dto.TokenAuthenticationResult;
-import com.commerce.security.resolver.AuthenticatedMemberIdArgumentResolver;
-import com.commerce.common.config.WebConfig;
 import com.commerce.common.log.LogContext;
-import com.commerce.member.domain.MemberRole;
-import com.commerce.security.annotation.AuthenticatedMemberId;
-import com.commerce.security.annotation.RequireRole;
+import com.commerce.common.security.annotation.AuthenticatedMemberId;
+import com.commerce.common.security.annotation.RequireRole;
+import com.commerce.common.security.config.SecurityWebMvcConfig;
+import com.commerce.common.security.context.AuthenticationContext;
+import com.commerce.common.security.filter.TokenAuthenticationFilterConfig;
+import com.commerce.common.security.interceptor.AuthorizationInterceptor;
+import com.commerce.common.security.port.TokenAuthenticator;
+import com.commerce.common.security.resolver.AuthenticatedMemberIdArgumentResolver;
 
 
 @WebMvcTest(controllers = SecurityWebMvcTest.TestController.class)
 @AutoConfigureMockMvc(addFilters = true)
 @ActiveProfiles("test")
 @Import({
-	WebConfig.class,
+	SecurityWebMvcConfig.class,
 	AuthenticatedMemberIdArgumentResolver.class,
 	AuthorizationInterceptor.class,
 	TraceIdFilterConfig.class,
-	JwtAuthenticationFilterConfig.class,
+	TokenAuthenticationFilterConfig.class,
 	SecurityWebMvcTest.TestController.class
 })
 class SecurityWebMvcTest {
@@ -56,7 +55,7 @@ class SecurityWebMvcTest {
 	private MockMvc mockMvc;
 
 	@MockitoBean
-	private TokenAuthenticationUseCase tokenAuthenticationUseCase;
+	private TokenAuthenticator tokenAuthenticator;
 
 	@AfterEach
 	void tearDown() {
@@ -78,8 +77,8 @@ class SecurityWebMvcTest {
 	@Test
 	void secureEndpoint_whenTokenValid_returnOk() throws Exception {
 		// given
-		given(tokenAuthenticationUseCase.authenticateAccessToken("access-token"))
-			.willReturn(TokenAuthenticationResult.of(1L, "ROLE_USER"));
+		given(tokenAuthenticator.authenticate("access-token"))
+			.willReturn(new AuthenticationContext(1L, Role.ROLE_USER));
 
 		// when & then
 		mockMvc.perform(get("/test/secure")
@@ -91,8 +90,8 @@ class SecurityWebMvcTest {
 	@Test
 	void adminEndpoint_whenRoleMismatch_returnForbidden() throws Exception {
 		// given
-		given(tokenAuthenticationUseCase.authenticateAccessToken("access-token"))
-			.willReturn(TokenAuthenticationResult.of(1L, "ROLE_USER"));
+		given(tokenAuthenticator.authenticate("access-token"))
+			.willReturn(new AuthenticationContext(1L, Role.ROLE_USER));
 
 		// when & then
 		mockMvc.perform(get("/test/admin")
@@ -107,8 +106,8 @@ class SecurityWebMvcTest {
 	@Test
 	void memberIdEndpoint_whenAuthenticated_returnMemberId() throws Exception {
 		// given
-		given(tokenAuthenticationUseCase.authenticateAccessToken("access-token"))
-			.willReturn(TokenAuthenticationResult.of(10L, "ROLE_USER"));
+		given(tokenAuthenticator.authenticate("access-token"))
+			.willReturn(new AuthenticationContext(10L, Role.ROLE_USER));
 
 		// when & then
 		mockMvc.perform(get("/test/member-id")
@@ -124,7 +123,7 @@ class SecurityWebMvcTest {
 		mockMvc.perform(get("/products"))
 			.andExpect(status().isOk());
 
-		then(tokenAuthenticationUseCase).should(never()).authenticateAccessToken(any());
+		then(tokenAuthenticator).should(never()).authenticate(any());
 		assertThat(LogContext.getMemberId()).isNull();
 	}
 
@@ -132,8 +131,8 @@ class SecurityWebMvcTest {
 	@Test
 	void authenticatedRequest_mdcMemberIdSetInControllerAndRemovedAfter() throws Exception {
 		// given
-		given(tokenAuthenticationUseCase.authenticateAccessToken("access-token"))
-			.willReturn(TokenAuthenticationResult.of(42L, "ROLE_USER"));
+		given(tokenAuthenticator.authenticate("access-token"))
+			.willReturn(new AuthenticationContext(42L, Role.ROLE_USER));
 
 		// when & then
 		mockMvc.perform(get("/test/mdc-member-id")
@@ -152,7 +151,7 @@ class SecurityWebMvcTest {
 			return ResponseEntity.ok().build();
 		}
 
-		@RequireRole(MemberRole.ROLE_ADMIN)
+		@RequireRole(Role.ROLE_ADMIN)
 		@GetMapping("/test/admin")
 		public ResponseEntity<Void> admin() {
 			return ResponseEntity.ok().build();

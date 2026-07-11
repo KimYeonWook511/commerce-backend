@@ -17,12 +17,13 @@ import org.springframework.test.context.ActiveProfiles;
 import org.springframework.test.context.bean.override.mockito.MockitoBean;
 import org.springframework.test.web.servlet.MockMvc;
 
-import com.commerce.security.filter.JwtAuthenticationFilter;
-import com.commerce.security.interceptor.AuthorizationInterceptor;
-import com.commerce.auth.application.usecase.TokenAuthenticationUseCase;
-import com.commerce.auth.application.dto.TokenAuthenticationResult;
-import com.commerce.security.resolver.AuthenticatedMemberIdArgumentResolver;
-import com.commerce.common.config.WebConfig;
+import com.commerce.common.security.filter.TokenAuthenticationFilter;
+import com.commerce.common.security.interceptor.AuthorizationInterceptor;
+import com.commerce.common.security.port.TokenAuthenticator;
+import com.commerce.common.security.Role;
+import com.commerce.common.security.context.AuthenticationContext;
+import com.commerce.common.security.resolver.AuthenticatedMemberIdArgumentResolver;
+import com.commerce.common.security.config.SecurityWebMvcConfig;
 import com.commerce.payment.application.service.ReservePaymentService;
 import com.commerce.payment.application.dto.ReservePaymentCommand;
 import com.commerce.payment.application.dto.ReservePaymentResult;
@@ -32,10 +33,10 @@ import com.commerce.payment.application.dto.ReservePaymentResult;
 @AutoConfigureMockMvc(addFilters = true)
 @ActiveProfiles("test")
 @Import({
-	WebConfig.class,
+	SecurityWebMvcConfig.class,
 	AuthenticatedMemberIdArgumentResolver.class,
 	AuthorizationInterceptor.class,
-	JwtAuthenticationFilter.class
+	TokenAuthenticationFilter.class
 })
 class ReservePaymentControllerTest {
 
@@ -46,7 +47,7 @@ class ReservePaymentControllerTest {
 	private ReservePaymentService reservePaymentService;
 
 	@MockitoBean
-	private TokenAuthenticationUseCase tokenAuthenticationUseCase;
+	private TokenAuthenticator tokenAuthenticator;
 
 	@DisplayName("결제 예약 요청이 유효하면 결제 예약 응답을 반환한다")
 	@Test
@@ -161,7 +162,7 @@ class ReservePaymentControllerTest {
 	}
 
 	private void stubForValidToken() {
-		given(tokenAuthenticationUseCase.authenticateAccessToken("access-token"))
-			.willReturn(TokenAuthenticationResult.of(1L, "ROLE_USER"));
+		given(tokenAuthenticator.authenticate("access-token"))
+			.willReturn(new AuthenticationContext(1L, Role.ROLE_USER));
 	}
 }

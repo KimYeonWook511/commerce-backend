@@ -1,4 +1,4 @@
-package com.commerce.security.filter;
+package com.commerce.common.security.filter;
 
 import static org.assertj.core.api.Assertions.assertThat;
 import static org.mockito.ArgumentMatchers.any;
@@ -18,21 +18,21 @@ import org.springframework.mock.web.MockFilterChain;
 import org.springframework.mock.web.MockHttpServletRequest;
 import org.springframework.mock.web.MockHttpServletResponse;
 
-import com.commerce.auth.application.usecase.TokenAuthenticationUseCase;
-import com.commerce.auth.application.dto.TokenAuthenticationResult;
 import com.commerce.auth.domain.exception.AuthErrorCode;
 import com.commerce.auth.domain.exception.AuthException;
 import com.commerce.common.log.LogContext;
+import com.commerce.common.security.Role;
+import com.commerce.common.security.context.AuthenticationContext;
+import com.commerce.common.security.port.TokenAuthenticator;
 import com.fasterxml.jackson.databind.ObjectMapper;
 
 import jakarta.servlet.FilterChain;
-import jakarta.servlet.ServletException;
 
-class JwtAuthenticationFilterTest {
+class TokenAuthenticationFilterTest {
 
-	private final TokenAuthenticationUseCase tokenAuthenticationUseCase = mock(TokenAuthenticationUseCase.class);
+	private final TokenAuthenticator tokenAuthenticator = mock(TokenAuthenticator.class);
 	private final ObjectMapper objectMapper = new ObjectMapper();
-	private final JwtAuthenticationFilter filter = new JwtAuthenticationFilter(tokenAuthenticationUseCase, objectMapper);
+	private final TokenAuthenticationFilter filter = new TokenAuthenticationFilter(tokenAuthenticator, objectMapper);
 
 	@BeforeEach
 	void setUp() {
@@ -51,8 +51,8 @@ class JwtAuthenticationFilterTest {
 		request.addHeader("Authorization", "Bearer valid-token");
 		MockHttpServletResponse response = new MockHttpServletResponse();
 
-		when(tokenAuthenticationUseCase.authenticateAccessToken("valid-token"))
-			.thenReturn(TokenAuthenticationResult.of(42L, "ROLE_USER"));
+		when(tokenAuthenticator.authenticate("valid-token"))
+			.thenReturn(new AuthenticationContext(42L, Role.ROLE_USER));
 
 		AtomicReference<String> mdcDuringChain = new AtomicReference<>();
 		FilterChain chain = mock(FilterChain.class);
@@ -66,7 +66,7 @@ class JwtAuthenticationFilterTest {
 		assertThat(mdcDuringChain.get()).isEqualTo("42");
 	}
 
-	@DisplayName("doFilter 완료 후에도 Jwt가 지우지 않아 populate된 memberId가 MDC에 남는다")
+	@DisplayName("doFilter 완료 후에도 필터가 지우지 않아 populate된 memberId가 MDC에 남는다")
 	@Test
 	void afterDoFilter_mdcMemberIdRemainsPopulated() throws Exception {
 		MockHttpServletRequest request = new MockHttpServletRequest("GET", "/orders");
@@ -74,8 +74,8 @@ class JwtAuthenticationFilterTest {
 		MockHttpServletResponse response = new MockHttpServletResponse();
 		MockFilterChain chain = new MockFilterChain();
 
-		when(tokenAuthenticationUseCase.authenticateAccessToken("valid-token"))
-			.thenReturn(TokenAuthenticationResult.of(42L, "ROLE_USER"));
+		when(tokenAuthenticator.authenticate("valid-token"))
+			.thenReturn(new AuthenticationContext(42L, Role.ROLE_USER));
 
 		filter.doFilter(request, response, chain);
 
@@ -103,7 +103,7 @@ class JwtAuthenticationFilterTest {
 		MockHttpServletResponse response = new MockHttpServletResponse();
 		MockFilterChain chain = new MockFilterChain();
 
-		when(tokenAuthenticationUseCase.authenticateAccessToken("invalid-token"))
+		when(tokenAuthenticator.authenticate("invalid-token"))
 			.thenThrow(new AuthException(AuthErrorCode.TOKEN_INVALID));
 
 		filter.doFilter(request, response, chain);
@@ -131,15 +131,15 @@ class JwtAuthenticationFilterTest {
 		assertThat(LogContext.getMemberId()).isNull();
 	}
 
-	@DisplayName("chain.doFilter에서 예외가 발생해도 Jwt가 지우지 않아 populate된 memberId가 남는다")
+	@DisplayName("chain.doFilter에서 예외가 발생해도 필터가 지우지 않아 populate된 memberId가 남는다")
 	@Test
 	void chainException_mdcMemberIdRemainsPopulated() throws Exception {
 		MockHttpServletRequest request = new MockHttpServletRequest("GET", "/orders");
 		request.addHeader("Authorization", "Bearer valid-token");
 		MockHttpServletResponse response = new MockHttpServletResponse();
 
-		when(tokenAuthenticationUseCase.authenticateAccessToken("valid-token"))
-			.thenReturn(TokenAuthenticationResult.of(42L, "ROLE_USER"));
+		when(tokenAuthenticator.authenticate("valid-token"))
+			.thenReturn(new AuthenticationContext(42L, Role.ROLE_USER));
 
 		FilterChain chain = mock(FilterChain.class);
 		doThrow(new RuntimeException("체인 내부 예외")).when(chain).doFilter(any(), any());
@@ -158,8 +158,8 @@ class JwtAuthenticationFilterTest {
 		request.addHeader("Authorization", "Bearer valid-token");
 		MockHttpServletResponse response = new MockHttpServletResponse();
 
-		when(tokenAuthenticationUseCase.authenticateAccessToken("valid-token"))
-			.thenReturn(TokenAuthenticationResult.of(99L, "ROLE_USER"));
+		when(tokenAuthenticator.authenticate("valid-token"))
+			.thenReturn(new AuthenticationContext(99L, Role.ROLE_USER));
 
 		AtomicReference<String> mdcDuringChain = new AtomicReference<>();
 		FilterChain chain = mock(FilterChain.class);

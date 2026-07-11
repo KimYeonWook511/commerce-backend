@@ -25,7 +25,7 @@ import org.springframework.test.web.servlet.MockMvc;
 import org.springframework.web.bind.annotation.GetMapping;
 import org.springframework.web.bind.annotation.RestController;
 
-import com.commerce.security.filter.JwtAuthenticationFilter;
+import com.commerce.common.security.filter.TokenAuthenticationFilter;
 
 import ch.qos.logback.classic.Level;
 import ch.qos.logback.classic.Logger;
@@ -35,7 +35,7 @@ import ch.qos.logback.core.read.ListAppender;
 @WebMvcTest(
 	controllers = AccessLogFilterIntegrationTest.TestController.class,
 	excludeAutoConfiguration = {SecurityAutoConfiguration.class, SecurityFilterAutoConfiguration.class},
-	excludeFilters = @Filter(type = FilterType.ASSIGNABLE_TYPE, classes = JwtAuthenticationFilter.class)
+	excludeFilters = @Filter(type = FilterType.ASSIGNABLE_TYPE, classes = TokenAuthenticationFilter.class)
 )
 @AutoConfigureMockMvc(addFilters = true)
 @ActiveProfiles("test")

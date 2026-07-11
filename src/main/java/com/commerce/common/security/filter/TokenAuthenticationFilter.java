@@ -1,20 +1,19 @@
-package com.commerce.security.filter;
+package com.commerce.common.security.filter;
 
 import java.io.IOException;
 import java.util.Set;
 
 import org.springframework.web.filter.OncePerRequestFilter;
 
-import com.commerce.auth.application.usecase.TokenAuthenticationUseCase;
-import com.commerce.auth.application.dto.TokenAuthenticationResult;
-import com.commerce.auth.domain.exception.AuthErrorCode;
-import com.commerce.auth.domain.exception.AuthException;
 import com.commerce.common.ApiResponse;
 import com.commerce.common.exception.CustomException;
 import com.commerce.common.exception.ErrorCategoryHttpStatus;
 import com.commerce.common.exception.ErrorCode;
 import com.commerce.common.log.LogContext;
-import com.commerce.security.context.AuthenticationContext;
+import com.commerce.common.security.context.AuthenticationContext;
+import com.commerce.common.security.context.AuthenticationContextHolder;
+import com.commerce.common.security.exception.SecurityErrorCode;
+import com.commerce.common.security.port.TokenAuthenticator;
 import com.fasterxml.jackson.databind.ObjectMapper;
 
 import jakarta.servlet.FilterChain;
@@ -24,7 +23,7 @@ import jakarta.servlet.http.HttpServletResponse;
 import lombok.RequiredArgsConstructor;
 
 @RequiredArgsConstructor
-public class JwtAuthenticationFilter extends OncePerRequestFilter {
+public class TokenAuthenticationFilter extends OncePerRequestFilter {
 
 	// 나중에 설정 파일로 분리하기
 	private static final Set<String> WHITELIST = Set.of(
@@ -35,7 +34,7 @@ public class JwtAuthenticationFilter extends OncePerRequestFilter {
 		"/payments/naverpay/return"
 	);
 
-	private final TokenAuthenticationUseCase tokenAuthenticationUseCase;
+	private final TokenAuthenticator tokenAuthenticator;
 	private final ObjectMapper objectMapper;
 
 	@Override
@@ -55,28 +54,28 @@ public class JwtAuthenticationFilter extends OncePerRequestFilter {
 		// Request Header에서 토큰 가져오기
 		String token = resolveToken(request);
 		if (token == null) {
-			unauthorized(response, new AuthException(AuthErrorCode.UNAUTHORIZED));
+			unauthorized(response, SecurityErrorCode.UNAUTHORIZED);
 			return;
 		}
 
 		// 토큰 처리
 		try {
-			TokenAuthenticationResult principal = tokenAuthenticationUseCase.authenticateAccessToken(token);
+			AuthenticationContext context = tokenAuthenticator.authenticate(token);
 
 			// memberId, role Context에 저장
-			Long memberId = principal.getMemberId();
-			AuthenticationContext.set(memberId, principal.getRole());
-			LogContext.putMemberId(memberId);
+			AuthenticationContextHolder.set(context);
+			LogContext.putMemberId(context.memberId());
 
 			filterChain.doFilter(request, response);
 
 		} catch (CustomException e) {
-			unauthorized(response, e);
+			// 토큰 만료·무효 등 auth가 판정한 코드를 공통 베이스로 받아 그대로 전파한다.
+			unauthorized(response, e.getErrorCode());
 		} catch (Exception e) {
-			unauthorized(response);
+			unauthorized(response, SecurityErrorCode.UNAUTHORIZED);
 		} finally {
 			// 반드시 정리
-			AuthenticationContext.clear();
+			AuthenticationContextHolder.clear();
 		}
 	}
 
@@ -88,17 +87,7 @@ public class JwtAuthenticationFilter extends OncePerRequestFilter {
 		return null;
 	}
 
-	private void unauthorized(HttpServletResponse response, CustomException ex) throws IOException {
-		ErrorCode errorCode = ex.getErrorCode();
-		response.setStatus(ErrorCategoryHttpStatus.of(errorCode.getCategory()).value());
-		response.setCharacterEncoding("UTF-8");
-		response.setContentType("application/json");
-		ApiResponse<Void> body = ApiResponse.error(errorCode);
-		response.getWriter().write(objectMapper.writeValueAsString(body));
-	}
-
-	private void unauthorized(HttpServletResponse response) throws IOException {
-		ErrorCode errorCode = AuthErrorCode.UNAUTHORIZED; // 필요시 커스텀 ErrorCode 생성하기
+	private void unauthorized(HttpServletResponse response, ErrorCode errorCode) throws IOException {
 		response.setStatus(ErrorCategoryHttpStatus.of(errorCode.getCategory()).value());
 		response.setCharacterEncoding("UTF-8");
 		response.setContentType("application/json");
