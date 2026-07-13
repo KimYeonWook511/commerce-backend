@@ -95,6 +95,8 @@ spec 문서와 `phases` 문서로 부족한 공통 맥락이 있을 때만 `CLAU
 
 > **문서 산출 모델(File Drafting 해체):** 옛 "File Drafting" 스테이지는 해체됐다. 각 단계가 자기 문서를 그 자리에서 쓴다 — Specify가 `spec.md`, Clarify가 `spec.md`의 `## Clarifications`, Plan + Tasks가 `architecture.md`·`api-spec.md`·`db-schema.md`와 phase·step 파일을 만든다. `adr.md`는 한 단계에 묶지 않고 **결정이 생기는 곳(주로 Clarify·Plan + Tasks)에서 그때그때 append**한다.
 
+> **문서 용어(전 산출물 공통):** harness가 만드는 모든 문서(`spec.md`·`plan.md`·설계 문서·`phases/**/step<N>.md`)는 `CLAUDE.md`의 "문서 용어" 규칙을 따른다 — 표준 기술 용어는 그대로 쓰되 일반적이지 않은 비유·축약이나 난해한 표현은 쉽게 풀어써 명료하게 다듬는다. 이 규칙은 spec.md 템플릿 작성 규칙(근원), Clarify taxonomy(spec 게이트), Analyze 검출 패스(전 문서 게이트)에서 각각 강제된다.
+
 ---
 
 ## Workflow
@@ -222,7 +224,7 @@ B. <방식 B> — ADR-020 위반. 채택하려면 ADR 갱신 필요.
 - 통합·외부 의존 (외부 서비스/API와 실패 모드, 데이터 포맷, 프로토콜/버전 가정)
 - 엣지·실패 처리 (부정 시나리오, rate limit, 동시 편집 등 충돌 해소)
 - 제약·트레이드오프 (기술 제약, 명시적 트레이드오프/기각 대안)
-- 용어 일관성 (표준 용어, 회피할 동의어)
+- 용어 일관성·쉬운 표현 (표준 용어, 회피할 동의어 + 풀어써야 할 비표준 비유·축약이나 난해한 표현이 남아 있는가 — `CLAUDE.md` "문서 용어")
 - 완료 신호 (완료 기준의 검증 가능성, 측정 가능한 DoD)
 - 기타·placeholder (TODO 마커, "robust"·"직관적" 등 정량화 안 된 모호 형용사)
 
@@ -350,6 +352,7 @@ phase는 "그 단위만으로 한 번 통합·검증할 가치가 있는 덩어�
 - **설계 문서**(작성된 것): architecture·data-model·db-schema·api-spec·adr.
 - **phase/step**: phase index, 각 `step<N>.md`의 구현 지시 + Acceptance Criteria.
 - **`docs/spec-constitution.md`**: 원칙 검증 기준.
+- **`CLAUDE.md`의 "문서 용어" 규칙**: 전 산출 문서의 용어 평이성 판정 기준(검출 패스 6).
 
 #### 검출 패스 (high-signal 위주)
 
@@ -358,7 +361,7 @@ phase는 "그 단위만으로 한 번 통합·검증할 가치가 있는 덩어�
 3. **미명세**: 동사는 있는데 대상·측정 기준이 없는 요구사항, AC가 spec과 안 맞는 step, spec/plan에 없는 파일·컴포넌트를 참조하는 step.
 4. **모호함**: 측정 기준 없는 형용사("빠른"·"안정적"·"확장 가능"), 미해소 placeholder(TODO·???).
 5. **중복**: 거의 같은 요구사항. 더 흐린 표현을 통합 대상으로.
-6. **불일치**: 용어 드리프트(같은 개념 다른 이름), plan엔 있는데 spec엔 없는 엔티티(또는 반대), step 순서 모순(기반 작업 전에 통합 step), 충돌하는 요구사항.
+6. **불일치·난해한 용어**: 용어 드리프트(같은 개념 다른 이름), 풀어쓰지 않은 비표준 비유·축약이나 난해한 표현(`CLAUDE.md` "문서 용어" 위반 — 전 산출 문서 대상), plan엔 있는데 spec엔 없는 엔티티(또는 반대), step 순서 모순(기반 작업 전에 통합 step), 충돌하는 요구사항.
 
 #### 심각도
 

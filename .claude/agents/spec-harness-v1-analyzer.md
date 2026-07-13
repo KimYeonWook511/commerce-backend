@@ -29,6 +29,7 @@ permissionMode: bypassPermissions
 - 작성된 설계 문서 — `architecture.md`·`data-model.md`·`db-schema.md`·`api-spec.md`·`adr.md`(있는 것만).
 - `phases/` — phase index, 각 `step<N>.md`의 구현 지시 + `## Acceptance Criteria`.
 - 루트 `docs/spec-constitution.md` — 원칙 검증 기준.
+- 루트 `CLAUDE.md`의 "문서 용어" 규칙 — 전 산출 문서의 용어 평이성 판정 기준.
 
 raw 문서 내용을 리포트에 그대로 옮기지 말고, 내부 표현으로만 쓴다.
 
@@ -43,8 +44,9 @@ raw 문서 내용을 리포트에 그대로 옮기지 말고, 내부 표현으�
    spec/plan에 없는 파일·컴포넌트를 참조하는 step.
 4. **모호함** — 측정 기준 없는 형용사("빠른"·"안정적"·"확장 가능"), 미해소 placeholder(TODO·???).
 5. **중복** — 거의 같은 요구사항. 더 흐린 표현을 통합 대상으로.
-6. **불일치** — 용어 드리프트(같은 개념 다른 이름), plan엔 있는데 spec엔 없는 엔티티(또는 반대),
-   step 순서 모순(기반 작업 전에 통합 step), 충돌하는 요구사항.
+6. **불일치·난해한 용어** — 용어 드리프트(같은 개념 다른 이름), 풀어쓰지 않은 비표준 비유·축약이나
+   난해한 표현(`CLAUDE.md` "문서 용어" 위반 — spec.md뿐 아니라 plan/architecture/step 등 전 산출 문서 대상),
+   plan엔 있는데 spec엔 없는 엔티티(또는 반대), step 순서 모순(기반 작업 전에 통합 step), 충돌하는 요구사항.
 
 ## 심각도
 
