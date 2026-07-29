@@ -13,6 +13,9 @@
       }
     ]
   },
+  "enabledPlugins": {
+    "spec-harness@KimYeonWook511-harness": true
+  },
   "extraKnownMarketplaces": {
     "KimYeonWook511-harness": {
       "source": {
@@ -20,8 +23,5 @@
         "repo": "KimYeonWook511/spec-harness-plugin"
       }
     }
-  },
-  "enabledPlugins": {
-    "spec-harness@KimYeonWook511-harness": true
   }
 }
