@@ -16,7 +16,7 @@ Java, Spring Boot, Gradle, MySQL, JPA(Hibernate) 백엔드 프로젝트.
 이 일곱 가지는 다른 어떤 규칙보다 우선하며 예외 없이 지킨다.
 
 1. **언어**: 답변·설명은 한국어. 코드 식별자(클래스·메서드·변수·패키지·테스트명)는 영어. 코드 식별자에 한국어를 섞지 않는다.
-2. **승인 게이트**: 사용자 승인 전에는 파일을 생성·수정하지 않는다. 일반 구현은 Plan Mode로 계획을 제시하고 `ExitPlanMode`로 승인을 받은 뒤 실행한다. `spec-harness-v1` skill은 자체 승인 절차(Analyze 통과 후 중단·보고 → 사용자 진행 확인)를 따르며, 그 절차대로 승인받기 전에는 실행기(`execute.py`)·workflow를 실행하지 않는다.
+2. **승인 게이트**: 사용자 승인 전에는 파일을 생성·수정하지 않는다. 일반 구현은 Plan Mode로 계획을 제시하고 `ExitPlanMode`로 승인을 받은 뒤 실행한다. spec-harness는 자체 승인 절차(Analyze 통과 후 중단·보고 → 사용자 진행 확인)를 따르며, 그 절차대로 승인받기 전에는 실행 단계로 넘어가지 않는다.
 3. **불명확하면 멈춤**: 임의로 판단하지 않고 구현 전에 사용자에게 먼저 확인한다. 근거 없이 기존 컨벤션을 무시하거나 사용처 없는 코드를 추가하지 않는다.
 4. **완료 산출물 불변**: 머지된 작업 산출물은 수정하지 않는다 — 레거시 `docs/tasks/`(동결)와 승격된 `docs/specs/_archive/` 모두. 머지 후 발생한 변경은 루트 `docs/` 문서로만 표현한다. 상세는 `docs/tasks/README.md`.
 5. **컨벤션 준수**: commit / PR / issue / 브랜치 생성은 예외 없이 해당 컨벤션을 따른다. 어떤 문서를 언제 읽을지는 아래 "시점별 규칙" 표를 따른다.
@@ -57,7 +57,7 @@ Java, Spring Boot, Gradle, MySQL, JPA(Hibernate) 백엔드 프로젝트.
 
 코드를 수정·작성한 뒤, 변경이 아래 표의 종류에 해당하면 **같은 작업 안에서** 해당 루트 문서를 현재 코드 기준으로 갱신한다. 내부 구현만 바뀐 경우는 동기화하지 않는다. 동기화 여부를 "판단"하지 말고 표와 **대조**한다.
 
-단, **spec-harness 실행 중에는 이 절이 적용되지 않는다** — 구현과 PR 리뷰 반영이 끝나 harness가 **Root Sync(Stage 8)**에 이르기 전까지는 루트 상태 문서(`docs/api-spec.md`·`docs/architecture.md`·`docs/db-schema.md`)를 갱신하지 않는다. 코드가 spec 설계와 달라지면 해당 spec 폴더의 설계 md를 as-built로 갱신하고, 루트 승격은 Root Sync에서 한 번에 한다. (근거: 이 repo는 squash-merge라 중간 커밋이 사라지고, PR 리뷰가 계약·스키마·구조를 바꿀 수 있어, 실행 중 미리 동기화하면 재작업·stale 위험만 크다.)
+단, **spec-harness 실행 중에는 이 절이 적용되지 않는다** — 구현과 PR 리뷰 반영이 끝나 harness가 **Root Sync** 단계에 이르기 전까지는 루트 상태 문서(`docs/api-spec.md`·`docs/architecture.md`·`docs/db-schema.md`)를 갱신하지 않는다. 코드가 spec 설계와 달라지면 해당 spec 폴더의 설계 md를 as-built로 갱신하고, 루트 승격은 Root Sync에서 한 번에 한다. (근거: 이 repo는 squash-merge라 중간 커밋이 사라지고, PR 리뷰가 계약·스키마·구조를 바꿀 수 있어, 실행 중 미리 동기화하면 재작업·stale 위험만 크다.)
 
 | 변경 종류 | 동기화 대상 | 동작 |
 | --- | --- | --- |
@@ -121,7 +121,7 @@ Java, Spring Boot, Gradle, MySQL, JPA(Hibernate) 백엔드 프로젝트.
 - 명세 불가침 원칙(위험영역): `docs/spec-constitution.md`
 
 명세·하네스 운영
-- spec 작업 체계·8-Stage 흐름: `docs/claude/skills/spec-harness-v1.md` (skill 본문: `.claude/skills/spec-harness-v1/SKILL.md`)
+- SDD 하네스: `spec-harness@KimYeonWook511-harness` 플러그인으로 동작한다. 마켓플레이스 주소와 활성 여부는 `.claude/settings.json`이, 이 저장소의 규칙 문서·방법론·작업 공간 형식은 `.spec-harness/config.json`이 선언한다.
 - 레거시 task 문서 운영 가이드(동결): `docs/tasks/README.md`
 - Claude Code hook 구조: `docs/claude/hooks/overview.md`
 - Claude Code skill 문서: `docs/claude/skills/*`
