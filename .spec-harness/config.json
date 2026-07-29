@@ -1,0 +1,27 @@
+{
+  "rule_docs": [
+    "docs/spec-constitution.md",
+    "docs/package-structure-conventions.md",
+    "docs/exception-strategy.md",
+    "docs/optimistic-lock-design.md",
+    "docs/persistence-conventions.md",
+    "docs/test-code-conventions.md",
+    "docs/logging-conventions.md"
+  ],
+  "commit_rule_docs": ["docs/commit-conventions.md"],
+  "reference_docs": [
+    "docs/api-spec.md",
+    "docs/db-schema.md",
+    "docs/architecture.md"
+  ],
+  "spec_root": "docs/specs",
+  "methodologies": ["ddd", "bdd"],
+  "pr": { "draft_until_root_sync": true },
+  "workspace": {
+    "mode": "worktree",
+    "base_ref": "develop",
+    "branch_pattern": "<type>/<name>",
+    "worktree_pattern": "worktrees/<type>-<name>",
+    "types": ["feature", "fix", "docs", "chore", "refactor", "test"]
+  }
+}
