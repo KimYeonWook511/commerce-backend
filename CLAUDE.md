@@ -13,15 +13,16 @@ Java, Spring Boot, Gradle, MySQL, JPA(Hibernate) 백엔드 프로젝트.
 
 ## 핵심 규칙 (항상, 최우선)
 
-이 일곱 가지는 다른 어떤 규칙보다 우선하며 예외 없이 지킨다.
+이 여덟 가지는 다른 어떤 규칙보다 우선하며 예외 없이 지킨다.
 
 1. **언어**: 답변·설명은 한국어. 코드 식별자(클래스·메서드·변수·패키지·테스트명)는 영어. 코드 식별자에 한국어를 섞지 않는다.
-2. **승인 게이트**: 사용자 승인 전에는 파일을 생성·수정하지 않는다. 일반 구현은 Plan Mode로 계획을 제시하고 `ExitPlanMode`로 승인을 받은 뒤 실행한다. `spec-harness-v1` skill은 자체 승인 절차(Analyze 통과 후 중단·보고 → 사용자 진행 확인)를 따르며, 그 절차대로 승인받기 전에는 실행기(`execute.py`)·workflow를 실행하지 않는다.
+2. **승인 게이트**: 사용자 승인 전에는 파일을 생성·수정하지 않는다. 일반 구현은 Plan Mode로 계획을 제시하고 `ExitPlanMode`로 승인을 받은 뒤 실행한다. spec-harness는 자체 승인 절차(Analyze 통과 후 중단·보고 → 사용자 진행 확인)를 따르며, 그 절차대로 승인받기 전에는 실행 단계로 넘어가지 않는다.
 3. **불명확하면 멈춤**: 임의로 판단하지 않고 구현 전에 사용자에게 먼저 확인한다. 근거 없이 기존 컨벤션을 무시하거나 사용처 없는 코드를 추가하지 않는다.
 4. **완료 산출물 불변**: 머지된 작업 산출물은 수정하지 않는다 — 레거시 `docs/tasks/`(동결)와 승격된 `docs/specs/_archive/` 모두. 머지 후 발생한 변경은 루트 `docs/` 문서로만 표현한다. 상세는 `docs/tasks/README.md`.
 5. **컨벤션 준수**: commit / PR / issue / 브랜치 생성은 예외 없이 해당 컨벤션을 따른다. 어떤 문서를 언제 읽을지는 아래 "시점별 규칙" 표를 따른다.
 6. **문서 용어**: **모든 문서(md)를 작성할 때**, 개발자에게 익숙한 표준 기술 용어(멱등, 낙관 락, 단일 출처 등)는 그대로 쓴다. 반면 일반적이지 않은 비유·축약이나 난해한 표현은 쉽게 풀어써 명료하게 다듬는다. 판단 기준은 "누가 읽어도 바로 이해되는가"라는 가독성이며, 단어 목록(사전)을 만들지 말고 이 기준으로 그때그때 판단한다.
 7. **브랜치 보호**: `main`과 `develop`은 보호 브랜치다. **어떤 경우에도 이 두 브랜치를 직접 변경하지 않는다** — 직접 push·commit·merge·force push·삭제 금지. 모든 변경은 **피처 브랜치 → PR → 머지**로만 반영한다. 세부 금지·허용은 아래 "브랜치 보호" 절을 따른다.
+8. **코드 자립성**: 코드 주석·Javadoc·`@DisplayName`·테스트 메서드명은 **그 자체로 읽히게** 쓴다. spec·ADR의 내부 식별자(`FR-###`·`SC-###` 등)를 코드에 남기지 않는다 — spec은 작업 후 아카이브되고 코드만 남아, 그 ID가 코드 독자에게 무의미해지기 때문이다. spec·ADR을 근거로 삼는 것은 맞지만, 코드에는 그 근거를 ID가 아니라 문장으로 적는다.
 
 ---
 
@@ -57,7 +58,7 @@ Java, Spring Boot, Gradle, MySQL, JPA(Hibernate) 백엔드 프로젝트.
 
 코드를 수정·작성한 뒤, 변경이 아래 표의 종류에 해당하면 **같은 작업 안에서** 해당 루트 문서를 현재 코드 기준으로 갱신한다. 내부 구현만 바뀐 경우는 동기화하지 않는다. 동기화 여부를 "판단"하지 말고 표와 **대조**한다.
 
-단, **spec-harness 실행 중에는 이 절이 적용되지 않는다** — 구현과 PR 리뷰 반영이 끝나 harness가 **Root Sync(Stage 8)**에 이르기 전까지는 루트 상태 문서(`docs/api-spec.md`·`docs/architecture.md`·`docs/db-schema.md`)를 갱신하지 않는다. 코드가 spec 설계와 달라지면 해당 spec 폴더의 설계 md를 as-built로 갱신하고, 루트 승격은 Root Sync에서 한 번에 한다. (근거: 이 repo는 squash-merge라 중간 커밋이 사라지고, PR 리뷰가 계약·스키마·구조를 바꿀 수 있어, 실행 중 미리 동기화하면 재작업·stale 위험만 크다.)
+단, **spec-harness 실행 중에는 이 절이 적용되지 않는다** — 구현과 PR 리뷰 반영이 끝나 harness가 **Root Sync** 단계에 이르기 전까지는 루트 상태 문서(`docs/api-spec.md`·`docs/architecture.md`·`docs/db-schema.md`)를 갱신하지 않는다. 코드가 spec 설계와 달라지면 해당 spec 폴더의 설계 md를 as-built로 갱신하고, 루트 승격은 Root Sync에서 한 번에 한다. (근거: 이 repo는 squash-merge라 중간 커밋이 사라지고, PR 리뷰가 계약·스키마·구조를 바꿀 수 있어, 실행 중 미리 동기화하면 재작업·stale 위험만 크다.)
 
 | 변경 종류 | 동기화 대상 | 동작 |
 | --- | --- | --- |
@@ -87,7 +88,7 @@ Java, Spring Boot, Gradle, MySQL, JPA(Hibernate) 백엔드 프로젝트.
 - 위 구조 규칙(@Transactional 위치, 예외 격리 등) 중 기계로 검증 가능한 것은 `ArchitectureRulesTest`(ArchUnit)가 강제한다.
 - 불필요한 추상화와 과한 설계를 피한다. 사용처 없는 인터페이스 메서드를 남기지 않는다.
 - 코드를 수정할 때 기존 주석을 삭제하지 않으며, 코드 위치가 바뀌면 주석도 함께 이동한다.
-- 코드 주석·테스트명은 **자립적**으로 쓴다. spec·ADR의 내부 식별자(`FR-###`·`SC-###` 등)는 코드에 남기지 않는다 — spec은 작업 후 아카이브되고 코드만 남아 그 ID가 코드 독자에게 무의미해지기 때문이다. "왜"는 ID 없이 문장으로 설명한다.
+- 코드 주석·테스트명에 spec·ADR 내부 식별자를 남기지 않는다 — 위 "핵심 규칙" 8번(코드 자립성)을 따른다.
 
 ---
 
@@ -121,7 +122,7 @@ Java, Spring Boot, Gradle, MySQL, JPA(Hibernate) 백엔드 프로젝트.
 - 명세 불가침 원칙(위험영역): `docs/spec-constitution.md`
 
 명세·하네스 운영
-- spec 작업 체계·8-Stage 흐름: `docs/claude/skills/spec-harness-v1.md` (skill 본문: `.claude/skills/spec-harness-v1/SKILL.md`)
+- SDD 하네스: `spec-harness@KimYeonWook511-harness` 플러그인으로 동작한다. 마켓플레이스 주소와 활성 여부는 `.claude/settings.json`이, 이 저장소의 규칙 문서·방법론·작업 공간 형식은 `.spec-harness/config.json`이 선언한다.
 - 레거시 task 문서 운영 가이드(동결): `docs/tasks/README.md`
 - Claude Code hook 구조: `docs/claude/hooks/overview.md`
 - Claude Code skill 문서: `docs/claude/skills/*`
