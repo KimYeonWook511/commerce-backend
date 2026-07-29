@@ -11,28 +11,6 @@
           }
         ]
       }
-    ],
-    "SubagentStop": [
-      {
-        "matcher": "spec-harness-v1-developer|spec-harness-v1-reviewer|spec-harness-v1-committer|spec-harness-v1-recorder|spec-harness-v1-finalizer",
-        "hooks": [
-          {
-            "type": "command",
-            "command": "\"$CLAUDE_PROJECT_DIR/.claude/skills/spec-harness-v1/scripts/hooks/log_stop.sh\""
-          }
-        ]
-      }
-    ],
-    "PostToolUse": [
-      {
-        "matcher": "Bash|Edit|Write|Read|Grep|Glob",
-        "hooks": [
-          {
-            "type": "command",
-            "command": "\"$CLAUDE_PROJECT_DIR/.claude/skills/spec-harness-v1/scripts/hooks/log_progress.sh\""
-          }
-        ]
-      }
     ]
   }
 }
