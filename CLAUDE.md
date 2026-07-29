@@ -51,7 +51,7 @@ Java, Spring Boot, Gradle, MySQL, JPA(Hibernate) 백엔드 프로젝트.
 | `git commit` 전 | `docs/commit-conventions.md` — 타입, subject 문체(`~한다`), 형식 |
 | `gh pr create` 전 | `docs/pr-conventions.md` — 타입, 형식, draft 여부 |
 | `gh pr merge` 전 | `docs/pr-conventions.md` 머지 규칙 (단, 보호 브랜치 셀프 머지·`--admin` 금지 — "브랜치 보호" 절 참고) |
-| `gh issue create` 전 | `.github/issue_template.md` — 섹션 구조 |
+| `gh issue create` 전 | `.github/issue_template.md` — 제목 규칙·섹션 구조·라벨 |
 | `git worktree add` 전 | `docs/branch-conventions.md` — 형식 |
 
 ### 코드 변경 후 루트 문서 동기화
