@@ -691,7 +691,7 @@ class ApproveNaverPayUseCaseTest {
 	@Test
 	void approve_whenCompleteApproveThrowsOrderException_propagatesWithoutCompensation() {
 		// given: PG SUCCESS + verify 통과 후 DB 기록 실패(CustomException 계열)
-		// → 정상 매출을 취소하지 않고 예외 전파, approve REQUESTED 유지 → reconcile self-heal (ADR-L1)
+		// → 정상 매출을 취소하지 않고 예외 전파, approve REQUESTED 유지 → reconcile self-heal
 		long memberId = 1L;
 		PaymentReservation reservation = createReservation("PAY-1", memberId, 1000);
 		Order order = createOrder(1000);
@@ -719,7 +719,7 @@ class ApproveNaverPayUseCaseTest {
 	@Test
 	void approve_whenCompleteApproveThrowsUnhandledPaymentException_propagatesWithoutCompensation() {
 		// given: PG SUCCESS + verify 통과 후 DB 기록 실패(unmapped PaymentException)
-		// → 버그 또는 transient 실패를 환불·FAILED로 박제하지 않고 전파(500), approve REQUESTED 유지 (ADR-L1)
+		// → 버그 또는 transient 실패를 환불·FAILED로 박제하지 않고 전파(500), approve REQUESTED 유지
 		long memberId = 1L;
 		PaymentReservation reservation = createReservation("PAY-1", memberId, 1000);
 		Order order = createOrder(1000);
@@ -747,7 +747,7 @@ class ApproveNaverPayUseCaseTest {
 	@Test
 	void approve_whenCompleteApproveThrowsUnexpectedException_propagatesWithoutCompensation() {
 		// given: PG SUCCESS + verify 통과 후 DB 기록 실패(일반 Exception — transient 또는 버그)
-		// → UNKNOWN/FAILED 둔갑 없이 전파(500), approve REQUESTED 유지 → reconcile self-heal (ADR-L1)
+		// → UNKNOWN/FAILED 둔갑 없이 전파(500), approve REQUESTED 유지 → reconcile self-heal
 		long memberId = 1L;
 		PaymentReservation reservation = createReservation("PAY-1", memberId, 1000);
 		Order order = createOrder(1000);

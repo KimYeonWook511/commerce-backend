@@ -566,7 +566,7 @@ class NaverPayApprovalUseCaseIntegrationTest {
 		pgA.succeed(LocalDateTime.now());
 		paymentPersistence.save(pgA);
 
-		// when & then: pgB는 existsApprovedByOrderId 가드에서 PG 호출 전 차단된다 (ADR-L2)
+		// when & then: pgB는 existsApprovedByOrderId 가드에서 PG 호출 전 차단된다
 		assertThatThrownBy(() -> approveNaverPayUseCase.approve(member.getId(), "PAY-INT-6-6", "pg-int-6-6-b"))
 			.isInstanceOfSatisfying(PaymentException.class, exception ->
 				assertThat(exception.getErrorCode()).isEqualTo(PaymentErrorCode.PAYMENT_DUPLICATE));
@@ -696,10 +696,10 @@ class NaverPayApprovalUseCaseIntegrationTest {
 	 * 9. DB/서버 장애
 	 * ===================================================
 	 */
-	@DisplayName("PAID 주문에 승인이 시도되고 중복 SUCCEEDED APPROVE가 없으면 비중복 PAID 안전망으로 종착한다 (ADR-L3)")
+	@DisplayName("PAID 주문에 승인이 시도되고 중복 SUCCEEDED APPROVE가 없으면 비중복 PAID 안전망으로 종착한다")
 	@Test
 	void approve_whenOrderAlreadyPaid_nonDuplicatePaidSafetyNetTerminates() {
-		// given: PG SUCCESS 후 order 상태가 PAID이지만 SUCCEEDED APPROVE payment가 없는 정합성 오류 시나리오 (ADR-L3)
+		// given: PG SUCCESS 후 order 상태가 PAID이지만 SUCCEEDED APPROVE payment가 없는 정합성 오류 시나리오
 		// facade가 ORDER_ALREADY_PAID를 받아 existsApprovedByOrderId 판별 → 비중복 → 환불 없이 통지 + FAILED 종착
 		Member member = memberPersistence.save(createMember());
 		Order order = persistOrder(member, "PAY-INT-9-1", 1000);
@@ -709,14 +709,14 @@ class NaverPayApprovalUseCaseIntegrationTest {
 		given(naverPayGateway.approve("pg-int-9-1"))
 			.willReturn(NaverPayApproveResult.success("PAY-INT-9-1", 1000));
 
-		// when & then: 비중복 PAID 안전망 — 환불 없이 PAYMENT_APPROVE_FAILED로 종착 (ADR-L3)
+		// when & then: 비중복 PAID 안전망 — 환불 없이 PAYMENT_APPROVE_FAILED로 종착
 		assertThatThrownBy(() -> approveNaverPayUseCase.approve(member.getId(), "PAY-INT-9-1", "pg-int-9-1"))
 			.isInstanceOf(PaymentException.class)
 			.satisfies(exception -> assertThat(((PaymentException)exception).getErrorCode())
 				.isEqualTo(PaymentErrorCode.PAYMENT_APPROVE_FAILED));
 		// 보상(PG cancel)이 없으므로 CANCEL payment는 생성되지 않는다
 		assertCancelPaymentEmpty("PAY-INT-9-1", "pg-int-9-1");
-		// approve payment는 FAILED로 종착한다 (ADR-L3 비중복 PAID 안전망)
+		// approve payment는 FAILED로 종착한다 (비중복 PAID 안전망)
 		assertThat(getPayment("PAY-INT-9-1", "pg-int-9-1", PaymentType.APPROVE).getStatus())
 			.isEqualTo(PaymentStatus.FAILED);
 		then(naverPayGateway).should(never()).cancel(any(), anyInt(), any());
@@ -726,7 +726,7 @@ class NaverPayApprovalUseCaseIntegrationTest {
 	@Test
 	void approve_whenCompleteApproveThrowsUnexpectedException_propagatesWithoutCompensation() {
 		// given: PG SUCCESS 후 DB 기록 실패(transient 또는 버그) — UNKNOWN/FAILED 둔갑 없이 전파(500)
-		// approve REQUESTED 유지 → reconcile self-heal (ADR-L1)
+		// approve REQUESTED 유지 → reconcile self-heal
 		Member member = memberPersistence.save(createMember());
 		persistOrder(member, "PAY-INT-9-2", 1000);
 		given(naverPayGateway.approve("pg-int-9-2"))
@@ -811,7 +811,7 @@ class NaverPayApprovalUseCaseIntegrationTest {
 		Member attacker = memberPersistence.save(createMember());
 		persistOrder(owner, "PAY-INT-10-1", 1000);
 
-		// when & then: (attacker.id, "PAY-INT-10-1") 조합이 없으므로 RESERVATION_NOT_FOUND (ADR-L3)
+		// when & then: (attacker.id, "PAY-INT-10-1") 조합이 없으므로 RESERVATION_NOT_FOUND
 		assertThatThrownBy(() -> approveNaverPayUseCase.approve(attacker.getId(), "PAY-INT-10-1", "pg-int-10-1"))
 			.isInstanceOf(PaymentException.class)
 			.satisfies(exception -> assertThat(((PaymentException)exception).getErrorCode())
@@ -900,7 +900,7 @@ class NaverPayApprovalUseCaseIntegrationTest {
 
 	/**
 	 * ===================================================
-	 * 13. 진입 차단 (ADR-L2)
+	 * 13. 진입 차단
 	 * ===================================================
 	 */
 	@DisplayName("이미 APPROVE·SUCCEEDED 결제가 있는 주문에 새 승인 요청이 진입 단계에서 차단되고 PG 호출이 발생하지 않는다")

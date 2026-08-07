@@ -102,7 +102,7 @@ public class ReconcilePaymentUseCase {
 				succeeded, failed, skipped, errors);
 		}
 
-		// CANCEL 대사: standalone CANCEL(REQUESTED/UNKNOWN) 스캔 → PG 재조회 → 재시도/확정 (ADR-L4)
+		// CANCEL 대사: standalone CANCEL(REQUESTED/UNKNOWN) 스캔 → PG 재조회 → 재시도/확정
 		List<Payment> cancelCandidates = paymentRepository.findStaleCancelPaymentsForReconciliation(
 			staleCutoff, requestedStaleCutoff, escalationCutoff, now, PageRequest.of(0, RECONCILE_BATCH_SIZE));
 
@@ -154,7 +154,7 @@ public class ReconcilePaymentUseCase {
 			}
 		}
 
-		// CANCEL escalation: 6시간 초과 UNKNOWN/REQUESTED + FAILED CANCEL (ADR-L4)
+		// CANCEL escalation: 6시간 초과 UNKNOWN/REQUESTED + FAILED CANCEL
 		List<Payment> cancelCandidates = paymentRepository.findCancelEscalationCandidates(
 			escalationCutoff, PageRequest.of(0, RECONCILE_BATCH_SIZE));
 
@@ -369,7 +369,7 @@ public class ReconcilePaymentUseCase {
 
 	/**
 	 * backoff 기록을 best-effort로 수행한다. 낙관적 락 충돌·행 없음은 흡수해 대사 루프가 중단되지 않도록 한다.
-	 * backoff는 cadence 힌트이므로 충돌 시 건너뛰어도 다음 주기에 자연히 재시도된다(ADR-L3).
+	 * backoff는 cadence 힌트이므로 충돌 시 건너뛰어도 다음 주기에 자연히 재시도된다.
 	 */
 	private void delayReconcileSkippable(Payment payment, PaymentType type, LocalDateTime now) {
 		try {

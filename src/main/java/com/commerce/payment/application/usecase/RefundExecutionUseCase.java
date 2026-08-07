@@ -20,7 +20,7 @@ import lombok.RequiredArgsConstructor;
 import lombok.extern.slf4j.Slf4j;
 
 /**
- * 사용자 주도 환불 실행 경로 (ADR-L2, ADR-L3).
+ * 사용자 주도 환불 실행 경로.
  * 영속된 CANCEL 결제(REQUESTED)에 대해 PG 취소를 호출하고 결과를 반영한다.
  * tx 밖(커밋 이후)에서 호출되는 best-effort 경로이며, approve 결제를 건드리지 않는다.
  * CANCEL 대사(step2)의 재실행과 같은 구조를 공유하도록 CANCEL 결제 객체를 직접 받는다.

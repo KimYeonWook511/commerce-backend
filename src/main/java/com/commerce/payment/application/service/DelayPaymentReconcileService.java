@@ -23,8 +23,8 @@ public class DelayPaymentReconcileService {
 
 	/**
 	 * KEEP_WAITING 판정 후 대사 재조회를 미룬다. next_reconcile_at = now + RECONCILE_BACKOFF.
-	 * type에 따라 APPROVE/CANCEL finder를 선택해 양쪽 모두 일관되게 적용한다(ADR-L3).
-	 * status는 바꾸지 않는다(ADR-L1).
+	 * type에 따라 APPROVE/CANCEL finder를 선택해 양쪽 모두 일관되게 적용한다.
+	 * status는 바꾸지 않는다.
 	 */
 	@Transactional
 	public void delay(

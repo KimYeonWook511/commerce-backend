@@ -185,7 +185,7 @@ class ReconciliationScanQueryIntegrationTest {
 		assertThat(result).isEmpty();
 	}
 
-	@DisplayName("escalationCutoff보다 오래된 UNKNOWN 결제는 스캔 윈도우 상한 초과로 대사 후보에서 제외된다 (ADR-L8)")
+	@DisplayName("escalationCutoff보다 오래된 UNKNOWN 결제는 스캔 윈도우 상한 초과로 대사 후보에서 제외된다")
 	@Test
 	void findStaleApprovePayments_escalatedUnknown_excluded() {
 		LocalDateTime now = LocalDateTime.now();
@@ -204,7 +204,7 @@ class ReconciliationScanQueryIntegrationTest {
 		assertThat(result).isEmpty();
 	}
 
-	@DisplayName("escalationCutoff보다 오래된 stale REQUESTED 결제는 스캔 윈도우 상한 초과로 대사 후보에서 제외된다 (ADR-L8)")
+	@DisplayName("escalationCutoff보다 오래된 stale REQUESTED 결제는 스캔 윈도우 상한 초과로 대사 후보에서 제외된다")
 	@Test
 	void findStaleApprovePayments_escalatedRequested_excluded() {
 		LocalDateTime now = LocalDateTime.now();
