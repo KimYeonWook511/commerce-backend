@@ -11,7 +11,7 @@ public class OrderCancelResult {
 
 	private Long orderId;
 	private OrderStatus status;
-	/** 환불 진행 상태. INIT 취소는 NONE, PAID 취소는 COMPLETED 또는 IN_PROGRESS (ADR-L3). */
+	/** 환불 진행 상태. INIT 취소는 NONE, PAID 취소는 COMPLETED 또는 IN_PROGRESS. */
 	private OrderCancelRefundStatus refundStatus;
 
 	@Builder

@@ -22,7 +22,7 @@ import lombok.RequiredArgsConstructor;
 import lombok.extern.slf4j.Slf4j;
 
 /**
- * 사용자 주도 주문 취소 흐름 조율 (ADR-L1·L2·L3, tx 없음).
+ * 사용자 주도 주문 취소 흐름 조율 (tx 없음).
  * 주문 상태에 따라 INIT(기존: 재고만 복구)과 PAID(환불 포함) 경로를 선택한다.
  * PAID 경로: 조율 service(tx) 호출 → 커밋 후 best-effort PG 환불 실행 → 결과를 응답에 반영.
  */
@@ -61,7 +61,7 @@ public class CancelOrderUseCase {
 		// 1. 원자적 단위작업: tx 안에서 환불 의도 영속화 + 취소 + 재고 복구
 		CancelPaidOrderTransactionResult txResult = cancelPaidOrderService.cancelPaidOrder(memberId, orderId);
 
-		// 2. 커밋 이후 best-effort PG 환불 실행 (ADR-L1, ADR-L2, ADR-L3)
+		// 2. 커밋 이후 best-effort PG 환불 실행
 		//    실패·UNKNOWN은 CANCEL 대사(step2)가 마무리한다.
 		//    execute()가 PG 최종 결과를 반환한다. in-memory cancelPayment 상태에 의존하지 않는다.
 		CancelOutcome cancelOutcome = refundExecutionUseCase.execute(txResult.cancelPayment(), this::pgCancel);
