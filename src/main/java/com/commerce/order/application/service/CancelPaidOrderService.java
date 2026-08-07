@@ -23,7 +23,7 @@ import lombok.RequiredArgsConstructor;
 import lombok.extern.slf4j.Slf4j;
 
 /**
- * PAID 주문 취소의 원자적 단위작업 (ADR-L1).
+ * PAID 주문 취소의 원자적 단위작업.
  * 한 tx 안에서 환불 의도(CANCEL REQUESTED) 영속화 + order.cancel() + 재고 복구를 커밋한다.
  * PG 호출은 tx 밖(CancelOrderUseCase)에서 best-effort로 실행한다.
  */
@@ -45,7 +45,7 @@ public class CancelPaidOrderService {
 	 */
 	@Transactional
 	public CancelPaidOrderTransactionResult cancelPaidOrder(Long memberId, Long orderId) {
-		// 주문 행만 잠근다(단일 행 락, ADR-L6). orderItems는 아래에서 aggregate를 통해 lazy 로드한다.
+		// 주문 행만 잠근다(단일 행 락). orderItems는 아래에서 aggregate를 통해 lazy 로드한다.
 		Order order = orderRepository.findByIdAndMemberIdForUpdate(orderId, memberId)
 			.orElseThrow(() -> new OrderException(OrderErrorCode.ORDER_NOT_FOUND));
 
@@ -63,7 +63,7 @@ public class CancelPaidOrderService {
 		Payment approvePayment = paymentRepository.findApproveSucceededByOrderId(orderId)
 			.orElseThrow(() -> new OrderException(OrderErrorCode.ORDER_REFUND_TARGET_NOT_FOUND));
 
-		// 환불 의도(CANCEL REQUESTED) 영속화 — order 잠금 안에서 멱등 생성(ADR-L5)
+		// 환불 의도(CANCEL REQUESTED) 영속화 — order 잠금 안에서 멱등 생성
 		// cancelAmount는 approve.amount 그대로 사용(전액, 멱등 금액 불일치 방지)
 		Payment cancelPayment = getOrCreateCancelPaymentService.getOrCreate(
 			approvePayment.getOrderId(),
