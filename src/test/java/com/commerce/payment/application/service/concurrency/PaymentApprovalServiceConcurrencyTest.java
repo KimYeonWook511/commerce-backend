@@ -122,7 +122,7 @@ class PaymentApprovalServiceConcurrencyTest {
 			return orderException.getErrorCode() == OrderErrorCode.ORDER_ALREADY_PAID;
 		}
 		// @Version 도입 후 order 비관 락으로 직렬화해도 payment 행 버전 충돌이 발생할 수 있다.
-		// succeed는 무조건 전이 메서드이므로 충돌 시 전파(ADR-L2).
+		// succeed는 무조건 전이 메서드이므로 충돌 시 전파한다.
 		if (throwable instanceof OptimisticLockingFailureException) {
 			return true;
 		}

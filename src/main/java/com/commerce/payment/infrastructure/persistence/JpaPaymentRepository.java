@@ -44,7 +44,7 @@ public interface JpaPaymentRepository extends JpaRepository<Payment, Long> {
 
 	// REQUESTED는 UNKNOWN보다 늦은 하한(requestedStaleCutoff)을 쓴다. 정책 진입 지연(REQUESTED 15분 / UNKNOWN 1분)과
 	// 스캔 하한을 일치시켜, 진입 지연 전 REQUESTED가 id ASC 첫 페이지를 차지하고 매 주기 버려져 뒤 후보가 고사하는 것을 막는다.
-	// backoff 게이트: next_reconcile_at이 미래인 행은 스캔에서 제외한다. NULL이면 한 번도 미뤄지지 않아 즉시 대상(ADR-L1).
+	// backoff 게이트: next_reconcile_at이 미래인 행은 스캔에서 제외한다. NULL이면 한 번도 미뤄지지 않아 즉시 대상.
 	@Query("""
 		SELECT p FROM Payment p
 		WHERE p.type = 'APPROVE'
@@ -91,9 +91,9 @@ public interface JpaPaymentRepository extends JpaRepository<Payment, Long> {
 		Pageable pageable
 	);
 
-	// CANCEL 대사 후보: APPROVE 스캔과 동일 cutoff·페이징 정책을 따른다 (ADR-L4).
+	// CANCEL 대사 후보: APPROVE 스캔과 동일 cutoff·페이징 정책을 따른다.
 	// UNKNOWN은 respondedAt, REQUESTED는 createdAt 기준으로 stale 윈도우 적용.
-	// backoff 게이트: next_reconcile_at이 미래인 행은 스캔에서 제외한다. NULL이면 즉시 대상(ADR-L1).
+	// backoff 게이트: next_reconcile_at이 미래인 행은 스캔에서 제외한다. NULL이면 즉시 대상.
 	@Query("""
 		SELECT p FROM Payment p
 		WHERE p.type = 'CANCEL'
@@ -114,7 +114,7 @@ public interface JpaPaymentRepository extends JpaRepository<Payment, Long> {
 	);
 
 	// CANCEL escalation 후보: escalatedAt IS NULL이고 6시간 초과 UNKNOWN/REQUESTED CANCEL 건 (대사 스캔 윈도우 밖).
-	// FAILED CANCEL도 escalation 대상(ADR-L4: 확정적 환불 실패는 사람에게 넘긴다).
+	// FAILED CANCEL도 escalation 대상(확정적 환불 실패는 사람에게 넘긴다).
 	@Query("""
 		SELECT p FROM Payment p
 		WHERE p.type = 'CANCEL'

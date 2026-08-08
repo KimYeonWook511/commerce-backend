@@ -32,7 +32,7 @@ import com.commerce.support.PersistenceCleanupTestSupport;
 import com.commerce.support.TestcontainersSupport;
 
 /**
- * saveChecked의 @Version 충돌 변환을 version 강제 stale로 결정적으로 검증한다 (ADR-L2 전파 프리미티브).
+ * saveChecked의 @Version 충돌 변환을 version 강제 stale로 결정적으로 검증한다.
  * 두 detached 복사본 중 하나를 먼저 저장해 DB version을 bump한 뒤, stale 복사본을 saveChecked하면
  * ObjectOptimisticLockingFailureException이 PaymentException(PAYMENT_CONCURRENTLY_MODIFIED)으로 변환돼 throw됨을 확인한다.
  */

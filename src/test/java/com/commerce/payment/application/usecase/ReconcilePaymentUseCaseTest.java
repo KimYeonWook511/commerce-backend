@@ -209,7 +209,7 @@ class ReconcilePaymentUseCaseTest {
 		then(delayPaymentReconcileService).should(never()).delay(any(), any(), any(), any(), any());
 	}
 
-	// --- escalation: 6시간 초과는 로그만 남기고 상태 변경 없음 (ADR-L5, 후속 #238) ---
+	// --- escalation: 6시간 초과는 로그만 남기고 상태 변경 없음 (후속 #238) ---
 
 	@DisplayName("UNKNOWN 결제가 6시간 escalation 임계를 넘으면 상태 변경 없이 PG 조회도 하지 않는다")
 	@Test
@@ -303,7 +303,7 @@ class ReconcilePaymentUseCaseTest {
 		then(confirmApprovalUseCase).should().confirm(eq(payment), any(LocalDateTime.class), any(), eq("PAY-1"), eq(1000));
 	}
 
-	// --- 비중복 PAID → facade가 통지+fail 안전망 (ADR-L3) ---
+	// --- 비중복 PAID → facade가 통지+fail 안전망 ---
 
 	@DisplayName("facade가 PAYMENT_APPROVE_FAILED 거부를 반환하면(비중복 PAID 안전망) FAILED로 종착한다")
 	@Test
@@ -324,7 +324,7 @@ class ReconcilePaymentUseCaseTest {
 		then(confirmApprovalUseCase).should().confirm(eq(payment), any(LocalDateTime.class), any(), eq("PAY-1"), eq(1000));
 	}
 
-	// --- merchantPayKey 불일치 → facade가 보상 (ADR-L2, 금전 정합성) ---
+	// --- merchantPayKey 불일치 → facade가 보상 (금전 정합성) ---
 
 	@DisplayName("대사 APPROVED인데 merchantPayKey가 불일치하면 facade가 보상을 처리하고 FAILED로 종착한다")
 	@Test

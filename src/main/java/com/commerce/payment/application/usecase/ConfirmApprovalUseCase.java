@@ -23,7 +23,7 @@ import lombok.extern.slf4j.Slf4j;
 /**
  * provider 중립 승인 확정 조율 facade. tx를 열지 않는다(@Component).
  * 검증된 APPROVE Payment를 받아 succeedApproval 시도 → 성공이면 확정, 거부면 errorCode 기반 보상 → Outcome 반환.
- * 결합은 이 facade 한 점에만 격리한다 — 거부 사유는 errorCode로 받으며 주문 상태 재조회 분기 없음(ADR-L1·L2).
+ * 결합은 이 facade 한 점에만 격리한다 — 거부 사유는 errorCode로 받으며 주문 상태 재조회 분기 없음.
  */
 @Slf4j
 @Component
@@ -132,7 +132,7 @@ public class ConfirmApprovalUseCase {
 
 	/**
 	 * ORDER_ALREADY_PAID / PAYMENT_DUPLICATE 거부 처리.
-	 * existsApprovedByOrderId로 실제 중복 여부를 판별해 분기한다(ADR-L3).
+	 * existsApprovedByOrderId로 실제 중복 여부를 판별해 분기한다.
 	 */
 	private Outcome handleAlreadyPaidRejection(Payment payment, LocalDateTime now, PgCanceller pgCanceller,
 		RuntimeException cause) {
@@ -146,7 +146,7 @@ public class ConfirmApprovalUseCase {
 			return Outcome.rejected(PaymentErrorCode.PAYMENT_DUPLICATE);
 		}
 
-		// 비중복 PAID — dead 경로지만 만약 도달하면 환불하지 않고 통지 + FAILED 종착 (ADR-L3, 금전 정합성)
+		// 비중복 PAID — dead 경로지만 만약 도달하면 환불하지 않고 통지 + FAILED 종착 (금전 정합성)
 		log.error("승인 확정 - 비중복 PAID 비정상 상태(정합성 오류) paymentId={} orderId={} merchantPayKey={}",
 			payment.getId(), payment.getOrderId(), payment.getMerchantPayKey());
 		failApprovePaymentService.fail(
