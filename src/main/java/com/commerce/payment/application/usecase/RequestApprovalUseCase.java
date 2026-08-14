@@ -3,11 +3,9 @@ package com.commerce.payment.application.usecase;
 import java.time.LocalDateTime;
 
 import org.springframework.stereotype.Component;
-import org.springframework.util.StringUtils;
 
 import com.commerce.payment.application.dto.ApprovalOutcome;
 import com.commerce.payment.application.dto.ApprovalResult;
-import com.commerce.payment.application.port.NotificationPort;
 import com.commerce.payment.application.port.PaymentGatewayPort;
 import com.commerce.payment.application.port.dto.PgApproveResult;
 import com.commerce.payment.application.port.dto.PgHistoryResult;
@@ -43,8 +41,6 @@ public class RequestApprovalUseCase {
 	private final PaymentService paymentService;
 	private final PgCallLogService pgCallLogService;
 	private final ConfirmApprovalUseCase confirmApprovalUseCase;
-	private final ClosePaymentUseCase closePaymentUseCase;
-	private final NotificationPort notificationPort;
 
 	public ApprovalResult approve(Long memberId, String paymentKey, String pgPaymentId) {
 		// 결제 키와 회원으로 함께 좁힌다. 남의 결제 키를 실으면 그 번호가 있는지조차 드러나지 않는다.
@@ -122,39 +118,13 @@ public class RequestApprovalUseCase {
 
 	private ApprovalResult resolve(Payment payment, PgApproveResult result) {
 		return switch (result.outcome()) {
-			case SUCCEEDED -> verifyAndConfirm(payment, result);
+			case SUCCEEDED -> toResult(payment, confirmApprovalUseCase.confirmApproved(payment, result));
 			// 답은 받았는데 그 답이 결과를 정하지 못했다. 이력을 읽으면 풀린다.
 			case UNKNOWN -> result.answered() ? resolveFromHistory(payment) : leaveUnknown(payment, result.message());
 			// 요청 흐름의 첫 호출이라 앞선 승인이 없다. 종결해 슬롯을 풀어야 회원이 다시 결제할 수 있다.
 			case RETRYABLE_FAILURE -> closeFailed(payment, PaymentCloseCode.PG_UNAVAILABLE, result.message());
 			case TERMINAL_FAILURE -> closeFailed(payment, PaymentCloseCode.PG_DECLINED, result.message());
 		};
-	}
-
-	private ApprovalResult verifyAndConfirm(Payment payment, PgApproveResult result) {
-		if (!payment.getPaymentKey().equals(result.paymentKey())) {
-			// 그 응답에는 상대의 결제 키와 결제사 번호가 들어 있고, 상대의 결제가 방금 승인됐다는 뜻이다.
-			ApprovalOutcome outcome = closePaymentUseCase.closeKeyMismatch(
-				payment, result.paymentKey(), payment.getPgPaymentId());
-			throw new PaymentException(outcome.errorCode());
-		}
-		if (!ownsMemberKey(payment, result.memberKey())) {
-			// 결제 키는 맞는데 회원만 어긋났다. 두 기록 중 하나가 틀린 상태라 자동으로 정할 근거가 없다 —
-			// 종결하면 슬롯이 풀려 돈이 두 번 나갈 수 있고, 되돌리면 그 돈의 주인을 단정하는 것이 된다.
-			notificationPort.notifyManualReviewRequired(
-				payment.getOrderId(), payment.getPaymentKey(), "승인 응답의 회원이 결제 행의 회원과 다르다");
-			throw new PaymentException(PaymentErrorCode.PAYMENT_RESULT_PENDING);
-		}
-		return toResult(payment,
-			confirmApprovalUseCase.confirm(payment, result.approvedAmount(), result.pgTransactionId()));
-	}
-
-	/**
-	 * 결제 예약 때 보낸 회원 식별자가 응답에 실려 온다. 값이 없으면 대조할 것이 없어 통과시킨다 —
-	 * 결제창을 여는 쪽이 그 값을 싣지 않으면 응답에도 담기지 않는다.
-	 */
-	private boolean ownsMemberKey(Payment payment, String memberKey) {
-		return !StringUtils.hasText(memberKey) || memberKey.equals(String.valueOf(payment.getMemberId()));
 	}
 
 	private ApprovalResult resolveFromHistory(Payment payment) {
@@ -168,6 +138,9 @@ public class RequestApprovalUseCase {
 			case SUCCEEDED -> ApprovalResult.succeeded(payment.getPgPaymentId());
 			case REJECTED -> throw new PaymentException(outcome.errorCode());
 			case UNRESOLVED -> leaveUnknown(payment, "승인 결과를 확정하지 못했다");
+			// 어긋난 것을 알린 뒤 그 결제를 그대로 둔다. 결과 불명으로 표시하면 답을 못 받은 건과
+			// 구분되지 않고, 종결하면 슬롯이 풀려 돈이 두 번 나갈 수 있다.
+			case MANUAL_REVIEW -> throw new PaymentException(PaymentErrorCode.PAYMENT_RESULT_PENDING);
 		};
 	}
 
