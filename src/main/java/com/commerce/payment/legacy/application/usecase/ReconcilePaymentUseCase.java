@@ -70,6 +70,15 @@ public class ReconcilePaymentUseCase {
 	 * PG 조회(외부 호출)는 트랜잭션 경계 밖에서 수행하고, 상태 확정은 건별 단건 트랜잭션으로 처리한다.
 	 */
 	public void reconcile() {
+		reconcileApprovals();
+		reconcileCancels();
+	}
+
+	/**
+	 * APPROVE 대사와 그 escalation. 새 결제 모델의 대사가 같은 일을 하므로 스케줄러는 더 이상 이것을
+	 * 깨우지 않는다 — 둘 다 돌면 같은 결제를 두 번 대사한다.
+	 */
+	public void reconcileApprovals() {
 		LocalDateTime now = LocalDateTime.now();
 		LocalDateTime staleCutoff = now.minusMinutes(STALE_CUTOFF_MINUTES);
 		LocalDateTime requestedStaleCutoff = now.minusMinutes(REQUESTED_STALE_CUTOFF_MINUTES);
@@ -102,6 +111,19 @@ public class ReconcilePaymentUseCase {
 				succeeded, failed, skipped, errors);
 		}
 
+		processApproveEscalations(now, escalationCutoff);
+	}
+
+	/**
+	 * CANCEL 대사와 그 escalation. 레거시 주문 취소가 아직 살아 있어 그것이 만든 환불을 회수할 자리가
+	 * 여기뿐이므로 계속 돈다 — 멈추면 그 구간에 PG 호출이 실패한 환불이 돈이 안 돌아간 채 방치된다.
+	 */
+	public void reconcileCancels() {
+		LocalDateTime now = LocalDateTime.now();
+		LocalDateTime staleCutoff = now.minusMinutes(STALE_CUTOFF_MINUTES);
+		LocalDateTime requestedStaleCutoff = now.minusMinutes(REQUESTED_STALE_CUTOFF_MINUTES);
+		LocalDateTime escalationCutoff = now.minusHours(ESCALATION_DELAY_HOURS);
+
 		// CANCEL 대사: standalone CANCEL(REQUESTED/UNKNOWN) 스캔 → PG 재조회 → 재시도/확정
 		List<Payment> cancelCandidates = paymentRepository.findStaleCancelPaymentsForReconciliation(
 			staleCutoff, requestedStaleCutoff, escalationCutoff, now, PageRequest.of(0, RECONCILE_BATCH_SIZE));
@@ -129,11 +151,10 @@ public class ReconcilePaymentUseCase {
 				succeeded, failed, skipped, errors);
 		}
 
-		processEscalations(now, escalationCutoff);
+		processCancelEscalations(now, escalationCutoff);
 	}
 
-	private void processEscalations(LocalDateTime now, LocalDateTime escalationCutoff) {
-		// APPROVE escalation
+	private void processApproveEscalations(LocalDateTime now, LocalDateTime escalationCutoff) {
 		List<Payment> candidates = paymentRepository.findEscalationCandidates(
 			escalationCutoff, PageRequest.of(0, RECONCILE_BATCH_SIZE));
 
@@ -153,7 +174,9 @@ public class ReconcilePaymentUseCase {
 				}
 			}
 		}
+	}
 
+	private void processCancelEscalations(LocalDateTime now, LocalDateTime escalationCutoff) {
 		// CANCEL escalation: 6시간 초과 UNKNOWN/REQUESTED + FAILED CANCEL
 		List<Payment> cancelCandidates = paymentRepository.findCancelEscalationCandidates(
 			escalationCutoff, PageRequest.of(0, RECONCILE_BATCH_SIZE));
