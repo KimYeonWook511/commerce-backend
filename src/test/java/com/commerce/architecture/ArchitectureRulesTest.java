@@ -203,6 +203,21 @@ class ArchitectureRulesTest {
     // ────────────────────────────────────────────────────────────
 
     @Test
+    @DisplayName("application·presentation 은 PG 경계(infrastructure.pg) 안의 타입을 직접 참조하지 않는다 (port 로만)")
+    void applicationAndPresentationDoNotDependOnPgBoundary() {
+        // 결제사 전용 타입은 PG 경계 안에서만 산다. 이름이 아니라 의존 방향으로 적는 것은, 클래스 이름에
+        // 결제사가 없어도 그 타입에 의존하면 결제사를 아는 것이고 반대로 승인 복귀 진입점처럼 이름만
+        // 결제사인 자리는 위반이 아니기 때문이다.
+        // com.commerce.payment.legacy 는 결제사가 최상위 묶음이던 옛 구조 그대로이며 통째로 지울 예정이라
+        // 제외한다. 제외 범위를 그 패키지 하나로 좁혀 새 코드가 이 규칙을 비켜 가지 못하게 한다.
+        ArchRule rule = noClasses()
+                .that().resideInAnyPackage("..application..", "..presentation..")
+                .and().resideOutsideOfPackage("com.commerce.payment.legacy..")
+                .should().dependOnClassesThat().resideInAPackage("..infrastructure.pg..");
+        check(rule);
+    }
+
+    @Test
     @DisplayName("application 은 KafkaTemplate·Redis 클라이언트를 직접 참조하지 않는다")
     void applicationDoesNotDependOnTechClients() {
         ArchRule rule = noClasses()
