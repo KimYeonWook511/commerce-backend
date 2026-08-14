@@ -54,7 +54,8 @@ payment/application/
 │   ├── PaymentApprovalService          (succeedApproval — order+payment 한 tx)
 │   └── PaymentCancellationService
 ├── port/           # 외부 시스템 인터페이스 (outbound)
-└── dto/            # 입력 command(=Command DTO) / result
+├── dto/            # 입력 command(=Command DTO) / result
+└── config/         # 설정값을 읽어 도메인 정책을 빈으로 등록 — 아래
 
 (retry/skip이 여러 도메인에 걸쳐 재사용될 때만 application 밖 helper로 — 한 곳뿐이면 private)
 support/   또는 common/
@@ -65,6 +66,11 @@ support/   또는 common/
 > 커밋돼야 할 때): usecase에 `@Transactional`을 달지 말고(외부 호출이 tx에 빨려들고 규칙도 깨짐),
 > 둘을 감싸는 **전용 메서드를 `service/`에 만들고 거기에만 tx를 단다**(`PaymentApprovalService.succeedApproval`).
 > 그 메서드는 다른 tx 서비스를 부르기보다 리포지토리/도메인 객체를 직접 다뤄 한 메서드 안에서 완결한다.
+
+`config/` — **도메인 정책을 빈으로 등록하는 자리**:
+
+- 정책이 **운영 설정값을 받아야 할 때만** 둔다. `domain/policy/`의 정책 클래스에 `@Component`를 붙이면 설정값을 읽는 일까지 domain이 하게 되고, 값을 바꿀 때마다 domain을 건드린다. 등록하는 자리가 값을 읽어 생성자로 넘기면 정책은 받은 값으로 판단만 한다(`payment/application/config/PaymentPolicyConfig`).
+- **그 이상으로 넓히지 않는다.** 흐름 조립이나 tx가 들어오면 `usecase/`·`service/`와 책임이 겹친다. 기술 클라이언트 설정(RestTemplate 등)은 그 기술을 쓰는 `infrastructure/` 아래에 둔다.
 
 충돌 반응(skip/retry) 배치 — **정식 레이어(`policy/`)를 만들지 않는다**:
 
@@ -261,7 +267,8 @@ Redis 타임아웃이 raw로 application까지 새면 안 되고, 구현체가 �
 │   ├── usecase/     orchestrator (tx 없음, 흐름 조립 + 정책 선택; skip은 private 메서드)
 │   ├── service/     tx 단위작업 (@Transactional, 충돌 전파)
 │   ├── port/        outbound 인터페이스 (PG/cache/messaging/email)
-│   └── dto/
+│   ├── dto/
+│   └── config/      설정값을 읽어 도메인 정책을 빈으로 등록
 ├── domain/
 │   ├── <entity>/    엔티티 + 전이 로직
 │   ├── repository/  repository port
