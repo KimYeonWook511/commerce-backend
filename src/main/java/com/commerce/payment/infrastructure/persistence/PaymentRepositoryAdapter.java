@@ -64,6 +64,11 @@ public class PaymentRepositoryAdapter implements PaymentRepository {
 	}
 
 	@Override
+	public Optional<Payment> findByMemberIdAndIdempotencyKey(Long memberId, String idempotencyKey) {
+		return jpaPaymentRepository.findByMemberIdAndIdempotencyKey(memberId, idempotencyKey);
+	}
+
+	@Override
 	public Optional<Payment> findByPaymentKeyAndMemberId(String paymentKey, Long memberId) {
 		return jpaPaymentRepository.findByPaymentKeyAndMemberId(paymentKey, memberId);
 	}

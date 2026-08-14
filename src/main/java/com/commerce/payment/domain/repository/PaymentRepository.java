@@ -34,6 +34,12 @@ public interface PaymentRepository {
 	/** 그 주문의 활성 슬롯을 쥐고 있는 결제 */
 	Optional<Payment> findActiveByOrderId(Long orderId);
 
+	/**
+	 * 결제 시작 멱등키로 앞서 만든 결제를 찾는다. 유일 제약과 같은 범위로 좁혀야 하므로 회원이 이름에
+	 * 든다 — 키만으로 찾으면 같은 문자열을 보낸 다른 회원에게 남의 결제 키와 금액이 그대로 나간다.
+	 */
+	Optional<Payment> findByMemberIdAndIdempotencyKey(Long memberId, String idempotencyKey);
+
 	/** 회원 요청 경로가 쓰는 결제 키 조회. 소유 확인이 이 조회를 타고 흐르므로 회원이 이름에 든다 */
 	Optional<Payment> findByPaymentKeyAndMemberId(String paymentKey, Long memberId);
 

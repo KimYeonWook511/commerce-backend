@@ -185,6 +185,17 @@ public class Payment extends BaseTimeEntity {
 		return new Payment(orderId, memberId, pg, paymentKey, idempotencyKey, amount);
 	}
 
+	/**
+	 * 같은 멱등키로 다시 온 요청이 이 결제를 만든 그 요청과 같은지 확인한다. 다르면 이 결제를 돌려주지
+	 * 않고 거절한다 — 다른 주문을 결제하려던 요청에 앞 주문의 결제창 값이 나가면 회원이 그 창에서
+	 * 인증해 엉뚱한 주문이 결제되고, 승인까지 성공하므로 어떤 실패 응답도 나가지 않는다.
+	 */
+	public void requireSameRequest(Long orderId, int amount) {
+		if (!this.orderId.equals(orderId) || this.amount != amount) {
+			throw new PaymentException(PaymentErrorCode.PAYMENT_IDEMPOTENCY_KEY_CONFLICT);
+		}
+	}
+
 	/** 승인 호출 직전. 결제사 번호를 심고 첫 호출의 시도 번호를 올린다. 부르기 전에 따로 커밋한다 */
 	public void markInProgress(String pgPaymentId, LocalDateTime requestedAt) {
 		requireStatusIn(PaymentStatus.READY);
