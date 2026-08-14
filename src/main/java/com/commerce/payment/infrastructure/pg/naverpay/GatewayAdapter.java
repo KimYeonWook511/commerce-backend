@@ -75,12 +75,12 @@ public class GatewayAdapter implements PaymentGatewayPort {
 		PgOutcome transportOutcome = transportOutcome(exchange);
 		if (transportOutcome != null) {
 			logFailure("승인", payment.getPgPaymentId(), transportOutcome, exchange.errorType().name(), exchange.httpStatus());
-			return approveFailure(transportOutcome, transportMessage(exchange), callRecord(exchange, null));
+			return approveFailure(transportOutcome, false, transportMessage(exchange), callRecord(exchange, null));
 		}
 
 		GatewayResponse<ApproveBody> response = readBody(exchange, new TypeReference<>() {});
 		if (response == null || response.getCode() == null) {
-			return PgApproveResult.unknown("승인 응답을 읽지 못했다", parseFailureRecord(exchange));
+			return PgApproveResult.unanswered("승인 응답을 읽지 못했다", parseFailureRecord(exchange));
 		}
 
 		Optional<ApproveCode> code = ApproveCode.from(response.getCode());
@@ -90,17 +90,18 @@ public class GatewayAdapter implements PaymentGatewayPort {
 
 		if (outcome != PgOutcome.SUCCEEDED) {
 			logFailure("승인", payment.getPgPaymentId(), outcome, response.getCode(), exchange.httpStatus());
-			return approveFailure(outcome, message, callRecord);
+			return approveFailure(outcome, true, message, callRecord);
 		}
 
 		ApproveBody.Detail detail = response.getBody() == null ? null : response.getBody().getDetail();
 		if (detail == null || detail.getMerchantPayKey() == null) {
 			// 결제사는 승인이 됐다고 답했는데 그 내용이 비었다. 실패로 접으면 나간 돈을 안 나간 것으로
 			// 다루게 되므로 결과 불명으로 두고 이력으로 확인하게 한다.
-			return PgApproveResult.unknown("승인 응답 본문이 비어 결과를 확인해야 한다", callRecord);
+			return PgApproveResult.unsettled("승인 응답 본문이 비어 결과를 확인해야 한다", callRecord);
 		}
 		return PgApproveResult.succeeded(
-			detail.getMerchantPayKey(), detail.getTotalPayAmount(), detail.getPayHistId(), message, callRecord);
+			detail.getMerchantPayKey(), detail.getMerchantUserKey(), detail.getTotalPayAmount(),
+			detail.getPayHistId(), message, callRecord);
 	}
 
 	@Override
@@ -237,11 +238,18 @@ public class GatewayAdapter implements PaymentGatewayPort {
 		}
 	}
 
-	private PgApproveResult approveFailure(PgOutcome outcome, String message, PgCallRecord callRecord) {
+	private PgApproveResult approveFailure(
+		PgOutcome outcome,
+		boolean answered,
+		String message,
+		PgCallRecord callRecord
+	) {
 		return switch (outcome) {
-			case UNKNOWN -> PgApproveResult.unknown(message, callRecord);
-			case RETRYABLE_FAILURE -> PgApproveResult.retryableFailure(message, callRecord);
-			case TERMINAL_FAILURE -> PgApproveResult.terminalFailure(message, callRecord);
+			case UNKNOWN -> answered
+				? PgApproveResult.unsettled(message, callRecord)
+				: PgApproveResult.unanswered(message, callRecord);
+			case RETRYABLE_FAILURE -> PgApproveResult.retryableFailure(answered, message, callRecord);
+			case TERMINAL_FAILURE -> PgApproveResult.terminalFailure(answered, message, callRecord);
 			case SUCCEEDED -> throw new IllegalArgumentException("성공은 실패 갈래로 만들지 않는다");
 		};
 	}

@@ -18,6 +18,8 @@ public class ApproveBody {
 		private String paymentId;
 		private String payHistId;
 		private String merchantPayKey;
+		/** 결제창을 열 때 실어 보낸 우리 회원 키가 그대로 돌아온다 */
+		private String merchantUserKey;
 		private String admissionState;
 		private String admissionYmdt;
 		private int totalPayAmount;
