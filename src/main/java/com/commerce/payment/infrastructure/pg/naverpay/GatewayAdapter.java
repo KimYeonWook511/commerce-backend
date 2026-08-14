@@ -90,6 +90,9 @@ public class GatewayAdapter implements PaymentGatewayPort {
 
 		if (outcome != PgOutcome.SUCCEEDED) {
 			logFailure("승인", payment.getPgPaymentId(), outcome, response.getCode(), exchange.httpStatus());
+			if (code.filter(ApproveCode::isApprovalWindowClosed).isPresent()) {
+				return PgApproveResult.approvalWindowClosed(message, callRecord);
+			}
 			return approveFailure(outcome, true, message, callRecord);
 		}
 

@@ -5,7 +5,6 @@ import java.util.Optional;
 import com.commerce.payment.application.port.dto.PgOutcome;
 
 import lombok.Getter;
-import lombok.RequiredArgsConstructor;
 
 /**
  * 승인 응답 코드를 네 갈래로 접는 표.
@@ -14,7 +13,6 @@ import lombok.RequiredArgsConstructor;
  * 접으면 실제로 나간 돈을 안 나간 것으로 다루게 된다.
  */
 @Getter
-@RequiredArgsConstructor
 public enum ApproveCode {
 
 	SUCCESS("Success", PgOutcome.SUCCEEDED, "성공"),
@@ -35,8 +33,11 @@ public enum ApproveCode {
 	MAINTENANCE_ONGOING("MaintenanceOngoing", PgOutcome.RETRYABLE_FAILURE, "서비스 점검 중"),
 	FAULT_CHECK_ONGOING("FaultCheckOngoing", PgOutcome.RETRYABLE_FAILURE, "원천사 시스템 점검 중"),
 
-	/** 승인 가능 시간이 지났다. 이 답이 승인 실패를 확정하는 유일한 근거다 */
-	TIME_EXPIRED("TimeExpired", PgOutcome.TERMINAL_FAILURE, "승인 가능 시간 초과"),
+	/**
+	 * 승인 가능 시간이 지났다. 이 답이 승인 실패를 확정하는 유일한 근거이며, 나머지 셋과 갈라 두는
+	 * 것이 그래서 중요하다 — 나머지는 이번 호출이 실패했다는 뜻이라 앞선 호출의 결과를 말해 주지 않는다.
+	 */
+	TIME_EXPIRED("TimeExpired", PgOutcome.TERMINAL_FAILURE, "승인 가능 시간 초과", true),
 	OWNER_AUTH_FAIL("OwnerAuthFail", PgOutcome.TERMINAL_FAILURE, "본인 카드 인증 실패"),
 	NOT_ENOUGH_ACCOUNT_BALANCE("NotEnoughAccountBalance", PgOutcome.TERMINAL_FAILURE, "충전 계좌 잔고 부족"),
 	FAIL("Fail", PgOutcome.TERMINAL_FAILURE, "결제사·은행 오류로 승인 거절");
@@ -44,6 +45,18 @@ public enum ApproveCode {
 	private final String code;
 	private final PgOutcome outcome;
 	private final String description;
+	private final boolean approvalWindowClosed;
+
+	ApproveCode(String code, PgOutcome outcome, String description) {
+		this(code, outcome, description, false);
+	}
+
+	ApproveCode(String code, PgOutcome outcome, String description, boolean approvalWindowClosed) {
+		this.code = code;
+		this.outcome = outcome;
+		this.description = description;
+		this.approvalWindowClosed = approvalWindowClosed;
+	}
 
 	public static Optional<ApproveCode> from(String code) {
 		for (ApproveCode value : values()) {

@@ -16,7 +16,13 @@ public record ApprovalOutcome(Decision decision, PaymentErrorCode errorCode) {
 		/** 승인은 났는데 받아들이지 않아 결제를 종결했다 */
 		REJECTED,
 		/** 아무것도 확정하지 못했다. 그 결제는 결과 불명으로 남아 대사가 이어받는다 */
-		UNRESOLVED
+		UNRESOLVED,
+		/**
+		 * 우리 기록과 결제사 기록이 어긋나 자동으로 정할 근거가 없다. 상태를 그대로 두고 사람이 볼
+		 * 때까지 남긴다 — 미결과 가르는 이유는 그쪽이 결과 불명 표시로 이어지는데, 그 표시는 결제사
+		 * 답을 못 받았다는 뜻이라 답을 받은 이 경우에 붙이면 사실과 달라지기 때문이다
+		 */
+		MANUAL_REVIEW
 	}
 
 	public static ApprovalOutcome succeeded() {
@@ -29,5 +35,9 @@ public record ApprovalOutcome(Decision decision, PaymentErrorCode errorCode) {
 
 	public static ApprovalOutcome unresolved() {
 		return new ApprovalOutcome(Decision.UNRESOLVED, null);
+	}
+
+	public static ApprovalOutcome manualReview() {
+		return new ApprovalOutcome(Decision.MANUAL_REVIEW, null);
 	}
 }
