@@ -214,6 +214,20 @@ public class Payment extends BaseTimeEntity {
 		changeStatus(PaymentStatus.IN_PROGRESS);
 	}
 
+	/**
+	 * 승인을 다시 부르기 직전. 상태를 그대로 두고 부른 시각만 남긴다.
+	 *
+	 * <p>같은 키로 다시 불러도 찍는다 — 대사 유예를 이 값으로 재므로, 안 찍으면 방금 부른 건이 아직
+	 * 부르는 중인 건과 구분되지 않아 다음 주기가 곧바로 겹쳐 부른다.
+	 *
+	 * <p>시도 번호는 여기서 올리지 않는다. 결과를 모르는 동안은 같은 키를 그대로 실어 결제사가 저장해
+	 * 둔 응답을 되돌려주게 하고, 다시 시도할 수 있는 실패라는 것을 알게 된 자리에서만 새 키가 된다.
+	 */
+	public void recordRequested(LocalDateTime requestedAt) {
+		requireStatusIn(PaymentStatus.IN_PROGRESS, PaymentStatus.UNKNOWN);
+		this.lastRequestedAt = requestedAt;
+	}
+
 	/** 응답을 못 받아 승인 결과를 모른다 */
 	public void markUnknown() {
 		requireStatusIn(PaymentStatus.IN_PROGRESS);

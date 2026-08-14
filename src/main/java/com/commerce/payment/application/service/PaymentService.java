@@ -89,6 +89,17 @@ public class PaymentService {
 		return paymentRepository.saveChecked(payment);
 	}
 
+	/**
+	 * 승인을 다시 부르기 직전. 상태는 그대로 두고 부른 시각만 남긴다. 같은 키로 부를 때도 찍히므로
+	 * 대사 유예가 그 값으로 다시 걸린다.
+	 */
+	@Transactional
+	public Payment recordRequested(Long id, LocalDateTime requestedAt) {
+		Payment payment = load(id);
+		payment.recordRequested(requestedAt);
+		return paymentRepository.saveChecked(payment);
+	}
+
 	/** 응답을 못 받아 승인 결과를 모른다 */
 	@Transactional
 	public void markUnknown(Long id) {
@@ -198,6 +209,56 @@ public class PaymentService {
 		log.info("결제 키 불일치로 종결하고 상대 결제를 회수한다 paymentId={} counterpartPaymentKey={} reclaimed={}",
 			id, counterpartPaymentKey,
 			counterpart.filter(target -> target.getStatus() == PaymentStatus.UNKNOWN).isPresent());
+	}
+
+	/**
+	 * 승인을 한 번도 부르지 않은 채 방치된 결제를 종결하고 슬롯을 반납한다. 실패로 종결하지 않는 것은
+	 * 승인을 부른 적이 없어 성립하지 않은 승인이라는 것이 없기 때문이다.
+	 *
+	 * <p>종결 코드를 밖에서 받지 않는다. 자리를 내주는 종결과 이 배치가 하는 종결이 상태는 같아도 다른
+	 * 일이고, 어느 쪽인지는 그것을 일으킨 자리가 안다.
+	 */
+	@Transactional
+	public void expire(Long id) {
+		Payment payment = load(id);
+		payment.expire(PaymentCloseCode.SESSION_TIMEOUT);
+		paymentRepository.saveChecked(payment);
+		log.info("방치된 결제 만료 종결 paymentId={} orderId={}", id, payment.getOrderId());
+	}
+
+	/**
+	 * 다시 시도할 수 있는 실패를 받았다. 상태는 그대로 두고 시도 번호만 올려 다음 호출이 새 키로 나가게
+	 * 한다. 상태를 되돌리면 시간 조건 없이 집히는 자리로 가 실패가 돌아올 때마다 곧바로 다시 나간다.
+	 */
+	@Transactional
+	public void recordRetryableFailure(Long id) {
+		Payment payment = load(id);
+		payment.recordRetryableFailure();
+		paymentRepository.saveChecked(payment);
+		log.info("다시 시도할 수 있는 실패로 시도 번호를 올린다 paymentId={} attemptSeq={}", id, payment.getAttemptSeq());
+	}
+
+	/**
+	 * 대사가 이 건을 집었다. 결제사를 부르기 전에 따로 커밋한다 — 결과 반영과 한 트랜잭션으로 묶으면
+	 * 호출이나 응답 처리가 깨졌을 때 집은 사실까지 롤백되어 회차가 오르지 않고, 다시 집는 간격이 첫 값에
+	 * 머물러 장애가 길어질수록 결제사를 더 세게 두드린다.
+	 *
+	 * <p>이 저장에서 낙관 락이 걸린다. 두 주기가 같은 건을 동시에 집으면 진 쪽이 결제사를 부르기 전에
+	 * 물러난다.
+	 */
+	@Transactional
+	public Payment recordReconciled(Long id, LocalDateTime pickedAt) {
+		Payment payment = load(id);
+		payment.recordReconciled(pickedAt);
+		return paymentRepository.saveChecked(payment);
+	}
+
+	/** 통지를 보낸 뒤에 남긴다. 먼저 남기면 전송이 실패했을 때 알린 것으로 남아 다시 알리지 않는다 */
+	@Transactional
+	public void recordNotified(Long id, LocalDateTime notifiedAt) {
+		Payment payment = load(id);
+		payment.recordNotified(notifiedAt);
+		paymentRepository.saveChecked(payment);
 	}
 
 	/** 앞 결제가 없을 때의 생성. 결제사에 보낼 키를 새로 발급하고 그 자리에서 활성 슬롯을 잡는다 */
