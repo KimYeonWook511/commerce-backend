@@ -42,6 +42,21 @@ class RefundTest {
 		assertThat(refund.getPgIdempotencyKey()).isNotBlank();
 	}
 
+	@DisplayName("같은 요청 키로 온 요청은 금액과 사유가 모두 같아야 앞서 만든 사건으로 받아들여진다")
+	@Test
+	void requireSameRequest_whenContentDiffers_throws() {
+		Refund refund = requestedRefund();
+
+		refund.requireSameRequest(10_000, RefundReason.ORDER_CANCELED);
+
+		assertThatThrownBy(() -> refund.requireSameRequest(5_000, RefundReason.ORDER_CANCELED))
+			.isInstanceOf(PaymentException.class)
+			.hasMessage(PaymentErrorCode.REFUND_IDEMPOTENCY_KEY_CONFLICT.getMessage());
+		assertThatThrownBy(() -> refund.requireSameRequest(10_000, RefundReason.ORDER_NOT_PAYABLE))
+			.isInstanceOf(PaymentException.class)
+			.hasMessage(PaymentErrorCode.REFUND_IDEMPOTENCY_KEY_CONFLICT.getMessage());
+	}
+
 	@DisplayName("환불 금액이 0 이하이면 사건을 열지 못한다")
 	@Test
 	void open_whenAmountIsNotPositive_throws() {
