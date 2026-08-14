@@ -2,6 +2,8 @@ package com.commerce.payment.domain;
 
 import java.time.LocalDateTime;
 import java.util.Arrays;
+import java.util.Optional;
+import java.util.UUID;
 
 import com.commerce.common.jpa.BaseTimeEntity;
 import com.commerce.payment.domain.exception.PaymentErrorCode;
@@ -53,6 +55,13 @@ public class Payment extends BaseTimeEntity {
 
 	/** 결제사 호출 멱등키를 결제 키에서 파생할 때 쓰는 구분자 */
 	private static final String ATTEMPT_SEPARATOR = "-";
+
+	/**
+	 * 환불 사건 키 접두어. 시도 번호를 붙인 값이 결제사 한도를 넘지 못하도록 짧게 두고, 뒤에는 붙임표를
+	 * 뺀 UUID를 붙여 35자로 고정한다 — 길이를 정해 두지 않으면 파생값이 한도에서 잘려 서로 다른 시도가
+	 * 한 키로 접힌다.
+	 */
+	private static final String REFUND_KEY_PREFIX = "RF-";
 
 	@Id
 	@GeneratedValue(strategy = GenerationType.IDENTITY)
@@ -247,14 +256,66 @@ public class Payment extends BaseTimeEntity {
 	}
 
 	/**
-	 * 승인은 났는데 우리가 그 결제를 받아들일 수 없다. 되돌릴 금액을 알아야 하므로 승인 금액을 함께
-	 * 남긴다. 환불 생성은 이 메서드가 하지 않는다 — 결제를 종결하는 것과 별개의 일이다.
+	 * 승인은 났는데 우리가 그 결제를 받아들일 수 없어 반려로 종결한다. 되돌릴 환불을 먼저 연 자리에서
+	 * 부르므로 승인 금액은 이미 담겨 있다. 환불 생성은 이 메서드가 하지 않는다 — 결제를 종결하는 것과
+	 * 별개의 일이다.
+	 *
+	 * <p>이미 종착이면 전이를 건너뛰고 그 사실을 돌려준다. 전이가 안 됐다고 되돌릴 근거까지 롤백하면
+	 * 이미 나간 돈이 그대로 남기 때문이다. 반려하는 시점에 종착이 아닌 것이 정상이므로 그 조합은
+	 * 어딘가 어긋났다는 신호이며, 알리는 것은 커밋 뒤를 아는 호출자가 한다.
+	 *
+	 * @return 전이가 일어났으면 true
 	 */
-	public void reject(PaymentCloseCode closeCode, String closeDetail, int approvedAmount, String pgTransactionId) {
+	public boolean reject(PaymentCloseCode closeCode, String closeDetail) {
 		requireCloseCodeFor(closeCode, PaymentStatus.REJECTED);
+		if (this.status.isTerminal()) {
+			return false;
+		}
 		requireStatusIn(PaymentStatus.IN_PROGRESS, PaymentStatus.UNKNOWN);
-		recordApproval(approvedAmount, pgTransactionId);
 		close(closeCode, closeDetail);
+		return true;
+	}
+
+	/**
+	 * 회원 요청으로 환불을 연다. 같은 요청 키의 사건이 이미 있으면 그것을 그대로 돌려주고 누적 환불액을
+	 * 다시 더하지 않는다. 없으면 한도를 판정해 새로 만들고 그 금액만큼 누적 환불액을 더한다.
+	 *
+	 * <p>넘겨받은 사건이 이 결제의 것인지 먼저 대조한다 — 조회를 한 번 잘못 좁히면 남의 환불이 이번
+	 * 요청의 결과로 돌아간다.
+	 */
+	public Refund openRefund(Optional<Refund> existing, int amount, RefundReason reason, String idempotencyKey) {
+		if (existing.isPresent()) {
+			Refund found = requireOwnRefund(existing.get());
+			found.requireSameRequest(amount, reason);
+			return found;
+		}
+		return addRefund(RefundRequester.MEMBER, idempotencyKey, amount, reason);
+	}
+
+	/**
+	 * 승인 반려로 환불을 연다. 금액을 받지 않고 그 시점의 남은 한도(승인 금액 − 누적 환불액)를 스스로
+	 * 계산한다 — 상태에서 파생되는 판단이라 밖에서 계산해 넘기면 호출자가 도메인 규칙을 들게 된다.
+	 * 승인 금액으로 고정하지도 않는다. 정상 경로에서는 둘이 같고, 다른 순간은 이미 어긋난 상태라
+	 * 고정값을 쓰면 한도를 넘어 반려가 통째로 막힌다.
+	 *
+	 * <p>반려는 결제당 한 건이라 시스템이 요청한 환불이 이미 있으면 금액을 다시 계산하지 않고 그것을
+	 * 돌려준다. 계산하면 그 환불이 이미 한도를 잡고 있어 남은 한도가 0이 되고, 저장된 금액과 달라
+	 * 내용 불일치로 거절된다.
+	 *
+	 * <p>남은 한도가 0이면 비어 있는 결과를 돌려준다. 예외로 터뜨리면 반려가 통째로 롤백되어 이미 나간
+	 * 돈을 되돌릴 근거가 사라진다. 호출자는 그것이 비었는지만 보고 저장 여부를 가른다.
+	 */
+	public Optional<Refund> openRejectionRefund(Optional<Refund> existing, RefundReason reason) {
+		if (existing.isPresent()) {
+			return Optional.of(requireOwnRefund(existing.get()));
+		}
+		int remaining = remainingRefundableAmount();
+		if (remaining <= 0) {
+			return Optional.empty();
+		}
+		// 요청 멱등키에 사유 값을 담는다. 비워 두면 유일 검사에서 빠져 DB가 중복을 막지 못하고, 고정
+		// 문자열로 두면 사유가 늘었을 때 두 번째 종류가 제약에 막혀 조용히 안 만들어진다.
+		return Optional.of(addRefund(RefundRequester.SYSTEM, reason.name(), remaining, reason));
 	}
 
 	/**
@@ -301,12 +362,59 @@ public class Payment extends BaseTimeEntity {
 		return paymentKey + ATTEMPT_SEPARATOR + attemptSeq;
 	}
 
-	private void recordApproval(int approvedAmount, String pgTransactionId) {
+	/**
+	 * 결제사가 승인한 사실을 결제 행에 남긴다. 되돌릴 금액이 이 값에서 나오므로 반려가 환불을 열기
+	 * 전에 먼저 담는다 — 결제가 이미 종착이라 전이를 건너뛰는 경로에서도 이 값이 있어야 얼마를
+	 * 돌려줄지 정해진다.
+	 */
+	public void recordApproval(int approvedAmount, String pgTransactionId) {
 		if (approvedAmount <= 0) {
 			throw new PaymentException(PaymentErrorCode.PAYMENT_APPROVED_AMOUNT_INVALID);
 		}
 		this.approvedAmount = approvedAmount;
 		this.pgTransactionId = pgTransactionId;
+	}
+
+	/**
+	 * 환불 하나를 더한다. 한도 판정과 누적 환불액 갱신이 한 자리에 있어야 둘이 갈리지 않는다.
+	 *
+	 * <p>누적 환불액을 더하는 것이 곧 동시 요청 방어다. 결제 행이 실제로 바뀌어야 갱신 질의가 나가고
+	 * 버전이 오르며, 각자 한도를 통과한 두 요청 중 진 쪽이 그 버전에서 충돌해 자기 환불까지 함께
+	 * 롤백된다. 이 한 줄이 빠지면 겉보기에는 잘 돌다가 경합에서만 한도를 넘는다.
+	 */
+	private Refund addRefund(RefundRequester requester, String idempotencyKey, int amount, RefundReason reason) {
+		if (amount > remainingRefundableAmount()) {
+			throw new PaymentException(PaymentErrorCode.REFUND_LIMIT_EXCEEDED);
+		}
+		// 금액이 0보다 큰지와 요청 키가 있는지는 환불의 생성 관문이 지킨다. 여기서 값을 조립해 만들면
+		// 관문이 둘로 갈린다.
+		Refund refund = Refund.open(this.id, generateRefundKey(), requester, idempotencyKey, amount, reason);
+		this.totalRefundedAmount += amount;
+		return refund;
+	}
+
+	/**
+	 * 남은 한도. 모든 상태의 환불이 이미 누적 환불액에 들어 있어 상태로 예외를 두지 않는다 — 결과를
+	 * 모르는 것도 자동 처리가 멈춘 것도 아직 돈이 돌아가지 않았고, 그 몫을 풀어 주면 새 환불이 끼어든다.
+	 */
+	private int remainingRefundableAmount() {
+		if (approvedAmount == null) {
+			// 얼마를 돌려줘야 하는지가 정해지지 않았다.
+			throw new PaymentException(PaymentErrorCode.REFUND_APPROVED_AMOUNT_MISSING);
+		}
+		return approvedAmount - totalRefundedAmount;
+	}
+
+	private Refund requireOwnRefund(Refund refund) {
+		if (!refund.getPaymentId().equals(this.id)) {
+			throw new PaymentException(PaymentErrorCode.REFUND_NOT_OWNED_BY_PAYMENT);
+		}
+		return refund;
+	}
+
+	/** 환불 사건 키는 결제사를 부르기 전에 정해져야 하므로 환불을 만드는 이 자리에서 발급한다 */
+	private static String generateRefundKey() {
+		return REFUND_KEY_PREFIX + UUID.randomUUID().toString().replace("-", "");
 	}
 
 	private void close(PaymentCloseCode closeCode, String closeDetail) {

@@ -183,6 +183,19 @@ public class Refund extends BaseTimeEntity {
 		return new Refund(paymentId, refundKey, requester, idempotencyKey, amount, reason);
 	}
 
+	/**
+	 * 같은 요청 키로 다시 온 요청이 이 사건을 만든 그 요청과 같은지 확인한다. 다르면 이 사건을 돌려주지
+	 * 않고 거절한다 — 그러면 요청한 환불이 실행되지 않았는데 성공 응답이 나간다.
+	 *
+	 * <p>금액과 사유를 모두 본다. 전액환불만 하는 동안에는 둘 다 늘 같아 거절될 일이 없지만, 부분환불이
+	 * 오면 금액 비교가 그 방어의 전부가 된다.
+	 */
+	public void requireSameRequest(int amount, RefundReason reason) {
+		if (this.amount != amount || this.reason != reason) {
+			throw new PaymentException(PaymentErrorCode.REFUND_IDEMPOTENCY_KEY_CONFLICT);
+		}
+	}
+
 	/** 결제사 호출 직전. 첫 발송이라 시도 번호가 오르고 그 번호에서 호출 멱등키가 새로 파생된다 */
 	public void markInProgress(LocalDateTime requestedAt) {
 		requireStatusIn(RefundStatus.REQUESTED);

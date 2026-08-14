@@ -29,6 +29,13 @@ public enum PaymentErrorCode implements ErrorCode {
 	// 않는다 — 그 값은 남의 결제를 가리킨다.
 	PAYMENT_KEY_MISMATCH(ErrorCategory.CONFLICT, "PAYMENT-409-19",
 		"결제 정보가 일치하지 않아 결제를 완료하지 못했습니다"),
+	// 그 결제에 딸린 모든 환불의 합이 승인 금액을 넘는다. 상태로 예외를 두지 않으므로 결과를 모르는
+	// 환불도 자동 처리가 멈춘 환불도 이 한도를 잡고 있다.
+	REFUND_LIMIT_EXCEEDED(ErrorCategory.CONFLICT, "PAYMENT-409-20",
+		"환불 가능 금액을 넘는 요청입니다"),
+	// 승인 금액이 정해지지 않으면 얼마를 돌려줘야 하는지 알 수 없다.
+	REFUND_APPROVED_AMOUNT_MISSING(ErrorCategory.CONFLICT, "PAYMENT-409-21",
+		"승인 금액이 정해지지 않아 환불할 수 없습니다"),
 
 	PAYMENT_NOT_FOUND(ErrorCategory.NOT_FOUND, "PAYMENT-404", "결제를 찾을 수 없습니다"),
 
@@ -39,6 +46,9 @@ public enum PaymentErrorCode implements ErrorCode {
 	// 회원이 그 창에서 인증해 엉뚱한 주문이 결제된다. 다시 보내도 같으므로 새 키를 쓰라는 뜻이다.
 	PAYMENT_IDEMPOTENCY_KEY_CONFLICT(ErrorCategory.INVALID, "PAYMENT-400-22",
 		"같은 멱등키로 내용이 다른 요청이 왔습니다"),
+	// 앞서 만든 환불을 그대로 돌려주면 요청한 환불이 실행되지 않았는데 성공 응답이 나간다.
+	REFUND_IDEMPOTENCY_KEY_CONFLICT(ErrorCategory.INVALID, "PAYMENT-400-23",
+		"같은 환불 멱등키로 내용이 다른 요청이 왔습니다"),
 
 	PAYMENT_STATUS_TRANSITION_NOT_ALLOWED(ErrorCategory.INTERNAL, "PAYMENT-500-10",
 		"결제 상태 전이가 허용되지 않습니다"),
@@ -49,7 +59,11 @@ public enum PaymentErrorCode implements ErrorCode {
 	PAYMENT_APPROVED_AMOUNT_INVALID(ErrorCategory.INTERNAL, "PAYMENT-500-12",
 		"승인 금액이 0보다 크지 않습니다"),
 	REFUND_STATUS_TRANSITION_NOT_ALLOWED(ErrorCategory.INTERNAL, "PAYMENT-500-13",
-		"환불 상태 전이가 허용되지 않습니다");
+		"환불 상태 전이가 허용되지 않습니다"),
+	// 넘겨받은 기존 환불이 이 결제의 것이 아니다. 조회를 잘못 좁혔다는 뜻이며, 그대로 두면 남의 환불이
+	// 이번 요청의 결과로 돌아간다.
+	REFUND_NOT_OWNED_BY_PAYMENT(ErrorCategory.INTERNAL, "PAYMENT-500-14",
+		"그 결제의 환불이 아닙니다");
 
 	private final ErrorCategory category;
 	private final String code;
