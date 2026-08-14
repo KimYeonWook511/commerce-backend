@@ -224,6 +224,22 @@ class PaymentTest {
 		assertThat(payment.getAttemptSeq()).isEqualTo(2);
 	}
 
+	@DisplayName("결제사 호출 멱등키는 결제 키에 시도 번호를 붙인 값이고 시도 번호가 오를 때만 바뀐다")
+	@Test
+	void pgIdempotencyKey_whenAttemptSeqRaised_derivesNewKey() {
+		Payment payment = inProgressPayment();
+
+		String firstAttemptKey = payment.pgIdempotencyKey();
+		payment.recordReconciled(NOW.plusMinutes(1));
+		String sameAttemptKey = payment.pgIdempotencyKey();
+		payment.recordRetryableFailure();
+		String nextAttemptKey = payment.pgIdempotencyKey();
+
+		assertThat(firstAttemptKey).isEqualTo("PK-1-1");
+		assertThat(sameAttemptKey).isEqualTo(firstAttemptKey);
+		assertThat(nextAttemptKey).isEqualTo("PK-1-2");
+	}
+
 	@DisplayName("대사가 집을 때마다 회차가 오르고 집은 시각이 남는다")
 	@Test
 	void recordReconciled_whenCalled_raisesReconcileCountAndStampsPickedAt() {

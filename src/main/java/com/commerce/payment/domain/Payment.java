@@ -51,6 +51,9 @@ import org.hibernate.type.SqlTypes;
 @Getter
 public class Payment extends BaseTimeEntity {
 
+	/** 결제사 호출 멱등키를 결제 키에서 파생할 때 쓰는 구분자 */
+	private static final String ATTEMPT_SEPARATOR = "-";
+
 	@Id
 	@GeneratedValue(strategy = GenerationType.IDENTITY)
 	private Long id;
@@ -275,6 +278,16 @@ public class Payment extends BaseTimeEntity {
 	/** 통지를 보낸 뒤에 남긴다. 먼저 남기면 전송이 실패했을 때 알린 것으로 남아 다시 알리지 않는다 */
 	public void recordNotified(LocalDateTime notifiedAt) {
 		this.lastNotifyAt = notifiedAt;
+	}
+
+	/**
+	 * 승인 호출에 실을 결제사 호출 멱등키. 결제 키에 시도 번호를 붙여 파생하므로 시도 번호가 오르면
+	 * 함께 새것이 되고, 결과를 모르는 동안 다시 부를 때는 같은 값이 그대로 나가 결제사가 이전 응답을
+	 * 되돌려준다. 파생 규칙을 이 자리 하나에 두는 것은 보내는 값과 기록에 남기는 값이 갈리면 어느
+	 * 호출이 어느 시도였는지를 되짚을 수 없기 때문이다.
+	 */
+	public String pgIdempotencyKey() {
+		return paymentKey + ATTEMPT_SEPARATOR + attemptSeq;
 	}
 
 	private void recordApproval(int approvedAmount, String pgTransactionId) {
