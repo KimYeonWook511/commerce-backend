@@ -90,6 +90,44 @@ class GatewayAdapterTest {
 		assertThat(result.pgTransactionId()).isEqualTo("hist-1");
 	}
 
+	@DisplayName("승인 응답에 실려 온 회원 키를 그대로 넘긴다")
+	@Test
+	void approve_whenSucceeded_carriesMemberKey() {
+		server.expect(requestTo(APPROVAL_URL))
+			.andExpect(method(HttpMethod.POST))
+			.andRespond(withSuccess(approveSuccessResponse(), MediaType.APPLICATION_JSON));
+
+		PgApproveResult result = adapter.approve(payment);
+
+		assertThat(result.memberKey()).isEqualTo("2");
+	}
+
+	@DisplayName("결제사가 답했지만 결과가 정해지지 않으면 답을 받았다는 사실을 함께 넘긴다")
+	@Test
+	void approve_whenAnsweredButUnsettled_marksAnswered() {
+		server.expect(requestTo(APPROVAL_URL))
+			.andExpect(method(HttpMethod.POST))
+			.andRespond(withSuccess(approveResponse("AlreadyComplete"), MediaType.APPLICATION_JSON));
+
+		PgApproveResult result = adapter.approve(payment);
+
+		assertThat(result.outcome()).isEqualTo(PgOutcome.UNKNOWN);
+		assertThat(result.answered()).isTrue();
+	}
+
+	@DisplayName("응답을 받지 못하면 답이 없었다는 사실을 함께 넘긴다")
+	@Test
+	void approve_whenNotAnswered_marksUnanswered() {
+		server.expect(requestTo(APPROVAL_URL))
+			.andExpect(method(HttpMethod.POST))
+			.andRespond(withException(new SocketTimeoutException("read timed out")));
+
+		PgApproveResult result = adapter.approve(payment);
+
+		assertThat(result.outcome()).isEqualTo(PgOutcome.UNKNOWN);
+		assertThat(result.answered()).isFalse();
+	}
+
 	@DisplayName("호출 결과에 응답 원본과 결과 코드와 HTTP 상태가 함께 실린다")
 	@Test
 	void approve_whenResponded_carriesRawResponseAndResultCodeAndHttpStatus() {
@@ -532,8 +570,8 @@ class GatewayAdapterTest {
 	private String approveSuccessResponse() {
 		return """
 			{"code":"Success","message":"성공","body":{"detail":{"paymentId":"pg-payment-1",\
-			"payHistId":"hist-1","merchantPayKey":"payment-key-1","admissionState":"SUCCESS",\
-			"admissionYmdt":"20260815010203","totalPayAmount":10000}}}""";
+			"payHistId":"hist-1","merchantPayKey":"payment-key-1","merchantUserKey":"2",\
+			"admissionState":"SUCCESS","admissionYmdt":"20260815010203","totalPayAmount":10000}}}""";
 	}
 
 	private String approveResponse(String code) {
