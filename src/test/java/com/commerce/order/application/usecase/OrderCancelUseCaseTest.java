@@ -26,11 +26,11 @@ import com.commerce.order.domain.OrderStatus;
 import com.commerce.order.domain.repository.OrderRepository;
 import com.commerce.order.domain.exception.OrderErrorCode;
 import com.commerce.order.domain.exception.OrderException;
-import com.commerce.payment.application.port.result.CancelOutcome;
-import com.commerce.payment.application.usecase.RefundExecutionUseCase;
-import com.commerce.payment.domain.Payment;
-import com.commerce.payment.domain.PaymentProvider;
-import com.commerce.payment.naverpay.application.port.NaverPayGateway;
+import com.commerce.payment.legacy.application.port.result.CancelOutcome;
+import com.commerce.payment.legacy.application.usecase.RefundExecutionUseCase;
+import com.commerce.payment.legacy.domain.Payment;
+import com.commerce.payment.legacy.domain.PaymentProvider;
+import com.commerce.payment.legacy.naverpay.application.port.NaverPayGateway;
 
 @ExtendWith(MockitoExtension.class)
 class OrderCancelUseCaseTest {

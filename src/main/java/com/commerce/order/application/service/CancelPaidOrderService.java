@@ -14,9 +14,9 @@ import com.commerce.order.domain.OrderStatus;
 import com.commerce.order.domain.repository.OrderRepository;
 import com.commerce.order.domain.exception.OrderErrorCode;
 import com.commerce.order.domain.exception.OrderException;
-import com.commerce.payment.application.service.GetOrCreateCancelPaymentService;
-import com.commerce.payment.domain.Payment;
-import com.commerce.payment.domain.repository.PaymentRepository;
+import com.commerce.payment.legacy.application.service.GetOrCreateCancelPaymentService;
+import com.commerce.payment.legacy.domain.Payment;
+import com.commerce.payment.legacy.domain.repository.PaymentRepository;
 import com.commerce.stock.application.service.IncreaseStockService;
 
 import lombok.RequiredArgsConstructor;

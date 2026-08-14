@@ -31,12 +31,12 @@ import org.springframework.context.annotation.Import;
 import org.springframework.test.context.ActiveProfiles;
 import org.springframework.test.context.bean.override.mockito.MockitoBean;
 
-import com.commerce.payment.domain.Payment;
-import com.commerce.payment.domain.PaymentProvider;
-import com.commerce.payment.domain.PaymentReservation;
-import com.commerce.payment.domain.PaymentType;
-import com.commerce.payment.infrastructure.persistence.support.PaymentPersistenceTestSupport;
-import com.commerce.payment.infrastructure.persistence.support.PaymentReservationPersistenceTestSupport;
+import com.commerce.payment.legacy.domain.Payment;
+import com.commerce.payment.legacy.domain.PaymentProvider;
+import com.commerce.payment.legacy.domain.PaymentReservation;
+import com.commerce.payment.legacy.domain.PaymentType;
+import com.commerce.payment.legacy.infrastructure.persistence.support.PaymentPersistenceTestSupport;
+import com.commerce.payment.legacy.infrastructure.persistence.support.PaymentReservationPersistenceTestSupport;
 
 import com.commerce.order.domain.exception.OrderErrorCode;
 import com.commerce.order.domain.exception.OrderException;
