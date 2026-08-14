@@ -18,6 +18,7 @@ import org.springframework.data.domain.PageRequest;
 import org.springframework.test.context.ActiveProfiles;
 import org.springframework.test.context.DynamicPropertyRegistry;
 import org.springframework.test.context.DynamicPropertySource;
+import org.springframework.test.util.ReflectionTestUtils;
 
 import com.commerce.common.jpa.JpaConfig;
 import com.commerce.payment.domain.Refund;
@@ -110,6 +111,20 @@ class RefundRepositoryAdapterIntegrationTest {
 
 		assertThatThrownBy(() -> refundRepository.save(Refund.open(++nextPaymentId, duplicatedRefundKey,
 			RefundRequester.MEMBER, "IDEM-key-2", 10_000, RefundReason.ORDER_CANCELED)))
+			.isInstanceOf(DataIntegrityViolationException.class);
+	}
+
+	@DisplayName("두 환불이 같은 결제사 호출 멱등키를 나눠 가질 수 없다")
+	@Test
+	void save_whenTwoRefundsSharePgIdempotencyKey_violatesUniqueConstraint() {
+		Refund first = refundRepository.save(openedRefund(++nextPaymentId, RefundRequester.MEMBER, "IDEM-pg-1"));
+
+		// 이 값은 사건 키에서 파생되므로 실제로 겹치는 것은 새 시도인데 시도 번호를 안 올린 코드 버그일
+		// 때뿐이다. 그 버그가 남으면 결제사가 다른 환불의 결과를 이 환불의 결과로 돌려준다.
+		Refund colliding = openedRefund(++nextPaymentId, RefundRequester.MEMBER, "IDEM-pg-2");
+		ReflectionTestUtils.setField(colliding, "pgIdempotencyKey", first.getPgIdempotencyKey());
+
+		assertThatThrownBy(() -> refundRepository.save(colliding))
 			.isInstanceOf(DataIntegrityViolationException.class);
 	}
 

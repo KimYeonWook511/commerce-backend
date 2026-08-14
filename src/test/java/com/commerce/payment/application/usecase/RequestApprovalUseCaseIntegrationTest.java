@@ -50,9 +50,13 @@ import com.commerce.payment.domain.PgCallType;
 import com.commerce.payment.domain.PgErrorType;
 import com.commerce.payment.domain.exception.PaymentErrorCode;
 import com.commerce.payment.domain.exception.PaymentException;
+import com.commerce.payment.domain.Refund;
+import com.commerce.payment.domain.RefundReason;
+import com.commerce.payment.domain.RefundRequester;
 import com.commerce.payment.domain.repository.PaymentRepository;
 import com.commerce.payment.infrastructure.persistence.support.PaymentPersistenceTestSupport;
 import com.commerce.payment.infrastructure.persistence.support.PgCallLogPersistenceTestSupport;
+import com.commerce.payment.infrastructure.persistence.support.RefundPersistenceTestSupport;
 import com.commerce.product.domain.Product;
 import com.commerce.product.domain.ProductStatus;
 import com.commerce.product.infrastructure.persistence.support.ProductPersistenceTestSupport;
@@ -72,7 +76,8 @@ import com.commerce.support.TestcontainersSupport;
 	ProductPersistenceTestSupport.class,
 	OrderPersistenceTestSupport.class,
 	PaymentPersistenceTestSupport.class,
-	PgCallLogPersistenceTestSupport.class
+	PgCallLogPersistenceTestSupport.class,
+	RefundPersistenceTestSupport.class
 })
 class RequestApprovalUseCaseIntegrationTest {
 
@@ -109,6 +114,9 @@ class RequestApprovalUseCaseIntegrationTest {
 	@Autowired
 	private PgCallLogPersistenceTestSupport pgCallLogPersistence;
 
+	@Autowired
+	private RefundPersistenceTestSupport refundPersistence;
+
 	private static int uniqueSuffix = 0;
 
 	@DynamicPropertySource
@@ -120,7 +128,8 @@ class RequestApprovalUseCaseIntegrationTest {
 	@AfterEach
 	void tearDown() {
 		persistenceCleanup.deleteAllInBatch(
-			pgCallLogPersistence, paymentPersistence, memberPersistence, productPersistence, orderPersistence
+			pgCallLogPersistence, refundPersistence, paymentPersistence,
+			memberPersistence, productPersistence, orderPersistence
 		);
 	}
 
@@ -237,6 +246,13 @@ class RequestApprovalUseCaseIntegrationTest {
 		assertThat(payment.getCloseCode()).isEqualTo(PaymentCloseCode.ORDER_NOT_PAYABLE);
 		assertThat(payment.getApprovedAmount()).isEqualTo(fixture.amount());
 		assertThat(payment.getActiveOrderKey()).isNull();
+
+		// 결제 종결과 되돌릴 근거가 한 저장이다. 한쪽만 반영되면 돈이 나간 채 되돌릴 근거가 없다.
+		List<Refund> refunds = refundPersistence.findAll();
+		assertThat(refunds).hasSize(1);
+		assertThat(refunds.get(0).getRequester()).isEqualTo(RefundRequester.SYSTEM);
+		assertThat(refunds.get(0).getReason()).isEqualTo(RefundReason.ORDER_NOT_PAYABLE);
+		assertThat(refunds.get(0).getAmount()).isEqualTo(fixture.amount());
 	}
 
 	// ── 결제사 응답 갈래 ─────────────────────────────────────────
@@ -387,6 +403,12 @@ class RequestApprovalUseCaseIntegrationTest {
 		// 되돌릴 때 기준이 되는 값이라 우리 기록이 아니라 결제사가 승인한 금액을 담는다.
 		assertThat(payment.getApprovedAmount()).isEqualTo(approvedAmount);
 		assertThat(payment.getActiveOrderKey()).isNull();
+
+		// 환불 사유가 주문 상태 반려와 갈려 무엇 때문에 되돌리는지가 그 행에 남는다.
+		List<Refund> refunds = refundPersistence.findAll();
+		assertThat(refunds).hasSize(1);
+		assertThat(refunds.get(0).getReason()).isEqualTo(RefundReason.AMOUNT_MISMATCH);
+		assertThat(refunds.get(0).getAmount()).isEqualTo(approvedAmount);
 	}
 
 	@DisplayName("승인 금액이 0이면 확정하지 않고 결과 불명으로 두며 승인 금액을 담지 않는다")
