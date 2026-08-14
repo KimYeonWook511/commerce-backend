@@ -24,7 +24,7 @@ import static com.tngtech.archunit.lang.syntax.ArchRuleDefinition.noMethods;
  * 규칙의 근거는 각 @DisplayName 에 단 ADR/문서 포인터를 참고.
  *
  * NOTE: 패키지 컨벤션 가정 — com.commerce.<domain>.{presentation,application,domain,infrastructure}
- *       application 하위: usecase / service / port / dto  (skip·retry 모두 한 곳이면 usecase의 private 메서드, 여러 곳이면 support/ helper)
+ *       application 하위: usecase / service / port / dto / config  (skip·retry 모두 한 곳이면 usecase의 private 메서드, 여러 곳이면 support/ helper)
  *       infrastructure 하위: persistence / pg / cache / messaging / notification
  *       실제 패키지명이 다르면 아래 매처 문자열만 조정한다.
  *
