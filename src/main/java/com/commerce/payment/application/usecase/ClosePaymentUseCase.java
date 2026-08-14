@@ -5,11 +5,13 @@ import org.springframework.stereotype.Component;
 import com.commerce.common.exception.ErrorCode;
 import com.commerce.order.domain.exception.OrderErrorCode;
 import com.commerce.payment.application.dto.ApprovalOutcome;
+import com.commerce.payment.application.dto.RejectionAnomaly;
 import com.commerce.payment.application.port.NotificationPort;
 import com.commerce.payment.application.port.dto.PgHistoryEntry;
 import com.commerce.payment.application.service.PaymentService;
 import com.commerce.payment.domain.Payment;
 import com.commerce.payment.domain.PaymentCloseCode;
+import com.commerce.payment.domain.RefundReason;
 import com.commerce.payment.domain.exception.PaymentErrorCode;
 
 import lombok.RequiredArgsConstructor;
@@ -18,6 +20,9 @@ import lombok.extern.slf4j.Slf4j;
 /**
  * 승인이 났는데 우리가 그 결제를 이어갈 수 없을 때 결제를 종결한다. 승인 요청 흐름과 대사가 이 자리를
  * 공유하므로 종결 코드가 한 벌만 존재한다.
+ *
+ * <p>반려는 되돌릴 환불까지 따르고, 무엇 때문에 반려하는지가 환불 사유로 갈린다. 결제 키가 어긋난
+ * 경우만 환불을 만들지 않는다 — 나간 돈은 그 키의 주인 것이라 우리가 되돌릴 대상이 아니다.
  *
  * <p>트랜잭션을 열지 않는다. 종결마다 단위작업 하나가 커밋되고, 통지는 그 커밋 뒤에 나간다.
  */
@@ -31,13 +36,15 @@ public class ClosePaymentUseCase {
 
 	/** 결제사가 승인한 금액이 우리가 기록한 결제 금액과 다르다. 되돌릴 금액은 결제사가 승인한 쪽이다 */
 	public ApprovalOutcome rejectAmountMismatch(Payment payment, int approvedAmount, String pgTransactionId) {
-		paymentService.reject(
+		RejectionAnomaly anomaly = paymentService.reject(
 			payment.getId(),
 			PaymentCloseCode.AMOUNT_MISMATCH,
 			"승인 금액 " + approvedAmount + ", 주문 금액 " + payment.getAmount(),
 			approvedAmount,
-			pgTransactionId
+			pgTransactionId,
+			RefundReason.AMOUNT_MISMATCH
 		);
+		notifyIfAnomalous(payment, anomaly);
 		return ApprovalOutcome.rejected(PaymentErrorCode.PAYMENT_AMOUNT_MISMATCH);
 	}
 
@@ -51,13 +58,15 @@ public class ClosePaymentUseCase {
 		int approvedAmount,
 		String pgTransactionId
 	) {
-		paymentService.reject(
+		RejectionAnomaly anomaly = paymentService.reject(
 			payment.getId(),
 			PaymentCloseCode.ORDER_NOT_PAYABLE,
 			"주문 상태로 확정할 수 없다: " + orderErrorCode.getCode(),
 			approvedAmount,
-			pgTransactionId
+			pgTransactionId,
+			RefundReason.ORDER_NOT_PAYABLE
 		);
+		notifyIfAnomalous(payment, anomaly);
 		return ApprovalOutcome.rejected(toMemberFacingCode(orderErrorCode));
 	}
 
@@ -99,6 +108,18 @@ public class ClosePaymentUseCase {
 			"승인 응답의 결제 키가 다르다 responsePaymentKey=" + responsePaymentKey + " pgPaymentId=" + pgPaymentId
 		);
 		return ApprovalOutcome.rejected(PaymentErrorCode.PAYMENT_KEY_MISMATCH);
+	}
+
+	/**
+	 * 반려가 남긴 정합성 이상을 알린다. 커밋이 끝난 이 자리에서 보내는 것이 중요하다 — 트랜잭션 안에서
+	 * 던지면 방금 만든 되돌릴 근거가 통째로 롤백된다.
+	 */
+	private void notifyIfAnomalous(Payment payment, RejectionAnomaly anomaly) {
+		if (!anomaly.isAnomalous()) {
+			return;
+		}
+		notificationPort.notifyManualReviewRequired(
+			payment.getOrderId(), payment.getPaymentKey(), anomaly.description());
 	}
 
 	private PaymentErrorCode toMemberFacingCode(ErrorCode orderErrorCode) {

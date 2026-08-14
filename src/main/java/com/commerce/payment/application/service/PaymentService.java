@@ -10,19 +10,24 @@ import org.springframework.stereotype.Service;
 import org.springframework.transaction.annotation.Transactional;
 
 import com.commerce.common.util.UlidGenerator;
+import com.commerce.payment.application.dto.RejectionAnomaly;
 import com.commerce.payment.domain.Payment;
 import com.commerce.payment.domain.PaymentCloseCode;
 import com.commerce.payment.domain.PaymentPg;
 import com.commerce.payment.domain.PaymentStatus;
+import com.commerce.payment.domain.Refund;
+import com.commerce.payment.domain.RefundReason;
 import com.commerce.payment.domain.exception.PaymentErrorCode;
 import com.commerce.payment.domain.exception.PaymentException;
 import com.commerce.payment.domain.repository.PaymentRepository;
+import com.commerce.payment.domain.repository.RefundRepository;
 
 import lombok.RequiredArgsConstructor;
 import lombok.extern.slf4j.Slf4j;
 
 /**
- * 결제 도메인 안에서 끝나는 트랜잭션 단위작업.
+ * 결제 도메인 안에서 끝나는 트랜잭션 단위작업. 환불을 만드는 것도 여기다 — 그것을 만들지 판정하는
+ * 규칙이 결제 안에 있고 결제와 환불을 함께 저장해야 한다.
  *
  * <p>상태가 바뀐 사실을 남기는 로그가 여기 있다. 판정은 도메인이 하지만 그 판정을 커밋으로 확정하는
  * 것은 이 자리이고, 도메인 안에 로그를 두면 커밋되지 않은 전이까지 남는다.
@@ -35,6 +40,7 @@ public class PaymentService {
 	private static final String PAYMENT_KEY_PREFIX = "PAY-";
 
 	private final PaymentRepository paymentRepository;
+	private final RefundRepository refundRepository;
 
 	/**
 	 * 앞 결제를 종결해 활성 슬롯을 비우고 새 결제가 그 자리를 잡는다.
@@ -114,20 +120,51 @@ public class PaymentService {
 			id, payment.getOrderId(), approvedAmount);
 	}
 
-	/** 승인은 났는데 우리가 그 결제를 받아들일 수 없다. 되돌릴 금액을 알아야 하므로 승인 금액을 남긴다 */
+	/**
+	 * 승인은 났는데 우리가 그 결제를 받아들일 수 없다. 되돌릴 환불을 만드는 것과 결제를 반려로
+	 * 종결하는 것이 한 트랜잭션 한 저장이다 — 나누면 앞엣것만 커밋됐을 때 결제는 종착이라 아무도 다시
+	 * 보지 않고 환불 기록도 없어, 나간 돈을 되돌릴 근거가 아무 데도 남지 않는다.
+	 *
+	 * <p>환불 생성이 조건 없이 먼저다. 결제 전이가 일어나지 않더라도 환불은 남아야 한다 — 돈은 이미
+	 * 나갔다. 그리고 결제를 함께 저장하는 것이 동시 요청 방어다. 누적 환불액이 올라 결제 행이 바뀌므로,
+	 * 둘이 각자 한도를 통과하더라도 진 쪽은 결제 버전에서 충돌하고 그 환불까지 함께 롤백된다.
+	 *
+	 * <p>다른 트랜잭션 서비스를 부르지 않고 리포지토리와 도메인 객체를 직접 다룬다. 환불을 "찾거나
+	 * 만드는" 서비스를 따로 두면 혼자 불러도 되는 것처럼 생긴 문이 되어, 트랜잭션 없이 부르면 정당한
+	 * 조건 없이 환불 의도만 커밋된다.
+	 */
 	@Transactional
-	public void reject(
+	public RejectionAnomaly reject(
 		Long id,
 		PaymentCloseCode closeCode,
 		String closeDetail,
 		int approvedAmount,
-		String pgTransactionId
+		String pgTransactionId,
+		RefundReason reason
 	) {
 		Payment payment = load(id);
-		payment.reject(closeCode, closeDetail, approvedAmount, pgTransactionId);
+		// 반려에는 밖에서 온 요청 키가 없어 요청자로 찾는다. 찾는 범위를 유일 제약과 같게 두어야
+		// 조회가 못 찾은 것을 제약이 잡는 일이 정상 흐름에서 일어나지 않는다.
+		Optional<Refund> existing = refundRepository.findSystemRefundByPaymentId(id);
+
+		// 되돌릴 금액이 이 값에서 나오므로 환불을 열기 전에 담는다.
+		payment.recordApproval(approvedAmount, pgTransactionId);
+		Optional<Refund> refund = payment.openRejectionRefund(existing, reason);
+		if (refund.isEmpty()) {
+			// 만들 환불이 없으면 결제도 반려로 종결하지 않는다. 환불이 딸리지 않은 반려 행을 만들면
+			// "반려된 결제에는 되돌릴 근거가 있다"는 대조가 통째로 무력해진다.
+			log.error("남은 환불 한도가 0이라 반려 환불을 만들지 못했다 paymentId={} orderId={} approvedAmount={}",
+				id, payment.getOrderId(), approvedAmount);
+			return RejectionAnomaly.NO_REFUNDABLE_AMOUNT;
+		}
+
+		refundRepository.save(refund.get());
+		boolean closed = payment.reject(closeCode, closeDetail);
 		paymentRepository.saveChecked(payment);
-		log.info("승인 반려 종결 paymentId={} orderId={} closeCode={} approvedAmount={}",
-			id, payment.getOrderId(), closeCode, approvedAmount);
+
+		log.info("승인 반려 종결 paymentId={} orderId={} closeCode={} approvedAmount={} refundAmount={} closed={}",
+			id, payment.getOrderId(), closeCode, approvedAmount, refund.get().getAmount(), closed);
+		return closed ? RejectionAnomaly.NONE : RejectionAnomaly.PAYMENT_ALREADY_CLOSED;
 	}
 
 	/**
