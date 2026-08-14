@@ -22,7 +22,7 @@ import com.commerce.payment.legacy.infrastructure.persistence.support.PaymentPer
 import com.commerce.payment.legacy.infrastructure.persistence.support.PaymentReservationPersistenceTestSupport;
 
 import com.commerce.common.jpa.JpaConfig;
-import com.commerce.payment.legacy.infrastructure.persistence.PaymentRepositoryAdapter;
+import com.commerce.payment.legacy.infrastructure.persistence.LegacyPaymentRepositoryAdapter;
 import com.commerce.payment.legacy.infrastructure.persistence.PaymentReservationRepositoryAdapter;
 import jakarta.persistence.EntityManager;
 
@@ -30,7 +30,7 @@ import jakarta.persistence.EntityManager;
 @ActiveProfiles("test")
 @Import({
 	JpaConfig.class,
-	PaymentRepositoryAdapter.class,
+	LegacyPaymentRepositoryAdapter.class,
 	PaymentReservationRepositoryAdapter.class,
 	PaymentPersistenceTestSupport.class,
 	PaymentReservationPersistenceTestSupport.class

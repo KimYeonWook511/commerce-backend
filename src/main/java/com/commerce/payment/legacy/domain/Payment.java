@@ -23,7 +23,8 @@ import lombok.NoArgsConstructor;
 import org.hibernate.annotations.JdbcTypeCode;
 import org.hibernate.type.SqlTypes;
 
-@Entity
+// 새 결제 모델의 엔티티와 이름이 겹치지 않게 JPA 엔티티 이름을 따로 준다. 옮겨 간 테이블 이름과 짝을 맞춘다.
+@Entity(name = "LegacyPayment")
 @Table(
 	name = "tbl_legacy_payment",
 	uniqueConstraints = {

@@ -19,7 +19,7 @@ public class PaymentReservationPersistenceTestSupport implements PersistenceTest
 
 	@Override
 	public CleanupOrder cleanupOrder() {
-		return CleanupOrder.PAYMENT_RESERVATION;
+		return CleanupOrder.LEGACY_PAYMENT_RESERVATION;
 	}
 
 	@Override

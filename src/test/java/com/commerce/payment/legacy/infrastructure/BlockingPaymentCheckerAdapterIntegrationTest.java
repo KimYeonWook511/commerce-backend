@@ -25,14 +25,14 @@ import com.commerce.payment.legacy.domain.PaymentReservation;
 import com.commerce.payment.legacy.domain.PaymentType;
 import com.commerce.payment.legacy.domain.repository.PaymentRepository;
 import com.commerce.payment.legacy.infrastructure.persistence.BlockingPaymentCheckerAdapter;
-import com.commerce.payment.legacy.infrastructure.persistence.PaymentRepositoryAdapter;
+import com.commerce.payment.legacy.infrastructure.persistence.LegacyPaymentRepositoryAdapter;
 import com.commerce.support.TestcontainersSupport;
 
 @Tag("docker")
 @DataJpaTest
 @AutoConfigureTestDatabase(replace = AutoConfigureTestDatabase.Replace.NONE)
 @ActiveProfiles("test")
-@Import({JpaConfig.class, BlockingPaymentCheckerAdapter.class, PaymentRepositoryAdapter.class})
+@Import({JpaConfig.class, BlockingPaymentCheckerAdapter.class, LegacyPaymentRepositoryAdapter.class})
 class BlockingPaymentCheckerAdapterIntegrationTest {
 
 	@DynamicPropertySource

@@ -26,7 +26,7 @@ import com.commerce.payment.legacy.domain.exception.PaymentErrorCode;
 import com.commerce.payment.legacy.domain.exception.PaymentException;
 import com.commerce.payment.legacy.infrastructure.persistence.support.PaymentPersistenceTestSupport;
 import com.commerce.payment.legacy.infrastructure.persistence.support.PaymentReservationPersistenceTestSupport;
-import com.commerce.payment.legacy.infrastructure.persistence.PaymentRepositoryAdapter;
+import com.commerce.payment.legacy.infrastructure.persistence.LegacyPaymentRepositoryAdapter;
 import com.commerce.payment.legacy.infrastructure.persistence.PaymentReservationRepositoryAdapter;
 import com.commerce.support.PersistenceCleanupTestSupport;
 import com.commerce.support.TestcontainersSupport;
@@ -38,7 +38,7 @@ import com.commerce.support.TestcontainersSupport;
 	PersistenceCleanupTestSupport.class,
 	PaymentPersistenceTestSupport.class,
 	PaymentReservationPersistenceTestSupport.class,
-	PaymentRepositoryAdapter.class,
+	LegacyPaymentRepositoryAdapter.class,
 	PaymentReservationRepositoryAdapter.class
 })
 class PaymentRepositoryDuplicatePaymentTest {

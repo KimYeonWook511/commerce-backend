@@ -22,9 +22,9 @@ import lombok.RequiredArgsConstructor;
 
 @Repository
 @RequiredArgsConstructor
-public class PaymentRepositoryAdapter implements PaymentRepository {
+public class LegacyPaymentRepositoryAdapter implements PaymentRepository {
 
-	private final JpaPaymentRepository jpaPaymentRepository;
+	private final JpaLegacyPaymentRepository jpaPaymentRepository;
 
 	@Override
 	public Payment save(Payment payment) {

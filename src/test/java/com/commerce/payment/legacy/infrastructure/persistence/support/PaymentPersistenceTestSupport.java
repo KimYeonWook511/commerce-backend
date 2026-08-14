@@ -8,7 +8,7 @@ import com.commerce.payment.legacy.domain.Payment;
 import com.commerce.payment.legacy.domain.PaymentProvider;
 import com.commerce.payment.legacy.domain.PaymentStatus;
 import com.commerce.payment.legacy.domain.PaymentType;
-import com.commerce.payment.legacy.infrastructure.persistence.JpaPaymentRepository;
+import com.commerce.payment.legacy.infrastructure.persistence.JpaLegacyPaymentRepository;
 
 import lombok.RequiredArgsConstructor;
 import com.commerce.support.CleanupOrder;
@@ -18,11 +18,11 @@ import com.commerce.support.PersistenceTestSupport;
 @RequiredArgsConstructor
 public class PaymentPersistenceTestSupport implements PersistenceTestSupport {
 
-	private final JpaPaymentRepository jpaPaymentRepository;
+	private final JpaLegacyPaymentRepository jpaPaymentRepository;
 
 	@Override
 	public CleanupOrder cleanupOrder() {
-		return CleanupOrder.PAYMENT;
+		return CleanupOrder.LEGACY_PAYMENT;
 	}
 
 	@Override
