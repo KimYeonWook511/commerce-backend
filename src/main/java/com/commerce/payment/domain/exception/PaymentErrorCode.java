@@ -18,6 +18,19 @@ public enum PaymentErrorCode implements ErrorCode {
 	PAYMENT_RESULT_PENDING(ErrorCategory.CONFLICT, "PAYMENT-409-13",
 		"결제 결과 확인 중입니다. 잠시 후 주문 내역에서 확인해 주세요."),
 	PAYMENT_DUPLICATE(ErrorCategory.CONFLICT, "PAYMENT-409-14", "이미 다른 결제가 완료된 주문입니다"),
+	// 자리를 내주었거나 세션이 지났거나 이미 결과가 난 결제 시도로 승인이 돌아왔다. 그 시도로는 더
+	// 진행할 것이 없으므로 결제사를 부르지 않고 회원에게 다시 시작하라고 알린다.
+	PAYMENT_ATTEMPT_CLOSED(ErrorCategory.CONFLICT, "PAYMENT-409-15",
+		"종결된 결제 시도입니다. 결제를 다시 시작해 주세요."),
+	PAYMENT_APPROVAL_FAILED(ErrorCategory.CONFLICT, "PAYMENT-409-16", "결제 승인에 실패했습니다"),
+	PAYMENT_AMOUNT_MISMATCH(ErrorCategory.CONFLICT, "PAYMENT-409-17", "승인 금액이 주문 금액과 다릅니다"),
+	PAYMENT_ALREADY_CANCELED(ErrorCategory.CONFLICT, "PAYMENT-409-18", "이미 취소된 결제입니다"),
+	// 승인 응답에 실려 온 결제 키가 이 결제의 것이 아니다. 어느 결제가 승인됐는지를 회원에게 알리지
+	// 않는다 — 그 값은 남의 결제를 가리킨다.
+	PAYMENT_KEY_MISMATCH(ErrorCategory.CONFLICT, "PAYMENT-409-19",
+		"결제 정보가 일치하지 않아 결제를 완료하지 못했습니다"),
+
+	PAYMENT_NOT_FOUND(ErrorCategory.NOT_FOUND, "PAYMENT-404", "결제를 찾을 수 없습니다"),
 
 	PAYMENT_PG_NOT_SUPPORTED(ErrorCategory.INVALID, "PAYMENT-400-19", "지원하지 않는 결제 수단입니다"),
 	REFUND_AMOUNT_INVALID(ErrorCategory.INVALID, "PAYMENT-400-20", "환불 금액은 0보다 커야 합니다"),

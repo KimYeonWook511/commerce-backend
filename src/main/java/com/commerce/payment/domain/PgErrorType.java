@@ -18,5 +18,13 @@ public enum PgErrorType {
 	/** 응답을 받았는데 못 읽었다 */
 	PARSE,
 	/** 정상 응답 */
-	NONE
+	NONE;
+
+	/**
+	 * 응답이 돌아왔나. 호출 기록의 응답 시각을 남길지가 이 값으로 갈린다 — 그 자리가 비어 있다는 것이
+	 * "이 호출의 결과를 모른다"의 표시이고, 무엇 때문에 못 받았는지는 이 유형만이 말한다.
+	 */
+	public boolean responded() {
+		return this != CONNECT && this != TIMEOUT;
+	}
 }
