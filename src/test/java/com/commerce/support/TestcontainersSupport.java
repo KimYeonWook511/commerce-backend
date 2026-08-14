@@ -36,7 +36,10 @@ public final class TestcontainersSupport {
 					MySQLContainer<?> created = new MySQLContainer<>("mysql:8.0")
 						.withDatabaseName("commerce_db")
 						.withUsername("test")
-						.withPassword("test");
+						.withPassword("test")
+						// 통합 테스트 컨텍스트가 저마다 커넥션 풀을 들고 한 컨테이너를 나눠 쓴다.
+						// 기본 상한(151)에서는 컨텍스트가 늘 때 뒤엣것이 연결을 못 얻어 로딩부터 실패한다.
+						.withCommand("mysqld", "--max-connections=500");
 					created.start();
 					// start()를 한 이후에 참조를 해야함!! -> 초기화 중인 객체를 아래에서 사용하다 문제가 생길 수 있음
 					mysql = created;

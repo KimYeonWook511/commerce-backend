@@ -1,5 +1,6 @@
 package com.commerce.payment.infrastructure.persistence.support;
 
+import java.util.List;
 import java.util.Optional;
 
 import org.springframework.boot.test.context.TestComponent;
@@ -33,5 +34,21 @@ public class PaymentPersistenceTestSupport implements PersistenceTestSupport {
 
 	public Optional<Payment> findByPaymentKey(String paymentKey) {
 		return jpaPaymentRepository.findByPaymentKey(paymentKey);
+	}
+
+	public Optional<Payment> findById(Long id) {
+		return jpaPaymentRepository.findById(id);
+	}
+
+	public Optional<Payment> findActiveByOrderId(Long orderId) {
+		return jpaPaymentRepository.findByActiveOrderKey(orderId);
+	}
+
+	public List<Payment> findAll() {
+		return jpaPaymentRepository.findAll();
+	}
+
+	public long count() {
+		return jpaPaymentRepository.count();
 	}
 }

@@ -273,6 +273,34 @@ class PaymentTest {
 			.hasMessage(PaymentErrorCode.PAYMENT_STATUS_TRANSITION_NOT_ALLOWED.getMessage());
 	}
 
+	@DisplayName("같은 멱등키로 다시 온 요청이 이 결제를 만든 요청과 같으면 통과한다")
+	@Test
+	void requireSameRequest_whenOrderAndAmountMatch_passes() {
+		Payment payment = readyPayment();
+
+		payment.requireSameRequest(ORDER_ID, 10_000);
+	}
+
+	@DisplayName("같은 멱등키에 다른 주문이 실려 오면 앞서 만든 결제를 돌려주지 않고 거절한다")
+	@Test
+	void requireSameRequest_whenOrderDiffers_throws() {
+		Payment payment = readyPayment();
+
+		assertThatThrownBy(() -> payment.requireSameRequest(ORDER_ID + 1, 10_000))
+			.isInstanceOf(PaymentException.class)
+			.hasMessage(PaymentErrorCode.PAYMENT_IDEMPOTENCY_KEY_CONFLICT.getMessage());
+	}
+
+	@DisplayName("같은 멱등키에 다른 금액이 실려 오면 앞서 만든 결제를 돌려주지 않고 거절한다")
+	@Test
+	void requireSameRequest_whenAmountDiffers_throws() {
+		Payment payment = readyPayment();
+
+		assertThatThrownBy(() -> payment.requireSameRequest(ORDER_ID, 20_000))
+			.isInstanceOf(PaymentException.class)
+			.hasMessage(PaymentErrorCode.PAYMENT_IDEMPOTENCY_KEY_CONFLICT.getMessage());
+	}
+
 	@DisplayName("어느 전이를 거치든 상태와 활성 슬롯이 어긋나지 않는다")
 	@Test
 	void everyTransition_keepsActiveSlotConsistentWithStatus() {
