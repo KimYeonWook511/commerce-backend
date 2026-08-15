@@ -208,7 +208,7 @@ Application Service는 유스케이스 완료 시점에 도메인 이벤트 INFO
 
 ```java
 log.info("주문 생성 orderId={} memberId={} itemCount={}", orderId, memberId, itemCount);
-log.info("결제 승인 완료 merchantPayKey={} provider={} pgPaymentId={} orderId={}", ...);
+log.info("승인 확정 paymentId={} orderId={} approvedAmount={}", ...);
 ```
 
 - **Controller**: 로그 없음 (얇은 위임 레이어)
@@ -293,9 +293,9 @@ HTTP 요청 traceId는 스레드 로컬 MDC라 비동기 경계에서 자동 전
 ## 저장소 및 인프라 의존성
 
 - 영속 데이터는 MySQL에 저장한다.
-- 토큰은 Redis에 저장한다. 주문 멱등성은 Redis 에 in-flight 마커만 저장 (TTL 60초). 멱등성 진실은 `tbl_order.(member_id, idempotency_key)` unique 제약. Redis 장애 시 infra adapter 가 `OrderIdempotencyStoreUnavailableException` 으로 변환, application 이 catch 해 DB unique 안전망 경로로 fallback 진행 (단독 요청 정상 응답 가능).
+- 토큰은 Redis에 저장한다. 주문 생성·주문 취소·결제 시작의 멱등성은 Redis 에 in-flight 마커만 저장 (TTL 60초). 멱등성 진실은 DB unique 제약이다. Redis 장애 시 infra adapter 가 전용 기술 예외로 변환, application 이 catch 해 DB unique 안전망 경로로 fallback 진행 (단독 요청 정상 응답 가능). 결제 도메인은 자기 선점 port를 따로 두어 주문 도메인 것을 주입받지 않는다 — 어느 도메인 것도 아닌 공용 층을 만들지 않는다(→ PR#305).
 - 재고 복구 이벤트는 Outbox 모듈을 중심으로 Kafka로 전달한다.
-- 외부 결제는 네이버페이 PG 연동 모듈(`payment/naverpay`)을 통해 처리한다.
+- 외부 결제는 결제사 이름 없는 port 하나로 나가고, 네이버페이 구현체는 `payment/infrastructure/pg/naverpay`에 가둔다.
 
 ---
 
