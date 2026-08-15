@@ -38,8 +38,8 @@ public class GatewayClient {
 	private static final int HISTORY_ROWS_PER_PAGE = 100;
 
 	private final Properties properties;
-	private final RestTemplate pgNaverPayRestTemplate;
-	private final RestTemplate pgNaverPayBatchRestTemplate;
+	private final RestTemplate naverPayRestTemplate;
+	private final RestTemplate naverPayBatchRestTemplate;
 
 	public GatewayExchange approve(String pgPaymentId, String pgIdempotencyKey) {
 		HttpHeaders headers = createHeaders();
@@ -100,7 +100,7 @@ public class GatewayClient {
 
 	/** 읽기 제한 시간이 진입점마다 다르므로 클라이언트를 그 자리에 맞춰 고른다 */
 	private RestTemplate restTemplateFor(PgCallSource source) {
-		return source == PgCallSource.BATCH ? pgNaverPayBatchRestTemplate : pgNaverPayRestTemplate;
+		return source == PgCallSource.BATCH ? naverPayBatchRestTemplate : naverPayRestTemplate;
 	}
 
 	private <B> GatewayExchange post(String url, HttpHeaders headers, B body, PgCallSource source) {

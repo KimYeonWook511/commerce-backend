@@ -10,7 +10,7 @@ import lombok.extern.slf4j.Slf4j;
  * 지금 통지 수단은 서버 로그 한 줄이다. 받아서 처리하는 경로가 정해지면 이 자리를 바꾼다.
  */
 @Slf4j
-@Component("paymentLogNotificationAdapter")
+@Component
 public class LogNotificationAdapter implements NotificationPort {
 
 	@Override

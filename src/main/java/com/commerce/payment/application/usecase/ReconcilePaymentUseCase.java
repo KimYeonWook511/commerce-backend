@@ -41,12 +41,9 @@ import lombok.extern.slf4j.Slf4j;
  *
  * <p>트랜잭션을 열지 않는다. 건마다 단위작업이 따로 커밋되어 한 건이 실패해도 나머지가 돌고, 낙관 락
  * 충돌도 건별로 걸린다.
- *
- * <p>빈 이름을 옛 대사와 겹치지 않게 둔다. 둘이 나란히 사는 동안 같은 이름을 쓰면 컨테이너가 뜨지
- * 않는다.
  */
 @Slf4j
-@Component("paymentReconcilePaymentUseCase")
+@Component
 @RequiredArgsConstructor
 public class ReconcilePaymentUseCase {
 

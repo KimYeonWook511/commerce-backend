@@ -7,11 +7,8 @@ import lombok.Getter;
 
 /**
  * 이 결제사를 부르는 데 필요한 설정. 패키지가 어느 결제사인지를 말하므로 이름에 넣지 않는다.
- *
- * <p>빈 이름과 설정 키를 옛 연동과 겹치지 않게 둔다. 둘이 나란히 사는 동안 같은 이름을 쓰면 하나가
- * 다른 하나를 덮어 어느 쪽이 뜨는지가 로딩 순서에 달리게 된다.
  */
-@Component("pgNaverPayProperties")
+@Component
 @Getter
 public class Properties {
 

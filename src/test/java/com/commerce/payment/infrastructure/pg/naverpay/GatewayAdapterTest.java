@@ -77,8 +77,8 @@ class GatewayAdapterTest {
 		ReflectionTestUtils.setField(clientConfig, "connectTimeoutMillis", 1000);
 		ReflectionTestUtils.setField(clientConfig, "readTimeoutMillis", 1000);
 		ReflectionTestUtils.setField(clientConfig, "batchReadTimeoutMillis", 500);
-		RestTemplate restTemplate = clientConfig.pgNaverPayRestTemplate();
-		RestTemplate batchRestTemplate = clientConfig.pgNaverPayBatchRestTemplate();
+		RestTemplate restTemplate = clientConfig.naverPayRestTemplate();
+		RestTemplate batchRestTemplate = clientConfig.naverPayBatchRestTemplate();
 
 		server = MockRestServiceServer.bindTo(restTemplate).build();
 		batchServer = MockRestServiceServer.bindTo(batchRestTemplate).build();

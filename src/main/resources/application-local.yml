@@ -55,15 +55,6 @@ payment:
       cancel-url: ${LOCAL_NAVERPAY_CANCEL_URL}
       history-url: ${LOCAL_NAVERPAY_PAYMENT_HISTORY_URL}
 
-naverpay:
-  client-id: ${LOCAL_NAVERPAY_CLIENT_ID}
-  client-secret: ${LOCAL_NAVERPAY_CLIENT_SECRET}
-  chain-id: ${LOCAL_NAVERPAY_CHAIN_ID}
-  return-url: ${LOCAL_NAVERPAY_RETURN_URL}
-  approval-url: ${LOCAL_NAVERPAY_APPROVAL_URL}
-  cancel-url: ${LOCAL_NAVERPAY_CANCEL_URL}
-  payment-history-url: ${LOCAL_NAVERPAY_PAYMENT_HISTORY_URL}
-
 order:
   expiration:
     minutes: 60

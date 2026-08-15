@@ -47,15 +47,6 @@ payment:
       cancel-url: https://test
       history-url: https://test/{paymentId}
 
-naverpay:
-  client-id: test
-  client-secret: test
-  chain-id: test
-  return-url: https://test
-  approval-url: https://test
-  cancel-url: https://test
-  payment-history-url: https://test
-
 outbox:
   stock-restore:
     relay:

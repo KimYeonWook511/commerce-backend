@@ -27,12 +27,9 @@ import lombok.extern.slf4j.Slf4j;
  * 갈래가 두 벌이 되어 한쪽만 고쳤을 때 돈이 나가고 안 나가고가 진입점에 따라 갈린다.
  *
  * <p>트랜잭션을 열지 않는다 — 결제사 호출과 운영자 통지가 단위작업 사이에 끼기 때문이다.
- *
- * <p>빈 이름을 옛 연동과 겹치지 않게 둔다. 둘이 나란히 사는 동안 같은 이름을 쓰면 컨테이너가 뜨지
- * 않는다.
  */
 @Slf4j
-@Component("paymentConfirmApprovalUseCase")
+@Component
 @RequiredArgsConstructor
 public class ConfirmApprovalUseCase {
 
