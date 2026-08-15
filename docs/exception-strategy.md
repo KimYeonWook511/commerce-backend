@@ -9,6 +9,8 @@
 - **find-first 패턴**: 정상 흐름은 사전 `find`로 처리(멱등/중복 흡수). DB 무결성 위반(unique race, NOT NULL/FK/CHECK)은 catch하지 말고 `GlobalExceptionHandler` 안전망(500)에 위임한다. (단 그 위반을 특정 상황으로 구분해 처리해야 하면 adapter에서 도메인 예외로 번역해 4xx로 다룰 수 있다.)
 - **충돌이 잦은 시나리오**는 예외적으로 try-save-catch가 더 적합하다. 이때 DAO 추상 예외(`DuplicateKeyException` 등)를 잡는 건 허용되지만, 구현체에 묶인 구체 타입(`org.hibernate.*`·`org.springframework.orm.*`)은 직접 잡지 않는다 — 추상 상위를 잡으면 구체 하위가 다형적으로 걸린다.
 - **낙관 락(@Version) 충돌**: tx 경계 밖에서 정책(전파/skip/retry)을 정한다. **순수 재시도**면 usecase가 DAO 추상 예외 `OptimisticLockingFailureException`을 직접 잡아 새 tx로 재시도한다(번역 불필요). **충돌에 따라 다르게 처리**해야 하면 `infrastructure/persistence/` adapter가 `saveAndFlush`로 감지를 당겨 도메인 예외로 번역한다. 상세·근거는 `docs/optimistic-lock-design.md`가 단일 출처. (unique 위반과 달리 충돌은 정상 시나리오라 409 — 아래 "왜 500 vs 409" 참고.)
+  - **다시 하는 동안에는 다루지 않고, 소진되면 다룬다.** 재시도 중의 충돌은 그냥 다시 하면 되는 일이라 원형을 그대로 쓴다. 반면 횟수를 다 쓰면 회원에게 답을 줘야 하므로 그때는 도메인 예외로 옮긴다.
+  - **재시도하는 자리는 트랜잭션 경계 밖이어야 한다.** 충돌은 커밋 시점에 터지므로, 트랜잭션을 여는 메서드 안에서 잡으면 도달하지 않는 코드가 된다. 이 저장소는 usecase가 트랜잭션을 열지 않고 service를 부르므로 그 자리가 곧 경계 밖이다 — **usecase에 트랜잭션을 붙이는 순간 이 전제가 깨진다.**
 - **보상 catch (catch 안 2차 작업)**: 1차 예외는 진입 즉시 `log.error()`(근본 원인 보존). 2차 성공 시 1차만 전파. 2차 실패·덜 중요하면 `log.warn()`+1차 전파. 2차 실패·치명적이면 `addSuppressed`로 둘 다 전파. **레벨: 1차=ERROR. 2차 실패는 덜 중요하면 WARN+1차 전파, 치명적이면 addSuppressed로 둘 다 전파.**
 - **catch 안 메서드는 가급적 예외를 안 던지게 설계**하고 의도를 메서드명에 캡슐화한다. Composite Exception은 도저히 안 될 때만.
 - **외부 캐시(Redis) 장애**: infra adapter가 `DataAccessException`을 잡아 도메인 예외로 변환한다(port에 DAO 예외 노출 금지). 던지는 예외 타입은 application이 그 장애를 catch해 삼키느냐로 갈린다 — **catch해서 fallback**하면 자동 매핑을 피하는 `RuntimeException` 직접 상속 전용 예외, **catch하지 않으면** 공통 예외 베이스(`CustomException`)로 던져 `UNAVAILABLE`(503) 자동 매핑에 맡긴다.
@@ -21,9 +23,13 @@
 
 무결성 위반은 정상 흐름을 사전 `find` 로 처리하고, 실제 발생하면 `GlobalExceptionHandler` 안전망에 위임한다. `insert` 시점의 unique race는 DAO 추상 예외 `DataIntegrityViolationException` 으로 안전망까지 흘려 500으로 가시화한다(아래 본질 흐름).
 
-**안쪽이 그 위반에 따라 다르게 처리해야 하면 예외적으로 번역한다**: 특정 유니크 제약이 명확한 비즈니스 개념에 1:1 대응하고 안쪽이 그에 따라 처리를 달리하면, `infrastructure/persistence/` adapter가 제약을 식별해 도메인 예외로 번역한다. 이때도 adapter는 DAO 추상 상위(`DataIntegrityViolationException`)를 잡지, 구현체에 묶인 구체 타입(`org.hibernate.*`·`jakarta.persistence.*`)을 잡지 않는다.
+**안쪽이 그 위반에 따라 다르게 처리해야 하면 예외적으로 번역한다**: 특정 유니크 제약이 명확한 비즈니스 개념에 1:1 대응하고 안쪽이 그에 따라 처리를 달리하면, `infrastructure/persistence/` adapter가 제약을 식별해 도메인 예외로 번역한다. 이때도 adapter는 DAO 추상 상위(`DataIntegrityViolationException`)를 잡지, 구현체에 묶인 구체 타입(`org.hibernate.*`·`jakarta.persistence.*`)을 잡지 않는다. 제약 이름은 그 예외의 원인에 담겨 있어 **어댑터 안에서만** 들여다본다.
 
-**지금 이 저장소에 제약명을 식별하는 자리는 없다.** 결제 시작과 주문 취소가 유일 제약을 선점의 안전망으로 쓰는데, **어느 제약에 부딪혔든 "같은 자리를 다른 요청이 먼저 잡았다"는 뜻이 같아** 가려서 처리할 것이 없다. 그래서 번역 없이 usecase가 DAO 추상 예외(`DataIntegrityViolationException`)를 그대로 잡아 회원용 409로 바꾼다.
+**제약명을 식별하는 자리가 하나 있다 — 환불을 저장하는 persistence adapter다.** 주문 취소가 주문·환불·재고·결제를 **한 트랜잭션에 저장해 유일 제약 위반과 필수값 누락·외래 키 위반이 같은 예외로 도착하기 때문**이다. 앞엣것만 회원에게 "잠시 후 다시"라고 답할 수 있고 나머지는 회원이 할 수 있는 일이 없는 결함이라 안전망으로 보내야 하므로, 제약 이름을 볼 수 있는 그 자리에서 가른다. 유스케이스는 옮겨진 도메인 예외만 잡는다.
+
+**결제 시작은 아직 번역하지 않는다.** 그 트랜잭션은 결제 한 테이블만 저장하고, 부딪힐 수 있는 유일 제약 셋이 모두 **"같은 자리를 다른 요청이 먼저 잡았다"는 뜻이 같아** 가릴 것이 없다. 그래서 번역 없이 usecase가 DAO 추상 예외(`DataIntegrityViolationException`)를 그대로 잡아 회원용 409로 바꾼다. 판단축은 **"안쪽이 그 예외를 실제로 다루는가"**이며, 결제 시작도 여러 테이블을 함께 저장하게 되면 같은 판단으로 넘어온다.
+
+> **제약 이름을 바꾸면 어댑터도 함께 고친다.** 마이그레이션에서 이름만 바꾸면 어댑터의 판정이 조용히 어긋나는데, **컴파일도 단위 검증도 통과하고 실제 DB를 쓰는 검증만 잡는다.**
 
 ### 본질 흐름 — find-first 패턴
 
