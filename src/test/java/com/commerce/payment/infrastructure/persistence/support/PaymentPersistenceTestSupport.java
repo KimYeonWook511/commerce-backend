@@ -1,18 +1,16 @@
 package com.commerce.payment.infrastructure.persistence.support;
 
+import java.util.List;
 import java.util.Optional;
 
 import org.springframework.boot.test.context.TestComponent;
 
 import com.commerce.payment.domain.Payment;
-import com.commerce.payment.domain.PaymentProvider;
-import com.commerce.payment.domain.PaymentStatus;
-import com.commerce.payment.domain.PaymentType;
 import com.commerce.payment.infrastructure.persistence.JpaPaymentRepository;
-
-import lombok.RequiredArgsConstructor;
 import com.commerce.support.CleanupOrder;
 import com.commerce.support.PersistenceTestSupport;
+
+import lombok.RequiredArgsConstructor;
 
 @TestComponent
 @RequiredArgsConstructor
@@ -31,53 +29,26 @@ public class PaymentPersistenceTestSupport implements PersistenceTestSupport {
 	}
 
 	public Payment save(Payment payment) {
-		return jpaPaymentRepository.save(payment);
+		return jpaPaymentRepository.saveAndFlush(payment);
 	}
 
-	public Optional<Payment> findApproveSucceeded(String merchantPayKey) {
-		return jpaPaymentRepository.findByMerchantPayKeyAndTypeAndStatus(
-			merchantPayKey, PaymentType.APPROVE, PaymentStatus.SUCCEEDED
-		);
+	public Optional<Payment> findByPaymentKey(String paymentKey) {
+		return jpaPaymentRepository.findByPaymentKey(paymentKey);
 	}
 
-	public long countPaymentsByMerchantPayKey(String merchantPayKey) {
-		return jpaPaymentRepository.findAll().stream()
-			.filter(payment -> payment.getMerchantPayKey().equals(merchantPayKey))
-			.count();
+	public Optional<Payment> findById(Long id) {
+		return jpaPaymentRepository.findById(id);
 	}
 
-	public Optional<Payment> findPayment(
-		String merchantPayKey,
-		PaymentProvider provider,
-		String pgPaymentId,
-		PaymentType type
-	) {
-		return jpaPaymentRepository.findByMerchantPayKeyAndProviderAndPgPaymentIdAndType(
-			merchantPayKey, provider, pgPaymentId, type
-		);
+	public Optional<Payment> findActiveByOrderId(Long orderId) {
+		return jpaPaymentRepository.findByActiveOrderKey(orderId);
 	}
 
-	public Payment getPayment(
-		String merchantPayKey,
-		PaymentProvider provider,
-		String pgPaymentId,
-		PaymentType type
-	) {
-		return findPayment(merchantPayKey, provider, pgPaymentId, type).orElseThrow();
+	public List<Payment> findAll() {
+		return jpaPaymentRepository.findAll();
 	}
 
-	public long countPayments(String merchantPayKey, String pgPaymentId, PaymentType type) {
-		return jpaPaymentRepository.findAll().stream()
-			.filter(payment -> payment.getMerchantPayKey().equals(merchantPayKey))
-			.filter(payment -> payment.getPgPaymentId().equals(pgPaymentId))
-			.filter(payment -> payment.getType() == type)
-			.count();
-	}
-
-	public long countCancelPayments(String merchantPayKey) {
-		return jpaPaymentRepository.findAll().stream()
-			.filter(payment -> payment.getMerchantPayKey().equals(merchantPayKey))
-			.filter(payment -> payment.getType() == PaymentType.CANCEL)
-			.count();
+	public long count() {
+		return jpaPaymentRepository.count();
 	}
 }

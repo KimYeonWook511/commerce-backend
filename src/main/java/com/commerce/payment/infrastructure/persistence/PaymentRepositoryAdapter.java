@@ -1,8 +1,11 @@
 package com.commerce.payment.infrastructure.persistence;
 
 import java.time.LocalDateTime;
+import java.util.Collection;
+import java.util.HashSet;
 import java.util.List;
 import java.util.Optional;
+import java.util.Set;
 
 import org.hibernate.exception.ConstraintViolationException;
 import org.springframework.dao.DataIntegrityViolationException;
@@ -11,12 +14,10 @@ import org.springframework.orm.ObjectOptimisticLockingFailureException;
 import org.springframework.stereotype.Repository;
 
 import com.commerce.payment.domain.Payment;
-import com.commerce.payment.domain.PaymentProvider;
-import com.commerce.payment.domain.PaymentStatus;
-import com.commerce.payment.domain.PaymentType;
-import com.commerce.payment.domain.repository.PaymentRepository;
+import com.commerce.payment.domain.exception.DuplicatePaymentAttemptException;
 import com.commerce.payment.domain.exception.PaymentErrorCode;
 import com.commerce.payment.domain.exception.PaymentException;
+import com.commerce.payment.domain.repository.PaymentRepository;
 
 import lombok.RequiredArgsConstructor;
 
@@ -24,37 +25,44 @@ import lombok.RequiredArgsConstructor;
 @RequiredArgsConstructor
 public class PaymentRepositoryAdapter implements PaymentRepository {
 
+	/**
+	 * 결제 테이블의 유일 제약 이름은 모두 이 접두어를 갖는다. 셋(활성 슬롯·회원 멱등키·결제 키) 중
+	 * 무엇에 부딪혔든 뜻이 같아 이름을 하나하나 가리지 않는다.
+	 */
+	private static final String UK_PAYMENT_PREFIX = "uk_payment_";
+
 	private final JpaPaymentRepository jpaPaymentRepository;
 
-	@Override
-	public Payment save(Payment payment) {
-		return jpaPaymentRepository.saveAndFlush(payment);
-	}
-
 	/**
-	 * APPROVE 승인 완료 전용 저장 경로.
-	 * saveAndFlush의 조기 flush가 uk_payment_approved_order_key 위반을 이 메서드 호출 안에서 확정한다(load-bearing).
-	 * constraint name이 uk_payment_approved_order_key인 경우에만 PaymentException(PAYMENT_DUPLICATE)로 변환하고,
-	 * 그 외 무결성 위반은 원 예외를 그대로 전파한다.
+	 * 결제의 유일 제약에 부딪힌 것만 도메인 예외로 옮긴다. 활성 슬롯·회원 멱등키·결제 키 중 무엇이든
+	 * 같은 자리를 다른 요청이 먼저 잡았다는 뜻이라 회원이 할 일이 같아 하나로 접는다.
+	 *
+	 * <p>나머지 무결성 위반(필수값 누락·외래 키 등)은 그대로 올려 보내 안전망이 받게 한다 — 회원이 할 수
+	 * 있는 일이 없는 결함이고, 같은 응답으로 접으면 조사할 근거가 사라진다. 제약 이름을 볼 수 있는 것이
+	 * 이 자리뿐이라 여기서 가른다.
 	 */
 	@Override
-	public Payment saveApproved(Payment payment) {
+	public Payment save(Payment payment) {
 		try {
 			return jpaPaymentRepository.saveAndFlush(payment);
 		} catch (DataIntegrityViolationException ex) {
-			if (isApprovedOrderKeyViolation(ex)) {
-				throw new PaymentException(PaymentErrorCode.PAYMENT_DUPLICATE);
+			if (violatesUniqueOfPayment(ex)) {
+				throw new DuplicatePaymentAttemptException();
 			}
 			throw ex;
 		}
 	}
 
+	private boolean violatesUniqueOfPayment(DataIntegrityViolationException ex) {
+		return ex.getCause() instanceof ConstraintViolationException cause
+			&& cause.getConstraintName() != null
+			&& cause.getConstraintName().toLowerCase().contains(UK_PAYMENT_PREFIX);
+	}
+
 	/**
-	 * 낙관 락(@Version) 충돌 변환 전용 저장 경로.
-	 * saveAndFlush의 조기 flush가 버전 충돌을 이 메서드 호출 안에서 확정한다(load-bearing).
-	 * 진 쪽의 ObjectOptimisticLockingFailureException을 PaymentException(PAYMENT_CONCURRENTLY_MODIFIED)으로 변환한다.
-	 * catch 블록에서 추가 DB 쓰기를 하지 않는다 — 충돌 후 트랜잭션은 rollback-only 상태다.
-	 * 충돌을 skip할지 전파할지(409)는 이 변환 예외를 받는 useCase(트랜잭션 경계 밖)가 결정한다.
+	 * 낙관 락 충돌을 이 호출 안에서 확정한다. flush를 어댑터 프레임으로 당겨야 충돌이 여기서 터지고,
+	 * 그것을 도메인 예외로 바꿔 트랜잭션 밖의 호출자가 물러날지 전파할지 정할 수 있다.
+	 * 충돌 뒤 트랜잭션은 rollback-only이므로 catch 블록에서 추가 쓰기를 하지 않는다.
 	 */
 	@Override
 	public Payment saveChecked(Payment payment) {
@@ -66,91 +74,92 @@ public class PaymentRepositoryAdapter implements PaymentRepository {
 	}
 
 	/**
-	 * cause 체인의 Hibernate ConstraintViolationException에서 uk_payment_approved_order_key 위반 여부를 확인한다.
-	 * 일치하는 제약을 찾지 못하면 false를 반환해 원 예외를 그대로 전파한다(보수적 원칙).
-	 *
-	 * SQLErrorCodeSQLExceptionTranslator 빈 제거 후 unique 위반은 DataIntegrityViolationException
-	 * (cause=Hibernate ConstraintViolationException(cause=SQLException))으로 올라온다.
-	 * getConstraintName()이 MySQL에서 테이블 prefix를 포함한 형태(tbl_payment.uk_...)를 반환하므로 전체 이름으로 비교한다.
-	 * 대소문자는 환경에 따라 달라질 수 있어 무시하고, cause 체인을 끝까지 순회한다.
+	 * 이 저장이 뒤 저장보다 먼저 DB에 나가게 한다. Hibernate는 코드에 적힌 줄 순서로 쓰기를 내보내지
+	 * 않고 삽입을 갱신보다 먼저 내보내므로, 앞 결제의 슬롯을 비우는 갱신을 먼저 적어도 새 결제의 삽입이
+	 * 앞질러 도착해 아직 차 있는 슬롯에 부딪힌다.
 	 */
-	private static boolean isApprovedOrderKeyViolation(DataIntegrityViolationException ex) {
-		Throwable cause = ex;
-		while (cause != null) {
-			if (cause instanceof ConstraintViolationException constraintEx) {
-				if ("tbl_payment.uk_payment_approved_order_key".equalsIgnoreCase(constraintEx.getConstraintName())) {
-					return true;
-				}
-			}
-			cause = cause.getCause();
-		}
-		return false;
+	@Override
+	public Payment saveFlushed(Payment payment) {
+		return jpaPaymentRepository.saveAndFlush(payment);
 	}
 
 	@Override
-	public Optional<Payment> findApprovePayment(String merchantPayKey, PaymentProvider provider, String pgPaymentId) {
-		return jpaPaymentRepository.findByMerchantPayKeyAndProviderAndPgPaymentIdAndType(
-			merchantPayKey, provider, pgPaymentId, PaymentType.APPROVE
-		);
+	public Optional<Payment> findById(Long id) {
+		return jpaPaymentRepository.findById(id);
 	}
 
 	@Override
-	public Optional<Payment> findCancelPayment(String merchantPayKey, PaymentProvider provider, String pgPaymentId) {
-		return jpaPaymentRepository.findByMerchantPayKeyAndProviderAndPgPaymentIdAndType(
-			merchantPayKey, provider, pgPaymentId, PaymentType.CANCEL
-		);
+	public Optional<Payment> findActiveByOrderId(Long orderId) {
+		return jpaPaymentRepository.findByActiveOrderKey(orderId);
 	}
 
 	@Override
-	public Optional<Payment> findApproveSucceeded(String merchantPayKey) {
-		return jpaPaymentRepository.findByMerchantPayKeyAndTypeAndStatus(
-			merchantPayKey, PaymentType.APPROVE, PaymentStatus.SUCCEEDED
-		);
+	public Optional<Payment> findByMemberIdAndIdempotencyKey(Long memberId, String idempotencyKey) {
+		return jpaPaymentRepository.findByMemberIdAndIdempotencyKey(memberId, idempotencyKey);
 	}
 
 	@Override
-	public Optional<Payment> findApproveSucceededByOrderId(Long orderId) {
-		return jpaPaymentRepository.findByOrderIdAndTypeAndStatus(
-			orderId, PaymentType.APPROVE, PaymentStatus.SUCCEEDED
-		);
+	public Optional<Payment> findByPaymentKeyAndMemberId(String paymentKey, Long memberId) {
+		return jpaPaymentRepository.findByPaymentKeyAndMemberId(paymentKey, memberId);
+	}
+
+	@Override
+	public Optional<Payment> findByPaymentKey(String paymentKey) {
+		return jpaPaymentRepository.findByPaymentKey(paymentKey);
 	}
 
 	@Override
 	public boolean existsUnknownByOrderId(Long orderId) {
-		return jpaPaymentRepository.existsByOrderIdAndTypeAndStatus(
-			orderId, PaymentType.APPROVE, PaymentStatus.UNKNOWN
-		);
+		return jpaPaymentRepository.existsUnknownByOrderId(orderId);
 	}
 
 	@Override
-	public boolean existsUnconfirmedApproveByOrderId(Long orderId) {
-		return jpaPaymentRepository.existsUnconfirmedApproveByOrderId(orderId);
+	public Optional<Payment> findSucceededByMemberIdAndOrderId(Long memberId, Long orderId) {
+		return jpaPaymentRepository.findSucceededByMemberIdAndOrderId(memberId, orderId);
 	}
 
 	@Override
-	public boolean existsApprovedByOrderId(Long orderId) {
-		return jpaPaymentRepository.existsByOrderIdAndTypeAndStatus(
-			orderId, PaymentType.APPROVE, PaymentStatus.SUCCEEDED
-		);
+	public Set<Long> findOrderIdsHoldingActiveSlot(Collection<Long> orderIds) {
+		if (orderIds.isEmpty()) {
+			return Set.of();
+		}
+		return new HashSet<>(jpaPaymentRepository.findActiveOrderKeysIn(orderIds));
 	}
 
 	@Override
-	public List<Payment> findStaleApprovePaymentsForReconciliation(LocalDateTime staleCutoff, LocalDateTime requestedStaleCutoff, LocalDateTime escalationCutoff, LocalDateTime now, Pageable pageable) {
-		return jpaPaymentRepository.findStaleApprovePaymentsForReconciliation(staleCutoff, requestedStaleCutoff, escalationCutoff, now, pageable);
+	public List<Payment> findInProgressReconcileTargets(
+		LocalDateTime requestedBefore,
+		int minReconcileCount,
+		int maxReconcileCount,
+		LocalDateTime reconciledBefore,
+		Pageable pageable
+	) {
+		return jpaPaymentRepository.findInProgressReconcileTargets(
+			requestedBefore, minReconcileCount, maxReconcileCount, reconciledBefore, pageable);
 	}
 
 	@Override
-	public List<Payment> findEscalationCandidates(LocalDateTime escalationCutoff, Pageable pageable) {
-		return jpaPaymentRepository.findEscalationCandidates(escalationCutoff, pageable);
+	public List<Payment> findUnknownReconcileTargets(
+		int minReconcileCount,
+		int maxReconcileCount,
+		LocalDateTime reconciledBefore,
+		Pageable pageable
+	) {
+		return jpaPaymentRepository.findUnknownReconcileTargets(
+			minReconcileCount, maxReconcileCount, reconciledBefore, pageable);
 	}
 
 	@Override
-	public List<Payment> findStaleCancelPaymentsForReconciliation(LocalDateTime staleCutoff, LocalDateTime requestedStaleCutoff, LocalDateTime escalationCutoff, LocalDateTime now, Pageable pageable) {
-		return jpaPaymentRepository.findStaleCancelPaymentsForReconciliation(staleCutoff, requestedStaleCutoff, escalationCutoff, now, pageable);
+	public List<Payment> findNotifyTargets(
+		LocalDateTime createdBefore,
+		LocalDateTime notifiedBefore,
+		Pageable pageable
+	) {
+		return jpaPaymentRepository.findNotifyTargets(createdBefore, notifiedBefore, pageable);
 	}
 
 	@Override
-	public List<Payment> findCancelEscalationCandidates(LocalDateTime escalationCutoff, Pageable pageable) {
-		return jpaPaymentRepository.findCancelEscalationCandidates(escalationCutoff, pageable);
+	public List<Payment> findExpireTargets(LocalDateTime createdBefore, Pageable pageable) {
+		return jpaPaymentRepository.findExpireTargets(createdBefore, pageable);
 	}
 }

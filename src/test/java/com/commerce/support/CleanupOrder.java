@@ -1,8 +1,10 @@
 package com.commerce.support;
 
 public enum CleanupOrder {
-	PAYMENT_RESERVATION(5),
-	PAYMENT(10),
+	PG_CALL_LOG(1),
+	// 환불이 결제를 식별자로 가리킨다. 외래 키는 없지만 순서를 정해 두어야 읽는 사람이 관계를 안다.
+	REFUND(2),
+	PAYMENT(3),
 	OUTBOX(20),
 	CART(25),
 	ORDER(30),

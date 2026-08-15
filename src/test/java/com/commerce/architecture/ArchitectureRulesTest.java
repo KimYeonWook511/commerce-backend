@@ -24,7 +24,7 @@ import static com.tngtech.archunit.lang.syntax.ArchRuleDefinition.noMethods;
  * 규칙의 근거는 각 @DisplayName 에 단 ADR/문서 포인터를 참고.
  *
  * NOTE: 패키지 컨벤션 가정 — com.commerce.<domain>.{presentation,application,domain,infrastructure}
- *       application 하위: usecase / service / port / dto  (skip·retry 모두 한 곳이면 usecase의 private 메서드, 여러 곳이면 support/ helper)
+ *       application 하위: usecase / service / port / dto / config  (skip·retry 모두 한 곳이면 usecase의 private 메서드, 여러 곳이면 support/ helper)
  *       infrastructure 하위: persistence / pg / cache / messaging / notification
  *       실제 패키지명이 다르면 아래 매처 문자열만 조정한다.
  *
@@ -145,6 +145,21 @@ class ArchitectureRulesTest {
     }
 
     @Test
+    @DisplayName("무결성 위반(DataIntegrityViolationException)은 application 에서 잡지 않는다 — persistence adapter 가 제약을 가려 번역한다")
+    void integrityViolationIsTranslatedInAdapter() {
+        // 무결성 위반은 유일 제약과 필수값 누락·외래 키가 한 타입으로 도착한다. application 에서 통째로
+        // 잡으면 회원이 할 수 있는 일이 없는 결함까지 "잠시 후 다시"로 접혀 안전망에 닿지 못한다.
+        // 제약 이름을 볼 수 있는 것은 persistence adapter 뿐이므로 가르는 자리를 거기로 고정한다.
+        // 낙관 락(OptimisticLockingFailureException)은 다르다 — 다시 하면 되는 일이라 번역하지 않고
+        // application 이 그대로 다룬다(docs/exception-strategy.md).
+        ArchRule rule = noClasses()
+                .that().resideInAnyPackage("..application..", "..domain..")
+                .should().dependOnClassesThat()
+                .areAssignableTo("org.springframework.dao.DataIntegrityViolationException");
+        check(rule);
+    }
+
+    @Test
     @DisplayName("구현체에 묶인 예외(org.springframework.orm·org.hibernate·jakarta.persistence)는 application·domain·presentation 에 노출되지 않는다")
     void implementationExceptionsDoNotLeakInward() {
         // 구현체에 묶인 구체 예외는 안쪽으로 새지 않는다. DAO 추상 상위
@@ -201,6 +216,34 @@ class ArchitectureRulesTest {
     // ────────────────────────────────────────────────────────────
     // 6. 기술 누수 차단 — application 은 기술 타입을 직접 참조하지 않음 (port 로만)
     // ────────────────────────────────────────────────────────────
+
+    @Test
+    @DisplayName("application·presentation 은 PG 경계(infrastructure.pg) 안의 타입을 직접 참조하지 않는다 (port 로만)")
+    void applicationAndPresentationDoNotDependOnPgBoundary() {
+        // 결제사 전용 타입은 PG 경계 안에서만 산다. 이름이 아니라 의존 방향으로 적는 것은, 클래스 이름에
+        // 결제사가 없어도 그 타입에 의존하면 결제사를 아는 것이고 반대로 승인 복귀 진입점처럼 이름만
+        // 결제사인 자리는 위반이 아니기 때문이다.
+        ArchRule rule = noClasses()
+                .that().resideInAnyPackage("..application..", "..presentation..")
+                .should().dependOnClassesThat().resideInAPackage("..infrastructure.pg..");
+        check(rule);
+    }
+
+    @Test
+    @DisplayName("환불 사건은 결제의 도메인 메서드로만 열린다 (혼자 만들어 먼저 커밋하는 진입점 없음)")
+    void refundIsOpenedOnlyInsidePaymentDomain() {
+        // 환불을 만드는 관문이 결제 안에 있어야 한도 판정과 누적 환불액 갱신이 같은 자리에서 일어나고,
+        // 결제를 로드해 함께 저장하는 트랜잭션 밖에서는 환불 의도가 커밋될 수 없다. 밖에 관문이 하나
+        // 더 생기면 트랜잭션 없이 불러 정당한 조건 없는 환불만 커밋되는 문이 다시 열린다.
+        ArchRule rule = noClasses()
+                .that().resideOutsideOfPackage("com.commerce.payment.domain")
+                .should().callMethod(
+                        "com.commerce.payment.domain.Refund", "open",
+                        "java.lang.Long", "java.lang.String",
+                        "com.commerce.payment.domain.RefundRequester", "java.lang.String",
+                        "int", "com.commerce.payment.domain.RefundReason");
+        check(rule);
+    }
 
     @Test
     @DisplayName("application 은 KafkaTemplate·Redis 클라이언트를 직접 참조하지 않는다")

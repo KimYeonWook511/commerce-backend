@@ -45,14 +45,16 @@ jwt:
     secret.key: ${PROD_JWT_REFRESH_SECRET} # HMAC-SHA algorithms MUST have a size >= 256 bits
     expiration: ${PROD_JWT_REFRESH_EXPIRATION}
 
-naverpay:
-  client-id: ${PROD_NAVERPAY_CLIENT_ID}
-  client-secret: ${PROD_NAVERPAY_CLIENT_SECRET}
-  chain-id: ${PROD_NAVERPAY_CHAIN_ID}
-  return-url: ${PROD_NAVERPAY_RETURN_URL}
-  approval-url: ${PROD_NAVERPAY_APPROVAL_URL}
-  cancel-url: ${PROD_NAVERPAY_CANCEL_URL}
-  payment-history-url: ${PROD_NAVERPAY_PAYMENT_HISTORY_URL}
+payment:
+  pg:
+    naverpay:
+      client-id: ${PROD_NAVERPAY_CLIENT_ID}
+      client-secret: ${PROD_NAVERPAY_CLIENT_SECRET}
+      chain-id: ${PROD_NAVERPAY_CHAIN_ID}
+      return-url: ${PROD_NAVERPAY_RETURN_URL}
+      approval-url: ${PROD_NAVERPAY_APPROVAL_URL}
+      cancel-url: ${PROD_NAVERPAY_CANCEL_URL}
+      history-url: ${PROD_NAVERPAY_PAYMENT_HISTORY_URL}
 
 outbox:
   stock-restore:

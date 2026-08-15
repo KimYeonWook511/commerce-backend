@@ -6,6 +6,7 @@ import org.springframework.http.HttpStatus;
 import org.springframework.http.ResponseEntity;
 import org.springframework.http.converter.HttpMessageNotReadableException;
 import org.springframework.dao.OptimisticLockingFailureException;
+import org.springframework.dao.PessimisticLockingFailureException;
 import org.springframework.web.bind.annotation.ExceptionHandler;
 import org.springframework.web.bind.annotation.RestControllerAdvice;
 import org.springframework.web.bind.MethodArgumentNotValidException;
@@ -85,8 +86,20 @@ public class GlobalExceptionHandler {
 			.body(ApiResponse.error(CommonErrorCode.DATA_INTEGRITY_VIOLATION));
 	}
 
-	// 안전망: 위 구체 DAO 핸들러(DataIntegrityViolationException, OptimisticLockingFailureException)에
-	// 매칭되지 않는 모든 DAO 예외(BadSqlGrammarException, CannotAcquireLockException 등)를 받는다.
+	// 락 대기 타임아웃과 데드락을 일반 DB 오류와 갈라 받는다. 재고 복구가 주문 취소와 같은 트랜잭션에
+	// 있어 그 경합이 길어지면 취소 전체가 롤백되는데, 섞여 있으면 그 실패가 쌓여도 알 수 없다.
+	// 삼키지 않는다 — 구분해 남길 뿐이고 롤백은 그대로 일어난다.
+	@ExceptionHandler(PessimisticLockingFailureException.class)
+	public ResponseEntity<ApiResponse<Void>> handlePessimisticLockingFailureException(
+		PessimisticLockingFailureException ex
+	) {
+		log.error("락 획득 실패 (안전망)", ex);
+		return ResponseEntity.status(statusOf(CommonErrorCode.LOCK_ACQUISITION_FAILED))
+			.body(ApiResponse.error(CommonErrorCode.LOCK_ACQUISITION_FAILED));
+	}
+
+	// 안전망: 위 구체 DAO 핸들러(DataIntegrityViolationException, OptimisticLockingFailureException,
+	// PessimisticLockingFailureException)에 매칭되지 않는 모든 DAO 예외(BadSqlGrammarException 등)를 받는다.
 	// stack trace 와 함께 500 으로 응답해 운영 모니터링에서 DAO 카테고리(COMMON-500-2)로 분류된다.
 	@ExceptionHandler(DataAccessException.class)
 	public ResponseEntity<ApiResponse<Void>> handleDataAccessException(

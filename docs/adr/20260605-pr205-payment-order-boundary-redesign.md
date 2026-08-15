@@ -1,6 +1,6 @@
 # 결제 도메인을 재설계해 Order↔Payment 경계를 분리하고 RESERVE를 별도 거주지에 둔다
 
-- Status: accepted
+- Status: accepted — PR#305가 **부분 대체**. 아래 Decision 중 **두 테이블 분리·예약 슬롯·예약 재사용 정책**은 예약 테이블이 결제 행으로 흡수되며 대체됐다. 나머지(식별자 참조, 외부 호출을 트랜잭션 밖에 두는 경계)는 유지된다.
 - Date: 2026-06-05
 
 ## Context

@@ -36,14 +36,16 @@ jwt:
     secret.key: testRefreshSecretKey0123456789abcdef!!
     expiration: 604800000
 
-naverpay:
-  client-id: test
-  client-secret: test
-  chain-id: test
-  return-url: https://test
-  approval-url: https://test
-  cancel-url: https://test
-  payment-history-url: https://test
+payment:
+  pg:
+    naverpay:
+      client-id: test
+      client-secret: test
+      chain-id: test
+      return-url: https://test
+      approval-url: https://test
+      cancel-url: https://test
+      history-url: https://test/{paymentId}
 
 outbox:
   stock-restore:

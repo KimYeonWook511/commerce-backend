@@ -8,6 +8,10 @@ public enum OrderErrorCode implements ErrorCode {
 	ORDER_NOT_FOUND(ErrorCategory.NOT_FOUND, "ORDER-404", "주문을 찾을 수 없습니다"),
 	ORDER_IDEMPOTENCY_IN_PROGRESS(ErrorCategory.CONFLICT, "ORDER-409-1", "주문 생성이 이미 처리 중입니다. 잠시 후 다시 시도해주세요."),
 	ORDER_CANCEL_NOT_ALLOWED(ErrorCategory.CONFLICT, "ORDER-409-2", "주문을 취소할 수 없습니다"),
+	// 같은 취소 요청이 겹쳤다. 서버 오류로 내보내면 회원이 진짜 장애와 구분하지 못하고, 돈은 돌아가는
+	// 중인데 취소가 안 된 줄 알고 다시 요청한다.
+	ORDER_CANCEL_IN_PROGRESS(ErrorCategory.CONFLICT, "ORDER-409-3",
+		"같은 취소 요청이 이미 처리 중입니다. 잠시 후 다시 시도해 주세요."),
 	ORDER_ALREADY_PAID(ErrorCategory.CONFLICT, "ORDER-409-6", "주문이 이미 결제 완료 상태입니다"),
 	ORDER_CANCELED_FOR_PAYMENT(ErrorCategory.CONFLICT, "ORDER-409-7", "취소된 주문은 결제를 완료할 수 없습니다"),
 	ORDER_INVALID_STATE_FOR_PAYMENT(ErrorCategory.CONFLICT, "ORDER-409-8", "현재 주문 상태에서는 결제를 완료할 수 없습니다"),

@@ -1,192 +1,149 @@
 package com.commerce.payment.application.usecase;
 
-import java.time.LocalDateTime;
+import java.util.List;
+import java.util.Optional;
 
 import org.springframework.stereotype.Component;
+import org.springframework.util.StringUtils;
 
-import com.commerce.common.exception.ErrorCode;
-import com.commerce.order.domain.exception.OrderErrorCode;
 import com.commerce.order.domain.exception.OrderException;
+import com.commerce.payment.application.dto.ApprovalOutcome;
 import com.commerce.payment.application.port.NotificationPort;
-import com.commerce.payment.application.port.PgCanceller;
-import com.commerce.payment.application.service.FailApprovePaymentService;
-import com.commerce.payment.application.service.SucceedPaymentApprovalService;
+import com.commerce.payment.application.port.dto.PgApproveResult;
+import com.commerce.payment.application.port.dto.PgHistoryEntry;
+import com.commerce.payment.application.port.dto.PgHistoryEntryType;
+import com.commerce.payment.application.port.dto.PgHistoryResult;
+import com.commerce.payment.application.port.dto.PgOutcome;
+import com.commerce.payment.application.service.PaymentApprovalService;
 import com.commerce.payment.domain.Payment;
-import com.commerce.payment.domain.PaymentFailCode;
-import com.commerce.payment.domain.repository.PaymentRepository;
-import com.commerce.payment.domain.exception.PaymentErrorCode;
-import com.commerce.payment.domain.exception.PaymentException;
 
 import lombok.RequiredArgsConstructor;
 import lombok.extern.slf4j.Slf4j;
 
 /**
- * provider 중립 승인 확정 조율 facade. tx를 열지 않는다(@Component).
- * 검증된 APPROVE Payment를 받아 succeedApproval 시도 → 성공이면 확정, 거부면 errorCode 기반 보상 → Outcome 반환.
- * 결합은 이 facade 한 점에만 격리한다 — 거부 사유는 errorCode로 받으며 주문 상태 재조회 분기 없음.
+ * 성립한 승인을 받아들일지 정하고, 받아들이면 결제 성공과 주문 완료를 한 트랜잭션으로 커밋한다.
+ *
+ * <p>밖에서 불리지 않는다. 회원의 결제창 복귀와 대사가 이 자리를 공유하며, 각자 갖고 있으면 거부
+ * 갈래가 두 벌이 되어 한쪽만 고쳤을 때 돈이 나가고 안 나가고가 진입점에 따라 갈린다.
+ *
+ * <p>트랜잭션을 열지 않는다 — 결제사 호출과 운영자 통지가 단위작업 사이에 끼기 때문이다.
  */
 @Slf4j
 @Component
 @RequiredArgsConstructor
 public class ConfirmApprovalUseCase {
 
-	private final SucceedPaymentApprovalService succeedPaymentApprovalService;
-	private final CompensateApprovalUseCase compensateApprovalUseCase;
-	private final FailApprovePaymentService failApprovePaymentService;
-	private final PaymentRepository paymentRepository;
+	private final PaymentApprovalService paymentApprovalService;
+	private final ClosePaymentUseCase closePaymentUseCase;
 	private final NotificationPort notificationPort;
 
 	/**
-	 * 승인 확정을 시도하고 결과를 Outcome으로 반환한다.
-	 * verifyApprovedResponse 검증도 이 메서드 안에서 수행한다 — 검증 실패도 보상 분기로 흐르도록 보장한다.
+	 * 승인이 성립했다는 응답을 받아 확정을 시도한다. 응답에 실려 온 결제 키와 회원이 이 결제의 것인지
+	 * 먼저 대조한다 — 대조 없이 확정하면 남의 돈으로 이 주문이 결제된다.
 	 *
-	 * @param payment                  확정할 APPROVE Payment
-	 * @param now                      처리 시각
-	 * @param pgCanceller              보상 환불에 사용할 PG 취소 콜백 (진입점별로 다름)
-	 * @param responseMerchantPayKey   PG 응답 merchantPayKey (merchantPayKey 불일치 검증에 필요)
-	 * @param responseTotalAmount      PG 응답 금액 (금액 불일치 보상에 필요)
-	 * @return Outcome — 성공/거부(errorCode 보존)/예외 전파
+	 * <p>회원의 결제창 복귀와 대사의 승인 재요청이 이 자리를 함께 쓴다. 대사에만 따로 두면 대조가 두
+	 * 벌이 되어 한쪽만 고쳐졌을 때 어느 진입점으로 왔는지에 따라 방어가 갈린다.
 	 */
-	public Outcome confirm(Payment payment, LocalDateTime now, PgCanceller pgCanceller,
-		String responseMerchantPayKey, int responseTotalAmount) {
-		try {
-			payment.verifyApprovedResponse(responseMerchantPayKey, responseTotalAmount);
-			succeedPaymentApprovalService.succeedApproval(payment, now);
-			return Outcome.succeeded();
-		} catch (OrderException ex) {
-			return handleOrderRejection(payment, now, pgCanceller, ex);
-		} catch (PaymentException ex) {
-			return handlePaymentRejection(payment, now, pgCanceller, responseTotalAmount, ex);
+	public ApprovalOutcome confirmApproved(Payment payment, PgApproveResult result) {
+		if (!payment.getPaymentKey().equals(result.paymentKey())) {
+			// 그 응답에는 상대의 결제 키와 결제사 번호가 들어 있고, 상대의 결제가 방금 승인됐다는 뜻이다.
+			return closePaymentUseCase.closeKeyMismatch(payment, result.paymentKey(), payment.getPgPaymentId());
 		}
-	}
-
-	private Outcome handleOrderRejection(Payment payment, LocalDateTime now, PgCanceller pgCanceller, OrderException ex) {
-		ErrorCode code = ex.getErrorCode();
-
-		if (code == OrderErrorCode.ORDER_CANCELED_FOR_PAYMENT) {
-			// CANCELED 주문 — 보상 환불 + 통지
-			compensateApprovalUseCase.compensateCanceledOrderApproval(payment, pgCanceller);
-			log.warn("승인 확정 - 취소 주문 보상 paymentId={} orderId={} merchantPayKey={}",
-				payment.getId(), payment.getOrderId(), payment.getMerchantPayKey());
-			return Outcome.rejected(PaymentErrorCode.PAYMENT_DUPLICATE);
-		}
-
-		if (code == OrderErrorCode.ORDER_ALREADY_PAID) {
-			return handleAlreadyPaidRejection(payment, now, pgCanceller,
-				new PaymentException(PaymentErrorCode.PAYMENT_DUPLICATE));
-		}
-
-		if (code == OrderErrorCode.ORDER_INVALID_STATE_FOR_PAYMENT) {
-			// 그 외 비-INIT 주문 — 환불 없이 FAILED 종착
-			log.error("승인 확정 - 비-INIT 주문 상태로 종착 paymentId={} orderId={} merchantPayKey={}",
-				payment.getId(), payment.getOrderId(), payment.getMerchantPayKey());
-			failApprovePaymentService.fail(
-				payment.getMerchantPayKey(), payment.getProvider(), payment.getPgPaymentId(),
-				PaymentFailCode.APPROVE_PROCESS_FAILED, "비-INIT 주문 상태: " + code, now
-			);
-			return Outcome.rejected(PaymentErrorCode.PAYMENT_APPROVE_FAILED);
-		}
-
-		if (code == OrderErrorCode.ORDER_NOT_FOUND) {
-			// 주문 자체 없음 — 정합성 오류, 환불 없이 통지 + FAILED 종착 (새 상태를 도입하지 않는 escalation 종착·통지 결정을 따른다)
-			log.error("승인 확정 - 주문 없음(정합성 오류) paymentId={} orderId={} merchantPayKey={}",
-				payment.getId(), payment.getOrderId(), payment.getMerchantPayKey());
-			failApprovePaymentService.fail(
-				payment.getMerchantPayKey(), payment.getProvider(), payment.getPgPaymentId(),
-				PaymentFailCode.APPROVE_PROCESS_FAILED, "주문 없음 - 정합성 오류", now
-			);
-			notifyInconsistency(payment, "주문 없음 - 정합성 오류");
-			return Outcome.rejected(PaymentErrorCode.PAYMENT_APPROVE_FAILED);
-		}
-
-		// 그 외 OrderException은 보상 없이 전파
-		return Outcome.propagate(ex);
-	}
-
-	private Outcome handlePaymentRejection(Payment payment, LocalDateTime now, PgCanceller pgCanceller,
-		int responseTotalAmount, PaymentException ex) {
-
-		ErrorCode code = ex.getErrorCode();
-
-		if (code == PaymentErrorCode.PAYMENT_DUPLICATE) {
-			return handleAlreadyPaidRejection(payment, now, pgCanceller, ex);
-		}
-
-		if (code == PaymentErrorCode.PAYMENT_MERCHANT_KEY_MISMATCH) {
-			compensateApprovalUseCase.compensateMerchantKeyMismatch(payment);
-			log.warn("승인 확정 - merchantPayKey 불일치 보상 paymentId={} orderId={} merchantPayKey={}",
-				payment.getId(), payment.getOrderId(), payment.getMerchantPayKey());
-			return Outcome.rejected(PaymentErrorCode.PAYMENT_MERCHANT_KEY_MISMATCH);
-		}
-
-		if (code == PaymentErrorCode.PAYMENT_AMOUNT_MISMATCH) {
-			compensateApprovalUseCase.compensateAmountMismatch(payment, responseTotalAmount, pgCanceller);
-			log.warn("승인 확정 - 금액 불일치 보상 paymentId={} orderId={} merchantPayKey={}",
-				payment.getId(), payment.getOrderId(), payment.getMerchantPayKey());
-			return Outcome.rejected(PaymentErrorCode.PAYMENT_AMOUNT_MISMATCH);
-		}
-
-		// 보상 비대상 PaymentException(예: 정상 승인 후 기록 실패) — 보상 없이 전파
-		return Outcome.propagate(ex);
-	}
-
-	/**
-	 * ORDER_ALREADY_PAID / PAYMENT_DUPLICATE 거부 처리.
-	 * existsApprovedByOrderId로 실제 중복 여부를 판별해 분기한다.
-	 */
-	private Outcome handleAlreadyPaidRejection(Payment payment, LocalDateTime now, PgCanceller pgCanceller,
-		RuntimeException cause) {
-
-		boolean hasDuplicateSucceeded = paymentRepository.existsApprovedByOrderId(payment.getOrderId());
-		if (hasDuplicateSucceeded) {
-			// 중복 결제 — 보상 환불
-			log.warn("승인 확정 - 중복 결제 보상 paymentId={} orderId={} merchantPayKey={}",
-				payment.getId(), payment.getOrderId(), payment.getMerchantPayKey());
-			compensateApprovalUseCase.compensateDuplicatePayment(payment, cause, pgCanceller);
-			return Outcome.rejected(PaymentErrorCode.PAYMENT_DUPLICATE);
-		}
-
-		// 비중복 PAID — dead 경로지만 만약 도달하면 환불하지 않고 통지 + FAILED 종착 (금전 정합성)
-		log.error("승인 확정 - 비중복 PAID 비정상 상태(정합성 오류) paymentId={} orderId={} merchantPayKey={}",
-			payment.getId(), payment.getOrderId(), payment.getMerchantPayKey());
-		failApprovePaymentService.fail(
-			payment.getMerchantPayKey(), payment.getProvider(), payment.getPgPaymentId(),
-			PaymentFailCode.APPROVE_PROCESS_FAILED, "PAID 주문이나 SUCCEEDED APPROVE 없음 - 정합성 오류", now
-		);
-		notifyInconsistency(payment, "PAID 주문 비중복 정합성 오류");
-		return Outcome.rejected(PaymentErrorCode.PAYMENT_APPROVE_FAILED);
-	}
-
-	private void notifyInconsistency(Payment payment, String reason) {
-		try {
+		if (!ownsMemberKey(payment, result.memberKey())) {
+			// 결제 키는 맞는데 회원만 어긋났다. 두 기록 중 하나가 틀린 상태라 자동으로 정할 근거가 없다 —
+			// 종결하면 슬롯이 풀려 돈이 두 번 나갈 수 있고, 되돌리면 그 돈의 주인을 단정하는 것이 된다.
 			notificationPort.notifyManualReviewRequired(
-				payment.getOrderId(), payment.getMerchantPayKey(), reason);
-		} catch (Exception ex) {
-			log.warn("정합성 오류 통지 전송 실패 paymentId={} orderId={} merchantPayKey={}",
-				payment.getId(), payment.getOrderId(), payment.getMerchantPayKey(), ex);
+				payment.getOrderId(), payment.getPaymentKey(), "승인 응답의 회원이 결제 행의 회원과 다르다");
+			return ApprovalOutcome.manualReview();
+		}
+		return confirm(payment, result.approvedAmount(), result.pgTransactionId());
+	}
+
+	/**
+	 * 승인 금액과 거래 번호를 받아 확정을 시도한다. 금액이 어긋나거나 주문이 그 결제를 받을 수 없으면
+	 * 종결 흐름으로 넘긴다.
+	 */
+	public ApprovalOutcome confirm(Payment payment, int approvedAmount, String pgTransactionId) {
+		if (approvedAmount <= 0) {
+			// 정상 경로에서 나올 수 없는 값이라 해석할 수 없는 응답으로 다룬다. 담아 두면 한도가
+			// 처음부터 0이라 되돌릴 환불을 만들 수 없는 행이 남는다.
+			log.warn("승인 금액이 0보다 크지 않아 확정하지 않는다 paymentId={} approvedAmount={}",
+				payment.getId(), approvedAmount);
+			return ApprovalOutcome.unresolved();
+		}
+		if (approvedAmount != payment.getAmount()) {
+			return closePaymentUseCase.rejectAmountMismatch(payment, approvedAmount, pgTransactionId);
+		}
+		try {
+			paymentApprovalService.complete(payment.getId(), payment.getOrderId(), approvedAmount, pgTransactionId);
+			return ApprovalOutcome.succeeded();
+		} catch (OrderException ex) {
+			return closePaymentUseCase.rejectOrderNotPayable(
+				payment, ex.getErrorCode(), approvedAmount, pgTransactionId);
 		}
 	}
 
-	/** facade 처리 결과 종류. */
-	public enum Decision { SUCCEEDED, REJECTED, PROPAGATE }
+	/**
+	 * 이력을 읽어 확정한다. 결제사가 "이미 처리된 건"이라 답했을 때와 대사가 결과를 회수할 때가 이
+	 * 자리를 함께 쓴다.
+	 *
+	 * <p>목록의 특정 위치를 보지 않고, 우리 결제 키가 실린 성공한 원결제 항목을 찾는다. 이력이 비었다는
+	 * 것만으로 실패를 확정하지 않는다 — 돈이 안 나간 것과 결제사가 아직 반영하지 않은 것을 구분하지
+	 * 못한다.
+	 *
+	 * <p>이력 항목에는 회원 값이 실려 오지 않아 대조가 결제 키 하나로 끝난다. 회원까지 대조하는 것은
+	 * 승인 응답을 받는 자리의 몫이다.
+	 */
+	public ApprovalOutcome confirmFromHistory(Payment payment, PgHistoryResult history) {
+		if (history.outcome() != PgOutcome.SUCCEEDED) {
+			return ApprovalOutcome.unresolved();
+		}
+
+		List<PgHistoryEntry> approvals = succeededEntries(history, PgHistoryEntryType.APPROVAL);
+		Optional<PgHistoryEntry> approval = approvals.stream()
+			.filter(entry -> payment.getPaymentKey().equals(entry.paymentKey()))
+			.findFirst();
+		if (approval.isEmpty()) {
+			return approvals.stream()
+				.filter(entry -> StringUtils.hasText(entry.paymentKey()))
+				.findFirst()
+				// 우리가 든 결제사 번호로 남의 승인이 성립해 있다. 승인 요청에 남의 번호가 실렸던
+				// 경우이며, 응답으로 같은 것을 발견했을 때와 같은 자리에서 처리한다.
+				.map(foreign -> closePaymentUseCase.closeKeyMismatch(
+					payment, foreign.paymentKey(), payment.getPgPaymentId()))
+				.orElseGet(ApprovalOutcome::unresolved);
+		}
+
+		// 성공한 취소 항목만 본다. 실패한 취소도 한 줄로 남으므로 그것을 근거로 닫으면 돈이 나가 있는
+		// 결제를 닫고 슬롯을 반납해 회원이 다시 결제할 때 돈이 두 번 나간다.
+		List<PgHistoryEntry> refunds = succeededEntries(history, PgHistoryEntryType.REFUND);
+		Optional<PgHistoryEntry> foreign = refunds.stream()
+			.filter(entry -> !StringUtils.hasText(entry.refundAttemptKey()))
+			.findFirst();
+		if (foreign.isPresent()) {
+			return closePaymentUseCase.closeExternallyCanceled(payment, approval.get(), foreign.get());
+		}
+		if (!refunds.isEmpty()) {
+			// 우리 환불 시도 키가 실려 있다. 그 결제는 자기 경로로 풀리므로 여기서 확정하지 않는다.
+			log.info("이력의 취소가 우리 환불이라 확정하지 않는다 paymentId={}", payment.getId());
+			return ApprovalOutcome.unresolved();
+		}
+
+		return confirm(payment, approval.get().amount(), approval.get().pgTransactionId());
+	}
 
 	/**
-	 * facade 처리 결과. 진입점이 응답/종착으로 번역한다.
-	 * - REJECTED면 errorCode 보존 — 실시간 진입점이 이 errorCode로 PaymentException을 다시 throw한다.
-	 * - PROPAGATE면 보상 비대상 예외(예: 정상 승인 후 기록 실패) — 호출부가 cause를 그대로 rethrow한다.
+	 * 결제 예약 때 보낸 회원 식별자가 응답에 실려 온다. 값이 없으면 대조할 것이 없어 통과시킨다 —
+	 * 결제창을 여는 쪽이 그 값을 싣지 않으면 응답에도 담기지 않는다.
 	 */
-	public record Outcome(Decision decision, PaymentErrorCode errorCode, RuntimeException cause) {
+	private boolean ownsMemberKey(Payment payment, String memberKey) {
+		return !StringUtils.hasText(memberKey) || memberKey.equals(String.valueOf(payment.getMemberId()));
+	}
 
-		public static Outcome succeeded() {
-			return new Outcome(Decision.SUCCEEDED, null, null);
-		}
-
-		public static Outcome rejected(PaymentErrorCode errorCode) {
-			return new Outcome(Decision.REJECTED, errorCode, null);
-		}
-
-		public static Outcome propagate(RuntimeException cause) {
-			return new Outcome(Decision.PROPAGATE, null, cause);
-		}
+	private List<PgHistoryEntry> succeededEntries(PgHistoryResult history, PgHistoryEntryType type) {
+		return history.entries().stream()
+			.filter(entry -> entry.type() == type)
+			.filter(PgHistoryEntry::succeeded)
+			.toList();
 	}
 }

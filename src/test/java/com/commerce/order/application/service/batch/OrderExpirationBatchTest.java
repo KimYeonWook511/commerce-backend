@@ -32,11 +32,8 @@ import org.springframework.test.context.ActiveProfiles;
 import org.springframework.test.context.bean.override.mockito.MockitoBean;
 
 import com.commerce.payment.domain.Payment;
-import com.commerce.payment.domain.PaymentProvider;
-import com.commerce.payment.domain.PaymentReservation;
-import com.commerce.payment.domain.PaymentType;
+import com.commerce.payment.domain.PaymentPg;
 import com.commerce.payment.infrastructure.persistence.support.PaymentPersistenceTestSupport;
-import com.commerce.payment.infrastructure.persistence.support.PaymentReservationPersistenceTestSupport;
 
 import com.commerce.order.domain.exception.OrderErrorCode;
 import com.commerce.order.domain.exception.OrderException;
@@ -56,7 +53,7 @@ import com.commerce.support.PersistenceCleanupTestSupport;
 @SpringBatchTest
 @SpringBootTest
 @ActiveProfiles("test")
-@Import({PersistenceCleanupTestSupport.class, MemberPersistenceTestSupport.class, ProductPersistenceTestSupport.class, OrderPersistenceTestSupport.class, PaymentPersistenceTestSupport.class, PaymentReservationPersistenceTestSupport.class})
+@Import({PersistenceCleanupTestSupport.class, MemberPersistenceTestSupport.class, ProductPersistenceTestSupport.class, OrderPersistenceTestSupport.class, PaymentPersistenceTestSupport.class})
 class OrderExpirationBatchTest {
 
 	@SuppressWarnings("SpringJavaInjectionPointsAutowiringInspection")
@@ -81,9 +78,6 @@ class OrderExpirationBatchTest {
 	@Autowired
 	private PaymentPersistenceTestSupport paymentPersistence;
 
-	@Autowired
-	private PaymentReservationPersistenceTestSupport reservationPersistence;
-
 	@MockitoBean
 	private StockRestoreOutboxCreateService stockRestoreOutboxCreateService;
 
@@ -95,7 +89,7 @@ class OrderExpirationBatchTest {
 	@AfterEach
 	void tearDown() {
 		persistenceCleanup.deleteAllInBatch(
-			paymentPersistence, reservationPersistence, memberPersistence, productPersistence, orderPersistence
+			paymentPersistence, memberPersistence, productPersistence, orderPersistence
 		);
 	}
 
@@ -258,12 +252,7 @@ class OrderExpirationBatchTest {
 		Product product = productPersistence.save(createProduct());
 		Order order = orderPersistence.save(createOrder(member, product));
 
-		PaymentReservation reservation = reservationPersistence.save(
-			PaymentReservation.createReserved(order.getId(), member.getId(), 1000,
-				PaymentProvider.NAVERPAY, "PAY-" + order.getId(), now.plusMinutes(15)));
-		Payment payment = Payment.createRequested(reservation, PaymentType.APPROVE, "pg-unknown-1");
-		payment.markUnknown("timeout", now);
-		paymentPersistence.save(payment);
+		paymentPersistence.save(unknownPayment(order.getId(), member.getId(), "1", now));
 
 		JobParameters parameters = jobParameters(now.plusMinutes(10));
 
@@ -291,12 +280,7 @@ class OrderExpirationBatchTest {
 		Order blockedOrder = orderPersistence.save(createOrder(member, product));
 		Order normalOrder = orderPersistence.save(createOrder(member, product));
 
-		PaymentReservation reservation = reservationPersistence.save(
-			PaymentReservation.createReserved(blockedOrder.getId(), member.getId(), 1000,
-				PaymentProvider.NAVERPAY, "PAY-" + blockedOrder.getId(), now.plusMinutes(15)));
-		Payment payment = Payment.createRequested(reservation, PaymentType.APPROVE, "pg-unknown-2");
-		payment.markUnknown("timeout", now);
-		paymentPersistence.save(payment);
+		paymentPersistence.save(unknownPayment(blockedOrder.getId(), member.getId(), "2", now));
 
 		JobParameters parameters = jobParameters(now.plusMinutes(10));
 
@@ -354,6 +338,15 @@ class OrderExpirationBatchTest {
 		Order order = Order.create(member.getId());
 		order.addOrderItem(product.getId(), quantity, product.getPrice());
 		return order;
+	}
+
+	// 만료 배치가 건너뛰는 기준은 결제가 활성 슬롯을 쥐고 있는지다. 결과를 모르는 결제가 그 대표 경우다.
+	private Payment unknownPayment(Long orderId, Long memberId, String suffix, LocalDateTime now) {
+		Payment payment = Payment.start(orderId, memberId, PaymentPg.NAVERPAY,
+			"PK-batch-" + suffix, "IDEM-batch-" + suffix, 1000);
+		payment.markInProgress("pg-unknown-" + suffix, now);
+		payment.markUnknown();
+		return payment;
 	}
 
 }

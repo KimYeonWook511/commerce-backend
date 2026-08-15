@@ -1,6 +1,6 @@
 # reservation 동시 이중 use 가드를 `@Version` 낙관적 락으로 구현한다
 
-- Status: accepted
+- Status: superseded — PR#305가 대체. 예약 테이블이 없어져 그 행에 걸던 낙관 락도 사라진다. 같은 자리를 한 주문에 활성 결제 하나를 보장하는 유일 제약이 맡는다.
 - Date: 2026-06-09
 
 ## Context

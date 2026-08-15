@@ -1,8 +1,8 @@
 # 낙관적 락(@Version) 충돌 처리 설계
 
 > `@Version` 기반 낙관 락 충돌(`OptimisticLockException`)을 트랜잭션 경계·예외 변환·정책과 일관되게
-> 처리하기 위한 설계. 원리는 도메인 일반이고, 사례·코드는 결제(Payment) 도메인을 든다
-> (Payment 엔티티에 `@Version`을 도입하며 전이 succeed/fail/markUnknown/escalate 시 발생하는 충돌을
+> 처리하기 위한 설계. 원리는 도메인 일반이고, 사례·코드는 결제·환불 도메인을 든다
+> (결제와 환불이 각자 `@Version`을 갖고, 전이(승인 확정·종결·결과 불명 표시 등) 때 나는 충돌을
 > 기존 코드베이스 패턴과 일관되게 처리하는 맥락).
 > 대상 스택: Java 21, Spring Boot 3.x, JPA(Hibernate), MySQL(InnoDB).
 > 아키텍처: 헥사고날(포트앤어댑터) — `presentation → application → domain ← infrastructure`.
@@ -48,25 +48,70 @@ catch 자체는 없앨 수 없고(없애면 보상 흐름이 끊긴다), **위�
 > `UnexpectedRollbackException`은 "rollback-only인데 commit하려 할 때"만 난다.
 > 전파 경로에선 commit을 안 하므로 안 난다.
 
-### 1.3 save vs saveAndFlush — "save면 실패"가 아니다
+### 1.3 flush를 언제 당겨오나 — 그리고 저장 메서드를 무엇으로 가르나
 
 `SimpleJpaRepository`의 `save`/`saveAndFlush`에는 `@Transactional`(REQUIRED)이 붙어 있다.
 충돌을 adapter가 잡을 수 있느냐는 **flush가 어느 호출 프레임에서 일어나느냐 = 트랜잭션 경계가 어디냐**에 달렸다.
 
 | 상황 | flush 시점 | adapter가 충돌을 잡나? |
 |------|-----------|---------------------|
-| 바깥에 tx 없음 | `save()`가 자기 tx를 열고 닫으며 commit 시 flush | **예** — plain `save`라도 잡힌다 |
-| 바깥에 tx 있음(tx 단위작업이 `@Transactional`) | `save`는 REQUIRED라 기존 tx에 합류만, flush는 바깥 경계에서 | **아니오** — adapter 밖에서 터짐 |
+| 바깥에 tx 없음 | 즉시 flush를 안 해도 `save()`가 자기 tx를 열고 닫으며 commit 시 flush | **예** — 잡힌다 |
+| 바깥에 tx 있음(tx 단위작업이 `@Transactional`) | 즉시 flush를 안 하면 기존 tx에 합류만 하고 flush는 바깥 경계에서 | **아니오** — adapter 밖에서 터짐 |
 
 따라서 tx 단위작업(service 패키지)에 `@Transactional`을 둬서 **read + guard + write를 한 tx로 묶고(원자성)**,
 그 안에서 충돌을 adapter가 변환하려면 **`saveAndFlush`로 flush를 adapter 프레임 안으로 당겨와야** 한다.
 
 > `saveAndFlush`는 "save가 실패하는 걸 성공시키는" 도구가 아니라,
 > **충돌을 잡을 수 있는 위치로 당겨오는** 도구다.
-> 선례 `saveUsed`/`saveApproved`가 `saveAndFlush`인 이유 = 이들은 `@Transactional` 메서드 안에서 호출되니까.
 
-만약 tx 단위작업 없이 repository의 자체 `@Transactional`에만 맡기면 plain `save`로도 잡히긴 하지만,
+만약 tx 단위작업 없이 repository의 자체 `@Transactional`에만 맡기면 즉시 flush 없이도 잡히긴 하지만,
 **`find`(읽기)와 `save`(쓰기)가 서로 다른 트랜잭션으로 쪼개져** read-modify-write의 원자성이 깨진다.
+
+#### 저장 port 메서드는 구현이 아니라 "부르는 쪽이 무엇에 기대는지"로 가른다
+
+즉시 flush가 필요한 이유는 충돌 번역 말고도 있다 — **한 트랜잭션 안에서 쓰기 순서를 강제해야 할 때**가 그렇다.
+Hibernate는 코드에 적힌 줄 순서로 쓰기를 내보내지 않고 **삽입을 갱신보다 먼저** 내보내므로, 앞 행이 쥔 유일
+제약 자리를 비우는 갱신을 먼저 적어도 새 행의 삽입이 앞질러 도착해 아직 차 있는 자리에 부딪힌다.
+
+그래서 저장 port 메서드가 여럿이고 **구현이 같아도 이름이 다르다.** 지금 결제 리포지토리가 그 모양이다.
+
+| 이름 | 부르는 쪽이 기대하는 것 | 쓰는 자리 |
+|---|---|---|
+| `save` | **아무것도.** 구현이 즉시 flush를 하더라도 이 자리는 그것에 기대지 않는다 | 충돌을 그대로 전파해 409로 내보내는 경로 |
+| `saveChecked` | 낙관 락 충돌이 **이 호출 안에서** 확정되는 것 | 충돌을 잡아 물러나야 하는 경로 |
+| `saveFlushed` | 이 저장이 **뒤 저장보다 먼저** DB에 나가는 것 | 앞 행의 유일 제약 자리를 비우고 새 행에 같은 값을 심을 때 |
+
+**왜 이름을 가르나**: 셋은 안이 같아서 **무엇에 기대는 자리인지 이름 말고는 드러나지 않는다.** "여기는 충돌을
+안 잡네" 하고 평범한 `save`로 바꾸는 순간 쓰기 순서가 조용히 깨져 유일 제약에 걸린다. 주석은 지워지지만
+이름은 남는다.
+
+**한 자리가 둘 다 필요하면 `saveChecked`를 쓴다.** 그것이 이미 flush를 당겨오므로 순서도 함께 얻는다.
+다만 그 자리에 순서도 걸려 있다는 것을 주석 한 줄로 남긴다 — 나중에 충돌 처리가 바뀌어 `saveChecked`가
+빠질 때 순서까지 함께 사라지는 것을 막는다.
+
+### 1.4 판정을 통과시키는 루트는 자기 행의 값을 실제로 바꿔야 한다
+
+**다른 aggregate를 만들거나 늘리는 일의 불변식을 어떤 루트가 판정한다면, 그 판정을 통과시킬 때 그 루트는
+자기 행의 값도 함께 바꿔야 한다.** 안 바꾸면 그 판정에 동시성 방어가 없다.
+
+**저장을 호출한다고 버전이 오르는 것이 아니다.** 바뀐 값이 없는 엔티티를 저장하면 갱신 질의 자체가 나가지
+않고, 버전이 그대로라 **동시 트랜잭션끼리 서로를 감지하지 못한다.** 둘이 각자 판정을 통과했다면 둘 다 커밋된다.
+
+```
+T1: 루트를 읽어 한도를 판정 → 통과
+T2: 같은 루트를 읽어 한도를 판정 → 통과            ← T1 이 아직 커밋 전이라 보이지 않는다
+T1: 새 행을 만들고 루트를 저장 → 바뀐 값이 없어 UPDATE 없음, version 그대로
+T2: 같은 일을 한다 → 충돌하지 않는다               ← 합이 한도를 넘는다
+```
+
+판정을 통과시키면서 **그 판정이 읽는 값을 루트가 함께 갱신**하면(예: 누적된 금액을 더한다) 루트 행이 실제로
+바뀌어 버전이 오르고, 진 쪽은 그 버전에서 충돌해 방금 만든 것까지 함께 롤백된다.
+
+- **변경할 때만이다.** 읽기만 하는 조회에 버전을 올리지 않는다 — 애먼 충돌을 만든다.
+- **되돌리는 쪽에는 적용되지 않는다.** 이미 만들어진 것의 상태를 바꾸는 일은 판정이 읽는 값을 건드리지
+  않으므로 루트를 건드릴 이유가 없고, 올리면 배치가 한 바퀴 돌 때마다 회원 요청이 충돌로 밀린다.
+- **겉보기에는 잘 돌고 경합에서만 틀리는 종류다.** 단위 테스트도 수동 확인도 통과하고 동시 요청에서만
+  드러난다. 그래서 규칙으로 남긴다.
 
 ---
 
@@ -129,30 +174,37 @@ B의 catch가 tx 밖에 있으려면, A의 `@Transactional` 프록시가 반드�
 
 ```java
 @Service
-class PaymentTransitionService {   // application/service/ — tx 단위작업, 독립 빈
+class PaymentService {   // application/service/ — tx 단위작업, 독립 빈
 
     private final PaymentRepository repo;   // domain port
 
     @Transactional
-    public void markUnknown(Long paymentId, String detail, LocalDateTime at) {
-        Payment p = repo.findById(paymentId)
+    public void markUnknown(Long id) {
+        Payment p = repo.findById(id)
                         .orElseThrow(() -> new PaymentException(PAYMENT_NOT_FOUND));
-        p.markUnknown(detail, at);          // 가드 위반 시 PAYMENT_STATUS_TRANSITION_NOT_ALLOWED throw
-        repo.saveChecked(p);                // adapter: saveAndFlush, 충돌 → PAYMENT_CONCURRENTLY_MODIFIED 변환 throw
+        p.markUnknown();                    // 가드 위반 시 PAYMENT_STATUS_TRANSITION_NOT_ALLOWED throw
+        repo.saveChecked(p);                // adapter: 충돌 → PAYMENT_CONCURRENTLY_MODIFIED 변환 throw
         // ↑ 충돌도 가드 위반도 catch하지 않고 그대로 전파시킨다. tx는 깨끗이 rollback된다.
     }
 
     @Transactional
-    public void fail(Long paymentId, ...)    { /* 동일 형태 */ }
+    public void fail(Long id, ...)    { /* 동일 형태 */ }
 
     @Transactional
-    public void succeed(Long paymentId, ...) { /* 동일 형태 */ }
+    public void expire(Long id, ...)  { /* 동일 형태 */ }
 }
 ```
+
+> **단위작업은 내부 식별자로 다시 로드한다.** 밖에서 온 값으로 한 건을 집는 조회는 소유 확인이 걸린
+> 자리라 수를 늘리지 않고, 자기 aggregate의 대리키는 `id`로 부른다.
 
 이 빈은 "정책을 모른다." 그냥 일을 하거나 도메인 예외를 던질 뿐이다.
 가드 위반(`PAYMENT_STATUS_TRANSITION_NOT_ALLOWED`)과 버전 충돌(`PAYMENT_CONCURRENTLY_MODIFIED`)은
 둘 다 "누가 이미 이 결제를 전이시켰다"는 같은 의미라, 양쪽 다 도메인 예외로 겉으로 드러난다.
+
+**다른 도메인까지 바꾸는 트랜잭션만 클래스를 따로 둔다.** 결제 안에서 끝나는 전이는 인스턴스가 여럿이든
+같은 도메인의 다른 타입을 함께 저장하든 이 한 클래스에 모은다 — 갈라 놓으면 클래스만 늘고 드러나는 것이
+없다. 배치 기준은 `docs/package-structure-conventions.md`가 단일 출처다.
 
 ### 3.2 Adapter — saveAndFlush + 예외 변환
 
@@ -174,15 +226,18 @@ class PaymentRepositoryAdapter implements PaymentRepository {
         }
     }
 
-    // 순수 전파→409 경로와 순수 재시도 경로는 변환하지 않는다 — plain save로 두면 커밋 시점 충돌이
-    // tx 경계 밖으로 그대로 전파되어, usecase가 DAO 추상 예외(OptimisticLockingFailureException)를
-    // 직접 잡거나(재시도) GlobalExceptionHandler가 받는다(→409). saveAndFlush·번역은 skip 분기 때만.
+    // 순수 전파→409 경로와 순수 재시도 경로는 변환하지 않는다 — 충돌이 tx 경계 밖으로 그대로 전파되어
+    // usecase가 DAO 추상 예외(OptimisticLockingFailureException)를 직접 잡거나(재시도)
+    // GlobalExceptionHandler가 받는다(→409). 번역은 skip 분기 때만이다.
     @Override
     public Payment save(Payment p) {
-        return jpa.save(p);
+        return jpa.saveAndFlush(p);
     }
 }
 ```
+
+> **구현이 즉시 flush를 하더라도 `save`라는 이름은 그것에 기대지 않는다는 뜻이다**(1.3). 번역을 하느냐는
+> 이름과 catch 유무로 갈리지, `saveAndFlush`를 쓰느냐로 갈리지 않는다.
 
 ### 3.3 skip 정책 — 쓰는 Service 안의 private 메서드
 
@@ -191,55 +246,59 @@ skip("충돌이면 조용히 넘어감")은 보통 **그것을 쓰는 흐름 하
 맥락이 코드에 남고, 클래스·빈·주입이 안 늘어난다.
 
 ```java
-// application/usecase/ — 보상 orchestrator, tx 없음 (외부 호출은 tx 밖, DB 쓰기만 짧은 tx — → PR#97)
+// application/usecase/ — 환불 발송 orchestrator, tx 없음 (외부 호출은 tx 밖, DB 쓰기만 짧은 tx — → PR#97)
 @Component
-class PaymentApprovalCompensationUseCase {
+class ExecuteRefundUseCase {
 
     private static final Set<PaymentErrorCode> SKIPPABLE = EnumSet.of(
-        PAYMENT_CONCURRENTLY_MODIFIED,          // 버전 충돌 = 누가 이미 전이시킴
-        PAYMENT_STATUS_TRANSITION_NOT_ALLOWED   // 가드 위반 = 이미 다른 상태
+        REFUND_CONCURRENTLY_MODIFIED,          // 버전 충돌 = 누가 이미 전이시킴
+        REFUND_STATUS_TRANSITION_NOT_ALLOWED   // 가드 위반 = 이미 다른 상태
     );
 
-    private final PaymentTransitionService txService;   // 별도 빈 (프록시 위해 필수)
-    private final PaymentCancellationService cancellation;
-    private final PgCanceller pgCanceller;
+    private final RefundService refundService;   // 별도 빈 (프록시 위해 필수)
+    private final PaymentGatewayPort gateway;
 
-    public void runPgCancel(Long paymentId, ...) {
-        markUnknownBestEffort(paymentId, ...);   // 충돌이면 아래에서 조용히 skip → 환불 안 끊김
-        cancellation.getOrCreate(paymentId, ...); // CANCEL row 생성 (자기 tx)
-        pgCanceller.cancel(paymentId, ...);       // PG 환불 외부 호출 (tx 밖)
+    public RefundStatus send(Payment payment, Refund refund, PgCallSource source) {
+        Refund calling = beginCall(refund);      // 충돌이면 아래에서 조용히 물러난다
+        if (calling == null) {
+            return refund.getStatus();           // 이긴 쪽이 지금 부르고 있다 — 두 번 보내지 않는다
+        }
+        return dispatch(payment, calling, source);   // 결제사 호출 (tx 밖)
     }
 
-    // 이 보상 흐름에서만 의미 있는 skip 정책 → private. catch는 tx 경계 "밖"(이 메서드엔 @Transactional 없음)
-    private void markUnknownBestEffort(Long paymentId, ...) {
+    // 이 흐름에서만 의미 있는 skip 정책 → private. catch는 tx 경계 "밖"(이 메서드엔 @Transactional 없음)
+    private Refund beginCall(Refund refund) {
         try {
-            txService.markUnknown(paymentId, ...);   // 여기서 tx 열리고 닫힘(충돌이면 rollback 후 예외)
+            return refundService.markInProgress(refund.getId(), now());  // 여기서 tx 열리고 닫힘
         } catch (PaymentException e) {
-            if (SKIPPABLE.contains(e.errorCode())) {
-                log.warn("이미 전이됨 → 마킹 skip: payment={}, code={}", paymentId, e.errorCode());
-                return;                              // 흡수 = 이 흐름의 정책
+            if (SKIPPABLE.contains(e.getErrorCode())) {
+                log.info("부르기 직전 전이에 밀려 환불을 부르지 않는다 refundId={} 사유={}",
+                    refund.getId(), e.getErrorCode());
+                return null;                     // 흡수 = 이 흐름의 정책
             }
-            throw e;                                  // 예상 밖이면 전파
+            throw e;                             // 예상 밖이면 전파
         }
     }
 }
 ```
 
 > **별도 클래스로 빼는 건 skip을 여러 Service가 공유할 때만.** 한 흐름에서만 쓰면 private이 더 단순하고,
-> "각 Service가 자기 책임 코드를 자기 안에 명시한다"는 원칙(architecture.md: 하나의 Service는 하나의
-> 유스케이스 행위)에도 맞는다. 두 번째 사용처가 생기는 순간 추출하면 된다.
+> "각 클래스가 자기 책임 코드를 자기 안에 명시한다"는 배치 원칙(`docs/package-structure-conventions.md`)에도
+> 맞는다. 두 번째 사용처가 생기는 순간 추출하면 된다.
 
 ### 3.4 retry 정책 — skip과 같은 기준 (한 곳이면 private, 여러 곳이면 helper)
 
 retry의 배치 기준은 skip과 **동일**하다 — 쓰는 곳이 하나면 private 메서드, 여러 곳이면 추출. retry라고
 무조건 helper로 빼는 게 아니다.
 
-**한 곳에서만 쓰면 → private 메서드** (예: Stock 차감에서만 재시도)
+> **아직 이 저장소에 retry 루프는 없다.** 아래 둘은 고경합이 실제로 생겼을 때 어느 모양으로 둘지의 기준이다.
+
+**한 곳에서만 쓰면 → private 메서드** (예: 재고 차감에서만 재시도)
 
 ```java
 @Component
-class StockDecreaseUseCase {   // application/usecase/
-    private final StockService txService;   // application/service/ — 별도 빈 (프록시 위해 필수)
+class DecreaseStockUseCase {   // application/usecase/
+    private final DecreaseStockService txService;   // application/service/ — 별도 빈 (프록시 위해 필수)
 
     public void decrease(Long id, int qty) { decreaseWithRetry(id, qty, 3); }
 
@@ -247,7 +306,7 @@ class StockDecreaseUseCase {   // application/usecase/
     private void decreaseWithRetry(Long id, int qty, int maxAttempts) {
         for (int attempt = 1; ; attempt++) {
             try {
-                txService.decrement(id, qty);   // 매 시도 새 tx (별도 빈 → 프록시 → 새 tx → fresh read)
+                txService.decrease(id, qty);   // 매 시도 새 tx (별도 빈 → 프록시 → 새 tx → fresh read)
                 return;
             } catch (OptimisticLockingFailureException e) {   // 순수 재시도 — DAO 추상 예외를 직접 키로(번역 안 함)
                 if (attempt >= maxAttempts) throw e;
@@ -261,7 +320,7 @@ class StockDecreaseUseCase {   // application/usecase/
 > 함정 하나: retry 루프가 부르는 대상은 **별도 빈**이어야 한다. 자기 클래스의 다른 메서드를 부르면
 > self-invocation으로 tx 프록시가 안 먹어 "매 시도 새 tx"가 깨진다. 대상이 별도 빈인 한 private retry도 안전하다.
 
-**여러 도메인에서 쓰면 → 범용 helper** (Stock·Cart·Payment가 같은 retry를 공유)
+**여러 도메인에서 쓰면 → 범용 helper** (재고·장바구니·결제가 같은 retry를 공유)
 
 같은 루프·maxAttempts·backoff를 복붙하게 되면 그때 추출한다. 특정 Service의 책임이 아니므로
 `support/`·`common/` 등에 둔다.
@@ -272,14 +331,14 @@ class OptimisticRetry {   // support/ 또는 common/
     <T> T execute(int maxAttempts, Supplier<T> txUnit) {
         for (int attempt = 1; ; attempt++) {
             try {
-                return txUnit.get();                  // 매번 새 tx (txService 호출)
+                return txUnit.get();                  // 매번 새 tx (tx 단위작업 호출)
             } catch (OptimisticLockingFailureException e) {  // 순수 재시도 — DAO 추상 예외를 키로(번역 없이 전파된 것)
                 if (attempt >= maxAttempts) throw e;
             }
         }
     }
 }
-// 호출: retry.execute(3, () -> stockService.decrement(id, qty));
+// 호출: retry.execute(3, () -> decreaseStockService.decrease(id, qty));
 ```
 
 > skip이든 retry든 같은 규칙이다: **한 곳이면 private(흐름 옆에 명시), 여러 곳이면 추출.**
@@ -292,19 +351,20 @@ class OptimisticRetry {   // support/ 또는 common/
 
 > 핵심 원칙: **충돌 정책은 엔티티/리포지토리의 속성이 아니라 use-case의 속성이다.**
 > 그래서 tx 단위작업은 정책을 모르고, **orchestrator가 매번 결정**한다.
-> 같은 `txService.markUnknown` 단위작업이 호출 맥락에 따라 세 정책으로 갈린다.
+> 같은 전이 단위작업이 호출 맥락에 따라 세 정책으로 갈린다.
 
 | 정책 | 어디서 | 언제 | 어떻게 |
 |------|--------|------|--------|
 | **전파(기본)** | 코드 없음 | 클라이언트가 요청 전체를 재시도하면 되는 경우 | 도메인 예외가 GlobalExceptionHandler로 → 409 |
-| **skip(best-effort)** | 쓰는 Service의 private 메서드 (tx 밖) | 보상의 마킹처럼 "충돌=이미 처리됨=내 작업 무의미" | 도메인 예외 catch → 로그 → 계속 |
-| **retry** | 별도 헬퍼 (tx 밖) | Stock/Cart 같은 정당한 고경합 | **단위작업 전체를 새 tx로 재실행**(매 시도 fresh read) |
+| **skip(best-effort)** | 쓰는 Service의 private 메서드 (tx 밖) | "충돌=이미 처리됨=내 작업 무의미" | 도메인 예외 catch → 로그 → 계속 |
+| **retry** | 별도 헬퍼 (tx 밖) | 재고·장바구니 같은 정당한 고경합 | **단위작업 전체를 새 tx로 재실행**(매 시도 fresh read) |
 
 ### 4.1 호출 맥락별 매핑
 
-- **실시간 승인** → `txService.markUnknown` 직접 호출, catch 안 함 → 충돌은 409.
-- **보상(runPgCancel)** → private `markUnknownBestEffort` → 충돌/가드 위반이면 skip 후 PG 환불 진행.
-- **대사 루프(reconcile)** → `processOne`(별도 빈, 자기 tx)을 루프에서 건별 try-catch로 격리(skip-and-continue).
+- **회원 요청** → 전이 단위작업을 직접 호출, catch 안 함 → 충돌은 409.
+- **결제사를 부르기 직전 전이** → private skip → 충돌·가드 위반이면 부르지 않고 물러난다. 진 것이 곧 "이긴 쪽이 지금 부르고 있다"는 뜻이라, 그대로 부르면 같은 요청이 두 번 나간다.
+- **결제사 응답을 반영하는 전이** → private skip → 그 사이 다른 주체가 먼저 옮겼으면 그대로 둔다. 돈이 어떻게 됐는지는 대사가 이력으로 확정한다.
+- **후처리 배치 루프** → 건별 처리를 별도 빈의 자기 tx로 두고 루프에서 건별 try-catch로 격리(skip-and-continue).
 
 ### 4.2 retry 헬퍼 (코드는 3.4 참조)
 
@@ -314,7 +374,7 @@ retry는 skip과 같은 기준으로 배치한다(한 곳이면 private, 여러 
 2. 엔티티도 **시도마다 새로 find**(stale 엔티티 재사용 금지).
 
 > **주의**: retry가 무엇을 키로 잡는지는 그 경로가 번역을 하느냐에 달렸다.
-> - **순수 재시도**(번역 없음): DAO 추상 예외 `OptimisticLockingFailureException`을 tx 경계 밖에서 직접 잡는다(Stock·Cart). `saveAndFlush`·번역이 없다.
+> - **순수 재시도**(번역 없음): DAO 추상 예외 `OptimisticLockingFailureException`을 tx 경계 밖에서 직접 잡는다. 번역이 없다.
 > - **skip 분기를 위해 번역하는 경로**: adapter가 이미 도메인 예외로 변환했으므로 `@Retryable(ObjectOptimisticLockingFailureException.class)`는 안 먹는다(이미 변환됨) — 재시도한다면 도메인 충돌 코드를 키로 삼는다.
 > 어느 쪽이든 orchestrator가 "재시도 가능한 충돌"과 "비즈니스 규칙 위반"을 구분한다.
 
@@ -324,7 +384,7 @@ retry는 skip과 같은 기준으로 배치한다(한 곳이면 private, 여러 
 
 ### 5.1 변환은 충돌을 구분해 처리하는 경로에서만
 
-adapter에서 `OptimisticLockException`을 도메인 예외로 변환하는 것은 코드베이스 패턴(선례 saveUsed/saveApproved)과
+adapter에서 `OptimisticLockException`을 도메인 예외로 변환하는 것은 코드베이스 패턴(`saveChecked`)과
 일관되며 경계를 지킨다 — domain은 어떤 영속성 예외도 모르고, application은 구현체 예외에 의존하지 않는다(DAO 추상 예외는 허용).
 **단, 변환은 충돌을 skip 등으로 처리해야 하는 경로에서만** 한다. 순수 전파→409 경로와 순수 재시도 경로는 변환 없이,
 usecase가 DAO 추상 예외(`OptimisticLockingFailureException`)를 직접 잡거나 GlobalExceptionHandler까지 올려보낸다.
@@ -332,7 +392,7 @@ usecase가 DAO 추상 예외(`OptimisticLockingFailureException`)를 직접 잡�
 ### 5.2 @Version은 행 단위지 컬럼 단위가 아니다
 
 버전 충돌은 "이 행이 내가 읽은 뒤 누군가 커밋했다"만 알려줄 뿐, **어느 컬럼/어느 연산이 충돌했는지는
-알려주지 않는다.** 동시 succeed/fail/markUnknown이 전부 같은 version을 올리기 때문이다.
+알려주지 않는다.** 그 행의 모든 전이가 같은 version을 올리기 때문이다.
 "A 컬럼 충돌 vs B 컬럼 충돌" 구분은 @Version으로는 **원천적으로 불가능**하다.
 (그게 진짜 필요하면 @Version이 틀린 도구 → 조건부 UPDATE나 관심사별 별도 version 컬럼.)
 
@@ -340,7 +400,9 @@ usecase가 DAO 추상 예외(`OptimisticLockingFailureException`)를 직접 잡�
 
 **정책이 갈라지는 단위로 매핑하라. 더 잘게도, 더 굵게도 하지 마라.**
 
-- 버전 충돌은 보통 정책이 하나(skip 또는 retry)라서 → **단일 `PAYMENT_CONCURRENTLY_MODIFIED`로 충분**.
+- 버전 충돌은 보통 정책이 하나(skip 또는 retry)라서 → **엔티티마다 일반 충돌 코드 하나로 충분**
+  (`PAYMENT_CONCURRENTLY_MODIFIED`·`REFUND_CONCURRENTLY_MODIFIED`). 코드를 엔티티별로 가르는 것은
+  로그에서 어느 행이 밀렸는지 바로 보이기 때문이지, 정책이 갈려서가 아니다.
   (단, 진단용으로 엔티티 타입 + id는 예외에 실어라.)
 - **버전 충돌과 unique 위반은 절대 한 코드로 합치지 마라.** 정책이 다르다
   (unique=중복→보상, version=재시도/skip). `PAYMENT_DUPLICATE`(unique)와
@@ -349,43 +411,41 @@ usecase가 DAO 추상 예외(`OptimisticLockingFailureException`)를 직접 잡�
   이긴 트랜잭션이 어떤 상태로 커밋했을지 예외가 신뢰성 있게 못 담는다.
   → "충돌 예외 = 누가 옮겼으니 멈춰", "어디로 옮겼는지 알아야 하면 = 다시 읽어"로 분리.
 
-### 5.4 의미 코드(`ALREADY_USED` 류)는 전제가 좁다 — 기본값으로 삼지 마라
+### 5.4 의미 코드("이미 ~됨" 류)는 전제가 좁다 — 기본값으로 삼지 마라
 
-reservation의 `saveUsed`가 충돌을 `PAYMENT_RESERVATION_ALREADY_USED`로 번역할 수 있는 이유는,
-그 경로에서 **버전 충돌을 일으킬 수 있는 동시 쓰기가 의미상 "이미 사용됨" 하나뿐**이라
-"버전 충돌 = 이미 사용됨"이 **1:1로 성립**하기 때문이다.
+충돌을 "이미 ~됨" 같은 의미 코드로 번역할 수 있으려면, 그 경로에서 **버전 충돌을 일으킬 수 있는 동시
+쓰기가 그 의미 하나뿐**이라 "버전 충돌 = 그 의미"가 **1:1로 성립**해야 한다.
 
-**이 전제는 코드가 커지면 조용히 깨진다.** 같은 행에 다른 동시 쓰기 경로(예: 메모 수정, 만료시각 갱신)가
+**이 전제는 코드가 커지면 조용히 깨진다.** 같은 행에 다른 동시 쓰기 경로(예: 메모 수정, 시각 갱신)가
 하나만 추가돼도:
 
 ```
-T1: reservation 읽음 (version=5)
-T2: 같은 reservation의 메모 수정 후 commit (version=6)   ← 사용 처리가 아님
-T1: saveUsed → version=5로 UPDATE 시도 → 충돌
-    → 실제론 "이미 사용됨"이 아닌데 코드는 무조건 ALREADY_USED를 던짐  ← 거짓 양성
+T1: 행을 읽음 (version=5)
+T2: 같은 행의 메모를 수정하고 commit (version=6)   ← 그 의미의 전이가 아니다
+T1: version=5로 UPDATE 시도 → 충돌
+    → 실제론 "이미 ~됨"이 아닌데 코드는 무조건 그 의미 코드를 던짐  ← 거짓 양성
 ```
 
 더 나쁜 건 이게 **컴파일 에러로 안 잡힌다**는 점이다. 보이지 않는 결합이라 유지보수 리스크가 고약하다.
 
 **권장 디폴트**: 충돌은 일반 코드(`CONCURRENTLY_MODIFIED`)로 정직하게 던지고,
-"이미 사용됨인지"가 필요하면 **재조회로 판정**한다. 전제에 안 기대고, 동시 쓰기 경로가 늘어도 안 깨진다.
+상태가 필요하면 **재조회로 판정**한다. 전제에 안 기대고, 동시 쓰기 경로가 늘어도 안 깨진다.
 
 **의미 코드를 써도 견고한 예외 케이스**(전제가 아니라 구조/도메인이 1:1을 보장할 때):
 
 - 충돌 단위가 의미 단위와 구조적으로 일치 — 예: 조건부 UPDATE(`WHERE status='AVAILABLE'`)로
-  "사용됨 경합"만 떼어내면 `0행 = 진짜 이미 사용됨`이 **보장**된다.
+  그 경합만 떼어내면 `0행 = 진짜 그 의미`가 **보장**된다.
 - 엔티티가 도메인상 단일 목적인 게 자명 — 일회성 토큰 소비, 멱등 키 점유 등.
 
-> 기존 reservation 선례를 지금 당장 바꿀 필요는 없다(현재 1:1이면 정확하므로).
-> 대신 **"이건 reservation이 단일 목적인 동안에만 정직하다"는 전제를 주석/테스트로 박아두는 것**이
-> 실용적 절충이다. 새로 짜는 Payment 전이는 처음부터 일반 코드 + 재조회로 간다.
+> **지금 이 저장소에는 의미 코드가 없다.** 결제도 환불도 같은 행에 동시 쓰기 경로가 여럿(회원 요청·
+> 후처리 배치·승인 확정)이라 1:1이 애초에 성립하지 않는다. 일반 코드 + 재조회로 간다.
 
 ---
 
 ## 6. 트랜잭션 경계를 어디에 두나
 
 1. **트랜잭션은 service 패키지(tx 단위작업)에서만 관리.** 한 트랜잭션 = **"불변식이 원자적으로 성립해야 하는 최소 집합"**.
-   - 대개 한 애그리거트지만 **항상은 아니다.** `succeedApproval`은 `payment.succeed()`와
+   - 대개 한 애그리거트지만 **항상은 아니다.** 승인 확정은 `payment.succeed()`와
      `order.completePayment()`가 **반드시 함께 커밋**돼야 하므로(중간 상태가 보상 불가능) 두 애그리거트를
      한 tx로 묶는다. order 행은 `findByIdForUpdate`(비관 락)로 직렬화, payment는 @Version(낙관 락)으로
      전이 가드 — 한 tx 안에 락 전략을 섞어도 된다.
@@ -406,12 +466,12 @@ T1: saveUsed → version=5로 UPDATE 시도 → 충돌
 ```java
 // ✗ usecase에 @Transactional — 하면 안 됨
 @Component
-class NaverPayApprovalUseCase {   // application/usecase/
+class RequestApprovalUseCase {   // application/usecase/
     @Transactional                  // ← usecase가 tx를 열게 됨
     public void approve(...) {
-        pgGateway.approve(...);     // ← 외부 호출이 tx 안으로 빨려들어감 ("외부 호출은 tx 밖" 규칙 위반!)
-        paymentTxService.succeed(...);
-        orderTxService.complete(...);
+        gateway.approve(...);       // ← 외부 호출이 tx 안으로 빨려들어감 ("외부 호출은 tx 밖" 규칙 위반!)
+        paymentService.succeed(...);
+        orderService.complete(...);
     }
 }
 ```
@@ -426,9 +486,9 @@ class NaverPayApprovalUseCase {   // application/usecase/
 @Service
 class PaymentApprovalService {
     @Transactional   // ← tx는 여기. 딱 두 DB 쓰기만 감쌈
-    public void succeedApproval(Long orderId, Long paymentId, ...) {
-        Order order = orderRepo.findByIdForUpdate(orderId);   // 비관 락
-        Payment payment = paymentRepo.findById(paymentId).orElseThrow(...);
+    public void complete(Long id, Long orderId, ...) {
+        Order order = orderRepo.findByIdForUpdate(orderId);   // 비관 락 — 결제를 읽기 전에 잠근다
+        Payment payment = paymentRepo.findById(id).orElseThrow(...);
         payment.succeed(...);          // 낙관 락(@Version)
         order.completePayment();
         // 둘 다 이 tx 안에서 함께 커밋 — 원자성
@@ -436,21 +496,21 @@ class PaymentApprovalService {
 }
 
 // usecase는 호출만 (tx 없이)
-pgGateway.approve(...);                          // 외부 호출 (tx 밖)
-approvalService.succeedApproval(orderId, ...);   // 묶인 tx 호출
+gateway.approve(...);                            // 외부 호출 (tx 밖)
+approvalService.complete(id, orderId, ...);      // 묶인 tx 호출
 ```
 
 두 가지를 지킨다:
 - **묶음 메서드는 다른 tx 서비스를 부르기보다 리포지토리/도메인 객체를 직접 다뤄 한 메서드 안에서 완결한다.**
-  `succeedApproval`이 `paymentTxService.succeed()`+`orderTxService.complete()`를 부르면 REQUIRED라 합류는
-  하지만, 그 서비스들이 독립 호출도 되는 거라 책임이 모호해진다. 한 메서드 안에서 `payment.succeed()` /
-  `order.completePayment()`를 직접 부르는 게 깨끗하다.
+  묶음 메서드가 결제 서비스와 주문 서비스를 각각 부르면 REQUIRED라 합류는 하지만, 그 서비스들이 독립
+  호출도 되는 거라 책임이 모호해진다. 한 메서드 안에서 `payment.succeed()` / `order.completePayment()`를
+  직접 부르는 게 깨끗하다.
 - 한 tx 안에 **락 전략을 섞어도 된다**(order는 비관, payment는 낙관). 경합 지점은 비관으로 직렬화,
   전이 가드는 @Version으로.
 
 > 원칙 한 줄: **tx 경계는 "함께 커밋돼야 하는 것들"을 감싸는 메서드에 달리고, 그 메서드는 `service`
-> 패키지에 산다.** 단일이면 `PaymentTransitionService.markUnknown`, 둘을 묶으면
-> `PaymentApprovalService.succeedApproval` — 둘 다 service 패키지의 메서드이고, 묶는 단위만 다르다.
+> 패키지에 산다.** 결제 안에서 끝나면 `PaymentService`의 전이 메서드, 주문까지 묶으면
+> `PaymentApprovalService.complete` — 둘 다 service 패키지의 메서드이고, 묶는 단위만 다르다.
 
 ### 6.2 동기·비동기 모두에서 동일하다
 
@@ -493,7 +553,7 @@ approvalService.succeedApproval(orderId, ...);   // 묶인 tx 호출
   이걸 SQL `SET`으로 옮기면 도메인 로직이 repository로 샌다.
 - **여러 필드를 함께 바꾸고 그게 엔티티 불변식으로 묶여 있다**(status + respondedAt + failDetail 등).
 - **도메인 이벤트/후처리가 엔티티 전이에 걸려 있다.**
-- **여러 애그리거트가 한 tx에 얽힌다**(`succeedApproval`: payment.succeed + order.completePayment → 낙관/비관 락 혼용).
+- **여러 애그리거트가 한 tx에 얽힌다**(승인 확정: `payment.succeed()` + `order.completePayment()` → 낙관/비관 락 혼용).
 
 이때 1~3장의 설계(tx 단위작업이 전파, orchestrator가 tx 밖에서 private 메서드로 catch)를 그대로 적용한다.
 
@@ -502,30 +562,32 @@ approvalService.succeedApproval(orderId, ...);   // 묶인 tx 호출
 전이가 "현재 status가 X일 때만 Y로 바꾸는" 단순 플립이고 도메인 로직을 거의 안 품으면, 조건부 UPDATE가
 충돌을 **예외에서 숫자로** 바꿔 1·2장의 딜레마(catch 위치, rollback-only)를 통째로 없앤다.
 
+> **지금 이 저장소는 조건부 UPDATE를 전이에 쓰지 않는다.** 아래는 그 도구를 고를 때의 모양이다.
+
 ```java
 @Modifying(clearAutomatically = true, flushAutomatically = true)
 @Query("update Payment p set p.status = 'UNKNOWN', p.version = p.version + 1, ... " +
-       "where p.id = :id and p.status = 'REQUESTED'")
-int markUnknownIfRequested(@Param("id") Long id, ...);
+       "where p.id = :id and p.status = 'IN_PROGRESS'")
+int markUnknownIfInProgress(@Param("id") Long id, ...);
 // 반환 0 = 이미 누가 전이함 → skip (예외 없음), 1 = 완료
 ```
 
-가드("REQUESTED일 때만")를 SQL에 **원자적으로** 넣어 read-modify-write 레이스도 `OptimisticLockException`도
+가드("응답을 기다리는 중일 때만")를 SQL에 **원자적으로** 넣어 read-modify-write 레이스도 `OptimisticLockException`도
 아예 없앤다. orchestrator는 반환값만 보고 진행 → 예외가 없으니 rollback-only도 없고,
 같은 tx 안에서 해도 `UnexpectedRollbackException`이 안 난다.
 
 > 주의: 여러 필드를 보더라도 **셀 수 있는 단순 조건**이면 여전히 조건부 UPDATE가 가능하다
-> (`WHERE status='REQUESTED' AND amount=:expected`). 갈림길은 "WHERE 조건이 복잡하냐"가 **아니라**
+> (`WHERE status='IN_PROGRESS' AND amount=:expected`). 갈림길은 "WHERE 조건이 복잡하냐"가 **아니라**
 > "전이가 단순 플립이냐, 도메인 로직을 품었냐"다.
 
 #### 동시성 메커니즘 (@Version 아님, InnoDB 행 락 + WHERE 가드)
 
 ```
-T1: UPDATE ... WHERE id=X AND status='REQUESTED'   -- 행 X에 X-lock 획득
+T1: UPDATE ... WHERE id=X AND status='IN_PROGRESS'   -- 행 X에 X-lock 획득
 T2: 같은 UPDATE 실행 → 같은 행 X-lock 요청 → 대기(blocked)
 T1: commit → 행은 status='UNKNOWN'
 T2: unblock → 최신 커밋본을 재평가(UPDATE는 스냅샷이 아닌 latest committed를 읽음)
-    → status가 'REQUESTED' 아님 → WHERE 불일치 → 0 rows affected
+    → status가 'IN_PROGRESS' 아님 → WHERE 불일치 → 0 rows affected
 ```
 
 - "하나만 동작, 진 쪽은 커밋 전까지 락 대기"가 맞다.
@@ -547,8 +609,8 @@ T2: unblock → 최신 커밋본을 재평가(UPDATE는 스냅샷이 아닌 late
 | 상황 | 선택 | 이유 |
 |------|------|------|
 | 전이가 도메인 로직을 품음(계산된 다음 상태, 여러 필드 일관 변경, 도메인 이벤트) | **낙관 락 + catch** | 엔티티가 불변식을 표현, 로직이 domain에 남음 |
-| 여러 애그리거트 + 불변식이 얽힘 (succeedApproval) | **낙관/비관 락 + 한 tx** | 원자성 최소 집합을 한 tx로 |
-| 전이가 단순 멱등 status 플립 (markUnknownIfRequested, failIfPending 등) | **조건부 UPDATE** | 충돌이 예외→0행, 딜레마 소멸 |
+| 여러 애그리거트 + 불변식이 얽힘 (승인 확정) | **낙관/비관 락 + 한 tx** | 원자성 최소 집합을 한 tx로 |
+| 전이가 단순 멱등 status 플립 | **조건부 UPDATE** | 충돌이 예외→0행, 딜레마 소멸 |
 | 고경합 카운터성 (Stock/Cart 차감) | **낙관 락 + retry** | 정당한 동시 갱신을 재시도로 수렴 |
 
 > 트레이드오프 한 줄: **조건부 UPDATE는 충돌을 "예외→0행"으로 바꿔 tx 딜레마를 없애주지만,

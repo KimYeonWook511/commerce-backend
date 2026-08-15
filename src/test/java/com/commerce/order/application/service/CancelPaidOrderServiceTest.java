@@ -3,39 +3,44 @@ package com.commerce.order.application.service;
 import static org.assertj.core.api.Assertions.assertThat;
 import static org.assertj.core.api.Assertions.assertThatThrownBy;
 import static org.mockito.ArgumentMatchers.any;
-import static org.mockito.ArgumentMatchers.anyInt;
-import static org.mockito.ArgumentMatchers.anyLong;
-import static org.mockito.ArgumentMatchers.anyString;
 import static org.mockito.BDDMockito.given;
-import static org.mockito.BDDMockito.then;
 
+import java.time.LocalDateTime;
 import java.util.Optional;
 
 import org.junit.jupiter.api.DisplayName;
 import org.junit.jupiter.api.Test;
 import org.junit.jupiter.api.extension.ExtendWith;
+import org.mockito.InOrder;
 import org.mockito.InjectMocks;
 import org.mockito.Mock;
+import org.mockito.Mockito;
 import org.mockito.junit.jupiter.MockitoExtension;
 import org.springframework.test.util.ReflectionTestUtils;
 
-import com.commerce.order.application.dto.OrderCancelRefundStatus;
-import com.commerce.order.application.service.CancelPaidOrderService.CancelPaidOrderTransactionResult;
+import com.commerce.order.application.service.CancelPaidOrderService.CancelPaidOrderResult;
 import com.commerce.order.domain.Order;
 import com.commerce.order.domain.OrderStatus;
-import com.commerce.order.domain.repository.OrderRepository;
 import com.commerce.order.domain.exception.OrderErrorCode;
 import com.commerce.order.domain.exception.OrderException;
-import com.commerce.payment.application.service.GetOrCreateCancelPaymentService;
+import com.commerce.order.domain.repository.OrderRepository;
 import com.commerce.payment.domain.Payment;
-import com.commerce.payment.domain.PaymentProvider;
-import com.commerce.payment.domain.PaymentStatus;
-import com.commerce.payment.domain.PaymentType;
+import com.commerce.payment.domain.PaymentPg;
+import com.commerce.payment.domain.Refund;
+import com.commerce.payment.domain.RefundReason;
+import com.commerce.payment.domain.RefundRequester;
+import com.commerce.payment.domain.RefundStatus;
 import com.commerce.payment.domain.repository.PaymentRepository;
+import com.commerce.payment.domain.repository.RefundRepository;
 import com.commerce.stock.application.service.IncreaseStockService;
 
 @ExtendWith(MockitoExtension.class)
 class CancelPaidOrderServiceTest {
+
+	private static final Long MEMBER_ID = 1L;
+	private static final Long ORDER_ID = 100L;
+	private static final int APPROVED_AMOUNT = 10_000;
+	private static final String IDEMPOTENCY_KEY = "cancel-key-1";
 
 	@Mock
 	private OrderRepository orderRepository;
@@ -44,7 +49,7 @@ class CancelPaidOrderServiceTest {
 	private PaymentRepository paymentRepository;
 
 	@Mock
-	private GetOrCreateCancelPaymentService getOrCreateCancelPaymentService;
+	private RefundRepository refundRepository;
 
 	@Mock
 	private IncreaseStockService increaseStockService;
@@ -52,170 +57,179 @@ class CancelPaidOrderServiceTest {
 	@InjectMocks
 	private CancelPaidOrderService cancelPaidOrderService;
 
-	@DisplayName("PAID 주문을 취소하면 환불 의도가 영속화되고 주문이 CANCELED로 전이된다")
+	@DisplayName("결제된 주문을 취소하면 주문이 취소되고 되돌릴 환불 사건이 함께 열린다")
 	@Test
-	void cancelPaidOrder_whenPaidStatus_cancelOrderAndCreateCancelPayment() {
-		// given
-		Order order = createPaidOrderWithItems();
-		Payment approvePayment = createApproveSucceededPayment(order.getId());
-		Payment cancelPayment = createCancelRequestedPayment(order.getId());
+	void cancelPaidOrder_whenPaid_cancelsOrderAndOpensRefund() {
+		Order order = paidOrder();
+		Payment payment = succeededPayment();
+		givenCancelable(order, payment);
 
-		given(orderRepository.findByIdAndMemberIdForUpdate(100L, 1L)).willReturn(Optional.of(order));
-		given(paymentRepository.existsUnconfirmedApproveByOrderId(100L)).willReturn(false);
-		given(paymentRepository.findApproveSucceededByOrderId(100L)).willReturn(Optional.of(approvePayment));
-		given(getOrCreateCancelPaymentService.getOrCreate(anyLong(), anyString(), any(), anyString(), anyInt()))
-			.willReturn(cancelPayment);
+		CancelPaidOrderResult result =
+			cancelPaidOrderService.cancelPaidOrder(MEMBER_ID, ORDER_ID, IDEMPOTENCY_KEY);
 
-		// when
-		CancelPaidOrderTransactionResult result = cancelPaidOrderService.cancelPaidOrder(1L, 100L);
-
-		// then
 		assertThat(result.order().getStatus()).isEqualTo(OrderStatus.CANCELED);
-		assertThat(result.cancelPayment()).isSameAs(cancelPayment);
-		assertThat(result.toResult(OrderCancelRefundStatus.COMPLETED).getRefundStatus())
-			.isEqualTo(OrderCancelRefundStatus.COMPLETED);
+		assertThat(result.refund().getStatus()).isEqualTo(RefundStatus.REQUESTED);
+		assertThat(result.refund().getRequester()).isEqualTo(RefundRequester.MEMBER);
+		assertThat(result.refund().getReason()).isEqualTo(RefundReason.ORDER_CANCELED);
+		assertThat(result.refund().getIdempotencyKey()).isEqualTo(IDEMPOTENCY_KEY);
+		assertThat(result.refund().getRefundKey()).isNotBlank();
 	}
 
-	@DisplayName("PAID 주문 취소 시 재고 복구는 상품 ID 정렬 순서로 호출된다")
+	@DisplayName("환불액은 승인 금액 전액이고 남은 취소 가능 금액은 그만큼 줄어든다")
 	@Test
-	void cancelPaidOrder_whenPaidStatus_restoreStockInProductIdOrder() {
-		// given
-		Order order = Order.create(1L);
-		order.addOrderItem(5L, 2, 1000);
+	void cancelPaidOrder_whenPaid_refundsApprovedAmountAndLeavesNoRemaining() {
+		Order order = paidOrder();
+		Payment payment = succeededPayment();
+		givenCancelable(order, payment);
+
+		CancelPaidOrderResult result =
+			cancelPaidOrderService.cancelPaidOrder(MEMBER_ID, ORDER_ID, IDEMPOTENCY_KEY);
+
+		assertThat(result.refund().getAmount()).isEqualTo(APPROVED_AMOUNT);
+		assertThat(result.remainingAmount()).isZero();
+		assertThat(result.payment().getTotalRefundedAmount()).isEqualTo(APPROVED_AMOUNT);
+	}
+
+	@DisplayName("같은 요청 키로 다시 취소해도 앞서 만든 환불이 그대로 돌아오고 누적 환불액이 다시 오르지 않는다")
+	@Test
+	void cancelPaidOrder_whenSameIdempotencyKey_returnsExistingRefund() {
+		Order order = paidOrder();
+		Payment payment = succeededPayment();
+		Refund existing = Refund.open(payment.getId(), "RF-existing", RefundRequester.MEMBER,
+			IDEMPOTENCY_KEY, APPROVED_AMOUNT, RefundReason.ORDER_CANCELED);
+		ReflectionTestUtils.setField(payment, "totalRefundedAmount", APPROVED_AMOUNT);
+
+		given(orderRepository.findByIdAndMemberIdForUpdate(ORDER_ID, MEMBER_ID)).willReturn(Optional.of(order));
+		given(paymentRepository.existsUnknownByOrderId(ORDER_ID)).willReturn(false);
+		given(paymentRepository.findSucceededByMemberIdAndOrderId(MEMBER_ID, ORDER_ID))
+			.willReturn(Optional.of(payment));
+		given(refundRepository.findByPaymentIdAndRequesterAndIdempotencyKey(
+			payment.getId(), RefundRequester.MEMBER, IDEMPOTENCY_KEY)).willReturn(Optional.of(existing));
+		given(refundRepository.save(any())).willAnswer(invocation -> invocation.getArgument(0));
+
+		CancelPaidOrderResult result =
+			cancelPaidOrderService.cancelPaidOrder(MEMBER_ID, ORDER_ID, IDEMPOTENCY_KEY);
+
+		assertThat(result.refund()).isSameAs(existing);
+		assertThat(result.payment().getTotalRefundedAmount()).isEqualTo(APPROVED_AMOUNT);
+	}
+
+	@DisplayName("재고 복구는 상품 ID 정렬 순서로, 환불 의도를 연 뒤에 호출된다")
+	@Test
+	void cancelPaidOrder_whenPaid_restoresStockLastInProductIdOrder() {
+		Order order = Order.create(MEMBER_ID);
+		order.addOrderItem(5L, 2, 1_000);
 		order.addOrderItem(2L, 3, 500);
-		ReflectionTestUtils.setField(order, "id", 100L);
+		ReflectionTestUtils.setField(order, "id", ORDER_ID);
 		ReflectionTestUtils.setField(order, "status", OrderStatus.PAID);
+		Payment payment = succeededPayment();
+		givenCancelable(order, payment);
 
-		Payment approvePayment = createApproveSucceededPayment(100L);
-		Payment cancelPayment = createCancelRequestedPayment(100L);
+		cancelPaidOrderService.cancelPaidOrder(MEMBER_ID, ORDER_ID, IDEMPOTENCY_KEY);
 
-		given(orderRepository.findByIdAndMemberIdForUpdate(100L, 1L)).willReturn(Optional.of(order));
-		given(paymentRepository.existsUnconfirmedApproveByOrderId(100L)).willReturn(false);
-		given(paymentRepository.findApproveSucceededByOrderId(100L)).willReturn(Optional.of(approvePayment));
-		given(getOrCreateCancelPaymentService.getOrCreate(anyLong(), anyString(), any(), anyString(), anyInt()))
-			.willReturn(cancelPayment);
-
-		// when
-		cancelPaidOrderService.cancelPaidOrder(1L, 100L);
-
-		// then - productId 2가 먼저, 5가 나중
-		org.mockito.InOrder inOrder = org.mockito.Mockito.inOrder(increaseStockService);
+		// 재고 행 락을 쥐는 시간을 줄이려고 이 묶음의 맨 뒤에 둔다.
+		InOrder inOrder = Mockito.inOrder(refundRepository, increaseStockService, orderRepository);
+		inOrder.verify(refundRepository).findByPaymentIdAndRequesterAndIdempotencyKey(any(), any(), any());
 		inOrder.verify(increaseStockService).increase(2L, 3);
 		inOrder.verify(increaseStockService).increase(5L, 2);
+		inOrder.verify(orderRepository).save(order);
 	}
 
-	@DisplayName("주문이 없으면 취소에 실패한다")
+	@DisplayName("남의 주문 번호로는 취소할 수 없다")
 	@Test
-	void cancelPaidOrder_whenOrderNotFound_throwException() {
-		// given
-		given(orderRepository.findByIdAndMemberIdForUpdate(100L, 1L)).willReturn(Optional.empty());
+	void cancelPaidOrder_whenOrderNotFound_throws() {
+		given(orderRepository.findByIdAndMemberIdForUpdate(ORDER_ID, MEMBER_ID)).willReturn(Optional.empty());
 
-		// when & then
-		assertThatThrownBy(() -> cancelPaidOrderService.cancelPaidOrder(1L, 100L))
+		assertThatThrownBy(() -> cancelPaidOrderService.cancelPaidOrder(MEMBER_ID, ORDER_ID, IDEMPOTENCY_KEY))
 			.isInstanceOf(OrderException.class)
 			.satisfies(ex -> assertThat(((OrderException) ex).getErrorCode())
 				.isEqualTo(OrderErrorCode.ORDER_NOT_FOUND));
 	}
 
-	@DisplayName("PAID 상태가 아닌 주문은 이 service에서 거부한다")
+	@DisplayName("결제되지 않은 주문은 이 자리에서 거부한다")
 	@Test
-	void cancelPaidOrder_whenNotPaidStatus_throwException() {
-		// given
-		Order order = Order.create(1L);
-		ReflectionTestUtils.setField(order, "id", 100L);
-		// INIT 상태는 CancelOrderService가 처리하므로 이 service에 들어오면 안 됨
+	void cancelPaidOrder_whenNotPaid_throws() {
+		Order order = Order.create(MEMBER_ID);
+		ReflectionTestUtils.setField(order, "id", ORDER_ID);
+		given(orderRepository.findByIdAndMemberIdForUpdate(ORDER_ID, MEMBER_ID)).willReturn(Optional.of(order));
 
-		given(orderRepository.findByIdAndMemberIdForUpdate(100L, 1L)).willReturn(Optional.of(order));
-
-		// when & then
-		assertThatThrownBy(() -> cancelPaidOrderService.cancelPaidOrder(1L, 100L))
+		assertThatThrownBy(() -> cancelPaidOrderService.cancelPaidOrder(MEMBER_ID, ORDER_ID, IDEMPOTENCY_KEY))
 			.isInstanceOf(OrderException.class)
 			.satisfies(ex -> assertThat(((OrderException) ex).getErrorCode())
 				.isEqualTo(OrderErrorCode.ORDER_CANCEL_NOT_ALLOWED));
 	}
 
-	@DisplayName("미확정 APPROVE가 있는 주문은 환불 불가 예외를 던진다")
+	@DisplayName("승인 결과를 모르는 결제가 걸린 주문은 취소할 수 없다")
 	@Test
-	void cancelPaidOrder_whenUnconfirmedApproveExists_throwException() {
-		// given
-		Order order = createPaidOrderWithItems();
-		given(orderRepository.findByIdAndMemberIdForUpdate(100L, 1L)).willReturn(Optional.of(order));
-		given(paymentRepository.existsUnconfirmedApproveByOrderId(100L)).willReturn(true);
+	void cancelPaidOrder_whenUnknownPaymentExists_throws() {
+		Order order = paidOrder();
+		given(orderRepository.findByIdAndMemberIdForUpdate(ORDER_ID, MEMBER_ID)).willReturn(Optional.of(order));
+		given(paymentRepository.existsUnknownByOrderId(ORDER_ID)).willReturn(true);
 
-		// when & then
-		assertThatThrownBy(() -> cancelPaidOrderService.cancelPaidOrder(1L, 100L))
+		assertThatThrownBy(() -> cancelPaidOrderService.cancelPaidOrder(MEMBER_ID, ORDER_ID, IDEMPOTENCY_KEY))
 			.isInstanceOf(OrderException.class)
 			.satisfies(ex -> assertThat(((OrderException) ex).getErrorCode())
 				.isEqualTo(OrderErrorCode.ORDER_REFUND_NOT_AVAILABLE));
 	}
 
-	@DisplayName("SUCCEEDED APPROVE가 없는 PAID 주문은 정합성 오류로 처리된다")
+	@DisplayName("성공한 결제를 찾지 못하면 정합성 오류로 다룬다")
 	@Test
-	void cancelPaidOrder_whenApproveSucceededNotFound_throwException() {
-		// given
-		Order order = createPaidOrderWithItems();
-		given(orderRepository.findByIdAndMemberIdForUpdate(100L, 1L)).willReturn(Optional.of(order));
-		given(paymentRepository.existsUnconfirmedApproveByOrderId(100L)).willReturn(false);
-		given(paymentRepository.findApproveSucceededByOrderId(100L)).willReturn(Optional.empty());
+	void cancelPaidOrder_whenSucceededPaymentNotFound_throws() {
+		Order order = paidOrder();
+		given(orderRepository.findByIdAndMemberIdForUpdate(ORDER_ID, MEMBER_ID)).willReturn(Optional.of(order));
+		given(paymentRepository.existsUnknownByOrderId(ORDER_ID)).willReturn(false);
+		given(paymentRepository.findSucceededByMemberIdAndOrderId(MEMBER_ID, ORDER_ID)).willReturn(Optional.empty());
 
-		// when & then
-		assertThatThrownBy(() -> cancelPaidOrderService.cancelPaidOrder(1L, 100L))
+		assertThatThrownBy(() -> cancelPaidOrderService.cancelPaidOrder(MEMBER_ID, ORDER_ID, IDEMPOTENCY_KEY))
 			.isInstanceOf(OrderException.class)
 			.satisfies(ex -> assertThat(((OrderException) ex).getErrorCode())
 				.isEqualTo(OrderErrorCode.ORDER_REFUND_TARGET_NOT_FOUND));
 	}
 
-	@DisplayName("환불 의도 금액은 approve 결제 금액을 그대로 사용한다")
+	@DisplayName("승인 금액이 없는 결제는 얼마를 돌려줄지 정해지지 않아 취소할 수 없다")
 	@Test
-	void cancelPaidOrder_whenCanceling_cancelAmountEqualsApproveAmount() {
-		// given
-		Order order = createPaidOrderWithItems();
-		Payment approvePayment = createApproveSucceededPayment(order.getId());
-		Payment cancelPayment = createCancelRequestedPayment(order.getId());
+	void cancelPaidOrder_whenApprovedAmountMissing_throws() {
+		Order order = paidOrder();
+		Payment payment = Payment.start(ORDER_ID, MEMBER_ID, PaymentPg.NAVERPAY, "PK-1", "idem-1", APPROVED_AMOUNT);
+		ReflectionTestUtils.setField(payment, "id", 7L);
 
-		given(orderRepository.findByIdAndMemberIdForUpdate(100L, 1L)).willReturn(Optional.of(order));
-		given(paymentRepository.existsUnconfirmedApproveByOrderId(100L)).willReturn(false);
-		given(paymentRepository.findApproveSucceededByOrderId(100L)).willReturn(Optional.of(approvePayment));
-		given(getOrCreateCancelPaymentService.getOrCreate(anyLong(), anyString(), any(), anyString(), anyInt()))
-			.willReturn(cancelPayment);
+		given(orderRepository.findByIdAndMemberIdForUpdate(ORDER_ID, MEMBER_ID)).willReturn(Optional.of(order));
+		given(paymentRepository.existsUnknownByOrderId(ORDER_ID)).willReturn(false);
+		given(paymentRepository.findSucceededByMemberIdAndOrderId(MEMBER_ID, ORDER_ID))
+			.willReturn(Optional.of(payment));
 
-		// when
-		cancelPaidOrderService.cancelPaidOrder(1L, 100L);
-
-		// then - approve.amount(10000)가 cancelAmount로 전달됨
-		then(getOrCreateCancelPaymentService).should().getOrCreate(
-			anyLong(),
-			anyString(),
-			any(),
-			anyString(),
-			org.mockito.ArgumentMatchers.eq(approvePayment.getAmount())
-		);
+		assertThatThrownBy(() -> cancelPaidOrderService.cancelPaidOrder(MEMBER_ID, ORDER_ID, IDEMPOTENCY_KEY))
+			.isInstanceOf(OrderException.class)
+			.satisfies(ex -> assertThat(((OrderException) ex).getErrorCode())
+				.isEqualTo(OrderErrorCode.ORDER_REFUND_NOT_AVAILABLE));
 	}
 
 	// ── 헬퍼 ──
 
-	private Order createPaidOrderWithItems() {
-		Order order = Order.create(1L);
-		order.addOrderItem(10L, 2, 1000);
-		ReflectionTestUtils.setField(order, "id", 100L);
+	private void givenCancelable(Order order, Payment payment) {
+		given(orderRepository.findByIdAndMemberIdForUpdate(ORDER_ID, MEMBER_ID)).willReturn(Optional.of(order));
+		given(paymentRepository.existsUnknownByOrderId(ORDER_ID)).willReturn(false);
+		given(paymentRepository.findSucceededByMemberIdAndOrderId(MEMBER_ID, ORDER_ID))
+			.willReturn(Optional.of(payment));
+		given(refundRepository.findByPaymentIdAndRequesterAndIdempotencyKey(
+			payment.getId(), RefundRequester.MEMBER, IDEMPOTENCY_KEY)).willReturn(Optional.empty());
+		given(refundRepository.save(any())).willAnswer(invocation -> invocation.getArgument(0));
+	}
+
+	private Order paidOrder() {
+		Order order = Order.create(MEMBER_ID);
+		order.addOrderItem(10L, 2, 5_000);
+		ReflectionTestUtils.setField(order, "id", ORDER_ID);
 		ReflectionTestUtils.setField(order, "status", OrderStatus.PAID);
 		return order;
 	}
 
-	private Payment createApproveSucceededPayment(Long orderId) {
-		Payment payment = Payment.createCancelRequested(orderId, "PAY-KEY-1", "PG-PAY-1", 10000,
-			PaymentProvider.NAVERPAY);
-		// APPROVE SUCCEEDED 상태로 설정
-		ReflectionTestUtils.setField(payment, "type", PaymentType.APPROVE);
-		ReflectionTestUtils.setField(payment, "status", PaymentStatus.SUCCEEDED);
-		ReflectionTestUtils.setField(payment, "amount", 10000);
-		ReflectionTestUtils.setField(payment, "merchantPayKey", "PAY-KEY-1");
-		ReflectionTestUtils.setField(payment, "provider", PaymentProvider.NAVERPAY);
-		ReflectionTestUtils.setField(payment, "pgPaymentId", "PG-PAY-1");
+	private Payment succeededPayment() {
+		Payment payment = Payment.start(
+			ORDER_ID, MEMBER_ID, PaymentPg.NAVERPAY, "PK-1", "idem-1", APPROVED_AMOUNT);
+		payment.markInProgress("pg-payment-1", LocalDateTime.now());
+		payment.succeed(APPROVED_AMOUNT, "pg-tx-1");
+		ReflectionTestUtils.setField(payment, "id", 7L);
 		return payment;
-	}
-
-	private Payment createCancelRequestedPayment(Long orderId) {
-		return Payment.createCancelRequested(orderId, "PAY-KEY-1", "PG-PAY-1", 10000, PaymentProvider.NAVERPAY);
 	}
 }

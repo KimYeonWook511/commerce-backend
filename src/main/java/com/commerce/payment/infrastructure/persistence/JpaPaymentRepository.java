@@ -11,126 +11,97 @@ import org.springframework.data.jpa.repository.Query;
 import org.springframework.data.repository.query.Param;
 
 import com.commerce.payment.domain.Payment;
-import com.commerce.payment.domain.PaymentProvider;
-import com.commerce.payment.domain.PaymentStatus;
-import com.commerce.payment.domain.PaymentType;
 
 public interface JpaPaymentRepository extends JpaRepository<Payment, Long> {
 
-	Optional<Payment> findByMerchantPayKeyAndProviderAndPgPaymentIdAndType(
-		String merchantPayKey,
-		PaymentProvider provider,
-		String pgPaymentId,
-		PaymentType type
-	);
+	Optional<Payment> findByActiveOrderKey(Long activeOrderKey);
 
-	Optional<Payment> findByMerchantPayKeyAndTypeAndStatus(
-		String merchantPayKey,
-		PaymentType type,
-		PaymentStatus status
-	);
+	Optional<Payment> findByMemberIdAndIdempotencyKey(Long memberId, String idempotencyKey);
 
-	boolean existsByOrderIdAndTypeAndStatus(Long orderId, PaymentType type, PaymentStatus status);
+	Optional<Payment> findByPaymentKeyAndMemberId(String paymentKey, Long memberId);
+
+	Optional<Payment> findByPaymentKey(String paymentKey);
 
 	@Query("""
 		SELECT CASE WHEN COUNT(p) > 0 THEN TRUE ELSE FALSE END FROM Payment p
 		WHERE p.orderId = :orderId
-		  AND p.type = 'APPROVE'
-		  AND p.status IN ('UNKNOWN', 'REQUESTED')
+		  AND p.status = 'UNKNOWN'
 		""")
-	boolean existsUnconfirmedApproveByOrderId(@Param("orderId") Long orderId);
+	boolean existsUnknownByOrderId(@Param("orderId") Long orderId);
 
-	Optional<Payment> findByOrderIdAndTypeAndStatus(Long orderId, PaymentType type, PaymentStatus status);
-
-	// REQUESTED는 UNKNOWN보다 늦은 하한(requestedStaleCutoff)을 쓴다. 정책 진입 지연(REQUESTED 15분 / UNKNOWN 1분)과
-	// 스캔 하한을 일치시켜, 진입 지연 전 REQUESTED가 id ASC 첫 페이지를 차지하고 매 주기 버려져 뒤 후보가 고사하는 것을 막는다.
-	// backoff 게이트: next_reconcile_at이 미래인 행은 스캔에서 제외한다. NULL이면 한 번도 미뤄지지 않아 즉시 대상.
 	@Query("""
 		SELECT p FROM Payment p
-		WHERE p.type = 'APPROVE'
-		  AND (
-		    (p.status = 'UNKNOWN'    AND p.respondedAt < :staleCutoff          AND p.respondedAt > :escalationCutoff)
-		    OR
-		    (p.status = 'REQUESTED' AND p.createdAt   < :requestedStaleCutoff AND p.createdAt   > :escalationCutoff)
-		  )
-		  AND (p.nextReconcileAt IS NULL OR p.nextReconcileAt <= :now)
+		WHERE p.memberId = :memberId
+		  AND p.orderId = :orderId
+		  AND p.status = 'SUCCEEDED'
+		""")
+	Optional<Payment> findSucceededByMemberIdAndOrderId(
+		@Param("memberId") Long memberId,
+		@Param("orderId") Long orderId
+	);
+
+	// 활성 슬롯에는 살아 있는 결제만 주문 식별자를 담고 그 값이 유일하므로, 슬롯 값을 그대로 읽으면
+	// 막힌 주문 목록이 된다. 중복 제거도 필요 없다.
+	@Query("""
+		SELECT p.activeOrderKey FROM Payment p
+		WHERE p.activeOrderKey IN :orderIds
+		""")
+	List<Long> findActiveOrderKeysIn(@Param("orderIds") Collection<Long> orderIds);
+
+	// 임계 시각과 회차 범위는 코드가 간격표에서 계산해 넘긴다. 그래야 조회에 등호와 부등호만 남아
+	// (status, reconcile_count, last_reconcile_at) 인덱스가 그대로 먹는다.
+	// 부른 지 대사 유예가 지난 건만 고른다 — 요청 흐름이 아직 응답을 기다리는 중일 수 있다.
+	@Query("""
+		SELECT p FROM Payment p
+		WHERE p.status = 'IN_PROGRESS'
+		  AND p.reconcileCount >= :minReconcileCount
+		  AND p.reconcileCount <= :maxReconcileCount
+		  AND p.lastRequestedAt < :requestedBefore
+		  AND (p.lastReconcileAt IS NULL OR p.lastReconcileAt < :reconciledBefore)
 		ORDER BY p.id ASC
 		""")
-	List<Payment> findStaleApprovePaymentsForReconciliation(
-		@Param("staleCutoff") LocalDateTime staleCutoff,
-		@Param("requestedStaleCutoff") LocalDateTime requestedStaleCutoff,
-		@Param("escalationCutoff") LocalDateTime escalationCutoff,
-		@Param("now") LocalDateTime now,
+	List<Payment> findInProgressReconcileTargets(
+		@Param("requestedBefore") LocalDateTime requestedBefore,
+		@Param("minReconcileCount") int minReconcileCount,
+		@Param("maxReconcileCount") int maxReconcileCount,
+		@Param("reconciledBefore") LocalDateTime reconciledBefore,
 		Pageable pageable
 	);
 
-	// UNKNOWN뿐 아니라 미확정 REQUESTED(승인 호출 후 결과 저장 전 중단되어 실제 과금됐을 수 있음)도
-	// 만료 차단 대상에 포함해 만료-대사 경합을 막는다.
-	@Query("""
-		SELECT DISTINCT p.orderId FROM Payment p
-		WHERE p.type = 'APPROVE'
-		  AND p.status IN ('UNKNOWN', 'REQUESTED')
-		  AND p.orderId IN :orderIds
-		""")
-	List<Long> findOrderIdsWithBlockingPaymentIn(@Param("orderIds") Collection<Long> orderIds);
-
-	// escalation 후보: 대사 스캔 윈도우(1분~6시간) 밖에 있고 escalatedAt IS NULL인 6시간 초과 UNKNOWN/REQUESTED APPROVE.
+	// 결과를 모르는 건은 빨리 읽어 확정해야 하므로 대사 유예 없이 "아직 안 읽었다"가 곧 대상이다.
 	@Query("""
 		SELECT p FROM Payment p
-		WHERE p.type = 'APPROVE'
-		  AND p.escalatedAt IS NULL
-		  AND (
-		    (p.status = 'UNKNOWN'    AND p.respondedAt < :escalationCutoff)
-		    OR
-		    (p.status = 'REQUESTED' AND p.createdAt   < :escalationCutoff)
-		  )
+		WHERE p.status = 'UNKNOWN'
+		  AND p.reconcileCount >= :minReconcileCount
+		  AND p.reconcileCount <= :maxReconcileCount
+		  AND (p.lastReconcileAt IS NULL OR p.lastReconcileAt < :reconciledBefore)
 		ORDER BY p.id ASC
 		""")
-	List<Payment> findEscalationCandidates(
-		@Param("escalationCutoff") LocalDateTime escalationCutoff,
+	List<Payment> findUnknownReconcileTargets(
+		@Param("minReconcileCount") int minReconcileCount,
+		@Param("maxReconcileCount") int maxReconcileCount,
+		@Param("reconciledBefore") LocalDateTime reconciledBefore,
 		Pageable pageable
 	);
 
-	// CANCEL 대사 후보: APPROVE 스캔과 동일 cutoff·페이징 정책을 따른다.
-	// UNKNOWN은 respondedAt, REQUESTED는 createdAt 기준으로 stale 윈도우 적용.
-	// backoff 게이트: next_reconcile_at이 미래인 행은 스캔에서 제외한다. NULL이면 즉시 대상.
 	@Query("""
 		SELECT p FROM Payment p
-		WHERE p.type = 'CANCEL'
-		  AND (
-		    (p.status = 'UNKNOWN'    AND p.respondedAt < :staleCutoff          AND p.respondedAt > :escalationCutoff)
-		    OR
-		    (p.status = 'REQUESTED' AND p.createdAt   < :requestedStaleCutoff AND p.createdAt   > :escalationCutoff)
-		  )
-		  AND (p.nextReconcileAt IS NULL OR p.nextReconcileAt <= :now)
+		WHERE p.status IN ('IN_PROGRESS', 'UNKNOWN')
+		  AND p.createdAt < :createdBefore
+		  AND (p.lastNotifyAt IS NULL OR p.lastNotifyAt < :notifiedBefore)
 		ORDER BY p.id ASC
 		""")
-	List<Payment> findStaleCancelPaymentsForReconciliation(
-		@Param("staleCutoff") LocalDateTime staleCutoff,
-		@Param("requestedStaleCutoff") LocalDateTime requestedStaleCutoff,
-		@Param("escalationCutoff") LocalDateTime escalationCutoff,
-		@Param("now") LocalDateTime now,
+	List<Payment> findNotifyTargets(
+		@Param("createdBefore") LocalDateTime createdBefore,
+		@Param("notifiedBefore") LocalDateTime notifiedBefore,
 		Pageable pageable
 	);
 
-	// CANCEL escalation 후보: escalatedAt IS NULL이고 6시간 초과 UNKNOWN/REQUESTED CANCEL 건 (대사 스캔 윈도우 밖).
-	// FAILED CANCEL도 escalation 대상(확정적 환불 실패는 사람에게 넘긴다).
 	@Query("""
 		SELECT p FROM Payment p
-		WHERE p.type = 'CANCEL'
-		  AND p.escalatedAt IS NULL
-		  AND (
-		    (p.status = 'UNKNOWN'    AND p.respondedAt < :escalationCutoff)
-		    OR
-		    (p.status = 'REQUESTED' AND p.createdAt   < :escalationCutoff)
-		    OR
-		    (p.status = 'FAILED')
-		  )
+		WHERE p.status = 'READY'
+		  AND p.createdAt < :createdBefore
 		ORDER BY p.id ASC
 		""")
-	List<Payment> findCancelEscalationCandidates(
-		@Param("escalationCutoff") LocalDateTime escalationCutoff,
-		Pageable pageable
-	);
-
+	List<Payment> findExpireTargets(@Param("createdBefore") LocalDateTime createdBefore, Pageable pageable);
 }
