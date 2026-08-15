@@ -208,11 +208,8 @@ class ArchitectureRulesTest {
         // 결제사 전용 타입은 PG 경계 안에서만 산다. 이름이 아니라 의존 방향으로 적는 것은, 클래스 이름에
         // 결제사가 없어도 그 타입에 의존하면 결제사를 아는 것이고 반대로 승인 복귀 진입점처럼 이름만
         // 결제사인 자리는 위반이 아니기 때문이다.
-        // com.commerce.payment.legacy 는 결제사가 최상위 묶음이던 옛 구조 그대로이며 통째로 지울 예정이라
-        // 제외한다. 제외 범위를 그 패키지 하나로 좁혀 새 코드가 이 규칙을 비켜 가지 못하게 한다.
         ArchRule rule = noClasses()
                 .that().resideInAnyPackage("..application..", "..presentation..")
-                .and().resideOutsideOfPackage("com.commerce.payment.legacy..")
                 .should().dependOnClassesThat().resideInAPackage("..infrastructure.pg..");
         check(rule);
     }
@@ -223,7 +220,6 @@ class ArchitectureRulesTest {
         // 환불을 만드는 관문이 결제 안에 있어야 한도 판정과 누적 환불액 갱신이 같은 자리에서 일어나고,
         // 결제를 로드해 함께 저장하는 트랜잭션 밖에서는 환불 의도가 커밋될 수 없다. 밖에 관문이 하나
         // 더 생기면 트랜잭션 없이 불러 정당한 조건 없는 환불만 커밋되는 문이 다시 열린다.
-        // com.commerce.payment.legacy 는 옛 모델이라 이 타입을 쓰지 않으므로 제외가 필요 없다.
         ArchRule rule = noClasses()
                 .that().resideOutsideOfPackage("com.commerce.payment.domain")
                 .should().callMethod(
