@@ -8,7 +8,6 @@ import java.util.function.Function;
 import java.util.stream.Collectors;
 
 import org.springframework.beans.factory.annotation.Value;
-import org.springframework.dao.DataIntegrityViolationException;
 import org.springframework.stereotype.Component;
 import org.springframework.util.StringUtils;
 
@@ -110,17 +109,15 @@ public class StartPaymentUseCase {
 	}
 
 	/**
-	 * 유일 제약이 선점 층의 안전망이다. 활성 슬롯이든 회원 멱등키든 부딪혔다는 것은 같은 자리를 다른
-	 * 요청이 먼저 잡았다는 뜻이라 회원이 할 일이 같고, 그래서 응답도 같다. 서버 오류로 내보내지 않는다.
+	 * 유일 제약이 선점 층의 안전망이다. 부딪혔다는 것은 같은 자리를 다른 요청이 먼저 잡았다는 뜻이라
+	 * 회원이 할 일이 같고, 그래서 서버 오류로 내보내지 않는다.
+	 *
+	 * <p>그 판정은 제약 이름을 볼 수 있는 persistence adapter가 하고 여기까지 도메인 예외로 온다.
+	 * 필수값 누락 같은 다른 무결성 위반은 번역되지 않고 안전망으로 가므로 이 자리에서 잡지 않는다.
 	 */
 	private Payment createPayment(StartPaymentCommand command, Order order) {
-		try {
-			return paymentService.start(
-				order.getId(), command.memberId(), command.pg(), command.idempotencyKey(), order.getTotalPrice());
-		} catch (DataIntegrityViolationException e) {
-			log.info("결제 시작이 유일 제약에 막힘 orderId={} memberId={}", order.getId(), command.memberId());
-			throw new PaymentException(PaymentErrorCode.PAYMENT_REQUEST_IN_PROGRESS);
-		}
+		return paymentService.start(
+			order.getId(), command.memberId(), command.pg(), command.idempotencyKey(), order.getTotalPrice());
 	}
 
 	private StartPaymentResult buildResult(Order order, Payment payment) {

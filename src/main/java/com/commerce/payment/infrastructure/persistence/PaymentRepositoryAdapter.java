@@ -7,11 +7,14 @@ import java.util.List;
 import java.util.Optional;
 import java.util.Set;
 
+import org.hibernate.exception.ConstraintViolationException;
+import org.springframework.dao.DataIntegrityViolationException;
 import org.springframework.data.domain.Pageable;
 import org.springframework.orm.ObjectOptimisticLockingFailureException;
 import org.springframework.stereotype.Repository;
 
 import com.commerce.payment.domain.Payment;
+import com.commerce.payment.domain.exception.DuplicatePaymentAttemptException;
 import com.commerce.payment.domain.exception.PaymentErrorCode;
 import com.commerce.payment.domain.exception.PaymentException;
 import com.commerce.payment.domain.repository.PaymentRepository;
@@ -22,11 +25,38 @@ import lombok.RequiredArgsConstructor;
 @RequiredArgsConstructor
 public class PaymentRepositoryAdapter implements PaymentRepository {
 
+	/**
+	 * 결제 테이블의 유일 제약 이름은 모두 이 접두어를 갖는다. 셋(활성 슬롯·회원 멱등키·결제 키) 중
+	 * 무엇에 부딪혔든 뜻이 같아 이름을 하나하나 가리지 않는다.
+	 */
+	private static final String UK_PAYMENT_PREFIX = "uk_payment_";
+
 	private final JpaPaymentRepository jpaPaymentRepository;
 
+	/**
+	 * 결제의 유일 제약에 부딪힌 것만 도메인 예외로 옮긴다. 활성 슬롯·회원 멱등키·결제 키 중 무엇이든
+	 * 같은 자리를 다른 요청이 먼저 잡았다는 뜻이라 회원이 할 일이 같아 하나로 접는다.
+	 *
+	 * <p>나머지 무결성 위반(필수값 누락·외래 키 등)은 그대로 올려 보내 안전망이 받게 한다 — 회원이 할 수
+	 * 있는 일이 없는 결함이고, 같은 응답으로 접으면 조사할 근거가 사라진다. 제약 이름을 볼 수 있는 것이
+	 * 이 자리뿐이라 여기서 가른다.
+	 */
 	@Override
 	public Payment save(Payment payment) {
-		return jpaPaymentRepository.saveAndFlush(payment);
+		try {
+			return jpaPaymentRepository.saveAndFlush(payment);
+		} catch (DataIntegrityViolationException ex) {
+			if (violatesUniqueOfPayment(ex)) {
+				throw new DuplicatePaymentAttemptException();
+			}
+			throw ex;
+		}
+	}
+
+	private boolean violatesUniqueOfPayment(DataIntegrityViolationException ex) {
+		return ex.getCause() instanceof ConstraintViolationException cause
+			&& cause.getConstraintName() != null
+			&& cause.getConstraintName().toLowerCase().contains(UK_PAYMENT_PREFIX);
 	}
 
 	/**

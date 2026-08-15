@@ -13,7 +13,6 @@ import org.springframework.beans.factory.annotation.Autowired;
 import org.springframework.boot.test.autoconfigure.jdbc.AutoConfigureTestDatabase;
 import org.springframework.boot.test.autoconfigure.orm.jpa.DataJpaTest;
 import org.springframework.context.annotation.Import;
-import org.springframework.dao.DataIntegrityViolationException;
 import org.springframework.data.domain.PageRequest;
 import org.springframework.test.context.ActiveProfiles;
 import org.springframework.test.context.DynamicPropertyRegistry;
@@ -24,6 +23,7 @@ import com.commerce.payment.domain.Payment;
 import com.commerce.payment.domain.PaymentCloseCode;
 import com.commerce.payment.domain.PaymentPg;
 import com.commerce.payment.domain.PaymentStatus;
+import com.commerce.payment.domain.exception.DuplicatePaymentAttemptException;
 import com.commerce.payment.domain.repository.PaymentRepository;
 import com.commerce.support.TestcontainersSupport;
 
@@ -58,12 +58,13 @@ class PaymentRepositoryAdapterIntegrationTest {
 
 	@DisplayName("한 주문에 활성 슬롯을 쥔 결제가 둘일 수 없다")
 	@Test
-	void save_whenAnotherPaymentHoldsActiveSlot_violatesUniqueConstraint() {
+	void save_whenAnotherPaymentHoldsActiveSlot_translatesToDomainException() {
 		long orderId = ++nextOrderId;
 		paymentRepository.save(startedPayment(orderId, "dup-1"));
 
+		// 같은 자리를 다른 요청이 먼저 잡았다는 뜻이라 회원이 할 일이 있다. 그것만 도메인 언어로 옮긴다.
 		assertThatThrownBy(() -> paymentRepository.save(startedPayment(orderId, "dup-2")))
-			.isInstanceOf(DataIntegrityViolationException.class);
+			.isInstanceOf(DuplicatePaymentAttemptException.class);
 	}
 
 	@DisplayName("앞 결제의 슬롯을 먼저 비워 저장하면 같은 트랜잭션에서 새 결제가 그 자리를 잡는다")
@@ -84,13 +85,13 @@ class PaymentRepositoryAdapterIntegrationTest {
 
 	@DisplayName("같은 회원이 같은 결제 시작 멱등키를 두 번 보내면 결제가 하나만 선다")
 	@Test
-	void save_whenSameMemberSendsSameIdempotencyKey_violatesUniqueConstraint() {
+	void save_whenSameMemberSendsSameIdempotencyKey_translatesToDomainException() {
 		Payment first = Payment.start(++nextOrderId, MEMBER_ID, PaymentPg.NAVERPAY, "PK-idem-1", "IDEM-same", 10_000);
 		Payment second = Payment.start(++nextOrderId, MEMBER_ID, PaymentPg.NAVERPAY, "PK-idem-2", "IDEM-same", 10_000);
 		paymentRepository.save(first);
 
 		assertThatThrownBy(() -> paymentRepository.save(second))
-			.isInstanceOf(DataIntegrityViolationException.class);
+			.isInstanceOf(DuplicatePaymentAttemptException.class);
 	}
 
 	@DisplayName("결제 키로 찾을 때 회원이 다르면 없는 것으로 답한다")

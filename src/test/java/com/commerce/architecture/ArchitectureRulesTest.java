@@ -145,6 +145,21 @@ class ArchitectureRulesTest {
     }
 
     @Test
+    @DisplayName("무결성 위반(DataIntegrityViolationException)은 application 에서 잡지 않는다 — persistence adapter 가 제약을 가려 번역한다")
+    void integrityViolationIsTranslatedInAdapter() {
+        // 무결성 위반은 유일 제약과 필수값 누락·외래 키가 한 타입으로 도착한다. application 에서 통째로
+        // 잡으면 회원이 할 수 있는 일이 없는 결함까지 "잠시 후 다시"로 접혀 안전망에 닿지 못한다.
+        // 제약 이름을 볼 수 있는 것은 persistence adapter 뿐이므로 가르는 자리를 거기로 고정한다.
+        // 낙관 락(OptimisticLockingFailureException)은 다르다 — 다시 하면 되는 일이라 번역하지 않고
+        // application 이 그대로 다룬다(docs/exception-strategy.md).
+        ArchRule rule = noClasses()
+                .that().resideInAnyPackage("..application..", "..domain..")
+                .should().dependOnClassesThat()
+                .areAssignableTo("org.springframework.dao.DataIntegrityViolationException");
+        check(rule);
+    }
+
+    @Test
     @DisplayName("구현체에 묶인 예외(org.springframework.orm·org.hibernate·jakarta.persistence)는 application·domain·presentation 에 노출되지 않는다")
     void implementationExceptionsDoNotLeakInward() {
         // 구현체에 묶인 구체 예외는 안쪽으로 새지 않는다. DAO 추상 상위
