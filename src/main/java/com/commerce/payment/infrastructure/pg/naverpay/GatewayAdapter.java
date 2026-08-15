@@ -153,7 +153,7 @@ public class GatewayAdapter implements PaymentGatewayPort {
 	}
 
 	@Override
-	public PgHistoryResult readHistory(Payment payment, PgHistoryScope scope) {
+	public PgHistoryResult readHistory(Payment payment, PgHistoryScope scope, PgCallSource source) {
 		ApprovalType approvalType =
 			scope == PgHistoryScope.REFUND_ONLY ? ApprovalType.CANCEL : ApprovalType.ALL;
 
@@ -162,7 +162,7 @@ public class GatewayAdapter implements PaymentGatewayPort {
 		int totalPageCount = 1;
 
 		for (int page = 1; page <= totalPageCount && page <= MAX_HISTORY_PAGES; page++) {
-			GatewayExchange exchange = client.readHistory(payment.getPgPaymentId(), approvalType, page);
+			GatewayExchange exchange = client.readHistory(payment.getPgPaymentId(), approvalType, page, source);
 
 			PgOutcome transportOutcome = transportOutcome(exchange);
 			if (transportOutcome != null) {
@@ -197,8 +197,12 @@ public class GatewayAdapter implements PaymentGatewayPort {
 
 			totalPageCount = Math.max(body.getTotalPageCount(), 1);
 			if (totalPageCount > MAX_HISTORY_PAGES) {
-				log.warn("결제사 이력 페이지가 상한을 넘었다 pgPaymentId={} totalPageCount={} limit={}",
+				// 상한은 무한 반복을 막으려고 두지만, 못 읽은 페이지가 남은 목록으로 돈을 판정하면
+				// 뒤쪽에 있는 취소를 못 보고 결제를 성공으로 확정한다. 목록 자체를 못 읽은 경우와
+				// 마찬가지로 결과를 모르는 것으로 둔다.
+				log.warn("결제사 이력 페이지가 상한을 넘어 끝까지 읽지 못했다 pgPaymentId={} totalPageCount={} limit={}",
 					payment.getPgPaymentId(), totalPageCount, MAX_HISTORY_PAGES);
+				return PgHistoryResult.failed(PgOutcome.UNKNOWN, "이력 페이지가 상한을 넘어 끝까지 읽지 못했다");
 			}
 		}
 		return PgHistoryResult.succeeded(entries, message);
