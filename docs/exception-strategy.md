@@ -8,12 +8,12 @@
 - **번역은 의무가 아니라 선별적이다**: 기술 예외 → 도메인 예외 번역은 **안쪽이 그 예외에 따라 다르게 처리해야 할 때만** `infrastructure/persistence/` adapter가 한다(유니크 위반 → 이미 존재/이중결제 차단 등). 순수 재시도처럼 그 예외를 따로 처리하지 않으면 번역하지 않고 DAO 추상 예외를 그대로 usecase가 잡거나 끝단 핸들러로 흘려보낸다. 판단축은 "안쪽이 그 예외를 실제로 다루는가"다.
 - **find-first 패턴**: 정상 흐름은 사전 `find`로 처리(멱등/중복 흡수). DB 무결성 위반(unique race, NOT NULL/FK/CHECK)은 catch하지 말고 `GlobalExceptionHandler` 안전망(500)에 위임한다. (단 그 위반을 특정 상황으로 구분해 처리해야 하면 adapter에서 도메인 예외로 번역해 4xx로 다룰 수 있다.)
 - **충돌이 잦은 시나리오**는 예외적으로 try-save-catch가 더 적합하다. 이때 DAO 추상 예외(`DuplicateKeyException` 등)를 잡는 건 허용되지만, 구현체에 묶인 구체 타입(`org.hibernate.*`·`org.springframework.orm.*`)은 직접 잡지 않는다 — 추상 상위를 잡으면 구체 하위가 다형적으로 걸린다.
-- **낙관 락(@Version) 충돌**: tx 경계 밖에서 정책(전파/skip/retry)을 정한다. **순수 재시도**면 usecase가 DAO 추상 예외 `OptimisticLockingFailureException`을 직접 잡아 새 tx로 재시도한다(번역·`saveAndFlush` 불필요). **충돌에 따라 다르게 처리**해야 하면 `infrastructure/persistence/` adapter가 `saveAndFlush`로 감지를 당겨 도메인 예외로 번역한다. 상세·근거는 `docs/optimistic-lock-design.md`가 단일 출처. (unique 위반과 달리 충돌은 정상 시나리오라 409 — 아래 "왜 500 vs 409" 참고.)
+- **낙관 락(@Version) 충돌**: tx 경계 밖에서 정책(전파/skip/retry)을 정한다. **순수 재시도**면 usecase가 DAO 추상 예외 `OptimisticLockingFailureException`을 직접 잡아 새 tx로 재시도한다(번역 불필요). **충돌에 따라 다르게 처리**해야 하면 `infrastructure/persistence/` adapter가 `saveAndFlush`로 감지를 당겨 도메인 예외로 번역한다. 상세·근거는 `docs/optimistic-lock-design.md`가 단일 출처. (unique 위반과 달리 충돌은 정상 시나리오라 409 — 아래 "왜 500 vs 409" 참고.)
 - **보상 catch (catch 안 2차 작업)**: 1차 예외는 진입 즉시 `log.error()`(근본 원인 보존). 2차 성공 시 1차만 전파. 2차 실패·덜 중요하면 `log.warn()`+1차 전파. 2차 실패·치명적이면 `addSuppressed`로 둘 다 전파. **레벨: 1차=ERROR. 2차 실패는 덜 중요하면 WARN+1차 전파, 치명적이면 addSuppressed로 둘 다 전파.**
 - **catch 안 메서드는 가급적 예외를 안 던지게 설계**하고 의도를 메서드명에 캡슐화한다. Composite Exception은 도저히 안 될 때만.
 - **외부 캐시(Redis) 장애**: infra adapter가 `DataAccessException`을 잡아 도메인 예외로 변환한다(port에 DAO 예외 노출 금지). 던지는 예외 타입은 application이 그 장애를 catch해 삼키느냐로 갈린다 — **catch해서 fallback**하면 자동 매핑을 피하는 `RuntimeException` 직접 상속 전용 예외, **catch하지 않으면** 공통 예외 베이스(`CustomException`)로 던져 `UNAVAILABLE`(503) 자동 매핑에 맡긴다.
 - **도메인 예외는 전송 계층을 모른다(transport-agnostic)**: 도메인 예외가 든 `ErrorCode`는 HTTP 상태 대신 의미 분류 `ErrorCategory`(`INVALID`·`UNAUTHORIZED`·`FORBIDDEN`·`NOT_FOUND`·`CONFLICT`·`UPSTREAM_ERROR`·`UNAVAILABLE`·`INTERNAL`)만 든다. 카테고리→HttpStatus 매핑은 HTTP를 아는 경계(`GlobalExceptionHandler`·인증 필터·인가 인터셉터)가 `ErrorCategoryHttpStatus`로 소유한다. domain을 HTTP-free로 유지해 추후 모듈 분리 시 web 의존이 새지 않게 하며, ArchUnit이 domain의 `org.springframework.http`·`web` 의존을 금지해 강제한다.
-- **PG 결과 불명(UNKNOWN)**: 전송 후/불명 예외는 UNKNOWN 보존, 전송 전 버그는 안전망 500. UNKNOWN 행 있는 주문은 `PAYMENT_RESULT_PENDING`(409)로 차단.
+- **결제사 결과 불명(UNKNOWN)**: 결제사 호출은 게이트웨이 port 하나로만 나가고 구현체(어댑터)가 타임아웃·서버 오류·읽지 못한 응답까지 전부 결과 갈래로 접어 돌려주므로, 상위는 예외가 아니라 갈래를 보고 판단한다. 결과를 확정하지 못하면 UNKNOWN으로 남기고 대사가 이력을 읽어 확정한다. UNKNOWN인 결제 시도로 승인이 다시 오면 `PAYMENT_RESULT_PENDING`(409)로, 그 주문을 취소하려 하면 `ORDER_REFUND_NOT_AVAILABLE`(409)로 막는다.
 
 ---
 
@@ -21,7 +21,9 @@
 
 무결성 위반은 정상 흐름을 사전 `find` 로 처리하고, 실제 발생하면 `GlobalExceptionHandler` 안전망에 위임한다. `insert` 시점의 unique race는 DAO 추상 예외 `DataIntegrityViolationException` 으로 안전망까지 흘려 500으로 가시화한다(아래 본질 흐름).
 
-**안쪽이 그 위반에 따라 다르게 처리해야 하면 예외적으로 번역한다**: 특정 유니크 제약이 명확한 비즈니스 개념에 1:1 대응하고 안쪽이 그에 따라 처리를 달리하면, `infrastructure/persistence/` adapter가 제약을 식별해 도메인 예외로 번역한다. 이때도 adapter는 DAO 추상 상위(`DataIntegrityViolationException`)를 잡지, 구현체에 묶인 구체 타입(`org.hibernate.*`·`jakarta.persistence.*`)을 잡지 않는다. (commerce의 예: `PaymentRepositoryAdapter`가 `uk_payment_approved_order_key` 위반을 이중결제 신호로 식별 — 아래 "unique 위반 제약명 식별".)
+**안쪽이 그 위반에 따라 다르게 처리해야 하면 예외적으로 번역한다**: 특정 유니크 제약이 명확한 비즈니스 개념에 1:1 대응하고 안쪽이 그에 따라 처리를 달리하면, `infrastructure/persistence/` adapter가 제약을 식별해 도메인 예외로 번역한다. 이때도 adapter는 DAO 추상 상위(`DataIntegrityViolationException`)를 잡지, 구현체에 묶인 구체 타입(`org.hibernate.*`·`jakarta.persistence.*`)을 잡지 않는다.
+
+**지금 이 저장소에 제약명을 식별하는 자리는 없다.** 결제 시작과 주문 취소가 유일 제약을 선점의 안전망으로 쓰는데, **어느 제약에 부딪혔든 "같은 자리를 다른 요청이 먼저 잡았다"는 뜻이 같아** 가려서 처리할 것이 없다. 그래서 번역 없이 usecase가 DAO 추상 예외(`DataIntegrityViolationException`)를 그대로 잡아 회원용 409로 바꾼다.
 
 ### 본질 흐름 — find-first 패턴
 
@@ -38,7 +40,7 @@ DB find → 없으면 insert → 충돌 시 500
 본 정책은 다음 두 조건이 모두 만족될 때 유효하다.
 
 1. **트랜잭션이 짧다** — race window 가 좁아 안전망 500 의 발생률이 무시 가능한 수준이다.
-2. **정상 흐름에서 동시 충돌 확률이 낮다** — 사용자 입력 식별자(email, merchantPayKey) 나 idempotency key 기반 unique.
+2. **정상 흐름에서 동시 충돌 확률이 낮다** — 사용자 입력 식별자(email 등) 나 우리가 발급한 키·idempotency key 기반 unique.
 
 위 두 조건(짧은 트랜잭션 + 낮은 동시 충돌 확률)을 만족하는 서비스에 적용한다. 적용되는 서비스의 정확한 목록은 코드(`com.commerce.<domain>`)가 단일 출처이며, 본 문서는 하나하나 다 적지 않는다(클래스명이 바뀌면 문서가 안 맞게 되므로). 대표적으로 회원 가입·결제 승인/이력·주문 생성 등 사용자 입력 식별자나 idempotency key 기반 unique를 쓰는 경로가 해당한다.
 
@@ -69,7 +71,9 @@ DataAccessException (부모 핸들러, COMMON-500-2)
 
 `JpaConfig` 의 `SQLErrorCodeSQLExceptionTranslator` 빈은 제거됐다. 이 빈은 `db-constraint-violation-handling` 에서 application 의 `DuplicateKeyException` catch 를 위해 등록됐으나 그 catch 는 find-first 전환(→ PR#109)으로 폐기됐고, 남은 정당화("운영 로그에서 `DuplicateKeyException` 타입 구분")는 무가치했다 — 빈 유무와 무관하게 unique 위반은 같은 핸들러·같은 `COMMON-500-1` 로 분류되고 `Duplicate entry ... for key ...` `SQLException` 메시지가 cause 체인에 남는다.
 
-빈 제거 후 unique 위반은 `DataIntegrityViolationException`(cause=Hibernate `ConstraintViolationException`(cause=`SQLException`)) 으로 올라온다. 제약명이 필요한 곳(`PaymentRepositoryAdapter.isApprovedOrderKeyViolation`, 이중결제 식별) 은 Hibernate `ConstraintViolationException.getConstraintName()` 을 사용한다. MySQL 환경에서 이 값은 테이블 prefix 를 포함하므로(`tbl_payment.uk_payment_approved_order_key`) 전체 제약명을 대소문자 무시(`equalsIgnoreCase`)로 비교한다. 제약명을 소비하는 adapter 는 이미 JPA 전용이라 Hibernate API 의존이 자연스럽다.
+빈 제거 후 unique 위반은 `DataIntegrityViolationException`(cause=Hibernate `ConstraintViolationException`(cause=`SQLException`)) 으로 올라온다. **지금은 제약명을 읽는 코드가 없다** — 위 "DB 무결성 위반 흐름"에 적었듯 어느 제약이든 처리가 같아 가릴 이유가 없기 때문이다.
+
+제약을 가려야 하는 자리가 생기면 Hibernate `ConstraintViolationException.getConstraintName()` 을 쓰되 다음 둘을 지킨다. MySQL 환경에서 이 값은 테이블 prefix 를 포함하므로(`tbl_payment.uk_payment_active_order_key`) 전체 제약명을 대소문자 무시(`equalsIgnoreCase`)로 비교한다. 그리고 Hibernate API 에 닿는 것이므로 그 코드는 `infrastructure/persistence/` adapter 안에 둔다 — 이미 JPA 전용이라 그 의존이 자연스럽다.
 
 ---
 
@@ -81,7 +85,8 @@ DataAccessException (부모 핸들러, COMMON-500-2)
 
 - **tx 경계 안에서는 충돌을 catch하지 않는다.** 변환된 도메인 예외를 전파시켜 트랜잭션을 깨끗이 rollback한다. 경계 안에서 catch하면 `REQUIRES_NEW`라도 커밋 시 `UnexpectedRollbackException`이 난다(충돌 후 tx는 rollback-only).
 - **skip / retry / 전파 결정(정책)은 tx 경계 밖에서** 한다. 같은 tx 단위작업을 호출 맥락에 따라 전파(→409)·skip(보상)·retry(고경합)로 재사용한다.
-- **번역은 선별적이다.** 순수 재시도면 usecase가 tx 경계 밖에서 DAO 추상 예외 `OptimisticLockingFailureException`을 직접 잡아 새 tx로 재시도한다 — 번역도 `saveAndFlush`도 필요 없다(커밋 시점 예외가 tx 경계 밖으로 그대로 전파되므로 usecase에서 잡힌다). 반대로 충돌에 따라 *다르게 처리*해야 하면, adapter가 `saveAndFlush`로 감지를 커밋 전으로 당겨 `infrastructure/persistence/`에서 도메인 예외로 번역한다(그래야 예외가 adapter 메서드 안에서 터져 잡을 수 있다). 즉 `saveAndFlush`는 **번역이 필요할 때만** 쓴다.
+- **번역은 선별적이다.** 순수 재시도나 순수 전파면 번역하지 않는다 — 커밋 시점 예외가 tx 경계 밖으로 그대로 전파되므로 usecase가 DAO 추상 예외 `OptimisticLockingFailureException`을 직접 잡거나 끝단 핸들러가 409로 받는다. 반대로 충돌에 따라 *다르게 처리*해야 하면, adapter가 `saveAndFlush`로 감지를 커밋 전으로 당겨 `infrastructure/persistence/`에서 도메인 예외로 번역한다(그래야 예외가 adapter 메서드 안에서 터져 잡을 수 있다).
+- **`saveAndFlush`를 쓴다고 번역해야 하는 것은 아니다.** 즉시 flush가 필요한 이유는 충돌 번역 말고도 있다 — 한 트랜잭션 안에서 **쓰기 순서**를 강제해야 할 때가 그렇다. 그래서 저장 port 메서드는 *구현*이 아니라 **부르는 쪽이 무엇에 기대는지**로 갈리고, 이름이 그 기대를 말한다. 상세는 design 문서 3장.
 
 ### 도메인 예외의 상속 전략 — 자동 매핑을 원하느냐로 갈린다
 
@@ -96,7 +101,7 @@ DataAccessException (부모 핸들러, COMMON-500-2)
 
 ### 의미 코드 vs 일반 코드
 
-충돌을 도메인 예외로 변환할 때, 그 경로에서 충돌이 단일 비즈니스 의미로 1:1 대응하면 의미 코드(예: reservation use의 `PAYMENT_RESERVATION_ALREADY_USED`)로 번역하고, 그렇지 않으면 일반 충돌 코드(`PAYMENT_CONCURRENTLY_MODIFIED`)로 두고 필요 시 재조회로 상태를 판정한다. 의미 코드는 그 행의 동시 쓰기 경로가 하나뿐일 때만 정직하다(경로가 늘면 거짓 양성). 상세는 design 문서 5장.
+충돌을 도메인 예외로 변환할 때 기본은 **일반 충돌 코드**다 — 엔티티별로 하나씩 두고(결제는 `PAYMENT_CONCURRENTLY_MODIFIED`, 환불은 `REFUND_CONCURRENTLY_MODIFIED`), 상태가 필요하면 재조회로 판정한다. 그 경로에서 충돌이 단일 비즈니스 의미로 1:1 대응할 때만 의미 코드로 좁히며, 의미 코드는 그 행의 동시 쓰기 경로가 하나뿐일 때만 정직하다(경로가 늘면 거짓 양성). **지금 이 저장소에는 의미 코드가 없다** — 결제도 환불도 동시 쓰기 경로가 여럿이라 1:1이 성립하지 않는다. 상세는 design 문서 5장.
 
 ### 기계 검증
 
@@ -137,7 +142,7 @@ Infra adapter: DataAccessException catch → 도메인 예외 변환 (log.error)
 
 과거에는 catch 안 하는 케이스를 도메인 모듈의 전용 `@RestControllerAdvice`가 받았으나(도메인마다 advice·`@Order`·테스트가 늘어나는 부담), 인프라 일시 장애용 `UNAVAILABLE`(503) 카테고리를 도입하면서 공통 예외 자동 매핑으로 대체하고 그 advice는 폐기했다.
 
-**공통 인프라 장애 베이스 예외는 만들지 않는다.** catch 안 하는 케이스는 도메인 예외 클래스로 `UNAVAILABLE` 자동 매핑을 쓰므로 베이스가 불필요하고, catch해서 삼키는 fallback 케이스는 현재 한 곳뿐이라 전용 타입으로 충분하다. fallback 케이스가 3곳 이상으로 늘고 공통 catch 시나리오가 실제로 필요해지면 그때 전용 타입의 베이스 추출을 재검토한다.
+**공통 인프라 장애 베이스 예외는 만들지 않는다.** catch 안 하는 케이스는 도메인 예외 클래스로 `UNAVAILABLE` 자동 매핑을 쓰므로 베이스가 불필요하고, catch해서 삼키는 fallback 케이스는 **자리가 늘어도 각자 자기 도메인의 전용 타입 하나만 잡는다** — 여러 타입을 한 catch에 묶는 자리가 없어 베이스가 할 일이 없다. 서로 다른 도메인의 장애를 한 자리에서 함께 잡아야 하는 시나리오가 실제로 생기면 그때 베이스 추출을 재검토한다.
 
 ### 로깅 규약
 
@@ -181,68 +186,64 @@ catch 안에서 호출하는 skip 로직은 가급적 예외를 던지지 않게
 
 > 아래는 원칙이 적용된 *예시*다(완전한 목록 아님). 클래스·메서드명은 코드가 단일 출처이므로 예시가 낡아도 원칙 자체는 유지된다.
 
-- **상위 catch는 진입 즉시 1차를 ERROR로 남긴다** — 예: `NaverPayApprovalUseCase.completeVerifiedApproval`의 상위 catch(`PaymentException`/`CustomException`/`Exception`)가 진입 직후 1차 예외를 `log.error`로 보존한다.
-- **보상 catch 안 skip은 예외를 안 던지고 흐름을 멈추지 않는다** — 예: 보상 흐름에서 "현재 상태가 REQUESTED면 실패 처리, 아니면 skip"을 캡슐화해(현재는 `failIfRequested`, 향후 흐름 Service의 private 메서드로) 호출처가 try-catch 없이 평탄하게 진행한다. approve payment가 race window에서 이미 SUCCEEDED가 됐어도 PG cancel은 멈추지 않고 mark만 skip된다.
-- **사실 조회와 정책 적용을 분리한다** — 예: "완료된 Payment row 존재 여부"라는 *사실*은 Payment 도메인 소유자에 박아 두고(`hasCompletedPayment`), 보상 service는 그 사실을 받아 *정책*(`if (hasCompletedPayment) skip`)만 적용한다. 이는 낙관 락 충돌에서 "상태가 필요하면 예외가 아니라 재조회로 판정한다"(design 문서 5장)와 같은 사상 — *충돌·사실은 예외로 드러내되, 그걸 어떻게 쓸지는 호출한 쪽의 정책*. 도메인 정의 변경 시 영향 범위가 한 곳에 갇히고, NaverPay adapter가 Payment 저장소에 직접 접근하지 않는 의도도 유지된다.
-- **find-first의 예외적 허용 — 충돌 자체가 보상 신호일 때**: `uk_payment_approved_order_key` UNIQUE 위반(`DataIntegrityViolationException`)은 find-first의 예외 케이스다. `approved_order_key`는 APPROVE+SUCCEEDED 전이 시 단 한 번 set 되는 NULL 트릭 컬럼이라 사전 `find`로 레이스를 흡수하기 어렵고, 위반 발생 자체가 *이미 다른 결제가 성공했다*는 신호이므로 즉시 PG cancel 보상이 필요하다 → catch하여 보상(`compensateDuplicateApproval`)을 실행하고 원 예외를 전파한다.
+- **커밋 뒤 후속 호출이 실패해도 1차 결과를 흔들지 않는다** — 예: 주문 취소와 승인 반려는 되돌릴 근거(취소·환불 생성)를 먼저 커밋하고, 그 뒤 결제사 발송 호출이 실패하면 `log.error`로 남기고 흐름을 그대로 끝낸다. 환불은 접수 상태로 남아 발송 배치가 다시 보낸다. 여기서 예외를 전파시키면 회원은 취소가 안 된 줄 알고 다시 요청하는데 주문은 이미 취소돼 있다.
+- **보상 catch 안 skip은 예외를 안 던지고 흐름을 멈추지 않는다** — 예: 환불 발송 흐름이 "부르기 직전 전이"와 "결과 반영 전이"에서 각각 충돌·가드 위반을 private 메서드로 흡수한다. 충돌은 "다른 주체가 같은 건을 먼저 옮겼다"는 뜻이고 돈이 어떻게 됐는지는 대사가 이력으로 확정하므로, 그 자리에서 판정을 강행하지 않고 물러난다.
+- **사실 조회와 정책 적용을 분리한다** — 예: "환불 가능 금액이 얼마 남았는가"라는 *사실*은 결제 엔티티가 자기 값으로 판정하고, 그 결과로 무엇을 할지는 호출한 흐름이 정한다. 이는 낙관 락 충돌에서 "상태가 필요하면 예외가 아니라 재조회로 판정한다"(design 문서 5장)와 같은 사상 — *충돌·사실은 예외로 드러내되, 그걸 어떻게 쓸지는 호출한 쪽의 정책*.
+- **find-first의 예외적 허용 — 충돌 자체가 회원에게 답할 사실일 때**: 결제 시작과 주문 취소는 사전 `find`로 멱등 요청을 흡수한 뒤에도 race window가 남고, 그때 유일 제약 위반(`DataIntegrityViolationException`)이 나는 것은 *같은 자리를 다른 요청이 먼저 잡았다*는 뜻이다. 코드 버그가 아니라 회원에게 "잠시 후 다시"라고 답할 사실이므로 안전망 500으로 흘리지 않고 usecase가 잡아 409로 바꾼다.
 
-### PG cancel 콜백 (PgCanceller)
+### 결제사 호출 결과
 
-`PgCanceller.cancel(cancelPayment, cancelReason) → CancelOutcome` 시그니처. PG-specific 응답(`NaverPayCancelResult.Status` 등)을 도메인 `CancelOutcome.Status`(SUCCESS/PROCESSING/FAILED)로 변환한 뒤 cancel payment mark를 결정한다. `ALREADY_CANCELED`는 `SUCCESS`와 동일하게 매핑한다. `payment.application`이 `NaverPayCancelResult`를 직접 import하지 않아 레이어 의존 방향이 보존된다.
+**결제사로 나가는 통로는 `application/port/`의 게이트웨이 인터페이스 하나이고, 결제사 하나가 구현체(어댑터) 하나로 붙는다.** 결제사 전용 응답 타입·에러 코드·클라이언트는 `infrastructure/pg/<결제사>/` 안에서만 참조되고, application은 결제사 어휘가 없는 port dto만 본다 — 레이어 의존 방향이 이렇게 보존되며, 이 방향은 ArchUnit이 강제한다.
+
+**어댑터는 예외를 던지지 않는다.** 타임아웃도, 서버 오류도, 읽지 못한 응답도 전부 결과 갈래로 접어 돌려주므로, 부르는 쪽은 "예외를 놓치면 무슨 일이 나는가"를 따지지 않고 갈래만 보고 분기한다.
+
+**결과 갈래는 넷이다** — 됐다 / 모른다 / 다시 시도할 수 있는 실패 / 다시 시도할 수 없는 실패.
+
+- **두 실패를 가르는 것이 이 목록의 핵심이다.** 실패가 하나면 무엇을 할지 정할 수 없다 — 점검·요청 제한처럼 시간이 지나면 풀리는 것은 상태를 그대로 두고 다시 보내야 하고, 같은 요청에 같은 답이 오는 것은 사람에게 넘겨야 한다.
+- **"모른다"를 실패로 접지 않는다.** 요청이 처리됐을 수 있어 실패로 단정하면 나간 돈을 안 나간 것으로 다루게 된다. 답을 받았는지 여부가 함께 실려 오며, 그 값으로 이력을 읽을지 결과 불명으로 남길지가 갈린다.
+- **다시 시도할 수 없는 실패에만 검토 코드가 실린다.** 어느 결제사 응답 코드가 어느 검토 코드인지는 결제사마다 다르므로 어댑터가 정한다.
+
+**대사가 다시 보내는 것도 같은 경계를 지난다.** 결과를 회수하다 이력에 우리 시도가 없으면 그 자리에서 같은 멱등키로 다시 보내는데, 그 호출도 같은 port를 통과해 같은 넷으로 돌아온다. 대사에 별도 통로를 두면 갈래 해석이 두 벌이 된다.
 
 ---
 
 ## 결제 결과 UNKNOWN 처리
 
-PG 호출 결과가 확인되지 않아 결제 상태가 불명확한 경우의 처리 정책이다 (→ PR#205·PR#218).
+결제사 호출 결과가 확인되지 않아 결제 상태가 불명확한 경우의 처리 정책이다.
 
 ### 마킹 정책
 
-- PG approve API 호출 timeout 또는 IOException 발생 시 → `Payment.markUnknown(failDetail, respondedAt)` — `status=UNKNOWN` 흔적 보존
-- PG approve 응답 OK 후 DB 반영 실패 시에도 가능한 경우 UNKNOWN 흔적 보존
-- UNKNOWN 은 "결과를 알 수 없다" 는 사실을 DB 에 남기는 것이 목적이다. 사용자 재시도를 허용하면 이중결제 위험이 있으므로 차단한다
-- 어떤 예외를 UNKNOWN 으로 분류하는가의 경계는 *요청 전송 시점* 을 따른다:
-  - 전송 전 버그 → 전파(안전망 500)
-  - 전송 후 / 불명 예외 → UNKNOWN 보존
-  - `Success` 응답인데 `detail` 누락 → UNKNOWN 보존
-- `AlreadyComplete` 응답 후 이력조회(`getApprovalHistory`)로 재확인하는 경로도 동일하다 (→ PR#220, #218 일관화):
-  - 결과 불명류(NETWORK/SERVER_ERROR/INVALID_RESPONSE)나 외부 응답 이상(이력 목록·상세 누락, 승인 이력인데 `merchantPayKey` 누락)으로 확정 못 하면 → `FAILED`가 아니라 UNKNOWN 보존 + `PAYMENT_RESULT_PENDING`(409)
-  - 외부 응답 이상은 명시적 null 체크로 가르고, 예상 못 한 NPE는 안전망(500)으로 전파
-  - 명시적 실패(InvalidMerchant 등)·이력 없음(빈 목록)은 결과가 확정적 → FAILED 유지
-  - `merchantPayKey`가 누락이 아니라 존재하나 우리 키와 다르면 확정적 키 불일치 → FAILED
-- cancel(보상 취소) 호출이 결과 불명류 예외로 실패하면 cancel 기록(CANCEL 타입)을 UNKNOWN 으로 보존한다. CANCEL 타입 UNKNOWN 은 차단 정책(`existsUnknownByOrderId`, APPROVE 한정)에 잡히지 않아 주문 재결제를 차단하지 않으며, 대사 대상으로만 남는다 (자동 해소는 Epic #208)
+- 결과 갈래가 "모른다"이고 **답을 받지 못했으면** 그 결제를 UNKNOWN으로 남긴다. 답은 받았는데 그 답이 결과를 정하지 못한 경우는 먼저 이력을 읽고, 그래도 확정하지 못하면 UNKNOWN으로 남긴다.
+- UNKNOWN은 "결과를 알 수 없다"는 사실을 DB에 남기는 것이 목적이다. 그 시도로 다시 부르는 것을 허용하면 이중결제 위험이 있으므로 차단한다.
+- **그 자리에서 승인을 다시 부르지 않는다.** 결제사가 원천사로 승인을 보내 놓고 기다리는 중일 수 있어 가장 위험한 구간이다.
+- **이력이 비었다는 것만으로 실패를 확정하지 않는다.** 돈이 안 나간 것과 결제사가 아직 반영하지 않은 것을 구분하지 못한다. 반대로 승인 이력이 있고 우리 결제 키가 실려 있으면 확정적이므로 그대로 확정한다.
+- **승인 금액이 0 이하처럼 정상 경로에서 나올 수 없는 값이면 확정하지 않고 결과 불명으로 둔다.** 담아 두면 한도가 처음부터 0이라 되돌릴 환불을 만들 수 없는 행이 남는다.
+- 환불 호출이 결과를 못 받으면 **환불 행**이 결과 불명으로 남는다. 환불은 결제와 별개 테이블이라 결제의 결과 불명 판정에 섞이지 않으며, 환불 대사가 이력을 읽어 확정한다.
 
 ### 차단 정책
 
-- UNKNOWN 행이 있는 주문에 reserve 또는 approve 요청이 오면 `PAYMENT_RESULT_PENDING` (409 Conflict) 응답으로 차단한다
-- 판단: `paymentRepository.existsUnknownByOrderId(orderId)` — 해당 orderId 에 `status=UNKNOWN` 인 Payment 행 존재
-- 사용자에게 "결제 결과 확인 중입니다. 잠시 후 다시 시도해 주세요" 안내
+- UNKNOWN인 결제 시도로 승인이 다시 오면 `PAYMENT_RESULT_PENDING`(409)로 막는다. 판단은 그 결제 행의 상태다.
+- 그 주문에 UNKNOWN인 결제가 있으면 주문 취소를 `ORDER_REFUND_NOT_AVAILABLE`(409)로 막는다. 판단은 `existsUnknownByOrderId(orderId)`이며, 얼마를 돌려줘야 하는지가 아직 정해지지 않았기 때문이다.
+- 같은 주문의 **새 결제 시작**은 이 조회로 막지 않는다. 살아 있는 결제가 주문 자리를 쥐고 있고 그 자리에 유일 제약이 걸려 있어, 앞선 결제가 종결돼 자리를 놓기 전에는 새 결제가 들어오지 못한다.
+- 회원에게는 "결제 결과 확인 중입니다"로 안내한다.
 
 ### 해소 정책
 
-- UNKNOWN 해소 (단건 대사, 배치 대사) 는 후속 task 의 `PaymentReconciliationUseCase` 신설로 처리한다
-- 이번 task 는 마킹 + 차단까지만 포함한다. 해소 없이도 시스템은 안전하다 (사용자 안내 + 재시도 차단으로 추가 사고 없음)
+- UNKNOWN은 후처리 배치가 해소한다. 결제 대사가 결과를 모르는 결제를 훑어 이력을 읽고 확정하며, 확정하지 못한 채 오래 남으면 통지 배치가 사람에게 알린다.
+- 대사는 **집었다는 사실을 결제사 호출 전에 따로 커밋한다.** 결과 반영과 한 트랜잭션으로 묶으면 호출이 실패했을 때 집은 사실까지 롤백되어 다시 집는 간격이 오르지 않고, 장애가 길어질수록 우리가 더 세게 두드리게 된다.
 
 ---
 
-## 결제 redirect 멱등 응답
+## 승인 재요청 응답
 
-같은 merchantPayKey 의 PG redirect 가 중복 도착한 경우의 처리 정책이다 (→ PR#205).
+같은 결제 시도로 승인 요청이 다시 도착했을 때의 처리 정책이다. **결제 행의 상태 하나로 갈린다** — 이를 위해 별도 행을 두지 않는다.
 
-### 정책
+| 그 결제 시도의 상태 | 응답 |
+|---|---|
+| 성공 | **200 OK + 앞서 확정된 결과.** 차단이 아니다 |
+| 부른 뒤 결과를 기다리는 중 · 결과 불명 | `PAYMENT_RESULT_PENDING`(409) — 위 차단 정책 |
+| 실패·반려·만료로 종결됨 | `PAYMENT_ATTEMPT_CLOSED`(409) |
+| 아직 안 부름 | 결제사에 승인을 요청한다 |
 
-- `PaymentReservation.status == USED` 인 Reservation 을 발견하면, 해당 merchantPayKey 로 기존 결제 결과를 조회해 *200 OK + 기존 결과 응답* 으로 흡수한다
-- 차단 (4xx/5xx) 응답이 아니다
-
-### 근거
-
-- PG 의 redirect 본질은 *한 번 결제 = 한 번 redirect*. 같은 키 중복은 *동일 결과 재반환* 으로 처리하는 것이 PG redirect 정신에 부합한다
-- USED Reservation 이 발견됐다는 것은 이미 APPROVE 시도가 시작됐다는 사실이다. 막으면 *결제는 됐는데 확인 불가* 박제 위험이 있다
-
-### 구현
-
-```
-reservation.status == USED
-  → paymentRepository.findApproveSucceeded(merchantPayKey).orElseThrow(...)
-  → return toResponse(approvedPayment)  // 200 OK
-```
+- **성공한 건을 막지 않고 흡수하는 이유**: 결제창 복귀는 한 번 결제에 한 번이므로 같은 시도의 중복 도착은 동일 결과 재반환이 맞다. 막으면 *결제는 됐는데 회원이 확인할 수 없는* 상태가 된다.
+- **종결된 건은 흡수하지 않는 이유**: 우리가 종결해도 결제사 쪽 결제창은 살아 있어 옛 창의 인증이 여기로 돌아온다. 성공처럼 흡수하면 종결된 시도가 되살아나므로, 그 시도로는 더 진행할 것이 없다고 답하고 다시 시작하게 한다.

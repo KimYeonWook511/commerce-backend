@@ -49,7 +49,7 @@ src/test/java/
         │   │   ├── CreateOrderUseCaseTest.java            ← 단위 (흐름·정책)
         │   │   └── CreateOrderUseCaseIntegrationTest.java ← 통합
         │   └── service/                                  ← tx 단위작업 테스트
-        │       └── PaymentTransitionServiceTest.java     ← 단위
+        │       └── CreateOrderServiceTest.java            ← 단위
         ├── presentation/
         │   └── OrderControllerTest.java                  ← 슬라이스 테스트
         └── infrastructure/
@@ -99,22 +99,6 @@ src/test/java/
 ├── 트랜잭션 롤백 시 DB가 실제로 롤백되는가
 ├── AFTER_COMMIT 이후 Redis에 실제로 저장되는가 (향후 @TransactionalEventListener 도입 시 적용)
 └── 예외 발생 시 트랜잭션이 의도대로 처리되는가
-```
-
-#### PgCanceller functional interface Mock 패턴
-
-`@FunctionalInterface`를 Mockito로 Mock할 때는 일반 인터페이스와 동일하게 처리한다.
-
-```java
-@Mock PgCanceller pgCanceller;
-
-// stub 예시
-given(pgCanceller.cancel(any(), any())).willReturn(CancelOutcome.success());
-given(pgCanceller.cancel(any(), eq("취소 이유"))).willReturn(CancelOutcome.failed(failCode, "실패 상세"));
-
-// 호출 여부 검증
-then(pgCanceller).should().cancel(eq(cancelPayment), eq("취소 이유"));
-then(pgCanceller).should(never()).cancel(any(), any());
 ```
 
 ### Presentation Layer — 슬라이스 테스트 (`@WebMvcTest`)
