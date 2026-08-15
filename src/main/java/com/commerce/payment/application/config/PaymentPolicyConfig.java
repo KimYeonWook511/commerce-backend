@@ -8,6 +8,7 @@ import org.springframework.context.annotation.Bean;
 import org.springframework.context.annotation.Configuration;
 
 import com.commerce.payment.domain.policy.PaymentPostProcessPolicy;
+import com.commerce.payment.domain.policy.RefundPostProcessPolicy;
 
 /**
  * 도메인 정책을 빈으로 등록하는 자리. 운영 설정에서 온 값을 읽어 정책에 넘긴다.
@@ -31,5 +32,20 @@ public class PaymentPolicyConfig {
 	) {
 		return new PaymentPostProcessPolicy(
 			reconcileGrace, reconcileIntervals, notifyEscalation, notifyInterval, expireThreshold);
+	}
+
+	/**
+	 * 대사 유예만 결제와 다른 키에서 읽는다. 겹쳐 전송됐을 때 치르는 대가가 달라 환불에 여유를 더 두기
+	 * 때문이며, 다시 집는 간격과 통지 시간은 같은 키를 읽어 결제와 한 표를 쓴다.
+	 */
+	@Bean
+	public RefundPostProcessPolicy refundPostProcessPolicy(
+		@Value("${payment.postprocess.refund.reconcile.grace:90s}") Duration reconcileGrace,
+		@Value("${payment.postprocess.reconcile.intervals:10s,30s,2m,5m,10m}") List<Duration> reconcileIntervals,
+		@Value("${payment.postprocess.notify.escalation:1h}") Duration notifyEscalation,
+		@Value("${payment.postprocess.notify.interval:1h}") Duration notifyInterval
+	) {
+		return new RefundPostProcessPolicy(
+			reconcileGrace, reconcileIntervals, notifyEscalation, notifyInterval);
 	}
 }

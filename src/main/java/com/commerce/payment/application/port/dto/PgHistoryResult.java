@@ -1,6 +1,9 @@
 package com.commerce.payment.application.port.dto;
 
 import java.util.List;
+import java.util.Optional;
+
+import com.commerce.payment.domain.Refund;
 
 /**
  * 이력 조회의 결과.
@@ -27,5 +30,23 @@ public record PgHistoryResult(
 
 	public static PgHistoryResult failed(PgOutcome outcome, String message) {
 		return new PgHistoryResult(outcome, List.of(), message);
+	}
+
+	/**
+	 * 그 환불 사건의 시도 중 성공으로 남은 항목. 이력이 그 사건을 완료로 설명하는지가 이 값의 유무로
+	 * 갈리며, 판정이 두 자리로 갈리지 않게 여기 하나에 둔다.
+	 *
+	 * <p>항목의 성공 여부를 먼저 본다. 실패한 시도도 이력에 한 줄로 남으므로 존재만으로 완료를 단정하면
+	 * 나가지 않은 돈을 나간 것으로 확정한다.
+	 *
+	 * <p>어느 항목이 그 사건의 것인지는 환불 자신이 가른다 — 시도 키를 만드는 규칙과 맞추는 규칙이 갈리면
+	 * 이력에서 우리 시도를 못 찾고 그 사실이 조용히 지나간다.
+	 */
+	public Optional<PgHistoryEntry> settledRefundOf(Refund refund) {
+		return entries.stream()
+			.filter(entry -> entry.type() == PgHistoryEntryType.REFUND)
+			.filter(PgHistoryEntry::succeeded)
+			.filter(entry -> refund.ownsHistoryEntry(entry.refundAttemptKey()))
+			.findFirst();
 	}
 }

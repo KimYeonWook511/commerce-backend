@@ -7,7 +7,9 @@ import org.springframework.stereotype.Component;
 import com.commerce.payment.application.usecase.DispatchRefundUseCase;
 import com.commerce.payment.application.usecase.ExpirePaymentUseCase;
 import com.commerce.payment.application.usecase.NotifyPaymentUseCase;
+import com.commerce.payment.application.usecase.NotifyRefundUseCase;
 import com.commerce.payment.application.usecase.ReconcilePaymentUseCase;
+import com.commerce.payment.application.usecase.ReconcileRefundUseCase;
 
 import lombok.RequiredArgsConstructor;
 
@@ -25,6 +27,8 @@ public class PaymentPostProcessScheduler {
 	private final NotifyPaymentUseCase notifyPaymentUseCase;
 	private final ExpirePaymentUseCase expirePaymentUseCase;
 	private final DispatchRefundUseCase dispatchRefundUseCase;
+	private final ReconcileRefundUseCase reconcileRefundUseCase;
+	private final NotifyRefundUseCase notifyRefundUseCase;
 
 	/**
 	 * 아직 안 나간 환불을 훑어 보낸다. 주문 취소와 승인 반려는 커밋 뒤에 한 번 부르고 마는데, 그 호출이
@@ -48,5 +52,19 @@ public class PaymentPostProcessScheduler {
 	@Scheduled(cron = "${payment.postprocess.expire.cron:0 */10 * * * *}")
 	public void expire() {
 		expirePaymentUseCase.expire();
+	}
+
+	/**
+	 * 결과를 모르는 환불을 이력으로 확정하고, 이력에 그 시도가 없으면 그 자리에서 다시 보낸다.
+	 * 결제 대사와 조회 조건이 달라 주기를 따로 붙인다.
+	 */
+	@Scheduled(cron = "${payment.postprocess.refund.reconcile.cron:0 */1 * * * *}")
+	public void reconcileRefunds() {
+		reconcileRefundUseCase.reconcile();
+	}
+
+	@Scheduled(cron = "${payment.postprocess.refund.notify.cron:0 */10 * * * *}")
+	public void notifyStalledRefunds() {
+		notifyRefundUseCase.notifyStalled();
 	}
 }

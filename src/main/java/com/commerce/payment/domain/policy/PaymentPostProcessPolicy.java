@@ -2,7 +2,6 @@ package com.commerce.payment.domain.policy;
 
 import java.time.Duration;
 import java.time.LocalDateTime;
-import java.util.ArrayList;
 import java.util.List;
 
 /**
@@ -21,7 +20,7 @@ public class PaymentPostProcessPolicy {
 	private final Duration reconcileGrace;
 
 	/** 회차별로 다시 집는 간격. 초반을 촘촘하게 두어 정상 건을 빨리 확정하고, 마지막 값이 그 뒤로 계속 쓰인다 */
-	private final List<Duration> reconcileIntervals;
+	private final ReconcileSchedule reconcileSchedule;
 
 	/** 만들어진 지 이만큼 지나도록 결과가 안 나면 운영자에게 알린다 */
 	private final Duration notifyEscalation;
@@ -39,12 +38,8 @@ public class PaymentPostProcessPolicy {
 		Duration notifyInterval,
 		Duration expireThreshold
 	) {
-		if (reconcileIntervals.isEmpty()) {
-			// 간격표가 비면 어느 회차도 대상이 되지 않아 회수가 통째로 멈춘다.
-			throw new IllegalArgumentException("다시 집는 간격표가 비어 있다");
-		}
 		this.reconcileGrace = reconcileGrace;
-		this.reconcileIntervals = List.copyOf(reconcileIntervals);
+		this.reconcileSchedule = new ReconcileSchedule(reconcileIntervals);
 		this.notifyEscalation = notifyEscalation;
 		this.notifyInterval = notifyInterval;
 		this.expireThreshold = expireThreshold;
@@ -60,20 +55,9 @@ public class PaymentPostProcessPolicy {
 		return at.minus(reconcileGrace);
 	}
 
-	/**
-	 * 회차별 대사 대상 조건. 회차마다 간격이 벌어지므로 하나의 임계 시각으로는 고를 수 없고, 표의 항목
-	 * 수만큼 창이 나온다.
-	 *
-	 * <p>마지막 창은 집은 횟수의 상한을 열어 둔다. 표를 다 쓴 건도 계속 대상이어야 회수가 멈추지 않는다.
-	 */
+	/** 회차별 대사 대상 조건. 환불과 같은 표를 쓰므로 계산도 그 표가 한다 */
 	public List<ReconcileWindow> reconcileWindows(LocalDateTime at) {
-		List<ReconcileWindow> windows = new ArrayList<>(reconcileIntervals.size());
-		int lastRound = reconcileIntervals.size() - 1;
-		for (int round = 0; round <= lastRound; round++) {
-			int maxReconcileCount = round == lastRound ? Integer.MAX_VALUE : round;
-			windows.add(new ReconcileWindow(round, maxReconcileCount, at.minus(reconcileIntervals.get(round))));
-		}
-		return windows;
+		return reconcileSchedule.windows(at);
 	}
 
 	/** 만들어진 지 통지 승급 시간이 지난 건을 가르는 임계 시각 */
