@@ -3,6 +3,7 @@ package com.commerce.payment.application.usecase;
 import static org.assertj.core.api.Assertions.assertThat;
 import static org.mockito.ArgumentMatchers.any;
 import static org.mockito.ArgumentMatchers.argThat;
+import static org.mockito.ArgumentMatchers.eq;
 import static org.mockito.BDDMockito.given;
 import static org.mockito.BDDMockito.then;
 import static org.mockito.BDDMockito.willThrow;
@@ -32,6 +33,7 @@ import com.commerce.order.domain.OrderStatus;
 import com.commerce.order.infrastructure.persistence.support.OrderPersistenceTestSupport;
 import com.commerce.payment.application.port.NotificationPort;
 import com.commerce.payment.application.port.PaymentGatewayPort;
+import com.commerce.payment.application.port.dto.PgCallSource;
 import com.commerce.payment.application.port.dto.PgApproveResult;
 import com.commerce.payment.application.port.dto.PgCallRecord;
 import com.commerce.payment.application.port.dto.PgHistoryEntry;
@@ -158,7 +160,7 @@ class ReconcilePaymentUseCaseIntegrationTest {
 		reconcilePaymentUseCase.reconcile();
 
 		// 요청 흐름이 아직 그 호출을 쥐고 있을 수 있어, 집으면 같은 결제에 승인이 겹쳐 나간다.
-		then(paymentGatewayPort).should(never()).readHistory(any(Payment.class), any(PgHistoryScope.class));
+		then(paymentGatewayPort).should(never()).readHistory(any(Payment.class), any(PgHistoryScope.class), any());
 		assertThat(reload(fixture).getReconcileCount()).isZero();
 	}
 
@@ -177,7 +179,7 @@ class ReconcilePaymentUseCaseIntegrationTest {
 
 		reconcilePaymentUseCase.reconcile();
 
-		then(paymentGatewayPort).should(never()).readHistory(any(Payment.class), any(PgHistoryScope.class));
+		then(paymentGatewayPort).should(never()).readHistory(any(Payment.class), any(PgHistoryScope.class), any());
 		assertThat(reload(succeeded).getStatus()).isEqualTo(PaymentStatus.SUCCEEDED);
 		assertThat(reload(failed).getStatus()).isEqualTo(PaymentStatus.FAILED);
 	}
@@ -365,13 +367,25 @@ class ReconcilePaymentUseCaseIntegrationTest {
 		assertThat(reload(counterpart).getStatus()).isEqualTo(PaymentStatus.READY);
 	}
 
+	@DisplayName("대사의 이력 조회는 배치 출처로 나가 회원 요청보다 짧은 제한 시간을 쓴다")
+	@Test
+	void reconcile_whenReadingHistory_marksCallAsBatch() {
+		unknownPayment();
+
+		reconcilePaymentUseCase.reconcile();
+
+		// 회원 요청과 같은 제한 시간을 쓰면 결제사가 느려질 때 배치 스레드가 그만큼 오래 잡혀 대사가 밀린다.
+		then(paymentGatewayPort).should()
+			.readHistory(any(Payment.class), any(PgHistoryScope.class), eq(PgCallSource.BATCH));
+	}
+
 	// ── 집었다는 기록 ────────────────────────────────────────────
 
 	@DisplayName("집었다는 기록은 결제사를 부르기 전에 따로 커밋되어 호출이 깨져도 남는다")
 	@Test
 	void reconcile_whenGatewayCallBreaks_keepsThePickRecord() {
 		Fixture fixture = unknownPayment();
-		given(paymentGatewayPort.readHistory(any(Payment.class), any(PgHistoryScope.class)))
+		given(paymentGatewayPort.readHistory(any(Payment.class), any(PgHistoryScope.class), any()))
 			.willThrow(new IllegalStateException("이력 조회 중 끊김"));
 
 		reconcilePaymentUseCase.reconcile();
@@ -414,7 +428,7 @@ class ReconcilePaymentUseCaseIntegrationTest {
 	}
 
 	private void givenHistory(PgHistoryResult history) {
-		given(paymentGatewayPort.readHistory(any(Payment.class), any(PgHistoryScope.class))).willReturn(history);
+		given(paymentGatewayPort.readHistory(any(Payment.class), any(PgHistoryScope.class), any())).willReturn(history);
 	}
 
 	private void givenApproveSucceeded(Fixture fixture) {

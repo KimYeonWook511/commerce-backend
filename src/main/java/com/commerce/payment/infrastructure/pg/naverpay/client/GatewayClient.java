@@ -88,14 +88,16 @@ public class GatewayClient {
 		return post(properties.getCancelUrl(), headers, body, source);
 	}
 
-	public GatewayExchange readHistory(String pgPaymentId, ApprovalType approvalType, int pageNumber) {
+	public GatewayExchange readHistory(
+		String pgPaymentId, ApprovalType approvalType, int pageNumber, PgCallSource source
+	) {
 		HttpHeaders headers = createHeaders();
 		headers.setContentType(MediaType.APPLICATION_JSON);
 
 		HistoryRequest body = new HistoryRequest(approvalType, pageNumber, HISTORY_ROWS_PER_PAGE);
 		String url = properties.getHistoryUrl().replace(PAYMENT_ID_PLACEHOLDER, pgPaymentId);
 
-		return post(url, headers, body, PgCallSource.MEMBER_REQUEST);
+		return post(url, headers, body, source);
 	}
 
 	/** 읽기 제한 시간이 진입점마다 다르므로 클라이언트를 그 자리에 맞춰 고른다 */

@@ -127,7 +127,7 @@ class RefundPostProcessConcurrencyTest {
 	@Test
 	void reconcile_whenTwoCyclesPickTheSameRefund_settlesItOnce() throws InterruptedException {
 		Refund refund = unknownRefund(savePayment());
-		given(paymentGatewayPort.readHistory(any(), any())).willReturn(PgHistoryResult.succeeded(
+		given(paymentGatewayPort.readHistory(any(), any(), any())).willReturn(PgHistoryResult.succeeded(
 			List.of(new PgHistoryEntry(PgHistoryEntryType.REFUND, true, AMOUNT, LocalDateTime.now(),
 				null, refund.attemptKey(), HISTORY_TRANSACTION_ID)), "성공"));
 
@@ -193,7 +193,7 @@ class RefundPostProcessConcurrencyTest {
 
 		// 집으면 결과를 못 받은 건으로 보고 같은 환불을 둘이 동시에 결제사로 보낸다. 대사 유예가 그것을 막는다.
 		assertThat(refundCallCount.get()).isEqualTo(1);
-		then(paymentGatewayPort).should(never()).readHistory(any(), any());
+		then(paymentGatewayPort).should(never()).readHistory(any(), any(), any());
 		assertThat(reload(refund).getReconcileCount()).isZero();
 	}
 

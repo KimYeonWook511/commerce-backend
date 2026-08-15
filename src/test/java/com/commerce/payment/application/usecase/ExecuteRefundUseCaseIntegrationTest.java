@@ -202,7 +202,7 @@ class ExecuteRefundUseCaseIntegrationTest {
 		assertThat(stored.getAttemptSeq()).isEqualTo(1);
 		assertThat(stored.getLastRequestedAt()).isNotNull();
 		// 한 번도 안 부른 건은 이력을 읽지 않고 바로 나간다.
-		then(paymentGatewayPort).should(never()).readHistory(any(), any());
+		then(paymentGatewayPort).should(never()).readHistory(any(), any(), any());
 	}
 
 	@DisplayName("보낼 차례가 아닌 환불은 결제사를 부르지 않는다")
@@ -225,7 +225,7 @@ class ExecuteRefundUseCaseIntegrationTest {
 	void send_whenAttemptAlreadyInHistory_doesNotResend() {
 		Payment payment = savePayment();
 		Refund refund = revivedRefund(payment);
-		given(paymentGatewayPort.readHistory(any(), eq(PgHistoryScope.REFUND_ONLY)))
+		given(paymentGatewayPort.readHistory(any(), eq(PgHistoryScope.REFUND_ONLY), any()))
 			.willReturn(PgHistoryResult.succeeded(
 				List.of(refundEntry(refund.attemptKey())), "성공"));
 
@@ -240,7 +240,7 @@ class ExecuteRefundUseCaseIntegrationTest {
 	void send_whenHistoryHasNoAttemptOfThisRefund_sends() {
 		Payment payment = savePayment();
 		Refund refund = revivedRefund(payment);
-		given(paymentGatewayPort.readHistory(any(), eq(PgHistoryScope.REFUND_ONLY)))
+		given(paymentGatewayPort.readHistory(any(), eq(PgHistoryScope.REFUND_ONLY), any()))
 			.willReturn(PgHistoryResult.succeeded(List.of(refundEntry("RF-someone-else-1")), "성공"));
 		givenRefundResult(PgRefundResult.succeeded(PG_TRANSACTION_ID, "성공", callRecord(PgErrorType.NONE)));
 
@@ -254,7 +254,7 @@ class ExecuteRefundUseCaseIntegrationTest {
 	void send_whenHistoryReadRejected_doesNotSend() {
 		Payment payment = savePayment();
 		Refund refund = revivedRefund(payment);
-		given(paymentGatewayPort.readHistory(any(), eq(PgHistoryScope.REFUND_ONLY)))
+		given(paymentGatewayPort.readHistory(any(), eq(PgHistoryScope.REFUND_ONLY), any()))
 			.willReturn(PgHistoryResult.failed(PgOutcome.RETRYABLE_FAILURE, "인증 거절"));
 
 		executeRefundUseCase.send(payment, refund, PgCallSource.BATCH);
@@ -277,7 +277,7 @@ class ExecuteRefundUseCaseIntegrationTest {
 		Refund readyAgain = reload(refund);
 		ReflectionTestUtils.setField(readyAgain, "status", RefundStatus.REQUESTED);
 		refundPersistence.save(readyAgain);
-		given(paymentGatewayPort.readHistory(any(), eq(PgHistoryScope.REFUND_ONLY)))
+		given(paymentGatewayPort.readHistory(any(), eq(PgHistoryScope.REFUND_ONLY), any()))
 			.willReturn(PgHistoryResult.succeeded(List.of(), "성공"));
 
 		executeRefundUseCase.send(payment, reload(refund), PgCallSource.BATCH);
@@ -329,7 +329,7 @@ class ExecuteRefundUseCaseIntegrationTest {
 		Payment payment = savePayment();
 		Refund refund = saveRefund(payment);
 		givenRefundResult(exceededRejection());
-		given(paymentGatewayPort.readHistory(any(), eq(PgHistoryScope.REFUND_ONLY)))
+		given(paymentGatewayPort.readHistory(any(), eq(PgHistoryScope.REFUND_ONLY), any()))
 			.willReturn(PgHistoryResult.succeeded(List.of(refundEntry(refund.getRefundKey() + "-1")), "성공"));
 
 		RefundStatus status = executeRefundUseCase.send(payment, refund, PgCallSource.MEMBER_REQUEST);
@@ -345,7 +345,7 @@ class ExecuteRefundUseCaseIntegrationTest {
 	void send_whenExceededExplainedByAnotherRefund_settlesThatOneAndKeepsThisOne() {
 		PartiallyRefunded fixture = twoRefundsOnOnePayment();
 		givenRefundResult(exceededRejection());
-		given(paymentGatewayPort.readHistory(any(), eq(PgHistoryScope.REFUND_ONLY)))
+		given(paymentGatewayPort.readHistory(any(), eq(PgHistoryScope.REFUND_ONLY), any()))
 			.willReturn(PgHistoryResult.succeeded(
 				List.of(refundEntry(fixture.earlier().getRefundKey() + "-1")), "성공"));
 
@@ -364,7 +364,7 @@ class ExecuteRefundUseCaseIntegrationTest {
 	void send_whenExceededExplainedByAnotherRefund_doesNotRecheckTheLimit() {
 		PartiallyRefunded fixture = twoRefundsOnOnePayment();
 		givenRefundResult(exceededRejection());
-		given(paymentGatewayPort.readHistory(any(), eq(PgHistoryScope.REFUND_ONLY)))
+		given(paymentGatewayPort.readHistory(any(), eq(PgHistoryScope.REFUND_ONLY), any()))
 			.willReturn(PgHistoryResult.succeeded(
 				List.of(refundEntry(fixture.earlier().getRefundKey() + "-1")), "성공"));
 
@@ -382,7 +382,7 @@ class ExecuteRefundUseCaseIntegrationTest {
 		Payment payment = savePayment();
 		Refund refund = saveRefund(payment);
 		givenRefundResult(exceededRejection());
-		given(paymentGatewayPort.readHistory(any(), eq(PgHistoryScope.REFUND_ONLY)))
+		given(paymentGatewayPort.readHistory(any(), eq(PgHistoryScope.REFUND_ONLY), any()))
 			.willReturn(PgHistoryResult.succeeded(List.of(refundEntry("RF-nobody-knows-1")), "성공"));
 
 		RefundStatus status = executeRefundUseCase.send(payment, refund, PgCallSource.MEMBER_REQUEST);
@@ -400,7 +400,7 @@ class ExecuteRefundUseCaseIntegrationTest {
 		Payment payment = savePayment();
 		Refund refund = saveRefund(payment);
 		givenRefundResult(exceededRejection());
-		given(paymentGatewayPort.readHistory(any(), eq(PgHistoryScope.REFUND_ONLY)))
+		given(paymentGatewayPort.readHistory(any(), eq(PgHistoryScope.REFUND_ONLY), any()))
 			.willReturn(PgHistoryResult.failed(PgOutcome.RETRYABLE_FAILURE, "인증 거절"));
 
 		RefundStatus status = executeRefundUseCase.send(payment, refund, PgCallSource.MEMBER_REQUEST);
@@ -421,7 +421,7 @@ class ExecuteRefundUseCaseIntegrationTest {
 		RefundStatus status = executeRefundUseCase.send(payment, refund, PgCallSource.MEMBER_REQUEST);
 
 		assertThat(status).isEqualTo(RefundStatus.MANUAL_REVIEW);
-		then(paymentGatewayPort).should(never()).readHistory(any(), any());
+		then(paymentGatewayPort).should(never()).readHistory(any(), any(), any());
 	}
 
 	// ── 대사가 이력을 읽은 뒤 그 자리에서 다시 보낸다 ────────────

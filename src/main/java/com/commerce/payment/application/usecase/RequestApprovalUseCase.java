@@ -7,6 +7,7 @@ import org.springframework.stereotype.Component;
 import com.commerce.payment.application.dto.ApprovalOutcome;
 import com.commerce.payment.application.dto.ApprovalResult;
 import com.commerce.payment.application.port.PaymentGatewayPort;
+import com.commerce.payment.application.port.dto.PgCallSource;
 import com.commerce.payment.application.port.dto.PgApproveResult;
 import com.commerce.payment.application.port.dto.PgHistoryResult;
 import com.commerce.payment.application.port.dto.PgHistoryScope;
@@ -129,7 +130,7 @@ public class RequestApprovalUseCase {
 
 	private ApprovalResult resolveFromHistory(Payment payment) {
 		// 승인 판정은 걸러 받지 않는다. 승인이 성립했는지와 그 뒤 취소됐는지를 함께 봐야 한다.
-		PgHistoryResult history = paymentGatewayPort.readHistory(payment, PgHistoryScope.ALL);
+		PgHistoryResult history = paymentGatewayPort.readHistory(payment, PgHistoryScope.ALL, PgCallSource.MEMBER_REQUEST);
 		return toResult(payment, confirmApprovalUseCase.confirmFromHistory(payment, history));
 	}
 

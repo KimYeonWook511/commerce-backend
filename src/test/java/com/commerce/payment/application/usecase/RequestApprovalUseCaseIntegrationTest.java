@@ -347,7 +347,7 @@ class RequestApprovalUseCaseIntegrationTest {
 		assertThat(payment.getStatus()).isEqualTo(PaymentStatus.UNKNOWN);
 		// 그 자리에서 다시 부르지 않는다 — 결제사가 원천사로 승인을 보내 놓고 기다리는 중일 수 있다.
 		then(paymentGatewayPort).should().approve(any(Payment.class));
-		then(paymentGatewayPort).should(never()).readHistory(any(Payment.class), any(PgHistoryScope.class));
+		then(paymentGatewayPort).should(never()).readHistory(any(Payment.class), any(PgHistoryScope.class), any());
 	}
 
 	@DisplayName("요청 흐름의 첫 승인 호출이 거절되면 결제를 실패로 종결하고 슬롯을 반납한다")
@@ -648,7 +648,7 @@ class RequestApprovalUseCaseIntegrationTest {
 	}
 
 	private void givenHistory(PgHistoryResult history) {
-		given(paymentGatewayPort.readHistory(any(Payment.class), any(PgHistoryScope.class))).willReturn(history);
+		given(paymentGatewayPort.readHistory(any(Payment.class), any(PgHistoryScope.class), any())).willReturn(history);
 	}
 
 	private PgHistoryEntry approvalEntry(Fixture fixture, int amount) {

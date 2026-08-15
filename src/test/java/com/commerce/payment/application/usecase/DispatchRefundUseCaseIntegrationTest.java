@@ -99,7 +99,7 @@ class DispatchRefundUseCaseIntegrationTest {
 
 		assertThat(reload(refund).getStatus()).isEqualTo(RefundStatus.SUCCEEDED);
 		// 한 번도 안 부른 건은 이력을 읽지 않고 바로 나간다.
-		then(paymentGatewayPort).should(never()).readHistory(any(), any());
+		then(paymentGatewayPort).should(never()).readHistory(any(), any(), any());
 		then(paymentGatewayPort).should().refund(any(), any(), eq(PgCallSource.BATCH));
 	}
 

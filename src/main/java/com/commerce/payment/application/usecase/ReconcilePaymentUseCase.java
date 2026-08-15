@@ -10,6 +10,7 @@ import org.springframework.stereotype.Component;
 
 import com.commerce.payment.application.dto.ApprovalOutcome;
 import com.commerce.payment.application.port.PaymentGatewayPort;
+import com.commerce.payment.application.port.dto.PgCallSource;
 import com.commerce.payment.application.port.dto.PgApproveResult;
 import com.commerce.payment.application.port.dto.PgHistoryResult;
 import com.commerce.payment.application.port.dto.PgHistoryScope;
@@ -103,7 +104,7 @@ public class ReconcilePaymentUseCase {
 			return;
 		}
 
-		PgHistoryResult history = paymentGatewayPort.readHistory(picked, PgHistoryScope.ALL);
+		PgHistoryResult history = paymentGatewayPort.readHistory(picked, PgHistoryScope.ALL, PgCallSource.BATCH);
 		if (history.outcome() != PgOutcome.SUCCEEDED) {
 			// 조회가 거절된 것은 그 거래가 없다는 뜻이 아니라 우리가 제대로 묻지 못했다는 뜻이다.
 			// 빈 목록과 같은 처리로 흘려보내면 인증 설정이 틀린 순간 멀쩡한 결제가 전부 실패가 된다.
@@ -175,7 +176,7 @@ public class ReconcilePaymentUseCase {
 	}
 
 	private void confirmFromHistory(Payment payment) {
-		PgHistoryResult history = paymentGatewayPort.readHistory(payment, PgHistoryScope.ALL);
+		PgHistoryResult history = paymentGatewayPort.readHistory(payment, PgHistoryScope.ALL, PgCallSource.BATCH);
 		if (history.outcome() != PgOutcome.SUCCEEDED) {
 			log.warn("이력 조회가 거절되어 확정하지 않는다 paymentId={} 사유={}", payment.getId(), history.message());
 			return;

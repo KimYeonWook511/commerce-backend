@@ -291,7 +291,7 @@ class ReconcileRefundUseCaseIntegrationTest {
 
 		reconcileRefundUseCase.reconcile();
 
-		then(paymentGatewayPort).should(never()).readHistory(any(), any());
+		then(paymentGatewayPort).should(never()).readHistory(any(), any(), any());
 		assertThat(reload(succeeded).getStatus()).isEqualTo(RefundStatus.SUCCEEDED);
 		assertThat(reload(review).getStatus()).isEqualTo(RefundStatus.MANUAL_REVIEW);
 	}
@@ -311,7 +311,7 @@ class ReconcileRefundUseCaseIntegrationTest {
 		reconcileRefundUseCase.reconcile();
 
 		// 행이 만들어진 시각으로 재면 다시 보낸 건이 보내는 즉시 지연을 넘긴 것으로 읽혀 계속 나간다.
-		then(paymentGatewayPort).should(never()).readHistory(any(), any());
+		then(paymentGatewayPort).should(never()).readHistory(any(), any(), any());
 		assertThat(reload(refund).getReconcileCount()).isEqualTo(5);
 	}
 
@@ -320,7 +320,7 @@ class ReconcileRefundUseCaseIntegrationTest {
 	void reconcile_whenGatewayCallBreaks_keepsThePickRecord() {
 		Payment payment = savePayment();
 		Refund refund = unknownRefund(payment);
-		given(paymentGatewayPort.readHistory(any(), any()))
+		given(paymentGatewayPort.readHistory(any(), any(), any()))
 			.willThrow(new IllegalStateException("이력 조회 중 끊김"));
 
 		reconcileRefundUseCase.reconcile();
@@ -368,7 +368,7 @@ class ReconcileRefundUseCaseIntegrationTest {
 	// ── 헬퍼 ──
 
 	private void givenHistory(PgHistoryResult history) {
-		given(paymentGatewayPort.readHistory(any(), any(PgHistoryScope.class))).willReturn(history);
+		given(paymentGatewayPort.readHistory(any(), any(PgHistoryScope.class), any())).willReturn(history);
 	}
 
 	private void givenRefundResult(PgRefundResult result) {

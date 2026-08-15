@@ -615,7 +615,7 @@ class GatewayAdapterTest {
 		server.expect(requestTo(RESOLVED_HISTORY_URL))
 			.andRespond(withSuccess(historyResponse(1, partialCancelEntry("SUCCESS")), MediaType.APPLICATION_JSON));
 
-		PgHistoryResult result = adapter.readHistory(payment, PgHistoryScope.ALL);
+		PgHistoryResult result = adapter.readHistory(payment, PgHistoryScope.ALL, PgCallSource.MEMBER_REQUEST);
 
 		assertThat(result.outcome()).isEqualTo(PgOutcome.SUCCEEDED);
 		assertThat(result.entries()).singleElement()
@@ -632,7 +632,7 @@ class GatewayAdapterTest {
 		server.expect(requestTo(RESOLVED_HISTORY_URL))
 			.andRespond(withSuccess(historyResponse(1, fullCancelEntry()), MediaType.APPLICATION_JSON));
 
-		PgHistoryResult result = adapter.readHistory(payment, PgHistoryScope.ALL);
+		PgHistoryResult result = adapter.readHistory(payment, PgHistoryScope.ALL, PgCallSource.MEMBER_REQUEST);
 
 		assertThat(result.entries()).singleElement()
 			.extracting(PgHistoryEntry::type).isEqualTo(PgHistoryEntryType.REFUND);
@@ -648,8 +648,8 @@ class GatewayAdapterTest {
 			.andRespond(withSuccess(historyResponse(1, partialCancelEntry("SUCCESS"), approvalEntry()),
 				MediaType.APPLICATION_JSON));
 
-		List<PgHistoryEntry> inOrder = adapter.readHistory(payment, PgHistoryScope.ALL).entries();
-		List<PgHistoryEntry> reversed = adapter.readHistory(payment, PgHistoryScope.ALL).entries();
+		List<PgHistoryEntry> inOrder = adapter.readHistory(payment, PgHistoryScope.ALL, PgCallSource.MEMBER_REQUEST).entries();
+		List<PgHistoryEntry> reversed = adapter.readHistory(payment, PgHistoryScope.ALL, PgCallSource.MEMBER_REQUEST).entries();
 
 		assertThat(inOrder).containsExactlyInAnyOrderElementsOf(reversed);
 		assertThat(inOrder).extracting(PgHistoryEntry::type)
@@ -669,7 +669,7 @@ class GatewayAdapterTest {
 			.andExpect(jsonPath("$.pageNumber").value(3))
 			.andRespond(withSuccess(historyResponse(3, approvalEntry()), MediaType.APPLICATION_JSON));
 
-		PgHistoryResult result = adapter.readHistory(payment, PgHistoryScope.ALL);
+		PgHistoryResult result = adapter.readHistory(payment, PgHistoryScope.ALL, PgCallSource.MEMBER_REQUEST);
 
 		server.verify();
 		assertThat(result.entries()).hasSize(3);
@@ -677,16 +677,18 @@ class GatewayAdapterTest {
 			.contains(PgHistoryEntryType.APPROVAL);
 	}
 
-	@DisplayName("전체 페이지 수가 이상하게 커도 정해진 상한에서 멈춘다")
+	@DisplayName("전체 페이지 수가 상한을 넘으면 읽기를 멈추고 결과를 모르는 것으로 둔다")
 	@Test
-	void readHistory_whenPageCountExceedsLimit_stopsAtLimit() {
-		server.expect(ExpectedCount.times(20), requestTo(RESOLVED_HISTORY_URL))
+	void readHistory_whenPageCountExceedsLimit_returnsUnknown() {
+		// 앞부분만 모아 성공으로 돌려주면 뒤쪽에 있는 취소를 못 보고 결제를 성공으로 확정한다.
+		// 목록 자체를 못 읽은 경우와 같은 취급이다.
+		server.expect(ExpectedCount.once(), requestTo(RESOLVED_HISTORY_URL))
 			.andRespond(withSuccess(historyResponse(9_999, approvalEntry()), MediaType.APPLICATION_JSON));
 
-		PgHistoryResult result = adapter.readHistory(payment, PgHistoryScope.ALL);
+		PgHistoryResult result = adapter.readHistory(payment, PgHistoryScope.ALL, PgCallSource.MEMBER_REQUEST);
 
 		server.verify();
-		assertThat(result.entries()).hasSize(20);
+		assertThat(result.outcome()).isEqualTo(PgOutcome.UNKNOWN);
 	}
 
 	@DisplayName("환불 판정용 조회에는 취소 항목만 달라는 조건이 실린다")
@@ -696,7 +698,7 @@ class GatewayAdapterTest {
 			.andExpect(jsonPath("$.approvalType").value("CANCEL"))
 			.andRespond(withSuccess(historyResponse(1, partialCancelEntry("SUCCESS")), MediaType.APPLICATION_JSON));
 
-		adapter.readHistory(payment, PgHistoryScope.REFUND_ONLY);
+		adapter.readHistory(payment, PgHistoryScope.REFUND_ONLY, PgCallSource.MEMBER_REQUEST);
 
 		server.verify();
 	}
@@ -708,7 +710,7 @@ class GatewayAdapterTest {
 			.andExpect(jsonPath("$.approvalType").value("ALL"))
 			.andRespond(withSuccess(historyResponse(1, approvalEntry()), MediaType.APPLICATION_JSON));
 
-		adapter.readHistory(payment, PgHistoryScope.ALL);
+		adapter.readHistory(payment, PgHistoryScope.ALL, PgCallSource.MEMBER_REQUEST);
 
 		server.verify();
 	}
@@ -719,7 +721,7 @@ class GatewayAdapterTest {
 		server.expect(requestTo(RESOLVED_HISTORY_URL))
 			.andRespond(withSuccess(historyResponse(1, partialCancelEntry("FAIL")), MediaType.APPLICATION_JSON));
 
-		PgHistoryResult result = adapter.readHistory(payment, PgHistoryScope.ALL);
+		PgHistoryResult result = adapter.readHistory(payment, PgHistoryScope.ALL, PgCallSource.MEMBER_REQUEST);
 
 		assertThat(result.entries()).singleElement()
 			.extracting(PgHistoryEntry::succeeded).isEqualTo(false);
@@ -731,7 +733,7 @@ class GatewayAdapterTest {
 		server.expect(requestTo(RESOLVED_HISTORY_URL))
 			.andRespond(withSuccess(historyResponse(1, cancelEntryWith("refund-key-1-1")), MediaType.APPLICATION_JSON));
 
-		PgHistoryResult result = adapter.readHistory(payment, PgHistoryScope.ALL);
+		PgHistoryResult result = adapter.readHistory(payment, PgHistoryScope.ALL, PgCallSource.MEMBER_REQUEST);
 
 		assertThat(result.entries()).singleElement()
 			.extracting(PgHistoryEntry::refundAttemptKey).isEqualTo("refund-key-1-1");
@@ -743,7 +745,7 @@ class GatewayAdapterTest {
 		server.expect(requestTo(RESOLVED_HISTORY_URL))
 			.andRespond(withSuccess(historyResponse(1, partialCancelEntry("SUCCESS")), MediaType.APPLICATION_JSON));
 
-		PgHistoryResult result = adapter.readHistory(payment, PgHistoryScope.ALL);
+		PgHistoryResult result = adapter.readHistory(payment, PgHistoryScope.ALL, PgCallSource.MEMBER_REQUEST);
 
 		assertThat(result.entries()).singleElement()
 			.satisfies(entry -> {
@@ -758,7 +760,7 @@ class GatewayAdapterTest {
 		server.expect(requestTo(RESOLVED_HISTORY_URL))
 			.andRespond(withSuccess(historyResponse(1, approvalEntry()), MediaType.APPLICATION_JSON));
 
-		PgHistoryResult result = adapter.readHistory(payment, PgHistoryScope.ALL);
+		PgHistoryResult result = adapter.readHistory(payment, PgHistoryScope.ALL, PgCallSource.MEMBER_REQUEST);
 
 		assertThat(result.entries()).singleElement()
 			.satisfies(entry -> {
@@ -774,7 +776,7 @@ class GatewayAdapterTest {
 		server.expect(requestTo(RESOLVED_HISTORY_URL))
 			.andRespond(withSuccess(historyResponse(1), MediaType.APPLICATION_JSON));
 
-		PgHistoryResult result = adapter.readHistory(payment, PgHistoryScope.ALL);
+		PgHistoryResult result = adapter.readHistory(payment, PgHistoryScope.ALL, PgCallSource.MEMBER_REQUEST);
 
 		assertThat(result.outcome()).isEqualTo(PgOutcome.SUCCEEDED);
 		assertThat(result.entries()).isEmpty();
@@ -787,7 +789,7 @@ class GatewayAdapterTest {
 			.andRespond(withSuccess("{\"code\":\"InvalidMerchant\",\"message\":\"유효하지 않은 가맹점\"}",
 				MediaType.APPLICATION_JSON));
 
-		PgHistoryResult result = adapter.readHistory(payment, PgHistoryScope.ALL);
+		PgHistoryResult result = adapter.readHistory(payment, PgHistoryScope.ALL, PgCallSource.MEMBER_REQUEST);
 
 		assertThat(result.outcome()).isEqualTo(PgOutcome.RETRYABLE_FAILURE);
 		assertThat(result.entries()).isEmpty();
@@ -799,7 +801,7 @@ class GatewayAdapterTest {
 		server.expect(requestTo(RESOLVED_HISTORY_URL))
 			.andRespond(withStatus(HttpStatus.INTERNAL_SERVER_ERROR));
 
-		PgHistoryResult result = adapter.readHistory(payment, PgHistoryScope.ALL);
+		PgHistoryResult result = adapter.readHistory(payment, PgHistoryScope.ALL, PgCallSource.MEMBER_REQUEST);
 
 		assertThat(result.outcome()).isEqualTo(PgOutcome.UNKNOWN);
 	}
@@ -810,7 +812,7 @@ class GatewayAdapterTest {
 		server.expect(requestTo(RESOLVED_HISTORY_URL))
 			.andRespond(withException(new IOException("boom")));
 
-		PgHistoryResult result = adapter.readHistory(payment, PgHistoryScope.ALL);
+		PgHistoryResult result = adapter.readHistory(payment, PgHistoryScope.ALL, PgCallSource.MEMBER_REQUEST);
 
 		assertThat(result.outcome()).isEqualTo(PgOutcome.UNKNOWN);
 	}

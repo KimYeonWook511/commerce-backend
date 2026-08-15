@@ -69,7 +69,7 @@ public class ExecuteRefundUseCase {
 				refund.getId(), refund.getStatus());
 			return refund.getStatus();
 		}
-		if (refund.getAttemptSeq() != 0 && !confirmedNotSent(payment, refund)) {
+		if (refund.getAttemptSeq() != 0 && !confirmedNotSent(payment, refund, source)) {
 			return refund.getStatus();
 		}
 
@@ -118,8 +118,8 @@ public class ExecuteRefundUseCase {
 	 *
 	 * @return 이력에 그 시도가 없음을 확인했으면 true
 	 */
-	private boolean confirmedNotSent(Payment payment, Refund refund) {
-		PgHistoryResult history = paymentGatewayPort.readHistory(payment, PgHistoryScope.REFUND_ONLY);
+	private boolean confirmedNotSent(Payment payment, Refund refund, PgCallSource source) {
+		PgHistoryResult history = paymentGatewayPort.readHistory(payment, PgHistoryScope.REFUND_ONLY, source);
 		if (history.outcome() != PgOutcome.SUCCEEDED) {
 			log.warn("이력을 읽지 못해 환불을 보내지 않는다 refundId={} 사유={}", refund.getId(), history.message());
 			return false;
@@ -163,7 +163,7 @@ public class ExecuteRefundUseCase {
 
 		PgRefundResult result = paymentGatewayPort.refund(payment, refund, source);
 		try {
-			return apply(payment, refund, result);
+			return apply(payment, refund, result, source);
 		} finally {
 			recordCallResult(callLog, result);
 		}
@@ -187,7 +187,7 @@ public class ExecuteRefundUseCase {
 	 * 결제사 답이 어느 전이로 가는지를 정한다. 다시 시도할 수 있는 실패는 상태를 그대로 두고 시도
 	 * 번호만 올려 다음 호출이 새 키로 나가게 한다 — 환불에는 실패로 끝나는 종착이 없다.
 	 */
-	private RefundStatus apply(Payment payment, Refund refund, PgRefundResult result) {
+	private RefundStatus apply(Payment payment, Refund refund, PgRefundResult result, PgCallSource source) {
 		return switch (result.outcome()) {
 			case SUCCEEDED -> transition(refund,
 				() -> refundService.complete(refund.getId(), result.pgTransactionId()), RefundStatus.SUCCEEDED);
@@ -195,7 +195,7 @@ public class ExecuteRefundUseCase {
 				() -> refundService.markUnknown(refund.getId()), RefundStatus.UNKNOWN);
 			case RETRYABLE_FAILURE -> transition(refund,
 				() -> refundService.recordRetryableFailure(refund.getId()), RefundStatus.IN_PROGRESS);
-			case TERMINAL_FAILURE -> applyTerminalFailure(payment, refund, result);
+			case TERMINAL_FAILURE -> applyTerminalFailure(payment, refund, result, source);
 		};
 	}
 
@@ -207,9 +207,9 @@ public class ExecuteRefundUseCase {
 	 * <p>잔여가 0이라 "이미 취소된 결제"로 오는 답도 같은 검토 코드로 접혀 이 갈래에 함께 들어온다 —
 	 * 결제사가 어느 코드로 답할지는 검증 순서에 달렸고 명세에 없다.
 	 */
-	private RefundStatus applyTerminalFailure(Payment payment, Refund refund, PgRefundResult result) {
+	private RefundStatus applyTerminalFailure(Payment payment, Refund refund, PgRefundResult result, PgCallSource source) {
 		if (result.reviewCode() == RefundReviewCode.REFUNDABLE_AMOUNT_EXCEEDED) {
-			return settleAgainstHistory(payment, refund, result);
+			return settleAgainstHistory(payment, refund, result, source);
 		}
 		return transition(refund,
 			() -> refundService.flagForReview(refund.getId(), result.reviewCode(), result.message()),
@@ -231,8 +231,8 @@ public class ExecuteRefundUseCase {
 	 *
 	 * <p>다시 보내도 중복이 되지 않는다. 거절된 요청은 결제사가 실행하지 않아 이력에 흔적이 없다.
 	 */
-	private RefundStatus settleAgainstHistory(Payment payment, Refund refund, PgRefundResult result) {
-		PgHistoryResult history = paymentGatewayPort.readHistory(payment, PgHistoryScope.REFUND_ONLY);
+	private RefundStatus settleAgainstHistory(Payment payment, Refund refund, PgRefundResult result, PgCallSource source) {
+		PgHistoryResult history = paymentGatewayPort.readHistory(payment, PgHistoryScope.REFUND_ONLY, source);
 		if (history.outcome() != PgOutcome.SUCCEEDED) {
 			// 묻지 못한 것을 "설명되지 않는다"로 읽으면 인증 설정이 틀린 순간 멀쩡한 환불이 전부 손처리
 			// 대상이 된다. 확정하지 않고 다음 주기에 다시 집게 둔다.

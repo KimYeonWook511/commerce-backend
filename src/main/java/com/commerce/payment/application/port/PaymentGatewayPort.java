@@ -29,6 +29,11 @@ public interface PaymentGatewayPort {
 	 */
 	PgRefundResult refund(Payment payment, Refund refund, PgCallSource source);
 
-	/** 이력을 읽는다. 여러 페이지에 걸쳐 있으면 끝까지 읽는다 */
-	PgHistoryResult readHistory(Payment payment, PgHistoryScope scope);
+	/**
+	 * 이력을 읽는다. 여러 페이지에 걸쳐 있으면 끝까지 읽는다.
+	 *
+	 * <p>승인·환불 호출과 같은 이유로 부르는 자리를 함께 받는다. 배치가 회원 요청과 같은 제한 시간을
+	 * 쓰면 결제사가 느려질 때 배치 스레드가 그만큼 오래 잡혀 대사가 밀린다.
+	 */
+	PgHistoryResult readHistory(Payment payment, PgHistoryScope scope, PgCallSource source);
 }

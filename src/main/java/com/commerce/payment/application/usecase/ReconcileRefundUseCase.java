@@ -113,7 +113,7 @@ public class ReconcileRefundUseCase {
 		Payment payment = paymentRepository.findById(picked.getPaymentId())
 			.orElseThrow(() -> new PaymentException(PaymentErrorCode.PAYMENT_NOT_FOUND));
 
-		PgHistoryResult history = paymentGatewayPort.readHistory(payment, PgHistoryScope.REFUND_ONLY);
+		PgHistoryResult history = paymentGatewayPort.readHistory(payment, PgHistoryScope.REFUND_ONLY, PgCallSource.BATCH);
 		if (history.outcome() != PgOutcome.SUCCEEDED) {
 			// 조회가 거절된 것은 그 취소가 없다는 뜻이 아니라 우리가 제대로 묻지 못했다는 뜻이다. 빈 목록과
 			// 같게 다루면 그 자리에서 다시 보내게 되어, 이중환불을 막던 확인이 통째로 무력해진다.

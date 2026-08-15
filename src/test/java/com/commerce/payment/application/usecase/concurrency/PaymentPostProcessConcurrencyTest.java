@@ -131,7 +131,7 @@ class PaymentPostProcessConcurrencyTest {
 	void reconcile_whenTwoCyclesPickTheSamePayment_settlesItOnce() throws InterruptedException {
 		Payment payment = unknownPayment();
 		Order order = orderPersistence.findById(payment.getOrderId()).orElseThrow();
-		given(paymentGatewayPort.readHistory(any(), any())).willReturn(PgHistoryResult.succeeded(
+		given(paymentGatewayPort.readHistory(any(), any(), any())).willReturn(PgHistoryResult.succeeded(
 			List.of(new PgHistoryEntry(PgHistoryEntryType.APPROVAL, true, payment.getAmount(),
 				LocalDateTime.now(), payment.getPaymentKey(), null, PG_TRANSACTION_ID)), "성공"));
 
