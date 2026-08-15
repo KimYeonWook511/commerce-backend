@@ -148,10 +148,16 @@ class CancelOrderUseCaseIntegrationTest {
 		Fixture fixture = paidOrder();
 		givenGatewaySucceeds();
 
-		cancelOrderUseCase.cancel(fixture.memberId(), fixture.orderId(), "cancel-key-2");
-		assertThatThrownBy(() ->
-			cancelOrderUseCase.cancel(fixture.memberId(), fixture.orderId(), "cancel-key-2"))
-			.isInstanceOf(OrderException.class);
+		OrderCancelResult first = cancelOrderUseCase.cancel(
+			fixture.memberId(), fixture.orderId(), "cancel-key-2");
+		OrderCancelResult second = cancelOrderUseCase.cancel(
+			fixture.memberId(), fixture.orderId(), "cancel-key-2");
+
+		// 같은 요청 키의 재요청은 앞선 결과를 그대로 돌려준다. 응답이 유실되어 회원이 다시 보낸 경우다.
+		assertThat(second.getStatus()).isEqualTo(OrderStatus.CANCELED);
+		assertThat(second.getRefundStatus()).isEqualTo(first.getRefundStatus());
+		assertThat(second.getRefundedAmount()).isEqualTo(first.getRefundedAmount());
+		assertThat(second.getRemainingAmount()).isEqualTo(first.getRemainingAmount());
 
 		assertThat(refundPersistence.findAll()).hasSize(1);
 		then(paymentGatewayPort).should().refund(any(), any(), any());

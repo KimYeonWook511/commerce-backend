@@ -97,6 +97,24 @@ public class CancelPaidOrderService {
 		return new CancelPaidOrderResult(order, payment, savedRefund, payment.remainingRefundableAmount());
 	}
 
+	/**
+	 * 이미 취소된 주문에 같은 요청 키가 다시 왔을 때 앞선 결과를 찾는다. 응답이 유실되어 회원이 다시
+	 * 보낸 경우이며, 그 키로 만들어진 환불이 곧 이 요청의 결과다.
+	 *
+	 * <p>요청 키로 좁히므로 다른 요청이 만든 환불이 돌아오지 않는다. 조회 범위는 환불을 만들 때 쓰는
+	 * 것과 같은 결제·요청자·요청 키 셋이다.
+	 */
+	@Transactional(readOnly = true)
+	public Optional<CancelPaidOrderResult> findPreviousCancel(Order order, Long memberId, String idempotencyKey) {
+		return paymentRepository.findSucceededByMemberIdAndOrderId(memberId, order.getId())
+			.filter(payment -> payment.getApprovedAmount() != null)
+			.flatMap(payment -> refundRepository
+				.findByPaymentIdAndRequesterAndIdempotencyKey(
+					payment.getId(), RefundRequester.MEMBER, idempotencyKey)
+				.map(refund -> new CancelPaidOrderResult(
+					order, payment, refund, payment.remainingRefundableAmount())));
+	}
+
 	private void restoreStock(Order order) {
 		List<OrderItem> sortedItems = order.getOrderItems().stream()
 			.sorted(Comparator.comparing(OrderItem::getProductId))
