@@ -22,6 +22,14 @@ public interface JpaRefundRepository extends JpaRepository<Refund, Long> {
 
 	Optional<Refund> findByPaymentIdAndRequester(Long paymentId, RefundRequester requester);
 
+	@Query("""
+		SELECT r FROM Refund r
+		WHERE r.paymentId = :paymentId
+		  AND r.status IN ('IN_PROGRESS', 'UNKNOWN')
+		ORDER BY r.id ASC
+		""")
+	List<Refund> findUnsettledByPaymentId(@Param("paymentId") Long paymentId);
+
 	// 발송 대상에는 시간 조건이 없다. 이 상태로 오는 것은 한 번도 안 부른 건과 사람이 되살린 건뿐이라
 	// 되풀이 나갈 자리가 없고, 재전송의 백오프는 대사 쪽에 있다.
 	@Query("""

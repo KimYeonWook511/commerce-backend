@@ -37,6 +37,15 @@ public interface RefundRepository {
 	Optional<Refund> findSystemRefundByPaymentId(Long paymentId);
 
 	/**
+	 * 그 결제에서 아직 결과를 모르는 환불들. 환불 가능 금액 초과 거절의 원인이 그중 하나가 실제로 완료된
+	 * 것인지 이력으로 가릴 때 읽는다.
+	 *
+	 * <p>합계를 세지 않는다. 한도 판정은 결제 행의 누적 환불액만 읽고, 이 조회가 돌려주는 것은 이력의
+	 * 취소 항목을 설명할 후보다.
+	 */
+	List<Refund> findUnsettledByPaymentId(Long paymentId);
+
+	/**
 	 * 아직 한 번도 안 나갔거나 사람이 되살려 보낼 차례인 환불.
 	 * 시간 조건이 없다 — 회원 돈이라 늦출 이유가 없고, 재전송은 이 상태를 지나가지 않아 폭주하지 않는다.
 	 */

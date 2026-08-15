@@ -97,6 +97,30 @@ public class RefundService {
 	}
 
 	/**
+	 * 대사가 이 건을 집었다. 확정했든 못 했든, 그 자리에서 다시 불렀든 회차가 오른다.
+	 *
+	 * <p>결제사를 부르기 전에 따로 커밋한다. 결과 반영과 한 트랜잭션으로 묶으면 호출이나 응답 처리가
+	 * 깨졌을 때 집은 사실까지 함께 롤백되어 회차가 오르지 않고, 그러면 다시 집는 간격이 첫 값에 머물러
+	 * 장애가 길어질수록 결제사를 더 세게 두드린다.
+	 *
+	 * <p>이 저장에 지면 부르는 쪽이 물러난다 — 진 것이 곧 "다른 주기가 이미 집었다"는 뜻이다.
+	 */
+	@Transactional
+	public Refund recordReconciled(Long id, LocalDateTime pickedAt) {
+		Refund refund = load(id);
+		refund.recordReconciled(pickedAt);
+		return refundRepository.saveChecked(refund);
+	}
+
+	/** 통지를 보낸 뒤에 남긴다. 먼저 남기면 전송이 실패했을 때 알린 것으로 남아 다시 알리지 않는다 */
+	@Transactional
+	public void recordNotified(Long id, LocalDateTime notifiedAt) {
+		Refund refund = load(id);
+		refund.recordNotified(notifiedAt);
+		refundRepository.saveChecked(refund);
+	}
+
+	/**
 	 * 단위작업은 내부 식별자로 다시 로드한다. 밖에서 온 값으로 한 건을 집는 조회는 소유 확인이 새지
 	 * 않았는지 대조하는 기준이라 그 개수를 늘리지 않는다.
 	 */
