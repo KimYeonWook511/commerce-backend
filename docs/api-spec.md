@@ -736,14 +736,29 @@
 설명:
 - 회원이 자신의 주문을 취소합니다. `INIT`(결제 전)과 `PAID`(결제 완료) 주문을 취소할 수 있습니다.
 - `INIT` 취소: 재고만 복구합니다(환불 없음).
-- `PAID` 취소: 주문을 `CANCELED`로 전이하고 재고를 전량 복구하며 전액 환불합니다. 환불 의도는 취소와 단일 tx로 영속화되고(취소 접수 시점에 보장), 실제 PG 환불은 best-effort로 실행되어 실패·불확실·중단은 CANCEL 대사가 마무리합니다.
+- `PAID` 취소: 주문을 `CANCELED`로 전이하고 재고를 전량 복구하며 전액 환불합니다. 환불 의도는 취소와 단일 tx로 영속화되고(취소 접수 시점에 보장), 실제 PG 환불은 best-effort로 실행되어 실패·불확실·중단은 환불 대사가 마무리합니다.
+- 중복 요청 방지를 위해 `Idempotency-Key` 헤더가 필요합니다.
 
 요청:
 - Path
   - `orderId`: 주문 ID
+- Header
+  - `Idempotency-Key`: 필수, 64자 이하
+- 요청 바디 없음
+
+클라이언트는 취소 요청마다 고유값을 만들고, **재시도할 때는 같은 값을 다시 보냅니다.** 값이 바뀌면 새 요청으로 처리되어 중복 방지가 무의미해집니다. 같은 값이 겹치면 안 되는 범위는 그 결제에서 회원이 요청한 환불들이며(주문 생성 키는 그 회원의 주문들), 취소 쪽 범위가 더 좁으므로 주문 생성용 키 생성기를 그대로 써도 됩니다.
 
 응답:
-- `refundStatus`: 환불 진행 상태. `NONE`(INIT 취소, 환불 없음) / `COMPLETED`(PG 환불 완료) / `IN_PROGRESS`(환불 처리 중 — 대사가 마무리).
+- `refundStatus`: 환불 진행 상태. `NONE` / `COMPLETED` / `IN_PROGRESS` 셋뿐이며, 내부 환불 상태 다섯이 아래처럼 접힙니다.
+
+  | 내부 환불 상태 | `refundStatus` |
+  | --- | --- |
+  | (환불 없음 — 결제 전 취소) | `NONE` |
+  | `SUCCEEDED` | `COMPLETED` |
+  | `REQUESTED` · `IN_PROGRESS` · `UNKNOWN` · `MANUAL_REVIEW` | `IN_PROGRESS` |
+
+- `refundedAmount`: 이번 요청으로 환불되는 금액. 주문 총액도, 그 결제의 누적 환불액도 아닙니다.
+- `remainingAmount`: 앞으로 더 취소할 수 있는 금액(`승인 금액 − 누적 환불액`). 결과를 모르는 환불도 한도를 이미 잡고 있어 여기서 빠지므로, "아직 안 돌아온 돈"이 아니라 취소 가능 금액입니다. 결제 전 취소는 승인 금액이 없어 0입니다.
 
 ```json
 {
@@ -752,28 +767,38 @@
   "data": {
     "orderId": 1,
     "status": "CANCELED",
-    "refundStatus": "COMPLETED"
+    "refundStatus": "COMPLETED",
+    "refundedAmount": 10000,
+    "remainingAmount": 0
   }
 }
 ```
 
+같은 `Idempotency-Key`로 다시 요청하면 새 환불을 만들지 않고 앞서 만든 환불의 결과를 그대로 응답합니다(실패가 아닙니다). 결제사를 다시 부르지도 않습니다.
+
 실패:
 - 본인 주문이 아니거나 없으면 주문을 찾을 수 없음으로 응답합니다.
 - 취소 불가 상태(이미 CANCELED 등)는 거부합니다.
-- `PAID`인데 미확정(UNKNOWN/REQUESTED) 승인 결제가 떠 있으면 환불 불가로 거부하며, 환불 대상(SUCCEEDED 승인)이 없는 정합성 오류도 거부합니다(취소를 강행하지 않음).
+- `PAID`인데 승인 결과를 모르는 결제가 걸려 있으면 환불 불가로 거부하며, 환불 대상(성공한 승인)이 없는 정합성 오류도 거부합니다(취소를 강행하지 않음).
+- `400 INVALID_REQUEST`: `Idempotency-Key` 헤더 누락·빈 값 또는 64자 초과
+- `400 REFUND_IDEMPOTENCY_KEY_CONFLICT`: 같은 `Idempotency-Key`에 내용이 다른 환불 요청이 왔습니다. 앞 환불을 그대로 돌려주면 요청한 환불이 실행되지 않았는데 성공 응답이 나가므로 거부합니다.
+- `409 ORDER_CANCEL_IN_PROGRESS`: 같은 `Idempotency-Key`로 다른 요청이 처리 중. 클라이언트는 backoff 후 재시도 권장.
 - PG 환불 실행 실패·불확실은 취소 접수를 무르지 않습니다(`refundStatus=IN_PROGRESS`, 대사가 마무리).
 
 ## 결제
 
-### `POST /payments/reserve` (구 `/payments/ready`)
+### `POST /payments`
 
 설명:
-- 결제창 준비 (예약). 유효한 `PaymentReservation` (`status=RESERVED ∧ expiresAt>now ∧ provider·memberId·amount 일치`) 이 있으면 재사용, 없으면 새 `RESERVED` 행 발급합니다.
-- 서버가 merchantPayKey 를 발급하고 `PaymentReservation` 에 저장합니다. 클라이언트 발급 금지.
-- **호환 깨는 변경**: URL `POST /payments/ready` → `POST /payments/reserve` (frontend 미개발이라 무방). DTO class 이름만 rename (`PaymentReadyRequest` → `ReservePaymentRequest`, `PaymentReadyResponse` → `ReservePaymentResponse`). 응답 본문 구조 동일.
-- UNKNOWN 행 있는 주문 요청은 `PAYMENT_RESULT_PENDING` (409) 으로 차단합니다.
+- 결제를 시작합니다. 결제 행을 하나 만들고 결제창을 여는 데 필요한 값을 돌려줍니다. 이 행이 그 주문의 활성 결제 자리를 잡아 이중결제를 막습니다.
+- 서버가 결제 키(`merchantPayKey`)를 발급합니다. 클라이언트 발급 금지.
+- 요청한 회원의 주문만 결제할 수 있습니다. 남의 주문 번호를 실으면 주문을 찾을 수 없음으로 거부하며, 그 주문이 있는지조차 드러내지 않습니다.
+- 그 주문에 앞 결제가 살아 있어도 아직 승인을 부르지 않았다면 그 결제를 종결하고 새 결제가 자리를 이어받습니다. 승인을 부른 뒤라면 결과가 정해질 때까지 새 결제를 막습니다.
+- 중복 요청 방지를 위해 `Idempotency-Key` 헤더가 필요합니다.
 
 요청:
+- Header
+  - `Idempotency-Key`: 필수, 64자 이하
 - Body
 
 ```json
@@ -784,7 +809,11 @@
 ```
 
 - `orderId`: 주문 ID, 양의 정수, 필수
-- `provider`: `PaymentProvider` enum 값, 필수
+- `provider`: `PaymentPg` enum 값, 필수
+
+클라이언트는 결제 시작 요청마다 고유값을 만들고, **재시도할 때는 같은 값을 다시 보냅니다** — 그래야 결제창이 한 번만 열립니다. 같은 값이 겹치면 안 되는 범위는 그 회원의 결제들입니다. **값을 화면·세션 단위로 붙들어 두면 안 됩니다** — 다른 주문의 결제를 시작할 때 그 값이 다시 나가면 서버가 거부합니다. 값을 새로 만드는 단위는 "이 주문을 결제하겠다"는 한 번의 의사이고, 재시도는 그 안에서 같은 값을 다시 쓰는 것입니다.
+
+같은 `Idempotency-Key`로 다시 요청하면 새 결제를 만들지 않고 앞서 만든 결제의 결제창 정보를 그대로 응답합니다. 서버 쪽 방어가 겨냥하는 것은 끊긴 연결 뒤의 재전송이며, 버튼 연타는 클라이언트가 버튼을 막아 해결합니다.
 
 응답 (200):
 
@@ -807,9 +836,14 @@
 ```
 
 실패 응답:
-- `PAYMENT_RESULT_PENDING` (409): 해당 주문에 UNKNOWN 상태의 Payment 시도가 있어 차단
+- `400 INVALID_REQUEST`: `Idempotency-Key` 헤더 누락·빈 값 또는 64자 초과
+- `400 PAYMENT_IDEMPOTENCY_KEY_CONFLICT`: 같은 `Idempotency-Key`에 다른 주문·다른 금액이 실려 왔습니다. 앞 결제를 그대로 돌려주면 회원이 그 결제창에서 인증해 엉뚱한 주문이 결제되므로 거부합니다.
+- `400 PAYMENT_PG_NOT_SUPPORTED`: 지원하지 않는 `provider`
+- `409 PAYMENT_REQUEST_IN_PROGRESS`: 같은 요청이 처리 중. 같은 `Idempotency-Key`가 동시에 닿았거나, 같은 주문에 결제 시작이 동시에 와 활성 결제 자리를 다른 요청이 먼저 잡은 경우입니다. 클라이언트는 backoff 후 재시도 권장.
+- `409 PAYMENT_RESULT_PENDING`: 그 주문에 승인 결과가 정해지지 않은 결제가 있어 차단
+- `409 PAYMENT_DUPLICATE`: 이미 성공한 결제가 있는 주문
 - `ORDER-404`: 주문 미존재 또는 다른 회원 주문
-- `ORDER-409-1`: 결제 불가 주문 상태 (`checkPayable` 실패)
+- 결제 불가 주문 상태(이미 결제 완료·취소된 주문 등)는 거부합니다.
 
 ### `GET /payments/naverpay/return`
 
@@ -823,7 +857,6 @@
   - `resultCode`: 필수
   - `resultMessage`: 선택
   - `paymentId`: 선택
-  - `reserveId`: 선택
 
 응답:
 - 현재 별도 응답 바디 없음
@@ -831,12 +864,11 @@
 ### `POST /payments/naverpay/approve`
 
 설명:
-- PG redirect 후 승인 처리. `PaymentReservation.merchantPayKey` 기반으로 역조회하여 승인을 진행합니다. Order 를 거치지 않습니다.
-- **조회 단일화**: Reservation 은 `(memberId, merchantPayKey)` 로 역조회합니다. 다른 회원의/없는 `merchantPayKey` 는 모두 `PAYMENT_RESERVATION_NOT_FOUND` (404) 가 되어 키 존재 여부를 노출하지 않습니다.
-- **멱등 응답**: 같은 `merchantPayKey`·**같은 `pgPaymentId`** 의 redirect 가 중복 도착하고 `status=USED` Reservation 이 발견되면, 차단이 아닌 *기존 결제 결과 200 응답* 으로 흡수합니다. USED 예약에 **다른 `pgPaymentId`** 로 들어오면 이미 소비된 예약 재사용이므로 `PAYMENT_RESERVATION_ALREADY_USED` (409) 로 차단합니다.
-- UNKNOWN 행 있는 주문 요청은 `PAYMENT_RESULT_PENDING` (409) 으로 차단합니다.
-- 이미 성공(APPROVE·SUCCEEDED)한 결제가 있는 주문에 새 승인이 진입하면 PG 호출 전에 `PAYMENT_DUPLICATE` (409) 로 차단합니다.
-- 같은 예약에 다른 `pgPaymentId` 승인이 동시에 들어오면 한쪽만 진행하고 진 쪽은 PG 호출 전에 `PAYMENT_RESERVATION_ALREADY_USED` (409) 로 차단됩니다.
+- PG redirect 후 승인 처리. 결제 키(`merchantPayKey`)로 결제를 역조회하여 승인을 진행합니다. Order 를 거치지 않습니다.
+- **조회 단일화**: 결제는 `(memberId, merchantPayKey)` 로 역조회합니다. 다른 회원의/없는 키는 모두 `PAYMENT_NOT_FOUND` (404) 가 되어 키 존재 여부를 노출하지 않습니다.
+- **멱등 응답**: 이미 승인이 성공한 결제로 redirect 가 중복 도착하면 차단이 아닌 *기존 승인 결과 200 응답* 으로 흡수합니다.
+- 승인을 부른 뒤 결과가 정해지지 않은 결제는 `PAYMENT_RESULT_PENDING` (409) 으로 차단합니다. 승인을 호출하고 응답을 기다리는 중인 경우와 응답을 못 받아 결과 불명으로 남은 경우를 가르지 않습니다 — 회원이 할 일이 "결과를 기다리기"로 같고, 내부 상태를 응답으로 드러내지 않습니다.
+- 이미 종결된 결제 시도(실패·반려·만료)로 승인이 돌아오면 결제사를 부르지 않고 `PAYMENT_ATTEMPT_CLOSED` (409) 로 차단합니다. 우리가 종결해도 결제사 쪽 예약은 살아 있어 옛 결제창의 인증이 돌아올 수 있습니다.
 
 요청:
 - Body
@@ -844,12 +876,12 @@
 ```json
 {
   "merchantPayKey": "PAY-01HXXX...",
-  "pgPaymentId": "naver-pg-id-xxx"
+  "paymentId": "naver-pg-id-xxx"
 }
 ```
 
-- `merchantPayKey`: 64 자 이내, 필수
-- `pgPaymentId`: 64 자 이내, 필수
+- `merchantPayKey`: blank 불가, 필수 — 서버가 발급한 결제 키
+- `paymentId`: blank 불가, 필수 — 결제사가 발급한 결제 번호
 
 응답 (200):
 
@@ -864,20 +896,31 @@
 }
 ```
 
-멱등 응답 동작:
-- USED Reservation 발견 시 기존 `Payment(type=APPROVE, status=SUCCEEDED)` 의 결과를 그대로 반환합니다.
-- 차단/에러 응답이 아닙니다. PG redirect 의 *한 번 = 한 번* 정신에 따라 같은 키 중복은 *동일 결과 재반환* 으로 처리합니다 (→ PR#205).
+- 승인이 확정됐을 때만 본문이 나갑니다. 확정하지 못한 경우는 전부 실패 응답입니다 — 결과를 모른 채 성공도 실패도 아닌 값을 본문에 담으면 회원이 그것을 결제 완료로 읽습니다.
 
 실패 응답:
-- `PAYMENT_RESULT_PENDING` (409): 해당 주문에 UNKNOWN 상태의 Payment 시도가 있어 차단
-- `PAYMENT_RESERVATION_NOT_FOUND` (404): `(memberId, merchantPayKey)` 로 Reservation 미발견 — 없는 키 또는 다른 회원의 키 (키 존재 비노출)
-- `PAYMENT_DUPLICATE` (409): 이미 성공한 결제가 있는 주문에 새 승인 진입 — PG 호출 전 차단
-- `PAYMENT_RESERVATION_ALREADY_USED` (409): 같은 예약을 다른 pgPaymentId 로 동시/순차 재사용 — PG 호출 전 차단
+- `PAYMENT_NOT_FOUND` (404): `(memberId, merchantPayKey)` 로 결제 미발견 — 없는 키 또는 다른 회원의 키 (키 존재 비노출)
+- `PAYMENT_RESULT_PENDING` (409): 승인 결과가 정해지지 않음
+- `PAYMENT_ATTEMPT_CLOSED` (409): 종결된 결제 시도로 승인이 돌아옴
+- `PAYMENT_APPROVAL_FAILED` (409): 결제사가 승인을 거절
+- `PAYMENT_AMOUNT_MISMATCH` (409): 승인 금액이 주문 금액과 다름
+- `PAYMENT_ALREADY_CANCELED` (409): 승인 뒤 이미 취소된 결제
+- `PAYMENT_KEY_MISMATCH` (409): 승인 응답에 실려 온 결제 키가 이 결제의 것이 아님
+- `PAYMENT_DUPLICATE` (409): 이미 결제가 완료된 주문
 
-### 새 응답 코드 (payment-order-redesign 추가)
+### 결제 응답 코드
 
 | 코드 | HTTP | 의미 |
 |---|---|---|
-| `PAYMENT_RESULT_PENDING` | 409 | 해당 주문에 UNKNOWN 상태의 Payment 시도가 있어 reserve/approve 차단. 사용자에게 "결제 결과 확인 중" 안내 |
-| `PAYMENT_DUPLICATE` | 409 | 이미 성공(APPROVE·SUCCEEDED)한 결제가 있는 주문에 새 승인 진입 — PG 호출 전 진입 가드 차단 또는 `uk_payment_approved_order_key` 위반(최종 보루) |
-| `PAYMENT_RESERVATION_ALREADY_USED` | 409 | 같은 예약(merchantPayKey)을 다른 pgPaymentId 로 동시/순차 재사용 — PG 호출 전 차단 |
+| `PAYMENT_REQUEST_IN_PROGRESS` | 409 | 같은 요청이 이미 처리 중. 같은 멱등키가 동시에 닿았거나 같은 주문의 활성 결제 자리를 다른 요청이 먼저 잡음. 사용자에게 "잠시 후 다시" 안내 |
+| `PAYMENT_RESULT_PENDING` | 409 | 승인을 부른 뒤 결과가 정해지지 않은 결제가 그 주문에 있음. 결제 시작과 승인을 함께 차단하며, 사용자에게 "결제 결과 확인 중" 안내. 결제 대사가 이력을 조회해 확정합니다 |
+| `PAYMENT_DUPLICATE` | 409 | 이미 결제가 완료된 주문에 새 결제·승인 진입 |
+| `PAYMENT_ATTEMPT_CLOSED` | 409 | 실패·반려·만료로 종결된 결제 시도로 승인이 돌아옴. 결제를 다시 시작해야 합니다 |
+| `PAYMENT_APPROVAL_FAILED` | 409 | 결제사가 승인을 거절 |
+| `PAYMENT_AMOUNT_MISMATCH` | 409 | 승인 금액이 주문 금액과 다름 — 그 결제는 반려로 종결됩니다 |
+| `PAYMENT_ALREADY_CANCELED` | 409 | 승인이 성립했으나 그 뒤 취소된 결제 |
+| `PAYMENT_KEY_MISMATCH` | 409 | 승인 응답의 결제 키가 이 결제의 것이 아님 |
+| `PAYMENT_NOT_FOUND` | 404 | 결제 미발견 — 없는 키 또는 다른 회원의 키 |
+| `PAYMENT_IDEMPOTENCY_KEY_CONFLICT` | 400 | 같은 결제 멱등키로 내용이 다른 요청이 옴 |
+| `REFUND_IDEMPOTENCY_KEY_CONFLICT` | 400 | 같은 환불 멱등키로 내용이 다른 요청이 옴 |
+| `PAYMENT_PG_NOT_SUPPORTED` | 400 | 지원하지 않는 결제 수단 |
