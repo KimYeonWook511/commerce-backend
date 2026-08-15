@@ -10,8 +10,10 @@ import org.junit.jupiter.api.AfterEach;
 import org.junit.jupiter.api.BeforeEach;
 import org.junit.jupiter.api.DisplayName;
 import org.junit.jupiter.api.Test;
+import org.springframework.dao.CannotAcquireLockException;
 import org.springframework.dao.DataAccessException;
 import org.springframework.dao.DataIntegrityViolationException;
+import org.springframework.dao.DeadlockLoserDataAccessException;
 import org.springframework.dao.OptimisticLockingFailureException;
 import org.springframework.http.HttpStatus;
 import org.springframework.http.ResponseEntity;
@@ -19,6 +21,7 @@ import org.springframework.http.converter.HttpMessageNotReadableException;
 import org.springframework.validation.BindingResult;
 import org.springframework.web.bind.MethodArgumentNotValidException;
 
+import com.commerce.common.ApiResponse;
 import com.commerce.member.domain.exception.MemberErrorCode;
 
 import ch.qos.logback.classic.Level;
@@ -180,6 +183,31 @@ class GlobalExceptionHandlerTest {
 	}
 
 	@Test
+	@DisplayName("락 대기 타임아웃과 데드락은 일반 DAO 오류와 구분된 코드로 남는다")
+	void handlePessimisticLockingFailureException_separatesLockContention() {
+		// Given: 락 대기 타임아웃과 데드락이 그 아래에 함께 걸린다
+		CannotAcquireLockException waitTimeout = new CannotAcquireLockException("락 대기 시간 초과");
+		DeadlockLoserDataAccessException deadlock =
+			new DeadlockLoserDataAccessException("데드락", new RuntimeException("cause"));
+
+		// When
+		ResponseEntity<ApiResponse<Void>> timeoutResponse =
+			handler.handlePessimisticLockingFailureException(waitTimeout);
+		ResponseEntity<ApiResponse<Void>> deadlockResponse =
+			handler.handlePessimisticLockingFailureException(deadlock);
+
+		// Then: 회원 응답 상태는 기존 실패 그대로이고 코드만 갈린다
+		assertThat(timeoutResponse.getStatusCode()).isEqualTo(HttpStatus.INTERNAL_SERVER_ERROR);
+		assertThat(deadlockResponse.getStatusCode()).isEqualTo(HttpStatus.INTERNAL_SERVER_ERROR);
+		assertThat(timeoutResponse.getBody().getCode())
+			.isEqualTo(CommonErrorCode.LOCK_ACQUISITION_FAILED.getCode())
+			.isNotEqualTo(CommonErrorCode.DATA_ACCESS_ERROR.getCode());
+		assertThat(listAppender.list).hasSize(2);
+		assertThat(listAppender.list.get(0).getLevel()).isEqualTo(Level.ERROR);
+		assertThat(listAppender.list.get(0).getThrowableProxy()).isNotNull();
+	}
+
+	@Test
 	@DisplayName("각 핸들러의 응답 status 코드가 변경되지 않는다")
 	void allHandlers_responseStatusUnchanged() {
 		// Given
@@ -204,6 +232,8 @@ class GlobalExceptionHandlerTest {
 		assertThat(handler.handleDataIntegrityViolationException(new DataIntegrityViolationException("무결성 위반"))
 			.getStatusCode()).isEqualTo(HttpStatus.INTERNAL_SERVER_ERROR);
 		assertThat(handler.handleDataAccessException(new DataAccessException("DAO 오류") {})
+			.getStatusCode()).isEqualTo(HttpStatus.INTERNAL_SERVER_ERROR);
+		assertThat(handler.handlePessimisticLockingFailureException(new CannotAcquireLockException("락 대기"))
 			.getStatusCode()).isEqualTo(HttpStatus.INTERNAL_SERVER_ERROR);
 	}
 }

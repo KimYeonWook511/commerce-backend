@@ -49,14 +49,16 @@ DB find → 없으면 insert → 충돌 시 500
 ```
 DataAccessException (부모 핸들러, COMMON-500-2)
 ├─ DataIntegrityViolationException (COMMON-500-1)            ← unique / NOT NULL / FK / CHECK
-└─ OptimisticLockingFailureException (COMMON-409-1)           ← 409 (낙관적 락 정상 시나리오)
+├─ OptimisticLockingFailureException (COMMON-409-1)           ← 409 (낙관적 락 정상 시나리오)
+└─ PessimisticLockingFailureException (COMMON-500-3)          ← 락 대기 타임아웃 / 데드락
 ```
 
-- Spring `@ExceptionHandler` 는 가장 구체적인 타입을 먼저 매칭한다. 두 구체 핸들러(`DataIntegrityViolationException`, `OptimisticLockingFailureException`) 가 우선 매칭되고, 부모 `DataAccessException` 핸들러는 그 외 DAO 예외(`BadSqlGrammarException`, `CannotAcquireLockException`, `DataAccessResourceFailureException` 등) 만 받는다.
+- Spring `@ExceptionHandler` 는 가장 구체적인 타입을 먼저 매칭한다. 세 구체 핸들러(`DataIntegrityViolationException`, `OptimisticLockingFailureException`, `PessimisticLockingFailureException`) 가 우선 매칭되고, 부모 `DataAccessException` 핸들러는 그 외 DAO 예외(`BadSqlGrammarException`, `DataAccessResourceFailureException` 등) 만 받는다.
 - unique 위반은 `DataIntegrityViolationException`(cause=Hibernate `ConstraintViolationException`) 으로 올라와 같은 핸들러에 흡수된다 (translator 빈 제거 후 형태, → PR#228).
 - `DataIntegrityViolationException` 핸들러는 unique race window 와 NOT NULL/FK/CHECK 위반을 모두 잡아 500 + stack trace 로그(`COMMON-500-1`) 를 남긴다.
 - `DataAccessException` 부모 핸들러는 DAO 카테고리 fallback 으로 500 + stack trace + `COMMON-500-2` 를 남겨 운영 모니터링에서 일반 `Exception` fallback 과 구분 가능하게 한다.
 - `OptimisticLockingFailureException` 핸들러는 낙관적 락 충돌(정상 시나리오) 을 409 로 유지한다.
+- `PessimisticLockingFailureException` 핸들러는 비관적 락 경합 실패를 500 + stack trace + `COMMON-500-3` 으로 남긴다. 하위인 `CannotAcquireLockException`(락 대기 타임아웃) 과 `DeadlockLoserDataAccessException`(데드락) 이 함께 걸린다. 삼키지 않으므로 rollback 동작과 회원 응답 상태코드는 그대로다.
 
 > **왜 unique 위반은 500인데 낙관 락 충돌은 409인가** — 둘 다 동시성 충돌이지만 의미가 반대다.
 > unique race는 find-first를 제대로 썼다면 정상 흐름에선 거의 안 나야 하는 것이라, 나면 코드 버그처럼
