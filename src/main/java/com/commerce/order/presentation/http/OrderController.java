@@ -30,6 +30,12 @@ import lombok.RequiredArgsConstructor;
 @RequestMapping("/orders")
 public class OrderController {
 
+	/**
+	 * 멱등키 길이 상한. 넘으면 잘라 담지 않고 거절한다 — 앞부분이 같고 뒤만 다른 두 요청이 하나로 접히면
+	 * 뒤 요청이 앞 요청의 결과를 받는다.
+	 */
+	private static final int IDEMPOTENCY_KEY_MAX_LENGTH = 64;
+
 	private final CreateOrderUseCase createOrderUseCase;
 	private final CancelOrderUseCase cancelOrderUseCase;
 
@@ -62,9 +68,15 @@ public class OrderController {
 	@PostMapping("/{orderId}/cancel")
 	public ResponseEntity<ApiResponse<OrderCancelResult>> cancelOrder(
 		@AuthenticatedMemberId Long memberId,
-		@PathVariable Long orderId
+		@PathVariable Long orderId,
+		@RequestHeader(value = "Idempotency-Key", required = false) String idempotencyKey
 	) {
-		OrderCancelResult result = cancelOrderUseCase.cancel(memberId, orderId);
+		// 헤더가 없을 때도 ApiResponse 형태로 답하려고 required=false 로 받아 여기서 검증한다.
+		if (!StringUtils.hasText(idempotencyKey) || idempotencyKey.length() > IDEMPOTENCY_KEY_MAX_LENGTH) {
+			throw new CommonException(CommonErrorCode.INVALID_REQUEST);
+		}
+
+		OrderCancelResult result = cancelOrderUseCase.cancel(memberId, orderId, idempotencyKey);
 		return ResponseEntity.status(HttpStatus.OK).body(ApiResponse.of(result));
 	}
 }

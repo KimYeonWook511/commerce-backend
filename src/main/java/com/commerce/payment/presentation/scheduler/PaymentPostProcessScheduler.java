@@ -4,6 +4,7 @@ import org.springframework.context.annotation.Profile;
 import org.springframework.scheduling.annotation.Scheduled;
 import org.springframework.stereotype.Component;
 
+import com.commerce.payment.application.usecase.DispatchRefundUseCase;
 import com.commerce.payment.application.usecase.ExpirePaymentUseCase;
 import com.commerce.payment.application.usecase.NotifyPaymentUseCase;
 import com.commerce.payment.application.usecase.ReconcilePaymentUseCase;
@@ -23,6 +24,16 @@ public class PaymentPostProcessScheduler {
 	private final ReconcilePaymentUseCase reconcilePaymentUseCase;
 	private final NotifyPaymentUseCase notifyPaymentUseCase;
 	private final ExpirePaymentUseCase expirePaymentUseCase;
+	private final DispatchRefundUseCase dispatchRefundUseCase;
+
+	/**
+	 * 아직 안 나간 환불을 훑어 보낸다. 주문 취소와 승인 반려는 커밋 뒤에 한 번 부르고 마는데, 그 호출이
+	 * 실패하면 환불이 접수 상태로 남아 이 자리가 없으면 영영 안 나간다.
+	 */
+	@Scheduled(cron = "${payment.postprocess.refund.dispatch.cron:0 */1 * * * *}")
+	public void dispatchRefunds() {
+		dispatchRefundUseCase.dispatch();
+	}
 
 	@Scheduled(cron = "${payment.postprocess.reconcile.cron:0 */1 * * * *}")
 	public void reconcile() {

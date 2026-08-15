@@ -1,6 +1,7 @@
 package com.commerce.payment.infrastructure.pg.naverpay;
 
 import static org.assertj.core.api.Assertions.assertThat;
+import static org.springframework.test.web.client.match.MockRestRequestMatchers.content;
 import static org.springframework.test.web.client.match.MockRestRequestMatchers.header;
 import static org.springframework.test.web.client.match.MockRestRequestMatchers.jsonPath;
 import static org.springframework.test.web.client.match.MockRestRequestMatchers.method;
@@ -14,6 +15,7 @@ import java.net.ConnectException;
 import java.net.SocketTimeoutException;
 import java.time.LocalDateTime;
 import java.util.List;
+import java.util.Map;
 
 import org.junit.jupiter.api.BeforeEach;
 import org.junit.jupiter.api.DisplayName;
@@ -27,14 +29,20 @@ import org.springframework.test.web.client.MockRestServiceServer;
 import org.springframework.web.client.RestTemplate;
 
 import com.commerce.payment.application.port.dto.PgApproveResult;
+import com.commerce.payment.application.port.dto.PgCallSource;
 import com.commerce.payment.application.port.dto.PgHistoryEntry;
 import com.commerce.payment.application.port.dto.PgHistoryEntryType;
 import com.commerce.payment.application.port.dto.PgHistoryResult;
 import com.commerce.payment.application.port.dto.PgHistoryScope;
 import com.commerce.payment.application.port.dto.PgOutcome;
+import com.commerce.payment.application.port.dto.PgRefundResult;
 import com.commerce.payment.domain.Payment;
 import com.commerce.payment.domain.PaymentPg;
 import com.commerce.payment.domain.PgErrorType;
+import com.commerce.payment.domain.Refund;
+import com.commerce.payment.domain.RefundReason;
+import com.commerce.payment.domain.RefundRequester;
+import com.commerce.payment.domain.RefundReviewCode;
 import com.commerce.payment.infrastructure.pg.naverpay.client.GatewayClient;
 import com.fasterxml.jackson.databind.ObjectMapper;
 
@@ -42,13 +50,16 @@ import com.fasterxml.jackson.databind.ObjectMapper;
 class GatewayAdapterTest {
 
 	private static final String APPROVAL_URL = "https://test.pg/approve";
+	private static final String CANCEL_URL = "https://test.pg/cancel";
 	private static final String HISTORY_URL = "https://test.pg/history/{paymentId}";
 	private static final String PG_PAYMENT_ID = "pg-payment-1";
 	private static final String RESOLVED_HISTORY_URL = "https://test.pg/history/" + PG_PAYMENT_ID;
 	private static final String PAYMENT_KEY = "payment-key-1";
+	private static final String REFUND_KEY = "RF-0123456789abcdef0123456789abcd";
 
 	private GatewayAdapter adapter;
 	private MockRestServiceServer server;
+	private MockRestServiceServer batchServer;
 	private Payment payment;
 
 	@BeforeEach
@@ -59,15 +70,20 @@ class GatewayAdapterTest {
 		ReflectionTestUtils.setField(properties, "chainId", "chain-id");
 		ReflectionTestUtils.setField(properties, "returnUrl", "https://test.pg/return");
 		ReflectionTestUtils.setField(properties, "approvalUrl", APPROVAL_URL);
+		ReflectionTestUtils.setField(properties, "cancelUrl", CANCEL_URL);
 		ReflectionTestUtils.setField(properties, "historyUrl", HISTORY_URL);
 
 		ClientConfig clientConfig = new ClientConfig();
 		ReflectionTestUtils.setField(clientConfig, "connectTimeoutMillis", 1000);
 		ReflectionTestUtils.setField(clientConfig, "readTimeoutMillis", 1000);
+		ReflectionTestUtils.setField(clientConfig, "batchReadTimeoutMillis", 500);
 		RestTemplate restTemplate = clientConfig.pgNaverPayRestTemplate();
+		RestTemplate batchRestTemplate = clientConfig.pgNaverPayBatchRestTemplate();
 
 		server = MockRestServiceServer.bindTo(restTemplate).build();
-		adapter = new GatewayAdapter(new GatewayClient(properties, restTemplate), new ObjectMapper());
+		batchServer = MockRestServiceServer.bindTo(batchRestTemplate).build();
+		adapter = new GatewayAdapter(
+			new GatewayClient(properties, restTemplate, batchRestTemplate), new ObjectMapper());
 
 		payment = Payment.start(1L, 2L, PaymentPg.NAVERPAY, PAYMENT_KEY, "idem-1", 10_000);
 		payment.markInProgress(PG_PAYMENT_ID, LocalDateTime.now());
@@ -357,6 +373,183 @@ class GatewayAdapterTest {
 		assertThat(result.outcome()).isEqualTo(PgOutcome.UNKNOWN);
 	}
 
+	// ── 취소 호출 ────────────────────────────────────────────────
+
+	@DisplayName("취소 요청에 우리 환불 시도 키와 그 값에서 파생한 멱등키가 실린다")
+	@Test
+	void refund_whenCalled_sendsAttemptKeyAndDerivedIdempotencyKey() {
+		Refund refund = inProgressRefund(RefundRequester.MEMBER, RefundReason.ORDER_CANCELED);
+		server.expect(requestTo(CANCEL_URL))
+			.andExpect(method(HttpMethod.POST))
+			.andExpect(header("X-NaverPay-Idempotency-Key", refund.attemptKey()))
+			.andExpect(content().formDataContains(Map.of("merchantPayTransactionKey", refund.attemptKey())))
+			.andRespond(withSuccess(cancelSuccessResponse(), MediaType.APPLICATION_JSON));
+
+		adapter.refund(payment, refund, PgCallSource.MEMBER_REQUEST);
+
+		server.verify();
+	}
+
+	@DisplayName("취소 요청에 요청자와 사유가 결제사 값으로 실린다")
+	@Test
+	void refund_whenCalled_sendsRequesterAndReasonAsGatewayValues() {
+		Refund memberRefund = inProgressRefund(RefundRequester.MEMBER, RefundReason.ORDER_CANCELED);
+		server.expect(requestTo(CANCEL_URL))
+			.andExpect(content().formDataContains(Map.of("cancelRequester", "1", "cancelReason", "구매자 주문 취소")))
+			.andRespond(withSuccess(cancelSuccessResponse(), MediaType.APPLICATION_JSON));
+
+		adapter.refund(payment, memberRefund, PgCallSource.MEMBER_REQUEST);
+		server.verify();
+
+		server.reset();
+		Refund systemRefund = inProgressRefund(RefundRequester.SYSTEM, RefundReason.ORDER_NOT_PAYABLE);
+		server.expect(requestTo(CANCEL_URL))
+			.andExpect(content().formDataContains(Map.of("cancelRequester", "2", "cancelReason", "주문 상태로 결제를 받을 수 없어 취소")))
+			.andRespond(withSuccess(cancelSuccessResponse(), MediaType.APPLICATION_JSON));
+
+		adapter.refund(payment, systemRefund, PgCallSource.MEMBER_REQUEST);
+		server.verify();
+	}
+
+	@DisplayName("취소 요청에 과세·면세 금액이 나뉘어 실리고 그 합이 취소 금액과 같다")
+	@Test
+	void refund_whenCalled_splitsTaxAmountsSummingToCancelAmount() {
+		Refund refund = inProgressRefund(RefundRequester.MEMBER, RefundReason.ORDER_CANCELED);
+		server.expect(requestTo(CANCEL_URL))
+			.andExpect(content().formDataContains(
+				Map.of("cancelAmount", "10000", "taxScopeAmount", "10000", "taxExScopeAmount", "0")))
+			.andRespond(withSuccess(cancelSuccessResponse(), MediaType.APPLICATION_JSON));
+
+		adapter.refund(payment, refund, PgCallSource.MEMBER_REQUEST);
+
+		server.verify();
+	}
+
+	@DisplayName("취소 요청에 잔액 대조 값을 싣지 않는다")
+	@Test
+	void refund_whenCalled_doesNotSendBalanceCheckFields() {
+		Refund refund = inProgressRefund(RefundRequester.MEMBER, RefundReason.ORDER_CANCELED);
+		server.expect(requestTo(CANCEL_URL))
+			.andExpect(request -> assertThat(request.getBody().toString())
+				.doesNotContain("expectedRestAmount")
+				.doesNotContain("checkRestAmount"))
+			.andRespond(withSuccess(cancelSuccessResponse(), MediaType.APPLICATION_JSON));
+
+		adapter.refund(payment, refund, PgCallSource.MEMBER_REQUEST);
+
+		server.verify();
+	}
+
+	@DisplayName("취소가 성공하면 결제사 취소 거래 번호를 함께 넘긴다")
+	@Test
+	void refund_whenSucceeded_carriesTransactionId() {
+		Refund refund = inProgressRefund(RefundRequester.MEMBER, RefundReason.ORDER_CANCELED);
+		server.expect(requestTo(CANCEL_URL))
+			.andRespond(withSuccess(cancelSuccessResponse(), MediaType.APPLICATION_JSON));
+
+		PgRefundResult result = adapter.refund(payment, refund, PgCallSource.MEMBER_REQUEST);
+
+		assertThat(result.outcome()).isEqualTo(PgOutcome.SUCCEEDED);
+		assertThat(result.pgTransactionId()).isEqualTo("cancel-hist-1");
+		assertThat(result.callRecord().resultCode()).isEqualTo("Success");
+	}
+
+	@DisplayName("중복 요청 응답에 실려 온 본문이 성공이면 성공으로 확정한다")
+	@Test
+	void refund_whenDuplicateRequestBodySucceeded_foldsToSuccess() {
+		Refund refund = inProgressRefund(RefundRequester.MEMBER, RefundReason.ORDER_CANCELED);
+		server.expect(requestTo(CANCEL_URL))
+			.andRespond(withStatus(HttpStatus.CONFLICT)
+				.contentType(MediaType.APPLICATION_JSON)
+				.body(cancelSuccessResponse()));
+
+		PgRefundResult result = adapter.refund(payment, refund, PgCallSource.MEMBER_REQUEST);
+
+		assertThat(result.outcome()).isEqualTo(PgOutcome.SUCCEEDED);
+		assertThat(result.callRecord().httpStatus()).isEqualTo(409);
+	}
+
+	@DisplayName("중복 요청 응답의 본문이 실패면 성공으로 확정하지 않는다")
+	@Test
+	void refund_whenDuplicateRequestBodyFailed_doesNotFoldToSuccess() {
+		Refund refund = inProgressRefund(RefundRequester.MEMBER, RefundReason.ORDER_CANCELED);
+		server.expect(requestTo(CANCEL_URL))
+			.andRespond(withStatus(HttpStatus.CONFLICT)
+				.contentType(MediaType.APPLICATION_JSON)
+				.body(cancelResponse("Fail")));
+
+		PgRefundResult result = adapter.refund(payment, refund, PgCallSource.MEMBER_REQUEST);
+
+		assertThat(result.outcome()).isEqualTo(PgOutcome.TERMINAL_FAILURE);
+		assertThat(result.reviewCode()).isEqualTo(RefundReviewCode.REQUEST_REJECTED);
+	}
+
+	@DisplayName("앞선 취소가 처리 중이라는 거절은 다시 시도할 수 있는 실패로 접는다")
+	@Test
+	void refund_whenPreviousCancelInProgress_foldsToRetryableFailure() {
+		Refund refund = inProgressRefund(RefundRequester.MEMBER, RefundReason.ORDER_CANCELED);
+		server.expect(requestTo(CANCEL_URL))
+			.andRespond(withSuccess(cancelResponse("PreCancelNotComplete"), MediaType.APPLICATION_JSON));
+
+		PgRefundResult result = adapter.refund(payment, refund, PgCallSource.MEMBER_REQUEST);
+
+		assertThat(result.outcome()).isEqualTo(PgOutcome.RETRYABLE_FAILURE);
+		assertThat(result.reviewCode()).isNull();
+	}
+
+	@DisplayName("다시 시도할 수 없는 실패에는 검토 코드가 함께 실린다")
+	@Test
+	void refund_whenTerminalFailure_carriesReviewCode() {
+		Refund refund = inProgressRefund(RefundRequester.MEMBER, RefundReason.ORDER_CANCELED);
+		server.expect(requestTo(CANCEL_URL))
+			.andRespond(withSuccess(cancelResponse("CancelDeadlineExpired"), MediaType.APPLICATION_JSON));
+
+		PgRefundResult result = adapter.refund(payment, refund, PgCallSource.MEMBER_REQUEST);
+
+		assertThat(result.outcome()).isEqualTo(PgOutcome.TERMINAL_FAILURE);
+		assertThat(result.reviewCode()).isEqualTo(RefundReviewCode.CANCEL_DEADLINE_EXPIRED);
+	}
+
+	@DisplayName("모르는 취소 응답 코드는 실패가 아니라 결과 불명으로 접는다")
+	@Test
+	void refund_whenUnknownResultCode_foldsToUnknown() {
+		Refund refund = inProgressRefund(RefundRequester.MEMBER, RefundReason.ORDER_CANCELED);
+		server.expect(requestTo(CANCEL_URL))
+			.andRespond(withSuccess(cancelResponse("SomethingNobodyKnows"), MediaType.APPLICATION_JSON));
+
+		PgRefundResult result = adapter.refund(payment, refund, PgCallSource.MEMBER_REQUEST);
+
+		assertThat(result.outcome()).isEqualTo(PgOutcome.UNKNOWN);
+		assertThat(result.answered()).isTrue();
+	}
+
+	@DisplayName("취소 응답을 받지 못하면 답이 없었다는 사실을 함께 넘긴다")
+	@Test
+	void refund_whenNotAnswered_marksUnanswered() {
+		Refund refund = inProgressRefund(RefundRequester.MEMBER, RefundReason.ORDER_CANCELED);
+		server.expect(requestTo(CANCEL_URL))
+			.andRespond(withException(new SocketTimeoutException("read timed out")));
+
+		PgRefundResult result = adapter.refund(payment, refund, PgCallSource.MEMBER_REQUEST);
+
+		assertThat(result.outcome()).isEqualTo(PgOutcome.UNKNOWN);
+		assertThat(result.answered()).isFalse();
+		assertThat(result.callRecord().errorType()).isEqualTo(PgErrorType.TIMEOUT);
+	}
+
+	@DisplayName("배치에서 부르면 회원 요청 흐름보다 짧게 끊는 클라이언트를 쓴다")
+	@Test
+	void refund_whenCalledFromBatch_usesShorterReadTimeoutClient() {
+		Refund refund = inProgressRefund(RefundRequester.MEMBER, RefundReason.ORDER_CANCELED);
+		batchServer.expect(requestTo(CANCEL_URL))
+			.andRespond(withSuccess(cancelSuccessResponse(), MediaType.APPLICATION_JSON));
+
+		PgRefundResult result = adapter.refund(payment, refund, PgCallSource.BATCH);
+
+		assertThat(result.outcome()).isEqualTo(PgOutcome.SUCCEEDED);
+		batchServer.verify();
+	}
+
 	// ── 이력 조회 ────────────────────────────────────────────────
 
 	@DisplayName("부분취소로 기록된 항목을 환불로 읽는다")
@@ -566,6 +759,23 @@ class GatewayAdapterTest {
 	}
 
 	// ── 응답 조각 ────────────────────────────────────────────────
+
+	private Refund inProgressRefund(RefundRequester requester, RefundReason reason) {
+		Refund refund = Refund.open(7L, REFUND_KEY, requester, "IDEM-1", 10_000, reason);
+		refund.markInProgress(LocalDateTime.now());
+		ReflectionTestUtils.setField(refund, "id", 9L);
+		return refund;
+	}
+
+	private String cancelSuccessResponse() {
+		return """
+			{"code":"Success","message":"성공","body":{"paymentId":"pg-payment-1",\
+			"payHistId":"cancel-hist-1","cancelYmdt":"20260815010203","totalRestAmount":0}}""";
+	}
+
+	private String cancelResponse(String code) {
+		return "{\"code\":\"" + code + "\",\"message\":\"응답\"}";
+	}
 
 	private String approveSuccessResponse() {
 		return """

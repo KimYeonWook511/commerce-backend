@@ -44,6 +44,7 @@ payment:
       chain-id: test
       return-url: https://test
       approval-url: https://test
+      cancel-url: https://test
       history-url: https://test/{paymentId}
 
 naverpay:

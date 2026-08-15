@@ -14,9 +14,11 @@ import org.springframework.util.MultiValueMap;
 import org.springframework.web.client.ResourceAccessException;
 import org.springframework.web.client.RestTemplate;
 
+import com.commerce.payment.application.port.dto.PgCallSource;
 import com.commerce.payment.domain.PgErrorType;
 import com.commerce.payment.infrastructure.pg.naverpay.Properties;
 import com.commerce.payment.infrastructure.pg.naverpay.client.request.ApprovalType;
+import com.commerce.payment.infrastructure.pg.naverpay.client.request.CancelRequester;
 import com.commerce.payment.infrastructure.pg.naverpay.client.request.HistoryRequest;
 
 import lombok.RequiredArgsConstructor;
@@ -37,6 +39,7 @@ public class GatewayClient {
 
 	private final Properties properties;
 	private final RestTemplate pgNaverPayRestTemplate;
+	private final RestTemplate pgNaverPayBatchRestTemplate;
 
 	public GatewayExchange approve(String pgPaymentId, String pgIdempotencyKey) {
 		HttpHeaders headers = createHeaders();
@@ -46,7 +49,43 @@ public class GatewayClient {
 		MultiValueMap<String, String> body = new LinkedMultiValueMap<>();
 		body.add("paymentId", pgPaymentId);
 
-		return post(properties.getApprovalUrl(), headers, body);
+		return post(properties.getApprovalUrl(), headers, body, PgCallSource.MEMBER_REQUEST);
+	}
+
+	/**
+	 * 취소를 요청한다. 요청자·사유·과세·면세가 전부 결제사 필수 필드라 하나라도 빠지면 요청이 거절된다.
+	 *
+	 * <p>과세와 면세를 나눠 싣고 그 합이 취소 금액과 같아야 한다. 이번 범위는 전액을 과세로 다룬다 —
+	 * 결제 시작이 같은 규칙으로 보내고 있고, 주문·상품 어디에도 둘을 가르는 정보가 없다.
+	 *
+	 * <p>잔액 대조 값은 싣지 않는다. 우리 구조는 결과를 모르는 환불이 떠 있는 것이 정상이라, 그 값을
+	 * 실으면 시차가 오류로 취급되어 그 뒤 환불이 전부 거절된다.
+	 */
+	public GatewayExchange refund(
+		String pgPaymentId,
+		String refundAttemptKey,
+		String pgIdempotencyKey,
+		int amount,
+		String reason,
+		CancelRequester requester,
+		PgCallSource source
+	) {
+		HttpHeaders headers = createHeaders();
+		headers.setContentType(MediaType.APPLICATION_FORM_URLENCODED);
+		headers.set(IDEMPOTENCY_KEY_HEADER, pgIdempotencyKey);
+
+		MultiValueMap<String, String> body = new LinkedMultiValueMap<>();
+		body.add("paymentId", pgPaymentId);
+		// 우리 환불 시도 키를 결제사가 거래 고유 번호로 받는 자리에 싣는다. 이력에서 우리 시도를
+		// 집어내는 것이 이 값이라, 안 실으면 이중환불 탐지가 통째로 무력해진다.
+		body.add("merchantPayTransactionKey", refundAttemptKey);
+		body.add("cancelAmount", String.valueOf(amount));
+		body.add("cancelReason", reason);
+		body.add("cancelRequester", requester.getCode());
+		body.add("taxScopeAmount", String.valueOf(amount));
+		body.add("taxExScopeAmount", "0");
+
+		return post(properties.getCancelUrl(), headers, body, source);
 	}
 
 	public GatewayExchange readHistory(String pgPaymentId, ApprovalType approvalType, int pageNumber) {
@@ -56,13 +95,18 @@ public class GatewayClient {
 		HistoryRequest body = new HistoryRequest(approvalType, pageNumber, HISTORY_ROWS_PER_PAGE);
 		String url = properties.getHistoryUrl().replace(PAYMENT_ID_PLACEHOLDER, pgPaymentId);
 
-		return post(url, headers, body);
+		return post(url, headers, body, PgCallSource.MEMBER_REQUEST);
 	}
 
-	private <B> GatewayExchange post(String url, HttpHeaders headers, B body) {
+	/** 읽기 제한 시간이 진입점마다 다르므로 클라이언트를 그 자리에 맞춰 고른다 */
+	private RestTemplate restTemplateFor(PgCallSource source) {
+		return source == PgCallSource.BATCH ? pgNaverPayBatchRestTemplate : pgNaverPayRestTemplate;
+	}
+
+	private <B> GatewayExchange post(String url, HttpHeaders headers, B body, PgCallSource source) {
 		try {
-			ResponseEntity<String> response =
-				pgNaverPayRestTemplate.postForEntity(url, new HttpEntity<>(body, headers), String.class);
+			ResponseEntity<String> response = restTemplateFor(source)
+				.postForEntity(url, new HttpEntity<>(body, headers), String.class);
 			return GatewayExchange.responded(response.getStatusCode().value(), response.getBody());
 		} catch (ResourceAccessException ex) {
 			return GatewayExchange.notResponded(classifyTransportFailure(ex));

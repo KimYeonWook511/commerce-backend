@@ -13,20 +13,28 @@ import org.springframework.stereotype.Component;
 import com.commerce.payment.application.port.PaymentGatewayPort;
 import com.commerce.payment.application.port.dto.PgApproveResult;
 import com.commerce.payment.application.port.dto.PgCallRecord;
+import com.commerce.payment.application.port.dto.PgCallSource;
 import com.commerce.payment.application.port.dto.PgHistoryEntry;
 import com.commerce.payment.application.port.dto.PgHistoryResult;
 import com.commerce.payment.application.port.dto.PgHistoryScope;
 import com.commerce.payment.application.port.dto.PgOutcome;
+import com.commerce.payment.application.port.dto.PgRefundResult;
 import com.commerce.payment.domain.Payment;
 import com.commerce.payment.domain.PgErrorType;
+import com.commerce.payment.domain.Refund;
+import com.commerce.payment.domain.RefundReason;
+import com.commerce.payment.domain.RefundReviewCode;
 import com.commerce.payment.infrastructure.pg.naverpay.client.GatewayClient;
 import com.commerce.payment.infrastructure.pg.naverpay.client.GatewayExchange;
 import com.commerce.payment.infrastructure.pg.naverpay.client.request.ApprovalType;
+import com.commerce.payment.infrastructure.pg.naverpay.client.request.CancelRequester;
 import com.commerce.payment.infrastructure.pg.naverpay.client.response.GatewayResponse;
 import com.commerce.payment.infrastructure.pg.naverpay.client.response.body.ApproveBody;
+import com.commerce.payment.infrastructure.pg.naverpay.client.response.body.CancelBody;
 import com.commerce.payment.infrastructure.pg.naverpay.client.response.body.HistoryBody;
 import com.commerce.payment.infrastructure.pg.naverpay.code.AdmissionTypeCode;
 import com.commerce.payment.infrastructure.pg.naverpay.code.ApproveCode;
+import com.commerce.payment.infrastructure.pg.naverpay.code.CancelCode;
 import com.commerce.payment.infrastructure.pg.naverpay.code.HistoryCode;
 import com.fasterxml.jackson.core.type.TypeReference;
 import com.fasterxml.jackson.databind.ObjectMapper;
@@ -105,6 +113,43 @@ public class GatewayAdapter implements PaymentGatewayPort {
 		return PgApproveResult.succeeded(
 			detail.getMerchantPayKey(), detail.getMerchantUserKey(), detail.getTotalPayAmount(),
 			detail.getPayHistId(), message, callRecord);
+	}
+
+	@Override
+	public PgRefundResult refund(Payment payment, Refund refund, PgCallSource source) {
+		GatewayExchange exchange = client.refund(
+			payment.getPgPaymentId(),
+			refund.attemptKey(),
+			refund.getPgIdempotencyKey(),
+			refund.getAmount(),
+			cancelReason(refund.getReason()),
+			CancelRequester.from(refund.getRequester()),
+			source
+		);
+
+		PgOutcome transportOutcome = transportOutcome(exchange);
+		if (transportOutcome != null) {
+			logFailure("취소", payment.getPgPaymentId(), transportOutcome, exchange.errorType().name(), exchange.httpStatus());
+			return refundFailure(transportOutcome, false, null, transportMessage(exchange), callRecord(exchange, null));
+		}
+
+		GatewayResponse<CancelBody> response = readBody(exchange, new TypeReference<>() {});
+		if (response == null || response.getCode() == null) {
+			return PgRefundResult.unanswered("취소 응답을 읽지 못했다", parseFailureRecord(exchange));
+		}
+
+		// 중복 요청을 뜻하는 상태 코드와 함께 이전 응답이 실려 오는 경우가 여기로 온다. 상태 코드가
+		// 아니라 그 본문이 결과를 정한다 — 상태 코드로 실패를 확정하면 이미 성공한 취소를 뒤집는다.
+		Optional<CancelCode> code = CancelCode.from(response.getCode());
+		PgOutcome outcome = code.map(CancelCode::getOutcome).orElse(PgOutcome.UNKNOWN);
+		String message = message(response, code.map(CancelCode::getDescription).orElse("모르는 취소 응답 코드"));
+		PgCallRecord callRecord = callRecord(exchange, response.getCode());
+
+		if (outcome != PgOutcome.SUCCEEDED) {
+			logFailure("취소", payment.getPgPaymentId(), outcome, response.getCode(), exchange.httpStatus());
+			return refundFailure(outcome, true, code.map(CancelCode::getReviewCode).orElse(null), message, callRecord);
+		}
+		return PgRefundResult.succeeded(payHistId(response), message, callRecord);
 	}
 
 	@Override
@@ -255,6 +300,39 @@ public class GatewayAdapter implements PaymentGatewayPort {
 			case TERMINAL_FAILURE -> PgApproveResult.terminalFailure(answered, message, callRecord);
 			case SUCCEEDED -> throw new IllegalArgumentException("성공은 실패 갈래로 만들지 않는다");
 		};
+	}
+
+	private PgRefundResult refundFailure(
+		PgOutcome outcome,
+		boolean answered,
+		RefundReviewCode reviewCode,
+		String message,
+		PgCallRecord callRecord
+	) {
+		return switch (outcome) {
+			case UNKNOWN -> answered
+				? PgRefundResult.unsettled(message, callRecord)
+				: PgRefundResult.unanswered(message, callRecord);
+			case RETRYABLE_FAILURE -> PgRefundResult.retryableFailure(answered, message, callRecord);
+			// 검토 코드가 없는 채로 사람에게 넘기면 돈이 나갔는지를 알 수 없다. 표에 없는 코드는 여기까지
+			// 오지 않지만, 표를 늘릴 때 빠뜨려도 조사할 근거는 남게 둔다.
+			case TERMINAL_FAILURE -> PgRefundResult.terminalFailure(
+				reviewCode == null ? RefundReviewCode.REQUEST_REJECTED : reviewCode, message, callRecord);
+			case SUCCEEDED -> throw new IllegalArgumentException("성공은 실패 갈래로 만들지 않는다");
+		};
+	}
+
+	/** 결제사가 사람이 읽는 문구로 요구하는 필수 필드다. 도메인 enum 값을 그대로 보내지 않는다 */
+	private String cancelReason(RefundReason reason) {
+		return switch (reason) {
+			case ORDER_CANCELED -> "구매자 주문 취소";
+			case ORDER_NOT_PAYABLE -> "주문 상태로 결제를 받을 수 없어 취소";
+			case AMOUNT_MISMATCH -> "승인 금액 불일치로 취소";
+		};
+	}
+
+	private String payHistId(GatewayResponse<CancelBody> response) {
+		return response.getBody() == null ? null : response.getBody().getPayHistId();
 	}
 
 	private PgCallRecord callRecord(GatewayExchange exchange, String resultCode) {

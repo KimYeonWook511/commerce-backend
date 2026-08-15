@@ -3,6 +3,7 @@ package com.commerce.payment.application.usecase;
 import static org.assertj.core.api.Assertions.assertThat;
 import static org.assertj.core.api.Assertions.assertThatThrownBy;
 import static org.mockito.ArgumentMatchers.any;
+import static org.mockito.BDDMockito.given;
 import static org.mockito.BDDMockito.then;
 import static org.mockito.BDDMockito.willThrow;
 import static org.mockito.Mockito.never;
@@ -12,6 +13,7 @@ import java.util.List;
 import java.util.Optional;
 
 import org.junit.jupiter.api.AfterEach;
+import org.junit.jupiter.api.BeforeEach;
 import org.junit.jupiter.api.DisplayName;
 import org.junit.jupiter.api.Tag;
 import org.junit.jupiter.api.Test;
@@ -30,10 +32,14 @@ import com.commerce.order.domain.Order;
 import com.commerce.order.domain.exception.OrderErrorCode;
 import com.commerce.order.infrastructure.persistence.support.OrderPersistenceTestSupport;
 import com.commerce.payment.application.port.NotificationPort;
+import com.commerce.payment.application.port.PaymentGatewayPort;
+import com.commerce.payment.application.port.dto.PgCallRecord;
+import com.commerce.payment.application.port.dto.PgRefundResult;
 import com.commerce.payment.domain.Payment;
 import com.commerce.payment.domain.PaymentCloseCode;
 import com.commerce.payment.domain.PaymentPg;
 import com.commerce.payment.domain.PaymentStatus;
+import com.commerce.payment.domain.PgErrorType;
 import com.commerce.payment.domain.Refund;
 import com.commerce.payment.domain.RefundReason;
 import com.commerce.payment.domain.RefundRequester;
@@ -75,6 +81,13 @@ class ClosePaymentUseCaseIntegrationTest {
 	@MockitoBean
 	private NotificationPort notificationPort;
 
+	/**
+	 * 반려가 커밋 뒤에 환불을 보내므로 결제사 경계를 대역으로 막는다. 이 테스트가 보는 것은 반려 트랜잭션이
+	 * 무엇을 커밋했는가이고, 그 뒤 호출 결과는 환불 발송 쪽 테스트가 본다.
+	 */
+	@MockitoBean
+	private PaymentGatewayPort paymentGatewayPort;
+
 	@MockitoSpyBean
 	private RefundRepository refundRepository;
 
@@ -102,6 +115,13 @@ class ClosePaymentUseCaseIntegrationTest {
 	static void registerContainers(DynamicPropertyRegistry registry) {
 		TestcontainersSupport.registerMySql(registry);
 		TestcontainersSupport.registerRedis(registry);
+	}
+
+	@BeforeEach
+	void stubGateway() {
+		given(paymentGatewayPort.refund(any(), any(), any()))
+			.willReturn(PgRefundResult.unanswered("결제사를 부르지 않는다",
+				new PgCallRecord(PgErrorType.TIMEOUT, null, null, null)));
 	}
 
 	@AfterEach
@@ -176,8 +196,9 @@ class ClosePaymentUseCaseIntegrationTest {
 			payment, OrderErrorCode.ORDER_ALREADY_PAID, payment.getAmount(), PG_TRANSACTION_ID);
 		Payment afterRejection = reload(payment);
 
+		// 반려가 커밋 뒤에 이미 보내 그 환불은 결과 불명이다. 거기서 한 걸음 더 옮겨도 결제는 그대로여야 한다.
 		Refund refund = refundRepository.findById(onlyRefund().getId()).orElseThrow();
-		refund.markInProgress(LocalDateTime.now());
+		refund.complete(PG_TRANSACTION_ID);
 		refundRepository.saveChecked(refund);
 
 		Payment afterTransition = reload(payment);

@@ -37,6 +37,21 @@ public class PgCallLogService {
 	}
 
 	/**
+	 * 환불 호출 직전에 행을 만든다. 재시도는 새 행이라 몇 번 불렀는지가 행 수로 보인다.
+	 * 한 결제의 경위를 한 번에 볼 수 있도록 결제 참조도 함께 담는다.
+	 */
+	@Transactional(propagation = Propagation.REQUIRES_NEW)
+	public PgCallLog startRefundCall(
+		Long paymentId,
+		Long refundId,
+		String pgIdempotencyKey,
+		LocalDateTime requestedAt
+	) {
+		return pgCallLogRepository.save(
+			PgCallLog.startRefundCall(paymentId, refundId, pgIdempotencyKey, requestedAt));
+	}
+
+	/**
 	 * 그 호출의 결과를 한 번 채운다. 판정의 정본이 먼저 커밋된 뒤에 온다.
 	 *
 	 * <p>응답이 돌아오지 않은 호출은 응답 시각을 비운다. 부른 시각으로 채우면 "결과를 모른다"가 기록에서

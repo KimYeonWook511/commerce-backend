@@ -30,6 +30,9 @@ public class Properties {
 	@Value("${payment.pg.naverpay.approval-url}")
 	private String approvalUrl;
 
+	@Value("${payment.pg.naverpay.cancel-url}")
+	private String cancelUrl;
+
 	/** 결제 번호 자리를 담은 주소. 부를 때 그 자리를 채운다 */
 	@Value("${payment.pg.naverpay.history-url}")
 	private String historyUrl;

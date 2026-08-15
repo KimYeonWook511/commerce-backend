@@ -1,9 +1,12 @@
 package com.commerce.payment.application.port;
 
 import com.commerce.payment.application.port.dto.PgApproveResult;
+import com.commerce.payment.application.port.dto.PgCallSource;
 import com.commerce.payment.application.port.dto.PgHistoryResult;
 import com.commerce.payment.application.port.dto.PgHistoryScope;
+import com.commerce.payment.application.port.dto.PgRefundResult;
 import com.commerce.payment.domain.Payment;
+import com.commerce.payment.domain.Refund;
 
 /**
  * 결제사에 요청을 보내고 이력을 읽는 유일한 통로. 이름에 결제사가 없고, 결제사 하나가 구현체 하나로
@@ -19,6 +22,12 @@ public interface PaymentGatewayPort {
 
 	/** 승인을 요청한다 */
 	PgApproveResult approve(Payment payment);
+
+	/**
+	 * 환불을 요청한다. 어느 자리에서 부르는지를 함께 받는 것은 읽기 제한 시간이 진입점마다 다르기
+	 * 때문이며, 그 값을 고르는 것은 결제사 사정을 아는 어댑터의 일이다.
+	 */
+	PgRefundResult refund(Payment payment, Refund refund, PgCallSource source);
 
 	/** 이력을 읽는다. 여러 페이지에 걸쳐 있으면 끝까지 읽는다 */
 	PgHistoryResult readHistory(Payment payment, PgHistoryScope scope);

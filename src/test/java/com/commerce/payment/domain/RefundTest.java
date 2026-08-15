@@ -120,6 +120,57 @@ class RefundTest {
 		assertThat(refund.getPgIdempotencyKey().length()).isLessThanOrEqualTo(64);
 	}
 
+	@DisplayName("결제사에 실어 보낼 시도 키를 환불이 스스로 만든다 — 형식의 정본이 이 자리 하나다")
+	@Test
+	void attemptKey_whenCalled_joinsRefundKeyAndAttemptSeq() {
+		Refund refund = requestedRefund();
+		assertThat(refund.attemptKey()).isEqualTo(REFUND_KEY + "-0");
+
+		refund.markInProgress(NOW);
+
+		assertThat(refund.attemptKey()).isEqualTo(REFUND_KEY + "-1");
+		assertThat(refund.attemptKey()).isEqualTo(refund.getPgIdempotencyKey());
+	}
+
+	@DisplayName("이력 항목이 이 사건의 것인지는 이번 시도가 아니라 사건 키 접두어로 가른다")
+	@Test
+	void ownsHistoryEntry_matchesAnyAttemptOfThisRefund() {
+		Refund refund = inProgressRefund();
+
+		assertThat(refund.ownsHistoryEntry(REFUND_KEY + "-1")).isTrue();
+		// 지난 시도가 나갔는지를 물어야 하므로 그 사건의 모든 시도가 걸린다.
+		assertThat(refund.ownsHistoryEntry(REFUND_KEY + "-7")).isTrue();
+		assertThat(refund.ownsHistoryEntry(null)).isFalse();
+		assertThat(refund.ownsHistoryEntry("RF-other-1")).isFalse();
+		// 구분자까지 붙여 비교해야 사건 키 하나가 다른 사건 키의 앞부분과 같을 때 섞이지 않는다.
+		assertThat(refund.ownsHistoryEntry(REFUND_KEY + "9-1")).isFalse();
+	}
+
+	@DisplayName("다시 부르기 직전에는 상태와 시도 번호를 그대로 두고 부른 시각만 갱신한다")
+	@Test
+	void recordRequested_whenCalled_keepsStatusAndKeyAndStampsRequestedAt() {
+		Refund refund = inProgressRefund();
+		String beforeKey = refund.getPgIdempotencyKey();
+		LocalDateTime resentAt = NOW.plusMinutes(3);
+
+		refund.recordRequested(resentAt);
+
+		assertThat(refund.getStatus()).isEqualTo(RefundStatus.IN_PROGRESS);
+		assertThat(refund.getAttemptSeq()).isEqualTo(1);
+		assertThat(refund.getPgIdempotencyKey()).isEqualTo(beforeKey);
+		assertThat(refund.getLastRequestedAt()).isEqualTo(resentAt);
+	}
+
+	@DisplayName("아직 한 번도 안 보낸 환불에는 다시 부르기 직전 전이를 걸 수 없다")
+	@Test
+	void recordRequested_fromRequested_throws() {
+		Refund refund = requestedRefund();
+
+		assertThatThrownBy(() -> refund.recordRequested(NOW))
+			.isInstanceOf(PaymentException.class)
+			.hasMessage(PaymentErrorCode.REFUND_STATUS_TRANSITION_NOT_ALLOWED.getMessage());
+	}
+
 	@DisplayName("응답을 못 받으면 결과 불명이 된다")
 	@Test
 	void markUnknown_fromInProgress_marksUnknown() {

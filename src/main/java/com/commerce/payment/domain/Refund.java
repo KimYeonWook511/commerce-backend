@@ -204,6 +204,20 @@ public class Refund extends BaseTimeEntity {
 		this.status = RefundStatus.IN_PROGRESS;
 	}
 
+	/**
+	 * 결제사를 다시 부르기 직전. 상태를 그대로 두고 부른 시각만 남긴다.
+	 *
+	 * <p>상태를 되돌리지 않는 것은 되돌리면 이력 확인이 낡고 다시 집는 간격도 잃기 때문이다. 시도 번호도
+	 * 그대로라 같은 키가 나가고, 결제사가 저장해 둔 이전 응답이 두 번째 회수 수단이 된다.
+	 *
+	 * <p>부른 시각은 같은 키로 불러도 갱신한다 — 대사 유예를 이 값으로 재므로, 안 찍으면 방금 보낸 건을
+	 * 다른 주기가 또 집는다.
+	 */
+	public void recordRequested(LocalDateTime requestedAt) {
+		requireStatusIn(RefundStatus.IN_PROGRESS, RefundStatus.UNKNOWN);
+		this.lastRequestedAt = requestedAt;
+	}
+
 	/** 응답을 못 받아 결과를 모른다 */
 	public void markUnknown() {
 		requireStatusIn(RefundStatus.IN_PROGRESS);
@@ -243,6 +257,28 @@ public class Refund extends BaseTimeEntity {
 	/** 통지를 보낸 뒤에 남긴다 */
 	public void recordNotified(LocalDateTime notifiedAt) {
 		this.lastNotifyAt = notifiedAt;
+	}
+
+	/**
+	 * 결제사에 실어 보낼 환불 시도 키. 사건 키에 이번 시도 번호를 붙인 값이며 이력에서 우리 시도를
+	 * 집어내는 기준이기도 하다.
+	 *
+	 * <p>이 값을 만드는 것이 환불 자신이어야 한다 — 어댑터가 만들면 형식의 정본이 둘이 되고, 결제사가
+	 * 늘어 구분자가 갈리는 순간 다른 사건의 키와 접두어가 구분되지 않아 이중환불 탐지가 조용히
+	 * 무력해진다. 어댑터는 결제사가 요구하는 자리에 싣기만 한다.
+	 */
+	public String attemptKey() {
+		return attemptKey(this.refundKey, this.attemptSeq);
+	}
+
+	/**
+	 * 이력 항목이 이 사건의 시도인가. 이번 시도 키가 아니라 사건 키 접두어로 본다 — 지난 시도가 나갔는지를
+	 * 물어야 하므로 그 사건의 모든 시도를 훑어야 한다.
+	 *
+	 * <p>구분자까지 붙여 비교한다. 사건 키 하나가 다른 사건 키의 앞부분과 같을 때 둘이 섞이지 않게 한다.
+	 */
+	public boolean ownsHistoryEntry(String refundAttemptKey) {
+		return refundAttemptKey != null && refundAttemptKey.startsWith(this.refundKey + ATTEMPT_SEPARATOR);
 	}
 
 	private void openNextAttempt() {

@@ -11,6 +11,7 @@ import org.springframework.transaction.annotation.Transactional;
 
 import com.commerce.common.util.UlidGenerator;
 import com.commerce.payment.application.dto.RejectionAnomaly;
+import com.commerce.payment.application.dto.RejectionResult;
 import com.commerce.payment.domain.Payment;
 import com.commerce.payment.domain.PaymentCloseCode;
 import com.commerce.payment.domain.PaymentPg;
@@ -145,7 +146,7 @@ public class PaymentService {
 	 * 조건 없이 환불 의도만 커밋된다.
 	 */
 	@Transactional
-	public RejectionAnomaly reject(
+	public RejectionResult reject(
 		Long id,
 		PaymentCloseCode closeCode,
 		String closeDetail,
@@ -166,16 +167,16 @@ public class PaymentService {
 			// "반려된 결제에는 되돌릴 근거가 있다"는 대조가 통째로 무력해진다.
 			log.error("남은 환불 한도가 0이라 반려 환불을 만들지 못했다 paymentId={} orderId={} approvedAmount={}",
 				id, payment.getOrderId(), approvedAmount);
-			return RejectionAnomaly.NO_REFUNDABLE_AMOUNT;
+			return RejectionResult.withoutRefund(RejectionAnomaly.NO_REFUNDABLE_AMOUNT);
 		}
 
-		refundRepository.save(refund.get());
+		Refund saved = refundRepository.save(refund.get());
 		boolean closed = payment.reject(closeCode, closeDetail);
 		paymentRepository.saveChecked(payment);
 
 		log.info("승인 반려 종결 paymentId={} orderId={} closeCode={} approvedAmount={} refundAmount={} closed={}",
-			id, payment.getOrderId(), closeCode, approvedAmount, refund.get().getAmount(), closed);
-		return closed ? RejectionAnomaly.NONE : RejectionAnomaly.PAYMENT_ALREADY_CLOSED;
+			id, payment.getOrderId(), closeCode, approvedAmount, saved.getAmount(), closed);
+		return RejectionResult.of(closed ? RejectionAnomaly.NONE : RejectionAnomaly.PAYMENT_ALREADY_CLOSED, saved);
 	}
 
 	/**

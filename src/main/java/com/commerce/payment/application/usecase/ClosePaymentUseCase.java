@@ -6,7 +6,9 @@ import com.commerce.common.exception.ErrorCode;
 import com.commerce.order.domain.exception.OrderErrorCode;
 import com.commerce.payment.application.dto.ApprovalOutcome;
 import com.commerce.payment.application.dto.RejectionAnomaly;
+import com.commerce.payment.application.dto.RejectionResult;
 import com.commerce.payment.application.port.NotificationPort;
+import com.commerce.payment.application.port.dto.PgCallSource;
 import com.commerce.payment.application.port.dto.PgHistoryEntry;
 import com.commerce.payment.application.service.PaymentService;
 import com.commerce.payment.domain.Payment;
@@ -32,11 +34,12 @@ import lombok.extern.slf4j.Slf4j;
 public class ClosePaymentUseCase {
 
 	private final PaymentService paymentService;
+	private final ExecuteRefundUseCase executeRefundUseCase;
 	private final NotificationPort notificationPort;
 
 	/** 결제사가 승인한 금액이 우리가 기록한 결제 금액과 다르다. 되돌릴 금액은 결제사가 승인한 쪽이다 */
 	public ApprovalOutcome rejectAmountMismatch(Payment payment, int approvedAmount, String pgTransactionId) {
-		RejectionAnomaly anomaly = paymentService.reject(
+		RejectionResult result = paymentService.reject(
 			payment.getId(),
 			PaymentCloseCode.AMOUNT_MISMATCH,
 			"승인 금액 " + approvedAmount + ", 주문 금액 " + payment.getAmount(),
@@ -44,7 +47,8 @@ public class ClosePaymentUseCase {
 			pgTransactionId,
 			RefundReason.AMOUNT_MISMATCH
 		);
-		notifyIfAnomalous(payment, anomaly);
+		notifyIfAnomalous(payment, result.anomaly());
+		sendRefund(payment, result);
 		return ApprovalOutcome.rejected(PaymentErrorCode.PAYMENT_AMOUNT_MISMATCH);
 	}
 
@@ -58,7 +62,7 @@ public class ClosePaymentUseCase {
 		int approvedAmount,
 		String pgTransactionId
 	) {
-		RejectionAnomaly anomaly = paymentService.reject(
+		RejectionResult result = paymentService.reject(
 			payment.getId(),
 			PaymentCloseCode.ORDER_NOT_PAYABLE,
 			"주문 상태로 확정할 수 없다: " + orderErrorCode.getCode(),
@@ -66,7 +70,8 @@ public class ClosePaymentUseCase {
 			pgTransactionId,
 			RefundReason.ORDER_NOT_PAYABLE
 		);
-		notifyIfAnomalous(payment, anomaly);
+		notifyIfAnomalous(payment, result.anomaly());
+		sendRefund(payment, result);
 		return ApprovalOutcome.rejected(toMemberFacingCode(orderErrorCode));
 	}
 
@@ -108,6 +113,24 @@ public class ClosePaymentUseCase {
 			"승인 응답의 결제 키가 다르다 responsePaymentKey=" + responsePaymentKey + " pgPaymentId=" + pgPaymentId
 		);
 		return ApprovalOutcome.rejected(PaymentErrorCode.PAYMENT_KEY_MISMATCH);
+	}
+
+	/**
+	 * 반려가 만든 환불을 커밋 뒤에 결제사로 보낸다. 이 호출이 실패해도 환불은 접수 상태로 남아 발송
+	 * 배치가 다시 보내므로, 반려 자체의 결과를 흔들지 않는다.
+	 *
+	 * <p>회원 요청 흐름 안이라 회원 요청과 같은 제한 시간으로 끊는다 — 승인 반려도 회원이 화면에서
+	 * 기다리는 자리에서 일어난다.
+	 */
+	private void sendRefund(Payment payment, RejectionResult result) {
+		result.refundToSend().ifPresent(refund -> {
+			try {
+				executeRefundUseCase.send(payment, refund, PgCallSource.MEMBER_REQUEST);
+			} catch (RuntimeException ex) {
+				log.error("반려 환불을 보내지 못해 발송 배치에 맡긴다 paymentId={} refundId={}",
+					payment.getId(), refund.getId(), ex);
+			}
+		});
 	}
 
 	/**

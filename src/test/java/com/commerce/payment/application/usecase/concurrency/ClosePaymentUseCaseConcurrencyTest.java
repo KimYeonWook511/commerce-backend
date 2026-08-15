@@ -1,6 +1,8 @@
 package com.commerce.payment.application.usecase.concurrency;
 
 import static org.assertj.core.api.Assertions.assertThat;
+import static org.mockito.ArgumentMatchers.any;
+import static org.mockito.BDDMockito.given;
 
 import java.time.LocalDateTime;
 import java.util.List;
@@ -12,6 +14,7 @@ import java.util.concurrent.Executors;
 import java.util.function.IntConsumer;
 
 import org.junit.jupiter.api.AfterEach;
+import org.junit.jupiter.api.BeforeEach;
 import org.junit.jupiter.api.DisplayName;
 import org.junit.jupiter.api.Tag;
 import org.junit.jupiter.api.Test;
@@ -29,9 +32,13 @@ import com.commerce.order.domain.Order;
 import com.commerce.order.domain.exception.OrderErrorCode;
 import com.commerce.order.infrastructure.persistence.support.OrderPersistenceTestSupport;
 import com.commerce.payment.application.port.NotificationPort;
+import com.commerce.payment.application.port.PaymentGatewayPort;
+import com.commerce.payment.application.port.dto.PgCallRecord;
+import com.commerce.payment.application.port.dto.PgRefundResult;
 import com.commerce.payment.application.usecase.ClosePaymentUseCase;
 import com.commerce.payment.domain.Payment;
 import com.commerce.payment.domain.PaymentPg;
+import com.commerce.payment.domain.PgErrorType;
 import com.commerce.payment.domain.Refund;
 import com.commerce.payment.domain.RefundReason;
 import com.commerce.payment.domain.RefundRequester;
@@ -79,6 +86,10 @@ class ClosePaymentUseCaseConcurrencyTest {
 	@MockitoBean
 	private NotificationPort notificationPort;
 
+	/** 반려가 커밋 뒤에 환불을 보내므로 결제사 경계를 대역으로 막는다. 이 테스트가 보는 것은 경합의 결과다 */
+	@MockitoBean
+	private PaymentGatewayPort paymentGatewayPort;
+
 	@Autowired
 	private PersistenceCleanupTestSupport persistenceCleanup;
 
@@ -103,6 +114,13 @@ class ClosePaymentUseCaseConcurrencyTest {
 	static void registerContainers(DynamicPropertyRegistry registry) {
 		TestcontainersSupport.registerMySql(registry);
 		TestcontainersSupport.registerRedis(registry);
+	}
+
+	@BeforeEach
+	void stubGateway() {
+		given(paymentGatewayPort.refund(any(), any(), any()))
+			.willReturn(PgRefundResult.unanswered("결제사를 부르지 않는다",
+				new PgCallRecord(PgErrorType.TIMEOUT, null, null, null)));
 	}
 
 	@AfterEach

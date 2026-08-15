@@ -410,8 +410,11 @@ public class Payment extends BaseTimeEntity {
 	/**
 	 * 남은 한도. 모든 상태의 환불이 이미 누적 환불액에 들어 있어 상태로 예외를 두지 않는다 — 결과를
 	 * 모르는 것도 자동 처리가 멈춘 것도 아직 돈이 돌아가지 않았고, 그 몫을 풀어 주면 새 환불이 끼어든다.
+	 *
+	 * <p>주문 취소 응답이 "앞으로 더 취소할 수 있는 금액"으로 이 값을 그대로 싣는다. 한도를 재는 것과
+	 * 응답이 말하는 것이 같은 계산이어야 한도는 통과하는데 응답이 0을 말하는 어긋남이 생기지 않는다.
 	 */
-	private int remainingRefundableAmount() {
+	public int remainingRefundableAmount() {
 		if (approvedAmount == null) {
 			// 얼마를 돌려줘야 하는지가 정해지지 않았다.
 			throw new PaymentException(PaymentErrorCode.REFUND_APPROVED_AMOUNT_MISSING);
