@@ -25,6 +25,7 @@ import com.commerce.payment.domain.Refund;
 import com.commerce.payment.domain.RefundReason;
 import com.commerce.payment.domain.RefundRequester;
 import com.commerce.payment.domain.RefundReviewCode;
+import com.commerce.payment.domain.exception.DuplicateRefundRequestException;
 import com.commerce.payment.domain.repository.RefundRepository;
 import com.commerce.support.TestcontainersSupport;
 
@@ -79,14 +80,16 @@ class RefundRepositoryAdapterIntegrationTest {
 			secondPaymentId, RefundRequester.MEMBER, "IDEM-shared")).contains(second);
 	}
 
-	@DisplayName("같은 결제에 같은 요청자가 같은 환불 요청 멱등키를 다시 보내면 사건이 하나만 선다")
+	@DisplayName("같은 결제에 같은 요청자가 같은 환불 요청 멱등키를 다시 보내면 사건이 하나만 서고 도메인 예외로 옮겨진다")
 	@Test
-	void save_whenSameIdempotencyKeyOnSamePaymentAndRequester_violatesUniqueConstraint() {
+	void save_whenSameIdempotencyKeyOnSamePaymentAndRequester_translatesToDomainException() {
 		long paymentId = ++nextPaymentId;
 		refundRepository.save(openedRefund(paymentId, RefundRequester.MEMBER, "IDEM-dup"));
 
+		// 같은 요청이 두 번 들어온 것만 도메인 언어로 옮긴다. 회원에게 "잠시 후 다시"라고 답할 수 있는
+		// 유일한 위반이라 여기서 갈라야 위쪽이 그 뜻을 알 수 있다.
 		assertThatThrownBy(() -> refundRepository.save(openedRefund(paymentId, RefundRequester.MEMBER, "IDEM-dup")))
-			.isInstanceOf(DataIntegrityViolationException.class);
+			.isInstanceOf(DuplicateRefundRequestException.class);
 	}
 
 	@DisplayName("회원이 보낸 값과 시스템이 만든 값이 같은 문자열이어도 서로의 자리를 다투지 않는다")

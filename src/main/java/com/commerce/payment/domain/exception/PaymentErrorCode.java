@@ -36,6 +36,9 @@ public enum PaymentErrorCode implements ErrorCode {
 	// 승인 금액이 정해지지 않으면 얼마를 돌려줘야 하는지 알 수 없다.
 	REFUND_APPROVED_AMOUNT_MISSING(ErrorCategory.CONFLICT, "PAYMENT-409-21",
 		"승인 금액이 정해지지 않아 환불할 수 없습니다"),
+	// 같은 요청 키의 환불을 다른 쪽이 먼저 만들었다. 회원이 할 일은 잠시 후 다시 시도하는 것이다.
+	REFUND_REQUEST_IN_PROGRESS(ErrorCategory.CONFLICT, "PAYMENT-409-22",
+		"같은 환불 요청이 이미 처리 중입니다"),
 
 	PAYMENT_NOT_FOUND(ErrorCategory.NOT_FOUND, "PAYMENT-404", "결제를 찾을 수 없습니다"),
 

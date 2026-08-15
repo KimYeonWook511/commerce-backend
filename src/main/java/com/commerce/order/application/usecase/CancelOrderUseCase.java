@@ -4,7 +4,6 @@ import java.time.Duration;
 import java.util.Optional;
 
 import org.springframework.beans.factory.annotation.Value;
-import org.springframework.dao.DuplicateKeyException;
 import org.springframework.stereotype.Component;
 import org.springframework.util.StringUtils;
 
@@ -25,6 +24,7 @@ import com.commerce.order.infrastructure.OrderIdempotencyStoreUnavailableExcepti
 import com.commerce.payment.application.port.dto.PgCallSource;
 import com.commerce.payment.application.usecase.ExecuteRefundUseCase;
 import com.commerce.payment.domain.RefundStatus;
+import com.commerce.payment.domain.exception.DuplicateRefundRequestException;
 
 import lombok.RequiredArgsConstructor;
 import lombok.extern.slf4j.Slf4j;
@@ -130,14 +130,15 @@ public class CancelOrderUseCase {
 	 * 유일 제약이 선점 층의 안전망이다. 부딪혔다는 것은 같은 요청을 다른 쪽이 먼저 잡았다는 뜻이라 회원이
 	 * 할 일이 같고, 그래서 응답도 선점에 진 쪽과 같다. 서버 오류로 내보내지 않는다.
 	 *
-	 * <p>중복 키만 잡는다. 이 트랜잭션은 주문·환불·재고·결제를 함께 저장해 NOT NULL·외래 키 위반도 같은
-	 * 상위 예외로 오는데, 그것까지 "처리 중"으로 바꾸면 실제 정합성 장애가 안전망에 닿지 못하고 조사할
-	 * 근거도 남지 않는다.
+	 * <p>같은 요청 키의 환불이 이미 있다는 것만 여기로 온다. 이 트랜잭션은 주문·환불·재고·결제를 함께
+	 * 저장해 필수값 누락·외래 키 위반도 일어날 수 있는데, 그것은 회원이 할 수 있는 일이 없는 결함이라
+	 * 여기서 잡지 않고 안전망으로 보낸다. 무엇에 부딪혔는지 가르는 것은 제약 이름을 볼 수 있는
+	 * persistence adapter의 몫이다.
 	 */
 	private CancelPaidOrderResult commitCancel(Long memberId, Long orderId, String idempotencyKey) {
 		try {
 			return cancelPaidOrderService.cancelPaidOrder(memberId, orderId, idempotencyKey);
-		} catch (DuplicateKeyException ex) {
+		} catch (DuplicateRefundRequestException ex) {
 			log.info("주문 취소가 유일 제약에 막힘 orderId={} memberId={}", orderId, memberId);
 			throw new OrderException(OrderErrorCode.ORDER_CANCEL_IN_PROGRESS);
 		}
