@@ -484,6 +484,63 @@ class GatewayAdapterTest {
 		assertThat(result.reviewCode()).isEqualTo(RefundReviewCode.REQUEST_REJECTED);
 	}
 
+	@DisplayName("완료되지 않았지만 자동으로 재처리한다는 응답은 성공으로 접는다")
+	@Test
+	void refund_whenGatewayWillRetryAutomatically_foldsToSuccess() {
+		Refund refund = inProgressRefund(RefundRequester.MEMBER, RefundReason.ORDER_CANCELED);
+		server.expect(requestTo(CANCEL_URL))
+			.andRespond(withSuccess(cancelResponse("CancelNotComplete"), MediaType.APPLICATION_JSON));
+
+		PgRefundResult result = adapter.refund(payment, refund, PgCallSource.MEMBER_REQUEST);
+
+		// 결제사 명세가 재시도하지 말고 성공으로 처리하라고 지시한다.
+		assertThat(result.outcome()).isEqualTo(PgOutcome.SUCCEEDED);
+		// 그렇게 판단한 근거는 호출 기록의 응답 코드로 남는다. 환불 행에 별도 구분 값을 두지 않는다.
+		assertThat(result.callRecord().resultCode()).isEqualTo("CancelNotComplete");
+	}
+
+	@DisplayName("이미 진행 중이라는 취소 응답은 결과 불명으로 접는다")
+	@Test
+	void refund_whenAlreadyOnGoing_foldsToUnknown() {
+		Refund refund = inProgressRefund(RefundRequester.MEMBER, RefundReason.ORDER_CANCELED);
+		server.expect(requestTo(CANCEL_URL))
+			.andRespond(withSuccess(cancelResponse("AlreadyOnGoing"), MediaType.APPLICATION_JSON));
+
+		PgRefundResult result = adapter.refund(payment, refund, PgCallSource.MEMBER_REQUEST);
+
+		// 우리 요청이 처리되는 중일 수 있어 실패로 볼 수 없다.
+		assertThat(result.outcome()).isEqualTo(PgOutcome.UNKNOWN);
+		assertThat(result.reviewCode()).isNull();
+	}
+
+	@DisplayName("이미 취소된 결제라는 응답을 성공으로 접지 않고 초과 거절과 같은 검토 코드로 넘긴다")
+	@Test
+	void refund_whenAlreadyCanceled_foldsToTerminalFailureWithExceededReviewCode() {
+		Refund refund = inProgressRefund(RefundRequester.MEMBER, RefundReason.ORDER_CANCELED);
+		server.expect(requestTo(CANCEL_URL))
+			.andRespond(withSuccess(cancelResponse("AlreadyCanceled"), MediaType.APPLICATION_JSON));
+
+		PgRefundResult result = adapter.refund(payment, refund, PgCallSource.MEMBER_REQUEST);
+
+		// 성공으로 접으면 우리가 모르는 환불이 있는 경우를 덮는다. 잔여가 0이라는 뜻이라 초과와 성질이 같다.
+		assertThat(result.outcome()).isEqualTo(PgOutcome.TERMINAL_FAILURE);
+		assertThat(result.reviewCode()).isEqualTo(RefundReviewCode.REFUNDABLE_AMOUNT_EXCEEDED);
+	}
+
+	@DisplayName("환불 가능 금액을 넘는다는 거절도 같은 검토 코드로 넘겨 이력을 읽는 갈래로 보낸다")
+	@Test
+	void refund_whenOverRemainAmount_foldsToTerminalFailureWithExceededReviewCode() {
+		Refund refund = inProgressRefund(RefundRequester.MEMBER, RefundReason.ORDER_CANCELED);
+		server.expect(requestTo(CANCEL_URL))
+			.andRespond(withSuccess(cancelResponse("OverRemainAmount"), MediaType.APPLICATION_JSON));
+
+		PgRefundResult result = adapter.refund(payment, refund, PgCallSource.MEMBER_REQUEST);
+
+		// 결제사가 어느 코드로 답할지는 검증 순서에 달렸고 명세에 없어, 둘을 같은 부류로 다룬다.
+		assertThat(result.outcome()).isEqualTo(PgOutcome.TERMINAL_FAILURE);
+		assertThat(result.reviewCode()).isEqualTo(RefundReviewCode.REFUNDABLE_AMOUNT_EXCEEDED);
+	}
+
 	@DisplayName("앞선 취소가 처리 중이라는 거절은 다시 시도할 수 있는 실패로 접는다")
 	@Test
 	void refund_whenPreviousCancelInProgress_foldsToRetryableFailure() {

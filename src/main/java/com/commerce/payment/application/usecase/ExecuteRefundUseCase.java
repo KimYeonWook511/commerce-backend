@@ -1,11 +1,13 @@
 package com.commerce.payment.application.usecase;
 
 import java.time.LocalDateTime;
+import java.util.Optional;
 
 import org.springframework.stereotype.Component;
 
 import com.commerce.payment.application.port.PaymentGatewayPort;
 import com.commerce.payment.application.port.dto.PgCallSource;
+import com.commerce.payment.application.port.dto.PgHistoryEntry;
 import com.commerce.payment.application.port.dto.PgHistoryResult;
 import com.commerce.payment.application.port.dto.PgHistoryScope;
 import com.commerce.payment.application.port.dto.PgOutcome;
@@ -15,16 +17,22 @@ import com.commerce.payment.application.service.RefundService;
 import com.commerce.payment.domain.Payment;
 import com.commerce.payment.domain.PgCallLog;
 import com.commerce.payment.domain.Refund;
+import com.commerce.payment.domain.RefundReviewCode;
 import com.commerce.payment.domain.RefundStatus;
 import com.commerce.payment.domain.exception.PaymentErrorCode;
 import com.commerce.payment.domain.exception.PaymentException;
+import com.commerce.payment.domain.repository.RefundRepository;
 
 import lombok.RequiredArgsConstructor;
 import lombok.extern.slf4j.Slf4j;
 
 /**
- * 환불 하나를 결제사에 보낸다. 주문 취소·승인 반려·발송 배치가 이 자리를 공유하므로 보내는 규칙이 한
- * 벌만 존재한다.
+ * 환불 하나를 결제사에 보낸다. 주문 취소·승인 반려·발송 배치·대사가 이 자리를 공유하므로 보내는 규칙이
+ * 한 벌만 존재한다.
+ *
+ * <p>들어오는 문이 둘이다. 아직 안 나간 건을 처음 보내는 것과, 이력에 그 시도가 없음을 확인한 대사가
+ * 같은 키로 다시 보내는 것이다. 앞엣것은 부르기 직전에 상태를 옮기며 시도 번호를 올리고, 뒤엣것은 상태와
+ * 번호를 그대로 둔 채 부른 시각만 갱신한다. 그 뒤의 호출·기록·결과 반영은 같은 자리를 지난다.
  *
  * <p>순서가 정해져 있다 — 이력 확인, 부르기 직전 전이 커밋, 호출 기록, 결제사 호출, 결과 반영이다.
  * 전이를 부르기 전에 따로 커밋하지 않으면 둘이 같은 환불을 집어 함께 보내고, 부르는 도중 프로세스가
@@ -41,6 +49,7 @@ public class ExecuteRefundUseCase {
 	private final PaymentGatewayPort paymentGatewayPort;
 	private final RefundService refundService;
 	private final PgCallLogService pgCallLogService;
+	private final RefundRepository refundRepository;
 
 	/**
 	 * 아직 안 나간 환불을 처음 보낸다. 부를 준비 상태일 때만 보내는 것이 겹친 호출을 막는 장치다 —
@@ -68,6 +77,35 @@ public class ExecuteRefundUseCase {
 		if (calling == null) {
 			// 진 쪽은 부르지 않는다. 이긴 쪽이 지금 보내고 있으므로 회원이 잃는 것이 없다.
 			return RefundStatus.IN_PROGRESS;
+		}
+		return dispatch(payment, calling, source);
+	}
+
+	/**
+	 * 이력에 그 시도가 없음을 확인한 대사가 그 자리에서 다시 보낸다.
+	 *
+	 * <p>상태를 되돌리지 않는다. 되돌렸다가 나중에 보내면 그 사이 결제사가 이력에 반영할 수 있어 보내기
+	 * 직전에 또 읽어야 하는데, 같은 자리에서 읽고 보내면 그 창이 트랜잭션 둘 사이로 줄어든다.
+	 *
+	 * <p>시도 번호를 올리지 않아 같은 키가 나간다. 결과를 모르는 건이라 이미 나갔을 수 있고, 새 키로
+	 * 보내면 완료된 취소 위에 또 하나가 실행된다. 같은 키면 이미 나갔을 때 이전 응답이 되돌아와 그대로
+	 * 확정된다. 대신 부른 시각은 갱신한다 — 대사 유예를 그 값으로 재기 때문이다.
+	 *
+	 * @return 이 호출을 마친 시점의 환불 진행 상태
+	 */
+	public RefundStatus resend(Payment payment, Refund refund, PgCallSource source) {
+		Refund calling;
+		try {
+			calling = refundService.recordRequested(refund.getId(), LocalDateTime.now());
+		} catch (PaymentException ex) {
+			if (ex.getErrorCode() == PaymentErrorCode.REFUND_CONCURRENTLY_MODIFIED
+				|| ex.getErrorCode() == PaymentErrorCode.REFUND_STATUS_TRANSITION_NOT_ALLOWED) {
+				// 그 사이 다른 주체가 결과를 확정했거나 같은 건을 먼저 집었다.
+				log.info("다시 부르기 직전 전이에 밀려 환불을 부르지 않는다 refundId={} 사유={}",
+					refund.getId(), ex.getErrorCode());
+				return refund.getStatus();
+			}
+			throw ex;
 		}
 		return dispatch(payment, calling, source);
 	}
@@ -125,7 +163,7 @@ public class ExecuteRefundUseCase {
 
 		PgRefundResult result = paymentGatewayPort.refund(payment, refund, source);
 		try {
-			return apply(refund, result);
+			return apply(payment, refund, result);
 		} finally {
 			recordCallResult(callLog, result);
 		}
@@ -149,7 +187,7 @@ public class ExecuteRefundUseCase {
 	 * 결제사 답이 어느 전이로 가는지를 정한다. 다시 시도할 수 있는 실패는 상태를 그대로 두고 시도
 	 * 번호만 올려 다음 호출이 새 키로 나가게 한다 — 환불에는 실패로 끝나는 종착이 없다.
 	 */
-	private RefundStatus apply(Refund refund, PgRefundResult result) {
+	private RefundStatus apply(Payment payment, Refund refund, PgRefundResult result) {
 		return switch (result.outcome()) {
 			case SUCCEEDED -> transition(refund,
 				() -> refundService.complete(refund.getId(), result.pgTransactionId()), RefundStatus.SUCCEEDED);
@@ -157,10 +195,94 @@ public class ExecuteRefundUseCase {
 				() -> refundService.markUnknown(refund.getId()), RefundStatus.UNKNOWN);
 			case RETRYABLE_FAILURE -> transition(refund,
 				() -> refundService.recordRetryableFailure(refund.getId()), RefundStatus.IN_PROGRESS);
-			case TERMINAL_FAILURE -> transition(refund,
-				() -> refundService.flagForReview(refund.getId(), result.reviewCode(), result.message()),
-				RefundStatus.MANUAL_REVIEW);
+			case TERMINAL_FAILURE -> applyTerminalFailure(payment, refund, result);
 		};
+	}
+
+	/**
+	 * 환불 가능 금액을 넘는다는 거절만 상태를 바로 정하지 않고 이력을 읽는다. 우리 한도 검사를 이미
+	 * 통과한 요청이므로 그 거절은 우리 기록과 결제사 기록이 갈렸다는 뜻이고, 어느 쪽이 맞는지 확인하지
+	 * 않고 사람에게 넘기면 저절로 풀릴 건까지 손처리 대상이 된다.
+	 *
+	 * <p>잔여가 0이라 "이미 취소된 결제"로 오는 답도 같은 검토 코드로 접혀 이 갈래에 함께 들어온다 —
+	 * 결제사가 어느 코드로 답할지는 검증 순서에 달렸고 명세에 없다.
+	 */
+	private RefundStatus applyTerminalFailure(Payment payment, Refund refund, PgRefundResult result) {
+		if (result.reviewCode() == RefundReviewCode.REFUNDABLE_AMOUNT_EXCEEDED) {
+			return settleAgainstHistory(payment, refund, result);
+		}
+		return transition(refund,
+			() -> refundService.flagForReview(refund.getId(), result.reviewCode(), result.message()),
+			RefundStatus.MANUAL_REVIEW);
+	}
+
+	/**
+	 * 초과 거절을 이력으로 세 갈래로 가른다. 가르는 근거는 이력의 취소 항목이 우리 환불 기록으로
+	 * 설명되는지다 — 우리 시도 키가 실린 항목은 우리 사건이고, 실리지 않은 항목은 우리가 모르는 환불이다.
+	 *
+	 * <ol>
+	 *   <li>이 사건이 이미 완료로 있다 — 성공으로 확정한다.
+	 *   <li>결과를 모르던 다른 건이 완료된 것으로 설명된다 — 그 건을 확정하고 이번 건은 상태를 그대로 둔다.
+	 *       다음 주기의 대사가 같은 키로 다시 보내며, 한도는 다시 검사하지 않는다 — 누적 환불액은 환불을
+	 *       만들 때만 오르므로 만들 때 통과한 이 환불은 지금도 한도 안이고, 재검사를 두면 없앤 합계 조회가
+	 *       그 자리로 되살아난다.
+	 *   <li>어느 쪽으로도 설명되지 않는다 — 우리가 모르는 환불이 있다. 사람에게 넘긴다.
+	 * </ol>
+	 *
+	 * <p>다시 보내도 중복이 되지 않는다. 거절된 요청은 결제사가 실행하지 않아 이력에 흔적이 없다.
+	 */
+	private RefundStatus settleAgainstHistory(Payment payment, Refund refund, PgRefundResult result) {
+		PgHistoryResult history = paymentGatewayPort.readHistory(payment, PgHistoryScope.REFUND_ONLY);
+		if (history.outcome() != PgOutcome.SUCCEEDED) {
+			// 묻지 못한 것을 "설명되지 않는다"로 읽으면 인증 설정이 틀린 순간 멀쩡한 환불이 전부 손처리
+			// 대상이 된다. 확정하지 않고 다음 주기에 다시 집게 둔다.
+			log.warn("초과 거절의 원인을 이력으로 가르지 못해 확정하지 않는다 refundId={} 사유={}",
+				refund.getId(), history.message());
+			return refund.getStatus();
+		}
+
+		Optional<PgHistoryEntry> ours = history.settledRefundOf(refund);
+		if (ours.isPresent()) {
+			return transition(refund,
+				() -> refundService.complete(refund.getId(), ours.get().pgTransactionId()), RefundStatus.SUCCEEDED);
+		}
+		if (settleOthersExplainedBy(payment, refund, history)) {
+			log.info("결과를 모르던 다른 환불이 초과 거절을 설명해 이번 건은 다음 주기로 넘긴다 refundId={}",
+				refund.getId());
+			return refund.getStatus();
+		}
+		return transition(refund,
+			() -> refundService.flagForReview(
+				refund.getId(), RefundReviewCode.REFUNDABLE_AMOUNT_EXCEEDED, result.message()),
+			RefundStatus.MANUAL_REVIEW);
+	}
+
+	/**
+	 * 같은 결제에서 결과를 모르던 다른 환불이 이력에 완료로 있으면 그것을 확정한다.
+	 *
+	 * @return 그렇게 확정된 건이 하나라도 있으면 true. 그것이 곧 어긋남의 원인이 밝혀졌다는 뜻이다
+	 */
+	private boolean settleOthersExplainedBy(Payment payment, Refund refund, PgHistoryResult history) {
+		boolean explained = false;
+		for (Refund sibling : refundRepository.findUnsettledByPaymentId(payment.getId())) {
+			if (sibling.getId().equals(refund.getId())) {
+				continue;
+			}
+			Optional<PgHistoryEntry> settled = history.settledRefundOf(sibling);
+			if (settled.isEmpty()) {
+				continue;
+			}
+			try {
+				refundService.complete(sibling.getId(), settled.get().pgTransactionId());
+				explained = true;
+			} catch (PaymentException ex) {
+				// 다른 주체가 먼저 옮겼다. 그래도 그 건이 완료라는 사실은 달라지지 않으므로 설명된 것으로 센다.
+				log.info("다른 주체가 먼저 옮겨 이번 확정을 반영하지 않는다 refundId={} 사유={}",
+					sibling.getId(), ex.getErrorCode());
+				explained = true;
+			}
+		}
+		return explained;
 	}
 
 	/**

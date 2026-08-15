@@ -321,6 +321,148 @@ class ExecuteRefundUseCaseIntegrationTest {
 		assertThat(reload(refund).getStatus()).isEqualTo(RefundStatus.SUCCEEDED);
 	}
 
+	// ── 환불 가능 금액 초과 거절을 이력으로 가른다 ───────────────
+
+	@DisplayName("초과 거절을 받았는데 이력에 우리 시도가 완료로 있으면 성공으로 확정한다")
+	@Test
+	void send_whenExceededButOurAttemptSettledInHistory_completesRefund() {
+		Payment payment = savePayment();
+		Refund refund = saveRefund(payment);
+		givenRefundResult(exceededRejection());
+		given(paymentGatewayPort.readHistory(any(), eq(PgHistoryScope.REFUND_ONLY)))
+			.willReturn(PgHistoryResult.succeeded(List.of(refundEntry(refund.getRefundKey() + "-1")), "성공"));
+
+		RefundStatus status = executeRefundUseCase.send(payment, refund, PgCallSource.MEMBER_REQUEST);
+
+		// 우리 한도 검사를 통과한 요청이 거절된 것은 우리 기록과 결제사 기록이 갈렸다는 뜻이고,
+		// 이력이 그 사건을 완료로 설명하면 어긋남의 정체가 그것이다.
+		assertThat(status).isEqualTo(RefundStatus.SUCCEEDED);
+		assertThat(reload(refund).getStatus()).isEqualTo(RefundStatus.SUCCEEDED);
+	}
+
+	@DisplayName("초과 거절을 결과를 모르던 다른 환불이 설명하면 그 건을 확정하고 이번 건은 상태를 그대로 둔다")
+	@Test
+	void send_whenExceededExplainedByAnotherRefund_settlesThatOneAndKeepsThisOne() {
+		PartiallyRefunded fixture = twoRefundsOnOnePayment();
+		givenRefundResult(exceededRejection());
+		given(paymentGatewayPort.readHistory(any(), eq(PgHistoryScope.REFUND_ONLY)))
+			.willReturn(PgHistoryResult.succeeded(
+				List.of(refundEntry(fixture.earlier().getRefundKey() + "-1")), "성공"));
+
+		RefundStatus status = executeRefundUseCase.send(
+			fixture.payment(), fixture.current(), PgCallSource.MEMBER_REQUEST);
+
+		assertThat(reload(fixture.earlier()).getStatus()).isEqualTo(RefundStatus.SUCCEEDED);
+		// 사람에게 넘기지 않는다. 상태가 그대로라 다음 주기의 대사가 같은 키로 다시 보낸다.
+		assertThat(status).isEqualTo(RefundStatus.IN_PROGRESS);
+		assertThat(reload(fixture.current()).getStatus()).isEqualTo(RefundStatus.IN_PROGRESS);
+		assertThat(reload(fixture.current()).getReviewCode()).isNull();
+	}
+
+	@DisplayName("한도를 다시 검사하지 않아 어긋남이 풀린 환불이 그대로 나갈 수 있다")
+	@Test
+	void send_whenExceededExplainedByAnotherRefund_doesNotRecheckTheLimit() {
+		PartiallyRefunded fixture = twoRefundsOnOnePayment();
+		givenRefundResult(exceededRejection());
+		given(paymentGatewayPort.readHistory(any(), eq(PgHistoryScope.REFUND_ONLY)))
+			.willReturn(PgHistoryResult.succeeded(
+				List.of(refundEntry(fixture.earlier().getRefundKey() + "-1")), "성공"));
+
+		executeRefundUseCase.send(fixture.payment(), fixture.current(), PgCallSource.MEMBER_REQUEST);
+
+		// 누적 환불액은 환불을 만들 때만 오르고 상태로 바뀌지 않으므로, 만들 때 통과한 이 환불은 지금도
+		// 한도 안이다. 다시 검사하면 없앤 합계 조회가 그 자리로 되살아난다.
+		assertThat(paymentPersistence.findById(fixture.payment().getId()).orElseThrow().getTotalRefundedAmount())
+			.isEqualTo(AMOUNT);
+	}
+
+	@DisplayName("초과 거절이 어느 쪽으로도 설명되지 않으면 검토 코드를 채워 사람에게 넘긴다")
+	@Test
+	void send_whenExceededExplainedByNothing_flagsForReview() {
+		Payment payment = savePayment();
+		Refund refund = saveRefund(payment);
+		givenRefundResult(exceededRejection());
+		given(paymentGatewayPort.readHistory(any(), eq(PgHistoryScope.REFUND_ONLY)))
+			.willReturn(PgHistoryResult.succeeded(List.of(refundEntry("RF-nobody-knows-1")), "성공"));
+
+		RefundStatus status = executeRefundUseCase.send(payment, refund, PgCallSource.MEMBER_REQUEST);
+
+		// 우리 시도 키가 실리지 않은 항목은 우리가 모르는 환불이다. 돈이 나갔는지 모르므로 사람이 봐야 한다.
+		assertThat(status).isEqualTo(RefundStatus.MANUAL_REVIEW);
+		Refund flagged = reload(refund);
+		assertThat(flagged.getStatus()).isEqualTo(RefundStatus.MANUAL_REVIEW);
+		assertThat(flagged.getReviewCode()).isEqualTo(RefundReviewCode.REFUNDABLE_AMOUNT_EXCEEDED);
+	}
+
+	@DisplayName("초과 거절의 원인을 이력으로 가르지 못하면 사람에게 넘기지 않고 상태를 그대로 둔다")
+	@Test
+	void send_whenExceededAndHistoryReadRejected_leavesRefundUnsettled() {
+		Payment payment = savePayment();
+		Refund refund = saveRefund(payment);
+		givenRefundResult(exceededRejection());
+		given(paymentGatewayPort.readHistory(any(), eq(PgHistoryScope.REFUND_ONLY)))
+			.willReturn(PgHistoryResult.failed(PgOutcome.RETRYABLE_FAILURE, "인증 거절"));
+
+		RefundStatus status = executeRefundUseCase.send(payment, refund, PgCallSource.MEMBER_REQUEST);
+
+		// 묻지 못한 것을 "설명되지 않는다"로 읽으면 설정이 틀린 순간 멀쩡한 환불이 전부 손처리 대상이 된다.
+		assertThat(status).isEqualTo(RefundStatus.IN_PROGRESS);
+		assertThat(reload(refund).getReviewCode()).isNull();
+	}
+
+	@DisplayName("초과 말고 다시 시도할 수 없는 실패는 이력을 읽지 않고 바로 사람에게 넘긴다")
+	@Test
+	void send_whenTerminalFailureIsNotAboutBalance_doesNotReadHistory() {
+		Payment payment = savePayment();
+		Refund refund = saveRefund(payment);
+		givenRefundResult(PgRefundResult.terminalFailure(
+			RefundReviewCode.CANCEL_NOT_ALLOWED, "취소 불가", callRecord(PgErrorType.NONE)));
+
+		RefundStatus status = executeRefundUseCase.send(payment, refund, PgCallSource.MEMBER_REQUEST);
+
+		assertThat(status).isEqualTo(RefundStatus.MANUAL_REVIEW);
+		then(paymentGatewayPort).should(never()).readHistory(any(), any());
+	}
+
+	// ── 대사가 이력을 읽은 뒤 그 자리에서 다시 보낸다 ────────────
+
+	@DisplayName("다시 보낼 때 상태와 시도 번호를 그대로 두고 같은 키로 부르며 부른 시각만 갱신한다")
+	@Test
+	void resend_whenCalled_keepsStatusAndKeyAndStampsRequestedAt() {
+		Payment payment = savePayment();
+		Refund refund = saveRefund(payment);
+		refund.markInProgress(LocalDateTime.now().minusMinutes(5));
+		refund.markUnknown();
+		Refund unsettled = refundPersistence.save(refund);
+		String keyBefore = unsettled.getPgIdempotencyKey();
+		givenRefundResult(PgRefundResult.unanswered("응답 없음", callRecord(PgErrorType.TIMEOUT)));
+
+		executeRefundUseCase.resend(payment, unsettled, PgCallSource.BATCH);
+
+		Refund resent = reload(refund);
+		assertThat(resent.getStatus()).isEqualTo(RefundStatus.UNKNOWN);
+		assertThat(resent.getAttemptSeq()).isEqualTo(unsettled.getAttemptSeq());
+		assertThat(resent.getPgIdempotencyKey()).isEqualTo(keyBefore);
+		assertThat(resent.getLastRequestedAt()).isAfter(unsettled.getLastRequestedAt());
+	}
+
+	@DisplayName("다시 보내려는 사이 결과가 확정됐으면 결제사를 부르지 않는다")
+	@Test
+	void resend_whenRefundAlreadySettled_doesNotCallGateway() {
+		Payment payment = savePayment();
+		Refund refund = saveRefund(payment);
+		refund.markInProgress(LocalDateTime.now().minusMinutes(5));
+		Refund calling = refundPersistence.save(refund);
+		Refund settled = reload(refund);
+		settled.complete(PG_TRANSACTION_ID);
+		refundPersistence.save(settled);
+
+		executeRefundUseCase.resend(payment, calling, PgCallSource.BATCH);
+
+		then(paymentGatewayPort).should(never()).refund(any(), any(), any());
+		assertThat(reload(refund).getStatus()).isEqualTo(RefundStatus.SUCCEEDED);
+	}
+
 	@DisplayName("회원 요청 흐름과 배치가 서로 다른 제한 시간으로 부른다는 사실이 호출에 실린다")
 	@Test
 	void send_whenCalled_passesCallSourceToGateway() {
@@ -365,6 +507,36 @@ class ExecuteRefundUseCaseIntegrationTest {
 		Refund saved = refundPersistence.save(refund);
 		paymentPersistence.save(payment);
 		return saved;
+	}
+
+	/**
+	 * 한 결제에 환불 둘. 앞엣것은 결과를 모르는 상태이고 뒤엣것이 이번에 나간다.
+	 *
+	 * <p>결제를 한 번만 저장한다. 두 번 나눠 저장하면 앞 저장으로 낡아진 버전이 뒤 저장에 부딪힌다.
+	 */
+	private PartiallyRefunded twoRefundsOnOnePayment() {
+		Payment payment = savePayment();
+		int half = AMOUNT / 2;
+		Refund earlier = payment.openRefund(
+			Optional.empty(), half, RefundReason.ORDER_CANCELED, "IDEM-earlier-" + uniqueSuffix);
+		Refund current = payment.openRefund(
+			Optional.empty(), half, RefundReason.ORDER_CANCELED, "IDEM-current-" + uniqueSuffix);
+		earlier.markInProgress(LocalDateTime.now().minusMinutes(5));
+		earlier.markUnknown();
+
+		Refund savedEarlier = refundPersistence.save(earlier);
+		Refund savedCurrent = refundPersistence.save(current);
+		return new PartiallyRefunded(paymentPersistence.save(payment), savedEarlier, savedCurrent);
+	}
+
+	private record PartiallyRefunded(Payment payment, Refund earlier, Refund current) {
+	}
+
+	/** 환불 가능 금액을 넘는다는 거절. 잔여가 0이라 "이미 취소된 결제"로 오는 답도 같은 검토 코드로 온다 */
+	private PgRefundResult exceededRejection() {
+		return PgRefundResult.terminalFailure(
+			RefundReviewCode.REFUNDABLE_AMOUNT_EXCEEDED, "취소 요청 금액이 잔여 금액을 넘음",
+			callRecord(PgErrorType.NONE));
 	}
 
 	/** 사람이 되살린 건. 부를 준비 상태이면서 시도 번호가 0이 아니라 이력을 먼저 읽어야 한다 */
