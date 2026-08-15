@@ -22,6 +22,7 @@ import org.mockito.InjectMocks;
 import org.mockito.Mock;
 import org.mockito.junit.jupiter.MockitoExtension;
 import org.springframework.dao.DataIntegrityViolationException;
+import org.springframework.dao.DuplicateKeyException;
 import org.springframework.test.util.ReflectionTestUtils;
 
 import com.commerce.common.exception.CommonException;
@@ -159,12 +160,27 @@ class OrderCancelUseCaseTest {
 		Order order = order(OrderStatus.PAID);
 		given(orderRepository.findByIdAndMemberId(ORDER_ID, MEMBER_ID)).willReturn(Optional.of(order));
 		given(cancelPaidOrderService.cancelPaidOrder(MEMBER_ID, ORDER_ID, IDEMPOTENCY_KEY))
-			.willThrow(new DataIntegrityViolationException("uk_refund_payment_idempotency"));
+			.willThrow(new DuplicateKeyException("uk_refund_payment_idempotency"));
 
 		assertThatThrownBy(() -> cancelOrderUseCase.cancel(MEMBER_ID, ORDER_ID, IDEMPOTENCY_KEY))
 			.isInstanceOf(OrderException.class)
 			.satisfies(ex -> assertThat(((OrderException) ex).getErrorCode())
 				.isEqualTo(OrderErrorCode.ORDER_CANCEL_IN_PROGRESS));
+	}
+
+	@DisplayName("중복 키가 아닌 무결성 위반은 처리 중으로 바뀌지 않고 그대로 올라간다")
+	@Test
+	void cancel_whenOtherIntegrityViolation_doesNotHideIt() {
+		givenReserved();
+		Order order = order(OrderStatus.PAID);
+		given(orderRepository.findByIdAndMemberId(ORDER_ID, MEMBER_ID)).willReturn(Optional.of(order));
+		// 이 트랜잭션은 주문·환불·재고·결제를 함께 저장해 NOT NULL·외래 키 위반도 같은 상위 예외로 온다.
+		// 그것까지 "처리 중"으로 바꾸면 실제 정합성 장애가 안전망에 닿지 못한다.
+		given(cancelPaidOrderService.cancelPaidOrder(MEMBER_ID, ORDER_ID, IDEMPOTENCY_KEY))
+			.willThrow(new DataIntegrityViolationException("Column 'refund_key' cannot be null"));
+
+		assertThatThrownBy(() -> cancelOrderUseCase.cancel(MEMBER_ID, ORDER_ID, IDEMPOTENCY_KEY))
+			.isInstanceOf(DataIntegrityViolationException.class);
 	}
 
 	@DisplayName("선점 저장소가 죽으면 유일 제약 경로로 물러나고 선점을 해제하지 않는다")
