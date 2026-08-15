@@ -1,6 +1,6 @@
 # reservation 조회를 `(memberId, merchantPayKey)` 로 단일화하고 예약 미발견을 `PAYMENT_RESERVATION_NOT_FOUND` 로 응답한다
 
-- Status: accepted
+- Status: superseded — PR#305가 대체. 예약 테이블이 없어지고 그 자리를 결제 행이 물려받아, 조회 대상과 미발견 응답이 모두 결제 기준으로 바뀐다.
 - Date: 2026-06-09
 
 ## Context

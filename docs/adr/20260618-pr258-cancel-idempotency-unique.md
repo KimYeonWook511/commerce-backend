@@ -1,6 +1,6 @@
 # CANCEL 생성 멱등은 기존 (merchantPayKey, provider, pgPaymentId, type) unique로 하드 보장된다
 
-- Status: accepted
+- Status: superseded — PR#305가 대체. 환불 중복 차단이 `(payment_id, requester, idempotency_key)` 유일 제약으로 옮겨졌다. 예약과 결제사 번호에 기대던 네 열 제약은 그 테이블이 사라지며 함께 없어진다.
 - Date: 2026-06-18
 
 ## Context
