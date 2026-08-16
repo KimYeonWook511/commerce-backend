@@ -341,6 +341,9 @@ def split_compound_commands(command: str) -> list[tuple[str, str]]:
     """(명령, 그 뒤에 오는 구분자) 목록. 마지막 명령의 구분자는 ""."""
     try:
         lexer = shlex.shlex(newlines_to_separators(command), posix=True, punctuation_chars=True)
+        # `$` 를 단어의 일부로 본다. 떼어내면 `git -C $HOME/x` 가 `-C` 의 값을 `$` 로 읽어
+        # 나머지 경로가 git 인자로 남고, 그 명령이 차단 대상에서 빠진다.
+        lexer.wordchars += "$"
         tokens = list(lexer)
     except ValueError:
         return [(command, "")]

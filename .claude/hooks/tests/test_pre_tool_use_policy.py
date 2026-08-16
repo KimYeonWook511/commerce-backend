@@ -310,6 +310,18 @@ class TokenNormalization(PolicyTestBase):
         self.assertBlocked("sudo env FOO=bar git push origin develop", "feature/x")
         self.assertBlocked("env A=1 B=2 git commit -m x", "develop")
 
+    # ── 경로에 변수가 있어도 토큰이 갈라지지 않는다 ────────────────────────────
+    # `$` 를 단어에서 떼어내면 `-C` 가 그것을 값으로 삼아 나머지 경로가 git 인자로
+    # 남고, 그러면 push·commit 이 차단 대상에서 빠진다.
+    def test_variable_in_git_c_path(self):
+        self.assertBlocked("git -C $HOME/repo push origin develop", "feature/x")
+        self.assertBlocked('git -C "$HOME/repo" push origin main', "feature/x")
+        self.assertBlocked("git -C $REPO commit -m x", "develop")
+
+    def test_variable_elsewhere_still_blocked(self):
+        self.assertBlocked("BODY=$(echo x) && git push origin develop", "feature/x")
+        self.assertBlocked("echo $USER && git push origin main", "feature/x")
+
 
 class FailOpen(PolicyTestBase):
     def test_broken_quoting_fail_open(self):
