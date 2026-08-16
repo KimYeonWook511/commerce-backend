@@ -318,6 +318,12 @@ class TokenNormalization(PolicyTestBase):
         self.assertBlocked('git -C "$HOME/repo" push origin main', "feature/x")
         self.assertBlocked("git -C $REPO commit -m x", "develop")
 
+    def test_braced_variable_in_git_c_path(self):
+        # 중괄호를 떼어내면 `{` 가 git 하위 명령 자리에 들어가 차단 패턴이 어긋난다.
+        self.assertBlocked("git -C ${PWD} push origin develop", "feature/x")
+        self.assertBlocked("git -C ${HOME}/repo commit -m x", "develop")
+        self.assertBlocked("cd ${PWD} && git push origin main", "feature/x")
+
     def test_variable_elsewhere_still_blocked(self):
         self.assertBlocked("BODY=$(echo x) && git push origin develop", "feature/x")
         self.assertBlocked("echo $USER && git push origin main", "feature/x")

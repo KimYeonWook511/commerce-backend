@@ -98,7 +98,7 @@ Claude Code가 도구 실행을 시도하면 `PreToolUse` hook이 stdin으로 JS
 - **범용 도구 우회**: `gh api -X PATCH .../git/refs/heads/main ...`, `curl -X PATCH https://api.github.com/...` 처럼 인증 토큰으로 GitHub API에 직접 쓰기 호출하면 `git push` 차단을 우회한다. 이런 임의 호출은 hook으로 정밀 차단해도 빈틈이 계속 생기므로 정책 문서(CLAUDE.md)와 서버 보호에 맡긴다.
 - **스크립트 내부 명령**: `bash deploy.sh` 안에서 `git push origin main`이 일어나면 hook은 바깥 명령만 보므로 잡지 못한다.
 - **브랜치 탐지 실패(fail-open)**: 레포가 아니거나 git 미설치·타임아웃 등으로 현재 브랜치 조회가 실패하면 "현재 브랜치 의존 검사"(commit·bare push·reset 등)는 통과시킨다. 단, refspec으로 **명시된** 보호 브랜치 대상 push(`git push origin develop` 등)는 탐지와 무관하게 항상 차단된다.
-- **경로를 확정할 수 없는 위치 지정**: `cd $VAR`·`cd -`·`git -C $VAR`처럼 hook이 평가할 수 없는 경로는 이 Repo에 남아 있는 것으로 간주해 판정을 유지한다(`cd $VAR && git push origin main`·`git -C $VAR commit`은 차단). 다른 저장소라는 확인이 섰을 때만 판정을 건너뛴다.
+- **경로를 확정할 수 없는 위치 지정**: `cd $VAR`·`cd -`·`git -C ${VAR}`처럼 hook이 평가할 수 없는 경로는 이 Repo에 남아 있는 것으로 간주해 판정을 유지한다(`cd $VAR && git push origin main`·`git -C ${VAR} commit`은 차단). 다른 저장소라는 확인이 섰을 때만 판정을 건너뛴다. 알아보는 형태는 `$VAR`와 `${VAR}`까지이며, `${VAR:-기본값}`처럼 더 복잡한 확장은 토큰이 갈라져 판정에서 빠진다 — 실수로 나오는 표기가 아니므로 여기서 선을 긋는다.
 - **hook 자체 비활성화**: `.claude/settings.json`/스크립트를 끄거나 다른 환경에서 실행하면 무력화된다.
 
 따라서 권장 구조는 다음 3중 방어다.
