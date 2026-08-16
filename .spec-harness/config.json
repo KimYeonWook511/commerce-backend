@@ -16,7 +16,7 @@
   ],
   "spec_root": "docs/specs",
   "methodologies": ["ddd", "bdd"],
-  "pr": { "draft_until_root_sync": false },
+  "merge": { "agent": "root_sync" },
   "workspace": {
     "mode": "worktree",
     "base_ref": "develop",
