@@ -10,6 +10,7 @@ import io
 import json
 import os
 import sys
+import tempfile
 import unittest
 from unittest.mock import patch
 
@@ -18,13 +19,17 @@ sys.path.insert(0, os.path.abspath(os.path.join(os.path.dirname(__file__), "..")
 
 import pre_tool_use_policy as policy  # noqa: E402
 
+# 저장소 판별용 common dir. 아래 기본 테스트들은 모든 디렉터리가 이 저장소라고 본다.
+SAME_REPO = "/repo/server/.git"
+
 
 class PolicyTestBase(unittest.TestCase):
     """command + 현재 브랜치를 주입해 evaluate_bash 결과를 검증한다."""
 
     def evaluate(self, command: str, branch: str):
-        # detect_current_branch(git 호출)를 주입한 브랜치로 대체
-        with patch.object(policy, "detect_current_branch", return_value=branch):
+        # resolve_context(git 호출)를 주입한 브랜치로 대체 — 어느 디렉터리든 이 저장소로 본다
+        with patch.object(policy, "resolve_context", return_value=(branch, SAME_REPO)), \
+                patch.object(policy, "project_common_dir", return_value=SAME_REPO):
             return policy.evaluate_bash(command)
 
     def assertBlocked(self, command: str, branch: str):
@@ -231,6 +236,61 @@ class CompoundCommands(PolicyTestBase):
         self.assertAllowed("git checkout -b feature/z && git commit -m x", "develop")
 
 
+class NewlineSeparatedCommands(PolicyTestBase):
+    """줄바꿈은 `;` 와 같은 순차 실행 구분자이므로 각 줄을 개별 검사한다."""
+
+    def test_leading_line_does_not_hide_violation(self):
+        self.assertBlocked("echo hi\ngit commit -m x", "develop")
+        self.assertBlocked("echo hi\ngit push origin develop", "feature/x")
+        self.assertBlocked("ls\ngit reset --hard", "develop")
+        self.assertBlocked("echo hi\nrm -rf /some/dir", "develop")
+
+    def test_branch_switch_tracked_across_lines(self):
+        self.assertBlocked("git checkout main\ngit commit -m x", "feature/x")
+        self.assertAllowed("git switch feature/y\ngit reset --hard", "develop")
+
+    def test_blank_lines_ignored(self):
+        self.assertBlocked("echo hi\n\n\ngit push origin main", "feature/x")
+
+    def test_newline_inside_quotes_preserved(self):
+        # 여러 줄 커밋 메시지는 값의 일부라 명령이 쪼개지지 않는다
+        self.assertBlocked('git commit -m "feat: x\n\n- body"', "develop")
+        self.assertAllowed('git commit -m "feat: x\n\n- body"', "feature/x")
+        self.assertAllowed("git commit -m 'feat: x\n\n- body'", "feature/x")
+
+    def test_trailing_newline_ignored(self):
+        self.assertBlocked("git push origin develop\n", "feature/x")
+        self.assertAllowed("git status\n", "develop")
+
+    def test_newline_after_separator_keeps_split(self):
+        # 구분자 뒤 줄바꿈은 명령을 잇는 개행이라, 구분자가 묻히면 안 된다
+        self.assertBlocked("echo ok &&\ngit commit -m x", "develop")
+        self.assertBlocked("echo ok ||\ngit push origin main", "feature/x")
+        self.assertBlocked("echo ok |\ngit commit -m x", "develop")
+        self.assertBlocked("echo ok ;\ngit reset --hard", "develop")
+
+
+class HeredocBody(PolicyTestBase):
+    """here-doc 본문은 앞 명령의 표준 입력이라 명령으로 쪼개지 않는다."""
+
+    def test_body_is_not_treated_as_command(self):
+        self.assertAllowed("cat <<'EOF' > notes\ngit push origin main\nEOF", "develop")
+        self.assertAllowed("cat <<EOF > notes\ngit reset --hard\nEOF", "develop")
+        self.assertAllowed("cat <<-EOF > notes\nrm -rf /some/dir\nEOF", "develop")
+
+    def test_commands_after_body_still_checked(self):
+        self.assertBlocked(
+            "cat <<'EOF' > notes\nsome text\nEOF\ngit push origin develop", "feature/x"
+        )
+
+    def test_quoted_heredoc_marker_is_not_a_body(self):
+        # 따옴표 안의 `<<EOF` 는 값일 뿐이므로 뒤 줄이 데이터가 되면 안 된다
+        self.assertBlocked('echo "<<EOF"\ngit push origin develop', "feature/x")
+
+    def test_command_opening_heredoc_is_still_checked(self):
+        self.assertBlocked("git commit -F - <<'EOF'\nmessage\nEOF", "develop")
+
+
 class TokenNormalization(PolicyTestBase):
     def test_sudo_prefix(self):
         self.assertBlocked("sudo git push origin develop", "feature/x")
@@ -250,6 +310,24 @@ class TokenNormalization(PolicyTestBase):
         self.assertBlocked("sudo env FOO=bar git push origin develop", "feature/x")
         self.assertBlocked("env A=1 B=2 git commit -m x", "develop")
 
+    # ── 경로에 변수가 있어도 토큰이 갈라지지 않는다 ────────────────────────────
+    # `$` 를 단어에서 떼어내면 `-C` 가 그것을 값으로 삼아 나머지 경로가 git 인자로
+    # 남고, 그러면 push·commit 이 차단 대상에서 빠진다.
+    def test_variable_in_git_c_path(self):
+        self.assertBlocked("git -C $HOME/repo push origin develop", "feature/x")
+        self.assertBlocked('git -C "$HOME/repo" push origin main', "feature/x")
+        self.assertBlocked("git -C $REPO commit -m x", "develop")
+
+    def test_braced_variable_in_git_c_path(self):
+        # 중괄호를 떼어내면 `{` 가 git 하위 명령 자리에 들어가 차단 패턴이 어긋난다.
+        self.assertBlocked("git -C ${PWD} push origin develop", "feature/x")
+        self.assertBlocked("git -C ${HOME}/repo commit -m x", "develop")
+        self.assertBlocked("cd ${PWD} && git push origin main", "feature/x")
+
+    def test_variable_elsewhere_still_blocked(self):
+        self.assertBlocked("BODY=$(echo x) && git push origin develop", "feature/x")
+        self.assertBlocked("echo $USER && git push origin main", "feature/x")
+
 
 class FailOpen(PolicyTestBase):
     def test_broken_quoting_fail_open(self):
@@ -266,13 +344,112 @@ class FailOpen(PolicyTestBase):
         self.assertBlocked("git push origin develop", "")
 
 
+class RepoScope(unittest.TestCase):
+    """실효 작업 디렉터리가 어느 저장소인지에 따라 정책 적용 여부가 갈린다."""
+
+    def setUp(self):
+        tmp = tempfile.TemporaryDirectory()
+        self.addCleanup(tmp.cleanup)
+        # hook 이 경로를 realpath 로 정규화하므로 기대값도 실제 경로로 맞춘다
+        base = os.path.realpath(tmp.name)
+        self.project = os.path.join(base, "server")
+        self.worktree = os.path.join(self.project, "worktrees", "fix-x")
+        self.other = os.path.join(base, "other")
+        for path in (self.project, self.worktree, self.other):
+            os.makedirs(path, exist_ok=True)
+        self.worktree_alias = os.path.join(base, "wt-alias")
+        os.symlink(self.worktree, self.worktree_alias)
+
+        # worktree 는 저장소 루트가 달라도 common dir 이 같아 이 저장소로 인식된다.
+        self.contexts = {
+            self.project: ("develop", SAME_REPO),
+            self.worktree: ("fix/x", SAME_REPO),
+            self.other: ("main", "/repo/other/.git"),
+        }
+
+    def evaluate(self, command: str):
+        def fake_context(directory):
+            return self.contexts.get(os.path.normpath(directory), ("", ""))
+
+        with patch.object(policy, "resolve_context", side_effect=fake_context), \
+                patch.object(policy, "project_common_dir", return_value=SAME_REPO):
+            return policy.evaluate_bash(command, self.project)
+
+    def assertBlocked(self, command: str):
+        result = self.evaluate(command)
+        self.assertTrue(result.blocked, f"차단 기대했으나 허용됨: {command}")
+
+    def assertAllowed(self, command: str):
+        result = self.evaluate(command)
+        self.assertFalse(result.blocked, f"허용 기대했으나 차단됨: {command}\n사유: {result.reason}")
+
+    def test_other_repo_write_allowed(self):
+        # 다른 저장소의 보호 브랜치 이름은 이 저장소 정책의 대상이 아니다
+        self.assertAllowed(f"cd {self.other} && git commit -m x")
+        self.assertAllowed(f"git -C {self.other} push origin main")
+
+    def test_same_repo_via_git_c_blocked(self):
+        # `-C` 로 이 저장소를 가리키면 그대로 정책이 적용된다
+        self.assertBlocked("git -C . commit -m x")
+        self.assertBlocked(f"git -C {self.project} push origin develop")
+
+    def test_worktree_treated_as_feature_branch(self):
+        self.assertAllowed(f"cd {self.worktree} && git commit -m x")
+        self.assertAllowed(f"git -C {self.worktree} reset --hard")
+
+    def test_unresolvable_path_keeps_policy(self):
+        # 경로를 확정할 수 없으면 이 저장소로 간주한다 — 우회로가 되지 않는다
+        self.assertBlocked("cd $TARGET && git push origin main")
+        self.assertBlocked("cd - && git commit -m x")
+        self.assertBlocked(f"cd {self.project}/nope && git commit -m x")
+
+    def test_cd_applies_to_following_commands(self):
+        self.assertAllowed(f"cd {self.other} && git status && git commit -m x")
+
+    def test_git_c_applies_to_one_command_only(self):
+        self.assertBlocked(f"git -C {self.other} commit -m x && git commit -m y")
+
+    def test_cd_does_not_propagate_across_subshell(self):
+        # 파이프·백그라운드는 서브셸에서 실행되어 부모 셸의 위치가 바뀌지 않는다
+        self.assertBlocked(f"cd {self.other} | git commit -m x")
+        self.assertBlocked(f"cd {self.other} & git commit -m x")
+
+    def test_cd_does_not_propagate_across_or(self):
+        # `||` 뒤 명령이 실행되는 것은 cd 가 실패했을 때뿐이라 위치가 그대로다
+        self.assertBlocked(f"cd {self.other} || git push origin main")
+
+    def test_cd_tracked_back_into_project(self):
+        # 다른 저장소를 경유해 돌아오면 다시 이 저장소 기준으로 판정한다
+        self.assertBlocked(f"cd {self.other} && cd {self.project} && git commit -m x")
+
+    def test_cd_with_extra_argument_is_unresolved(self):
+        # 셸의 cd 는 위치 인자를 하나만 받으므로 그 자리로 이동하지 않는다
+        self.assertBlocked(f"cd {self.other} extra && git commit -m x")
+
+    def test_branch_switch_scoped_to_target_dir(self):
+        # 다른 worktree 의 전환이 현재 디렉터리 판정에 새면 안 된다
+        self.assertBlocked(f"git -C {self.worktree} switch feature/z && git commit -m x")
+        # 전환한 그 worktree 는 전환된 브랜치로 판정한다
+        self.assertBlocked(f"git -C {self.worktree} switch develop && git -C {self.worktree} commit -m x")
+
+    def test_branch_switch_tracked_within_same_dir(self):
+        self.assertAllowed(f"git -C {self.worktree} switch feature/z && git -C {self.worktree} commit -m x")
+
+    def test_branch_switch_tracked_across_symlinked_path(self):
+        # 같은 디렉터리를 실제 경로와 심볼릭 링크로 가리켜도 전환 상태가 갈리지 않는다
+        self.assertBlocked(
+            f"git -C {self.worktree} switch develop && git -C {self.worktree_alias} commit -m x"
+        )
+
+
 class MainEntrypoint(unittest.TestCase):
     """main()을 stdin/stdout mock으로 end-to-end 검증한다."""
 
     def _run_main(self, payload, branch):
         stdin = io.StringIO(json.dumps(payload))
         stdout = io.StringIO()
-        with patch.object(policy, "detect_current_branch", return_value=branch), \
+        with patch.object(policy, "resolve_context", return_value=(branch, SAME_REPO)), \
+                patch.object(policy, "project_common_dir", return_value=SAME_REPO), \
                 patch.object(sys, "stdin", stdin), \
                 patch.object(sys, "stdout", stdout):
             code = policy.main()

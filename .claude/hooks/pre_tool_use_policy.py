@@ -16,6 +16,11 @@ Bash 명령을 브랜치 인식 정책으로 검사한다 (agent_type 분기 없
 force push/삭제·push 대상 판단은 "현재 브랜치"가 아니라 push 대상 브랜치(refspec)를 기준으로 한다.
 (피처 브랜치에서 `git push origin develop` 도 차단됨)
 
+적용 범위 — 이 저장소를 향하는 명령만:
+  명령의 실효 작업 디렉터리(`cd`·`git -C` 를 반영한 위치)를 따라가, 그곳이 다른 저장소면 판정하지
+  않는다. worktree 는 common dir 이 같아 이 저장소로 인식하며, 브랜치도 그 디렉터리에서 조회한다.
+  경로를 확정할 수 없으면(`cd $VAR`·`cd -`) 이 저장소로 간주해 판정을 유지한다.
+
 설계 원칙:
   - fail-open: 입력 파싱 실패·형식 오류는 차단하지 않는다(정책 오류가 작업을 막으면 안 됨).
   - 차단은 최신 형식으로 응답한다: hookSpecificOutput.permissionDecision = "deny".
@@ -32,6 +37,8 @@ force push/삭제·push 대상 판단은 "현재 브랜치"가 아니라 push �
 from __future__ import annotations
 
 import json
+import os
+import re
 import shlex
 import subprocess
 import sys
@@ -57,13 +64,19 @@ _NONMUTATING_SUBCMD_FLAGS = frozenset({"--abort", "--quit", "--dry-run"})
 
 
 # ─────────────────────────────────────────────────────────────────────────────
-# 현재 브랜치 탐지 (hook 1회 실행 = 1회만 호출)
+# 실효 작업 디렉터리와 저장소 판별
+#
+# 명령이 어느 디렉터리에서 실행되는지에 따라 브랜치도 저장소도 달라진다. 그래서 판정 기준을
+# hook 프로세스의 cwd 가 아니라 "그 명령의 실효 작업 디렉터리"로 잡는다.
 # ─────────────────────────────────────────────────────────────────────────────
-def detect_current_branch() -> str:
-    """현재 체크아웃된 브랜치명. detached HEAD 면 "HEAD", 실패 시 "" (fail-open)."""
+_context_cache: dict[str, tuple[str, str]] = {}
+
+
+def _run_git(directory: str, *args) -> str:
+    """지정한 디렉터리에서 git 을 실행해 stdout 을 돌려준다. 실패하면 "" (fail-open)."""
     try:
         proc = subprocess.run(
-            ["git", "rev-parse", "--abbrev-ref", "HEAD"],
+            ["git", "-C", directory, *args],
             capture_output=True,
             text=True,
             timeout=5,
@@ -75,6 +88,78 @@ def detect_current_branch() -> str:
     return proc.stdout.strip()
 
 
+def resolve_context(directory: str) -> tuple[str, str]:
+    """그 디렉터리의 (현재 브랜치, git common dir 절대경로).
+
+    common dir 로 저장소를 식별하는 이유는 worktree 때문이다. worktree 는 저장소 루트가
+    메인 체크아웃과 다르지만 common dir 은 같아서, 같은 저장소로 인식된다.
+    """
+    cached = _context_cache.get(directory)
+    if cached is not None:
+        return cached
+
+    branch = _run_git(directory, "rev-parse", "--abbrev-ref", "HEAD")
+    common = _run_git(directory, "rev-parse", "--git-common-dir")
+    if common:
+        if not os.path.isabs(common):
+            common = os.path.join(directory, common)
+        common = os.path.realpath(common)
+
+    context = (branch, common)
+    _context_cache[directory] = context
+    return context
+
+
+def project_common_dir() -> str:
+    """이 정책이 지키는 저장소의 common dir. 조회 실패면 "" (판별 생략)."""
+    root = os.environ.get("CLAUDE_PROJECT_DIR") or os.getcwd()
+    return resolve_context(root)[1]
+
+
+def resolve_dir(path: str, base: Optional[str]) -> Optional[str]:
+    """경로를 실제 디렉터리로 해석한다. 확정할 수 없으면 None.
+
+    변수 확장(`$VAR`)은 hook 이 평가할 수 없고, 존재하지 않는 경로는 명령 자체가 실패한다.
+    심볼릭 링크를 푸는 이유는 같은 디렉터리를 가리키는 여러 경로가 한 값으로 모여야
+    디렉터리별 상태(브랜치 전환 추적)가 갈리지 않기 때문이다.
+    """
+    if "$" in path:
+        return None
+    expanded = os.path.expanduser(path)
+    if not os.path.isabs(expanded):
+        if base is None:
+            return None
+        expanded = os.path.join(base, expanded)
+    expanded = os.path.realpath(expanded)
+    return expanded if os.path.isdir(expanded) else None
+
+
+def cd_target(tokens: list[str], base: Optional[str]) -> Optional[str]:
+    """`cd` 가 옮겨갈 디렉터리. cd 가 아니거나 확정할 수 없으면 None."""
+    if not tokens or tokens[0] != "cd":
+        return None
+    args = [t for t in tokens[1:] if t == "-" or not t.startswith("-")]
+    if not args:
+        return os.path.expanduser("~")
+    if len(args) > 1:
+        # 셸의 cd 는 위치 인자를 하나만 받는다. 인자가 더 있으면 그 자리로 이동하지 않는다
+        # (bash 는 인자 초과로 실패하고, zsh 는 경로 치환으로 전혀 다르게 동작한다).
+        return None
+    if args[0] == "-":  # 이전 디렉터리 — hook 은 알 수 없다
+        return None
+    return resolve_dir(args[0], base)
+
+
+def in_project_repo(directory: Optional[str], project: str) -> bool:
+    """이 저장소를 향하는 명령인가. 확정할 수 없으면 True — 모를 때는 판정을 유지한다."""
+    if directory is None or not project:
+        return True
+    common = resolve_context(directory)[1]
+    if not common:
+        return True
+    return common == project
+
+
 def _protected_label() -> str:
     return ", ".join(sorted(PROTECTED_BRANCHES))
 
@@ -83,10 +168,15 @@ def _protected_label() -> str:
 # 토큰 정규화 (sudo/env/command/git 접두사 제거) — 우회 차단
 # ─────────────────────────────────────────────────────────────────────────────
 def normalize_tokens(command: str) -> list[str]:
+    return normalize_tokens_with_dirs(command)[0]
+
+
+def normalize_tokens_with_dirs(command: str) -> tuple[list[str], list[str]]:
+    """정규화한 토큰과, `git -C` 가 지정한 디렉터리 목록을 함께 돌려준다."""
     try:
         tokens = shlex.split(command, posix=True)
     except ValueError:
-        return []  # 잘못된 quoting은 fail-open
+        return [], []  # 잘못된 quoting은 fail-open
 
     while tokens:
         head = tokens[0]
@@ -135,18 +225,28 @@ def normalize_tokens(command: str) -> list[str]:
         break
 
     if tokens and tokens[0] == "git":
-        tokens = normalize_git_tokens(tokens)
-    return tokens
+        return normalize_git_tokens_with_dirs(tokens)
+    return tokens, []
 
 
 def normalize_git_tokens(tokens: list[str]) -> list[str]:
+    return normalize_git_tokens_with_dirs(tokens)[0]
+
+
+def normalize_git_tokens_with_dirs(tokens: list[str]) -> tuple[list[str], list[str]]:
     normalized = tokens[:1]
     remainder = tokens[1:]
+    dirs: list[str] = []
     while remainder:
         current = remainder[0]
         if current == "--":
             remainder = remainder[1:]
             break
+        # `-C` 는 값을 소비하며, 그 값이 이 명령의 실효 작업 디렉터리다(여러 번 오면 순차 적용).
+        if current == "-C" and len(remainder) >= 2:
+            dirs.append(remainder[1])
+            remainder = remainder[2:]
+            continue
         if current == "-c" and len(remainder) >= 2:
             remainder = remainder[2:]
             continue
@@ -157,34 +257,109 @@ def normalize_git_tokens(tokens: list[str]) -> list[str]:
             remainder = remainder[1:]
             continue
         break
-    return normalized + remainder
+    return normalized + remainder, dirs
 
 
 # ─────────────────────────────────────────────────────────────────────────────
-# 복합 명령 분리 (&&, ||, ;, &, | 로 연결된 것을 각각 검사)
+# 복합 명령 분리 (줄바꿈과 &&, ||, ;, &, | 로 연결된 것을 각각 검사)
 # ─────────────────────────────────────────────────────────────────────────────
 _COMPOUND_SEPARATORS = frozenset({"&&", "||", ";", "&", "|"})
 
+# `cd` 의 결과가 뒤 명령까지 이어지는 구분자.
+#   `|`·`&`  — 서브셸에서 실행되어 부모 셸의 작업 디렉터리가 바뀌지 않는다.
+#   `||`     — 뒤 명령이 실행되는 것은 `cd` 가 실패했을 때뿐이라 위치가 그대로다.
+_CD_PROPAGATING_SEPARATORS = frozenset({"&&", ";"})
 
-def split_compound_commands(command: str) -> list[str]:
+
+_HEREDOC_START = re.compile(r"<<-?\s*(['\"]?)(\w+)\1")
+
+
+def scan_line(line: str, quote: str) -> tuple[str, str]:
+    """한 줄을 훑어 (줄 끝의 따옴표 상태, 시작한 here-doc 의 종료 표시)를 돌려준다.
+
+    따옴표 밖의 `<<` 만 here-doc 으로 본다. 따옴표 안의 `<<EOF` 를 here-doc 으로 오인하면
+    뒤따르는 줄이 데이터로 취급돼 검사를 건너뛰게 된다.
+    """
+    heredoc = ""
+    escaped = False
+    index = 0
+    while index < len(line):
+        ch = line[index]
+        if escaped:
+            escaped = False
+        elif ch == "\\" and quote != "'":
+            escaped = True
+        elif quote:
+            if ch == quote:
+                quote = ""
+        elif ch in "'\"":
+            quote = ch
+        elif not heredoc and line.startswith("<<", index):
+            match = _HEREDOC_START.match(line, index)
+            if match:
+                heredoc = match.group(2)
+                index = match.end()
+                continue
+        index += 1
+    return quote, heredoc
+
+
+def newlines_to_separators(command: str) -> str:
+    """명령을 잇는 줄바꿈을 `;` 로 바꾼다.
+
+    셸에서 줄바꿈은 `;` 와 같은 순차 실행 구분자다. 이걸 그냥 두면 여러 줄 명령이 한 덩어리로
+    묶여 첫 낱말만 보고 판정하게 되고, 앞에 아무 줄이나 붙이는 것만으로 검사를 지나간다.
+
+    값에 해당하는 줄바꿈은 건드리지 않는다 — 따옴표 안(여러 줄 commit 메시지)과 here-doc 본문
+    (앞 명령의 표준 입력)이 그렇다.
+    """
+    pieces: list[str] = []
+    quote = ""
+    heredoc_end = ""
+
+    for index, line in enumerate(command.split("\n")):
+        if index == 0:
+            pieces.append(line)
+        elif heredoc_end or quote:
+            pieces.append("\n" + line)  # 값의 일부 — 원래 줄바꿈을 유지한다
+        else:
+            # 앞이 이미 구분자면 줄바꿈은 명령을 다음 줄로 잇는 개행이다. 여기에 `;` 를 더하면
+            # `&&;` 처럼 붙어 한 낱말로 묶이고, 원래 잡히던 구분자마저 사라진다.
+            previous = "".join(pieces).rstrip(" \t")
+            pieces.append(" " if previous.endswith(("&", "|", ";")) else ";")
+            pieces.append(line)
+
+        if heredoc_end:
+            if line.strip() == heredoc_end:
+                heredoc_end = ""
+            continue
+        quote, heredoc_end = scan_line(line, quote)
+    return "".join(pieces)
+
+
+def split_compound_commands(command: str) -> list[tuple[str, str]]:
+    """(명령, 그 뒤에 오는 구분자) 목록. 마지막 명령의 구분자는 ""."""
     try:
-        lexer = shlex.shlex(command, posix=True, punctuation_chars=True)
+        lexer = shlex.shlex(newlines_to_separators(command), posix=True, punctuation_chars=True)
+        # `$`·`{`·`}` 를 단어의 일부로 본다. 떼어내면 `git -C ${HOME}/x` 가 `-C` 의 값을 `$` 로
+        # 읽고 `{` 를 하위 명령으로 오인해, 그 명령이 차단 대상에서 빠진다.
+        lexer.wordchars += "${}"
         tokens = list(lexer)
     except ValueError:
-        return [command]
+        return [(command, "")]
 
-    commands: list[str] = []
+    commands: list[tuple[str, str]] = []
     current: list[str] = []
     for token in tokens:
         if token in _COMPOUND_SEPARATORS:
             if current:
-                commands.append(shlex.join(current))
+                commands.append((shlex.join(current), token))
                 current = []
         else:
             current.append(token)
     if current:
-        commands.append(shlex.join(current))
-    return commands if commands else [command]
+        commands.append((shlex.join(current), ""))
+    return commands if commands else [(command, "")]
 
 
 # ─────────────────────────────────────────────────────────────────────────────
@@ -383,19 +558,52 @@ def evaluate_blacklist_tokens(tokens: list[str], current: str) -> PolicyResult:
     return PolicyResult(False)
 
 
-def evaluate_bash(command: str) -> PolicyResult:
-    branch = detect_current_branch()
-    for sub in split_compound_commands(command):
-        tokens = normalize_tokens(sub)
+def evaluate_bash(command: str, cwd: str = "") -> PolicyResult:
+    project = project_common_dir()
+    base_dir = os.path.realpath(cwd or os.getcwd())
+    # None = 경로를 확정하지 못한 상태. 그때는 기점에 남아 있는 것으로 보고 판정을 유지한다.
+    current_dir: Optional[str] = base_dir
+    # 같은 줄에서 전환한 브랜치를 디렉터리별로 기억한다. hook 은 명령 실행 전에 돌아 전환이
+    # 아직 반영되지 않았고, 한 worktree 의 전환이 다른 worktree 판정에 새면 안 된다.
+    switched: dict[str, str] = {}
+
+    def branch_of(directory: Optional[str]) -> str:
+        key = directory if directory is not None else base_dir
+        if key in switched:
+            return switched[key]
+        return resolve_context(key)[0]
+
+    for sub, separator in split_compound_commands(command):
+        tokens, c_dirs = normalize_tokens_with_dirs(sub)
         if not tokens:
             continue
-        result = evaluate_blacklist_tokens(tokens, branch)
+
+        # `cd` 는 차단 대상이 아니라 위치 상태만 바꾼다. 저장소 판별보다 먼저 처리해야
+        # 다른 저장소를 경유해 돌아오는 경로에서 추적이 끊기지 않는다.
+        if tokens[0] == "cd":
+            if separator in _CD_PROPAGATING_SEPARATORS:
+                current_dir = cd_target(tokens, current_dir)
+            continue
+
+        # `git -C` 는 그 명령 하나에만 적용된다(`cd` 와 달리 뒤로 이어지지 않는다).
+        target_dir = current_dir
+        for path in c_dirs:
+            target_dir = resolve_dir(path, target_dir)
+            if target_dir is None:
+                break
+
+        if not in_project_repo(target_dir, project):
+            continue  # 다른 저장소를 향하는 명령 — 이 저장소의 정책 대상이 아니다
+
+        result = evaluate_blacklist_tokens(tokens, branch_of(target_dir))
         if result.blocked:
             return result
-        # 같은 줄에서 브랜치를 전환하면 이후 명령은 전환된 브랜치 기준으로 판단
-        switched = branch_switch_target(tokens)
-        if switched is not None:
-            branch = switched
+
+        # 같은 줄에서 브랜치를 전환하면 이후 명령은 전환된 브랜치 기준으로 판단한다.
+        # 전환은 그 명령이 가리킨 디렉터리에만 적용된다.
+        target_branch = branch_switch_target(tokens)
+        if target_branch is not None:
+            switched[target_dir if target_dir is not None else base_dir] = target_branch
     return PolicyResult(False)
 
 
@@ -432,7 +640,8 @@ def main() -> int:
         command = tool_input.get("command", "")
         if not isinstance(command, str) or not command.strip():
             return 0
-        result = evaluate_bash(command)
+        cwd = payload.get("cwd")
+        result = evaluate_bash(command, cwd if isinstance(cwd, str) else "")
         if result.blocked:
             return emit_block(result.reason)
     return 0
