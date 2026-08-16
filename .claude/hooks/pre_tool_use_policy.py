@@ -38,6 +38,7 @@ from __future__ import annotations
 
 import json
 import os
+import re
 import shlex
 import subprocess
 import sys
@@ -260,7 +261,7 @@ def normalize_git_tokens_with_dirs(tokens: list[str]) -> tuple[list[str], list[s
 
 
 # ─────────────────────────────────────────────────────────────────────────────
-# 복합 명령 분리 (&&, ||, ;, &, | 로 연결된 것을 각각 검사)
+# 복합 명령 분리 (줄바꿈과 &&, ||, ;, &, | 로 연결된 것을 각각 검사)
 # ─────────────────────────────────────────────────────────────────────────────
 _COMPOUND_SEPARATORS = frozenset({"&&", "||", ";", "&", "|"})
 
@@ -270,10 +271,76 @@ _COMPOUND_SEPARATORS = frozenset({"&&", "||", ";", "&", "|"})
 _CD_PROPAGATING_SEPARATORS = frozenset({"&&", ";"})
 
 
+_HEREDOC_START = re.compile(r"<<-?\s*(['\"]?)(\w+)\1")
+
+
+def scan_line(line: str, quote: str) -> tuple[str, str]:
+    """한 줄을 훑어 (줄 끝의 따옴표 상태, 시작한 here-doc 의 종료 표시)를 돌려준다.
+
+    따옴표 밖의 `<<` 만 here-doc 으로 본다. 따옴표 안의 `<<EOF` 를 here-doc 으로 오인하면
+    뒤따르는 줄이 데이터로 취급돼 검사를 건너뛰게 된다.
+    """
+    heredoc = ""
+    escaped = False
+    index = 0
+    while index < len(line):
+        ch = line[index]
+        if escaped:
+            escaped = False
+        elif ch == "\\" and quote != "'":
+            escaped = True
+        elif quote:
+            if ch == quote:
+                quote = ""
+        elif ch in "'\"":
+            quote = ch
+        elif not heredoc and line.startswith("<<", index):
+            match = _HEREDOC_START.match(line, index)
+            if match:
+                heredoc = match.group(2)
+                index = match.end()
+                continue
+        index += 1
+    return quote, heredoc
+
+
+def newlines_to_separators(command: str) -> str:
+    """명령을 잇는 줄바꿈을 `;` 로 바꾼다.
+
+    셸에서 줄바꿈은 `;` 와 같은 순차 실행 구분자다. 이걸 그냥 두면 여러 줄 명령이 한 덩어리로
+    묶여 첫 낱말만 보고 판정하게 되고, 앞에 아무 줄이나 붙이는 것만으로 검사를 지나간다.
+
+    값에 해당하는 줄바꿈은 건드리지 않는다 — 따옴표 안(여러 줄 commit 메시지)과 here-doc 본문
+    (앞 명령의 표준 입력)이 그렇다.
+    """
+    pieces: list[str] = []
+    quote = ""
+    heredoc_end = ""
+
+    for index, line in enumerate(command.split("\n")):
+        if index == 0:
+            pieces.append(line)
+        elif heredoc_end or quote:
+            pieces.append("\n" + line)  # 값의 일부 — 원래 줄바꿈을 유지한다
+        else:
+            # 앞이 이미 구분자면 줄바꿈은 명령을 다음 줄로 잇는 개행이다. 여기에 `;` 를 더하면
+            # `&&;` 처럼 붙어 한 낱말로 묶이고, 원래 잡히던 구분자마저 사라진다.
+            previous = "".join(pieces).rstrip(" \t")
+            pieces.append(" " if previous.endswith(("&", "|", ";")) else ";")
+            pieces.append(line)
+
+        if heredoc_end:
+            if line.strip() == heredoc_end:
+                heredoc_end = ""
+            continue
+        quote, heredoc_end = scan_line(line, quote)
+    return "".join(pieces)
+
+
 def split_compound_commands(command: str) -> list[tuple[str, str]]:
     """(명령, 그 뒤에 오는 구분자) 목록. 마지막 명령의 구분자는 ""."""
     try:
-        lexer = shlex.shlex(command, posix=True, punctuation_chars=True)
+        lexer = shlex.shlex(newlines_to_separators(command), posix=True, punctuation_chars=True)
         tokens = list(lexer)
     except ValueError:
         return [(command, "")]

@@ -236,6 +236,61 @@ class CompoundCommands(PolicyTestBase):
         self.assertAllowed("git checkout -b feature/z && git commit -m x", "develop")
 
 
+class NewlineSeparatedCommands(PolicyTestBase):
+    """줄바꿈은 `;` 와 같은 순차 실행 구분자이므로 각 줄을 개별 검사한다."""
+
+    def test_leading_line_does_not_hide_violation(self):
+        self.assertBlocked("echo hi\ngit commit -m x", "develop")
+        self.assertBlocked("echo hi\ngit push origin develop", "feature/x")
+        self.assertBlocked("ls\ngit reset --hard", "develop")
+        self.assertBlocked("echo hi\nrm -rf /some/dir", "develop")
+
+    def test_branch_switch_tracked_across_lines(self):
+        self.assertBlocked("git checkout main\ngit commit -m x", "feature/x")
+        self.assertAllowed("git switch feature/y\ngit reset --hard", "develop")
+
+    def test_blank_lines_ignored(self):
+        self.assertBlocked("echo hi\n\n\ngit push origin main", "feature/x")
+
+    def test_newline_inside_quotes_preserved(self):
+        # 여러 줄 커밋 메시지는 값의 일부라 명령이 쪼개지지 않는다
+        self.assertBlocked('git commit -m "feat: x\n\n- body"', "develop")
+        self.assertAllowed('git commit -m "feat: x\n\n- body"', "feature/x")
+        self.assertAllowed("git commit -m 'feat: x\n\n- body'", "feature/x")
+
+    def test_trailing_newline_ignored(self):
+        self.assertBlocked("git push origin develop\n", "feature/x")
+        self.assertAllowed("git status\n", "develop")
+
+    def test_newline_after_separator_keeps_split(self):
+        # 구분자 뒤 줄바꿈은 명령을 잇는 개행이라, 구분자가 묻히면 안 된다
+        self.assertBlocked("echo ok &&\ngit commit -m x", "develop")
+        self.assertBlocked("echo ok ||\ngit push origin main", "feature/x")
+        self.assertBlocked("echo ok |\ngit commit -m x", "develop")
+        self.assertBlocked("echo ok ;\ngit reset --hard", "develop")
+
+
+class HeredocBody(PolicyTestBase):
+    """here-doc 본문은 앞 명령의 표준 입력이라 명령으로 쪼개지 않는다."""
+
+    def test_body_is_not_treated_as_command(self):
+        self.assertAllowed("cat <<'EOF' > notes\ngit push origin main\nEOF", "develop")
+        self.assertAllowed("cat <<EOF > notes\ngit reset --hard\nEOF", "develop")
+        self.assertAllowed("cat <<-EOF > notes\nrm -rf /some/dir\nEOF", "develop")
+
+    def test_commands_after_body_still_checked(self):
+        self.assertBlocked(
+            "cat <<'EOF' > notes\nsome text\nEOF\ngit push origin develop", "feature/x"
+        )
+
+    def test_quoted_heredoc_marker_is_not_a_body(self):
+        # 따옴표 안의 `<<EOF` 는 값일 뿐이므로 뒤 줄이 데이터가 되면 안 된다
+        self.assertBlocked('echo "<<EOF"\ngit push origin develop', "feature/x")
+
+    def test_command_opening_heredoc_is_still_checked(self):
+        self.assertBlocked("git commit -F - <<'EOF'\nmessage\nEOF", "develop")
+
+
 class TokenNormalization(PolicyTestBase):
     def test_sudo_prefix(self):
         self.assertBlocked("sudo git push origin develop", "feature/x")
