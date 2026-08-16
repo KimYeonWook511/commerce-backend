@@ -10,7 +10,8 @@
 
 ## 적용 범위
 
-- 이 정책은 현재 Repo에서만 적용된다.
+- 이 정책은 현재 Repo를 향하는 명령에만 적용된다. 명령의 **실효 작업 디렉터리**(`cd`·`git -C`를 반영한 위치)가 속한 저장소를 보고, 다른 저장소면 판정하지 않는다. 그래서 `git -C ../commerce-brain commit`처럼 형제 저장소를 다루는 명령은 이 Repo의 브랜치 규칙에 걸리지 않는다.
+- worktree는 같은 저장소로 인식한다(저장소 루트는 달라도 git common dir이 같다). 브랜치도 그 디렉터리에서 조회하므로, `worktrees/<type>-<name>`에서의 커밋은 피처 브랜치 작업으로 판정된다.
 - hook 설정 파일은 `.claude/settings.json`이다.
 - 정책 스크립트는 `.claude/hooks/pre_tool_use_policy.py`이다.
 - 매처는 `Bash`. Bash 명령만 검사한다(Write/Edit 등 파일 도구는 검사하지 않는다).
@@ -18,7 +19,7 @@
 
 ## 규칙
 
-규칙은 "현재 체크아웃된 브랜치"와 "명령의 대상 브랜치"를 기준으로 동작한다. 현재 브랜치는 hook 실행 시 `git rev-parse --abbrev-ref HEAD`로 1회 조회한다.
+규칙은 "현재 체크아웃된 브랜치"와 "명령의 대상 브랜치"를 기준으로 동작한다. 현재 브랜치는 명령의 실효 작업 디렉터리에서 `git rev-parse --abbrev-ref HEAD`로 조회한다.
 
 ### 1. 보호 브랜치로의 직접 push — 전면 차단
 
@@ -38,7 +39,7 @@
 - 차단(보호 브랜치일 때): `git commit` / `git merge` / `git rebase` / `git cherry-pick` / `git revert` / `git am`
 - 허용: 커밋을 만들지 않는 안전 동작 — `--abort`, `--quit`(복구), `--dry-run`(조회)
 - 차단: `--continue`·`--skip`은 중단된 작업을 이어 커밋을 만들 수 있어 막는다
-- `git checkout main && git commit ...`처럼 같은 줄에서 보호 브랜치로 전환한 뒤 작업하는 패턴도 추적해 차단한다(복합 명령의 브랜치 전환 추적).
+- `git checkout main && git commit ...`처럼 같은 줄에서 보호 브랜치로 전환한 뒤 작업하는 패턴도 추적해 차단한다(복합 명령의 브랜치 전환 추적). 전환은 **그 명령이 가리킨 디렉터리에만** 적용되므로, `git -C <다른-worktree> switch ...`가 현재 디렉터리의 판정 기준을 바꾸지 않는다.
 
 ### 3. 파괴적 명령 — 보호 브랜치에서만 차단
 
@@ -56,6 +57,10 @@
 ### 토큰 기준 검사
 
 차단 기준은 명령 문자열이 아니라 shell token 기준이다. `sudo`, `command`, `env FOO=bar ...`, `git -c key=val ...` 같은 prefix가 있어도 실제 명령이 규칙에 해당하면 차단한다. `&&`, `||`, `;`, `&`, `|`로 연결된 복합 명령은 각 명령을 개별 검사하고, 따옴표 안의 구분자는 분리 대상에서 제외한다.
+
+복합 명령 안에서 작업 위치가 바뀌는 것도 추적한다. `git -C <path>`는 그 명령 하나에만 적용되고(git 자체 동작과 같다), `cd <path>`는 `&&`·`;`로 이어진 뒤 명령에 적용된다. 그래서 `cd ../other-repo && git commit`은 통과하고, `git -C . commit`은 이 Repo를 가리키므로 그대로 차단된다.
+
+`cd`가 나머지 구분자 뒤로는 이어지지 않는 이유는 셸이 실제로 그렇게 동작하기 때문이다. `|`·`&`는 서브셸에서 실행되어 부모 셸의 작업 디렉터리가 바뀌지 않고, `||`는 뒤 명령이 실행되는 경우가 `cd`가 실패했을 때뿐이라 위치가 그대로다. 이어붙이면 `cd ../other-repo | git commit` 한 줄로 보호 브랜치 커밋이 통과한다.
 
 ## 허용 예시
 
@@ -86,11 +91,14 @@ Claude Code가 도구 실행을 시도하면 `PreToolUse` hook이 stdin으로 JS
 
 ## 한계 (중요)
 
-이 hook은 **결정론적이고 형태가 명확한 소수의 사고**를 막는 로컬 가드레일이다. 다음 경로는 막지 못한다.
+이 hook은 **결정론적이고 형태가 명확한 소수의 사고**를 막는 로컬 가드레일이다. 막는 대상은 **실수**이지 고의로 짜낸 우회가 아니다. 셸 문법을 비틀어 판정을 흔드는 형태(`cd`를 서브셸에 넣기, 인자를 덧붙여 이동을 실패시키기, 심볼릭 링크로 같은 디렉터리를 다르게 가리키기 등)는 정상 작업에서 나오지 않으므로, 그런 경로를 하나씩 좇아 파서를 키우지 않는다. 셸 의미론을 hook 안에 다시 구현하려 들면 규칙만 복잡해지고 빈틈은 계속 생긴다. 그 영역은 아래 3중 방어의 마지막 층인 **서버 측 branch protection**이 맡는다.
+
+특히 다음 경로는 막지 못한다.
 
 - **범용 도구 우회**: `gh api -X PATCH .../git/refs/heads/main ...`, `curl -X PATCH https://api.github.com/...` 처럼 인증 토큰으로 GitHub API에 직접 쓰기 호출하면 `git push` 차단을 우회한다. 이런 임의 호출은 hook으로 정밀 차단해도 빈틈이 계속 생기므로 정책 문서(CLAUDE.md)와 서버 보호에 맡긴다.
 - **스크립트 내부 명령**: `bash deploy.sh` 안에서 `git push origin main`이 일어나면 hook은 바깥 명령만 보므로 잡지 못한다.
 - **브랜치 탐지 실패(fail-open)**: 레포가 아니거나 git 미설치·타임아웃 등으로 현재 브랜치 조회가 실패하면 "현재 브랜치 의존 검사"(commit·bare push·reset 등)는 통과시킨다. 단, refspec으로 **명시된** 보호 브랜치 대상 push(`git push origin develop` 등)는 탐지와 무관하게 항상 차단된다.
+- **경로를 확정할 수 없는 이동**: `cd $VAR`·`cd -`처럼 hook이 평가할 수 없는 경로는 이 Repo에 남아 있는 것으로 간주해 판정을 유지한다(`cd $VAR && git push origin main`은 차단). 다른 저장소라는 확인이 섰을 때만 판정을 건너뛴다.
 - **hook 자체 비활성화**: `.claude/settings.json`/스크립트를 끄거나 다른 환경에서 실행하면 무력화된다.
 
 따라서 권장 구조는 다음 3중 방어다.
@@ -110,6 +118,10 @@ echo '{"tool_name":"Bash","tool_input":{"command":"git push origin develop"}}' \
 
 # 일반 조회 → 통과(출력 없음)
 echo '{"tool_name":"Bash","tool_input":{"command":"git status"}}' \
+  | python3 .claude/hooks/pre_tool_use_policy.py
+
+# 다른 저장소를 향하는 명령 → 통과(출력 없음)
+echo '{"tool_name":"Bash","tool_input":{"command":"git -C ../commerce-brain push origin main"}}' \
   | python3 .claude/hooks/pre_tool_use_policy.py
 ```
 
