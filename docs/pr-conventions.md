@@ -60,7 +60,22 @@ draft가 아닌 PR을 생성하는 경우:
 - 머지 방식은 squash and merge를 사용한다.
 - 머지 commit 제목은 PR 제목을 그대로 사용한다 (`<type>: <요약> (#N)` 형태로 자동 부착).
 - Extended description은 각 commit의 subject만 남기고 body는 제거한다. PR 본문이 이미 변경 맥락을 담고 있으므로 git history에는 압축된 요약만 남긴다.
-- CLI로 머지하는 경우 `gh pr merge <N> --squash` 를 사용한다. body가 들어가 있다면 `--body`로 정리된 내용을 명시하거나, 정리가 필요하면 GitHub UI에서 수동 편집 후 머지한다.
+- CLI로 머지할 때는 아래 명령을 사용한다. 저장소의 squash 기본 메시지 설정이 각 commit의 body까지 넣으므로, `--body`로 subject 목록만 직접 넘겨야 위 규칙이 지켜진다.
+
+```bash
+PR=$(gh pr view <N> --json commits,headRefOid) \
+  && BODY=$(jq -r 'if (.commits|length) == 1
+       then .commits[0].messageHeadline
+       else [.commits[] | "* " + .messageHeadline] | join("\n\n") end' <<<"$PR") \
+  && gh pr merge <N> --squash --delete-branch \
+       --body "$BODY" --match-head-commit "$(jq -r .headRefOid <<<"$PR")"
+```
+
+commit이 하나뿐이면 GitHub은 불릿을 붙이지 않으므로 jq가 그 경우를 갈라 같은 형식을 만든다.
+
+본문을 변수로 받아 `&&`로 잇는 이유는 조회 실패를 머지 전에 잡기 위해서다. 명령 치환을 `--body`에 바로 끼우면 `gh pr view`가 실패해도 그 상태가 바깥으로 전달되지 않아(`set -e`로도 막히지 않는다) 빈 본문으로 머지가 진행되고, 되돌릴 수 없는 시점에 위 규칙이 깨진다.
+
+**`--match-head-commit`으로 조회한 head를 고정한다.** 조회와 머지 사이에 그 PR에 commit이 push되면 본문은 옛 목록인데 머지되는 것은 새 head가 되어, 검토하지 않은 변경이 들어가고 위 규칙도 깨진다. head가 달라졌으면 머지가 거절되므로 다시 조회해서 진행하면 된다. 본문과 SHA를 **한 번의 조회에서 함께** 꺼내는 것도 같은 이유다 — 두 번 물으면 그 사이가 다시 창이 된다.
 - `## 후속 작업` 섹션은 본 PR의 머지 조건이다. 모든 항목이 체크되지 않은 상태에서는 머지하지 않는다. agent가 머지를 부탁받았을 때 미체크 항목이 있으면 머지를 보류하고 사용자에게 보고한다.
 - 본 PR 작업 중 발견되어 별도 issue로 등록만 한 무관한 작업(본 PR의 머지 조건이 아닌 항목)은 PR 본문 어디에도 적지 않는다. `## 관련 이슈`는 본 PR이 해결하는 이슈만, `## 후속 작업`은 머지 조건인 항목만 적는다. 무관 이슈는 자체 issue로 추적되므로 PR에서 다시 연결할 필요가 없다.
 - agent가 머지를 부탁받은 경우에도 위 모든 룰을 동일하게 따른다.

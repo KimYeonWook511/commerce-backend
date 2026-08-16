@@ -28,7 +28,7 @@ Java, Spring Boot, Gradle, MySQL, JPA(Hibernate) 백엔드 프로젝트.
 
 ## 브랜치 보호 (main · develop)
 
-`main`·`develop`은 보호 브랜치다. 직접 변경하지 않고 **피처 브랜치 → PR 머지**로만 반영한다. 차단 명령·플래그와 3중 방어 구조(hook → 이 규칙 → 서버 branch protection)는 `docs/claude/hooks/pre-tool-use-policy.md`를 따른다. agent는 어떤 경우에도 merge하지 않는다 — merge는 사람이 수동으로 한다.
+`main`·`develop`은 보호 브랜치다. 직접 변경하지 않고 **피처 브랜치 → PR 머지**로만 반영한다. 차단 명령·플래그와 3중 방어 구조(hook → 이 규칙 → 서버 branch protection)는 `docs/claude/hooks/pre-tool-use-policy.md`를 따른다. agent가 PR을 머지할 수 있는 시점은 `.spec-harness/config.json`의 `merge.agent`가 정한다.
 
 특히 hook이 막지 못하는 다음은 hook·서버 상태와 무관하게 **항상** 지킨다.
 
