@@ -24,11 +24,11 @@ public class PaymentPolicyConfig {
 
 	@Bean
 	public PaymentPostProcessPolicy paymentPostProcessPolicy(
-		@Value("${payment.postprocess.reconcile.grace:30s}") Duration reconcileGrace,
-		@Value("${payment.postprocess.reconcile.intervals:10s,30s,2m,5m,10m}") List<Duration> reconcileIntervals,
-		@Value("${payment.postprocess.notify.escalation:1h}") Duration notifyEscalation,
-		@Value("${payment.postprocess.notify.interval:1h}") Duration notifyInterval,
-		@Value("${payment.postprocess.expire.threshold:1h}") Duration expireThreshold
+		@Value("${payment.postprocess.reconcile.grace}") Duration reconcileGrace,
+		@Value("${payment.postprocess.reconcile.intervals}") List<Duration> reconcileIntervals,
+		@Value("${payment.postprocess.notify.escalation}") Duration notifyEscalation,
+		@Value("${payment.postprocess.notify.interval}") Duration notifyInterval,
+		@Value("${payment.postprocess.expire.threshold}") Duration expireThreshold
 	) {
 		return new PaymentPostProcessPolicy(
 			reconcileGrace, reconcileIntervals, notifyEscalation, notifyInterval, expireThreshold);
@@ -40,10 +40,10 @@ public class PaymentPolicyConfig {
 	 */
 	@Bean
 	public RefundPostProcessPolicy refundPostProcessPolicy(
-		@Value("${payment.postprocess.refund.reconcile.grace:90s}") Duration reconcileGrace,
-		@Value("${payment.postprocess.reconcile.intervals:10s,30s,2m,5m,10m}") List<Duration> reconcileIntervals,
-		@Value("${payment.postprocess.notify.escalation:1h}") Duration notifyEscalation,
-		@Value("${payment.postprocess.notify.interval:1h}") Duration notifyInterval
+		@Value("${payment.postprocess.refund.reconcile.grace}") Duration reconcileGrace,
+		@Value("${payment.postprocess.reconcile.intervals}") List<Duration> reconcileIntervals,
+		@Value("${payment.postprocess.notify.escalation}") Duration notifyEscalation,
+		@Value("${payment.postprocess.notify.interval}") Duration notifyInterval
 	) {
 		return new RefundPostProcessPolicy(
 			reconcileGrace, reconcileIntervals, notifyEscalation, notifyInterval);

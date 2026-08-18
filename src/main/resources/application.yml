@@ -1,2 +1,28 @@
 server:
   port: 8080
+
+payment:
+  postprocess:
+    reconcile:
+      cron: "0 */1 * * * *"
+      # 승인 호출의 읽기 제한 시간보다 길어야 한다. 짧으면 요청 흐름이 아직 응답을 기다리는 중인
+      # 건을 대사가 집어 같은 결제에 승인이 겹쳐 나간다.
+      grace: 30s
+      intervals: 10s,30s,2m,5m,10m
+    notify:
+      cron: "0 */10 * * * *"
+      escalation: 1h
+      interval: 1h
+    expire:
+      cron: "0 */10 * * * *"
+      threshold: 1h
+    refund:
+      dispatch:
+        cron: "0 */1 * * * *"
+      reconcile:
+        cron: "0 */1 * * * *"
+        # 결제보다 길다. 겹쳐 전송되면 같은 취소가 두 번 나가지만, 결제는 재요청이 겹쳐도 결제사가
+        # 이미 진행 중으로 막는다.
+        grace: 90s
+      notify:
+        cron: "0 */10 * * * *"

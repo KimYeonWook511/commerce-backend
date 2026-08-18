@@ -34,22 +34,22 @@ public class PaymentPostProcessScheduler {
 	 * 아직 안 나간 환불을 훑어 보낸다. 주문 취소와 승인 반려는 커밋 뒤에 한 번 부르고 마는데, 그 호출이
 	 * 실패하면 환불이 접수 상태로 남아 이 자리가 없으면 영영 안 나간다.
 	 */
-	@Scheduled(cron = "${payment.postprocess.refund.dispatch.cron:0 */1 * * * *}")
+	@Scheduled(cron = "${payment.postprocess.refund.dispatch.cron}")
 	public void dispatchRefunds() {
 		dispatchRefundUseCase.dispatch();
 	}
 
-	@Scheduled(cron = "${payment.postprocess.reconcile.cron:0 */1 * * * *}")
+	@Scheduled(cron = "${payment.postprocess.reconcile.cron}")
 	public void reconcile() {
 		reconcilePaymentUseCase.reconcile();
 	}
 
-	@Scheduled(cron = "${payment.postprocess.notify.cron:0 */10 * * * *}")
+	@Scheduled(cron = "${payment.postprocess.notify.cron}")
 	public void notifyStalled() {
 		notifyPaymentUseCase.notifyStalled();
 	}
 
-	@Scheduled(cron = "${payment.postprocess.expire.cron:0 */10 * * * *}")
+	@Scheduled(cron = "${payment.postprocess.expire.cron}")
 	public void expire() {
 		expirePaymentUseCase.expire();
 	}
@@ -58,12 +58,12 @@ public class PaymentPostProcessScheduler {
 	 * 결과를 모르는 환불을 이력으로 확정하고, 이력에 그 시도가 없으면 그 자리에서 다시 보낸다.
 	 * 결제 대사와 조회 조건이 달라 주기를 따로 붙인다.
 	 */
-	@Scheduled(cron = "${payment.postprocess.refund.reconcile.cron:0 */1 * * * *}")
+	@Scheduled(cron = "${payment.postprocess.refund.reconcile.cron}")
 	public void reconcileRefunds() {
 		reconcileRefundUseCase.reconcile();
 	}
 
-	@Scheduled(cron = "${payment.postprocess.refund.notify.cron:0 */10 * * * *}")
+	@Scheduled(cron = "${payment.postprocess.refund.notify.cron}")
 	public void notifyStalledRefunds() {
 		notifyRefundUseCase.notifyStalled();
 	}
