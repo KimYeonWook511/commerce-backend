@@ -143,8 +143,9 @@ class GatewayAdapterSandboxTest {
 		PgHistoryResult result = rejected.readHistory(payment(pgPaymentId), PgHistoryScope.ALL, PgCallSource.BATCH);
 
 		assertThat(result.outcome())
-			.as("거절이 성공으로 접혔다. 빈 목록과 갈리지 않으면 인증 설정이 틀린 순간 멀쩡한 결제가 전부 실패로 확정된다")
-			.isNotEqualTo(PgOutcome.SUCCEEDED);
+			.as("인증 거절을 종착으로 접으면 설정이 틀린 순간 멀쩡한 결제가 전부 실패로 확정된다 message=%s",
+				result.message())
+			.isEqualTo(PgOutcome.RETRYABLE_FAILURE);
 		assertThat(result.entries()).isEmpty();
 	}
 
