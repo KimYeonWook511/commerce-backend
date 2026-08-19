@@ -2,8 +2,10 @@ package com.commerce.payment.infrastructure.pg.naverpay;
 
 import static org.assertj.core.api.Assertions.assertThat;
 import static org.assertj.core.api.Assertions.assertThatCode;
+import static org.awaitility.Awaitility.await;
 import static org.junit.jupiter.api.Assumptions.assumeTrue;
 
+import java.time.Duration;
 import java.time.LocalDateTime;
 import java.time.format.DateTimeFormatter;
 import java.util.List;
@@ -220,6 +222,12 @@ class GatewayAdapterSandboxTest {
 			.as("같은 키로 다시 보낸 환불이 성공으로 접히지 않았다. 이미 나간 환불을 못 알아본 것이다 message=%s",
 				resentResult.message())
 			.isEqualTo(PgOutcome.SUCCEEDED);
+
+		// 앞선 취소가 이력에 반영되기 전에 다음 취소를 보내면 결제사가 앞 건이 처리 중이라며 거절한다.
+		// 그 답도 옳은 것이라 여기서 실패로 다루면 매핑이 아니라 결제사 처리 속도를 재는 테스트가 된다.
+		await().atMost(Duration.ofSeconds(30)).pollInterval(Duration.ofSeconds(2))
+			.until(() -> adapter.readHistory(payment, PgHistoryScope.REFUND_ONLY, PgCallSource.BATCH)
+				.settledRefundOf(partial).isPresent());
 
 		Refund rest = inProgressRefund(REST_REFUND_AMOUNT);
 		PgRefundResult restResult = adapter.refund(payment, rest, PgCallSource.BATCH);
