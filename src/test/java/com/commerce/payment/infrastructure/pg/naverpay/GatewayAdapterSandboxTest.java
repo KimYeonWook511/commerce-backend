@@ -242,14 +242,16 @@ class GatewayAdapterSandboxTest {
 				restResult.message())
 			.isEqualTo(PgOutcome.SUCCEEDED);
 
-		PgHistoryResult history = adapter.readHistory(payment, PgHistoryScope.ALL, PgCallSource.BATCH);
+		// 취소가 접수만 되고 결제사 후속 처리가 남은 경우에도 성공으로 접히므로, 이력에 나타나는 것이
+		// 응답보다 늦을 수 있다. 그 늦음을 실패로 다루면 여기도 매핑이 아니라 반영 속도를 재게 된다.
+		PgHistoryResult history = await("잔액 환불의 시도 키가 이력에 나타나기")
+			.atMost(Duration.ofSeconds(30)).pollInterval(Duration.ofSeconds(2))
+			.until(() -> adapter.readHistory(payment, PgHistoryScope.ALL, PgCallSource.BATCH),
+				result -> result.settledRefundOf(rest).isPresent());
 
 		assertThat(history.outcome()).isEqualTo(PgOutcome.SUCCEEDED);
 		assertThat(history.settledRefundOf(partial))
 			.as("부분 환불의 시도 키를 이력에서 찾지 못했다. 못 찾으면 환불이 확정되지 않고 이중환불도 못 막는다")
-			.isPresent();
-		assertThat(history.settledRefundOf(rest))
-			.as("잔액 환불의 시도 키를 이력에서 찾지 못했다")
 			.isPresent();
 		assertThat(history.entries().stream().filter(entry -> entry.type() == PgHistoryEntryType.REFUND).toList())
 			.as("같은 키로 다시 보낸 환불이 이력에 한 건 더 남았다. 그러면 돈이 두 번 나간 것이다")
