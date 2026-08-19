@@ -38,6 +38,7 @@ import com.commerce.payment.infrastructure.pg.naverpay.client.request.ApprovalTy
 import com.commerce.payment.infrastructure.pg.naverpay.client.response.GatewayResponse;
 import com.commerce.payment.infrastructure.pg.naverpay.client.response.body.HistoryBody;
 import com.commerce.payment.infrastructure.pg.naverpay.code.AdmissionTypeCode;
+import com.commerce.payment.infrastructure.pg.naverpay.code.ApproveCode;
 import com.commerce.payment.infrastructure.pg.naverpay.code.CancelCode;
 import com.fasterxml.jackson.core.type.TypeReference;
 import com.fasterxml.jackson.databind.ObjectMapper;
@@ -155,6 +156,9 @@ class GatewayAdapterSandboxTest {
 
 		PgApproveResult result = adapter.approve(payment(pgPaymentId));
 
+		assertThat(ApproveCode.from(result.callRecord().resultCode()))
+			.as("승인 응답 코드 %s 를 우리 표가 모른다", result.callRecord().resultCode())
+			.contains(ApproveCode.ALREADY_COMPLETE);
 		assertThat(result.outcome())
 			.as("승인이 끝난 결제를 실패로 접으면 나간 돈을 안 나간 것으로 다룬다 message=%s", result.message())
 			.isEqualTo(PgOutcome.UNKNOWN);
