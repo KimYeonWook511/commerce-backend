@@ -248,10 +248,6 @@ tasks.register('sandboxTest', Test) {
         environment key, value
     }
 
-    doFirst {
-        verifyDockerDaemon('sandboxTest')
-    }
-
     useJUnitPlatform {
         includeTags "sandbox"
         excludeTags "concurrency", "batch", "learning"
