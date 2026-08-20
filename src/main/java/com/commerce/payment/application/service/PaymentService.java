@@ -120,19 +120,6 @@ public class PaymentService {
 	}
 
 	/**
-	 * 승인은 났으나 우리가 모르는 경로로 이미 취소됐다. 돈이 이미 돌아갔으므로 되돌릴 것이 없고,
-	 * 승인이 났었다는 사실만 그 행에 남긴다.
-	 */
-	@Transactional
-	public void failExternallyCanceled(Long id, String closeDetail, int approvedAmount, String pgTransactionId) {
-		Payment payment = load(id);
-		payment.failExternallyCanceled(closeDetail, approvedAmount, pgTransactionId);
-		paymentRepository.saveChecked(payment);
-		log.info("밖에서 취소된 승인으로 종결 paymentId={} orderId={} approvedAmount={}",
-			id, payment.getOrderId(), approvedAmount);
-	}
-
-	/**
 	 * 승인은 났는데 우리가 그 결제를 받아들일 수 없다. 되돌릴 환불을 만드는 것과 결제를 반려로
 	 * 종결하는 것이 한 트랜잭션 한 저장이다 — 나누면 앞엣것만 커밋됐을 때 결제는 종착이라 아무도 다시
 	 * 보지 않고 환불 기록도 없어, 나간 돈을 되돌릴 근거가 아무 데도 남지 않는다.

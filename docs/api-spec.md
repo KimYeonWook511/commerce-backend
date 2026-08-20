@@ -904,7 +904,6 @@
 - `PAYMENT_ATTEMPT_CLOSED` (409): 종결된 결제 시도로 승인이 돌아옴
 - `PAYMENT_APPROVAL_FAILED` (409): 결제사가 승인을 거절
 - `PAYMENT_AMOUNT_MISMATCH` (409): 승인 금액이 주문 금액과 다름
-- `PAYMENT_ALREADY_CANCELED` (409): 승인 뒤 이미 취소된 결제
 - `PAYMENT_KEY_MISMATCH` (409): 승인 응답에 실려 온 결제 키가 이 결제의 것이 아님
 - `PAYMENT_DUPLICATE` (409): 이미 결제가 완료된 주문
 

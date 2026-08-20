@@ -286,28 +286,43 @@ class ReconcilePaymentUseCaseIntegrationTest {
 
 	// ── 이력이 우리 것이 아닌 사건을 보일 때 ─────────────────────
 
-	@DisplayName("이력이 우리 것이 아닌 성공한 취소를 보이면 결제를 종결하고 환불을 만들지 않는다")
+	@DisplayName("이력이 우리 것이 아닌 성공한 취소를 보여도 승인을 확정하고 활성 슬롯을 유지한다")
 	@Test
-	void reconcile_whenHistoryShowsForeignCancel_closesWithoutOpeningRefund() {
+	void reconcile_whenHistoryShowsForeignCancel_confirmsAndKeepsActiveSlot() {
 		Fixture fixture = unknownPayment();
 		givenHistory(PgHistoryResult.succeeded(List.of(
 			approvalEntry(fixture, fixture.amount()),
-			refundEntry(fixture.amount(), true, null)
+			refundEntry(3_000, true, null)
 		), "성공"));
 
 		reconcilePaymentUseCase.reconcile();
 
-		Payment closed = reload(fixture);
-		assertThat(closed.getStatus()).isEqualTo(PaymentStatus.FAILED);
-		assertThat(closed.getCloseCode()).isEqualTo(PaymentCloseCode.EXTERNALLY_CANCELED);
-		// 승인이 났었다는 사실은 그 행만 보고도 읽혀야 한다.
-		assertThat(closed.getApprovedAmount()).isEqualTo(fixture.amount());
-		assertThat(closed.getActiveOrderKey()).isNull();
-		// 돈이 이미 돌아갔으므로 되돌릴 것이 없다.
+		Payment settled = reload(fixture);
+		// 얼마가 돌아갔는지 모르는 채 종결하면 일부만 돌아간 결제까지 닫혀 그 주문에 새 결제가 선다.
+		assertThat(settled.getStatus()).isEqualTo(PaymentStatus.SUCCEEDED);
+		assertThat(settled.getActiveOrderKey()).isNotNull();
+		assertThat(settled.getApprovedAmount()).isEqualTo(fixture.amount());
+		// 밖에서 일어난 일이라 우리 환불 사건으로 적지 않는다. 잔액이 모자란 것은 환불을 보낼 때 드러난다.
 		assertThat(refundPersistence.findAll()).isEmpty();
-		// 되돌릴 것이 없고 조사만 남는 일이라 그 자리에서 한 번 알린다.
+		// 자동 처리가 여기까지라는 사실은 알려야 한다.
 		then(notificationPort).should(times(1))
 			.notifyManualReviewRequired(any(Long.class), any(String.class), any(String.class));
+	}
+
+	@DisplayName("이력의 취소에 우리 환불 시도 키가 실려 있으면 확정하지 않고 자기 경로에 맡긴다")
+	@Test
+	void reconcile_whenHistoryCancelIsOurs_leavesConfirmationToRefundFlow() {
+		Fixture fixture = unknownPayment();
+		givenHistory(PgHistoryResult.succeeded(List.of(
+			approvalEntry(fixture, fixture.amount()),
+			refundEntry(fixture.amount(), true, "RF-ours-1")
+		), "성공"));
+		given(paymentGatewayPort.approve(any(Payment.class)))
+			.willReturn(PgApproveResult.unsettled("이미 진행 중인 결제", respondedRecord("AlreadyOnGoing")));
+
+		reconcilePaymentUseCase.reconcile();
+
+		assertThat(reload(fixture).getStatus()).isEqualTo(PaymentStatus.UNKNOWN);
 	}
 
 	@DisplayName("이력의 취소가 실패한 시도뿐이면 그것을 근거로 결제를 닫지 않는다")

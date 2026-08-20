@@ -24,7 +24,6 @@ public enum PaymentErrorCode implements ErrorCode {
 		"종결된 결제 시도입니다. 결제를 다시 시작해 주세요."),
 	PAYMENT_APPROVAL_FAILED(ErrorCategory.CONFLICT, "PAYMENT-409-16", "결제 승인에 실패했습니다"),
 	PAYMENT_AMOUNT_MISMATCH(ErrorCategory.CONFLICT, "PAYMENT-409-17", "승인 금액이 주문 금액과 다릅니다"),
-	PAYMENT_ALREADY_CANCELED(ErrorCategory.CONFLICT, "PAYMENT-409-18", "이미 취소된 결제입니다"),
 	// 승인 응답에 실려 온 결제 키가 이 결제의 것이 아니다. 어느 결제가 승인됐는지를 회원에게 알리지
 	// 않는다 — 그 값은 남의 결제를 가리킨다.
 	PAYMENT_KEY_MISMATCH(ErrorCategory.CONFLICT, "PAYMENT-409-19",

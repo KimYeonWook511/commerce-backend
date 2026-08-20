@@ -9,7 +9,6 @@ import com.commerce.payment.application.dto.RejectionAnomaly;
 import com.commerce.payment.application.dto.RejectionResult;
 import com.commerce.payment.application.port.NotificationPort;
 import com.commerce.payment.application.port.dto.PgCallSource;
-import com.commerce.payment.application.port.dto.PgHistoryEntry;
 import com.commerce.payment.application.service.PaymentService;
 import com.commerce.payment.domain.Payment;
 import com.commerce.payment.domain.PaymentCloseCode;
@@ -73,28 +72,6 @@ public class ClosePaymentUseCase {
 		notifyIfAnomalous(payment, result.anomaly());
 		sendRefund(payment, result);
 		return ApprovalOutcome.rejected(toMemberFacingCode(orderErrorCode));
-	}
-
-	/**
-	 * 승인은 났으나 우리가 모르는 경로로 이미 취소됐다. 돈이 이미 돌아갔으므로 환불을 만들지 않고,
-	 * 닫지 않으면 그 결제가 활성 슬롯을 쥔 채 남아 그 주문을 영영 결제할 수 없다.
-	 *
-	 * <p>되돌릴 것이 없고 조사만 남는 일이라 통지는 이 자리에서 한 번이다.
-	 */
-	public ApprovalOutcome closeExternallyCanceled(
-		Payment payment,
-		PgHistoryEntry approval,
-		PgHistoryEntry canceled
-	) {
-		paymentService.failExternallyCanceled(
-			payment.getId(),
-			"밖에서 취소됨 시각=" + canceled.occurredAt() + " 금액=" + canceled.amount(),
-			approval.amount(),
-			approval.pgTransactionId()
-		);
-		notificationPort.notifyManualReviewRequired(
-			payment.getOrderId(), payment.getPaymentKey(), "우리가 모르는 경로로 취소된 승인");
-		return ApprovalOutcome.rejected(PaymentErrorCode.PAYMENT_ALREADY_CANCELED);
 	}
 
 	/**
