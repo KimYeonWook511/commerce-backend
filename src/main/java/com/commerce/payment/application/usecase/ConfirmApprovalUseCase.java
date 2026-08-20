@@ -114,20 +114,24 @@ public class ConfirmApprovalUseCase {
 				.orElseGet(ApprovalOutcome::unresolved);
 		}
 
-		// 성공한 취소 항목만 본다. 실패한 취소도 한 줄로 남으므로 그것을 근거로 닫으면 돈이 나가 있는
-		// 결제를 닫고 슬롯을 반납해 회원이 다시 결제할 때 돈이 두 번 나간다.
+		// 성공한 취소 항목만 본다. 실패한 취소도 한 줄로 남으므로 그것까지 세면 나가지도 않은 취소를
+		// 근거로 확정을 미루게 된다.
 		List<PgHistoryEntry> refunds = succeededEntries(history, PgHistoryEntryType.REFUND);
-		Optional<PgHistoryEntry> foreign = refunds.stream()
-			.filter(entry -> !StringUtils.hasText(entry.refundAttemptKey()))
-			.findFirst();
-		if (foreign.isPresent()) {
-			return closePaymentUseCase.closeExternallyCanceled(payment, approval.get(), foreign.get());
-		}
-		if (!refunds.isEmpty()) {
+		if (refunds.stream().anyMatch(entry -> StringUtils.hasText(entry.refundAttemptKey()))) {
 			// 우리 환불 시도 키가 실려 있다. 그 결제는 자기 경로로 풀리므로 여기서 확정하지 않는다.
 			log.info("이력의 취소가 우리 환불이라 확정하지 않는다 paymentId={}", payment.getId());
 			return ApprovalOutcome.unresolved();
 		}
+
+		// 우리 것이 아닌 취소는 알리기만 하고 확정을 막지 않는다. 얼마가 돌아갔는지는 결제사만 알고
+		// 우리에게 알려 주는 채널이 없어, 이 항목 하나를 전액 취소로 읽고 종결하면 일부만 돌아간 결제까지
+		// 닫혀 슬롯이 열린다. 잔액이 모자란 것은 나중에 환불을 보낼 때 결제사가 거절하며 드러난다.
+		refunds.stream()
+			.filter(entry -> !StringUtils.hasText(entry.refundAttemptKey()))
+			.findFirst()
+			.ifPresent(foreign -> notificationPort.notifyManualReviewRequired(
+				payment.getOrderId(), payment.getPaymentKey(),
+				"우리가 모르는 경로로 취소된 승인 시각=" + foreign.occurredAt() + " 금액=" + foreign.amount()));
 
 		return confirm(payment, approval.get().amount(), approval.get().pgTransactionId());
 	}

@@ -290,27 +290,24 @@ class RequestApprovalUseCaseIntegrationTest {
 		assertThat(reload(fixture).getStatus()).isEqualTo(PaymentStatus.UNKNOWN);
 	}
 
-	@DisplayName("이력이 우리 것이 아닌 성공한 취소를 보이면 결제를 실패로 종결하고 이미 취소됐다고 답한다")
+	@DisplayName("이력이 우리 것이 아닌 성공한 취소를 보여도 승인을 확정하고 활성 슬롯을 유지한다")
 	@Test
-	void approve_whenHistoryShowsForeignCancel_closesPaymentAsExternallyCanceled() {
+	void approve_whenHistoryShowsForeignCancel_confirmsAndKeepsActiveSlot() {
 		Fixture fixture = readyPayment();
 		given(paymentGatewayPort.approve(any(Payment.class)))
 			.willReturn(PgApproveResult.unsettled("이미 완료된 결제", respondedRecord("AlreadyComplete")));
 		givenHistory(PgHistoryResult.succeeded(List.of(
 			approvalEntry(fixture, fixture.amount()),
-			refundEntry(fixture.amount(), true, null)
+			refundEntry(3_000, true, null)
 		), "성공"));
 
-		assertThatThrownBy(() -> approve(fixture))
-			.isInstanceOf(PaymentException.class)
-			.hasMessage(PaymentErrorCode.PAYMENT_ALREADY_CANCELED.getMessage());
+		ApprovalResult result = approve(fixture);
 
+		assertThat(result.status()).isEqualTo(ApprovalStatus.SUCCESS);
 		Payment payment = reload(fixture);
-		assertThat(payment.getStatus()).isEqualTo(PaymentStatus.FAILED);
-		assertThat(payment.getCloseCode()).isEqualTo(PaymentCloseCode.EXTERNALLY_CANCELED);
-		// 돈이 이미 돌아갔으므로 되돌릴 것이 없지만, 승인이 났었다는 사실은 그 행에 남는다.
-		assertThat(payment.getApprovedAmount()).isEqualTo(fixture.amount());
-		assertThat(payment.getActiveOrderKey()).isNull();
+		// 얼마가 돌아갔는지 모르는 채 종결하면 일부만 돌아간 결제까지 닫혀 그 주문에 새 결제가 선다.
+		assertThat(payment.getStatus()).isEqualTo(PaymentStatus.SUCCEEDED);
+		assertThat(payment.getActiveOrderKey()).isNotNull();
 		then(notificationPort).should().notifyManualReviewRequired(
 			any(Long.class), any(String.class), any(String.class));
 	}

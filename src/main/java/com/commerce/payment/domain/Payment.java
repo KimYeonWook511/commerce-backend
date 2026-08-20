@@ -260,16 +260,6 @@ public class Payment extends BaseTimeEntity {
 	}
 
 	/**
-	 * 승인은 났으나 우리가 모르는 경로로 이미 취소됐다. 돈이 이미 돌아갔으므로 환불을 만들지 않지만,
-	 * 승인이 났었다는 사실이 그 행만 보고도 읽히도록 승인 금액을 함께 남긴다.
-	 */
-	public void failExternallyCanceled(String closeDetail, int approvedAmount, String pgTransactionId) {
-		requireStatusIn(PaymentStatus.IN_PROGRESS, PaymentStatus.UNKNOWN);
-		recordApproval(approvedAmount, pgTransactionId);
-		close(PaymentCloseCode.EXTERNALLY_CANCELED, closeDetail);
-	}
-
-	/**
 	 * 승인은 났는데 우리가 그 결제를 받아들일 수 없어 반려로 종결한다. 되돌릴 환불을 먼저 연 자리에서
 	 * 부르므로 승인 금액은 이미 담겨 있다. 환불 생성은 이 메서드가 하지 않는다 — 결제를 종결하는 것과
 	 * 별개의 일이다.

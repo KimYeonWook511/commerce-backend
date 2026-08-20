@@ -20,8 +20,6 @@ public enum PaymentCloseCode {
 	PAYMENT_KEY_MISMATCH(PaymentStatus.FAILED),
 	/** 승인을 다시 요청했고 결제사가 승인 가능 시간이 지났다고 답해 확정했다 */
 	UNCONFIRMED_CLOSED(PaymentStatus.FAILED),
-	/** 승인은 났는데 우리가 모르는 경로로 취소됐다 */
-	EXTERNALLY_CANCELED(PaymentStatus.FAILED),
 
 	/** 승인 금액이 우리 주문 금액과 다르다. 위변조 신호 */
 	AMOUNT_MISMATCH(PaymentStatus.REJECTED),

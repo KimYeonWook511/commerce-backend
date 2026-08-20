@@ -164,20 +164,6 @@ class PaymentTest {
 		assertThat(payment.getStatus()).isEqualTo(PaymentStatus.SUCCEEDED);
 	}
 
-	@DisplayName("밖에서 이미 취소된 승인을 발견해 종결하면 승인이 났었다는 사실이 그 행에 남는다")
-	@Test
-	void failExternallyCanceled_fromUnknown_keepsApprovedAmountAndReleasesActiveSlot() {
-		Payment payment = inProgressPayment();
-		payment.markUnknown();
-
-		payment.failExternallyCanceled("외부 취소 확인", 10_000, "pg-tx-1");
-
-		assertThat(payment.getStatus()).isEqualTo(PaymentStatus.FAILED);
-		assertThat(payment.getCloseCode()).isEqualTo(PaymentCloseCode.EXTERNALLY_CANCELED);
-		assertThat(payment.getApprovedAmount()).isEqualTo(10_000);
-		assertThat(payment.getActiveOrderKey()).isNull();
-	}
-
 	@DisplayName("승인을 부르지 않은 채 만료되면 활성 슬롯을 반납한다")
 	@Test
 	void expire_fromReady_releasesActiveSlot() {
@@ -566,10 +552,6 @@ class PaymentTest {
 		Payment failed = inProgressPayment();
 		failed.fail(PaymentCloseCode.PG_DECLINED, "거절");
 		assertSlotMatchesStatus(failed);
-
-		Payment externallyCanceled = inProgressPayment();
-		externallyCanceled.failExternallyCanceled("외부 취소", 10_000, "pg-tx-1");
-		assertSlotMatchesStatus(externallyCanceled);
 
 		Payment rejected = inProgressPayment();
 		rejected.recordApproval(10_000, "pg-tx-1");
