@@ -126,14 +126,17 @@ public class ConfirmApprovalUseCase {
 		// 우리 것이 아닌 취소는 알리기만 하고 확정을 막지 않는다. 얼마가 돌아갔는지는 결제사만 알고
 		// 우리에게 알려 주는 채널이 없어, 이 항목 하나를 전액 취소로 읽고 종결하면 일부만 돌아간 결제까지
 		// 닫혀 슬롯이 열린다. 잔액이 모자란 것은 나중에 환불을 보낼 때 결제사가 거절하며 드러난다.
-		refunds.stream()
+		Optional<PgHistoryEntry> foreign = refunds.stream()
 			.filter(entry -> !StringUtils.hasText(entry.refundAttemptKey()))
-			.findFirst()
-			.ifPresent(foreign -> notificationPort.notifyManualReviewRequired(
-				payment.getOrderId(), payment.getPaymentKey(),
-				"우리가 모르는 경로로 취소된 승인 시각=" + foreign.occurredAt() + " 금액=" + foreign.amount()));
+			.findFirst();
 
-		return confirm(payment, approval.get().amount(), approval.get().pgTransactionId());
+		ApprovalOutcome outcome = confirm(payment, approval.get().amount(), approval.get().pgTransactionId());
+		// 확정이 커밋된 뒤에 알린다. 먼저 알리면 그 실패가 확정을 막아, 알리기만 한다는 이 자리의 뜻과
+		// 반대로 결제가 결과 불명에 남는다.
+		foreign.ifPresent(entry -> notificationPort.notifyManualReviewRequired(
+			payment.getOrderId(), payment.getPaymentKey(),
+			"우리가 모르는 경로로 취소된 승인 시각=" + entry.occurredAt() + " 금액=" + entry.amount()));
+		return outcome;
 	}
 
 	/**
