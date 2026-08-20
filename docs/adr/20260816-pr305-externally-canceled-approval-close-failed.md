@@ -1,6 +1,6 @@
 # 밖에서 취소된 승인을 발견하면 환불을 만들지 않고 결제를 FAILED로 종결한다
 
-- Status: accepted
+- Status: superseded by [20260820-pr320-external-cancel-does-not-close-payment](20260820-pr320-external-cancel-does-not-close-payment.md)
 - Date: 2026-08-16
 
 ## Context
