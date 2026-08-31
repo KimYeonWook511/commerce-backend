@@ -917,7 +917,6 @@
 | `PAYMENT_ATTEMPT_CLOSED` | 409 | 실패·반려·만료로 종결된 결제 시도로 승인이 돌아옴. 결제를 다시 시작해야 합니다 |
 | `PAYMENT_APPROVAL_FAILED` | 409 | 결제사가 승인을 거절 |
 | `PAYMENT_AMOUNT_MISMATCH` | 409 | 승인 금액이 주문 금액과 다름 — 그 결제는 반려로 종결됩니다 |
-| `PAYMENT_ALREADY_CANCELED` | 409 | 승인이 성립했으나 그 뒤 취소된 결제 |
 | `PAYMENT_KEY_MISMATCH` | 409 | 승인 응답의 결제 키가 이 결제의 것이 아님 |
 | `PAYMENT_NOT_FOUND` | 404 | 결제 미발견 — 없는 키 또는 다른 회원의 키 |
 | `PAYMENT_IDEMPOTENCY_KEY_CONFLICT` | 400 | 같은 결제 멱등키로 내용이 다른 요청이 옴 |
