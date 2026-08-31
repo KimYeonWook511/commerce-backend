@@ -15,6 +15,7 @@
   - `V11__rename_legacy_payment_tables.sql` — `tbl_payment` → `tbl_legacy_payment`, `tbl_payment_reservation` → `tbl_legacy_payment_reservation` RENAME. 데이터는 그대로 남아 legacy 경로가 계속 동작한다.
   - `V12__create_payment_and_refund.sql` — `tbl_payment`(재구성) · `tbl_refund` · `tbl_pg_call_log` CREATE.
   - `V13__drop_legacy_payment_tables.sql` — legacy 두 테이블 DROP. **파괴적 마이그레이션**이며 옛 결제·예약 데이터는 이관하지 않고 폐기한다 (운영 데이터 없음 전제).
+- **환불 첫 상태 이름 교정**: `V14__rename_refund_requested_status.sql` 으로 `tbl_refund.status` 의 `REQUESTED` 를 `READY` 로 옮겼다 (2026-08-31). 옛 이름은 결제사에 이미 요청했다는 뜻으로 읽혀 아직 안 나간 환불을 나간 것으로 오해하게 했다.
 
 ## 네이밍 규칙
 
@@ -220,7 +221,7 @@ COLUMNS:
 - `amount INT NOT NULL` — 이번 환불 금액
 - `reason VARCHAR NOT NULL` — enum. `ORDER_CANCELED` / `ORDER_NOT_PAYABLE` / `AMOUNT_MISMATCH`
 - `pg_idempotency_key VARCHAR(64) NOT NULL` — 결제사 호출 멱등키. 사건 키에 시도 번호를 붙여 파생한다
-- `status VARCHAR NOT NULL` — enum. `REQUESTED` / `IN_PROGRESS` / `UNKNOWN` / `SUCCEEDED` / `MANUAL_REVIEW`
+- `status VARCHAR NOT NULL` — enum. `READY` / `IN_PROGRESS` / `UNKNOWN` / `SUCCEEDED` / `MANUAL_REVIEW`
 - `pg_transaction_id VARCHAR(64) NULL` — 결제사 거래 번호. 정산 대조·문의 조사용
 - `review_code VARCHAR NULL` — enum. 왜 자동으로 더 진행하지 못하게 됐나. 채워졌다는 것이 곧 `MANUAL_REVIEW` 다
 - `review_detail VARCHAR(255) NULL`

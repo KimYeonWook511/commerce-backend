@@ -134,7 +134,7 @@ class CancelPaidOrderServiceIntegrationTest {
 			cancelPaidOrderService.cancelPaidOrder(member.getId(), order.getId(), IDEMPOTENCY_KEY);
 
 		assertThat(refundPersistence.findAll()).hasSize(1);
-		assertThat(result.refund().getStatus()).isEqualTo(RefundStatus.REQUESTED);
+		assertThat(result.refund().getStatus()).isEqualTo(RefundStatus.READY);
 		assertThat(result.refund().getRequester()).isEqualTo(RefundRequester.MEMBER);
 		assertThat(result.refund().getReason()).isEqualTo(RefundReason.ORDER_CANCELED);
 		assertThat(result.refund().getAmount()).isEqualTo(PRODUCT_PRICE * ORDER_QUANTITY);

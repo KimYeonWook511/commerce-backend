@@ -162,7 +162,7 @@ class RefundPostProcessConcurrencyTest {
 	@Test
 	void reconcile_whileRequestFlowIsStillCallingTheGateway_doesNotPickIt() throws InterruptedException {
 		Payment payment = savePayment();
-		Refund refund = requestedRefund(payment);
+		Refund refund = readyRefund(payment);
 		CountDownLatch reconcileFinished = new CountDownLatch(1);
 		willAnswer(invocation -> {
 			refundCallCount.incrementAndGet();
@@ -246,7 +246,7 @@ class RefundPostProcessConcurrencyTest {
 	}
 
 	/** 아직 한 번도 안 나간 환불. 요청 흐름이 이제 그것을 보낸다 */
-	private Refund requestedRefund(Payment payment) {
+	private Refund readyRefund(Payment payment) {
 		Refund refund = payment.openRefund(
 			Optional.empty(), AMOUNT, RefundReason.ORDER_CANCELED, "IDEM-" + uniqueSuffix);
 		Refund saved = refundPersistence.save(refund);
@@ -256,7 +256,7 @@ class RefundPostProcessConcurrencyTest {
 
 	/** 답을 못 받아 결과를 모르는 환불. 이 상태에는 대사 유예가 없어 바로 대상이 된다 */
 	private Refund unknownRefund(Payment payment) {
-		Refund refund = requestedRefund(payment);
+		Refund refund = readyRefund(payment);
 		refund.markInProgress(LocalDateTime.now().minusMinutes(5));
 		refund.markUnknown();
 		return refundPersistence.save(refund);
