@@ -189,10 +189,10 @@ class ExecuteRefundUseCaseIntegrationTest {
 
 	@DisplayName("부르기 전과 부른 뒤가 상태로 갈리고, 한 번도 안 부른 건은 시도 번호가 0이다")
 	@Test
-	void send_whenFirstDispatch_movesFromRequestedAndRaisesAttemptSeq() {
+	void send_whenFirstDispatch_movesFromReadyAndRaisesAttemptSeq() {
 		Payment payment = savePayment();
 		Refund refund = saveRefund(payment);
-		assertThat(refund.getStatus()).isEqualTo(RefundStatus.REQUESTED);
+		assertThat(refund.getStatus()).isEqualTo(RefundStatus.READY);
 		assertThat(refund.getAttemptSeq()).isZero();
 		givenRefundResult(PgRefundResult.unanswered("응답 없음", callRecord(PgErrorType.TIMEOUT)));
 
@@ -232,7 +232,7 @@ class ExecuteRefundUseCaseIntegrationTest {
 		executeRefundUseCase.send(payment, refund, PgCallSource.BATCH);
 
 		then(paymentGatewayPort).should(never()).refund(any(), any(), any());
-		assertThat(reload(refund).getStatus()).isEqualTo(RefundStatus.REQUESTED);
+		assertThat(reload(refund).getStatus()).isEqualTo(RefundStatus.READY);
 	}
 
 	@DisplayName("이력에 그 사건의 시도가 없으면 보낸다")
@@ -275,7 +275,7 @@ class ExecuteRefundUseCaseIntegrationTest {
 		revived.flagForReview(RefundReviewCode.REQUEST_REJECTED, "임시");
 		refundPersistence.save(revived);
 		Refund readyAgain = reload(refund);
-		ReflectionTestUtils.setField(readyAgain, "status", RefundStatus.REQUESTED);
+		ReflectionTestUtils.setField(readyAgain, "status", RefundStatus.READY);
 		refundPersistence.save(readyAgain);
 		given(paymentGatewayPort.readHistory(any(), eq(PgHistoryScope.REFUND_ONLY), any()))
 			.willReturn(PgHistoryResult.succeeded(List.of(), "성공"));
@@ -546,7 +546,7 @@ class ExecuteRefundUseCaseIntegrationTest {
 		refund.flagForReview(RefundReviewCode.REQUEST_REJECTED, "임시");
 		refundPersistence.save(refund);
 		Refund revived = reload(refund);
-		ReflectionTestUtils.setField(revived, "status", RefundStatus.REQUESTED);
+		ReflectionTestUtils.setField(revived, "status", RefundStatus.READY);
 		return refundPersistence.save(revived);
 	}
 

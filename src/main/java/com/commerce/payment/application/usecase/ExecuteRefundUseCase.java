@@ -62,7 +62,7 @@ public class ExecuteRefundUseCase {
 	 * @return 이 호출을 마친 시점에 회원에게 알릴 환불 진행 상태
 	 */
 	public RefundStatus send(Payment payment, Refund refund, PgCallSource source) {
-		if (refund.getStatus() != RefundStatus.REQUESTED) {
+		if (refund.getStatus() != RefundStatus.READY) {
 			// 다른 쪽이 이미 집었거나 결과가 났다. 결과를 모르는 건을 다시 보내는 것은 이력을 읽은
 			// 대사의 몫이라 여기서 하지 않는다.
 			log.info("보낼 차례가 아닌 환불이라 부르지 않는다 refundId={} status={}",

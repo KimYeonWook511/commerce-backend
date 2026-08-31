@@ -34,7 +34,7 @@ public interface JpaRefundRepository extends JpaRepository<Refund, Long> {
 	// 되풀이 나갈 자리가 없고, 재전송의 백오프는 대사 쪽에 있다.
 	@Query("""
 		SELECT r FROM Refund r
-		WHERE r.status = 'REQUESTED'
+		WHERE r.status = 'READY'
 		ORDER BY r.id ASC
 		""")
 	List<Refund> findDispatchTargets(Pageable pageable);

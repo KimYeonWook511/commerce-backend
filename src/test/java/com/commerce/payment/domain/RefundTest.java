@@ -17,23 +17,23 @@ class RefundTest {
 	private static final String REFUND_KEY = "RF-0123456789abcdef0123456789abcd";
 	private static final LocalDateTime NOW = LocalDateTime.of(2026, 1, 1, 12, 0);
 
-	private Refund requestedRefund() {
+	private Refund readyRefund() {
 		return Refund.open(PAYMENT_ID, REFUND_KEY, RefundRequester.MEMBER, "IDEM-1", 10_000,
 			RefundReason.ORDER_CANCELED);
 	}
 
 	private Refund inProgressRefund() {
-		Refund refund = requestedRefund();
+		Refund refund = readyRefund();
 		refund.markInProgress(NOW);
 		return refund;
 	}
 
 	@DisplayName("환불 사건을 열면 아직 안 보낸 상태가 되고 시도 번호가 0이다")
 	@Test
-	void open_whenCalled_createsRequestedRefundWithoutAttempt() {
-		Refund refund = requestedRefund();
+	void open_whenCalled_createsReadyRefundWithoutAttempt() {
+		Refund refund = readyRefund();
 
-		assertThat(refund.getStatus()).isEqualTo(RefundStatus.REQUESTED);
+		assertThat(refund.getStatus()).isEqualTo(RefundStatus.READY);
 		assertThat(refund.getPaymentId()).isEqualTo(PAYMENT_ID);
 		assertThat(refund.getAmount()).isEqualTo(10_000);
 		assertThat(refund.getReason()).isEqualTo(RefundReason.ORDER_CANCELED);
@@ -45,7 +45,7 @@ class RefundTest {
 	@DisplayName("같은 요청 키로 온 요청은 금액과 사유가 모두 같아야 앞서 만든 사건으로 받아들여진다")
 	@Test
 	void requireSameRequest_whenContentDiffers_throws() {
-		Refund refund = requestedRefund();
+		Refund refund = readyRefund();
 
 		refund.requireSameRequest(10_000, RefundReason.ORDER_CANCELED);
 
@@ -83,7 +83,7 @@ class RefundTest {
 	@DisplayName("사유는 정해진 값으로만 기록되고 회원 취소와 승인 반려가 그 값으로 구분된다")
 	@Test
 	void open_whenCreatedByEitherPath_recordsPredefinedReason() {
-		Refund memberRefund = requestedRefund();
+		Refund memberRefund = readyRefund();
 		Refund rejectionRefund = Refund.open(PAYMENT_ID, "RF-ffffffffffffffffffffffffffffffff",
 			RefundRequester.SYSTEM, RefundReason.ORDER_NOT_PAYABLE.name(), 10_000,
 			RefundReason.ORDER_NOT_PAYABLE);
@@ -96,8 +96,8 @@ class RefundTest {
 
 	@DisplayName("첫 발송 직전 전이는 시도 번호를 올리고 그 번호에서 호출 멱등키를 새로 파생한다")
 	@Test
-	void markInProgress_fromRequested_opensFirstAttemptAndDerivesNewPgIdempotencyKey() {
-		Refund refund = requestedRefund();
+	void markInProgress_fromReady_opensFirstAttemptAndDerivesNewPgIdempotencyKey() {
+		Refund refund = readyRefund();
 		String beforeKey = refund.getPgIdempotencyKey();
 
 		refund.markInProgress(NOW);
@@ -123,7 +123,7 @@ class RefundTest {
 	@DisplayName("결제사에 실어 보낼 시도 키를 환불이 스스로 만든다 — 형식의 정본이 이 자리 하나다")
 	@Test
 	void attemptKey_whenCalled_joinsRefundKeyAndAttemptSeq() {
-		Refund refund = requestedRefund();
+		Refund refund = readyRefund();
 		assertThat(refund.attemptKey()).isEqualTo(REFUND_KEY + "-0");
 
 		refund.markInProgress(NOW);
@@ -163,8 +163,8 @@ class RefundTest {
 
 	@DisplayName("아직 한 번도 안 보낸 환불에는 다시 부르기 직전 전이를 걸 수 없다")
 	@Test
-	void recordRequested_fromRequested_throws() {
-		Refund refund = requestedRefund();
+	void recordRequested_fromReady_throws() {
+		Refund refund = readyRefund();
 
 		assertThatThrownBy(() -> refund.recordRequested(NOW))
 			.isInstanceOf(PaymentException.class)
@@ -195,8 +195,8 @@ class RefundTest {
 
 	@DisplayName("아직 한 번도 안 보낸 환불을 성공으로 확정할 수는 없다")
 	@Test
-	void complete_fromRequested_throws() {
-		Refund refund = requestedRefund();
+	void complete_fromReady_throws() {
+		Refund refund = readyRefund();
 
 		assertThatThrownBy(() -> refund.complete("pg-tx-1"))
 			.isInstanceOf(PaymentException.class)
@@ -275,11 +275,11 @@ class RefundTest {
 	@Test
 	void callLifecycleNames_meanTheSameThingForPaymentAndRefund() {
 		Payment payment = Payment.start(1L, 1L, PaymentPg.NAVERPAY, "PK-1", "IDEM-1", 10_000);
-		Refund refund = requestedRefund();
+		Refund refund = readyRefund();
 
 		// 첫 상태는 양쪽 다 결제사를 아직 부르기 전이다. 기다리는 대상이 달라 이름만 갈린다.
 		assertThat(payment.getStatus()).isEqualTo(PaymentStatus.READY);
-		assertThat(refund.getStatus()).isEqualTo(RefundStatus.REQUESTED);
+		assertThat(refund.getStatus()).isEqualTo(RefundStatus.READY);
 
 		payment.markInProgress("pg-payment-1", NOW);
 		refund.markInProgress(NOW);

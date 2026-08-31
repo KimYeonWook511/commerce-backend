@@ -156,7 +156,7 @@ public class Refund extends BaseTimeEntity {
 		this.idempotencyKey = idempotencyKey;
 		this.amount = amount;
 		this.reason = reason;
-		this.status = RefundStatus.REQUESTED;
+		this.status = RefundStatus.READY;
 		this.attemptSeq = 0;
 		this.reconcileCount = 0;
 		this.pgIdempotencyKey = attemptKey(refundKey, 0);
@@ -198,7 +198,7 @@ public class Refund extends BaseTimeEntity {
 
 	/** 결제사 호출 직전. 첫 발송이라 시도 번호가 오르고 그 번호에서 호출 멱등키가 새로 파생된다 */
 	public void markInProgress(LocalDateTime requestedAt) {
-		requireStatusIn(RefundStatus.REQUESTED);
+		requireStatusIn(RefundStatus.READY);
 		openNextAttempt();
 		this.lastRequestedAt = requestedAt;
 		this.status = RefundStatus.IN_PROGRESS;

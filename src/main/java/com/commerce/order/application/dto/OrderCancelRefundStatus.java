@@ -26,7 +26,7 @@ public enum OrderCancelRefundStatus {
 	public static OrderCancelRefundStatus from(RefundStatus status) {
 		return switch (status) {
 			case SUCCEEDED -> COMPLETED;
-			case REQUESTED, IN_PROGRESS, UNKNOWN, MANUAL_REVIEW -> OrderCancelRefundStatus.IN_PROGRESS;
+			case READY, IN_PROGRESS, UNKNOWN, MANUAL_REVIEW -> OrderCancelRefundStatus.IN_PROGRESS;
 		};
 	}
 }

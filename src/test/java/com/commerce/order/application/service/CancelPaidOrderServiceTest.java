@@ -68,7 +68,7 @@ class CancelPaidOrderServiceTest {
 			cancelPaidOrderService.cancelPaidOrder(MEMBER_ID, ORDER_ID, IDEMPOTENCY_KEY);
 
 		assertThat(result.order().getStatus()).isEqualTo(OrderStatus.CANCELED);
-		assertThat(result.refund().getStatus()).isEqualTo(RefundStatus.REQUESTED);
+		assertThat(result.refund().getStatus()).isEqualTo(RefundStatus.READY);
 		assertThat(result.refund().getRequester()).isEqualTo(RefundRequester.MEMBER);
 		assertThat(result.refund().getReason()).isEqualTo(RefundReason.ORDER_CANCELED);
 		assertThat(result.refund().getIdempotencyKey()).isEqualTo(IDEMPOTENCY_KEY);

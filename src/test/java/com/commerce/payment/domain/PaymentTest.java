@@ -330,7 +330,7 @@ class PaymentTest {
 		assertThat(refund.getAmount()).isEqualTo(3_000);
 		assertThat(refund.getRequester()).isEqualTo(RefundRequester.MEMBER);
 		assertThat(refund.getIdempotencyKey()).isEqualTo("IDEM-refund");
-		assertThat(refund.getStatus()).isEqualTo(RefundStatus.REQUESTED);
+		assertThat(refund.getStatus()).isEqualTo(RefundStatus.READY);
 		// 시도 번호를 붙여도 결제사 한도 안에 들도록 길이를 고정한다.
 		assertThat(refund.getRefundKey()).startsWith("RF-").hasSize(35);
 		// 이 갱신이 없으면 동시에 온 두 요청이 서로를 감지하지 못한다.
