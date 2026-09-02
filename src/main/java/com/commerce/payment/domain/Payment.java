@@ -401,6 +401,25 @@ public class Payment extends BaseTimeEntity {
 	}
 
 	/**
+	 * 환불 하나가 성공했다는 사실을 결제 행에 남긴다. 실제로 돌아간 금액이 그 금액만큼 오르며, 이 값을
+	 * 바꾸는 길은 여기뿐이다.
+	 *
+	 * <p>결제 상태를 조건으로 삼지 않는다. 승인 반려는 환불을 먼저 열고 그 뒤에 결제를 종결하므로
+	 * 종결된 결제에 열린 환불이 딸린 상태가 정상이고, 상태로 막으면 그 환불의 성공이 반영되지 않은 채
+	 * 부르는 흐름에 흡수되어 조용히 사라진다.
+	 *
+	 * <p>금액이 0보다 큰지도 함께 본다. 이 자리는 환불을 만드는 관문을 지나지 않아 그 관문의 금액
+	 * 검사가 뒤에 서 주지 않는다. 어느 쪽을 어겼든 구조상 나올 수 없는 값이며, 그때는 저장된 두 금액이
+	 * 이미 어긋났다는 뜻이라 조용히 더하지 않고 거부한다.
+	 */
+	public void recordRefundSuccess(int amount) {
+		if (amount <= 0 || this.refundSucceededAmount + amount > this.refundOpenedAmount) {
+			throw new PaymentException(PaymentErrorCode.REFUND_SUCCEEDED_AMOUNT_INVARIANT_BROKEN);
+		}
+		this.refundSucceededAmount += amount;
+	}
+
+	/**
 	 * 환불 하나를 더한다. 한도 판정과 돌려주기로 한 금액 갱신이 한 자리에 있어야 둘이 갈리지 않는다.
 	 *
 	 * <p>돌려주기로 한 금액을 더하는 것이 곧 동시 요청 방어다. 결제 행이 실제로 바뀌어야 갱신 질의가 나가고

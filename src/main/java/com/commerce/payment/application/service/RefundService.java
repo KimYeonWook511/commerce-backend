@@ -5,21 +5,25 @@ import java.time.LocalDateTime;
 import org.springframework.stereotype.Service;
 import org.springframework.transaction.annotation.Transactional;
 
+import com.commerce.payment.domain.Payment;
 import com.commerce.payment.domain.Refund;
 import com.commerce.payment.domain.RefundReviewCode;
 import com.commerce.payment.domain.exception.PaymentErrorCode;
 import com.commerce.payment.domain.exception.PaymentException;
+import com.commerce.payment.domain.repository.PaymentRepository;
 import com.commerce.payment.domain.repository.RefundRepository;
 
 import lombok.RequiredArgsConstructor;
 import lombok.extern.slf4j.Slf4j;
 
 /**
- * 환불 하나를 전이시키는 트랜잭션 단위작업. 환불만 로드하고 결제를 건드리지 않는다.
+ * 환불 하나를 전이시키는 트랜잭션 단위작업. 성공 확정만 결제를 함께 로드해 갱신하고, 나머지 전이는
+ * 환불만 로드한다.
  *
- * <p>결제 버전을 올리지 않는 것이 중요하다. 상태 전이는 한도를 바꾸지 않으므로 결제가 알 필요가 없고,
- * 올리면 대사가 한 바퀴 돌 때마다 회원의 환불 요청이 낙관 락 충돌로 밀린다. 결제를 함께 저장하는 것은
- * 환불을 만들 때뿐이다.
+ * <p>나머지 전이가 결제 버전을 올리지 않는 것이 중요하다. 그 전이들은 한도도 한도의 사용 내역도 바꾸지
+ * 않으므로 결제가 알 필요가 없고, 올리면 대사가 한 바퀴 돌 때마다 회원의 환불 요청이 낙관 락 충돌로
+ * 밀린다. 확정은 실제로 돌아간 금액을 올리므로 결제가 알아야 하고, 환불 건당 한 번뿐이라 그 해악이
+ * 되풀이되지 않는다.
  *
  * <p>상태가 바뀐 사실을 남기는 로그가 여기 있다. 판정은 도메인이 하지만 그 판정을 커밋으로 확정하는
  * 것은 이 자리이고, 도메인 안에 로그를 두면 커밋되지 않은 전이까지 남는다.
@@ -30,6 +34,7 @@ import lombok.extern.slf4j.Slf4j;
 public class RefundService {
 
 	private final RefundRepository refundRepository;
+	private final PaymentRepository paymentRepository;
 
 	/**
 	 * 첫 발송의 결제사 호출 직전. 응답 대기로 옮기고 시도 번호를 올려 그 회차의 키를 만든다.
@@ -55,13 +60,29 @@ public class RefundService {
 		return refundRepository.saveChecked(refund);
 	}
 
-	/** 환불이 완료됐다. 자동으로 갈 수 있는 유일한 종착이다 */
+	/**
+	 * 환불이 완료됐다. 자동으로 갈 수 있는 유일한 종착이며, 결제가 그 성공을 함께 받아들여 실제로
+	 * 돌아간 금액이 오른다.
+	 *
+	 * <p>두 갱신이 한 트랜잭션이라 환불만 성공으로 남고 금액이 안 오르는 어긋남이 생기지 않는다. 금액
+	 * 갱신이 환불의 상태 가드 안쪽이라 앞 확정이 커밋된 뒤에 다시 오는 확정도 두 번 계상되지 않는다.
+	 */
 	@Transactional
 	public void complete(Long id, String pgTransactionId) {
 		Refund refund = load(id);
 		refund.complete(pgTransactionId);
+		// 낙관 락을 검사하는 저장이고, 결제 갱신보다 먼저 나가야 한다. 같은 환불을 동시에 확정하면 진
+		// 쪽이 결제 행에 닿기 전에 여기서 걸리며, 순서를 안 정하면 어느 행이 잡는지가 흔들린다.
 		refundRepository.saveChecked(refund);
-		log.info("환불 완료 refundId={} paymentId={} amount={}", id, refund.getPaymentId(), refund.getAmount());
+
+		Payment payment = loadPayment(refund.getPaymentId());
+		payment.recordRefundSuccess(refund.getAmount());
+		paymentRepository.saveChecked(payment);
+
+		// 결제 갱신이 성공한 뒤에 남긴다. 앞에 두면 결제 행 경합으로 되돌려진 확정에도 "환불 완료"가
+		// 남아, 돈이 실제로 확정됐는지를 로그로 되짚을 수 없다.
+		log.info("환불 완료 refundId={} paymentId={} amount={} refundSucceededAmount={}",
+			id, refund.getPaymentId(), refund.getAmount(), payment.getRefundSucceededAmount());
 	}
 
 	/** 응답을 못 받아 결과를 모른다 */
@@ -126,6 +147,12 @@ public class RefundService {
 	 */
 	private Refund load(Long id) {
 		return refundRepository.findById(id)
+			.orElseThrow(() -> new PaymentException(PaymentErrorCode.PAYMENT_NOT_FOUND));
+	}
+
+	/** 환불 행이 가리키는 결제가 없으면 확정할 대상이 없다. 부르는 흐름이 경합과 함께 흡수한다 */
+	private Payment loadPayment(Long paymentId) {
+		return paymentRepository.findById(paymentId)
 			.orElseThrow(() -> new PaymentException(PaymentErrorCode.PAYMENT_NOT_FOUND));
 	}
 }
