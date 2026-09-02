@@ -173,9 +173,9 @@ class ClosePaymentUseCaseIntegrationTest {
 		assertThat(refund.getAmount()).isEqualTo(approvedAmount);
 	}
 
-	@DisplayName("환불을 만들면 결제 행의 환불 합이 오르고 버전도 함께 오른다")
+	@DisplayName("환불을 만들면 결제 행의 돌려주기로 한 금액이 오르고 버전도 함께 오른다")
 	@Test
-	void rejectOrderNotPayable_whenCalled_raisesTotalRefundedAmountAndVersion() {
+	void rejectOrderNotPayable_whenCalled_raisesRefundOpenedAmountAndVersion() {
 		Payment payment = inProgressPayment();
 		Long versionBefore = reload(payment).getVersion();
 
@@ -184,11 +184,11 @@ class ClosePaymentUseCaseIntegrationTest {
 
 		Payment closed = reload(payment);
 		// 이 갱신이 없으면 동시에 온 두 요청이 서로를 감지하지 못한다.
-		assertThat(closed.getTotalRefundedAmount()).isEqualTo(payment.getAmount());
+		assertThat(closed.getRefundOpenedAmount()).isEqualTo(payment.getAmount());
 		assertThat(closed.getVersion()).isGreaterThan(versionBefore);
 	}
 
-	@DisplayName("환불 상태를 바꿔도 결제 행의 환불 합과 버전은 그대로다")
+	@DisplayName("환불 상태를 바꿔도 결제 행의 돌려주기로 한 금액과 버전은 그대로다")
 	@Test
 	void refundTransition_whenApplied_leavesPaymentRowUntouched() {
 		Payment payment = inProgressPayment();
@@ -203,7 +203,7 @@ class ClosePaymentUseCaseIntegrationTest {
 
 		Payment afterTransition = reload(payment);
 		// 여기서 결제를 함께 저장하면 대사가 한 바퀴 돌 때마다 회원의 환불 요청이 밀린다.
-		assertThat(afterTransition.getTotalRefundedAmount()).isEqualTo(afterRejection.getTotalRefundedAmount());
+		assertThat(afterTransition.getRefundOpenedAmount()).isEqualTo(afterRejection.getRefundOpenedAmount());
 		assertThat(afterTransition.getVersion()).isEqualTo(afterRejection.getVersion());
 	}
 
@@ -222,7 +222,7 @@ class ClosePaymentUseCaseIntegrationTest {
 		// 금액을 다시 계산하면 앞서 만든 환불이 한도를 잡고 있어 남은 한도가 0이 된다.
 		Refund refund = onlyRefund();
 		assertThat(refund.getAmount()).isEqualTo(payment.getAmount());
-		assertThat(reload(payment).getTotalRefundedAmount()).isEqualTo(payment.getAmount());
+		assertThat(reload(payment).getRefundOpenedAmount()).isEqualTo(payment.getAmount());
 	}
 
 	@DisplayName("결제가 이미 종착이어도 반려 환불은 만들어지고 정합성 이상으로 알린다")
@@ -277,7 +277,7 @@ class ClosePaymentUseCaseIntegrationTest {
 		Payment untouched = reload(payment);
 		assertThat(untouched.getStatus()).isEqualTo(PaymentStatus.IN_PROGRESS);
 		assertThat(untouched.getCloseCode()).isNull();
-		assertThat(untouched.getTotalRefundedAmount()).isZero();
+		assertThat(untouched.getRefundOpenedAmount()).isZero();
 		assertThat(refundPersistence.findAll()).isEmpty();
 	}
 
@@ -296,7 +296,7 @@ class ClosePaymentUseCaseIntegrationTest {
 		assertThat(closed.getCloseCode()).isEqualTo(PaymentCloseCode.PAYMENT_KEY_MISMATCH);
 		// 나간 돈은 그 키의 주인 결제의 것이라 우리가 되돌릴 대상이 아니다.
 		assertThat(refundPersistence.findAll()).isEmpty();
-		assertThat(closed.getTotalRefundedAmount()).isZero();
+		assertThat(closed.getRefundOpenedAmount()).isZero();
 	}
 
 	// ── 픽스처 ───────────────────────────────────────────────────

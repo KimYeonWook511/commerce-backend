@@ -53,11 +53,11 @@ import com.commerce.support.PersistenceCleanupTestSupport;
 import com.commerce.support.TestcontainersSupport;
 
 /**
- * 환불을 만드는 트랜잭션이 겹칠 때의 불변식을 확인한다. 결제 행의 누적 환불액 갱신과 환불 요청 멱등키
+ * 환불을 만드는 트랜잭션이 겹칠 때의 불변식을 확인한다. 결제 행의 돌려주기로 한 금액 갱신과 환불 요청 멱등키
  * 유일 제약이 이 방어의 전부라 실제 DB 위에서만 거동이 재현된다.
  *
  * <p>어느 쪽이 이기는지는 단언하지 않는다. 승자는 타이밍에 달려 있고, 지켜야 하는 것은 "환불 사건이
- * 하나", "환불 총액이 승인 금액을 넘지 않는다"라는 불변식이다.
+ * 하나", "돌려주기로 한 금액이 승인 금액을 넘지 않는다"라는 불변식이다.
  */
 @SpringBootTest
 @ActiveProfiles("test")
@@ -142,10 +142,10 @@ class ClosePaymentUseCaseConcurrencyTest {
 		// 조회가 둘 다 못 찾은 것을 유일 제약이 잡고, 그것을 지나가더라도 결제 버전이 받는다.
 		assertThat(refundPersistence.findAll()).hasSize(1);
 		assertThat(failures).isLessThan(THREADS);
-		assertThat(reload(payment).getTotalRefundedAmount()).isEqualTo(payment.getAmount());
+		assertThat(reload(payment).getRefundOpenedAmount()).isEqualTo(payment.getAmount());
 	}
 
-	@DisplayName("사유가 다른 반려가 동시에 와도 환불 총액이 승인 금액을 넘지 않는다")
+	@DisplayName("사유가 다른 반려가 동시에 와도 돌려주기로 한 금액이 승인 금액을 넘지 않는다")
 	@Test
 	void reject_whenDifferentReasonsRace_keepsTotalWithinApprovedAmount() throws InterruptedException {
 		Payment payment = inProgressPayment();
@@ -160,10 +160,10 @@ class ClosePaymentUseCaseConcurrencyTest {
 			}
 		});
 
-		// 키가 달라 유일 제약에는 걸리지 않는다. 그 자리는 누적 환불액이 올린 결제 버전이 받는다.
+		// 키가 달라 유일 제약에는 걸리지 않는다. 그 자리는 돌려주기로 한 금액이 올린 결제 버전이 받는다.
 		assertThat(refundPersistence.findAll()).hasSize(1);
 		assertThat(failures).isLessThan(THREADS);
-		assertThat(reload(payment).getTotalRefundedAmount()).isEqualTo(payment.getAmount());
+		assertThat(reload(payment).getRefundOpenedAmount()).isEqualTo(payment.getAmount());
 	}
 
 	@DisplayName("환불 상태를 바꾸는 일과 새 환불을 만드는 일이 겹쳐도 서로 부딪히지 않는다")
@@ -191,7 +191,7 @@ class ClosePaymentUseCaseConcurrencyTest {
 			.isEqualTo(RefundStatus.SUCCEEDED);
 		List<Refund> refunds = refundPersistence.findAll();
 		assertThat(refunds).hasSize(2);
-		assertThat(reload(payment).getTotalRefundedAmount()).isEqualTo(payment.getAmount());
+		assertThat(reload(payment).getRefundOpenedAmount()).isEqualTo(payment.getAmount());
 	}
 
 	/** 밀려난 쪽의 수를 돌려준다. 어느 쪽이 밀렸는지는 타이밍에 달려 있어 단언하지 않는다 */

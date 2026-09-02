@@ -50,7 +50,7 @@ public class CancelPaidOrderService {
 	/**
 	 * 결제된 주문을 취소하고 되돌릴 환불을 연다.
 	 *
-	 * <p>같은 요청 키로 다시 들어오면 앞서 만든 환불이 그대로 돌아오고 누적 환불액도 다시 오르지 않는다.
+	 * <p>같은 요청 키로 다시 들어오면 앞서 만든 환불이 그대로 돌아오고 돌려주기로 한 금액도 다시 오르지 않는다.
 	 * 그 판정은 결제의 도메인 메서드가 하며, 이 자리는 기존 사건을 찾아 넘기기만 한다.
 	 */
 	@Transactional
@@ -87,7 +87,7 @@ public class CancelPaidOrderService {
 
 		orderRepository.save(order);
 		Refund savedRefund = refundRepository.save(refund);
-		// 누적 환불액이 올라 결제 버전이 바뀐다. 동시에 온 두 요청 중 진 쪽은 그 버전에서 충돌해
+		// 돌려주기로 한 금액이 올라 결제 버전이 바뀐다. 동시에 온 두 요청 중 진 쪽은 그 버전에서 충돌해
 		// 자기 환불까지 함께 롤백된다.
 		paymentRepository.save(payment);
 
@@ -125,7 +125,7 @@ public class CancelPaidOrderService {
 	/**
 	 * 커밋된 사실을 흐름 조립 자리에 넘기는 결과.
 	 *
-	 * @param remainingAmount 앞으로 더 취소할 수 있는 금액. 승인 금액에서 누적 환불액을 뺀 값이며,
+	 * @param remainingAmount 앞으로 더 취소할 수 있는 금액. 승인 금액에서 돌려주기로 한 금액을 뺀 값이며,
 	 *                        한도를 재는 것과 같은 계산이라 응답이 그것을 그대로 쓴다
 	 */
 	public record CancelPaidOrderResult(Order order, Payment payment, Refund refund, int remainingAmount) {

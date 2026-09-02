@@ -10,7 +10,7 @@ import com.commerce.payment.domain.Refund;
 import com.commerce.payment.domain.RefundRequester;
 
 /**
- * 합계 조회를 두지 않는다. 한도 판정은 결제 행의 승인 금액과 누적 환불액만 읽으므로 결제를 로드하는
+ * 합계 조회를 두지 않는다. 한도 판정은 결제 행의 승인 금액과 돌려주기로 한 금액만 읽으므로 결제를 로드하는
  * 것으로 끝나고, 값을 두 곳에서 읽으면 어긋났을 때 어느 쪽을 믿을지를 정해야 한다.
  */
 public interface RefundRepository {
@@ -40,7 +40,7 @@ public interface RefundRepository {
 	 * 그 결제에서 아직 결과를 모르는 환불들. 환불 가능 금액 초과 거절의 원인이 그중 하나가 실제로 완료된
 	 * 것인지 이력으로 가릴 때 읽는다.
 	 *
-	 * <p>합계를 세지 않는다. 한도 판정은 결제 행의 누적 환불액만 읽고, 이 조회가 돌려주는 것은 이력의
+	 * <p>합계를 세지 않는다. 한도 판정은 결제 행의 돌려주기로 한 금액만 읽고, 이 조회가 돌려주는 것은 이력의
 	 * 취소 항목을 설명할 후보다.
 	 */
 	List<Refund> findUnsettledByPaymentId(Long paymentId);

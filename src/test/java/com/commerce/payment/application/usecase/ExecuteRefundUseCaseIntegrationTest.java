@@ -302,7 +302,7 @@ class ExecuteRefundUseCaseIntegrationTest {
 		Refund stored = reload(refund);
 		assertThat(stored.getStatus()).isEqualTo(RefundStatus.IN_PROGRESS);
 		assertThat(stored.getAmount()).isEqualTo(AMOUNT);
-		assertThat(paymentPersistence.findById(payment.getId()).orElseThrow().getTotalRefundedAmount())
+		assertThat(paymentPersistence.findById(payment.getId()).orElseThrow().getRefundOpenedAmount())
 			.isEqualTo(AMOUNT);
 	}
 
@@ -370,9 +370,9 @@ class ExecuteRefundUseCaseIntegrationTest {
 
 		executeRefundUseCase.send(fixture.payment(), fixture.current(), PgCallSource.MEMBER_REQUEST);
 
-		// 누적 환불액은 환불을 만들 때만 오르고 상태로 바뀌지 않으므로, 만들 때 통과한 이 환불은 지금도
+		// 돌려주기로 한 금액은 환불을 만들 때만 오르고 상태로 바뀌지 않으므로, 만들 때 통과한 이 환불은 지금도
 		// 한도 안이다. 다시 검사하면 없앤 합계 조회가 그 자리로 되살아난다.
-		assertThat(paymentPersistence.findById(fixture.payment().getId()).orElseThrow().getTotalRefundedAmount())
+		assertThat(paymentPersistence.findById(fixture.payment().getId()).orElseThrow().getRefundOpenedAmount())
 			.isEqualTo(AMOUNT);
 	}
 
@@ -500,7 +500,7 @@ class ExecuteRefundUseCaseIntegrationTest {
 		return paymentPersistence.save(payment);
 	}
 
-	/** 환불을 만드는 관문은 결제 안에 있다. 누적 환불액이 오른 결제도 함께 저장한다 */
+	/** 환불을 만드는 관문은 결제 안에 있다. 돌려주기로 한 금액이 오른 결제도 함께 저장한다 */
 	private Refund saveRefund(Payment payment) {
 		Refund refund = payment.openRefund(
 			Optional.empty(), AMOUNT, RefundReason.ORDER_CANCELED, "IDEM-" + uniqueSuffix);

@@ -102,12 +102,26 @@ public class Payment extends BaseTimeEntity {
 	private Integer approvedAmount;
 
 	/**
-	 * 이 결제에 딸린 환불 금액의 합. 한도 판정이 읽는 유일한 값이다.
-	 * 이름에 합이라는 뜻을 넣은 것은 주문 취소 응답이 같은 자리에서 이번 건 하나의 금액을 가리키기
-	 * 때문이다 — 이름이 같으면 그 값을 그대로 응답에 옮기는 실수가 난다.
+	 * 돌려주기로 한 금액. 이 결제에 열린 모든 환불 금액의 합이며 성공한 것도 실패한 것도 다 들어 있다.
+	 * 한도 판정이 읽는 유일한 값이고 줄지 않는다 — 미결인 몫을 풀어 주면 아직 돈이 안 돌아갔는데 새
+	 * 환불이 끼어든다.
+	 *
+	 * <p>주문 취소 응답이 같은 자리에서 이번 건 하나의 금액을 가리키므로 그 값과 헷갈리면 안 된다.
 	 */
-	@Column(name = "total_refunded_amount", nullable = false)
-	private int totalRefundedAmount;
+	@Column(name = "refund_opened_amount", nullable = false)
+	private int refundOpenedAmount;
+
+	/**
+	 * 실제로 돌아간 금액. 위 금액 중 결제사 응답으로 성공이 확정된 몫의 합이며 줄지 않는다.
+	 * 구조상 {@code refundOpenedAmount} 이하다 — 환불 하나가 열릴 때 그쪽이 오르고, 그 환불이 성공할
+	 * 때 같은 금액만큼 이쪽이 오른다.
+	 *
+	 * <p>세는 것은 결제사가 확정했다고 답한 돈이지 실제로 나간 돈이 아니다. 운영자가 결제사 콘솔에서
+	 * 직접 처리한 건은 안 들어오고, 결제사가 곧 자동으로 다시 처리한다고 답한 건은 돈이 나가기 전에
+	 * 들어온다. 어긋나는 방향이 하나가 아니므로 읽는 쪽이 한쪽을 가정하면 안 된다.
+	 */
+	@Column(name = "refund_succeeded_amount", nullable = false)
+	private int refundSucceededAmount;
 
 	@Enumerated(EnumType.STRING)
 	@JdbcTypeCode(SqlTypes.VARCHAR)
@@ -173,7 +187,8 @@ public class Payment extends BaseTimeEntity {
 		this.paymentKey = paymentKey;
 		this.idempotencyKey = idempotencyKey;
 		this.amount = amount;
-		this.totalRefundedAmount = 0;
+		this.refundOpenedAmount = 0;
+		this.refundSucceededAmount = 0;
 		this.attemptSeq = 0;
 		this.reconcileCount = 0;
 		changeStatus(PaymentStatus.READY);
@@ -281,8 +296,8 @@ public class Payment extends BaseTimeEntity {
 	}
 
 	/**
-	 * 회원 요청으로 환불을 연다. 같은 요청 키의 사건이 이미 있으면 그것을 그대로 돌려주고 누적 환불액을
-	 * 다시 더하지 않는다. 없으면 한도를 판정해 새로 만들고 그 금액만큼 누적 환불액을 더한다.
+	 * 회원 요청으로 환불을 연다. 같은 요청 키의 사건이 이미 있으면 그것을 그대로 돌려주고 돌려주기로 한
+	 * 금액을 다시 더하지 않는다. 없으면 한도를 판정해 새로 만들고 그 금액만큼 그 값을 더한다.
 	 *
 	 * <p>넘겨받은 사건이 이 결제의 것인지 먼저 대조한다 — 조회를 한 번 잘못 좁히면 남의 환불이 이번
 	 * 요청의 결과로 돌아간다.
@@ -297,7 +312,7 @@ public class Payment extends BaseTimeEntity {
 	}
 
 	/**
-	 * 승인 반려로 환불을 연다. 금액을 받지 않고 그 시점의 남은 한도(승인 금액 − 누적 환불액)를 스스로
+	 * 승인 반려로 환불을 연다. 금액을 받지 않고 그 시점의 남은 한도(승인 금액 − 돌려주기로 한 금액)를 스스로
 	 * 계산한다 — 상태에서 파생되는 판단이라 밖에서 계산해 넘기면 호출자가 도메인 규칙을 들게 된다.
 	 * 승인 금액으로 고정하지도 않는다. 정상 경로에서는 둘이 같고, 다른 순간은 이미 어긋난 상태라
 	 * 고정값을 쓰면 한도를 넘어 반려가 통째로 막힌다.
@@ -386,9 +401,9 @@ public class Payment extends BaseTimeEntity {
 	}
 
 	/**
-	 * 환불 하나를 더한다. 한도 판정과 누적 환불액 갱신이 한 자리에 있어야 둘이 갈리지 않는다.
+	 * 환불 하나를 더한다. 한도 판정과 돌려주기로 한 금액 갱신이 한 자리에 있어야 둘이 갈리지 않는다.
 	 *
-	 * <p>누적 환불액을 더하는 것이 곧 동시 요청 방어다. 결제 행이 실제로 바뀌어야 갱신 질의가 나가고
+	 * <p>돌려주기로 한 금액을 더하는 것이 곧 동시 요청 방어다. 결제 행이 실제로 바뀌어야 갱신 질의가 나가고
 	 * 버전이 오르며, 각자 한도를 통과한 두 요청 중 진 쪽이 그 버전에서 충돌해 자기 환불까지 함께
 	 * 롤백된다. 이 한 줄이 빠지면 겉보기에는 잘 돌다가 경합에서만 한도를 넘는다.
 	 */
@@ -399,12 +414,12 @@ public class Payment extends BaseTimeEntity {
 		// 금액이 0보다 큰지와 요청 키가 있는지는 환불의 생성 관문이 지킨다. 여기서 값을 조립해 만들면
 		// 관문이 둘로 갈린다.
 		Refund refund = Refund.open(this.id, generateRefundKey(), requester, idempotencyKey, amount, reason);
-		this.totalRefundedAmount += amount;
+		this.refundOpenedAmount += amount;
 		return refund;
 	}
 
 	/**
-	 * 남은 한도. 모든 상태의 환불이 이미 누적 환불액에 들어 있어 상태로 예외를 두지 않는다 — 결과를
+	 * 남은 한도. 모든 상태의 환불이 이미 돌려주기로 한 금액에 들어 있어 상태로 예외를 두지 않는다 — 결과를
 	 * 모르는 것도 자동 처리가 멈춘 것도 아직 돈이 돌아가지 않았고, 그 몫을 풀어 주면 새 환불이 끼어든다.
 	 *
 	 * <p>주문 취소 응답이 "앞으로 더 취소할 수 있는 금액"으로 이 값을 그대로 싣는다. 한도를 재는 것과
@@ -415,7 +430,7 @@ public class Payment extends BaseTimeEntity {
 			// 얼마를 돌려줘야 하는지가 정해지지 않았다.
 			throw new PaymentException(PaymentErrorCode.REFUND_APPROVED_AMOUNT_MISSING);
 		}
-		return approvedAmount - totalRefundedAmount;
+		return approvedAmount - refundOpenedAmount;
 	}
 
 	private Refund requireOwnRefund(Refund refund) {

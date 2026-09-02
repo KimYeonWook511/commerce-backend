@@ -243,7 +243,7 @@ class ReconcileRefundUseCaseIntegrationTest {
 		assertThat(flagged.getStatus()).isEqualTo(RefundStatus.MANUAL_REVIEW);
 		assertThat(flagged.getReviewCode()).isEqualTo(RefundReviewCode.CANCEL_DEADLINE_EXPIRED);
 		// 자동으로 못 푼다고 몫을 풀어 주면 아직 돈이 안 돌아간 사건이 미결인 채 새 환불이 끼어든다.
-		assertThat(reloadPayment(payment).getTotalRefundedAmount()).isEqualTo(AMOUNT);
+		assertThat(reloadPayment(payment).getRefundOpenedAmount()).isEqualTo(AMOUNT);
 	}
 
 	@DisplayName("다시 시도할 수 있는 실패를 받으면 상태를 그대로 두고 다음 호출이 새 키로 나가게 한다")

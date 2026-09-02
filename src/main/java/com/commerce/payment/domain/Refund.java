@@ -85,7 +85,7 @@ public class Refund extends BaseTimeEntity {
 	@Column(nullable = false, length = 20)
 	private RefundRequester requester;
 
-	/** 이번 환불 금액. 만들어진 뒤 바뀌지 않는다 — 결제 행의 누적 환불액이 그 전제 위에 서 있다 */
+	/** 이번 환불 금액. 만들어진 뒤 바뀌지 않는다 — 결제 행의 돌려주기로 한 금액이 그 전제 위에 서 있다 */
 	@Column(nullable = false)
 	private int amount;
 
