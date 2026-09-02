@@ -35,6 +35,7 @@ import com.commerce.payment.application.port.NotificationPort;
 import com.commerce.payment.application.port.PaymentGatewayPort;
 import com.commerce.payment.application.port.dto.PgCallRecord;
 import com.commerce.payment.application.port.dto.PgRefundResult;
+import com.commerce.payment.application.service.RefundService;
 import com.commerce.payment.domain.Payment;
 import com.commerce.payment.domain.PaymentCloseCode;
 import com.commerce.payment.domain.PaymentPg;
@@ -90,6 +91,9 @@ class ClosePaymentUseCaseIntegrationTest {
 
 	@MockitoSpyBean
 	private RefundRepository refundRepository;
+
+	@Autowired
+	private RefundService refundService;
 
 	@Autowired
 	private PersistenceCleanupTestSupport persistenceCleanup;
@@ -188,23 +192,40 @@ class ClosePaymentUseCaseIntegrationTest {
 		assertThat(closed.getVersion()).isGreaterThan(versionBefore);
 	}
 
-	@DisplayName("환불 상태를 바꿔도 결제 행의 돌려주기로 한 금액과 버전은 그대로다")
+	@DisplayName("확정 말고 다른 환불 전이는 결제 행의 두 금액과 버전을 그대로 둔다")
 	@Test
-	void refundTransition_whenApplied_leavesPaymentRowUntouched() {
+	void refundTransition_whenNotSettling_leavesPaymentRowUntouched() {
 		Payment payment = inProgressPayment();
 		closePaymentUseCase.rejectOrderNotPayable(
 			payment, OrderErrorCode.ORDER_ALREADY_PAID, payment.getAmount(), PG_TRANSACTION_ID);
 		Payment afterRejection = reload(payment);
 
-		// 반려가 커밋 뒤에 이미 보내 그 환불은 결과 불명이다. 거기서 한 걸음 더 옮겨도 결제는 그대로여야 한다.
-		Refund refund = refundRepository.findById(onlyRefund().getId()).orElseThrow();
-		refund.complete(PG_TRANSACTION_ID);
-		refundRepository.saveChecked(refund);
+		// 반려가 커밋 뒤에 이미 보내 그 환불은 결과 불명이다. 확정이 아닌 걸음은 결제를 그대로 둬야 한다.
+		refundService.recordRetryableFailure(onlyRefund().getId());
 
 		Payment afterTransition = reload(payment);
 		// 여기서 결제를 함께 저장하면 대사가 한 바퀴 돌 때마다 회원의 환불 요청이 밀린다.
 		assertThat(afterTransition.getRefundOpenedAmount()).isEqualTo(afterRejection.getRefundOpenedAmount());
+		assertThat(afterTransition.getRefundSucceededAmount()).isEqualTo(afterRejection.getRefundSucceededAmount());
 		assertThat(afterTransition.getVersion()).isEqualTo(afterRejection.getVersion());
+	}
+
+	@DisplayName("반려 환불이 확정되면 종결된 결제의 실제로 돌아간 금액과 버전이 오른다")
+	@Test
+	void refundCompletion_whenSettling_raisesSucceededAmountAndVersion() {
+		Payment payment = inProgressPayment();
+		closePaymentUseCase.rejectOrderNotPayable(
+			payment, OrderErrorCode.ORDER_ALREADY_PAID, payment.getAmount(), PG_TRANSACTION_ID);
+		Payment afterRejection = reload(payment);
+
+		refundService.complete(onlyRefund().getId(), PG_TRANSACTION_ID);
+
+		Payment afterCompletion = reload(payment);
+		// 반려가 결제를 먼저 닫으므로 상태로 막았다면 이 성공이 영영 반영되지 않았을 것이다.
+		assertThat(afterCompletion.getStatus()).isEqualTo(PaymentStatus.REJECTED);
+		assertThat(afterCompletion.getRefundSucceededAmount()).isEqualTo(payment.getAmount());
+		assertThat(afterCompletion.getRefundOpenedAmount()).isEqualTo(afterRejection.getRefundOpenedAmount());
+		assertThat(afterCompletion.getVersion()).isGreaterThan(afterRejection.getVersion());
 	}
 
 	// ── 재실행과 어긋난 상태 ─────────────────────────────────────

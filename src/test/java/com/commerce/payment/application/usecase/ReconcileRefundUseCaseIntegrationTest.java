@@ -350,9 +350,9 @@ class ReconcileRefundUseCaseIntegrationTest {
 		assertThat(reload(refund).getStatus()).isEqualTo(RefundStatus.SUCCEEDED);
 	}
 
-	@DisplayName("환불을 확정해도 결제 버전이 오르지 않아 회원의 환불 요청이 밀리지 않는다")
+	@DisplayName("결제 행 경합으로 밀렸던 확정을 대사가 다시 집어 실제로 돌아간 금액에 반영한다")
 	@Test
-	void reconcile_whenRefundSettled_doesNotBumpPaymentVersion() {
+	void reconcile_whenSettlingFromHistory_raisesSucceededAmountAndBumpsPaymentVersion() {
 		Payment payment = savePayment();
 		Refund refund = unknownRefund(payment);
 		Long versionBefore = reloadPayment(payment).getVersion();
@@ -361,8 +361,29 @@ class ReconcileRefundUseCaseIntegrationTest {
 		reconcileRefundUseCase.reconcile();
 
 		assertThat(reload(refund).getStatus()).isEqualTo(RefundStatus.SUCCEEDED);
+		Payment stored = reloadPayment(payment);
+		assertThat(stored.getRefundSucceededAmount()).isEqualTo(AMOUNT);
+		// 버전을 안 올리면 다른 트랜잭션이 들고 있던 옛 값이 이 컬럼을 덮는다.
+		assertThat(stored.getVersion()).isGreaterThan(versionBefore);
+	}
+
+	@DisplayName("확정하지 않고 다시 보내기만 한 주기는 결제 행을 건드리지 않는다")
+	@Test
+	void reconcile_whenOnlyResending_leavesPaymentRowUntouched() {
+		Payment payment = savePayment();
+		Refund refund = inProgressRefund(payment);
+		Payment before = reloadPayment(payment);
+		givenHistory(PgHistoryResult.succeeded(List.of(), "성공"));
+		givenRefundResult(PgRefundResult.unanswered("응답 없음", callRecord(PgErrorType.TIMEOUT)));
+
+		reconcileRefundUseCase.reconcile();
+
+		assertThat(reload(refund).getStatus()).isEqualTo(RefundStatus.UNKNOWN);
+		Payment after = reloadPayment(payment);
 		// 결제 버전이 오르면 대사가 한 바퀴 돌 때마다 회원의 환불 요청이 낙관 락 충돌로 밀린다.
-		assertThat(reloadPayment(payment).getVersion()).isEqualTo(versionBefore);
+		assertThat(after.getRefundOpenedAmount()).isEqualTo(before.getRefundOpenedAmount());
+		assertThat(after.getRefundSucceededAmount()).isEqualTo(before.getRefundSucceededAmount());
+		assertThat(after.getVersion()).isEqualTo(before.getVersion());
 	}
 
 	// ── 헬퍼 ──
