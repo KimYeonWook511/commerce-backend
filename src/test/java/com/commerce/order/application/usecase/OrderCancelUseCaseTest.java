@@ -21,6 +21,7 @@ import org.junit.jupiter.api.extension.ExtendWith;
 import org.mockito.InjectMocks;
 import org.mockito.Mock;
 import org.mockito.junit.jupiter.MockitoExtension;
+import org.springframework.dao.CannotAcquireLockException;
 import org.springframework.dao.DataIntegrityViolationException;
 import org.springframework.test.util.ReflectionTestUtils;
 
@@ -125,6 +126,27 @@ class OrderCancelUseCaseTest {
 		given(cancelPaidOrderService.cancelPaidOrder(MEMBER_ID, ORDER_ID, IDEMPOTENCY_KEY))
 			.willReturn(canceledResult());
 		willThrow(new IllegalStateException("결제사 호출이 깨졌다"))
+			.given(executeRefundUseCase).send(any(), any(), any());
+
+		OrderCancelResult result = cancelOrderUseCase.cancel(MEMBER_ID, ORDER_ID, IDEMPOTENCY_KEY);
+
+		assertThat(result.getStatus()).isEqualTo(OrderStatus.CANCELED);
+		assertThat(result.getRefundStatus()).isEqualTo(OrderCancelRefundStatus.IN_PROGRESS);
+	}
+
+	@DisplayName("확정이 밀려 되돌려진 뒤에도 회원에게 완료라고 답하지 않는다")
+	@Test
+	void cancel_whenSettlementRolledBack_doesNotAnswerCompleted() {
+		givenReserved();
+		Order order = order(OrderStatus.PAID);
+		given(orderRepository.findByIdAndMemberId(ORDER_ID, MEMBER_ID)).willReturn(Optional.of(order));
+		CancelPaidOrderResult canceled = canceledResult();
+		// 되돌려진 확정이 남긴 자국. 한 요청이 영속성 컨텍스트를 공유하면 확정이 이 인스턴스를 성공으로
+		// 바꾸는데, 그 트랜잭션이 되돌려져도 인스턴스의 값은 그대로 남는다.
+		ReflectionTestUtils.setField(canceled.refund(), "status", RefundStatus.SUCCEEDED);
+		given(cancelPaidOrderService.cancelPaidOrder(MEMBER_ID, ORDER_ID, IDEMPOTENCY_KEY))
+			.willReturn(canceled);
+		willThrow(new CannotAcquireLockException("결제 행 락을 얻지 못했다"))
 			.given(executeRefundUseCase).send(any(), any(), any());
 
 		OrderCancelResult result = cancelOrderUseCase.cancel(MEMBER_ID, ORDER_ID, IDEMPOTENCY_KEY);
