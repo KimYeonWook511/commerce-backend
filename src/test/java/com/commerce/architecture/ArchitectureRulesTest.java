@@ -246,6 +246,20 @@ class ArchitectureRulesTest {
     }
 
     @Test
+    @DisplayName("환불 성공이 결제에 반영되는 것은 환불을 전이시키는 자리 하나뿐이다")
+    void refundSuccessIsRecordedOnlyWhereTheRefundTransitions() {
+        // 이 금액을 올리는 것은 환불 하나가 성공했다는 사실을 결제에 남기는 일이라, 그 환불을 성공으로
+        // 옮기는 트랜잭션과 같은 자리에서만 일어나야 한다. 결제가 보는 가드는 총량뿐이라 넘어온 금액이
+        // 어느 환불의 몫인지 구분하지 못하고, 밖에 부르는 곳이 하나 더 생기면 나가지도 않은 환불의
+        // 금액이 총량에 실린 뒤 그 환불의 진짜 성공이 영구히 거부된다.
+        ArchRule rule = noClasses()
+                .that().doNotHaveFullyQualifiedName("com.commerce.payment.application.service.RefundService")
+                .should().callMethod(
+                        "com.commerce.payment.domain.Payment", "recordRefundSuccess", "int");
+        check(rule);
+    }
+
+    @Test
     @DisplayName("application 은 KafkaTemplate·Redis 클라이언트를 직접 참조하지 않는다")
     void applicationDoesNotDependOnTechClients() {
         ArchRule rule = noClasses()
