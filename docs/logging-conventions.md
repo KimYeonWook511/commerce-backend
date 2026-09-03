@@ -80,7 +80,10 @@
 ## 4. 예외 로깅 표준
 
 ### 처리 위치
-`GlobalExceptionHandler`에서 일괄 처리한다. Application·Adapter는 직접 로그를 남기지 않는다 (보상 catch의 1차/2차 예외는 별도, 아래 참조).
+`GlobalExceptionHandler`에서 일괄 처리한다. Application·Adapter는 직접 로그를 남기지 않는다. 예외는 둘이다.
+
+- 보상 catch의 1차/2차 예외 (아래 참조)
+- **흐름이 잡아 삼켜 끝단에 닿지 않는 예외** — 거기서 안 남기면 어디에도 안 남는다. 삼키는 자리가 남기되, 다시 시도하면 풀리는 경합은 INFO로, 사람이 손대기 전까지 안 풀리는 것은 ERROR와 전체 stack으로 갈라 남긴다. 같은 수준으로 두면 뒤엣것이 정상 흐름 로그에 묻힌다.
 
 ### Stack trace 포함 정책
 
