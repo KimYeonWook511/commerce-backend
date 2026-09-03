@@ -71,8 +71,8 @@ public class RefundService {
 	public void complete(Long id, String pgTransactionId) {
 		Refund refund = load(id);
 		refund.complete(pgTransactionId);
-		// 낙관 락을 검사하는 저장이고, 결제 갱신보다 먼저 나가야 한다. 같은 환불을 동시에 확정하면 진
-		// 쪽이 결제 행에 닿기 전에 여기서 걸리며, 순서를 안 정하면 어느 행이 잡는지가 흔들린다.
+		// 결제 갱신보다 먼저 나가야 한다. 두 행을 함께 저장하는 다른 자리들도 환불을 먼저 잡으므로,
+		// 여기만 뒤집으면 서로 상대가 쥔 행을 기다리는 교착이 생긴다.
 		refundRepository.saveChecked(refund);
 
 		Payment payment = loadPayment(refund.getPaymentId());
@@ -150,7 +150,10 @@ public class RefundService {
 			.orElseThrow(() -> new PaymentException(PaymentErrorCode.PAYMENT_NOT_FOUND));
 	}
 
-	/** 환불 행이 가리키는 결제가 없으면 확정할 대상이 없다. 부르는 흐름이 경합과 함께 흡수한다 */
+	/**
+	 * 부르는 흐름이 이 결제를 이미 읽어 두고 들어오므로 여기서 못 찾는 일이 없다. 결제 행이 정말
+	 * 없으면 그 앞 조회에서 먼저 걸린다.
+	 */
 	private Payment loadPayment(Long paymentId) {
 		return paymentRepository.findById(paymentId)
 			.orElseThrow(() -> new PaymentException(PaymentErrorCode.PAYMENT_NOT_FOUND));
