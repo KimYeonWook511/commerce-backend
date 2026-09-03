@@ -9,4 +9,14 @@ package com.commerce.payment.application.port;
 public interface NotificationPort {
 
 	void notifyManualReviewRequired(Long orderId, String paymentKey, String reason);
+
+	/**
+	 * 한 회차의 대사 대상이 너무 많다는 것을 알린다. 대상을 개수로 자르지 않으므로 밀렸다는 사실은 이
+	 * 알림으로만 드러난다.
+	 *
+	 * @param subject     무엇이 밀렸나
+	 * @param targetCount 이번 회차의 대상 수
+	 * @param threshold   이 수를 넘으면 밀린 것으로 보기로 한 값
+	 */
+	void notifyReconcileBacklog(String subject, int targetCount, int threshold);
 }

@@ -7,6 +7,7 @@ import java.util.Optional;
 
 import org.springframework.stereotype.Component;
 
+import com.commerce.payment.application.port.NotificationPort;
 import com.commerce.payment.application.port.PaymentGatewayPort;
 import com.commerce.payment.application.port.dto.PgCallSource;
 import com.commerce.payment.application.port.dto.PgHistoryEntry;
@@ -54,16 +55,20 @@ import lombok.extern.slf4j.Slf4j;
 @RequiredArgsConstructor
 public class ReconcileRefundUseCase {
 
+	private static final String BACKLOG_SUBJECT = "환불 대사";
+
 	private final RefundRepository refundRepository;
 	private final PaymentRepository paymentRepository;
 	private final PaymentGatewayPort paymentGatewayPort;
 	private final RefundService refundService;
 	private final ExecuteRefundUseCase executeRefundUseCase;
+	private final NotificationPort notificationPort;
 	private final RefundPostProcessPolicy policy;
 
 	/**
 	 * 집은 대상을 개수로 자르지 않고 다 처리한다. 자르면 남은 건이 다음 주기로 밀릴 뿐 총 처리 시간은
-	 * 줄지 않고, 주기가 끝난 뒤부터 간격을 재므로 잘게 쪼갤수록 쉬는 시간만 더 붙는다.
+	 * 줄지 않고, 주기가 끝난 뒤부터 간격을 재므로 잘게 쪼갤수록 쉬는 시간만 더 붙는다. 대신 대상이
+	 * 임계를 넘으면 알린다 — 밀렸다는 사실이 조용히 잘려 사라지지 않게 한다.
 	 */
 	public void reconcile() {
 		List<ReconcileTarget> targets = findTargets(LocalDateTime.now());
@@ -72,12 +77,29 @@ public class ReconcileRefundUseCase {
 		}
 
 		log.info("환불 대사 시작 targets={}", targets.size());
+		alertIfBacklogged(targets.size());
 		for (ReconcileTarget target : targets) {
 			try {
 				reconcileOne(target);
 			} catch (Exception ex) {
 				log.error("환불 대사 처리 실패 refundId={}", target.id(), ex);
 			}
+		}
+	}
+
+	/**
+	 * 밀렸다는 것을 알린다. 알림이 실패해도 이 주기를 끝내지 않는다 — 전파하면 밀렸을 때 알리려고 둔
+	 * 것이 밀렸을 때 회수를 통째로 멈추고, 대상이 그대로라 다음 주기도 같은 자리에서 죽는다.
+	 */
+	private void alertIfBacklogged(int targetCount) {
+		if (!policy.isReconcileBacklogged(targetCount)) {
+			return;
+		}
+		try {
+			notificationPort.notifyReconcileBacklog(
+				BACKLOG_SUBJECT, targetCount, policy.reconcileBacklogThreshold());
+		} catch (RuntimeException ex) {
+			log.error("대사가 밀렸다는 알림을 보내지 못했다 targetCount={}", targetCount, ex);
 		}
 	}
 

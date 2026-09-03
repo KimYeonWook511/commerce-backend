@@ -31,18 +31,26 @@ public class PaymentPostProcessPolicy {
 	/** 승인을 한 번도 부르지 않은 결제를 종결하기까지 */
 	private final Duration expireThreshold;
 
+	/**
+	 * 한 회차의 대사 대상이 이 수를 넘으면 밀린 것으로 보고 알린다. 자르는 값이 아니라 알리는 값이다 —
+	 * 상한으로 조용히 자르면 얼마나 밀렸는지가 아무 데도 남지 않는다.
+	 */
+	private final int reconcileBacklogThreshold;
+
 	public PaymentPostProcessPolicy(
 		Duration reconcileGrace,
 		List<Duration> reconcileIntervals,
 		Duration notifyEscalation,
 		Duration notifyInterval,
-		Duration expireThreshold
+		Duration expireThreshold,
+		int reconcileBacklogThreshold
 	) {
 		this.reconcileGrace = reconcileGrace;
 		this.reconcileSchedule = new ReconcileSchedule(reconcileIntervals);
 		this.notifyEscalation = notifyEscalation;
 		this.notifyInterval = notifyInterval;
 		this.expireThreshold = expireThreshold;
+		this.reconcileBacklogThreshold = reconcileBacklogThreshold;
 	}
 
 	/**
@@ -73,5 +81,15 @@ public class PaymentPostProcessPolicy {
 	/** 방치된 결제를 종결할 때가 됐는지 가르는 임계 시각 */
 	public LocalDateTime createdBeforeForExpire(LocalDateTime at) {
 		return at.minus(expireThreshold);
+	}
+
+	/** 이번 회차의 대상 수가 밀렸다고 볼 만한가 */
+	public boolean isReconcileBacklogged(int targetCount) {
+		return targetCount > reconcileBacklogThreshold;
+	}
+
+	/** 밀렸다고 보기로 한 값. 알림에 함께 실어 사람이 기준을 알 수 있게 한다 */
+	public int reconcileBacklogThreshold() {
+		return reconcileBacklogThreshold;
 	}
 }

@@ -17,4 +17,9 @@ public class LogNotificationAdapter implements NotificationPort {
 	public void notifyManualReviewRequired(Long orderId, String paymentKey, String reason) {
 		log.error("수동 검토 필요 orderId={} paymentKey={} reason={}", orderId, paymentKey, reason);
 	}
+
+	@Override
+	public void notifyReconcileBacklog(String subject, int targetCount, int threshold) {
+		log.error("대사가 밀렸다 subject={} targetCount={} threshold={}", subject, targetCount, threshold);
+	}
 }

@@ -18,7 +18,7 @@ class PaymentPostProcessPolicyTest {
 		Duration.ofSeconds(10), Duration.ofSeconds(30), Duration.ofMinutes(2));
 
 	private final PaymentPostProcessPolicy policy = new PaymentPostProcessPolicy(
-		Duration.ofSeconds(30), INTERVALS, Duration.ofHours(1), Duration.ofHours(1), Duration.ofHours(1));
+		Duration.ofSeconds(30), INTERVALS, Duration.ofHours(1), Duration.ofHours(1), Duration.ofHours(1), 500);
 
 	@DisplayName("다시 집는 창이 간격표의 항목 수만큼 나오고 회차마다 임계 시각이 벌어진다")
 	@Test
@@ -57,7 +57,7 @@ class PaymentPostProcessPolicyTest {
 	@Test
 	void construct_whenIntervalsAreEmpty_isRejected() {
 		assertThatThrownBy(() -> new PaymentPostProcessPolicy(
-			Duration.ofSeconds(30), List.of(), Duration.ofHours(1), Duration.ofHours(1), Duration.ofHours(1)))
+			Duration.ofSeconds(30), List.of(), Duration.ofHours(1), Duration.ofHours(1), Duration.ofHours(1), 500))
 			.isInstanceOf(IllegalArgumentException.class);
 	}
 

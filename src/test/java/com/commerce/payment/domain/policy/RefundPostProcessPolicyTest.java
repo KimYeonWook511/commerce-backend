@@ -18,7 +18,7 @@ class RefundPostProcessPolicyTest {
 		Duration.ofSeconds(10), Duration.ofSeconds(30), Duration.ofMinutes(2));
 
 	private final RefundPostProcessPolicy policy = new RefundPostProcessPolicy(
-		Duration.ofSeconds(90), INTERVALS, Duration.ofHours(1), Duration.ofHours(1));
+		Duration.ofSeconds(90), INTERVALS, Duration.ofHours(1), Duration.ofHours(1), 500);
 
 	@DisplayName("대사 유예와 통지 승급·간격을 시각으로 바꿔 준다")
 	@Test
@@ -32,7 +32,7 @@ class RefundPostProcessPolicyTest {
 	@Test
 	void requestedBefore_whenComparedWithPayment_leavesMoreRoom() {
 		PaymentPostProcessPolicy paymentPolicy = new PaymentPostProcessPolicy(
-			Duration.ofSeconds(30), INTERVALS, Duration.ofHours(1), Duration.ofHours(1), Duration.ofHours(1));
+			Duration.ofSeconds(30), INTERVALS, Duration.ofHours(1), Duration.ofHours(1), Duration.ofHours(1), 500);
 
 		assertThat(policy.requestedBefore(NOW)).isBefore(paymentPolicy.requestedBefore(NOW));
 	}
@@ -41,7 +41,7 @@ class RefundPostProcessPolicyTest {
 	@Test
 	void reconcileWindows_whenBuilt_matchThePaymentSideSchedule() {
 		PaymentPostProcessPolicy paymentPolicy = new PaymentPostProcessPolicy(
-			Duration.ofSeconds(30), INTERVALS, Duration.ofHours(1), Duration.ofHours(1), Duration.ofHours(1));
+			Duration.ofSeconds(30), INTERVALS, Duration.ofHours(1), Duration.ofHours(1), Duration.ofHours(1), 500);
 
 		assertThat(policy.reconcileWindows(NOW)).isEqualTo(paymentPolicy.reconcileWindows(NOW));
 	}
@@ -60,7 +60,7 @@ class RefundPostProcessPolicyTest {
 	@Test
 	void construct_whenIntervalsAreEmpty_isRejected() {
 		assertThatThrownBy(() -> new RefundPostProcessPolicy(
-			Duration.ofSeconds(90), List.of(), Duration.ofHours(1), Duration.ofHours(1)))
+			Duration.ofSeconds(90), List.of(), Duration.ofHours(1), Duration.ofHours(1), 500))
 			.isInstanceOf(IllegalArgumentException.class);
 	}
 }
