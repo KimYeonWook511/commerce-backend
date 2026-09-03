@@ -15,6 +15,7 @@
   - `V11__rename_legacy_payment_tables.sql` — `tbl_payment` → `tbl_legacy_payment`, `tbl_payment_reservation` → `tbl_legacy_payment_reservation` RENAME. 데이터는 그대로 남아 legacy 경로가 계속 동작한다.
   - `V12__create_payment_and_refund.sql` — `tbl_payment`(재구성) · `tbl_refund` · `tbl_pg_call_log` CREATE.
   - `V13__drop_legacy_payment_tables.sql` — legacy 두 테이블 DROP. **파괴적 마이그레이션**이며 옛 결제·예약 데이터는 이관하지 않고 폐기한다 (운영 데이터 없음 전제).
+- **결제 환불 금액 분할**: `V15__split_payment_refund_amounts.sql` 으로 `tbl_payment.total_refunded_amount` 를 `refund_opened_amount` 로 옮기고 `refund_succeeded_amount INT NOT NULL DEFAULT 0` 을 신설한 뒤, 결제마다 그 결제에서 성공한 환불 금액의 합으로 채웠다 (2026-09-03). 옛 이름 하나에 "돌려주기로 했는데 아직 안 나간 돈"과 "실제로 돌아간 돈"이 섞여 있어 결제사에 남은 잔액을 물을 수단이 없었다.
 - **환불 첫 상태 이름 교정**: `V14__rename_refund_requested_status.sql` 으로 `tbl_refund.status` 의 `REQUESTED` 를 `READY` 로 옮겼다 (2026-08-31). 옛 이름은 결제사에 이미 요청했다는 뜻으로 읽혀 아직 안 나간 환불을 나간 것으로 오해하게 했다.
 
 ## 네이밍 규칙
@@ -178,7 +179,8 @@ COLUMNS:
 - `pg_transaction_id VARCHAR(64) NULL` — 결제사 거래 번호. 정산 대조·문의 조사용이며 판정에는 쓰지 않는다
 - `amount INT NOT NULL` — 결제 시작 시점 주문 금액의 사본
 - `approved_amount INT NULL` — 결제사가 승인한 금액. 환불 한도 계산의 기준
-- `total_refunded_amount INT NOT NULL DEFAULT 0` — 이 결제에 딸린 환불 금액의 합. 한도 판정이 읽는 유일한 값
+- `refund_opened_amount INT NOT NULL DEFAULT 0` — 이 결제에 열린 모든 환불 금액의 합. 성공한 것도 실패한 것도 들어 있으며 한도 판정이 읽는 유일한 값
+- `refund_succeeded_amount INT NOT NULL DEFAULT 0` — 그중 결제사 응답으로 성공이 확정된 몫의 합. 실제로 나간 돈과 어긋날 수 있고 그 방향이 하나가 아니라, 읽는 쪽이 한쪽을 가정하면 안 된다
 - `pg VARCHAR NOT NULL` — enum. 어느 결제사인가
 - `status VARCHAR NOT NULL` — enum. `READY` / `IN_PROGRESS` / `UNKNOWN` / `SUCCEEDED` / `FAILED` / `REJECTED` / `EXPIRED`
 - `active_order_key BIGINT NULL` — 활성 슬롯. 살아 있으면 `order_id`, 종결되면 NULL (NULL 트릭)
@@ -242,7 +244,7 @@ INDEX:
 - `idx_refund_status_reconcile (status, reconcile_count, last_reconcile_at)` — 발송·회수·통지 대상 조회. `tbl_payment` 와 같은 구성
 
 비고:
-- **환불도 자기 낙관 락을 갖는다.** 환불을 *만드는* 것은 결제 행의 버전이 막고(그때만 한도가 바뀐다), 환불 하나를 *고치는* 것은 이 버전이 막는다. 그래서 대사가 한 바퀴 돌아도 결제 버전이 오르지 않아 회원의 환불 요청이 밀리지 않는다 (→ PR#305)
+- **환불도 자기 낙관 락을 갖는다.** 환불을 *만드는* 것은 결제 행의 버전이 막고(그때만 한도가 바뀐다), 환불 하나를 *고치는* 것은 이 버전이 막는다. 결제 버전을 함께 올리는 환불 전이는 성공 확정 하나뿐이고(그때 실제로 돌아간 금액이 오른다), 나머지 전이는 결제 행을 건드리지 않아 대사가 한 바퀴 돌아도 회원의 환불 요청이 밀리지 않는다
 - **FK**: `payment_id` 는 FK 제약 없음. 환불이 독립 aggregate 가 되면서 이 참조가 경계를 넘게 됐고, 이 저장소는 경계를 넘는 외래 키를 두지 않는다
 - 유일 제약이 셋인 것은 세 값의 책임이 달라서다 — 사건을 가리키고, 같은 요청이 두 번 오는 것을 막고, 한 번의 호출이 중복 전송되는 것을 결제사가 막게 한다
 - **`EXPIRED` 가 없다** — 환불은 포기할 수 없어 "안 부른 채 끝남"이라는 종착이 없다
