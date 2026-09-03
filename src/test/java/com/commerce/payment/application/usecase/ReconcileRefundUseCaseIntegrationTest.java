@@ -9,9 +9,11 @@ import static org.mockito.Mockito.never;
 
 import java.time.LocalDateTime;
 import java.util.List;
+import java.util.UUID;
 import java.util.Optional;
 
 import org.junit.jupiter.api.AfterEach;
+import org.junit.jupiter.api.BeforeEach;
 import org.junit.jupiter.api.DisplayName;
 import org.junit.jupiter.api.Tag;
 import org.junit.jupiter.api.Test;
@@ -38,12 +40,19 @@ import com.commerce.payment.domain.PgErrorType;
 import com.commerce.payment.domain.Refund;
 import com.commerce.payment.domain.RefundReason;
 import com.commerce.payment.domain.RefundReviewCode;
+import com.commerce.payment.domain.RefundRequester;
 import com.commerce.payment.domain.RefundStatus;
 import com.commerce.payment.infrastructure.persistence.support.PaymentPersistenceTestSupport;
 import com.commerce.payment.infrastructure.persistence.support.PgCallLogPersistenceTestSupport;
 import com.commerce.payment.infrastructure.persistence.support.RefundPersistenceTestSupport;
 import com.commerce.support.PersistenceCleanupTestSupport;
 import com.commerce.support.TestcontainersSupport;
+
+import ch.qos.logback.classic.Level;
+import ch.qos.logback.classic.Logger;
+import ch.qos.logback.classic.spi.ILoggingEvent;
+import ch.qos.logback.core.read.ListAppender;
+import org.slf4j.LoggerFactory;
 
 /**
  * 결과를 모르는 환불을 대사가 어떻게 확정하고 어떤 조건에서 다시 보내는지 실제 DB 위에서 확인한다.
@@ -84,14 +93,26 @@ class ReconcileRefundUseCaseIntegrationTest {
 
 	private static int uniqueSuffix = 0;
 
+	private Logger useCaseLogger;
+	private ListAppender<ILoggingEvent> capturedLogs;
+
 	@DynamicPropertySource
 	static void registerContainers(DynamicPropertyRegistry registry) {
 		TestcontainersSupport.registerMySql(registry);
 		TestcontainersSupport.registerRedis(registry);
 	}
 
+	@BeforeEach
+	void captureLogs() {
+		useCaseLogger = (Logger)LoggerFactory.getLogger(ReconcileRefundUseCase.class);
+		capturedLogs = new ListAppender<>();
+		capturedLogs.start();
+		useCaseLogger.addAppender(capturedLogs);
+	}
+
 	@AfterEach
 	void tearDown() {
+		useCaseLogger.detachAppender(capturedLogs);
 		persistenceCleanup.deleteAllInBatch(pgCallLogPersistence, refundPersistence, paymentPersistence);
 	}
 
@@ -367,6 +388,25 @@ class ReconcileRefundUseCaseIntegrationTest {
 		assertThat(stored.getVersion()).isGreaterThan(versionBefore);
 	}
 
+	@DisplayName("금액 불변식이 깨져 확정이 거부되면 경합과 다른 수준으로 남는다")
+	@Test
+	void reconcile_whenAmountInvariantBroken_logsItApartFromRacing() {
+		Payment payment = savePayment();
+		Refund refund = uncountedRefund(payment);
+		givenHistory(PgHistoryResult.succeeded(List.of(refundEntry(refund.attemptKey(), true)), "성공"));
+
+		reconcileRefundUseCase.reconcile();
+
+		// 금액 갱신이 환불 전이와 한 트랜잭션이라 거부되면 그 환불도 미결로 남는다.
+		assertThat(reload(refund).getStatus()).isEqualTo(RefundStatus.UNKNOWN);
+		assertThat(reloadPayment(payment).getRefundSucceededAmount()).isZero();
+		// 다시 집어도 풀리지 않는 것이라 경합과 같은 수준으로 남기면 정상 흐름 로그에 묻힌다.
+		assertThat(capturedLogs.list)
+			.filteredOn(event -> event.getLevel() == Level.ERROR)
+			.singleElement()
+			.satisfies(event -> assertThat(event.getThrowableProxy()).isNotNull());
+	}
+
 	@DisplayName("확정하지 않고 다시 보내기만 한 주기는 결제 행을 건드리지 않는다")
 	@Test
 	void reconcile_whenOnlyResending_leavesPaymentRowUntouched() {
@@ -428,6 +468,19 @@ class ReconcileRefundUseCaseIntegrationTest {
 	/** 답을 못 받아 결과를 모르는 환불. 이 상태에는 대사 유예가 없다 */
 	private Refund unknownRefund(Payment payment) {
 		Refund refund = inProgressRefund(payment);
+		refund.markUnknown();
+		return refundPersistence.save(refund);
+	}
+
+	/**
+	 * 결제를 거치지 않고 만들어 붙인 환불. 그 금액이 돌려주기로 한 금액에 안 들어 있어 확정하려 하면
+	 * 결제의 불변식 가드에 걸린다. 정상 흐름으로는 이 상태가 만들어지지 않는다.
+	 */
+	private Refund uncountedRefund(Payment payment) {
+		Refund refund = Refund.open(
+			payment.getId(), "RF-" + UUID.randomUUID().toString().replace("-", ""),
+			RefundRequester.MEMBER, "IDEM-UNCOUNTED-" + (++uniqueSuffix), AMOUNT, RefundReason.ORDER_CANCELED);
+		refund.markInProgress(LocalDateTime.now().minusMinutes(5));
 		refund.markUnknown();
 		return refundPersistence.save(refund);
 	}
