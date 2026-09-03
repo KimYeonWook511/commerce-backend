@@ -61,7 +61,13 @@ docs/adr/20260622-pr245-payment-escalation-retry.md
 - **Decision** — 무엇을 결정했나
 - **Consequences** — 얻는 것과 감수하는 trade-off
 
-부분 대체(기존 결정의 일부 메커니즘만 갱신)는 status를 바꾸지 않고, 기존 ADR 본문에 어느 부분이 어떤 PR로 갱신됐는지 한 줄로 명시한다. status의 `superseded`는 결정 전체가 대체됐을 때만 쓴다.
+부분 대체(기존 결정의 일부 메커니즘만 갱신)는 옛 ADR의 **`Status:` 줄에 이어** 무엇이 어떤 PR로 대체됐고 무엇이 남았는지 적는다. 상태값은 `accepted` 그대로 두고 본문은 건드리지 않는다.
+
+```text
+- Status: accepted — PR#326이 **부분 대체**. 아래 Decision 중 **<대체된 부분>**이 <이유>로 대체됐다([링크]). 나머지(<남은 것>)는 유지된다.
+```
+
+status의 `superseded`는 결정 **전체**가 대체됐을 때만 쓴다.
 
 ## 작업 중 결정의 staging
 

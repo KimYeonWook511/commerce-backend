@@ -11,8 +11,10 @@ import static org.mockito.Mockito.never;
 import java.time.LocalDateTime;
 import java.util.List;
 import java.util.Optional;
+import java.util.UUID;
 
 import org.junit.jupiter.api.AfterEach;
+import org.junit.jupiter.api.BeforeEach;
 import org.junit.jupiter.api.DisplayName;
 import org.junit.jupiter.api.Tag;
 import org.junit.jupiter.api.Test;
@@ -43,13 +45,23 @@ import com.commerce.payment.domain.PgCallType;
 import com.commerce.payment.domain.PgErrorType;
 import com.commerce.payment.domain.Refund;
 import com.commerce.payment.domain.RefundReason;
+import com.commerce.payment.domain.RefundRequester;
 import com.commerce.payment.domain.RefundReviewCode;
 import com.commerce.payment.domain.RefundStatus;
+import com.commerce.payment.domain.exception.PaymentErrorCode;
+import com.commerce.payment.domain.exception.PaymentException;
+import com.commerce.payment.domain.repository.PaymentRepository;
 import com.commerce.payment.infrastructure.persistence.support.PaymentPersistenceTestSupport;
 import com.commerce.payment.infrastructure.persistence.support.PgCallLogPersistenceTestSupport;
 import com.commerce.payment.infrastructure.persistence.support.RefundPersistenceTestSupport;
 import com.commerce.support.PersistenceCleanupTestSupport;
 import com.commerce.support.TestcontainersSupport;
+
+import ch.qos.logback.classic.Level;
+import ch.qos.logback.classic.Logger;
+import ch.qos.logback.classic.spi.ILoggingEvent;
+import ch.qos.logback.core.read.ListAppender;
+import org.slf4j.LoggerFactory;
 
 /**
  * 환불 하나를 보내는 흐름이 부르기 직전 전이·호출 기록·결과 반영을 정해진 순서로 커밋하는지 실제 DB
@@ -78,6 +90,9 @@ class ExecuteRefundUseCaseIntegrationTest {
 	@MockitoSpyBean
 	private PgCallLogService pgCallLogService;
 
+	@MockitoSpyBean
+	private PaymentRepository paymentRepository;
+
 	@Autowired
 	private PersistenceCleanupTestSupport persistenceCleanup;
 
@@ -92,14 +107,26 @@ class ExecuteRefundUseCaseIntegrationTest {
 
 	private static int uniqueSuffix = 0;
 
+	private Logger useCaseLogger;
+	private ListAppender<ILoggingEvent> capturedLogs;
+
 	@DynamicPropertySource
 	static void registerContainers(DynamicPropertyRegistry registry) {
 		TestcontainersSupport.registerMySql(registry);
 		TestcontainersSupport.registerRedis(registry);
 	}
 
+	@BeforeEach
+	void captureLogs() {
+		useCaseLogger = (Logger)LoggerFactory.getLogger(ExecuteRefundUseCase.class);
+		capturedLogs = new ListAppender<>();
+		capturedLogs.start();
+		useCaseLogger.addAppender(capturedLogs);
+	}
+
 	@AfterEach
 	void tearDown() {
+		useCaseLogger.detachAppender(capturedLogs);
 		persistenceCleanup.deleteAllInBatch(pgCallLogPersistence, refundPersistence, paymentPersistence);
 	}
 
@@ -116,6 +143,28 @@ class ExecuteRefundUseCaseIntegrationTest {
 		Refund stored = reload(refund);
 		assertThat(stored.getStatus()).isEqualTo(RefundStatus.SUCCEEDED);
 		assertThat(stored.getPgTransactionId()).isEqualTo(PG_TRANSACTION_ID);
+		// 열릴 때 이미 한도를 잡았으므로 확정이 올리는 것은 실제로 돌아간 금액뿐이다.
+		Payment settled = reloadPayment(payment);
+		assertThat(settled.getRefundSucceededAmount()).isEqualTo(AMOUNT);
+		assertThat(settled.getRefundOpenedAmount()).isEqualTo(AMOUNT);
+	}
+
+	@DisplayName("확정이 결제 행 경합에 밀리면 예외를 밖으로 내지 않고 처리 중으로 답한다")
+	@Test
+	void send_whenPaymentRowContended_absorbsAndAnswersInProgress() {
+		Payment payment = savePayment();
+		Refund refund = saveRefund(payment);
+		givenRefundResult(PgRefundResult.succeeded(PG_TRANSACTION_ID, "성공", callRecord(PgErrorType.NONE)));
+		// 확정이 결제 행을 저장하는 사이 다른 주체가 그 행을 먼저 옮긴 상황.
+		willThrow(new PaymentException(PaymentErrorCode.PAYMENT_CONCURRENTLY_MODIFIED))
+			.given(paymentRepository).saveChecked(any(Payment.class));
+
+		RefundStatus status = executeRefundUseCase.send(payment, refund, PgCallSource.MEMBER_REQUEST);
+
+		assertThat(status).isEqualTo(RefundStatus.IN_PROGRESS);
+		// 확정과 금액 갱신이 한 트랜잭션이라 환불도 함께 되돌아간다. 돈이 어떻게 됐는지는 대사가 이력으로 확정한다.
+		assertThat(reload(refund).getStatus()).isEqualTo(RefundStatus.IN_PROGRESS);
+		assertThat(reloadPayment(payment).getRefundSucceededAmount()).isZero();
 	}
 
 	@DisplayName("결제사를 부른 사실이 그때 쓴 멱등키·요청 시각·받은 결과와 함께 기록에 쌓인다")
@@ -169,6 +218,10 @@ class ExecuteRefundUseCaseIntegrationTest {
 		assertThat(stored.getStatus()).isEqualTo(RefundStatus.IN_PROGRESS);
 		assertThat(stored.getAttemptSeq()).isEqualTo(2);
 		assertThat(stored.getPgIdempotencyKey()).endsWith("-2");
+		// 돈이 안 나갔으므로 실제로 돌아간 금액은 그대로이고, 그 몫은 한도를 계속 잡는다.
+		Payment stillOpen = reloadPayment(payment);
+		assertThat(stillOpen.getRefundSucceededAmount()).isZero();
+		assertThat(stillOpen.getRefundOpenedAmount()).isEqualTo(AMOUNT);
 	}
 
 	@DisplayName("다시 시도할 수 없는 실패를 받으면 검토 코드와 함께 사람이 처리해야 하는 상태가 된다")
@@ -185,6 +238,10 @@ class ExecuteRefundUseCaseIntegrationTest {
 		Refund stored = reload(refund);
 		assertThat(stored.getStatus()).isEqualTo(RefundStatus.MANUAL_REVIEW);
 		assertThat(stored.getReviewCode()).isEqualTo(RefundReviewCode.CANCEL_DEADLINE_EXPIRED);
+		// 사람이 이어받아 멈춘 몫이다. 돈은 안 나갔는데 그 금액은 한도를 계속 잡고 있다.
+		Payment stuck = reloadPayment(payment);
+		assertThat(stuck.getRefundSucceededAmount()).isZero();
+		assertThat(stuck.getRefundOpenedAmount()).isEqualTo(AMOUNT);
 	}
 
 	@DisplayName("부르기 전과 부른 뒤가 상태로 갈리고, 한 번도 안 부른 건은 시도 번호가 0이다")
@@ -302,7 +359,7 @@ class ExecuteRefundUseCaseIntegrationTest {
 		Refund stored = reload(refund);
 		assertThat(stored.getStatus()).isEqualTo(RefundStatus.IN_PROGRESS);
 		assertThat(stored.getAmount()).isEqualTo(AMOUNT);
-		assertThat(paymentPersistence.findById(payment.getId()).orElseThrow().getTotalRefundedAmount())
+		assertThat(paymentPersistence.findById(payment.getId()).orElseThrow().getRefundOpenedAmount())
 			.isEqualTo(AMOUNT);
 	}
 
@@ -370,10 +427,11 @@ class ExecuteRefundUseCaseIntegrationTest {
 
 		executeRefundUseCase.send(fixture.payment(), fixture.current(), PgCallSource.MEMBER_REQUEST);
 
-		// 누적 환불액은 환불을 만들 때만 오르고 상태로 바뀌지 않으므로, 만들 때 통과한 이 환불은 지금도
-		// 한도 안이다. 다시 검사하면 없앤 합계 조회가 그 자리로 되살아난다.
-		assertThat(paymentPersistence.findById(fixture.payment().getId()).orElseThrow().getTotalRefundedAmount())
-			.isEqualTo(AMOUNT);
+		// 한도가 읽는 것은 돌려주기로 한 금액이고 그 값은 환불을 만들 때만 오르므로, 만들 때 통과한 이
+		// 환불은 지금도 한도 안이다. 방금 확정한 형제가 올린 것은 실제로 돌아간 금액이라 한도와 무관하다.
+		Payment stored = reloadPayment(fixture.payment());
+		assertThat(stored.getRefundOpenedAmount()).isEqualTo(AMOUNT);
+		assertThat(stored.getRefundSucceededAmount()).isEqualTo(fixture.earlier().getAmount());
 	}
 
 	@DisplayName("초과 거절이 어느 쪽으로도 설명되지 않으면 검토 코드를 채워 사람에게 넘긴다")
@@ -422,6 +480,55 @@ class ExecuteRefundUseCaseIntegrationTest {
 
 		assertThat(status).isEqualTo(RefundStatus.MANUAL_REVIEW);
 		then(paymentGatewayPort).should(never()).readHistory(any(), any(), any());
+	}
+
+	// ── 금액 불변식이 깨진 결제를 만나면 ────────────────────────
+
+	@DisplayName("금액 불변식이 깨져 확정이 거부되면 경합과 다른 수준으로 남고 결제 행이 그대로다")
+	@Test
+	void send_whenAmountInvariantBroken_logsItApartFromRacing() {
+		Payment payment = savePayment();
+		Refund refund = uncountedRefund(payment, AMOUNT, "single");
+		givenRefundResult(PgRefundResult.succeeded(PG_TRANSACTION_ID, "성공", callRecord(PgErrorType.NONE)));
+
+		RefundStatus status = executeRefundUseCase.send(payment, refund, PgCallSource.MEMBER_REQUEST);
+
+		assertThat(status).isEqualTo(RefundStatus.IN_PROGRESS);
+		assertThat(reloadPayment(payment).getRefundSucceededAmount()).isZero();
+		// 금액 갱신이 환불 전이와 한 트랜잭션이라 거부되면 그 환불도 미결로 남는다.
+		assertThat(reload(refund).getStatus()).isEqualTo(RefundStatus.IN_PROGRESS);
+		// 경합과 같은 수준으로 남기면 돈 기록이 깨졌다는 신호가 정상 흐름 로그에 묻히고, 여기서 삼켜져
+		// 끝단에 닿지 않으므로 원인 위치는 함께 실은 stack 에만 남는다.
+		assertThat(capturedLogs.list).singleElement().satisfies(event -> {
+			assertThat(event.getLevel()).isEqualTo(Level.ERROR);
+			assertThat(event.getThrowableProxy()).isNotNull();
+		});
+	}
+
+	@DisplayName("형제 환불을 연달아 확정하다 가운데가 거부돼도 앞뒤로 커밋된 건은 남는다")
+	@Test
+	void send_whenSiblingSettlementIsRejectedInTheMiddle_keepsCommittedOnes() {
+		SiblingSettlement fixture = siblingsWithOneBroken();
+		givenRefundResult(exceededRejection());
+		given(paymentGatewayPort.readHistory(any(), eq(PgHistoryScope.REFUND_ONLY), any()))
+			.willReturn(PgHistoryResult.succeeded(List.of(
+				refundEntry(fixture.first().attemptKey()),
+				refundEntry(fixture.broken().attemptKey()),
+				refundEntry(fixture.third().attemptKey())), "성공"));
+
+		RefundStatus status = executeRefundUseCase.send(
+			fixture.payment(), fixture.driving(), PgCallSource.MEMBER_REQUEST);
+
+		// 확정 하나하나가 자기 트랜잭션이라 앞서 커밋된 것이 되돌려지지 않고, 남은 건은 대사가 회수한다.
+		assertThat(reload(fixture.first()).getStatus()).isEqualTo(RefundStatus.SUCCEEDED);
+		assertThat(reload(fixture.third()).getStatus()).isEqualTo(RefundStatus.SUCCEEDED);
+		assertThat(reload(fixture.broken()).getStatus()).isEqualTo(RefundStatus.UNKNOWN);
+		assertThat(reloadPayment(fixture.payment()).getRefundSucceededAmount())
+			.isEqualTo(fixture.first().getAmount() + fixture.third().getAmount());
+		// 우리 기록에 못 옮겼을 뿐 그 환불이 결제사에서 완료라는 사실은 달라지지 않으므로 초과 거절의
+		// 원인은 밝혀진 것이다. 여기서 안 세면 멀쩡한 건이 나가는 전이가 없는 검토 대기로 간다.
+		assertThat(status).isEqualTo(RefundStatus.IN_PROGRESS);
+		assertThat(reload(fixture.driving()).getReviewCode()).isNull();
 	}
 
 	// ── 대사가 이력을 읽은 뒤 그 자리에서 다시 보낸다 ────────────
@@ -500,7 +607,7 @@ class ExecuteRefundUseCaseIntegrationTest {
 		return paymentPersistence.save(payment);
 	}
 
-	/** 환불을 만드는 관문은 결제 안에 있다. 누적 환불액이 오른 결제도 함께 저장한다 */
+	/** 환불을 만드는 관문은 결제 안에 있다. 돌려주기로 한 금액이 오른 결제도 함께 저장한다 */
 	private Refund saveRefund(Payment payment) {
 		Refund refund = payment.openRefund(
 			Optional.empty(), AMOUNT, RefundReason.ORDER_CANCELED, "IDEM-" + uniqueSuffix);
@@ -550,10 +657,60 @@ class ExecuteRefundUseCaseIntegrationTest {
 		return refundPersistence.save(revived);
 	}
 
+	/**
+	 * 한 결제에 구동 환불 하나와 형제 셋. 이력이 형제 셋을 완료로 설명하는데 가운데 하나만 결제를 거치지
+	 * 않고 만들어져, 그 금액이 돌려주기로 한 금액에 안 들어 있어 확정이 거부된다.
+	 *
+	 * <p>확정 차례가 식별자 오름차순이라 깨진 건을 가운데에 끼워 넣는다.
+	 */
+	private SiblingSettlement siblingsWithOneBroken() {
+		Payment payment = savePayment();
+		int share = AMOUNT / 10;
+		Refund driving = payment.openRefund(
+			Optional.empty(), share, RefundReason.ORDER_CANCELED, "IDEM-driving-" + uniqueSuffix);
+		Refund first = unsettled(payment.openRefund(
+			Optional.empty(), share, RefundReason.ORDER_CANCELED, "IDEM-first-" + uniqueSuffix));
+		Refund third = unsettled(payment.openRefund(
+			Optional.empty(), share, RefundReason.ORDER_CANCELED, "IDEM-third-" + uniqueSuffix));
+
+		Refund savedDriving = refundPersistence.save(driving);
+		Refund savedFirst = refundPersistence.save(first);
+		Refund savedBroken = refundPersistence.save(unsettled(uncountedRefund(payment, AMOUNT / 2, "middle")));
+		Refund savedThird = refundPersistence.save(third);
+		paymentPersistence.save(payment);
+		return new SiblingSettlement(payment, savedDriving, savedFirst, savedBroken, savedThird);
+	}
+
+	private record SiblingSettlement(Payment payment, Refund driving, Refund first, Refund broken, Refund third) {
+	}
+
+	/** 결제사를 불렀는데 결과를 몰라 아직 결과가 정해지지 않은 환불. 형제 확정의 후보가 되는 상태다 */
+	private Refund unsettled(Refund refund) {
+		refund.markInProgress(LocalDateTime.now());
+		refund.markUnknown();
+		return refund;
+	}
+
+	/**
+	 * 결제를 거치지 않고 만들어 붙인 환불. 그 금액이 돌려주기로 한 금액에 안 들어 있어 확정하려 하면
+	 * 결제의 불변식 가드에 걸린다. 정상 흐름으로는 이 상태가 만들어지지 않는다.
+	 */
+	private Refund uncountedRefund(Payment payment, int amount, String idempotencySuffix) {
+		Refund refund = Refund.open(
+			payment.getId(), "RF-" + UUID.randomUUID().toString().replace("-", ""),
+			RefundRequester.MEMBER, "IDEM-UNCOUNTED-" + idempotencySuffix + "-" + uniqueSuffix,
+			amount, RefundReason.ORDER_CANCELED);
+		return refundPersistence.save(refund);
+	}
+
 	private Refund reload(Refund refund) {
 		return refundPersistence.findAll().stream()
 			.filter(candidate -> candidate.getId().equals(refund.getId()))
 			.findFirst()
 			.orElseThrow();
+	}
+
+	private Payment reloadPayment(Payment payment) {
+		return paymentPersistence.findById(payment.getId()).orElseThrow();
 	}
 }

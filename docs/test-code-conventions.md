@@ -177,6 +177,8 @@ static void registerProperties(DynamicPropertyRegistry registry) {
 }
 ```
 
+**예외는 하나다 — 마이그레이션을 단계까지 지정해 돌리는 검증.** 공유 컨테이너는 첫 컨텍스트에서 마이그레이션을 최신까지 적용하므로 특정 스크립트 **직전** 상태를 만들 수 없고, 그 컨테이너의 계정에는 검증용 데이터베이스를 새로 만들 권한도 없다. 그 테스트만 자기 컨테이너를 띄우고, 왜 공유할 수 없는지를 테스트 문서 주석에 남긴다. 다른 이유로 전용 컨테이너를 만들지 않는다.
+
 ### 2. 테스트 격리 — `PersistenceCleanupTestSupport`
 
 통합 테스트에서 `@Transactional`을 사용하면 커밋이 발생하지 않아 `AFTER_COMMIT` 동작 검증이 불가능하다. 따라서 각 테스트가 `tearDown`에서 직접 데이터를 삭제한다. (`@TransactionalEventListener` 도입 시에도 동일 원칙 적용)

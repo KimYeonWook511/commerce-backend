@@ -65,7 +65,12 @@ public enum PaymentErrorCode implements ErrorCode {
 	// 넘겨받은 기존 환불이 이 결제의 것이 아니다. 조회를 잘못 좁혔다는 뜻이며, 그대로 두면 남의 환불이
 	// 이번 요청의 결과로 돌아간다.
 	REFUND_NOT_OWNED_BY_PAYMENT(ErrorCategory.INTERNAL, "PAYMENT-500-14",
-		"그 결제의 환불이 아닙니다");
+		"그 결제의 환불이 아닙니다"),
+	// 환불 성공을 받아들이면 실제로 돌아간 금액이 돌려주기로 한 금액을 넘거나, 더할 금액이 0 이하다.
+	// 구조상 나올 수 없는 값이라 회원에게 답하지 않고 확정을 부르는 흐름이 흡수한다. 경합과 같은 값으로
+	// 두면 그 흐름들이 평범한 경합으로 삼켜 돈 기록이 깨졌다는 신호가 사라진다.
+	REFUND_SUCCEEDED_AMOUNT_INVARIANT_BROKEN(ErrorCategory.INTERNAL, "PAYMENT-500-15",
+		"환불 성공 금액이 결제의 금액 불변식을 어깁니다");
 
 	private final ErrorCategory category;
 	private final String code;

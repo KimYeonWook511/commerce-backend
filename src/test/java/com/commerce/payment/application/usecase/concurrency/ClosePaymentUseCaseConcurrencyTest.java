@@ -3,14 +3,16 @@ package com.commerce.payment.application.usecase.concurrency;
 import static org.assertj.core.api.Assertions.assertThat;
 import static org.mockito.ArgumentMatchers.any;
 import static org.mockito.BDDMockito.given;
+import static org.mockito.BDDMockito.willAnswer;
 
 import java.time.LocalDateTime;
-import java.util.List;
 import java.util.Optional;
 import java.util.concurrent.ConcurrentLinkedQueue;
 import java.util.concurrent.CountDownLatch;
 import java.util.concurrent.ExecutorService;
 import java.util.concurrent.Executors;
+import java.util.concurrent.TimeUnit;
+import java.util.concurrent.atomic.AtomicBoolean;
 import java.util.function.IntConsumer;
 
 import org.junit.jupiter.api.AfterEach;
@@ -25,6 +27,7 @@ import org.springframework.test.context.ActiveProfiles;
 import org.springframework.test.context.DynamicPropertyRegistry;
 import org.springframework.test.context.DynamicPropertySource;
 import org.springframework.test.context.bean.override.mockito.MockitoBean;
+import org.springframework.test.context.bean.override.mockito.MockitoSpyBean;
 
 import com.commerce.member.domain.Member;
 import com.commerce.member.infrastructure.persistence.support.MemberPersistenceTestSupport;
@@ -35,6 +38,7 @@ import com.commerce.payment.application.port.NotificationPort;
 import com.commerce.payment.application.port.PaymentGatewayPort;
 import com.commerce.payment.application.port.dto.PgCallRecord;
 import com.commerce.payment.application.port.dto.PgRefundResult;
+import com.commerce.payment.application.service.RefundService;
 import com.commerce.payment.application.usecase.ClosePaymentUseCase;
 import com.commerce.payment.domain.Payment;
 import com.commerce.payment.domain.PaymentPg;
@@ -43,6 +47,7 @@ import com.commerce.payment.domain.Refund;
 import com.commerce.payment.domain.RefundReason;
 import com.commerce.payment.domain.RefundRequester;
 import com.commerce.payment.domain.RefundStatus;
+import com.commerce.payment.domain.repository.PaymentRepository;
 import com.commerce.payment.domain.repository.RefundRepository;
 import com.commerce.payment.infrastructure.persistence.support.PaymentPersistenceTestSupport;
 import com.commerce.payment.infrastructure.persistence.support.RefundPersistenceTestSupport;
@@ -53,11 +58,11 @@ import com.commerce.support.PersistenceCleanupTestSupport;
 import com.commerce.support.TestcontainersSupport;
 
 /**
- * 환불을 만드는 트랜잭션이 겹칠 때의 불변식을 확인한다. 결제 행의 누적 환불액 갱신과 환불 요청 멱등키
- * 유일 제약이 이 방어의 전부라 실제 DB 위에서만 거동이 재현된다.
+ * 환불을 만드는 트랜잭션이 다른 트랜잭션과 겹칠 때의 불변식을 확인한다. 결제 행의 두 금액 갱신과 환불
+ * 요청 멱등키 유일 제약이 이 방어의 전부라 실제 DB 위에서만 거동이 재현된다.
  *
  * <p>어느 쪽이 이기는지는 단언하지 않는다. 승자는 타이밍에 달려 있고, 지켜야 하는 것은 "환불 사건이
- * 하나", "환불 총액이 승인 금액을 넘지 않는다"라는 불변식이다.
+ * 하나", "돌려주기로 한 금액이 승인 금액을 넘지 않는다"라는 불변식이다.
  */
 @SpringBootTest
 @ActiveProfiles("test")
@@ -82,6 +87,12 @@ class ClosePaymentUseCaseConcurrencyTest {
 
 	@Autowired
 	private RefundRepository refundRepository;
+
+	@Autowired
+	private RefundService refundService;
+
+	@MockitoSpyBean
+	private PaymentRepository paymentRepository;
 
 	@MockitoBean
 	private NotificationPort notificationPort;
@@ -142,10 +153,10 @@ class ClosePaymentUseCaseConcurrencyTest {
 		// 조회가 둘 다 못 찾은 것을 유일 제약이 잡고, 그것을 지나가더라도 결제 버전이 받는다.
 		assertThat(refundPersistence.findAll()).hasSize(1);
 		assertThat(failures).isLessThan(THREADS);
-		assertThat(reload(payment).getTotalRefundedAmount()).isEqualTo(payment.getAmount());
+		assertThat(reload(payment).getRefundOpenedAmount()).isEqualTo(payment.getAmount());
 	}
 
-	@DisplayName("사유가 다른 반려가 동시에 와도 환불 총액이 승인 금액을 넘지 않는다")
+	@DisplayName("사유가 다른 반려가 동시에 와도 돌려주기로 한 금액이 승인 금액을 넘지 않는다")
 	@Test
 	void reject_whenDifferentReasonsRace_keepsTotalWithinApprovedAmount() throws InterruptedException {
 		Payment payment = inProgressPayment();
@@ -160,38 +171,73 @@ class ClosePaymentUseCaseConcurrencyTest {
 			}
 		});
 
-		// 키가 달라 유일 제약에는 걸리지 않는다. 그 자리는 누적 환불액이 올린 결제 버전이 받는다.
+		// 키가 달라 유일 제약에는 걸리지 않는다. 그 자리는 돌려주기로 한 금액이 올린 결제 버전이 받는다.
 		assertThat(refundPersistence.findAll()).hasSize(1);
 		assertThat(failures).isLessThan(THREADS);
-		assertThat(reload(payment).getTotalRefundedAmount()).isEqualTo(payment.getAmount());
+		assertThat(reload(payment).getRefundOpenedAmount()).isEqualTo(payment.getAmount());
 	}
 
-	@DisplayName("환불 상태를 바꾸는 일과 새 환불을 만드는 일이 겹쳐도 서로 부딪히지 않는다")
+	@DisplayName("환불 확정과 새 환불 생성이 겹치면 한쪽이 통째로 되돌아간다")
 	@Test
-	void refundTransitionAndRejection_whenRacing_bothSucceed() throws InterruptedException {
+	void refundCompletionAndRejection_whenRacing_leavesOnlyOneOfThemApplied() throws InterruptedException {
 		Payment payment = inProgressPayment();
-		Refund pending = openPendingMemberRefund(payment, payment.getAmount() / 2);
+		int pendingAmount = 3_000;
+		Refund pending = openPendingMemberRefund(payment, pendingAmount);
 
-		int failures = runConcurrently(index -> {
+		// 둘이 결제 행을 읽는 시점만 맞춘다. 어느 쪽이 이기는지는 진짜 낙관 락이 정하고, 맞추지 않으면
+		// 한쪽이 커밋을 마친 뒤에 다른 쪽이 읽어 경합이 아예 성립하지 않는 회차가 섞인다.
+		AtomicBoolean aligned = alignPaymentLoads();
+
+		// 밀린 쪽 수를 세지 않는다. 어느 경로로 부르느냐에 따라 값이 달라져 지켜야 할 것을 가리지 않는다.
+		runConcurrently(index -> {
 			if (index == 0) {
-				Refund loaded = refundRepository.findById(pending.getId()).orElseThrow();
-				loaded.complete("pg-refund-1");
-				refundRepository.saveChecked(loaded);
+				refundService.complete(pending.getId(), "pg-refund-1");
 			} else {
+				// 반려는 그 시점 남은 한도 전액을 열어 한도 검사에 걸리지 않는다. 회원 취소로는 언제나
+				// 승인 전액을 요청해 이 경합을 세울 수 없다.
 				closePaymentUseCase.rejectOrderNotPayable(
 					paymentPersistence.findById(payment.getId()).orElseThrow(),
 					OrderErrorCode.ORDER_ALREADY_PAID, payment.getAmount(), PG_TRANSACTION_ID);
 			}
 		});
 
-		// 상태 전이는 한도를 바꾸지 않으므로 결제가 알 필요가 없다. 부딪히게 만들면 대사가 한 바퀴 돌
-		// 때마다 회원의 환불 요청이 밀린다.
-		assertThat(failures).isZero();
+		// 창이 안 열리면 순차 실행이 되는데 아래 단언은 그때도 통과한다. 경합이 실제로 섰는지를 먼저 본다.
+		assertThat(aligned).isTrue();
+
+		Payment stored = reload(payment);
+		int refundCount = refundPersistence.findAll().size();
+		// 진 쪽이 통째로 되돌아가므로 최종 상태는 둘 중 하나다. 돌려주기로 한 금액이 3,000원인데 환불이
+		// 둘이거나, 10,000원인데 실제로 돌아간 금액이 3,000원인 조합은 양쪽이 다 반영됐다는 뜻이다.
+		boolean completionWon = stored.getRefundOpenedAmount() == pendingAmount
+			&& stored.getRefundSucceededAmount() == pendingAmount
+			&& refundCount == 1;
+		boolean rejectionWon = stored.getRefundOpenedAmount() == payment.getAmount()
+			&& stored.getRefundSucceededAmount() == 0
+			&& refundCount == 2;
+		assertThat(completionWon || rejectionWon).isTrue();
 		assertThat(refundRepository.findById(pending.getId()).orElseThrow().getStatus())
-			.isEqualTo(RefundStatus.SUCCEEDED);
-		List<Refund> refunds = refundPersistence.findAll();
-		assertThat(refunds).hasSize(2);
-		assertThat(reload(payment).getTotalRefundedAmount()).isEqualTo(payment.getAmount());
+			.isEqualTo(completionWon ? RefundStatus.SUCCEEDED : RefundStatus.UNKNOWN);
+	}
+
+	/**
+	 * 두 트랜잭션이 결제 행을 다 읽을 때까지 서로 기다리게 한다. 읽는 값도 저장 결과도 진짜 리포지토리가
+	 * 정하고 여기서 잡는 것은 순서뿐이다.
+	 *
+	 * @return 둘이 실제로 만났는지. 한쪽이 이 조회를 안 타게 되면 기다리다 그냥 지나가 경합이 서지 않는데,
+	 *         그때도 단언은 순차 실행을 통과시키므로 부르는 쪽이 이 값을 함께 확인한다.
+	 */
+	private AtomicBoolean alignPaymentLoads() {
+		CountDownLatch bothLoaded = new CountDownLatch(THREADS);
+		AtomicBoolean aligned = new AtomicBoolean(true);
+		willAnswer(invocation -> {
+			Object loaded = invocation.callRealMethod();
+			bothLoaded.countDown();
+			if (!bothLoaded.await(5, TimeUnit.SECONDS)) {
+				aligned.set(false);
+			}
+			return loaded;
+		}).given(paymentRepository).findById(any());
+		return aligned;
 	}
 
 	/** 밀려난 쪽의 수를 돌려준다. 어느 쪽이 밀렸는지는 타이밍에 달려 있어 단언하지 않는다 */

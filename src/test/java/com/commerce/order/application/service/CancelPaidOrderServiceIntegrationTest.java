@@ -143,7 +143,7 @@ class CancelPaidOrderServiceIntegrationTest {
 		assertThat(orderPersistence.getOrderStatusById(order.getId())).isEqualTo(OrderStatus.CANCELED);
 		assertThat(stockPersistence.findByProductId(product.getId()).orElseThrow().getQuantity())
 			.isEqualTo(ORDER_QUANTITY);
-		assertThat(paymentPersistence.findById(payment.getId()).orElseThrow().getTotalRefundedAmount())
+		assertThat(paymentPersistence.findById(payment.getId()).orElseThrow().getRefundOpenedAmount())
 			.isEqualTo(PRODUCT_PRICE * ORDER_QUANTITY);
 	}
 
@@ -163,7 +163,7 @@ class CancelPaidOrderServiceIntegrationTest {
 			.isInstanceOf(RuntimeException.class);
 
 		assertThat(refundPersistence.findAll()).hasSize(1);
-		assertThat(paymentPersistence.findById(payment.getId()).orElseThrow().getTotalRefundedAmount())
+		assertThat(paymentPersistence.findById(payment.getId()).orElseThrow().getRefundOpenedAmount())
 			.isEqualTo(PRODUCT_PRICE * ORDER_QUANTITY);
 	}
 

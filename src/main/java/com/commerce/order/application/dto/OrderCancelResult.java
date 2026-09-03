@@ -15,7 +15,7 @@ public class OrderCancelResult {
 	private OrderCancelRefundStatus refundStatus;
 	/** 이번 요청으로 환불되는 금액. 그 결제의 모든 환불 합이 아니라 이번 건 하나다 */
 	private int refundedAmount;
-	/** 앞으로 더 취소할 수 있는 금액. 승인 금액에서 누적 환불액을 뺀 값이다 */
+	/** 앞으로 더 취소할 수 있는 금액. 승인 금액에서 돌려주기로 한 금액을 뺀 값이다 */
 	private int remainingAmount;
 
 	@Builder

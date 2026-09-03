@@ -1,6 +1,6 @@
 # 환불이 자기 낙관 락을 갖고 결제 버전은 환불을 만들 때만 오른다
 
-- Status: accepted
+- Status: accepted — PR#326이 **부분 대체**. 아래 Decision 중 **결제 버전은 환불을 만들 때만 오른다**는 부분이, 환불이 성공으로 확정되는 전이 하나에 한해 대체됐다 — 그 전이가 한도가 아니라 한도의 사용 내역을 바꾸기 때문이다([20260901-pr326-refund-settlement-updates-payment-row](20260901-pr326-refund-settlement-updates-payment-row.md)). 나머지(환불이 자기 낙관 락을 갖는 것, 확정 말고 다른 환불 전이가 결제를 건드리지 않는 것)는 유지된다.
 - Date: 2026-08-16
 
 ## Context

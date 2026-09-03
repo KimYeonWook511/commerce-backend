@@ -52,7 +52,7 @@ payment/application/
 │   └── ReconcilePaymentUseCase
 ├── service/        # tx 단위작업. @Transactional. 충돌 시 전파(catch 안 함)
 │   ├── PaymentService                  (결제 안에서 끝나는 전이 — 아래 "서비스를 무엇으로 가르나")
-│   ├── RefundService                   (환불 안에서 끝나는 전이)
+│   ├── RefundService                   (환불 하나의 전이. 성공 확정만 결제를 함께 갱신한다)
 │   └── PaymentApprovalService          (complete — order+payment 한 tx)
 ├── port/           # 외부 시스템 인터페이스 (outbound)
 ├── dto/            # 입력 command(=Command DTO) / result

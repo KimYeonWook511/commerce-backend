@@ -42,6 +42,13 @@ class PaymentTest {
 		return identified(payment, PAYMENT_ID);
 	}
 
+	/** 승인 금액은 담겼지만 아직 어느 종착에도 이르지 않은 결제. 종결 전이가 아직 남아 있다 */
+	private Payment pendingPaymentWithApproval(int approvedAmount) {
+		Payment payment = inProgressPayment();
+		payment.recordApproval(approvedAmount, "pg-tx-1");
+		return identified(payment, PAYMENT_ID);
+	}
+
 	@DisplayName("결제를 시작하면 승인 호출 전 상태가 되고 그 자리에서 활성 슬롯을 잡는다")
 	@Test
 	void start_whenCalled_createsReadyPaymentHoldingActiveSlot() {
@@ -51,7 +58,8 @@ class PaymentTest {
 		assertThat(payment.getActiveOrderKey()).isEqualTo(ORDER_ID);
 		assertThat(payment.getAttemptSeq()).isZero();
 		assertThat(payment.getReconcileCount()).isZero();
-		assertThat(payment.getTotalRefundedAmount()).isZero();
+		assertThat(payment.getRefundOpenedAmount()).isZero();
+		assertThat(payment.getRefundSucceededAmount()).isZero();
 		assertThat(payment.getApprovedAmount()).isNull();
 	}
 
@@ -319,7 +327,7 @@ class PaymentTest {
 
 	// ── 환불 생성과 한도 판정 ────────────────────────────────────
 
-	@DisplayName("환불을 만들면 결제 행의 환불 합이 그 금액만큼 오른다")
+	@DisplayName("환불을 만들면 결제 행의 돌려주기로 한 금액이 그 금액만큼 오른다")
 	@Test
 	void openRefund_whenNoExistingRefund_createsRefundAndRaisesTotal() {
 		Payment payment = approvedPayment(10_000);
@@ -334,7 +342,7 @@ class PaymentTest {
 		// 시도 번호를 붙여도 결제사 한도 안에 들도록 길이를 고정한다.
 		assertThat(refund.getRefundKey()).startsWith("RF-").hasSize(35);
 		// 이 갱신이 없으면 동시에 온 두 요청이 서로를 감지하지 못한다.
-		assertThat(payment.getTotalRefundedAmount()).isEqualTo(3_000);
+		assertThat(payment.getRefundOpenedAmount()).isEqualTo(3_000);
 	}
 
 	@DisplayName("한 결제에 환불이 여러 건 쌓이고 각각 다른 사건 키로 구분된다")
@@ -346,10 +354,10 @@ class PaymentTest {
 		Refund second = payment.openRefund(Optional.empty(), 4_000, RefundReason.ORDER_CANCELED, "IDEM-2");
 
 		assertThat(first.getRefundKey()).isNotEqualTo(second.getRefundKey());
-		assertThat(payment.getTotalRefundedAmount()).isEqualTo(7_000);
+		assertThat(payment.getRefundOpenedAmount()).isEqualTo(7_000);
 	}
 
-	@DisplayName("남은 한도를 넘는 환불 요청은 거절되고 결제 행의 환불 합도 그대로다")
+	@DisplayName("남은 한도를 넘는 환불 요청은 거절되고 결제 행의 두 금액도 그대로다")
 	@Test
 	void openRefund_whenAmountExceedsRemainingLimit_throws() {
 		Payment payment = approvedPayment(10_000);
@@ -360,7 +368,27 @@ class PaymentTest {
 			.isInstanceOf(PaymentException.class)
 			.hasMessage(PaymentErrorCode.REFUND_LIMIT_EXCEEDED.getMessage());
 
-		assertThat(payment.getTotalRefundedAmount()).isEqualTo(3_000);
+		assertThat(payment.getRefundOpenedAmount()).isEqualTo(3_000);
+		assertThat(payment.getRefundSucceededAmount()).isZero();
+	}
+
+	@DisplayName("성공으로 끝난 환불도 한도를 계속 잡아 남은 금액을 넘는 요청이 거절된다")
+	@Test
+	void openRefund_whenSucceededRefundOccupiesLimit_throws() {
+		Payment payment = approvedPayment(10_000);
+		Refund succeeded = payment.openRefund(Optional.empty(), 3_000, RefundReason.ORDER_CANCELED, "IDEM-1");
+		succeeded.markInProgress(NOW);
+		succeeded.complete("pg-refund-tx-1");
+		payment.recordRefundSuccess(succeeded.getAmount());
+
+		// 한도는 돌려주기로 한 금액만 읽는다. 성공한 몫을 풀어 주면 이미 나간 돈만큼 새 환불이 끼어든다.
+		assertThatThrownBy(() ->
+			payment.openRefund(Optional.empty(), 8_000, RefundReason.ORDER_CANCELED, "IDEM-2"))
+			.isInstanceOf(PaymentException.class)
+			.hasMessage(PaymentErrorCode.REFUND_LIMIT_EXCEEDED.getMessage());
+
+		assertThat(payment.getRefundOpenedAmount()).isEqualTo(3_000);
+		assertThat(payment.getRefundSucceededAmount()).isEqualTo(3_000);
 	}
 
 	@DisplayName("결과를 모르는 환불도 한도를 잡고 있어 남은 금액을 넘는 요청이 거절된다")
@@ -414,7 +442,7 @@ class PaymentTest {
 			.isInstanceOf(PaymentException.class)
 			.hasMessage(PaymentErrorCode.REFUND_AMOUNT_INVALID.getMessage());
 
-		assertThat(payment.getTotalRefundedAmount()).isZero();
+		assertThat(payment.getRefundOpenedAmount()).isZero();
 	}
 
 	@DisplayName("승인 금액이 없는 결제에는 환불을 만들 수 없다")
@@ -439,8 +467,8 @@ class PaymentTest {
 			Optional.of(existing), 3_000, RefundReason.ORDER_CANCELED, "IDEM-1");
 
 		assertThat(again).isSameAs(existing);
-		// 돌려주는 것뿐이라 누적 환불액을 다시 더하지 않는다.
-		assertThat(payment.getTotalRefundedAmount()).isEqualTo(3_000);
+		// 돌려주는 것뿐이라 돌려주기로 한 금액을 다시 더하지 않는다.
+		assertThat(payment.getRefundOpenedAmount()).isEqualTo(3_000);
 	}
 
 	@DisplayName("같은 요청 키에 금액이 다르면 앞서 만든 사건을 돌려주지 않고 거절한다")
@@ -484,7 +512,7 @@ class PaymentTest {
 		// 비워 두면 유일 검사에서 빠져 DB가 중복을 막지 못한다.
 		assertThat(refund.get().getIdempotencyKey()).isEqualTo(RefundReason.ORDER_NOT_PAYABLE.name());
 		assertThat(refund.get().getReason()).isEqualTo(RefundReason.ORDER_NOT_PAYABLE);
-		assertThat(payment.getTotalRefundedAmount()).isEqualTo(10_000);
+		assertThat(payment.getRefundOpenedAmount()).isEqualTo(10_000);
 	}
 
 	@DisplayName("반려 환불이 이미 있으면 금액을 다시 계산하지 않고 그것을 돌려준다")
@@ -499,7 +527,7 @@ class PaymentTest {
 
 		// 다시 계산하면 그 환불이 이미 한도를 잡고 있어 남은 한도가 0이 된다.
 		assertThat(again).containsSame(existing);
-		assertThat(payment.getTotalRefundedAmount()).isEqualTo(10_000);
+		assertThat(payment.getRefundOpenedAmount()).isEqualTo(10_000);
 	}
 
 	@DisplayName("한도가 모자란 채로 반려가 와도 남은 만큼은 되돌릴 근거로 남는다")
@@ -513,7 +541,7 @@ class PaymentTest {
 		// 승인 금액으로 고정하면 한도를 넘어 반려가 통째로 막힌다.
 		assertThat(refund).isPresent();
 		assertThat(refund.get().getAmount()).isEqualTo(6_000);
-		assertThat(payment.getTotalRefundedAmount()).isEqualTo(10_000);
+		assertThat(payment.getRefundOpenedAmount()).isEqualTo(10_000);
 	}
 
 	@DisplayName("남은 한도가 0이면 반려 환불을 만들지 않고 비어 있는 결과를 돌려준다")
@@ -526,7 +554,76 @@ class PaymentTest {
 
 		// 예외로 터뜨리면 반려가 통째로 롤백되어 되돌릴 근거도 조사할 근거도 사라진다.
 		assertThat(refund).isEmpty();
-		assertThat(payment.getTotalRefundedAmount()).isEqualTo(10_000);
+		assertThat(payment.getRefundOpenedAmount()).isEqualTo(10_000);
+	}
+
+	// ── 환불 성공을 결제가 받아들인다 ───────────────────────────
+
+	@DisplayName("환불 성공을 받아들이면 실제로 돌아간 금액만 오르고 돌려주기로 한 금액은 그대로다")
+	@Test
+	void recordRefundSuccess_whenRefundIsOpen_raisesSucceededAmountOnly() {
+		Payment payment = approvedPayment(10_000);
+		payment.openRefund(Optional.empty(), 3_000, RefundReason.ORDER_CANCELED, "IDEM-1");
+
+		payment.recordRefundSuccess(3_000);
+
+		assertThat(payment.getRefundSucceededAmount()).isEqualTo(3_000);
+		assertThat(payment.getRefundOpenedAmount()).isEqualTo(3_000);
+	}
+
+	@DisplayName("종결된 결제도 환불 성공을 받아들인다 — 반려는 환불을 먼저 열고 그 뒤에 결제를 닫는다")
+	@Test
+	void recordRefundSuccess_whenPaymentAlreadyClosed_stillRecords() {
+		Payment payment = pendingPaymentWithApproval(10_000);
+		payment.openRejectionRefund(Optional.empty(), RefundReason.ORDER_NOT_PAYABLE);
+		payment.reject(PaymentCloseCode.ORDER_NOT_PAYABLE, "이미 취소된 주문");
+
+		payment.recordRefundSuccess(10_000);
+
+		// 상태로 막으면 반려 환불의 성공이 반영되지 않고 그 예외는 흐름이 흡수해 조용히 사라진다.
+		assertThat(payment.getStatus()).isEqualTo(PaymentStatus.REJECTED);
+		assertThat(payment.getRefundSucceededAmount()).isEqualTo(10_000);
+	}
+
+	@DisplayName("받아들일 금액이 0 이하이면 실제로 돌아간 금액을 올리지 않는다")
+	@Test
+	void recordRefundSuccess_whenAmountIsNotPositive_throws() {
+		Payment payment = approvedPayment(10_000);
+		payment.openRefund(Optional.empty(), 3_000, RefundReason.ORDER_CANCELED, "IDEM-1");
+
+		// 이 자리는 환불을 만드는 관문을 지나지 않아 그 관문의 금액 검사가 뒤에 서 주지 않는다.
+		assertThatThrownBy(() -> payment.recordRefundSuccess(0))
+			.isInstanceOf(PaymentException.class)
+			.hasMessage(PaymentErrorCode.REFUND_SUCCEEDED_AMOUNT_INVARIANT_BROKEN.getMessage());
+		assertThat(payment.getRefundSucceededAmount()).isZero();
+	}
+
+	@DisplayName("실제로 돌아간 금액이 돌려주기로 한 금액을 넘게 되는 성공은 거부한다")
+	@Test
+	void recordRefundSuccess_whenItWouldExceedOpenedAmount_throws() {
+		Payment payment = approvedPayment(10_000);
+		payment.openRefund(Optional.empty(), 3_000, RefundReason.ORDER_CANCELED, "IDEM-1");
+		payment.recordRefundSuccess(3_000);
+
+		// 넘는다는 것은 저장된 두 금액이 이미 어긋났다는 뜻이라 조용히 더하지 않는다.
+		assertThatThrownBy(() -> payment.recordRefundSuccess(1))
+			.isInstanceOf(PaymentException.class)
+			.hasMessage(PaymentErrorCode.REFUND_SUCCEEDED_AMOUNT_INVARIANT_BROKEN.getMessage());
+		assertThat(payment.getRefundSucceededAmount()).isEqualTo(3_000);
+	}
+
+	@DisplayName("결제 자신의 종결 전이는 두 금액을 바꾸지 않는다")
+	@Test
+	void reject_whenRefundIsOpen_leavesBothRefundAmounts() {
+		Payment payment = pendingPaymentWithApproval(10_000);
+		payment.openRefund(Optional.empty(), 3_000, RefundReason.ORDER_CANCELED, "IDEM-1");
+		payment.recordRefundSuccess(3_000);
+
+		payment.reject(PaymentCloseCode.ORDER_NOT_PAYABLE, "이미 취소된 주문");
+
+		// 두 금액은 상태와 직교한다. 종결됐는지는 얼마가 열렸고 얼마가 돌아갔는지와 무관하다.
+		assertThat(payment.getRefundOpenedAmount()).isEqualTo(3_000);
+		assertThat(payment.getRefundSucceededAmount()).isEqualTo(3_000);
 	}
 
 	@DisplayName("어느 전이를 거치든 상태와 활성 슬롯이 어긋나지 않는다")

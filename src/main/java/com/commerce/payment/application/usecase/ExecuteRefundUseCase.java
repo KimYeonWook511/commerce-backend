@@ -223,8 +223,9 @@ public class ExecuteRefundUseCase {
 	 * <ol>
 	 *   <li>이 사건이 이미 완료로 있다 — 성공으로 확정한다.
 	 *   <li>결과를 모르던 다른 건이 완료된 것으로 설명된다 — 그 건을 확정하고 이번 건은 상태를 그대로 둔다.
-	 *       다음 주기의 대사가 같은 키로 다시 보내며, 한도는 다시 검사하지 않는다 — 누적 환불액은 환불을
-	 *       만들 때만 오르므로 만들 때 통과한 이 환불은 지금도 한도 안이고, 재검사를 두면 없앤 합계 조회가
+	 *       다음 주기의 대사가 같은 키로 다시 보내며, 한도는 다시 검사하지 않는다 — 한도가 읽는 것은 돌려주기로
+	 *       한 금액이고 그 값은 환불을 만들 때만 오르므로 만들 때 통과한 이 환불은 지금도 한도 안이다. 방금
+	 *       확정한 건이 올린 것은 실제로 돌아간 금액이라 한도와 무관하고, 재검사를 두면 없앤 합계 조회가
 	 *       그 자리로 되살아난다.
 	 *   <li>어느 쪽으로도 설명되지 않는다 — 우리가 모르는 환불이 있다. 사람에게 넘긴다.
 	 * </ol>
@@ -274,30 +275,46 @@ public class ExecuteRefundUseCase {
 			}
 			try {
 				refundService.complete(sibling.getId(), settled.get().pgTransactionId());
-				explained = true;
 			} catch (PaymentException ex) {
-				// 다른 주체가 먼저 옮겼다. 그래도 그 건이 완료라는 사실은 달라지지 않으므로 설명된 것으로 센다.
-				log.info("다른 주체가 먼저 옮겨 이번 확정을 반영하지 않는다 refundId={} 사유={}",
-					sibling.getId(), ex.getErrorCode());
-				explained = true;
+				// 우리 기록에 못 옮겼을 뿐 그 건이 결제사에서 완료라는 사실은 달라지지 않으므로 설명된
+				// 것으로 센다. 여기서 안 세면 원인이 이미 밝혀진 건이 나가는 전이가 없는 검토 대기로 간다.
+				logAbsorbedFailure(sibling.getId(), ex);
 			}
+			explained = true;
 		}
 		return explained;
 	}
 
 	/**
-	 * 전이를 커밋하고 그 결과 상태를 돌려준다. 그 사이 다른 주체가 같은 환불을 먼저 옮겼으면 그대로
-	 * 둔다 — 돈이 어떻게 됐는지는 대사가 이력으로 확정하고, 회원에게는 어느 쪽이든 "처리 중"이다.
+	 * 전이를 커밋하고 그 결과 상태를 돌려준다. 밀리는 이유가 둘이다 — 다른 주체가 같은 환불을 먼저
+	 * 옮겼거나, 확정이라면 결제가 동시에 바뀌어 금액 갱신이 밀린 것이다. 뒤엣것은 결제를 함께 저장하는
+	 * 확정에만 해당하고, 이 자리를 함께 지나는 결과 불명·재시도·검토 대기 전이에는 해당하지 않는다.
+	 * 어느 쪽이든 그대로 둔다 — 돈이 어떻게 됐는지는 대사가 이력으로 확정하고, 회원에게는 어느 쪽이든
+	 * "처리 중"이다.
 	 */
 	private RefundStatus transition(Refund refund, Runnable transition, RefundStatus applied) {
 		try {
 			transition.run();
 			return applied;
 		} catch (PaymentException ex) {
-			log.info("다른 주체가 먼저 환불을 옮겨 이번 결과를 반영하지 않는다 refundId={} 사유={}",
-				refund.getId(), ex.getErrorCode());
+			logAbsorbedFailure(refund.getId(), ex);
 			return RefundStatus.IN_PROGRESS;
 		}
+	}
+
+	/**
+	 * 이 흐름이 잡아 삼키는 실패를 남긴다. 결제의 금액 불변식이 깨진 것만 갈라 올린다 — 경합은 대사가
+	 * 다시 집으면 풀리지만 이것은 저장된 두 금액이 이미 어긋났다는 뜻이라 사람이 바로잡기 전까지 풀리지
+	 * 않는다. 경합과 같은 수준으로 남기면 그 신호가 정상 흐름 로그에 묻히고, 여기서 삼켜져 끝단에 닿지
+	 * 않으므로 원인 위치는 실어 주는 stack 에만 남는다.
+	 */
+	private void logAbsorbedFailure(Long refundId, PaymentException ex) {
+		if (ex.getErrorCode() == PaymentErrorCode.REFUND_SUCCEEDED_AMOUNT_INVARIANT_BROKEN) {
+			log.error("결제의 환불 금액 불변식이 깨져 이번 확정을 반영하지 못한다 refundId={}", refundId, ex);
+			return;
+		}
+		log.info("먼저 옮겨졌거나 결제가 함께 바뀌어 이번 결과를 반영하지 않는다 refundId={} 사유={}",
+			refundId, ex.getErrorCode());
 	}
 
 	/** 기록이 환불 판정을 흔들지 않는다. 판정의 정본은 이미 커밋됐고 이 행은 조사에서만 읽는다 */

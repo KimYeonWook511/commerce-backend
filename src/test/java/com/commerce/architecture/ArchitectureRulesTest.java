@@ -232,7 +232,7 @@ class ArchitectureRulesTest {
     @Test
     @DisplayName("환불 사건은 결제의 도메인 메서드로만 열린다 (혼자 만들어 먼저 커밋하는 진입점 없음)")
     void refundIsOpenedOnlyInsidePaymentDomain() {
-        // 환불을 만드는 관문이 결제 안에 있어야 한도 판정과 누적 환불액 갱신이 같은 자리에서 일어나고,
+        // 환불을 만드는 관문이 결제 안에 있어야 한도 판정과 돌려주기로 한 금액 갱신이 같은 자리에서 일어나고,
         // 결제를 로드해 함께 저장하는 트랜잭션 밖에서는 환불 의도가 커밋될 수 없다. 밖에 관문이 하나
         // 더 생기면 트랜잭션 없이 불러 정당한 조건 없는 환불만 커밋되는 문이 다시 열린다.
         ArchRule rule = noClasses()
@@ -242,6 +242,20 @@ class ArchitectureRulesTest {
                         "java.lang.Long", "java.lang.String",
                         "com.commerce.payment.domain.RefundRequester", "java.lang.String",
                         "int", "com.commerce.payment.domain.RefundReason");
+        check(rule);
+    }
+
+    @Test
+    @DisplayName("환불 성공이 결제에 반영되는 것은 환불을 전이시키는 자리 하나뿐이다")
+    void refundSuccessIsRecordedOnlyWhereTheRefundTransitions() {
+        // 이 금액을 올리는 것은 환불 하나가 성공했다는 사실을 결제에 남기는 일이라, 그 환불을 성공으로
+        // 옮기는 트랜잭션과 같은 자리에서만 일어나야 한다. 결제가 보는 가드는 총량뿐이라 넘어온 금액이
+        // 어느 환불의 몫인지 구분하지 못하고, 밖에 부르는 곳이 하나 더 생기면 나가지도 않은 환불의
+        // 금액이 총량에 실린 뒤 그 환불의 진짜 성공이 영구히 거부된다.
+        ArchRule rule = noClasses()
+                .that().doNotHaveFullyQualifiedName("com.commerce.payment.application.service.RefundService")
+                .should().callMethod(
+                        "com.commerce.payment.domain.Payment", "recordRefundSuccess", "int");
         check(rule);
     }
 

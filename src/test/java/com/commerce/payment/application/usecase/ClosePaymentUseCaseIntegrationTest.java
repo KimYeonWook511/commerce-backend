@@ -35,6 +35,7 @@ import com.commerce.payment.application.port.NotificationPort;
 import com.commerce.payment.application.port.PaymentGatewayPort;
 import com.commerce.payment.application.port.dto.PgCallRecord;
 import com.commerce.payment.application.port.dto.PgRefundResult;
+import com.commerce.payment.application.service.RefundService;
 import com.commerce.payment.domain.Payment;
 import com.commerce.payment.domain.PaymentCloseCode;
 import com.commerce.payment.domain.PaymentPg;
@@ -90,6 +91,9 @@ class ClosePaymentUseCaseIntegrationTest {
 
 	@MockitoSpyBean
 	private RefundRepository refundRepository;
+
+	@Autowired
+	private RefundService refundService;
 
 	@Autowired
 	private PersistenceCleanupTestSupport persistenceCleanup;
@@ -173,9 +177,9 @@ class ClosePaymentUseCaseIntegrationTest {
 		assertThat(refund.getAmount()).isEqualTo(approvedAmount);
 	}
 
-	@DisplayName("환불을 만들면 결제 행의 환불 합이 오르고 버전도 함께 오른다")
+	@DisplayName("환불을 만들면 결제 행의 돌려주기로 한 금액이 오르고 버전도 함께 오른다")
 	@Test
-	void rejectOrderNotPayable_whenCalled_raisesTotalRefundedAmountAndVersion() {
+	void rejectOrderNotPayable_whenCalled_raisesRefundOpenedAmountAndVersion() {
 		Payment payment = inProgressPayment();
 		Long versionBefore = reload(payment).getVersion();
 
@@ -184,27 +188,44 @@ class ClosePaymentUseCaseIntegrationTest {
 
 		Payment closed = reload(payment);
 		// 이 갱신이 없으면 동시에 온 두 요청이 서로를 감지하지 못한다.
-		assertThat(closed.getTotalRefundedAmount()).isEqualTo(payment.getAmount());
+		assertThat(closed.getRefundOpenedAmount()).isEqualTo(payment.getAmount());
 		assertThat(closed.getVersion()).isGreaterThan(versionBefore);
 	}
 
-	@DisplayName("환불 상태를 바꿔도 결제 행의 환불 합과 버전은 그대로다")
+	@DisplayName("확정 말고 다른 환불 전이는 결제 행의 두 금액과 버전을 그대로 둔다")
 	@Test
-	void refundTransition_whenApplied_leavesPaymentRowUntouched() {
+	void refundTransition_whenNotSettling_leavesPaymentRowUntouched() {
 		Payment payment = inProgressPayment();
 		closePaymentUseCase.rejectOrderNotPayable(
 			payment, OrderErrorCode.ORDER_ALREADY_PAID, payment.getAmount(), PG_TRANSACTION_ID);
 		Payment afterRejection = reload(payment);
 
-		// 반려가 커밋 뒤에 이미 보내 그 환불은 결과 불명이다. 거기서 한 걸음 더 옮겨도 결제는 그대로여야 한다.
-		Refund refund = refundRepository.findById(onlyRefund().getId()).orElseThrow();
-		refund.complete(PG_TRANSACTION_ID);
-		refundRepository.saveChecked(refund);
+		// 반려가 커밋 뒤에 이미 보내 그 환불은 결과 불명이다. 확정이 아닌 걸음은 결제를 그대로 둬야 한다.
+		refundService.recordRetryableFailure(onlyRefund().getId());
 
 		Payment afterTransition = reload(payment);
 		// 여기서 결제를 함께 저장하면 대사가 한 바퀴 돌 때마다 회원의 환불 요청이 밀린다.
-		assertThat(afterTransition.getTotalRefundedAmount()).isEqualTo(afterRejection.getTotalRefundedAmount());
+		assertThat(afterTransition.getRefundOpenedAmount()).isEqualTo(afterRejection.getRefundOpenedAmount());
+		assertThat(afterTransition.getRefundSucceededAmount()).isEqualTo(afterRejection.getRefundSucceededAmount());
 		assertThat(afterTransition.getVersion()).isEqualTo(afterRejection.getVersion());
+	}
+
+	@DisplayName("반려 환불이 확정되면 종결된 결제의 실제로 돌아간 금액과 버전이 오른다")
+	@Test
+	void refundCompletion_whenSettling_raisesSucceededAmountAndVersion() {
+		Payment payment = inProgressPayment();
+		closePaymentUseCase.rejectOrderNotPayable(
+			payment, OrderErrorCode.ORDER_ALREADY_PAID, payment.getAmount(), PG_TRANSACTION_ID);
+		Payment afterRejection = reload(payment);
+
+		refundService.complete(onlyRefund().getId(), PG_TRANSACTION_ID);
+
+		Payment afterCompletion = reload(payment);
+		// 반려가 결제를 먼저 닫으므로 상태로 막았다면 이 성공이 영영 반영되지 않았을 것이다.
+		assertThat(afterCompletion.getStatus()).isEqualTo(PaymentStatus.REJECTED);
+		assertThat(afterCompletion.getRefundSucceededAmount()).isEqualTo(payment.getAmount());
+		assertThat(afterCompletion.getRefundOpenedAmount()).isEqualTo(afterRejection.getRefundOpenedAmount());
+		assertThat(afterCompletion.getVersion()).isGreaterThan(afterRejection.getVersion());
 	}
 
 	// ── 재실행과 어긋난 상태 ─────────────────────────────────────
@@ -222,7 +243,7 @@ class ClosePaymentUseCaseIntegrationTest {
 		// 금액을 다시 계산하면 앞서 만든 환불이 한도를 잡고 있어 남은 한도가 0이 된다.
 		Refund refund = onlyRefund();
 		assertThat(refund.getAmount()).isEqualTo(payment.getAmount());
-		assertThat(reload(payment).getTotalRefundedAmount()).isEqualTo(payment.getAmount());
+		assertThat(reload(payment).getRefundOpenedAmount()).isEqualTo(payment.getAmount());
 	}
 
 	@DisplayName("결제가 이미 종착이어도 반려 환불은 만들어지고 정합성 이상으로 알린다")
@@ -277,7 +298,7 @@ class ClosePaymentUseCaseIntegrationTest {
 		Payment untouched = reload(payment);
 		assertThat(untouched.getStatus()).isEqualTo(PaymentStatus.IN_PROGRESS);
 		assertThat(untouched.getCloseCode()).isNull();
-		assertThat(untouched.getTotalRefundedAmount()).isZero();
+		assertThat(untouched.getRefundOpenedAmount()).isZero();
 		assertThat(refundPersistence.findAll()).isEmpty();
 	}
 
@@ -296,7 +317,7 @@ class ClosePaymentUseCaseIntegrationTest {
 		assertThat(closed.getCloseCode()).isEqualTo(PaymentCloseCode.PAYMENT_KEY_MISMATCH);
 		// 나간 돈은 그 키의 주인 결제의 것이라 우리가 되돌릴 대상이 아니다.
 		assertThat(refundPersistence.findAll()).isEmpty();
-		assertThat(closed.getTotalRefundedAmount()).isZero();
+		assertThat(closed.getRefundOpenedAmount()).isZero();
 	}
 
 	// ── 픽스처 ───────────────────────────────────────────────────

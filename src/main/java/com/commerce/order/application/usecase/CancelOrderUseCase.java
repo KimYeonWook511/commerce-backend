@@ -154,7 +154,9 @@ public class CancelOrderUseCase {
 		} catch (RuntimeException ex) {
 			log.error("주문 취소의 환불을 보내지 못해 발송 배치에 맡긴다 orderId={} refundId={}",
 				canceled.order().getId(), canceled.refund().getId(), ex);
-			return canceled.refund().getStatus();
+			// 환불 인스턴스에 묻지 않는다. 확정이 커밋된 뒤에 던지는 자리가 없어 여기 닿았다는 것은 곧
+			// 미확정이라는 뜻이고, 그 인스턴스는 롤백된 트랜잭션이 메모리에서 바꿔 둔 값을 들고 있다.
+			return RefundStatus.IN_PROGRESS;
 		}
 	}
 }

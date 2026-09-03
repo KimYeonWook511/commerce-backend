@@ -1,0 +1,892 @@
+{
+  "generated_at": "2026-09-01T00:00:00+09:00",
+  "closed_at": "2026-09-02T14:42:30.006626+09:00",
+  "round": 10,
+  "inspectors": [
+    "구현자 시점(확인)"
+  ],
+  "note": "Z2 를 고친 뒤 같은 시점으로 다시 검사했다. 검사관이 컨테이너를 실제로 띄워 step1 이 지시한 흐름을 끝까지 돌렸다 — V14 까지 적용, JDBC 시딩, V15 적용, 단언. 결제 둘의 백필이 결제별로 갈리는 것까지 확인됐다. CRITICAL 없음. 남은 것은 규칙 문서에 예외가 안 남는다는 MEDIUM 하나였고 Root Sync 목록에 한 줄 더해 닫았다.",
+  "findings": [
+    {
+      "id": "Z5",
+      "severity": "MEDIUM",
+      "category": "규칙 문서 정합",
+      "location": "db-schema.md Root Sync 절 ↔ docs/test-code-conventions.md 컨테이너 공유 절",
+      "reported_by": [
+        {
+          "inspector": "구현자 시점(확인)"
+        }
+      ],
+      "summary": "이 테스트는 컨테이너를 따로 띄우는데, 테스트 규약은 컨테이너를 한 번만 띄워 공유한다고만 적고 예외를 두지 않는다. spec 의 Root Sync 문서 목록에 그 규약이 없어 예외가 규칙 문서 어디에도 안 남고, 다음 사람이 같은 판단을 할 때 근거가 테스트 코드의 주석 한 줄뿐이 된다. 구현을 막지는 않는다.",
+      "disposition": {
+        "kind": "fixed",
+        "how": "db-schema.md 의 Root Sync '규칙·전략 문서' 목록에 그 규약과 무엇을 적을지를 한 줄로 더했다."
+      }
+    },
+    {
+      "id": "Z6",
+      "severity": "INFO",
+      "category": "실측으로 확인됨",
+      "location": "phases/1-main/step1.md · scenarios.md#SCN-014",
+      "reported_by": [
+        {
+          "inspector": "구현자 시점(확인)"
+        }
+      ],
+      "summary": "step1 이 지시한 검증을 실제로 돌려 통과했다. flyway-core 11.7.2 가 testRuntimeClasspath 에 있고 target 지정이 Community 판에서 동작한다. 테스트 리소스의 V900 스크립트는 target 밖이라 안 섞이고 2차 적용의 validate 도 통과한다. V12 가 두 테이블의 NOT NULL 컬럼을 다 적어 두어 JDBC 시딩 조건이 확정된다. @Tag(\"docker\") 가 integrationTest 에만 잡히고 배치할 패키지도 이미 있다. 아키텍처 테스트는 production 클래스만 봐서 무관하다.",
+      "disposition": {
+        "kind": "acknowledged",
+        "how": "조치 불필요."
+      }
+    }
+  ],
+  "carried_open": [],
+  "next": {
+    "무엇을 할 차례인가": "close-analyze 를 다시 실행한다. CRITICAL 이 없으므로 통과해야 한다.",
+    "닫은 뒤": "workflow-checklist.json 의 Analyze 를 completed 로 찍고 멈춘다. 문서 경로를 보고하고 사용자의 검토 응답을 기다린다. '진행해'는 Execution 승인이 아니다. Execution 진입은 별도 승인.",
+    "열 라운드가 남긴 교훈": [
+      "수정 pass 가 매번 새 사실 오류를 만들었다. 그래서 7라운드부터 '틀린 문장 고치기'를 '없어도 되는 단언 지우기'로 바꿨고, 지울 때 그 자리에 새 단언을 채우지 않는다.",
+      "검토자 시점 여덟 라운드가 못 본 것을 구현자 시점이 두 번 연속 찾았다. 두 번 다 '해법을 정했다' 와 '그 해법을 이 저장소에서 실행할 수 있다' 사이의 틈이었다.",
+      "게이트가 disposition=fixed 를 막은 것이 옳았다. 8라운드에 fixed 로 닫았으면 실행 불가능한 지시가 구현 단계로 넘어갔다. 고쳤다는 것은 다시 봐야 확인된다."
+    ]
+  },
+  "previous_rounds": [
+    {
+      "id": "B1",
+      "severity": "CRITICAL",
+      "category": "위험영역 결정의 근거가 코드와 반대",
+      "location": "spec.md#Clarifications(4차)·#가정 · aggregate.yaml · data-model.md",
+      "reported_by": [
+        {
+          "inspector": "domain",
+          "severity": "CRITICAL"
+        }
+      ],
+      "summary": "'승인 금액은 한 번만 정해진다'를 '코드 확인'을 근거로 닫았으나 코드는 반대다. recordApproval 에 상태 가드가 없고 PaymentService.reject 가 종결 여부를 보기 전에 그것을 부르며, Payment.reject 는 종결 결제에 다시 걸리는 것을 정상 경로로 인정한다(false 반환). 그 금액은 결제사 이력에서 오므로 옛 값과 다를 수 있다. 그러면 불변식의 오른쪽 고리가 소급해 깨지고 '잔액 추정 오차는 한 방향'도 성립하지 않는다.",
+      "disposition": {
+        "kind": "fixed"
+      },
+      "round": 2
+    },
+    {
+      "id": "B2",
+      "severity": "CRITICAL",
+      "category": "한 문서가 같은 사안에 반대 판정 둘을 담는다",
+      "location": "plan.md 대조표 ↔ plan.md 본문 ↔ docs/spec-constitution.md",
+      "reported_by": [
+        {
+          "inspector": "rules",
+          "severity": "CRITICAL"
+        }
+      ],
+      "summary": "대조표는 낙관 락 설계 §1.4를 '어긋난다'고 적고 본문은 '금지가 아니라 의무의 면제라 위반이 아니다'라고 적는다. 헌법이 'Analyze에서 헌법 위반은 자동 CRITICAL, 희석 금지'를 정하므로, 산출물이 스스로 위반을 선언한 상태에서는 검사관이 낮출 수 없다.",
+      "disposition": {
+        "kind": "fixed"
+      },
+      "round": 2
+    },
+    {
+      "id": "B3",
+      "severity": "HIGH",
+      "category": "새 경합의 패자 종착 미정 (환불 생성 쪽)",
+      "location": "spec.md#FR-008 · adr.md#1 · scenarios.md#SCN-009",
+      "reported_by": [
+        {
+          "inspector": "concurrency",
+          "severity": "HIGH"
+        }
+      ],
+      "summary": "확정이 결제 버전을 올리게 되면서 생기는 경합에서 진 쪽이 환불 생성일 때 회원에게 무엇이 나가는지가 없다. CancelPaidOrderService 가 saveChecked 가 아닌 save 를 써서 충돌이 전역 안전망까지 올라가 주문 취소·재고 복구까지 통째로 롤백된다. adr.md 의 '밀린 쪽은 물러나 다시 읽으며 그 경로는 이미 있다'가 생성 쪽에는 성립하지 않고, spec 의 '회원이 보는 동작을 바꾸지 않는다'와도 어긋난다.",
+      "disposition": {
+        "kind": "fixed"
+      },
+      "round": 2
+    },
+    {
+      "id": "B4",
+      "severity": "HIGH",
+      "category": "가드 위반이 흡수 자리에서 구분되지 않는다",
+      "location": "spec.md#FR-014 · scenarios.md#SCN-017·018 · step2.md",
+      "reported_by": [
+        {
+          "inspector": "concurrency",
+          "severity": "HIGH"
+        }
+      ],
+      "summary": "FR-014 는 값이 달라야 한다는 데까지만 간다. 세 흡수 자리는 여전히 예외를 종류 없이 잡아 같은 문장을 남기고, 특히 형제 확정 자리는 그것을 'explained=true'로 세어 가드 위반이 '원인이 밝혀졌다'로 계상된다. step2 지시 6과 주의사항이 서로 반대를 가리킨다(갈라라 / 가르지 마라).",
+      "disposition": {
+        "kind": "fixed"
+      },
+      "round": 2
+    },
+    {
+      "id": "B5",
+      "severity": "HIGH",
+      "category": "완료 기준의 좁아진 절이 대조표에 안 걸림",
+      "location": "scenarios.md 대조표 · step2.md",
+      "reported_by": [
+        {
+          "inspector": "traceability",
+          "severity": "HIGH"
+        }
+      ],
+      "summary": "SC-001 이 '사람이 손으로 처리한 건은 안 들어온다'로 좁아졌는데 그것을 보여주는 SCN-013 이 SC-001 에 연결돼 있지 않다.",
+      "disposition": {
+        "kind": "fixed"
+      },
+      "round": 2
+    },
+    {
+      "id": "B6",
+      "severity": "MEDIUM",
+      "category": "MEDIUM·LOW 묶음",
+      "location": "여러 문서",
+      "reported_by": [
+        {
+          "inspector": "clarity",
+          "severity": "MEDIUM"
+        },
+        {
+          "inspector": "domain",
+          "severity": "MEDIUM"
+        },
+        {
+          "inspector": "domain-expert",
+          "severity": "MEDIUM"
+        },
+        {
+          "inspector": "rules",
+          "severity": "MEDIUM"
+        },
+        {
+          "inspector": "concurrency",
+          "severity": "MEDIUM"
+        },
+        {
+          "inspector": "traceability",
+          "severity": "MEDIUM"
+        }
+      ],
+      "summary": "(1) aggregate.yaml 에 '금액가' 조사 오류. (2) FR-001 만 옛 서술형을 쓴다. (3) '기능 요구사항 12개'가 14개로 안 바뀜. (4) adr.md 5 의 완화책이 부분취소 세계에서 힘을 잃는다. (5) db-schema 의 제약 근거가 같은 문서 마이그레이션과 어긋난다. (6) 용어집 두 항목에 손처리 한계가 안 적힘. (7) 환불 절에 식별·유일성 규칙 한 줄 없음. (8) Root Sync 목록이 두 문서에 갈려 내용이 다름. (9) 대조표가 패키지 배치 규약 항목을 안 다룸. (10) 새 실패 값의 의미 분류·상속 전략 미정. (11) plan 결정 3 만 아직 방어를 하나로 말하고 시나리오 점검이 14개로 남음. (12) spec 범위의 '문서를 고친다'가 실행 중 수정으로 읽힘. (13) ADR 부분 대체 형식이 두 규칙 문서에서 다름. (14) adr.md 5 의 근거 배치가 순환으로 읽힘. (15) 짝 규칙 비대칭의 이유 미기록. (16) FR-005 에 붙은 시나리오가 다른 것을 봄.",
+      "disposition": {
+        "kind": "fixed"
+      },
+      "round": 2
+    },
+    {
+      "id": "C3-1",
+      "severity": "CRITICAL",
+      "category": "철회한 근거가 다른 문서에 살아 있다",
+      "location": "spec.md#가정 · data-model.md#불변식",
+      "reported_by": [
+        {
+          "inspector": "domain-expert"
+        },
+        {
+          "inspector": "domain"
+        },
+        {
+          "inspector": "clarity"
+        }
+      ],
+      "summary": "2라운드 B1이 '승인 확정·반려가 둘 다 종결 전이라 한 번만 정해진다'를 사실 아님으로 철회했는데, 그 교정이 aggregate.yaml 에만 반영되고 spec.md 가정 절(교정문과 철회문이 한 문단에 공존)과 data-model.md 불변식 근거에는 안 갔다. 검사관 셋이 독립으로 짚었고 실물로 확인했다.",
+      "disposition": {
+        "kind": "fixed",
+        "how": "두 자리를 aggregate.yaml 과 같은 문장으로 맞췄다 — '상태 전이가 아니라서 종결 뒤에도 다시 담기지만 같은 결제사 응답이라 같은 값이 다시 쓰인다'."
+      },
+      "round": 3
+    },
+    {
+      "id": "C3-2",
+      "severity": "CRITICAL",
+      "category": "한 문서가 같은 질문에 반대로 답한다",
+      "location": "spec.md#Edge Cases · spec.md#Clarifications 2차 스캔",
+      "reported_by": [
+        {
+          "inspector": "concurrency"
+        }
+      ],
+      "summary": "Edge Cases 두 항목이 이중 계상 방어를 두고 '상태 가드가 유일한 장치다'와 '양쪽 다 통과하며 되돌리는 것은 환불 행 낙관 락이다'로 반대로 답했다. 2라운드에 plan·adr·data-model·scenarios·FR-013을 '둘'로 고칠 때 정본인 spec.md 두 자리만 남았다.",
+      "disposition": {
+        "kind": "fixed",
+        "how": "중복된 앞 항목을 지우고 뒤 항목이 맥락까지 담게 합쳤다. Clarifications 2차 스캔에도 정정 표기를 달았다."
+      },
+      "round": 3
+    },
+    {
+      "id": "C3-3",
+      "severity": "CRITICAL",
+      "category": "거짓으로 판정된 문장이 plan 에 남았다",
+      "location": "plan.md#복잡도·예외 기록",
+      "reported_by": [
+        {
+          "inspector": "concurrency"
+        },
+        {
+          "inspector": "clarity"
+        }
+      ],
+      "summary": "plan.md 가 '밀린 쪽은 물러나 다시 읽으면 되고 그 경로는 이미 있다'를 들고 있었다. 2라운드 B3 가 거짓으로 판정해 adr.md 1번에서 고친 바로 그 문장이며, plan.md 에는 결정 6도 그에 딸린 step 도 아예 없었다.",
+      "disposition": {
+        "kind": "fixed",
+        "how": "그 문장을 adr.md 1번과 같은 판정으로 고치고, plan.md 구조 결정에 6번(회원 응답은 정해 두고 구현은 미룬다)을 세웠다."
+      },
+      "round": 3
+    },
+    {
+      "id": "H3-1",
+      "severity": "HIGH",
+      "category": "검증 대상을 실제로 재현할 수 없다",
+      "location": "phases/1-main/step3.md · scenarios.md#SCN-009 · spec.md#FR-015 · adr.md#6",
+      "reported_by": [
+        {
+          "inspector": "concurrency"
+        },
+        {
+          "inspector": "clarity"
+        },
+        {
+          "inspector": "domain"
+        },
+        {
+          "inspector": "rules"
+        }
+      ],
+      "summary": "step3 의 유일한 검증 대상(회원 취소가 확정과 겹쳐 진 경우)을 만들 수 없다. CancelPaidOrderService 가 언제나 승인 전액을 요청하고 Payment.addRefund 의 한도 검사가 결제 저장보다 먼저 걸리므로, 확정할 환불이 하나라도 열려 있으면 낙관 락 자리에 닿기 전에 거절된다. 데이터를 심어도 같다. 코드로 확인했다.",
+      "disposition": {
+        "kind": "fixed",
+        "how": "사용자 결정 — 요구·결정은 남기고 구현만 부분취소 작업으로 미룬다. step3 을 지우고 FR-015·SCN-009·ADR 6 에 그 이유(한도 검사가 먼저 걸린다)와 구현 시점을 적었다. ADR 6 Context 의 '성립하지 않는 이유'에 이 네 번째 이유를 더했다."
+      },
+      "round": 3
+    },
+    {
+      "id": "H3-2",
+      "severity": "HIGH",
+      "category": "요구를 그대로 구현하면 멀쩡한 건이 죽는다",
+      "location": "spec.md#FR-014 · scenarios.md#SCN-018 · phases/1-main/step2.md",
+      "reported_by": [
+        {
+          "inspector": "domain-expert"
+        }
+      ],
+      "summary": "2라운드에 넣은 FR-014 두 번째 문장('형제 자리는 가드 거부를 원인 규명으로 세지 않는다')을 그대로 구현하면, 초과 거절의 원인이 이미 밝혀진 멀쩡한 건이 나가는 전이가 없는 검토 대기로 간다. 그 문장이 든 근거('안 그러면 깨진 건이 사람에게 안 넘어간다')도 성립하지 않는다 — 깨진 것은 형제이고 형제는 어느 쪽이든 운영자 통지 대상이다.",
+      "disposition": {
+        "kind": "fixed",
+        "how": "사용자 결정 — 두 번째 문장을 뺐다. 형제 자리의 원인 규명 판정은 현행 유지. 첫 문장(구분되는 실패 값·다른 문장·다른 수준)은 남겼다. 형제 행을 건드리는 설계 자체는 별도 이슈로 뺀다."
+      },
+      "round": 3
+    },
+    {
+      "id": "H3-3",
+      "severity": "HIGH",
+      "category": "새 실패 값의 의미 분류·상속 미정",
+      "location": "spec.md#FR-014 · adr.md#3 · phases/1-main/step2.md",
+      "reported_by": [
+        {
+          "inspector": "rules"
+        }
+      ],
+      "summary": "불변식 가드 거부가 쓸 ErrorCategory 와 예외 상속이 어느 산출물에도 없었다(2라운드 B6-10 이 fixed 로 닫혔으나 값이 실제로 안 들어갔다). 규약 표는 'catch 해서 삼킬 예외는 RuntimeException 직접 상속'인데 이 저장소의 세 흡수 자리는 전부 CustomException 계열을 잡아 삼켜 규약과 실태가 갈려 있다.",
+      "disposition": {
+        "kind": "fixed",
+        "how": "사용자 결정 — 결제 도메인 예외 계열 그대로 두고 의미 분류는 시스템 결함 쪽. adr.md 3번·plan.md 원칙 점검표·step2 지시 2에 적었다. 그 분류에서 따라 나오는 로그 수준(가드 거부만 올리고 경합은 그대로)도 함께 못박았다."
+      },
+      "round": 3
+    },
+    {
+      "id": "M3",
+      "severity": "MEDIUM",
+      "category": "MEDIUM·LOW 묶음",
+      "location": "여러 문서",
+      "reported_by": [
+        {
+          "inspector": "traceability"
+        },
+        {
+          "inspector": "domain"
+        },
+        {
+          "inspector": "concurrency"
+        },
+        {
+          "inspector": "rules"
+        },
+        {
+          "inspector": "clarity"
+        },
+        {
+          "inspector": "domain-expert"
+        }
+      ],
+      "summary": "(1) step2 검증 대상의 SCN-013 에 SC-001 누락 (2) FR-005 에 붙은 SCN-006 이 다른 것을 봄 (3) SCN-009 금지 상태에 시점이 없어 SCN-010 의 정상 결과와 충돌 (4) SCN-016 금지 문장이 판정문이 안 됨 (5) 경합 시나리오 상황을 정상 흐름으로 못 만든다는 사실 미기재 (6) 새 도메인 메서드에 금액 양수 검사 없음 (7) '환불 확정'이 한 문서에서 두 뜻 (8) 새 메서드의 이름·인자 미정 (9) aggregate.yaml 의 Payment purpose·members·invariants·전이가 이 작업을 반영 못 함 (10) Refund 전이 줄에 결제 갱신 책임이 붙어 경계가 흐려짐 (11) ADR 5 에 저장을 택하는 도메인 쪽 근거 없음 (12) 값이 깨진 뒤 복구 경로가 없다는 사실 미기재 (13) 결제 절 식별·유일성이 환불 절보다 얇음 (14) SC-005 주어가 넓어 결제 대사에는 거짓 (15) plan 안에서 '경합 넷'이 두 집합 (16) Root Sync 목록에 낙관 락 설계 §4.1 누락 (17) 규칙 문서 갱신의 근거를 두 문서가 다르게 말함 (18) 새 테스트의 자리·태그 미지정 (19) 같은 편집이 step1·step2 에 중복 배정 (20) 재전송 안전성 근거 주석이 수정 목록에서 빠짐 (21) db-schema 컬럼 뜻에 손처리 한계 없음 (22) 불변식 표기가 문서마다 다름 (23) Refund invariants 에 상태기계 서술",
+      "disposition": {
+        "kind": "fixed",
+        "how": "23건 전부 같은 조율 pass 에서 반영했다."
+      },
+      "round": 3
+    },
+    {
+      "id": "C4-1",
+      "severity": "CRITICAL",
+      "category": "규약 표를 비켜 가면서 산출물은 '위반 없음'이라 적는다",
+      "location": "plan.md#원칙 점검 · adr.md#3 · phases/1-main/step2.md ↔ docs/exception-strategy.md#상속 전략",
+      "reported_by": [
+        {
+          "inspector": "rules"
+        }
+      ],
+      "summary": "예외 처리 규약의 상속 전략 표는 판단축을 'application 이 그 예외를 catch 해서 삼키느냐'로 못박고 삼킬 것이면 RuntimeException 직접 상속 전용 타입을 요구한다. 새 가드 거부는 세 자리가 삼키는데 결제 도메인 예외 계열로 정했고, plan 대조표는 그 행을 '위반 없음'이라 적었다.",
+      "disposition": {
+        "kind": "fixed",
+        "how": "코드로 확인하니 이 저장소는 계층으로 갈린 패턴 둘을 쓴다 — 전용 타입 셋은 전부 인프라 계층이고, 도메인은 예외 없이 공통 예외 계열을 던지며 흐름이 오류 코드로 골라 삼킨다(선례 둘). 사용자 결정으로 표의 판단축을 '삼키느냐'에서 '무엇을 삼키느냐'로 좁히기로 하고 ADR 7 을 세웠다. plan 대조표를 정직하게 고치고 Root Sync 에 규약 문서 수정을 넣었다. 방침 변경이 아니라 실태를 적는 것이다."
+      },
+      "round": 4
+    },
+    {
+      "id": "H4-1",
+      "severity": "HIGH",
+      "category": "같은 문장의 세 번째 사본",
+      "location": "spec.md#Edge Cases",
+      "reported_by": [
+        {
+          "inspector": "domain-expert"
+        }
+      ],
+      "summary": "'진 쪽은 되돌려지고 흐름은 예외를 밖으로 던지지 않는다'가 생성이 진 경우까지 덮는데, 생성이 지면 지금 코드는 실제로 던진다. 2라운드에 adr.md 에서, 3라운드에 plan.md 에서 고친 문장이 정본인 spec.md 에 남아 있었다.",
+      "disposition": {
+        "kind": "fixed",
+        "how": "확정이 질 때와 생성이 질 때를 갈라 적고, 생성 쪽은 FR-015 와 그 구현 시점을 가리키게 했다."
+      },
+      "round": 4
+    },
+    {
+      "id": "H4-2",
+      "severity": "HIGH",
+      "category": "정반대를 단언하는 세 번째 테스트가 목록에 없다",
+      "location": "src/test/java/com/commerce/payment/application/usecase/concurrency/ClosePaymentUseCaseConcurrencyTest.java ↔ spec.md · adr.md#1 · step2.md",
+      "reported_by": [
+        {
+          "inspector": "concurrency"
+        }
+      ],
+      "summary": "산출물 넷이 '계약으로 붙든 테스트는 둘'이라 적었으나 셋이다. 셋째는 '확정과 새 환불 생성이 겹쳐도 부딪히지 않는다'를 이유 주석까지 달아 단언하는 경합 테스트이고, 확정 쪽이 환불 리포지토리를 직접 불러 변경 뒤에도 초록불로 남는다. 실물로 확인했다.",
+      "disposition": {
+        "kind": "fixed",
+        "how": "넷 다 셋으로 고치고 step2 지시 8 에 그 테스트를 실제 경로로 바꿔 SCN-009 의 저장된 상태 단언으로 다시 쓰라고 적었다. 덤으로 이 테스트가 반려 경로로 SCN-009 경합을 실제 코드에서 세울 수 있음을 보여줘, scenarios.md 의 '테스트에서 직접 세운다'를 그 사실로 고쳤다. FR-015 의 회원 응답 갈래만 여전히 못 세우므로 step3 미룸 결정은 그대로 선다."
+      },
+      "round": 4
+    },
+    {
+      "id": "M4",
+      "severity": "MEDIUM",
+      "category": "MEDIUM·LOW 묶음",
+      "location": "여러 문서",
+      "reported_by": [
+        {
+          "inspector": "traceability"
+        },
+        {
+          "inspector": "clarity"
+        },
+        {
+          "inspector": "rules"
+        },
+        {
+          "inspector": "concurrency"
+        },
+        {
+          "inspector": "domain-expert"
+        }
+      ],
+      "summary": "(1) SCN-006 이 FR-011 로 옮겨졌으나 주체가 다름 (2) SCN-018 이 FR-014 에 안 걸림 (3) '환불 확정 전이' 합성어가 용어집이 가른 두 뜻 사이에서 순환문이 됨 (4) SCN-007·008 이 step1·step2 에 이유 없이 중복 (5) adr 안에서 결정 번호가 하나씩 어긋남 (6) 새 메서드 이름 accept* 가 이 저장소에 전례 없는 동사 (7) '환불 객체를 받으면 경계가 무너진다'가 기존 openRefund 에서 이미 거짓 (8) ERROR 로 올리기로 했으나 stack 정책 없음, 근거 조항도 안 맞음 (9) 경합 테스트 태그가 두 축 중 격리 축만 (10) 두 step 이 테스트 규약을 관련 문서로 안 걺 (11) step2 가 plan 결정을 '다섯 항목'이라 가리킴 (12) 같은 환불 동시 확정에서 어느 행의 락이 막는지가 저장 순서에 달렸는데 넷이 하나로 단정 (13) 뒤집히는 성질을 서술한 클래스 주석 둘이 수정 목록에서 빠짐 (14) 확정 로그와 결제 갱신의 순서 미지정 (15) plan 안에서 SCN-017 을 경합으로 세어 집합이 갈림 (16) aggregate.yaml 경계 주석에 주어 없는 조각 (17) 결제 갱신 주체를 '환불의 전이'로 말하는 자리 둘",
+      "disposition": {
+        "kind": "fixed",
+        "how": "17건 전부 같은 조율 pass 에서 반영했다. (6)은 이 저장소가 '밖에서 확인된 사실을 자기 행에 남긴다'를 record* 로 부르는 것을 확인해 Payment.recordRefundSuccess(int) 로 바꿨다."
+      },
+      "round": 4
+    },
+    {
+      "id": "C5-1",
+      "severity": "CRITICAL",
+      "category": "머리글이 자기 표와 반대 판정을 담는다",
+      "location": "plan.md#원칙 점검 (머리글 ↔ 예외 처리 규약 행)",
+      "reported_by": [
+        {
+          "inspector": "rules"
+        }
+      ],
+      "summary": "4라운드에 표의 행을 '표의 문자대로는 어긋난다'로 정직하게 고치면서 바로 위 머리글 '참조 규약 위반 여부 — 위반 없음'을 함께 안 고쳐, 한 절이 같은 질문에 반대로 답하게 됐다. 2라운드 B2 와 같은 모양이 방향만 뒤집혀 되살아났다.",
+      "disposition": {
+        "kind": "fixed",
+        "how": "머리글을 '다섯 중 넷은 위반 없음, 예외 처리 규약 한 건은 현행 표의 문자와 어긋나며 그 표를 좁히는 것을 결정 7로 남긴다'로 고쳤다."
+      },
+      "round": 5
+    },
+    {
+      "id": "H5-1",
+      "severity": "HIGH",
+      "category": "ADR 7 의 사실 주장 둘이 틀렸다",
+      "location": "adr.md#7 · plan.md#원칙 점검",
+      "reported_by": [
+        {
+          "inspector": "rules"
+        },
+        {
+          "inspector": "domain-expert"
+        }
+      ],
+      "summary": "(a) '전용 타입 셋 다 인프라 계층'이라 적었으나 메시지 소비 쪽 하나는 presentation 에서 던지고 프레임워크 오류 핸들러가 쓴다. (b) '전용 타입은 도메인에 하나도 없다'가 틀렸다 — 결제 도메인 예외를 상속한 전용 하위 타입 둘이 있고 흐름이 타입으로 잡는다. 그 타입의 주석이 존재 이유를 이미 적는다: 무결성 위반이 전부 같은 기술 예외로 오므로 하나만 골라내려면 타입이 필요하다. 실물로 확인했다.",
+      "disposition": {
+        "kind": "fixed",
+        "how": "ADR 7 을 다시 썼다. 실태를 두 갈래가 아니라 셋으로 적고, 근거를 '체계 밖이라 분류를 못 든다'에서 '이 저장소는 타입이 아니면 골라낼 수 없을 때만 전용 타입을 만드는데 가드 거부에는 그 사정이 없다'로 바꿨다. 결론은 그대로 선다."
+      },
+      "round": 5
+    },
+    {
+      "id": "H5-2",
+      "severity": "HIGH",
+      "category": "SCN-009 의 금액이 새로 정한 세우기로는 나올 수 없다",
+      "location": "scenarios.md#SCN-009 ↔ Payment.openRejectionRefund",
+      "reported_by": [
+        {
+          "inspector": "concurrency"
+        },
+        {
+          "inspector": "domain-expert"
+        }
+      ],
+      "summary": "4라운드에 SCN-009 를 반려 경로로 세우기로 고쳤는데, 반려는 금액을 인자로 받지 않고 그 시점 남은 한도 전액을 연다. 그래서 '생성이 이기면 5,000원'과 금지 조합의 숫자가 그 경로로는 안 나온다. 그리고 '전제 상태는 테스트에서 직접 세운다'를 교체하며 사실의 나머지 절반을 함께 지웠다.",
+      "disposition": {
+        "kind": "fixed",
+        "how": "금액을 반려가 실제로 여는 값으로 다시 계산하고(7,000 을 열어 10,000 이 된다), 전제 상태는 여전히 심어야 한다는 것을 되돌렸다. ADR 6 Context 에도 '반려로 경합 자체는 세울 수 있고 회원 응답 갈래만 못 세운다'를 적었다."
+      },
+      "round": 5
+    },
+    {
+      "id": "H5-3",
+      "severity": "HIGH",
+      "category": "두 생성 경로를 하나로 단정한다",
+      "location": "spec.md#Edge Cases·FR-015 · adr.md#1·#6 · plan.md",
+      "reported_by": [
+        {
+          "inspector": "domain-expert"
+        }
+      ],
+      "summary": "'환불을 만드는 쪽은 결제를 낙관 락 검사 없이 저장한다'가 네 문서에 단정으로 적혀 있는데, 환불을 여는 자리 둘 중 회원 취소만 그렇고 승인 반려는 이미 검사하는 저장을 쓴다. SCN-009 가 반려로 세우게 된 뒤로는 요구와 시나리오가 서로 다른 경로를 가리키게 됐다.",
+      "disposition": {
+        "kind": "fixed",
+        "how": "네 자리의 주어를 '회원 취소가 여는 자리'로 좁히고 반려 쪽은 이미 도메인 예외가 된다는 사실을 함께 적었다. FR-015 의 적용 범위도 회원 취소 경로로 한정했다."
+      },
+      "round": 5
+    },
+    {
+      "id": "M5",
+      "severity": "MEDIUM",
+      "category": "MEDIUM·LOW 묶음",
+      "location": "여러 문서",
+      "reported_by": [
+        {
+          "inspector": "rules"
+        },
+        {
+          "inspector": "concurrency"
+        },
+        {
+          "inspector": "domain-expert"
+        }
+      ],
+      "summary": "(1) ADR 7 이 인용한 조항이 만들지 않는 충돌을 만들었다고 적음 (2) 규칙 문서 개정을 Root Sync 로 미루는 근거 없음 (3) '예외 없이'가 문자대로는 사실 아님 (4) 경합 INFO 유지가 로깅 규약과 대조 안 됨 (5) 저장 순서를 못박은 뒤에도 '순서에 달렸다'가 근거로 셋에 남음 (6) 로그를 뒤로 옮겨도 커밋 실패는 못 덮음 (7) SCN-006 을 기준 결제로는 세울 수 없음(이미 종결이라 종결 전이가 안 일어난다) (8) 4라운드에 걷어낸 범주적 근거가 step2 에 잔존 (9) 새 메서드 이름을 못박은 용어집이 step2 관련 문서에 없음 (10) 세 흡수 자리가 계열 전체를 잡는 대가가 안 적힘 (11) FR-011 표제 문장이 FR-002 와 표면상 충돌 (12) data-model 의 이유가 결제 상태 전이에는 안 맞음 (13) 새 용어를 다른 문서가 거의 안 씀 (14) 같은 주석 한 줄이 두 step 에 배정",
+      "disposition": {
+        "kind": "fixed",
+        "how": "14건 전부 같은 조율 pass 에서 반영했다."
+      },
+      "round": 5
+    },
+    {
+      "id": "X1",
+      "severity": "CRITICAL",
+      "category": "Root Sync 정본 목록에 루트 아키텍처 문서가 빠졌다",
+      "location": "db-schema.md#문서 동기화 · plan.md#설계 문서 구성 ↔ docs/architecture.md",
+      "reported_by": [
+        {
+          "inspector": "rules"
+        },
+        {
+          "inspector": "domain-expert"
+        }
+      ],
+      "summary": "루트 아키텍처 문서가 이 작업이 정면으로 깨는 문장('환불 상태 전이는 결제 버전을 올리지 않는다')을 담고 있는데 정본 목록에 없었다. plan 의 'architecture.md — 쓰지 않는다'가 spec 폴더 얘기인데 루트 갱신까지 덮는 것으로 읽혀 그 문서가 논의된 유일한 자리가 '손댈 것 없음'으로 닫혀 있었다.",
+      "disposition": {
+        "kind": "fixed",
+        "how": "Root Sync 목록을 세 묶음(루트 상태 문서·결정 기록·규칙 문서)으로 다시 쓰고 아키텍처 문서와 API 스펙, 루트 스키마 문서의 환불 표 비고를 더했다. plan 의 그 줄도 spec 폴더 얘기임을 밝히고 루트는 Root Sync 에 있다고 가리키게 했다."
+      },
+      "round": 6
+    },
+    {
+      "id": "X2",
+      "severity": "CRITICAL",
+      "category": "새 컬럼 값의 오차 방향 단언이 코드와 반대",
+      "location": "data-model.md · spec.md#Edge Cases·SC-001 · db-schema.md · 용어집",
+      "reported_by": [
+        {
+          "inspector": "domain"
+        }
+      ],
+      "summary": "네 문서가 '이 값은 실제보다 작거나 같다, 오차 방향이 한쪽으로 정해져 있다'고 단언하는데, 취소 응답 코드 중 '아직 안 끝났지만 곧 자동 재처리한다'가 성공으로 접히므로 돈이 나가기 전에 값이 오른다 — 실제보다 클 수도 있다. 결제사 명세가 재시도를 금지해 그렇게 접기로 한 기존 결정의 결과다. 코드로 확인했다.",
+      "disposition": {
+        "kind": "fixed",
+        "how": "네 자리의 한 방향 단언을 걷고 어긋나는 길이 양쪽이라는 것과 각각의 이유를 적었다. SC-001 표현도 맞췄다. 접는 결정 자체는 건드리지 않는다."
+      },
+      "round": 6
+    },
+    {
+      "id": "X3",
+      "severity": "CRITICAL",
+      "category": "범위 제외 근거가 코드와 반대",
+      "location": "spec.md#FR-015·Edge Cases · adr.md#6 · scenarios.md#SCN-009",
+      "reported_by": [
+        {
+          "inspector": "domain"
+        },
+        {
+          "inspector": "concurrency"
+        },
+        {
+          "inspector": "domain-expert"
+        }
+      ],
+      "summary": "5라운드에 FR-015 를 회원 취소로 좁히며 넣은 '승인 반려는 회원이 기다리는 요청이 아니다'가 사실이 아니다 — 반려는 회원의 결제창 복귀 경로에서 일어나고 코드 주석이 그렇게 적는다. 곁들인 근거('검사하는 저장을 쓴다')도 그 경로에서 아무도 안 잡아 결과를 바꾸지 못한다. 검사관 셋이 독립으로 짚었다.",
+      "disposition": {
+        "kind": "fixed",
+        "how": "세 자리의 근거를 실제로 성립하는 것으로 바꿨다 — 반려의 응답은 주문 취소 응답이 아니라 승인 확정 응답이라 이 요구가 말하는 안내에 대응물이 없고, 반려는 아직 닫히지 않은 결제에만 걸려 확정과 결제 행에서 만나지 않는다. 뒤엣것을 FR-008 에 넷째 자리 검토 결과로 남겼다."
+      },
+      "round": 6
+    },
+    {
+      "id": "X4",
+      "severity": "HIGH",
+      "category": "규약을 고치는 결정의 사실 주장이 또 틀렸다",
+      "location": "adr.md#7",
+      "reported_by": [
+        {
+          "inspector": "rules"
+        },
+        {
+          "inspector": "domain-expert"
+        }
+      ],
+      "summary": "5라운드에 다시 쓴 ADR 7 이 새 오류 셋을 만들었다 — 표 1행 머리가 '메시지 장애'를 드는데 실제 열에 그 예가 없고, 3행의 '값 둘을 흐름이 타입으로 잡는다'는 둘 중 하나만 맞으며(다른 하나는 아무도 안 잡고 끝단 자동 매핑으로 나간다), '선례가 둘'은 실물 다섯 자리다. 같은 자리 세 번째 정정이다.",
+      "disposition": {
+        "kind": "fixed",
+        "how": "표를 네 갈래로 다시 적고(메시지 소비 진입점을 넷째로 분리) 3행의 실제 열을 둘의 성격 차이로 나눠 적었으며 선례 수를 실물에 맞췄다. 결론은 그대로다."
+      },
+      "round": 6
+    },
+    {
+      "id": "X5",
+      "severity": "HIGH",
+      "category": "경합 시나리오를 세울 상대가 없다",
+      "location": "scenarios.md#SCN-018 · plan.md",
+      "reported_by": [
+        {
+          "inspector": "concurrency"
+        }
+      ],
+      "summary": "SCN-018 이 형제 확정 루프의 두 번째가 결제 행 경합으로 밀리기를 요구하는데 그 경합을 겨눌 상대가 없다 — 미결 환불이 셋 딸린 결제에 결제 행을 쓰는 다른 경로가 없고 충돌 창이 확정 트랜잭션 안쪽이라 밖에서 시점을 겨눌 수도 없다.",
+      "disposition": {
+        "kind": "fixed",
+        "how": "불변식 가드 거부로 다시 썼다. 단일 흐름·순차로 같은 결과가 나온다. 왜 결제 행 경합이 아닌지도 시나리오에 적고 plan 의 격리 테스트 목록에서 뺐다."
+      },
+      "round": 6
+    },
+    {
+      "id": "X6",
+      "severity": "HIGH",
+      "category": "마이그레이션 백필의 결제 경계가 검증되지 않는다",
+      "location": "scenarios.md#SCN-014",
+      "reported_by": [
+        {
+          "inspector": "access"
+        }
+      ],
+      "summary": "SCN-014 의 상황에 결제가 하나뿐이라, 백필이 결제별로 묶지 않고 전체 합계를 모든 결제에 넣어도 값이 같아 통과한다. FR-012 의 '그 결제에 딸린'이라는 절반에 검증이 없었다. 그 오류가 나면 한 결제가 남의 환불 합을 들고 불변식 가드에 걸려 확정이 영구히 막힌다.",
+      "disposition": {
+        "kind": "fixed",
+        "how": "결제를 둘 두고 서로의 환불이 섞이지 않음을 함께 단언하게 했다. 왜 둘이어야 하는지도 시나리오에 적고 FR-012·마이그레이션 절차에도 반영했다."
+      },
+      "round": 6
+    },
+    {
+      "id": "X7",
+      "severity": "HIGH",
+      "category": "대조표가 시나리오 본문과 반대",
+      "location": "scenarios.md#대조표 ↔ SCN-009 본문 · step2.md",
+      "reported_by": [
+        {
+          "inspector": "traceability"
+        }
+      ],
+      "summary": "대조표는 SCN-009 가 FR-015 를 확인한다고 적는데 같은 시나리오 본문과 step2 는 그 갈래가 부분취소 작업 몫이라고 명시한다. FR-015 를 좁혀 미루면서 표만 안 고쳤다.",
+      "disposition": {
+        "kind": "fixed",
+        "how": "대조표에서 FR-015 를 빼고, FR-005 와 같은 형식으로 '이 spec 에서 확인하지 않는다'를 표 아래에 명시했다."
+      },
+      "round": 6
+    },
+    {
+      "id": "X8",
+      "severity": "MEDIUM",
+      "category": "잉여·모순·용어 묶음",
+      "location": "여러 문서",
+      "reported_by": [
+        {
+          "inspector": "clarity"
+        },
+        {
+          "inspector": "domain"
+        },
+        {
+          "inspector": "concurrency"
+        },
+        {
+          "inspector": "rules"
+        },
+        {
+          "inspector": "domain-expert"
+        }
+      ],
+      "summary": "(1) 이중 계상 표가 두 문서에 그대로 중복 (2) 가드가 금액 양수를 함께 보는 이유가 네 곳 (3) 결제 상태를 안 보는 이유가 네 곳 (4) Root Sync 문구가 세 갈래로 갈림 (5) plan 번호와 결정 기록 번호가 두 곳만 우연히 일치 (6) FR 목록이 번호 순서를 벗어남 (7) '형제 환불'이 정의 없는 조어 (8) 용어집이 세운 말이 밖에서 안 쓰이고 한 행위를 여덟 표현으로 부름 (9) 새 메서드 이름이 그것을 만드는 step 에 없음 (10) 저장 순서를 정한 뒤 무효가 된 수렴 서술 셋 (11) '대사가 돌 때마다 밀린다'가 여섯 자리에 현재형인데 지금 모델에서는 성립 안 함 (12) 종결과 종착이 한 문서군에서 두 뜻 (13) 이름 근거를 담은 필드 주석이 어느 step 에도 미배정 (14) 옛 우리말 이름이 열다섯 자리 (15) 저장 순서를 못박으면 규약이 요구하는 주석 지시 누락 (16) 새 도메인 메서드 가드에 단위 테스트 지시 없음 (17) 대사 흡수 자리의 실증 경로 불명 (18) SCN-009 에서 반려가 진 갈래의 종착 미기재 (19) '세운다' 표시가 일부 시나리오에만 (20) plan 의 '다섯' 둘이 낡거나 모호 (21) SCN-011 제목이 표와 다름 (22) 상태 다이어그램 표시가 두 전이 중 하나에만 (23) 예외 규약 결론 문장이 갱신 범위에 없음 (24) 결정 기록 본문 수정 허용 여부로 규칙 문서 셋이 갈림 (25) 안전망 서술과 SCN-005 경로의 사실 오차",
+      "disposition": {
+        "kind": "fixed",
+        "how": "25건 전부 같은 조율 pass 에서 반영했다. 잉여는 정본을 정하고 나머지를 참조로 돌리는 방식으로 걷었고, 그 안에 있던 사실 오류도 함께 사라졌다. (24)는 이 저장소가 이미 세 곳에서 부분 갱신 줄을 본문에 남기고 있고 결정 기록 규약이 그 형식을 허용하는 것을 확인해, 저장소 지침 쪽에 예외를 적는 것을 Root Sync 에 넣었다."
+      },
+      "round": 6
+    },
+    {
+      "id": "Y1",
+      "severity": "CRITICAL",
+      "category": "걷어낸 단언이 다섯 번째 자리에 남았다",
+      "location": "ubiquitous-language-glossary.yaml",
+      "reported_by": [
+        {
+          "inspector": "domain"
+        }
+      ],
+      "summary": "6라운드에 오차 방향의 한 방향 단언을 네 문서에서 걷었는데 용어집 두 항목이 남았다. 그 문서는 두 step 이 관련 문서로 걸어 둔 이름의 정본이라, 구현자가 값의 뜻을 물으러 오는 자리다.",
+      "disposition": {
+        "kind": "fixed",
+        "how": "단언을 지우고 데이터 모델 문서를 정본으로 가리키게 했다. 되풀이 서술을 없애 다시 어긋날 자리를 줄였다."
+      },
+      "round": 7
+    },
+    {
+      "id": "Y2",
+      "severity": "CRITICAL",
+      "category": "같은 자리의 네 번째 사실 오류",
+      "location": "spec.md#FR-008 · scenarios.md#SCN-009·SCN-018",
+      "reported_by": [
+        {
+          "inspector": "domain"
+        },
+        {
+          "inspector": "concurrency"
+        }
+      ],
+      "summary": "'반려는 종결되지 않은 결제에만 걸려 확정과 만나지 않는다'가 틀렸다 — 반려는 종착 결제에도 걸리고 환불을 연 뒤 결제를 저장한다. 막는 것은 상태가 아니라 남은 한도 0 이다. 게다가 SCN-009 가 바로 그 만남을 세워 확인하므로 요구와 시나리오가 정면으로 충돌했다. 이 자리는 3·5·6라운드에도 각각 다른 이유로 틀렸다.",
+      "disposition": {
+        "kind": "fixed",
+        "how": "**그 설명을 지웠다.** 요구가 정할 것은 '이 작업이 다루는 흡수 자리가 셋'이지 반려가 왜 아닌지의 메커니즘이 아니다. '그 경로가 이 충돌을 어떻게 다루는지는 범위 밖'만 남겼다."
+      },
+      "round": 7
+    },
+    {
+      "id": "Y3",
+      "severity": "HIGH",
+      "category": "시나리오가 그 코드 경로에 닿지 못한다",
+      "location": "scenarios.md#SCN-018",
+      "reported_by": [
+        {
+          "inspector": "concurrency"
+        }
+      ],
+      "summary": "형제 확정 루프는 초과 거절을 받고 이력으로 설명되지 않는 구동 환불이 따로 있어야 돌고 루프는 그 구동 건을 건너뛴다. '미결 환불 셋'만 적으면 앞 갈래에서 반환되거나 형제가 둘뿐이라 적힌 행위가 안 나온다.",
+      "disposition": {
+        "kind": "fixed",
+        "how": "상황에 구동 환불과 형제 셋을 나눠 적고 차례가 식별자 오름차순임을 밝혔다. '왜 결제 행 경합이 아닌가'의 근거 둘 중 코드와 반대인 것을 걷고 성립하는 하나만 남겼다."
+      },
+      "round": 7
+    },
+    {
+      "id": "Y4",
+      "severity": "HIGH",
+      "category": "경합의 종착이 그 시나리오의 결제 상태에서 안 나온다",
+      "location": "scenarios.md#SCN-009",
+      "reported_by": [
+        {
+          "inspector": "concurrency"
+        }
+      ],
+      "summary": "기준 결제가 승인이라는 종착이라, 6라운드에 더한 '반려 트랜잭션이 되돌아가 결제가 안 닫힌 채 남고 결제 대사가 다시 집는다'가 둘 다 성립하지 않는다 — 종착이면 반려가 애초에 결제를 안 닫고 결제 대사는 종착 결제를 안 집는다.",
+      "disposition": {
+        "kind": "fixed",
+        "how": "상황에 '아직 어느 종착에도 이르지 않은 결제'를 명시하고 기준 결제에서는 금액 전제만 물려받는다고 적었다."
+      },
+      "round": 7
+    },
+    {
+      "id": "Y5",
+      "severity": "HIGH",
+      "category": "결정 7 의 사실 주장이 또 어긋났다",
+      "location": "adr.md#7",
+      "reported_by": [
+        {
+          "inspector": "rules"
+        }
+      ],
+      "summary": "6라운드에 '선례가 둘 → 다섯'으로 고쳤는데 세 줄 아래 같은 수가 안 고쳐졌다. 머리말은 '셋'인데 표는 네 줄이고, 둘째 갈래의 다섯 자리 중 둘은 대사 흐름인데 다른 흐름으로 적었으며, 셋째 갈래의 예 하나는 타입으로 골라지지 않아 그 갈래의 머리말에 안 맞는다. 같은 자리 네 번째 정정이다.",
+      "disposition": {
+        "kind": "fixed",
+        "how": "**표를 지웠다.** 저장소 전체의 예외 관행을 조사해 네 갈래로 세는 것은 이 결정에 필요하지 않다. 필요한 것은 '이 저장소는 골라낼 수단이 없을 때 전용 타입을 만든다'와 그 근거 하나뿐이라 그것만 남겼다."
+      },
+      "round": 7
+    },
+    {
+      "id": "Y6",
+      "severity": "MEDIUM",
+      "category": "MEDIUM·LOW 묶음",
+      "location": "여러 문서",
+      "reported_by": [
+        {
+          "inspector": "rules"
+        },
+        {
+          "inspector": "concurrency"
+        },
+        {
+          "inspector": "domain"
+        }
+      ],
+      "summary": "(1) 값이 어긋나는 세 번째 길(우리 시도 키가 안 실린 취소는 환불 행 자체가 없다)이 열거에 빠짐 (2) 종착 자리에 종결을 쓴 곳 셋 (3) FR-011 이 그것을 확인하는 시나리오보다 좁음(금액만 안 건드리고 결제를 저장하면 버전이 오른다) (4) 세우는 법에 '두 금액이 깨진 결제'가 빠짐 (5) 아키텍처 문서 항목이 결제 절로만 좁혀짐 (6) 예외 처리 규약의 선행 드리프트가 목록에 없음 (7) 결정 기록의 지시대명사가 어긋남 (8) plan 이 Root Sync 할 일을 다시 서술 (9) 부분취소가 함께 데려올 대조에 결제사 처리 금액 대조가 안 적힘 (10) 손대지 않기로 한 문서의 판단이 안 보임",
+      "disposition": {
+        "kind": "fixed",
+        "how": "10건 반영. 되풀이 서술은 고치는 대신 정본을 가리키게 바꿔 다시 어긋날 자리를 줄였다."
+      },
+      "round": 7
+    },
+    {
+      "id": "Z1",
+      "severity": "CRITICAL",
+      "category": "검증 대상을 세울 틀이 저장소에 없다",
+      "location": "scenarios.md#SCN-014 · phases/1-main/step1.md",
+      "reported_by": [
+        {
+          "inspector": "구현자 시점"
+        }
+      ],
+      "summary": "SC-006 이 걸린 유일한 시나리오인데 그 상태를 만들 수 없다. 통합 테스트 틀이 컨테이너를 공유하고 첫 컨텍스트에서 마이그레이션을 최신까지 적용하므로 백필 전 상태가 안 만들어지고, 마이그레이션을 코드로 돌리는 선례가 저장소에 0건이다. 여덟 라운드 동안 검토자 시점 검사관 아무도 못 봤다 — 전부 '이 문장이 사실인가'만 물었기 때문이다.",
+      "disposition": {
+        "kind": "fixed",
+        "how": "사용자 결정 — 같은 컨테이너에 스키마를 하나 더 만들어 거기서 이번 것 직전까지 적용하고 데이터를 심은 뒤 이번 스크립트를 적용한다. 컨테이너를 안 늘려 공용 방식과 안 부딪힌다. step1 과 SCN-014 에 적었다."
+      },
+      "round": 8
+    },
+    {
+      "id": "Z2",
+      "severity": "HIGH",
+      "category": "지운 자리에 새 단언을 채웠다",
+      "location": "spec.md#FR-008",
+      "reported_by": [
+        {
+          "inspector": "clarity"
+        }
+      ],
+      "summary": "7라운드에 메커니즘 설명을 지우기로 하고 지웠는데, 그 자리에 '정상 흐름에서는 그 조합이 서지 않아 회원에게 노출되지 않는다'는 새 단언을 곧바로 채웠다. SCN-009 와 결정 6 이 바로 그 조합을 세워 확인하므로 정면으로 어긋났다. 같은 자리 다섯 번째다.",
+      "disposition": {
+        "kind": "fixed",
+        "how": "이번에는 채우지 않았다. '그 경로의 회원 응답은 이 작업이 정하지 않는다 — FR-015 와 같다' 한 문장만 남겼다. 빈도·노출에 대한 단언을 넣지 않는다."
+      },
+      "round": 8
+    },
+    {
+      "id": "Z3",
+      "severity": "MEDIUM",
+      "category": "MEDIUM·LOW 묶음",
+      "location": "여러 문서",
+      "reported_by": [
+        {
+          "inspector": "clarity"
+        },
+        {
+          "inspector": "구현자 시점"
+        }
+      ],
+      "summary": "(1) 결정 1 에 같은 문장이 두 번 — 고칠 때 지우지 않고 덧붙였다 (2) Root Sync 목록이 없는 절 이름을 가리킴 (3) 용어집이 정본 밖에서 오차 방향을 새로 단언 (4) '구동 환불'이 짝 용어인데 용어집에 없음 (5) 금액 양수 가드가 어느 실패 값인지 안 정해져 기존 값을 쓰면 FR-014 가 조용히 깨짐 (6) 로깅 규약이 열어 둔 예외를 잘못 끌어옴 (7) step1 검증 대상의 '손대지 않고'가 문자 그대로는 어긋남 (8) step2 의 '나머지 둘'이 한 문단에서 다른 집합 (9) 회원 요청 흐름의 흡수 자리는 확정 말고 다른 전이도 태움 (10) SCN-017 각주가 두 요구의 커버리지를 섞음 (11) 확정 쪽을 어느 경로로 부르느냐로 단언이 달라짐 (12) 결제를 못 찾는 실패가 그 자리로 새로 오는데 안 다룸 (13) 옛 우리말 이름이 넷인데 하나만 지목 (14) 같은 미룸이 여섯 곳·같은 금지가 두 곳",
+      "disposition": {
+        "kind": "fixed",
+        "how": "14건 반영. 되풀이는 고치지 않고 지웠고, 규약 인용은 잘못 끌어온 것을 걷어내고 실태가 다르다는 사실만 남겨 Root Sync 로 넘겼다."
+      },
+      "round": 8
+    },
+    {
+      "id": "Z2",
+      "severity": "CRITICAL",
+      "category": "정한 해법을 실행할 권한이 없다",
+      "location": "src/test/java/com/commerce/support/TestcontainersSupport.java:38-39,51-52 ↔ phases/1-main/step1.md 구현 지시 1",
+      "reported_by": [
+        {
+          "inspector": "구현자 시점(재검)"
+        }
+      ],
+      "summary": "8라운드가 정한 '같은 컨테이너에 스키마를 하나 더 만든다'를 실행할 수 없다. 공유 컨테이너의 계정은 test/test 이고 mysql 엔트리포인트가 그 계정에 MYSQL_DATABASE 로 지정한 데이터베이스 하나만 권한을 준다. 검사관이 같은 env 조합으로 컨테이너를 실제로 띄워 SHOW GRANTS 가 commerce_db 하나만 주는 것과 CREATE DATABASE 가 ERROR 1044 로 거부되는 것을 확인했다. Flyway 의 createSchemas(true) 로 대신 만들게 해도 같은 계정이 같은 DDL 을 치므로 똑같이 막힌다. 덧붙여 MySQL 컨테이너 핸들에 공개 접근자가 없어 JDBC URL 을 얻을 정식 경로도 없다(Kafka 만 접근자가 있다).",
+      "disposition": {
+        "kind": "fixed",
+        "how": "사용자 확인 후 방향을 바꿨다 — 이 테스트만 데이터베이스 컨테이너를 따로 띄운다. 컨테이너가 곧 격리라 별도 스키마가 필요 없어지고, 자기 데이터베이스에는 그 계정이 전권을 가지므로 권한 벽이 사라진다. 공유 support 클래스를 안 건드려 그것을 함께 쓰는 통합 테스트들에 영향이 없다. step1 지시 1 과 SCN-014 의 '어떻게 세우나' 를 그렇게 고쳤다. SCN-014 의 상황·행위·기대 결과는 계약이라 손대지 않았다."
+      },
+      "round": 9
+    },
+    {
+      "id": "Z3",
+      "severity": "MEDIUM",
+      "category": "명세 구체성",
+      "location": "phases/1-main/step1.md 구현 지시 7",
+      "reported_by": [
+        {
+          "inspector": "구현자 시점(재검)"
+        }
+      ],
+      "summary": "'그 환경 태그를 단다' 가 태그 이름을 말하지 않고, 마이그레이션 검증 테스트는 '대상 클래스와 같은 패키지' 라는 배치 규칙에 대응하는 대상 클래스가 없다.",
+      "disposition": {
+        "kind": "fixed",
+        "how": "@Tag(\"docker\") 로 못박고, 결제 쪽 영속성 패키지에 둔다고 지정했다."
+      },
+      "round": 9
+    },
+    {
+      "id": "Z4",
+      "severity": "INFO",
+      "category": "추적성",
+      "location": "spec.md · scenarios.md · phases/1-main/*",
+      "reported_by": [
+        {
+          "inspector": "추적성"
+        }
+      ],
+      "summary": "발견 0. 두 라운드 연속이다. SC-006 사슬(FR-012 → SC-006 → SCN-014 → step1 검증 대상 → AC)이 온전하고, step3 삭제 뒤 FR-015 가 매달리지 않고 scenarios.md 에 '이 spec 에서 확인하지 않는다' 로 명시돼 있으며, 어느 step 의 검증 대상에도 안 걸린 FR·SC 가 없다. 예외 둘(FR-005·FR-015)은 문서에 의도적 제외로 적혀 있다.",
+      "disposition": {
+        "kind": "acknowledged",
+        "how": "조치 불필요."
+      },
+      "round": 9
+    }
+  ],
+  "fingerprint": {
+    "spec.md": "407110bb9deb",
+    "plan.md": "45c98ad309ca",
+    "scenarios.md": "7f8510ba84ed",
+    "data-model.md": "05486f7b5e8d",
+    "db-schema.md": "17fdb6147635",
+    "adr.md": "bec7eb17cd85",
+    "phases/1-main/step1.md": "214f0aa55187",
+    "phases/1-main/step2.md": "75e265c02403"
+  }
+}

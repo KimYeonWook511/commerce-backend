@@ -164,9 +164,9 @@ class CancelOrderUseCaseConcurrencyTest {
 		assertThat(refundPersistence.findAll()).hasSize(1);
 		assertThat(refundCalls.get()).isEqualTo(1);
 
-		// 환불 총액이 승인 금액을 넘지 않는다.
+		// 돌려주기로 한 금액이 승인 금액을 넘지 않는다.
 		Payment payment = paymentPersistence.findById(fixture.paymentId()).orElseThrow();
-		assertThat(payment.getTotalRefundedAmount()).isEqualTo(UNIT_PRICE);
+		assertThat(payment.getRefundOpenedAmount()).isEqualTo(UNIT_PRICE);
 	}
 
 	// ── 헬퍼 ──
