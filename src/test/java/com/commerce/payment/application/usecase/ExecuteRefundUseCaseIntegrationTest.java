@@ -48,6 +48,9 @@ import com.commerce.payment.domain.RefundReason;
 import com.commerce.payment.domain.RefundRequester;
 import com.commerce.payment.domain.RefundReviewCode;
 import com.commerce.payment.domain.RefundStatus;
+import com.commerce.payment.domain.exception.PaymentErrorCode;
+import com.commerce.payment.domain.exception.PaymentException;
+import com.commerce.payment.domain.repository.PaymentRepository;
 import com.commerce.payment.infrastructure.persistence.support.PaymentPersistenceTestSupport;
 import com.commerce.payment.infrastructure.persistence.support.PgCallLogPersistenceTestSupport;
 import com.commerce.payment.infrastructure.persistence.support.RefundPersistenceTestSupport;
@@ -86,6 +89,9 @@ class ExecuteRefundUseCaseIntegrationTest {
 
 	@MockitoSpyBean
 	private PgCallLogService pgCallLogService;
+
+	@MockitoSpyBean
+	private PaymentRepository paymentRepository;
 
 	@Autowired
 	private PersistenceCleanupTestSupport persistenceCleanup;
@@ -141,6 +147,24 @@ class ExecuteRefundUseCaseIntegrationTest {
 		Payment settled = reloadPayment(payment);
 		assertThat(settled.getRefundSucceededAmount()).isEqualTo(AMOUNT);
 		assertThat(settled.getRefundOpenedAmount()).isEqualTo(AMOUNT);
+	}
+
+	@DisplayName("확정이 결제 행 경합에 밀리면 예외를 밖으로 내지 않고 처리 중으로 답한다")
+	@Test
+	void send_whenPaymentRowContended_absorbsAndAnswersInProgress() {
+		Payment payment = savePayment();
+		Refund refund = saveRefund(payment);
+		givenRefundResult(PgRefundResult.succeeded(PG_TRANSACTION_ID, "성공", callRecord(PgErrorType.NONE)));
+		// 확정이 결제 행을 저장하는 사이 다른 주체가 그 행을 먼저 옮긴 상황.
+		willThrow(new PaymentException(PaymentErrorCode.PAYMENT_CONCURRENTLY_MODIFIED))
+			.given(paymentRepository).saveChecked(any(Payment.class));
+
+		RefundStatus status = executeRefundUseCase.send(payment, refund, PgCallSource.MEMBER_REQUEST);
+
+		assertThat(status).isEqualTo(RefundStatus.IN_PROGRESS);
+		// 확정과 금액 갱신이 한 트랜잭션이라 환불도 함께 되돌아간다. 돈이 어떻게 됐는지는 대사가 이력으로 확정한다.
+		assertThat(reload(refund).getStatus()).isEqualTo(RefundStatus.IN_PROGRESS);
+		assertThat(reloadPayment(payment).getRefundSucceededAmount()).isZero();
 	}
 
 	@DisplayName("결제사를 부른 사실이 그때 쓴 멱등키·요청 시각·받은 결과와 함께 기록에 쌓인다")
