@@ -2,16 +2,19 @@ package com.commerce.payment.application.usecase;
 
 import static org.assertj.core.api.Assertions.assertThat;
 import static org.mockito.ArgumentMatchers.any;
+import static org.mockito.ArgumentMatchers.anyInt;
 import static org.mockito.ArgumentMatchers.argThat;
 import static org.mockito.ArgumentMatchers.eq;
 import static org.mockito.BDDMockito.given;
 import static org.mockito.BDDMockito.then;
+import static org.mockito.BDDMockito.willAnswer;
 import static org.mockito.BDDMockito.willThrow;
 import static org.mockito.Mockito.never;
 import static org.mockito.Mockito.times;
 
 import java.time.LocalDateTime;
 import java.util.List;
+import java.util.concurrent.atomic.AtomicBoolean;
 
 import org.junit.jupiter.api.AfterEach;
 import org.junit.jupiter.api.DisplayName;
@@ -33,14 +36,15 @@ import com.commerce.order.domain.OrderStatus;
 import com.commerce.order.infrastructure.persistence.support.OrderPersistenceTestSupport;
 import com.commerce.payment.application.port.NotificationPort;
 import com.commerce.payment.application.port.PaymentGatewayPort;
-import com.commerce.payment.application.port.dto.PgCallSource;
 import com.commerce.payment.application.port.dto.PgApproveResult;
 import com.commerce.payment.application.port.dto.PgCallRecord;
+import com.commerce.payment.application.port.dto.PgCallSource;
 import com.commerce.payment.application.port.dto.PgHistoryEntry;
 import com.commerce.payment.application.port.dto.PgHistoryEntryType;
 import com.commerce.payment.application.port.dto.PgHistoryResult;
 import com.commerce.payment.application.port.dto.PgHistoryScope;
 import com.commerce.payment.application.port.dto.PgOutcome;
+import com.commerce.payment.application.service.PaymentService;
 import com.commerce.payment.domain.Payment;
 import com.commerce.payment.domain.PaymentCloseCode;
 import com.commerce.payment.domain.PaymentPg;
@@ -93,6 +97,9 @@ class ReconcilePaymentUseCaseIntegrationTest {
 
 	@MockitoSpyBean
 	private PaymentRepository paymentRepository;
+
+	@Autowired
+	private PaymentService paymentService;
 
 	@Autowired
 	private PersistenceCleanupTestSupport persistenceCleanup;
@@ -418,7 +425,7 @@ class ReconcilePaymentUseCaseIntegrationTest {
 		Fixture fixture = unknownPayment();
 		Payment stale = fixture.payment();
 		for (int round = 0; round < 12; round++) {
-			stale.recordReconciled(LocalDateTime.now().minusHours(6));
+			stale.recordReconciled(round, LocalDateTime.now().minusHours(6));
 		}
 		stale.recordNotified(LocalDateTime.now().minusHours(3));
 		paymentPersistence.save(stale);
@@ -431,6 +438,32 @@ class ReconcilePaymentUseCaseIntegrationTest {
 	}
 
 	// ── 픽스처 ───────────────────────────────────────────────────
+
+	@DisplayName("다른 주기가 먼저 집어 커밋한 건은 결제사를 부르지 않고 그 회차의 남은 건은 계속 처리한다")
+	@Test
+	void reconcile_whenAnotherRoundAlreadyCommittedItsClaim_skipsItAndKeepsGoing() {
+		Fixture taken = unknownPayment();
+		Fixture remaining = unknownPayment();
+		givenHistory(PgHistoryResult.succeeded(List.of(approvalEntry(remaining, remaining.amount())), "성공"));
+
+		// 목록을 받은 직후 다른 주기가 첫 건을 집어 커밋한 상황. 갱신이 이미 끝났으므로 낙관 락은 이 창을
+		// 가리지 못하고, 집을 때 본 회차와 달라졌다는 것만이 그 사실을 알려 준다.
+		AtomicBoolean claimedByOther = new AtomicBoolean();
+		willAnswer(invocation -> {
+			Object targets = invocation.callRealMethod();
+			if (claimedByOther.compareAndSet(false, true)) {
+				paymentService.recordReconciled(taken.payment().getId(), 0, LocalDateTime.now());
+			}
+			return targets;
+		}).given(paymentRepository).findUnknownReconcileTargets(anyInt(), anyInt(), any(), any());
+
+		reconcilePaymentUseCase.reconcile();
+
+		Payment skipped = reload(taken);
+		assertThat(skipped.getReconcileCount()).isEqualTo(1);
+		assertThat(skipped.getStatus()).isEqualTo(PaymentStatus.UNKNOWN);
+		assertThat(reload(remaining).getStatus()).isEqualTo(PaymentStatus.SUCCEEDED);
+	}
 
 	private Payment reload(Fixture fixture) {
 		return paymentPersistence.findById(fixture.payment().getId()).orElseThrow();

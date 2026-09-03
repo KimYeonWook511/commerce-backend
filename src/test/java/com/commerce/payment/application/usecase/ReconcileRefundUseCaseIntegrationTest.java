@@ -2,15 +2,18 @@ package com.commerce.payment.application.usecase;
 
 import static org.assertj.core.api.Assertions.assertThat;
 import static org.mockito.ArgumentMatchers.any;
+import static org.mockito.ArgumentMatchers.anyInt;
 import static org.mockito.ArgumentMatchers.eq;
 import static org.mockito.BDDMockito.given;
 import static org.mockito.BDDMockito.then;
+import static org.mockito.BDDMockito.willAnswer;
 import static org.mockito.Mockito.never;
 
 import java.time.LocalDateTime;
 import java.util.List;
-import java.util.UUID;
 import java.util.Optional;
+import java.util.UUID;
+import java.util.concurrent.atomic.AtomicBoolean;
 
 import org.junit.jupiter.api.AfterEach;
 import org.junit.jupiter.api.BeforeEach;
@@ -24,6 +27,7 @@ import org.springframework.test.context.ActiveProfiles;
 import org.springframework.test.context.DynamicPropertyRegistry;
 import org.springframework.test.context.DynamicPropertySource;
 import org.springframework.test.context.bean.override.mockito.MockitoBean;
+import org.springframework.test.context.bean.override.mockito.MockitoSpyBean;
 
 import com.commerce.payment.application.port.PaymentGatewayPort;
 import com.commerce.payment.application.port.dto.PgCallRecord;
@@ -34,14 +38,16 @@ import com.commerce.payment.application.port.dto.PgHistoryResult;
 import com.commerce.payment.application.port.dto.PgHistoryScope;
 import com.commerce.payment.application.port.dto.PgOutcome;
 import com.commerce.payment.application.port.dto.PgRefundResult;
+import com.commerce.payment.application.service.RefundService;
 import com.commerce.payment.domain.Payment;
 import com.commerce.payment.domain.PaymentPg;
 import com.commerce.payment.domain.PgErrorType;
 import com.commerce.payment.domain.Refund;
 import com.commerce.payment.domain.RefundReason;
-import com.commerce.payment.domain.RefundReviewCode;
 import com.commerce.payment.domain.RefundRequester;
+import com.commerce.payment.domain.RefundReviewCode;
 import com.commerce.payment.domain.RefundStatus;
+import com.commerce.payment.domain.repository.RefundRepository;
 import com.commerce.payment.infrastructure.persistence.support.PaymentPersistenceTestSupport;
 import com.commerce.payment.infrastructure.persistence.support.PgCallLogPersistenceTestSupport;
 import com.commerce.payment.infrastructure.persistence.support.RefundPersistenceTestSupport;
@@ -78,6 +84,12 @@ class ReconcileRefundUseCaseIntegrationTest {
 
 	@MockitoBean
 	private PaymentGatewayPort paymentGatewayPort;
+
+	@MockitoSpyBean
+	private RefundRepository refundRepository;
+
+	@Autowired
+	private RefundService refundService;
 
 	@Autowired
 	private PersistenceCleanupTestSupport persistenceCleanup;
@@ -324,7 +336,7 @@ class ReconcileRefundUseCaseIntegrationTest {
 		Refund refund = inProgressRefund(payment);
 		// 여러 주기를 지나 이미 오래된 행이지만, 마지막으로 부른 것은 방금이다.
 		for (int round = 0; round < 5; round++) {
-			refund.recordReconciled(LocalDateTime.now().minusHours(1));
+			refund.recordReconciled(round, LocalDateTime.now().minusHours(1));
 		}
 		refund.recordRequested(LocalDateTime.now());
 		refundPersistence.save(refund);
@@ -359,7 +371,7 @@ class ReconcileRefundUseCaseIntegrationTest {
 		Payment payment = savePayment();
 		Refund refund = unknownRefund(payment);
 		for (int round = 0; round < 12; round++) {
-			refund.recordReconciled(LocalDateTime.now().minusHours(6));
+			refund.recordReconciled(round, LocalDateTime.now().minusHours(6));
 		}
 		refund.recordNotified(LocalDateTime.now().minusHours(3));
 		refundPersistence.save(refund);
@@ -427,6 +439,32 @@ class ReconcileRefundUseCaseIntegrationTest {
 	}
 
 	// ── 헬퍼 ──
+
+	@DisplayName("다른 주기가 먼저 집어 커밋한 건은 결제사를 부르지 않고 그 회차의 남은 건은 계속 처리한다")
+	@Test
+	void reconcile_whenAnotherRoundAlreadyCommittedItsClaim_skipsItAndKeepsGoing() {
+		Refund taken = unknownRefund(savePayment());
+		Refund remaining = unknownRefund(savePayment());
+		givenHistory(PgHistoryResult.succeeded(List.of(refundEntry(remaining.attemptKey(), true)), "성공"));
+
+		// 목록을 받은 직후 다른 주기가 첫 건을 집어 커밋한 상황. 갱신이 이미 끝났으므로 낙관 락은 이 창을
+		// 가리지 못하고, 집을 때 본 회차와 달라졌다는 것만이 그 사실을 알려 준다.
+		AtomicBoolean claimedByOther = new AtomicBoolean();
+		willAnswer(invocation -> {
+			Object targets = invocation.callRealMethod();
+			if (claimedByOther.compareAndSet(false, true)) {
+				refundService.recordReconciled(taken.getId(), 0, LocalDateTime.now());
+			}
+			return targets;
+		}).given(refundRepository).findUnknownReconcileTargets(anyInt(), anyInt(), any(), any());
+
+		reconcileRefundUseCase.reconcile();
+
+		Refund skipped = reload(taken);
+		assertThat(skipped.getReconcileCount()).isEqualTo(1);
+		assertThat(skipped.getStatus()).isEqualTo(RefundStatus.UNKNOWN);
+		assertThat(reload(remaining).getStatus()).isEqualTo(RefundStatus.SUCCEEDED);
+	}
 
 	private void givenHistory(PgHistoryResult history) {
 		given(paymentGatewayPort.readHistory(any(), any(PgHistoryScope.class), any())).willReturn(history);

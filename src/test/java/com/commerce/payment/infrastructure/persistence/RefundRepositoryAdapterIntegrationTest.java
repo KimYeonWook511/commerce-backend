@@ -156,7 +156,7 @@ class RefundRepositoryAdapterIntegrationTest {
 		Refund secondRound = openedRefund(++nextPaymentId, RefundRequester.MEMBER, "IDEM-rec-2");
 		secondRound.markInProgress(NOW);
 		secondRound.markUnknown();
-		secondRound.recordReconciled(NOW);
+		secondRound.recordReconciled(0, NOW);
 		refundRepository.save(secondRound);
 
 		List<Refund> zeroRound = refundRepository.findUnknownReconcileTargets(

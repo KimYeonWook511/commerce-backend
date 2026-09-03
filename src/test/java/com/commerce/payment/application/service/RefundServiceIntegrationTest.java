@@ -147,7 +147,7 @@ class RefundServiceIntegrationTest {
 
 		refundService.markUnknown(refund.getId());
 		refundService.recordRetryableFailure(refund.getId());
-		refundService.recordReconciled(refund.getId(), LocalDateTime.now());
+		refundService.recordReconciled(refund.getId(), 0, LocalDateTime.now());
 		refundService.recordNotified(refund.getId(), LocalDateTime.now());
 		refundService.flagForReview(refund.getId(), RefundReviewCode.CANCEL_NOT_ALLOWED, "취소 불가");
 

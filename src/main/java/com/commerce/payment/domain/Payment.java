@@ -360,10 +360,19 @@ public class Payment extends BaseTimeEntity {
 	 * 대사가 이 건을 집었다. 조회로 끝난 주기도 그 자리에서 다시 부른 주기도 하나로 세며, 결제사를
 	 * 부르기 전에 따로 커밋한다 — 결과 반영과 묶으면 호출이 깨졌을 때 회차가 함께 롤백되어 다시 집는
 	 * 간격이 영영 첫 값에 머문다.
+	 *
+	 * <p>집을 때 본 회차가 그대로일 때만 오른다. 대상을 고른 조회와 이 갱신 사이에 다른 주기가 같은
+	 * 건을 집어 갈 수 있고, 그 갱신이 이미 커밋됐으면 낙관 락이 새 버전을 읽어 충돌 없이 통과한다.
+	 *
+	 * @return 집었으면 true, 다른 주기가 이미 집었으면 false
 	 */
-	public void recordReconciled(LocalDateTime pickedAt) {
+	public boolean recordReconciled(int expectedReconcileCount, LocalDateTime pickedAt) {
+		if (this.reconcileCount != expectedReconcileCount) {
+			return false;
+		}
 		this.lastReconcileAt = pickedAt;
 		this.reconcileCount++;
+		return true;
 	}
 
 	/** 통지를 보낸 뒤에 남긴다. 먼저 남기면 전송이 실패했을 때 알린 것으로 남아 다시 알리지 않는다 */

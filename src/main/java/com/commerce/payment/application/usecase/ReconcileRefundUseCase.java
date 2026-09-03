@@ -106,7 +106,7 @@ public class ReconcileRefundUseCase {
 	}
 
 	private void reconcileOne(Refund target) {
-		Refund picked = pick(target);
+		Refund picked = pick(target).orElse(null);
 		if (picked == null) {
 			return;
 		}
@@ -134,18 +134,24 @@ public class ReconcileRefundUseCase {
 	}
 
 	/**
-	 * 집었다는 사실을 결제사를 부르기 전에 따로 커밋한다. 이 저장에 지면 다른 주기가 같은 건을 이미
-	 * 집었다는 뜻이라 부르지 않고 물러난다.
+	 * 집었다는 사실을 결제사를 부르기 전에 따로 커밋한다. 다른 주기가 같은 건을 이미 집었으면 두 가지로
+	 * 갈린다 — 그 갱신이 이미 커밋됐으면 고를 때 본 회차와 달라져 빈 결과가 오고, 아직 커밋 전이면 낙관
+	 * 락이 잡는다. 어느 쪽이든 부르지 않고 물러난다.
 	 *
-	 * @return 집은 환불. 물러났으면 {@code null}
+	 * @return 집은 환불. 물러났으면 비어 있다
 	 */
-	private Refund pick(Refund target) {
+	private Optional<Refund> pick(Refund target) {
 		try {
-			return refundService.recordReconciled(target.getId(), LocalDateTime.now());
+			Optional<Refund> picked = refundService.recordReconciled(
+				target.getId(), target.getReconcileCount(), LocalDateTime.now());
+			if (picked.isEmpty()) {
+				log.info("다른 주기가 먼저 집어 이번 주기는 물러난다 refundId={}", target.getId());
+			}
+			return picked;
 		} catch (PaymentException ex) {
 			if (ex.getErrorCode() == PaymentErrorCode.REFUND_CONCURRENTLY_MODIFIED) {
-				log.info("다른 주기가 먼저 집어 이번 주기는 물러난다 refundId={}", target.getId());
-				return null;
+				log.info("다른 주기와 겹쳐 이번 주기는 물러난다 refundId={}", target.getId());
+				return Optional.empty();
 			}
 			throw ex;
 		}

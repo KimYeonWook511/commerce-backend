@@ -150,7 +150,7 @@ class PaymentRepositoryAdapterIntegrationTest {
 		Payment secondRound = startedPayment(++nextOrderId, "rec-2");
 		secondRound.markInProgress("pg-rec-2", NOW);
 		secondRound.markUnknown();
-		secondRound.recordReconciled(NOW);
+		secondRound.recordReconciled(0, NOW);
 		paymentRepository.save(secondRound);
 
 		List<Payment> zeroRound = paymentRepository.findUnknownReconcileTargets(
@@ -168,9 +168,9 @@ class PaymentRepositoryAdapterIntegrationTest {
 		Payment payment = startedPayment(++nextOrderId, "rec-last");
 		payment.markInProgress("pg-rec-last", NOW);
 		payment.markUnknown();
-		payment.recordReconciled(NOW);
-		payment.recordReconciled(NOW);
-		payment.recordReconciled(NOW);
+		payment.recordReconciled(0, NOW);
+		payment.recordReconciled(1, NOW);
+		payment.recordReconciled(2, NOW);
 		paymentRepository.save(payment);
 
 		List<Payment> targets = paymentRepository.findUnknownReconcileTargets(

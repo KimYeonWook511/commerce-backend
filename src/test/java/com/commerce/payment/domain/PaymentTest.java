@@ -254,7 +254,7 @@ class PaymentTest {
 		Payment payment = inProgressPayment();
 
 		String firstAttemptKey = payment.pgIdempotencyKey();
-		payment.recordReconciled(NOW.plusMinutes(1));
+		payment.recordReconciled(0, NOW.plusMinutes(1));
 		String sameAttemptKey = payment.pgIdempotencyKey();
 		payment.recordRetryableFailure();
 		String nextAttemptKey = payment.pgIdempotencyKey();
@@ -269,11 +269,26 @@ class PaymentTest {
 	void recordReconciled_whenCalled_raisesReconcileCountAndStampsPickedAt() {
 		Payment payment = inProgressPayment();
 
-		payment.recordReconciled(NOW.plusMinutes(5));
-		payment.recordReconciled(NOW.plusMinutes(10));
+		boolean first = payment.recordReconciled(0, NOW.plusMinutes(5));
+		boolean second = payment.recordReconciled(1, NOW.plusMinutes(10));
 
+		assertThat(first).isTrue();
+		assertThat(second).isTrue();
 		assertThat(payment.getReconcileCount()).isEqualTo(2);
 		assertThat(payment.getLastReconcileAt()).isEqualTo(NOW.plusMinutes(10));
+	}
+
+	@DisplayName("고를 때 본 회차가 이미 바뀌었으면 집지 않는다 — 다른 주기가 먼저 집었다는 뜻이다")
+	@Test
+	void recordReconciled_whenReconcileCountAlreadyMoved_doesNotPick() {
+		Payment payment = inProgressPayment();
+		payment.recordReconciled(0, NOW.plusMinutes(5));
+
+		boolean picked = payment.recordReconciled(0, NOW.plusMinutes(10));
+
+		assertThat(picked).isFalse();
+		assertThat(payment.getReconcileCount()).isEqualTo(1);
+		assertThat(payment.getLastReconcileAt()).isEqualTo(NOW.plusMinutes(5));
 	}
 
 	@DisplayName("통지를 보낸 뒤 알린 시각이 남는다")
