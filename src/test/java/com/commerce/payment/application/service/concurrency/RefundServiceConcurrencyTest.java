@@ -108,6 +108,8 @@ class RefundServiceConcurrencyTest {
 			.filter(candidate -> candidate.getStatus() == RefundStatus.SUCCEEDED)
 			.mapToInt(Refund::getAmount)
 			.sum();
+		// 둘 다 밀리면 양쪽이 0 이라 위 비교만으로는 통과한다. 적어도 하나는 반영돼야 한다.
+		assertThat(settledSum).isPositive();
 		assertThat(reloadPayment(payment).getRefundSucceededAmount()).isEqualTo(settledSum);
 	}
 

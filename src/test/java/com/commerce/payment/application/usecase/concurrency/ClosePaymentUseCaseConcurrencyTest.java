@@ -12,6 +12,7 @@ import java.util.concurrent.CountDownLatch;
 import java.util.concurrent.ExecutorService;
 import java.util.concurrent.Executors;
 import java.util.concurrent.TimeUnit;
+import java.util.concurrent.atomic.AtomicBoolean;
 import java.util.function.IntConsumer;
 
 import org.junit.jupiter.api.AfterEach;
@@ -185,7 +186,7 @@ class ClosePaymentUseCaseConcurrencyTest {
 
 		// 둘이 결제 행을 읽는 시점만 맞춘다. 어느 쪽이 이기는지는 진짜 낙관 락이 정하고, 맞추지 않으면
 		// 한쪽이 커밋을 마친 뒤에 다른 쪽이 읽어 경합이 아예 성립하지 않는 회차가 섞인다.
-		alignPaymentLoads();
+		AtomicBoolean aligned = alignPaymentLoads();
 
 		// 밀린 쪽 수를 세지 않는다. 어느 경로로 부르느냐에 따라 값이 달라져 지켜야 할 것을 가리지 않는다.
 		runConcurrently(index -> {
@@ -199,6 +200,9 @@ class ClosePaymentUseCaseConcurrencyTest {
 					OrderErrorCode.ORDER_ALREADY_PAID, payment.getAmount(), PG_TRANSACTION_ID);
 			}
 		});
+
+		// 창이 안 열리면 순차 실행이 되는데 아래 단언은 그때도 통과한다. 경합이 실제로 섰는지를 먼저 본다.
+		assertThat(aligned).isTrue();
 
 		Payment stored = reload(payment);
 		int refundCount = refundPersistence.findAll().size();
@@ -218,15 +222,22 @@ class ClosePaymentUseCaseConcurrencyTest {
 	/**
 	 * 두 트랜잭션이 결제 행을 다 읽을 때까지 서로 기다리게 한다. 읽는 값도 저장 결과도 진짜 리포지토리가
 	 * 정하고 여기서 잡는 것은 순서뿐이다.
+	 *
+	 * @return 둘이 실제로 만났는지. 한쪽이 이 조회를 안 타게 되면 기다리다 그냥 지나가 경합이 서지 않는데,
+	 *         그때도 단언은 순차 실행을 통과시키므로 부르는 쪽이 이 값을 함께 확인한다.
 	 */
-	private void alignPaymentLoads() {
+	private AtomicBoolean alignPaymentLoads() {
 		CountDownLatch bothLoaded = new CountDownLatch(THREADS);
+		AtomicBoolean aligned = new AtomicBoolean(true);
 		willAnswer(invocation -> {
 			Object loaded = invocation.callRealMethod();
 			bothLoaded.countDown();
-			bothLoaded.await(5, TimeUnit.SECONDS);
+			if (!bothLoaded.await(5, TimeUnit.SECONDS)) {
+				aligned.set(false);
+			}
 			return loaded;
 		}).given(paymentRepository).findById(any());
+		return aligned;
 	}
 
 	/** 밀려난 쪽의 수를 돌려준다. 어느 쪽이 밀렸는지는 타이밍에 달려 있어 단언하지 않는다 */
