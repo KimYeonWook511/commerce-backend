@@ -60,6 +60,8 @@ Java, Spring Boot, Gradle, MySQL, JPA(Hibernate) 백엔드 프로젝트.
 
 단, **spec-harness 실행 중에는 이 절이 적용되지 않는다** — 구현과 PR 리뷰 반영이 끝나 harness가 **Root Sync** 단계에 이르기 전까지는 루트 상태 문서(`docs/api-spec.md`·`docs/architecture.md`·`docs/db-schema.md`)를 갱신하지 않는다. 코드가 spec 설계와 달라지면 해당 spec 폴더의 설계 md를 as-built로 갱신하고, 루트 승격은 Root Sync에서 한 번에 한다. (근거: 이 repo는 squash-merge라 중간 커밋이 사라지고, PR 리뷰가 계약·스키마·구조를 바꿀 수 있어, 실행 중 미리 동기화하면 재작업·stale 위험만 크다.)
 
+**그 대신 spec 문서는 리뷰 전에 보여야 한다.** 루트가 왜 코드와 안 맞는지를 판단할 근거가 거기 있기 때문이다. harness가 Stage 8에 들어갈 때 spec 정본을 커밋하므로, 리뷰어는 PR에서 그 문서를 열어 무엇을 어떻게 고칠 계획인지 볼 수 있다. **이 유예가 덮는 것은 위 루트 상태 문서 셋뿐이다** — 규칙·전략 문서는 이 유예의 대상이 아니라 아래 표 밖의 일반 규칙을 따른다.
+
 | 변경 종류 | 동기화 대상 | 동작 |
 | --- | --- | --- |
 | API 계약 (엔드포인트·요청·응답·실패코드) | `docs/api-spec.md` | 현재 상태로 갱신 |
