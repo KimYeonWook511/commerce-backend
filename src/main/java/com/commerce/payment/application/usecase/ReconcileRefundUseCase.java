@@ -5,8 +5,6 @@ import java.util.ArrayList;
 import java.util.List;
 import java.util.Optional;
 
-import org.springframework.data.domain.PageRequest;
-import org.springframework.data.domain.Pageable;
 import org.springframework.stereotype.Component;
 
 import com.commerce.payment.application.port.PaymentGatewayPort;
@@ -23,6 +21,7 @@ import com.commerce.payment.domain.exception.PaymentException;
 import com.commerce.payment.domain.policy.ReconcileWindow;
 import com.commerce.payment.domain.policy.RefundPostProcessPolicy;
 import com.commerce.payment.domain.repository.PaymentRepository;
+import com.commerce.payment.domain.repository.ReconcileTarget;
 import com.commerce.payment.domain.repository.RefundRepository;
 
 import lombok.RequiredArgsConstructor;
@@ -55,9 +54,6 @@ import lombok.extern.slf4j.Slf4j;
 @RequiredArgsConstructor
 public class ReconcileRefundUseCase {
 
-	/** 한 회차에서 한 주기에 집는 상한. 다음 주기가 나머지를 이어 집는다 */
-	private static final int BATCH_SIZE = 100;
-
 	private final RefundRepository refundRepository;
 	private final PaymentRepository paymentRepository;
 	private final PaymentGatewayPort paymentGatewayPort;
@@ -65,19 +61,22 @@ public class ReconcileRefundUseCase {
 	private final ExecuteRefundUseCase executeRefundUseCase;
 	private final RefundPostProcessPolicy policy;
 
+	/**
+	 * 집은 대상을 개수로 자르지 않고 다 처리한다. 자르면 남은 건이 다음 주기로 밀릴 뿐 총 처리 시간은
+	 * 줄지 않고, 주기가 끝난 뒤부터 간격을 재므로 잘게 쪼갤수록 쉬는 시간만 더 붙는다.
+	 */
 	public void reconcile() {
-		List<Refund> targets = findTargets(LocalDateTime.now());
+		List<ReconcileTarget> targets = findTargets(LocalDateTime.now());
 		if (targets.isEmpty()) {
 			return;
 		}
 
 		log.info("환불 대사 시작 targets={}", targets.size());
-		for (Refund target : targets) {
+		for (ReconcileTarget target : targets) {
 			try {
 				reconcileOne(target);
 			} catch (Exception ex) {
-				log.error("환불 대사 처리 실패 refundId={} paymentId={} status={}",
-					target.getId(), target.getPaymentId(), target.getStatus(), ex);
+				log.error("환불 대사 처리 실패 refundId={}", target.id(), ex);
 			}
 		}
 	}
@@ -90,22 +89,21 @@ public class ReconcileRefundUseCase {
 	 * <p>회차별 임계 시각은 정책이 간격표에서 계산해 준다. 조회에는 상태·집은 횟수·임계 시각만 남아야
 	 * 인덱스를 그대로 타고, 간격을 정하는 것도 인프라가 아니라 정책의 일이다.
 	 */
-	private List<Refund> findTargets(LocalDateTime now) {
+	private List<ReconcileTarget> findTargets(LocalDateTime now) {
 		LocalDateTime requestedBefore = policy.requestedBefore(now);
-		Pageable page = PageRequest.of(0, BATCH_SIZE);
 
-		List<Refund> targets = new ArrayList<>();
+		List<ReconcileTarget> targets = new ArrayList<>();
 		for (ReconcileWindow window : policy.reconcileWindows(now)) {
 			targets.addAll(refundRepository.findUnknownReconcileTargets(
-				window.minReconcileCount(), window.maxReconcileCount(), window.reconciledBefore(), page));
+				window.minReconcileCount(), window.maxReconcileCount(), window.reconciledBefore()));
 			targets.addAll(refundRepository.findInProgressReconcileTargets(
 				requestedBefore, window.minReconcileCount(), window.maxReconcileCount(),
-				window.reconciledBefore(), page));
+				window.reconciledBefore()));
 		}
 		return targets;
 	}
 
-	private void reconcileOne(Refund target) {
+	private void reconcileOne(ReconcileTarget target) {
 		Refund picked = pick(target).orElse(null);
 		if (picked == null) {
 			return;
@@ -140,17 +138,17 @@ public class ReconcileRefundUseCase {
 	 *
 	 * @return 집은 환불. 물러났으면 비어 있다
 	 */
-	private Optional<Refund> pick(Refund target) {
+	private Optional<Refund> pick(ReconcileTarget target) {
 		try {
-			Optional<Refund> picked = refundService.recordReconciled(
-				target.getId(), target.getReconcileCount(), LocalDateTime.now());
+			Optional<Refund> picked =
+				refundService.recordReconciled(target.id(), target.reconcileCount(), LocalDateTime.now());
 			if (picked.isEmpty()) {
-				log.info("다른 주기가 먼저 집어 이번 주기는 물러난다 refundId={}", target.getId());
+				log.info("다른 주기가 먼저 집어 이번 주기는 물러난다 refundId={}", target.id());
 			}
 			return picked;
 		} catch (PaymentException ex) {
 			if (ex.getErrorCode() == PaymentErrorCode.REFUND_CONCURRENTLY_MODIFIED) {
-				log.info("다른 주기와 겹쳐 이번 주기는 물러난다 refundId={}", target.getId());
+				log.info("다른 주기와 겹쳐 이번 주기는 물러난다 refundId={}", target.id());
 				return Optional.empty();
 			}
 			throw ex;

@@ -455,7 +455,7 @@ class ReconcilePaymentUseCaseIntegrationTest {
 				paymentService.recordReconciled(taken.payment().getId(), 0, LocalDateTime.now());
 			}
 			return targets;
-		}).given(paymentRepository).findUnknownReconcileTargets(anyInt(), anyInt(), any(), any());
+		}).given(paymentRepository).findUnknownReconcileTargets(anyInt(), anyInt(), any());
 
 		reconcilePaymentUseCase.reconcile();
 

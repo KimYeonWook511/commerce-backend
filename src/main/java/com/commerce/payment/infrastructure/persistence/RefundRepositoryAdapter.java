@@ -16,6 +16,7 @@ import com.commerce.payment.domain.exception.DuplicateRefundRequestException;
 import com.commerce.payment.domain.exception.PaymentErrorCode;
 import com.commerce.payment.domain.exception.PaymentException;
 import com.commerce.payment.domain.repository.RefundRepository;
+import com.commerce.payment.domain.repository.ReconcileTarget;
 
 import lombok.RequiredArgsConstructor;
 
@@ -98,26 +99,24 @@ public class RefundRepositoryAdapter implements RefundRepository {
 	}
 
 	@Override
-	public List<Refund> findInProgressReconcileTargets(
+	public List<ReconcileTarget> findInProgressReconcileTargets(
 		LocalDateTime requestedBefore,
 		int minReconcileCount,
 		int maxReconcileCount,
-		LocalDateTime reconciledBefore,
-		Pageable pageable
+		LocalDateTime reconciledBefore
 	) {
 		return jpaRefundRepository.findInProgressReconcileTargets(
-			requestedBefore, minReconcileCount, maxReconcileCount, reconciledBefore, pageable);
+			requestedBefore, minReconcileCount, maxReconcileCount, reconciledBefore);
 	}
 
 	@Override
-	public List<Refund> findUnknownReconcileTargets(
+	public List<ReconcileTarget> findUnknownReconcileTargets(
 		int minReconcileCount,
 		int maxReconcileCount,
-		LocalDateTime reconciledBefore,
-		Pageable pageable
+		LocalDateTime reconciledBefore
 	) {
 		return jpaRefundRepository.findUnknownReconcileTargets(
-			minReconcileCount, maxReconcileCount, reconciledBefore, pageable);
+			minReconcileCount, maxReconcileCount, reconciledBefore);
 	}
 
 	@Override

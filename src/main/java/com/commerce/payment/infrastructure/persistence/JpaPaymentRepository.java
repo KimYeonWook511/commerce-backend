@@ -11,6 +11,7 @@ import org.springframework.data.jpa.repository.Query;
 import org.springframework.data.repository.query.Param;
 
 import com.commerce.payment.domain.Payment;
+import com.commerce.payment.domain.repository.ReconcileTarget;
 
 public interface JpaPaymentRepository extends JpaRepository<Payment, Long> {
 
@@ -52,7 +53,8 @@ public interface JpaPaymentRepository extends JpaRepository<Payment, Long> {
 	// (status, reconcile_count, last_reconcile_at) 인덱스가 그대로 먹는다.
 	// 부른 지 대사 유예가 지난 건만 고른다 — 요청 흐름이 아직 응답을 기다리는 중일 수 있다.
 	@Query("""
-		SELECT p FROM Payment p
+		SELECT new com.commerce.payment.domain.repository.ReconcileTarget(p.id, p.reconcileCount)
+		FROM Payment p
 		WHERE p.status = 'IN_PROGRESS'
 		  AND p.reconcileCount >= :minReconcileCount
 		  AND p.reconcileCount <= :maxReconcileCount
@@ -60,28 +62,27 @@ public interface JpaPaymentRepository extends JpaRepository<Payment, Long> {
 		  AND (p.lastReconcileAt IS NULL OR p.lastReconcileAt < :reconciledBefore)
 		ORDER BY p.id ASC
 		""")
-	List<Payment> findInProgressReconcileTargets(
+	List<ReconcileTarget> findInProgressReconcileTargets(
 		@Param("requestedBefore") LocalDateTime requestedBefore,
 		@Param("minReconcileCount") int minReconcileCount,
 		@Param("maxReconcileCount") int maxReconcileCount,
-		@Param("reconciledBefore") LocalDateTime reconciledBefore,
-		Pageable pageable
+		@Param("reconciledBefore") LocalDateTime reconciledBefore
 	);
 
 	// 결과를 모르는 건은 빨리 읽어 확정해야 하므로 대사 유예 없이 "아직 안 읽었다"가 곧 대상이다.
 	@Query("""
-		SELECT p FROM Payment p
+		SELECT new com.commerce.payment.domain.repository.ReconcileTarget(p.id, p.reconcileCount)
+		FROM Payment p
 		WHERE p.status = 'UNKNOWN'
 		  AND p.reconcileCount >= :minReconcileCount
 		  AND p.reconcileCount <= :maxReconcileCount
 		  AND (p.lastReconcileAt IS NULL OR p.lastReconcileAt < :reconciledBefore)
 		ORDER BY p.id ASC
 		""")
-	List<Payment> findUnknownReconcileTargets(
+	List<ReconcileTarget> findUnknownReconcileTargets(
 		@Param("minReconcileCount") int minReconcileCount,
 		@Param("maxReconcileCount") int maxReconcileCount,
-		@Param("reconciledBefore") LocalDateTime reconciledBefore,
-		Pageable pageable
+		@Param("reconciledBefore") LocalDateTime reconciledBefore
 	);
 
 	@Query("""

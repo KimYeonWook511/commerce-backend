@@ -5,14 +5,12 @@ import java.util.ArrayList;
 import java.util.List;
 import java.util.Optional;
 
-import org.springframework.data.domain.PageRequest;
-import org.springframework.data.domain.Pageable;
 import org.springframework.stereotype.Component;
 
 import com.commerce.payment.application.dto.ApprovalOutcome;
 import com.commerce.payment.application.port.PaymentGatewayPort;
-import com.commerce.payment.application.port.dto.PgCallSource;
 import com.commerce.payment.application.port.dto.PgApproveResult;
+import com.commerce.payment.application.port.dto.PgCallSource;
 import com.commerce.payment.application.port.dto.PgHistoryResult;
 import com.commerce.payment.application.port.dto.PgHistoryScope;
 import com.commerce.payment.application.port.dto.PgOutcome;
@@ -26,6 +24,7 @@ import com.commerce.payment.domain.exception.PaymentException;
 import com.commerce.payment.domain.policy.PaymentPostProcessPolicy;
 import com.commerce.payment.domain.policy.ReconcileWindow;
 import com.commerce.payment.domain.repository.PaymentRepository;
+import com.commerce.payment.domain.repository.ReconcileTarget;
 
 import lombok.RequiredArgsConstructor;
 import lombok.extern.slf4j.Slf4j;
@@ -49,9 +48,6 @@ import lombok.extern.slf4j.Slf4j;
 @RequiredArgsConstructor
 public class ReconcilePaymentUseCase {
 
-	/** 한 회차에서 한 주기에 집는 상한. 다음 주기가 나머지를 이어 집는다 */
-	private static final int BATCH_SIZE = 100;
-
 	private final PaymentRepository paymentRepository;
 	private final PaymentGatewayPort paymentGatewayPort;
 	private final PaymentService paymentService;
@@ -59,19 +55,22 @@ public class ReconcilePaymentUseCase {
 	private final ConfirmApprovalUseCase confirmApprovalUseCase;
 	private final PaymentPostProcessPolicy policy;
 
+	/**
+	 * 집은 대상을 개수로 자르지 않고 다 처리한다. 자르면 남은 건이 다음 주기로 밀릴 뿐 총 처리 시간은
+	 * 줄지 않고, 주기가 끝난 뒤부터 간격을 재므로 잘게 쪼갤수록 쉬는 시간만 더 붙는다.
+	 */
 	public void reconcile() {
-		List<Payment> targets = findTargets(LocalDateTime.now());
+		List<ReconcileTarget> targets = findTargets(LocalDateTime.now());
 		if (targets.isEmpty()) {
 			return;
 		}
 
 		log.info("결제 대사 시작 targets={}", targets.size());
-		for (Payment target : targets) {
+		for (ReconcileTarget target : targets) {
 			try {
 				reconcileOne(target);
 			} catch (Exception ex) {
-				log.error("결제 대사 처리 실패 paymentId={} orderId={} status={}",
-					target.getId(), target.getOrderId(), target.getStatus(), ex);
+				log.error("결제 대사 처리 실패 paymentId={}", target.id(), ex);
 			}
 		}
 	}
@@ -84,22 +83,21 @@ public class ReconcilePaymentUseCase {
 	 * <p>회차별 임계 시각은 정책이 간격표에서 계산해 준다. 조회에는 상태·집은 횟수·임계 시각만 남아야
 	 * 인덱스를 그대로 타고, 간격을 정하는 것도 인프라가 아니라 정책의 일이다.
 	 */
-	private List<Payment> findTargets(LocalDateTime now) {
+	private List<ReconcileTarget> findTargets(LocalDateTime now) {
 		LocalDateTime requestedBefore = policy.requestedBefore(now);
-		Pageable page = PageRequest.of(0, BATCH_SIZE);
 
-		List<Payment> targets = new ArrayList<>();
+		List<ReconcileTarget> targets = new ArrayList<>();
 		for (ReconcileWindow window : policy.reconcileWindows(now)) {
 			targets.addAll(paymentRepository.findUnknownReconcileTargets(
-				window.minReconcileCount(), window.maxReconcileCount(), window.reconciledBefore(), page));
+				window.minReconcileCount(), window.maxReconcileCount(), window.reconciledBefore()));
 			targets.addAll(paymentRepository.findInProgressReconcileTargets(
 				requestedBefore, window.minReconcileCount(), window.maxReconcileCount(),
-				window.reconciledBefore(), page));
+				window.reconciledBefore()));
 		}
 		return targets;
 	}
 
-	private void reconcileOne(Payment target) {
+	private void reconcileOne(ReconcileTarget target) {
 		Payment picked = pick(target).orElse(null);
 		if (picked == null) {
 			return;
@@ -125,17 +123,17 @@ public class ReconcilePaymentUseCase {
 	 *
 	 * @return 집은 결제. 물러났으면 비어 있다
 	 */
-	private Optional<Payment> pick(Payment target) {
+	private Optional<Payment> pick(ReconcileTarget target) {
 		try {
-			Optional<Payment> picked = paymentService.recordReconciled(
-				target.getId(), target.getReconcileCount(), LocalDateTime.now());
+			Optional<Payment> picked =
+				paymentService.recordReconciled(target.id(), target.reconcileCount(), LocalDateTime.now());
 			if (picked.isEmpty()) {
-				log.info("다른 주기가 먼저 집어 이번 주기는 물러난다 paymentId={}", target.getId());
+				log.info("다른 주기가 먼저 집어 이번 주기는 물러난다 paymentId={}", target.id());
 			}
 			return picked;
 		} catch (PaymentException ex) {
 			if (ex.getErrorCode() == PaymentErrorCode.PAYMENT_CONCURRENTLY_MODIFIED) {
-				log.info("다른 주기와 겹쳐 이번 주기는 물러난다 paymentId={}", target.getId());
+				log.info("다른 주기와 겹쳐 이번 주기는 물러난다 paymentId={}", target.id());
 				return Optional.empty();
 			}
 			throw ex;

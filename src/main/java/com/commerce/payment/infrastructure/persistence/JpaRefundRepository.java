@@ -11,6 +11,7 @@ import org.springframework.data.repository.query.Param;
 
 import com.commerce.payment.domain.Refund;
 import com.commerce.payment.domain.RefundRequester;
+import com.commerce.payment.domain.repository.ReconcileTarget;
 
 public interface JpaRefundRepository extends JpaRepository<Refund, Long> {
 
@@ -40,7 +41,8 @@ public interface JpaRefundRepository extends JpaRepository<Refund, Long> {
 	List<Refund> findDispatchTargets(Pageable pageable);
 
 	@Query("""
-		SELECT r FROM Refund r
+		SELECT new com.commerce.payment.domain.repository.ReconcileTarget(r.id, r.reconcileCount)
+		FROM Refund r
 		WHERE r.status = 'IN_PROGRESS'
 		  AND r.reconcileCount >= :minReconcileCount
 		  AND r.reconcileCount <= :maxReconcileCount
@@ -48,27 +50,26 @@ public interface JpaRefundRepository extends JpaRepository<Refund, Long> {
 		  AND (r.lastReconcileAt IS NULL OR r.lastReconcileAt < :reconciledBefore)
 		ORDER BY r.id ASC
 		""")
-	List<Refund> findInProgressReconcileTargets(
+	List<ReconcileTarget> findInProgressReconcileTargets(
 		@Param("requestedBefore") LocalDateTime requestedBefore,
 		@Param("minReconcileCount") int minReconcileCount,
 		@Param("maxReconcileCount") int maxReconcileCount,
-		@Param("reconciledBefore") LocalDateTime reconciledBefore,
-		Pageable pageable
+		@Param("reconciledBefore") LocalDateTime reconciledBefore
 	);
 
 	@Query("""
-		SELECT r FROM Refund r
+		SELECT new com.commerce.payment.domain.repository.ReconcileTarget(r.id, r.reconcileCount)
+		FROM Refund r
 		WHERE r.status = 'UNKNOWN'
 		  AND r.reconcileCount >= :minReconcileCount
 		  AND r.reconcileCount <= :maxReconcileCount
 		  AND (r.lastReconcileAt IS NULL OR r.lastReconcileAt < :reconciledBefore)
 		ORDER BY r.id ASC
 		""")
-	List<Refund> findUnknownReconcileTargets(
+	List<ReconcileTarget> findUnknownReconcileTargets(
 		@Param("minReconcileCount") int minReconcileCount,
 		@Param("maxReconcileCount") int maxReconcileCount,
-		@Param("reconciledBefore") LocalDateTime reconciledBefore,
-		Pageable pageable
+		@Param("reconciledBefore") LocalDateTime reconciledBefore
 	);
 
 	// 사람이 처리해야 하는 건은 승급을 기다리지 않는다. 그 상태 자체가 이미 조치할 것이 남았다는 뜻이고,

@@ -64,20 +64,18 @@ public interface PaymentRepository {
 	 * 판단이 인프라로 새고 인덱스도 범위로 좁히지 못한다. 마지막 회차는 그 이상을 전부 받아 회수가
 	 * 멈추지 않게 한다.
 	 */
-	List<Payment> findInProgressReconcileTargets(
+	List<ReconcileTarget> findInProgressReconcileTargets(
 		LocalDateTime requestedBefore,
 		int minReconcileCount,
 		int maxReconcileCount,
-		LocalDateTime reconciledBefore,
-		Pageable pageable
+		LocalDateTime reconciledBefore
 	);
 
 	/** 결과를 모르는 결제 중 대사 대상. 빨리 읽어 확정해야 하므로 대사 유예가 없다 */
-	List<Payment> findUnknownReconcileTargets(
+	List<ReconcileTarget> findUnknownReconcileTargets(
 		int minReconcileCount,
 		int maxReconcileCount,
-		LocalDateTime reconciledBefore,
-		Pageable pageable
+		LocalDateTime reconciledBefore
 	);
 
 	/** 통지 대상. 승급 기준이 만들어진 시각 하나라 상태를 묶어 고른다 */

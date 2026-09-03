@@ -26,6 +26,7 @@ import com.commerce.payment.domain.RefundReason;
 import com.commerce.payment.domain.RefundRequester;
 import com.commerce.payment.domain.RefundReviewCode;
 import com.commerce.payment.domain.exception.DuplicateRefundRequestException;
+import com.commerce.payment.domain.repository.ReconcileTarget;
 import com.commerce.payment.domain.repository.RefundRepository;
 import com.commerce.support.TestcontainersSupport;
 
@@ -159,10 +160,10 @@ class RefundRepositoryAdapterIntegrationTest {
 		secondRound.recordReconciled(0, NOW);
 		refundRepository.save(secondRound);
 
-		List<Refund> zeroRound = refundRepository.findUnknownReconcileTargets(
-			0, 0, NOW.plusMinutes(1), PageRequest.of(0, 10));
+		List<ReconcileTarget> zeroRound = refundRepository.findUnknownReconcileTargets(
+			0, 0, NOW.plusMinutes(1));
 
-		assertThat(zeroRound).contains(firstRound).doesNotContain(secondRound);
+		assertThat(idsOf(zeroRound)).contains(firstRound.getId()).doesNotContain(secondRound.getId());
 	}
 
 	@DisplayName("사람이 처리해야 하는 환불은 승급을 기다리지 않고 통지 대상이 된다")
@@ -177,5 +178,9 @@ class RefundRepositoryAdapterIntegrationTest {
 			LocalDateTime.now().minusDays(1), LocalDateTime.now(), PageRequest.of(0, 10));
 
 		assertThat(targets).contains(manualReview);
+	}
+
+	private static List<Long> idsOf(List<ReconcileTarget> targets) {
+		return targets.stream().map(ReconcileTarget::id).toList();
 	}
 }

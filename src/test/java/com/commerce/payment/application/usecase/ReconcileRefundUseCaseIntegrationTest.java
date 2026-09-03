@@ -456,7 +456,7 @@ class ReconcileRefundUseCaseIntegrationTest {
 				refundService.recordReconciled(taken.getId(), 0, LocalDateTime.now());
 			}
 			return targets;
-		}).given(refundRepository).findUnknownReconcileTargets(anyInt(), anyInt(), any(), any());
+		}).given(refundRepository).findUnknownReconcileTargets(anyInt(), anyInt(), any());
 
 		reconcileRefundUseCase.reconcile();
 
