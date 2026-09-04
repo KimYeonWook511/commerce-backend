@@ -97,6 +97,8 @@ Java, Spring Boot, Gradle, MySQL, JPA(Hibernate) 백엔드 프로젝트.
 ## 표기·Git 세부
 
 - 한국어 문장에서 영문 용어 뒤 조사는 붙여 쓴다 (`race가`, `mock으로`, `latch는`, `stub한다`). 의존명사(`자체`, `간`, `등`)나 일반 명사는 띄어 쓴다 (`mock 응답`, `thread 간`).
+- 도구 호출 인자의 한국어(그 밖의 비ASCII 문자 포함)는 `\uXXXX` 이스케이프가 아니라 UTF-8 글자 그대로 쓴다.
+  파일에 쓸 때도 같다 — 라이브러리 기본값이 이스케이프면 끈다 (`json.dump`는 `ensure_ascii=False`).
 - 커밋 메시지에 `Co-Authored-By` 줄을 붙이지 않는다.
 - 브랜치 운영은 "브랜치 보호" 절을 최우선으로 따른다. `main`·`develop` 직접 변경 금지, 모든 변경은 PR 머지로만.
 
