@@ -139,6 +139,7 @@ git -C {brain_path} add raw/sessions/<platform>/<파일들>
 git -C {brain_path} commit -m "raw: <platform> <slug>"   # 여러 파일이면 대표 주제로, 본문에 목록
 git -C {brain_path} push
 ```
+- **`{brain_path}` 는 셸 변수가 아니라 경로를 그대로 적는다** (`git -C ../commerce-brain add ...`). 브랜치 보호 hook 은 명령을 실행 전에 문자열로 검사하는데, `git -C $BRAIN` 처럼 변수로 적으면 그 경로가 어느 저장소인지 판정할 수 없어 **현재 repo 로 간주하고 차단**한다. 경로가 길어도 변수로 담지 않는다.
 - **raw 외에는 stage 하지 않는다** (`wiki/`·`index.md` 등 절대 금지 — wiki 변경의 정상 경로는 `ingest:` 커밋뿐).
 - push 충돌 시 `git -C {brain_path} pull --rebase` 후 재시도(raw 는 append-only 라 내용 충돌은 사실상 없다).
 
