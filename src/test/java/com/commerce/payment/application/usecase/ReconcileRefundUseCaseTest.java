@@ -80,6 +80,55 @@ class ReconcileRefundUseCaseTest {
 		then(refundService).should(times(THRESHOLD + 1)).recordReconciled(anyLong(), anyInt(), any());
 	}
 
+	@DisplayName("한 번 알린 뒤 통지 간격 안에 다시 밀려도 또 알리지 않는다")
+	@Test
+	void reconcile_whenAlertedWithinInterval_doesNotAlertAgain() {
+		givenTargets(THRESHOLD + 1);
+		givenEveryClaimYields();
+		given(policy.isReconcileBacklogged(THRESHOLD + 1)).willReturn(true);
+		given(policy.reconcileBacklogThreshold()).willReturn(THRESHOLD);
+		// 방금 알린 것으로 보이게 임계 시각을 과거로 둔다.
+		given(policy.notifiedBefore(any())).willReturn(LocalDateTime.now().minusHours(1));
+
+		reconcileRefundUseCase.reconcile();
+		reconcileRefundUseCase.reconcile();
+
+		then(notificationPort).should(times(1)).notifyReconcileBacklog(any(), anyInt(), anyInt());
+	}
+
+	@DisplayName("통지 간격이 지나면 밀린 상태가 이어져도 다시 알린다")
+	@Test
+	void reconcile_whenAlertIntervalPassed_alertsAgain() {
+		givenTargets(THRESHOLD + 1);
+		givenEveryClaimYields();
+		given(policy.isReconcileBacklogged(THRESHOLD + 1)).willReturn(true);
+		given(policy.reconcileBacklogThreshold()).willReturn(THRESHOLD);
+		// 마지막 알림이 임계보다 앞선 것으로 보이게 임계 시각을 미래로 둔다.
+		given(policy.notifiedBefore(any())).willReturn(LocalDateTime.now().plusHours(1));
+
+		reconcileRefundUseCase.reconcile();
+		reconcileRefundUseCase.reconcile();
+
+		then(notificationPort).should(times(2)).notifyReconcileBacklog(any(), anyInt(), anyInt());
+	}
+
+	@DisplayName("알림이 실패하면 보낸 것으로 세지 않아 다음 주기가 다시 시도한다")
+	@Test
+	void reconcile_whenAlertFails_retriesNextRound() {
+		givenTargets(THRESHOLD + 1);
+		givenEveryClaimYields();
+		given(policy.isReconcileBacklogged(THRESHOLD + 1)).willReturn(true);
+		given(policy.reconcileBacklogThreshold()).willReturn(THRESHOLD);
+		willThrow(new IllegalStateException("통지 실패"))
+			.given(notificationPort).notifyReconcileBacklog(any(), anyInt(), anyInt());
+
+		reconcileRefundUseCase.reconcile();
+		reconcileRefundUseCase.reconcile();
+
+		// 못 보낸 것을 보낸 것으로 세면 밀린 채로 조용해진다.
+		then(notificationPort).should(times(2)).notifyReconcileBacklog(any(), anyInt(), anyInt());
+	}
+
 	@DisplayName("대상이 임계 이하면 알리지 않는다")
 	@Test
 	void reconcile_whenTargetsWithinThreshold_doesNotAlert() {

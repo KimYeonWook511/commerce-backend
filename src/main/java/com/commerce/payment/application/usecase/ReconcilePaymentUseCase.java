@@ -51,6 +51,16 @@ public class ReconcilePaymentUseCase {
 
 	private static final String BACKLOG_SUBJECT = "결제 대사";
 
+	/**
+	 * 마지막으로 밀렸다고 알린 시각. 밀린 상태가 이어지는 동안 주기마다 알리면 통지 수단을 갈아끼우는
+	 * 순간 같은 사실이 분마다 쏟아진다.
+	 *
+	 * <p>알린 사실을 행이 아니라 이 자리에 든다 — 밀림은 결제 하나가 아니라 그 주기 전체의 성질이라
+	 * 남길 행이 없다. 그래서 인스턴스마다 따로 세고, 여럿이 돌면 그 수만큼 알림이 나간다. 통지 자체가
+	 * 사람을 부르는 신호라 그 정도 중복은 감수한다.
+	 */
+	private volatile LocalDateTime lastBacklogAlertAt;
+
 	private final PaymentRepository paymentRepository;
 	private final PaymentGatewayPort paymentGatewayPort;
 	private final PaymentService paymentService;
@@ -71,7 +81,7 @@ public class ReconcilePaymentUseCase {
 		}
 
 		log.info("결제 대사 시작 targets={}", targets.size());
-		alertIfBacklogged(targets.size());
+		alertIfBacklogged(targets.size(), LocalDateTime.now());
 		for (ReconcileTarget target : targets) {
 			try {
 				reconcileOne(target);
@@ -82,19 +92,28 @@ public class ReconcilePaymentUseCase {
 	}
 
 	/**
-	 * 밀렸다는 것을 알린다. 알림이 실패해도 이 주기를 끝내지 않는다 — 전파하면 밀렸을 때 알리려고 둔
-	 * 것이 밀렸을 때 회수를 통째로 멈추고, 대상이 그대로라 다음 주기도 같은 자리에서 죽는다.
+	 * 밀렸다는 것을 알린다. 한 번 알린 뒤에는 통지 간격이 지나야 다시 알린다 — 밀린 상태는 몇 주기를
+	 * 이어가는데 주기마다 알리면 같은 사실이 분마다 쏟아진다. 그 간격은 미해결 건 통지가 쓰는 값과 같다.
+	 *
+	 * <p>알림이 실패해도 이 주기를 끝내지 않는다 — 전파하면 밀렸을 때 알리려고 둔 것이 밀렸을 때 회수를
+	 * 통째로 멈추고, 대상이 그대로라 다음 주기도 같은 자리에서 죽는다. 실패한 알림의 시각은 남기지
+	 * 않는다. 남기면 못 보낸 것이 보낸 것으로 세어져 다음 주기가 조용해진다.
 	 */
-	private void alertIfBacklogged(int targetCount) {
-		if (!policy.isReconcileBacklogged(targetCount)) {
+	private void alertIfBacklogged(int targetCount, LocalDateTime now) {
+		if (!policy.isReconcileBacklogged(targetCount) || isWithinAlertInterval(now)) {
 			return;
 		}
 		try {
 			notificationPort.notifyReconcileBacklog(
 				BACKLOG_SUBJECT, targetCount, policy.reconcileBacklogThreshold());
+			lastBacklogAlertAt = now;
 		} catch (RuntimeException ex) {
 			log.error("대사가 밀렸다는 알림을 보내지 못했다 targetCount={}", targetCount, ex);
 		}
+	}
+
+	private boolean isWithinAlertInterval(LocalDateTime now) {
+		return lastBacklogAlertAt != null && lastBacklogAlertAt.isAfter(policy.notifiedBefore(now));
 	}
 
 	/**
