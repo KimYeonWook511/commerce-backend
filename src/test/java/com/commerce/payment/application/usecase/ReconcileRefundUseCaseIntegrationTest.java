@@ -3,10 +3,12 @@ package com.commerce.payment.application.usecase;
 import static org.assertj.core.api.Assertions.assertThat;
 import static org.mockito.ArgumentMatchers.any;
 import static org.mockito.ArgumentMatchers.anyInt;
+import static org.mockito.ArgumentMatchers.argThat;
 import static org.mockito.ArgumentMatchers.eq;
 import static org.mockito.BDDMockito.given;
 import static org.mockito.BDDMockito.then;
 import static org.mockito.BDDMockito.willAnswer;
+import static org.mockito.BDDMockito.willThrow;
 import static org.mockito.Mockito.never;
 
 import java.time.LocalDateTime;
@@ -47,6 +49,8 @@ import com.commerce.payment.domain.RefundReason;
 import com.commerce.payment.domain.RefundRequester;
 import com.commerce.payment.domain.RefundReviewCode;
 import com.commerce.payment.domain.RefundStatus;
+import com.commerce.payment.domain.exception.PaymentErrorCode;
+import com.commerce.payment.domain.exception.PaymentException;
 import com.commerce.payment.domain.repository.RefundRepository;
 import com.commerce.payment.infrastructure.persistence.support.PaymentPersistenceTestSupport;
 import com.commerce.payment.infrastructure.persistence.support.PgCallLogPersistenceTestSupport;
@@ -438,7 +442,25 @@ class ReconcileRefundUseCaseIntegrationTest {
 		assertThat(after.getVersion()).isEqualTo(before.getVersion());
 	}
 
-	// ── 헬퍼 ──
+	@DisplayName("집기가 다른 주기와 겹쳐 낙관 락에 걸리면 그 건만 건너뛰고 남은 건은 계속 처리한다")
+	@Test
+	void reconcile_whenClaimLosesOptimisticLock_skipsOnlyThatOne() {
+		Refund contended = unknownRefund(savePayment());
+		Refund remaining = unknownRefund(savePayment());
+		givenHistory(PgHistoryResult.succeeded(List.of(refundEntry(remaining.attemptKey(), true)), "성공"));
+		// 두 집기가 실제로 겹쳐 진 쪽이 받는 것. 값 재확인이 아니라 이 갈래를 세운다.
+		willThrow(new PaymentException(PaymentErrorCode.REFUND_CONCURRENTLY_MODIFIED))
+			.given(refundRepository)
+			.saveChecked(argThat(refund -> contended.getId().equals(refund.getId())));
+
+		reconcileRefundUseCase.reconcile();
+
+		Refund skipped = reload(contended);
+		assertThat(skipped.getReconcileCount()).isZero();
+		assertThat(skipped.getStatus()).isEqualTo(RefundStatus.UNKNOWN);
+		// 진 쪽에서 회차가 통째로 깨지면 뒤의 건이 그 주기에 영영 안 돌아간다.
+		assertThat(reload(remaining).getStatus()).isEqualTo(RefundStatus.SUCCEEDED);
+	}
 
 	@DisplayName("다른 주기가 먼저 집어 커밋한 건은 결제사를 부르지 않고 그 회차의 남은 건은 계속 처리한다")
 	@Test
@@ -465,6 +487,8 @@ class ReconcileRefundUseCaseIntegrationTest {
 		assertThat(skipped.getStatus()).isEqualTo(RefundStatus.UNKNOWN);
 		assertThat(reload(remaining).getStatus()).isEqualTo(RefundStatus.SUCCEEDED);
 	}
+
+	// ── 헬퍼 ──
 
 	private void givenHistory(PgHistoryResult history) {
 		given(paymentGatewayPort.readHistory(any(), any(PgHistoryScope.class), any())).willReturn(history);

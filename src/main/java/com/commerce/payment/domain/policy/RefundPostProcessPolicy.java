@@ -47,6 +47,10 @@ public class RefundPostProcessPolicy {
 		Duration notifyInterval,
 		int reconcileBacklogThreshold
 	) {
+		if (reconcileBacklogThreshold <= 0) {
+			// 0이나 음수면 대상이 하나만 있어도 밀린 것이 되어 주기마다 알린다.
+			throw new IllegalArgumentException("대사 밀림 임계는 1 이상이어야 한다");
+		}
 		this.reconcileGrace = reconcileGrace;
 		this.reconcileSchedule = new ReconcileSchedule(reconcileIntervals);
 		this.notifyEscalation = notifyEscalation;

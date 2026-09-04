@@ -437,7 +437,25 @@ class ReconcilePaymentUseCaseIntegrationTest {
 		assertThat(reload(fixture).getStatus()).isEqualTo(PaymentStatus.SUCCEEDED);
 	}
 
-	// ── 픽스처 ───────────────────────────────────────────────────
+	@DisplayName("집기가 다른 주기와 겹쳐 낙관 락에 걸리면 그 건만 건너뛰고 남은 건은 계속 처리한다")
+	@Test
+	void reconcile_whenClaimLosesOptimisticLock_skipsOnlyThatOne() {
+		Fixture contended = unknownPayment();
+		Fixture remaining = unknownPayment();
+		givenHistory(PgHistoryResult.succeeded(List.of(approvalEntry(remaining, remaining.amount())), "성공"));
+		// 두 집기가 실제로 겹쳐 진 쪽이 받는 것. 값 재확인이 아니라 이 갈래를 세운다.
+		willThrow(new PaymentException(PaymentErrorCode.PAYMENT_CONCURRENTLY_MODIFIED))
+			.given(paymentRepository)
+			.saveChecked(argThat(payment -> contended.payment().getId().equals(payment.getId())));
+
+		reconcilePaymentUseCase.reconcile();
+
+		Payment skipped = reload(contended);
+		assertThat(skipped.getReconcileCount()).isZero();
+		assertThat(skipped.getStatus()).isEqualTo(PaymentStatus.UNKNOWN);
+		// 진 쪽에서 회차가 통째로 깨지면 뒤의 건이 그 주기에 영영 안 돌아간다.
+		assertThat(reload(remaining).getStatus()).isEqualTo(PaymentStatus.SUCCEEDED);
+	}
 
 	@DisplayName("다른 주기가 먼저 집어 커밋한 건은 결제사를 부르지 않고 그 회차의 남은 건은 계속 처리한다")
 	@Test
@@ -464,6 +482,8 @@ class ReconcilePaymentUseCaseIntegrationTest {
 		assertThat(skipped.getStatus()).isEqualTo(PaymentStatus.UNKNOWN);
 		assertThat(reload(remaining).getStatus()).isEqualTo(PaymentStatus.SUCCEEDED);
 	}
+
+	// ── 픽스처 ───────────────────────────────────────────────────
 
 	private Payment reload(Fixture fixture) {
 		return paymentPersistence.findById(fixture.payment().getId()).orElseThrow();
