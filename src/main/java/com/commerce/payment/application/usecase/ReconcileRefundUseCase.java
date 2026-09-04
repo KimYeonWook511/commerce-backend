@@ -5,10 +5,9 @@ import java.util.ArrayList;
 import java.util.List;
 import java.util.Optional;
 
-import org.springframework.data.domain.PageRequest;
-import org.springframework.data.domain.Pageable;
 import org.springframework.stereotype.Component;
 
+import com.commerce.payment.application.port.NotificationPort;
 import com.commerce.payment.application.port.PaymentGatewayPort;
 import com.commerce.payment.application.port.dto.PgCallSource;
 import com.commerce.payment.application.port.dto.PgHistoryEntry;
@@ -23,6 +22,7 @@ import com.commerce.payment.domain.exception.PaymentException;
 import com.commerce.payment.domain.policy.ReconcileWindow;
 import com.commerce.payment.domain.policy.RefundPostProcessPolicy;
 import com.commerce.payment.domain.repository.PaymentRepository;
+import com.commerce.payment.domain.repository.ReconcileTarget;
 import com.commerce.payment.domain.repository.RefundRepository;
 
 import lombok.RequiredArgsConstructor;
@@ -55,31 +55,73 @@ import lombok.extern.slf4j.Slf4j;
 @RequiredArgsConstructor
 public class ReconcileRefundUseCase {
 
-	/** 한 회차에서 한 주기에 집는 상한. 다음 주기가 나머지를 이어 집는다 */
-	private static final int BATCH_SIZE = 100;
+	private static final String BACKLOG_SUBJECT = "환불 대사";
+
+	/**
+	 * 마지막으로 밀렸다고 알린 시각. 밀린 상태가 이어지는 동안 주기마다 알리면 통지 수단을 갈아끼우는
+	 * 순간 같은 사실이 분마다 쏟아진다.
+	 *
+	 * <p>알린 사실을 행이 아니라 이 자리에 든다 — 밀림은 환불 하나가 아니라 그 주기 전체의 성질이라
+	 * 남길 행이 없다. 그래서 인스턴스마다 따로 세고, 여럿이 돌면 그 수만큼 알림이 나간다. 통지 자체가
+	 * 사람을 부르는 신호라 그 정도 중복은 감수한다.
+	 */
+	private volatile LocalDateTime lastBacklogAlertAt;
 
 	private final RefundRepository refundRepository;
 	private final PaymentRepository paymentRepository;
 	private final PaymentGatewayPort paymentGatewayPort;
 	private final RefundService refundService;
 	private final ExecuteRefundUseCase executeRefundUseCase;
+	private final NotificationPort notificationPort;
 	private final RefundPostProcessPolicy policy;
 
+	/**
+	 * 집은 대상을 개수로 자르지 않고 다 처리한다. 자르면 남은 건이 다음 주기로 밀릴 뿐 총 처리 시간은
+	 * 줄지 않고, 그 주기는 다음 정각에야 오므로 잘게 쪼갤수록 마지막 건이 끝나는 시각이 뒤로 밀린다.
+	 * 대신 대상이 임계를 넘으면 알린다 — 밀렸다는 사실이 조용히 잘려 사라지지 않게 한다.
+	 */
 	public void reconcile() {
-		List<Refund> targets = findTargets(LocalDateTime.now());
+		List<ReconcileTarget> targets = findTargets(LocalDateTime.now());
 		if (targets.isEmpty()) {
 			return;
 		}
 
 		log.info("환불 대사 시작 targets={}", targets.size());
-		for (Refund target : targets) {
+		alertIfBacklogged(targets.size(), LocalDateTime.now());
+		for (ReconcileTarget target : targets) {
 			try {
 				reconcileOne(target);
 			} catch (Exception ex) {
-				log.error("환불 대사 처리 실패 refundId={} paymentId={} status={}",
-					target.getId(), target.getPaymentId(), target.getStatus(), ex);
+				// 집기 자체가 깨진 자리다. 그 행을 읽어 온 적이 없어 남길 것이 식별자뿐이며, 집은 뒤의
+				// 실패는 행을 손에 들고 더 자세히 남긴다.
+				log.error("환불 대사가 집지 못했다 refundId={}", target.id(), ex);
 			}
 		}
+	}
+
+	/**
+	 * 밀렸다는 것을 알린다. 한 번 알린 뒤에는 통지 간격이 지나야 다시 알린다 — 밀린 상태는 몇 주기를
+	 * 이어가는데 주기마다 알리면 같은 사실이 분마다 쏟아진다. 그 간격은 미해결 건 통지가 쓰는 값과 같다.
+	 *
+	 * <p>알림이 실패해도 이 주기를 끝내지 않는다 — 전파하면 밀렸을 때 알리려고 둔 것이 밀렸을 때 회수를
+	 * 통째로 멈추고, 대상이 그대로라 다음 주기도 같은 자리에서 죽는다. 실패한 알림의 시각은 남기지
+	 * 않는다. 남기면 못 보낸 것이 보낸 것으로 세어져 다음 주기가 조용해진다.
+	 */
+	private void alertIfBacklogged(int targetCount, LocalDateTime now) {
+		if (!policy.isReconcileBacklogged(targetCount) || isWithinAlertInterval(now)) {
+			return;
+		}
+		try {
+			notificationPort.notifyReconcileBacklog(
+				BACKLOG_SUBJECT, targetCount, policy.reconcileBacklogThreshold());
+			lastBacklogAlertAt = now;
+		} catch (RuntimeException ex) {
+			log.error("대사가 밀렸다는 알림을 보내지 못했다 targetCount={}", targetCount, ex);
+		}
+	}
+
+	private boolean isWithinAlertInterval(LocalDateTime now) {
+		return lastBacklogAlertAt != null && lastBacklogAlertAt.isAfter(policy.notifiedBefore(now));
 	}
 
 	/**
@@ -90,27 +132,36 @@ public class ReconcileRefundUseCase {
 	 * <p>회차별 임계 시각은 정책이 간격표에서 계산해 준다. 조회에는 상태·집은 횟수·임계 시각만 남아야
 	 * 인덱스를 그대로 타고, 간격을 정하는 것도 인프라가 아니라 정책의 일이다.
 	 */
-	private List<Refund> findTargets(LocalDateTime now) {
+	private List<ReconcileTarget> findTargets(LocalDateTime now) {
 		LocalDateTime requestedBefore = policy.requestedBefore(now);
-		Pageable page = PageRequest.of(0, BATCH_SIZE);
 
-		List<Refund> targets = new ArrayList<>();
+		List<ReconcileTarget> targets = new ArrayList<>();
 		for (ReconcileWindow window : policy.reconcileWindows(now)) {
 			targets.addAll(refundRepository.findUnknownReconcileTargets(
-				window.minReconcileCount(), window.maxReconcileCount(), window.reconciledBefore(), page));
+				window.minReconcileCount(), window.maxReconcileCount(), window.reconciledBefore()));
 			targets.addAll(refundRepository.findInProgressReconcileTargets(
 				requestedBefore, window.minReconcileCount(), window.maxReconcileCount(),
-				window.reconciledBefore(), page));
+				window.reconciledBefore()));
 		}
 		return targets;
 	}
 
-	private void reconcileOne(Refund target) {
-		Refund picked = pick(target);
+	private void reconcileOne(ReconcileTarget target) {
+		Refund picked = pick(target).orElse(null);
 		if (picked == null) {
 			return;
 		}
+		try {
+			settle(picked);
+		} catch (Exception ex) {
+			// 집은 뒤라 행을 손에 들고 있다. 대사가 무더기로 깨질 때 무엇이 어느 상태에서 깨지는지는
+			// 이 값들로만 갈리며, 없으면 건마다 다시 조회해야 한다.
+			log.error("환불 대사 처리 실패 refundId={} paymentId={} status={}",
+				picked.getId(), picked.getPaymentId(), picked.getStatus(), ex);
+		}
+	}
 
+	private void settle(Refund picked) {
 		Payment payment = paymentRepository.findById(picked.getPaymentId())
 			.orElseThrow(() -> new PaymentException(PaymentErrorCode.PAYMENT_NOT_FOUND));
 
@@ -134,18 +185,24 @@ public class ReconcileRefundUseCase {
 	}
 
 	/**
-	 * 집었다는 사실을 결제사를 부르기 전에 따로 커밋한다. 이 저장에 지면 다른 주기가 같은 건을 이미
-	 * 집었다는 뜻이라 부르지 않고 물러난다.
+	 * 집었다는 사실을 결제사를 부르기 전에 따로 커밋한다. 다른 주기가 같은 건을 이미 집었으면 두 가지로
+	 * 갈린다 — 그 갱신이 이미 커밋됐으면 고를 때 본 회차와 달라져 빈 결과가 오고, 아직 커밋 전이면 낙관
+	 * 락이 잡는다. 어느 쪽이든 부르지 않고 물러난다.
 	 *
-	 * @return 집은 환불. 물러났으면 {@code null}
+	 * @return 집은 환불. 물러났으면 비어 있다
 	 */
-	private Refund pick(Refund target) {
+	private Optional<Refund> pick(ReconcileTarget target) {
 		try {
-			return refundService.recordReconciled(target.getId(), LocalDateTime.now());
+			Optional<Refund> picked =
+				refundService.recordReconciled(target.id(), target.reconcileCount(), LocalDateTime.now());
+			if (picked.isEmpty()) {
+				log.info("다른 주기가 먼저 집어 이번 주기는 물러난다 refundId={}", target.id());
+			}
+			return picked;
 		} catch (PaymentException ex) {
 			if (ex.getErrorCode() == PaymentErrorCode.REFUND_CONCURRENTLY_MODIFIED) {
-				log.info("다른 주기가 먼저 집어 이번 주기는 물러난다 refundId={}", target.getId());
-				return null;
+				log.info("다른 주기와 겹쳐 이번 주기는 물러난다 refundId={}", target.id());
+				return Optional.empty();
 			}
 			throw ex;
 		}

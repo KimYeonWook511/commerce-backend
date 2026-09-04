@@ -17,8 +17,10 @@ class RefundPostProcessPolicyTest {
 	private static final List<Duration> INTERVALS = List.of(
 		Duration.ofSeconds(10), Duration.ofSeconds(30), Duration.ofMinutes(2));
 
+	private static final int BACKLOG_THRESHOLD = 500;
+
 	private final RefundPostProcessPolicy policy = new RefundPostProcessPolicy(
-		Duration.ofSeconds(90), INTERVALS, Duration.ofHours(1), Duration.ofHours(1));
+		Duration.ofSeconds(90), INTERVALS, Duration.ofHours(1), Duration.ofHours(1), BACKLOG_THRESHOLD);
 
 	@DisplayName("대사 유예와 통지 승급·간격을 시각으로 바꿔 준다")
 	@Test
@@ -32,7 +34,7 @@ class RefundPostProcessPolicyTest {
 	@Test
 	void requestedBefore_whenComparedWithPayment_leavesMoreRoom() {
 		PaymentPostProcessPolicy paymentPolicy = new PaymentPostProcessPolicy(
-			Duration.ofSeconds(30), INTERVALS, Duration.ofHours(1), Duration.ofHours(1), Duration.ofHours(1));
+			Duration.ofSeconds(30), INTERVALS, Duration.ofHours(1), Duration.ofHours(1), Duration.ofHours(1), 500);
 
 		assertThat(policy.requestedBefore(NOW)).isBefore(paymentPolicy.requestedBefore(NOW));
 	}
@@ -41,7 +43,7 @@ class RefundPostProcessPolicyTest {
 	@Test
 	void reconcileWindows_whenBuilt_matchThePaymentSideSchedule() {
 		PaymentPostProcessPolicy paymentPolicy = new PaymentPostProcessPolicy(
-			Duration.ofSeconds(30), INTERVALS, Duration.ofHours(1), Duration.ofHours(1), Duration.ofHours(1));
+			Duration.ofSeconds(30), INTERVALS, Duration.ofHours(1), Duration.ofHours(1), Duration.ofHours(1), 500);
 
 		assertThat(policy.reconcileWindows(NOW)).isEqualTo(paymentPolicy.reconcileWindows(NOW));
 	}
@@ -60,7 +62,29 @@ class RefundPostProcessPolicyTest {
 	@Test
 	void construct_whenIntervalsAreEmpty_isRejected() {
 		assertThatThrownBy(() -> new RefundPostProcessPolicy(
-			Duration.ofSeconds(90), List.of(), Duration.ofHours(1), Duration.ofHours(1)))
+			Duration.ofSeconds(90), List.of(), Duration.ofHours(1), Duration.ofHours(1), 500))
+			.isInstanceOf(IllegalArgumentException.class);
+	}
+
+	@DisplayName("한 회차 대상이 임계를 넘어야 밀린 것으로 본다 — 같은 수는 아직 아니다")
+	@Test
+	void isReconcileBacklogged_whenAtThreshold_isNotYetBacklogged() {
+		assertThat(policy.isReconcileBacklogged(BACKLOG_THRESHOLD - 1)).isFalse();
+		assertThat(policy.isReconcileBacklogged(BACKLOG_THRESHOLD)).isFalse();
+		assertThat(policy.isReconcileBacklogged(BACKLOG_THRESHOLD + 1)).isTrue();
+	}
+
+	@DisplayName("밀렸다고 보기로 한 값을 그대로 돌려준다 — 알림이 기준을 함께 싣는다")
+	@Test
+	void reconcileBacklogThreshold_whenAsked_returnsConfiguredValue() {
+		assertThat(policy.reconcileBacklogThreshold()).isEqualTo(BACKLOG_THRESHOLD);
+	}
+
+	@DisplayName("밀림 임계가 1보다 작으면 정책을 만들 수 없다")
+	@Test
+	void construct_whenBacklogThresholdIsNotPositive_isRejected() {
+		assertThatThrownBy(() -> new RefundPostProcessPolicy(
+				Duration.ofSeconds(90), INTERVALS, Duration.ofHours(1), Duration.ofHours(1), 0))
 			.isInstanceOf(IllegalArgumentException.class);
 	}
 }

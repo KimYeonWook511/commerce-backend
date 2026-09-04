@@ -11,6 +11,7 @@ import org.springframework.data.repository.query.Param;
 
 import com.commerce.payment.domain.Refund;
 import com.commerce.payment.domain.RefundRequester;
+import com.commerce.payment.domain.repository.ReconcileTarget;
 
 public interface JpaRefundRepository extends JpaRepository<Refund, Long> {
 
@@ -39,36 +40,42 @@ public interface JpaRefundRepository extends JpaRepository<Refund, Long> {
 		""")
 	List<Refund> findDispatchTargets(Pageable pageable);
 
+	// 대사 대상 조회 넷에는 정렬이 없다. 대상을 개수로 자르지 않아 어차피 다 처리하므로 정렬이 고르는
+	// 것을 바꾸지 않고, 인덱스가 주는 순서(회차가 낮은 것 먼저, 같은 회차 안에서는 오래 안 본 것 먼저)가
+	// 그대로 처리 순서로 쓸 만하다. 상한이 있는 발송·통지·만료 조회에는 정렬이 남는다 — 그쪽은 정렬이
+	// 어느 건을 자를지 정한다.
+	//
+	// 집은 시각 조건은 회차 간격만 재는 것이 아니다. 한 주기가 창을 돌며 조회하는 사이 다른 주기가 그
+	// 행을 집으면 회차가 올라 다음 창 조회에 다시 걸릴 수 있는데, 방금 찍힌 집은 시각이 그것을 막는다.
+	// 간격표의 첫 값을 0에 가깝게 줄이면 이 방어가 사라진다.
 	@Query("""
-		SELECT r FROM Refund r
+		SELECT new com.commerce.payment.domain.repository.ReconcileTarget(r.id, r.reconcileCount)
+		FROM Refund r
 		WHERE r.status = 'IN_PROGRESS'
 		  AND r.reconcileCount >= :minReconcileCount
 		  AND r.reconcileCount <= :maxReconcileCount
 		  AND r.lastRequestedAt < :requestedBefore
 		  AND (r.lastReconcileAt IS NULL OR r.lastReconcileAt < :reconciledBefore)
-		ORDER BY r.id ASC
 		""")
-	List<Refund> findInProgressReconcileTargets(
+	List<ReconcileTarget> findInProgressReconcileTargets(
 		@Param("requestedBefore") LocalDateTime requestedBefore,
 		@Param("minReconcileCount") int minReconcileCount,
 		@Param("maxReconcileCount") int maxReconcileCount,
-		@Param("reconciledBefore") LocalDateTime reconciledBefore,
-		Pageable pageable
+		@Param("reconciledBefore") LocalDateTime reconciledBefore
 	);
 
 	@Query("""
-		SELECT r FROM Refund r
+		SELECT new com.commerce.payment.domain.repository.ReconcileTarget(r.id, r.reconcileCount)
+		FROM Refund r
 		WHERE r.status = 'UNKNOWN'
 		  AND r.reconcileCount >= :minReconcileCount
 		  AND r.reconcileCount <= :maxReconcileCount
 		  AND (r.lastReconcileAt IS NULL OR r.lastReconcileAt < :reconciledBefore)
-		ORDER BY r.id ASC
 		""")
-	List<Refund> findUnknownReconcileTargets(
+	List<ReconcileTarget> findUnknownReconcileTargets(
 		@Param("minReconcileCount") int minReconcileCount,
 		@Param("maxReconcileCount") int maxReconcileCount,
-		@Param("reconciledBefore") LocalDateTime reconciledBefore,
-		Pageable pageable
+		@Param("reconciledBefore") LocalDateTime reconciledBefore
 	);
 
 	// 사람이 처리해야 하는 건은 승급을 기다리지 않는다. 그 상태 자체가 이미 조치할 것이 남았다는 뜻이고,

@@ -25,6 +25,7 @@ import com.commerce.payment.domain.PaymentPg;
 import com.commerce.payment.domain.PaymentStatus;
 import com.commerce.payment.domain.exception.DuplicatePaymentAttemptException;
 import com.commerce.payment.domain.repository.PaymentRepository;
+import com.commerce.payment.domain.repository.ReconcileTarget;
 import com.commerce.support.TestcontainersSupport;
 
 /**
@@ -150,16 +151,16 @@ class PaymentRepositoryAdapterIntegrationTest {
 		Payment secondRound = startedPayment(++nextOrderId, "rec-2");
 		secondRound.markInProgress("pg-rec-2", NOW);
 		secondRound.markUnknown();
-		secondRound.recordReconciled(NOW);
+		secondRound.recordReconciled(0, NOW);
 		paymentRepository.save(secondRound);
 
-		List<Payment> zeroRound = paymentRepository.findUnknownReconcileTargets(
-			0, 0, NOW.plusMinutes(1), PageRequest.of(0, 10));
-		List<Payment> firstRoundTargets = paymentRepository.findUnknownReconcileTargets(
-			1, 1, NOW.plusMinutes(1), PageRequest.of(0, 10));
+		List<ReconcileTarget> zeroRound = paymentRepository.findUnknownReconcileTargets(
+			0, 0, NOW.plusMinutes(1));
+		List<ReconcileTarget> firstRoundTargets = paymentRepository.findUnknownReconcileTargets(
+			1, 1, NOW.plusMinutes(1));
 
-		assertThat(zeroRound).contains(firstRound).doesNotContain(secondRound);
-		assertThat(firstRoundTargets).contains(secondRound).doesNotContain(firstRound);
+		assertThat(idsOf(zeroRound)).contains(firstRound.getId()).doesNotContain(secondRound.getId());
+		assertThat(idsOf(firstRoundTargets)).contains(secondRound.getId()).doesNotContain(firstRound.getId());
 	}
 
 	@DisplayName("마지막 회차 조회는 그 이상을 전부 받아 회수가 멈추지 않는다")
@@ -168,15 +169,15 @@ class PaymentRepositoryAdapterIntegrationTest {
 		Payment payment = startedPayment(++nextOrderId, "rec-last");
 		payment.markInProgress("pg-rec-last", NOW);
 		payment.markUnknown();
-		payment.recordReconciled(NOW);
-		payment.recordReconciled(NOW);
-		payment.recordReconciled(NOW);
+		payment.recordReconciled(0, NOW);
+		payment.recordReconciled(1, NOW);
+		payment.recordReconciled(2, NOW);
 		paymentRepository.save(payment);
 
-		List<Payment> targets = paymentRepository.findUnknownReconcileTargets(
-			2, Integer.MAX_VALUE, NOW.plusMinutes(1), PageRequest.of(0, 10));
+		List<ReconcileTarget> targets = paymentRepository.findUnknownReconcileTargets(
+			2, Integer.MAX_VALUE, NOW.plusMinutes(1));
 
-		assertThat(targets).contains(payment);
+		assertThat(idsOf(targets)).contains(payment.getId());
 	}
 
 	@DisplayName("승인을 부른 지 대사 유예가 지난 건만 대사 대상이 된다")
@@ -186,13 +187,13 @@ class PaymentRepositoryAdapterIntegrationTest {
 		payment.markInProgress("pg-rec-grace", NOW);
 		paymentRepository.save(payment);
 
-		List<Payment> beforeGrace = paymentRepository.findInProgressReconcileTargets(
-			NOW, 0, 0, NOW.plusMinutes(1), PageRequest.of(0, 10));
-		List<Payment> afterGrace = paymentRepository.findInProgressReconcileTargets(
-			NOW.plusMinutes(1), 0, 0, NOW.plusMinutes(1), PageRequest.of(0, 10));
+		List<ReconcileTarget> beforeGrace = paymentRepository.findInProgressReconcileTargets(
+			NOW, 0, 0, NOW.plusMinutes(1));
+		List<ReconcileTarget> afterGrace = paymentRepository.findInProgressReconcileTargets(
+			NOW.plusMinutes(1), 0, 0, NOW.plusMinutes(1));
 
-		assertThat(beforeGrace).doesNotContain(payment);
-		assertThat(afterGrace).contains(payment);
+		assertThat(idsOf(beforeGrace)).doesNotContain(payment.getId());
+		assertThat(idsOf(afterGrace)).contains(payment.getId());
 	}
 
 	@DisplayName("통지 대상은 알린 지 반복 간격이 지난 건만 다시 고른다")
@@ -227,5 +228,9 @@ class PaymentRepositoryAdapterIntegrationTest {
 			LocalDateTime.now().plusDays(1), PageRequest.of(0, 10));
 
 		assertThat(targets).contains(ready).doesNotContain(called);
+	}
+
+	private static List<Long> idsOf(List<ReconcileTarget> targets) {
+		return targets.stream().map(ReconcileTarget::id).toList();
 	}
 }

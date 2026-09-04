@@ -28,10 +28,12 @@ public class PaymentPolicyConfig {
 		@Value("${payment.postprocess.reconcile.intervals}") List<Duration> reconcileIntervals,
 		@Value("${payment.postprocess.notify.escalation}") Duration notifyEscalation,
 		@Value("${payment.postprocess.notify.interval}") Duration notifyInterval,
-		@Value("${payment.postprocess.expire.threshold}") Duration expireThreshold
+		@Value("${payment.postprocess.expire.threshold}") Duration expireThreshold,
+		@Value("${payment.postprocess.reconcile.backlog-threshold}") int reconcileBacklogThreshold
 	) {
 		return new PaymentPostProcessPolicy(
-			reconcileGrace, reconcileIntervals, notifyEscalation, notifyInterval, expireThreshold);
+			reconcileGrace, reconcileIntervals, notifyEscalation, notifyInterval, expireThreshold,
+			reconcileBacklogThreshold);
 	}
 
 	/**
@@ -43,9 +45,10 @@ public class PaymentPolicyConfig {
 		@Value("${payment.postprocess.refund.reconcile.grace}") Duration reconcileGrace,
 		@Value("${payment.postprocess.reconcile.intervals}") List<Duration> reconcileIntervals,
 		@Value("${payment.postprocess.notify.escalation}") Duration notifyEscalation,
-		@Value("${payment.postprocess.notify.interval}") Duration notifyInterval
+		@Value("${payment.postprocess.notify.interval}") Duration notifyInterval,
+		@Value("${payment.postprocess.reconcile.backlog-threshold}") int reconcileBacklogThreshold
 	) {
 		return new RefundPostProcessPolicy(
-			reconcileGrace, reconcileIntervals, notifyEscalation, notifyInterval);
+			reconcileGrace, reconcileIntervals, notifyEscalation, notifyInterval, reconcileBacklogThreshold);
 	}
 }

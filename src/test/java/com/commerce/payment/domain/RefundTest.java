@@ -255,8 +255,22 @@ class RefundTest {
 	void recordReconciled_whenCalled_raisesReconcileCountAndStampsPickedAt() {
 		Refund refund = inProgressRefund();
 
-		refund.recordReconciled(NOW.plusMinutes(5));
+		boolean picked = refund.recordReconciled(0, NOW.plusMinutes(5));
 
+		assertThat(picked).isTrue();
+		assertThat(refund.getReconcileCount()).isEqualTo(1);
+		assertThat(refund.getLastReconcileAt()).isEqualTo(NOW.plusMinutes(5));
+	}
+
+	@DisplayName("고를 때 본 회차가 이미 바뀌었으면 집지 않는다 — 다른 주기가 먼저 집었다는 뜻이다")
+	@Test
+	void recordReconciled_whenReconcileCountAlreadyMoved_doesNotPick() {
+		Refund refund = inProgressRefund();
+		refund.recordReconciled(0, NOW.plusMinutes(5));
+
+		boolean picked = refund.recordReconciled(0, NOW.plusMinutes(10));
+
+		assertThat(picked).isFalse();
 		assertThat(refund.getReconcileCount()).isEqualTo(1);
 		assertThat(refund.getLastReconcileAt()).isEqualTo(NOW.plusMinutes(5));
 	}

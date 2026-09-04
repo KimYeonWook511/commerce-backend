@@ -34,16 +34,28 @@ public class RefundPostProcessPolicy {
 	/** 알린 뒤 다시 알리기까지의 간격 */
 	private final Duration notifyInterval;
 
+	/**
+	 * 한 회차의 대사 대상이 이 수를 넘으면 밀린 것으로 보고 알린다. 자르는 값이 아니라 알리는 값이다 —
+	 * 상한으로 조용히 자르면 얼마나 밀렸는지가 아무 데도 남지 않는다.
+	 */
+	private final int reconcileBacklogThreshold;
+
 	public RefundPostProcessPolicy(
 		Duration reconcileGrace,
 		List<Duration> reconcileIntervals,
 		Duration notifyEscalation,
-		Duration notifyInterval
+		Duration notifyInterval,
+		int reconcileBacklogThreshold
 	) {
+		if (reconcileBacklogThreshold <= 0) {
+			// 0이나 음수면 대상이 하나만 있어도 밀린 것이 되어 주기마다 알린다.
+			throw new IllegalArgumentException("대사 밀림 임계는 1 이상이어야 한다");
+		}
 		this.reconcileGrace = reconcileGrace;
 		this.reconcileSchedule = new ReconcileSchedule(reconcileIntervals);
 		this.notifyEscalation = notifyEscalation;
 		this.notifyInterval = notifyInterval;
+		this.reconcileBacklogThreshold = reconcileBacklogThreshold;
 	}
 
 	/**
@@ -72,5 +84,15 @@ public class RefundPostProcessPolicy {
 	/** 다시 알릴 때가 된 건을 가르는 임계 시각. 아직 알린 적이 없으면 그것만으로 대상이다 */
 	public LocalDateTime notifiedBefore(LocalDateTime at) {
 		return at.minus(notifyInterval);
+	}
+
+	/** 이번 회차의 대상 수가 밀렸다고 볼 만한가 */
+	public boolean isReconcileBacklogged(int targetCount) {
+		return targetCount > reconcileBacklogThreshold;
+	}
+
+	/** 밀렸다고 보기로 한 값. 알림에 함께 실어 사람이 기준을 알 수 있게 한다 */
+	public int reconcileBacklogThreshold() {
+		return reconcileBacklogThreshold;
 	}
 }

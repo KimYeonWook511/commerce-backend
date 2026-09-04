@@ -31,6 +31,18 @@ class SchedulingConfigTest {
 		// 스프링은 이 타입의 빈이 있으면 공용 풀을 만들지 않으므로 저절로 생기지 않는다.
 		assertThat(pools).containsKeys(
 			ScheduledAnnotationBeanPostProcessor.DEFAULT_TASK_SCHEDULER_BEAN_NAME,
-			PaymentSchedulerConfig.SCHEDULER_BEAN);
+			PaymentSchedulerConfig.SCHEDULER_BEAN,
+			PaymentSchedulerConfig.RECONCILE_SCHEDULER_BEAN);
+	}
+
+	@DisplayName("대사 풀과 나머지 후처리 풀이 스레드를 나눠 갖는다")
+	@Test
+	void reconcilePool_whenResolved_isSeparateInstanceFromPostProcessPool() {
+		Map<String, TaskScheduler> pools = context.getBeansOfType(TaskScheduler.class);
+
+		// 두 이름이 같은 빈을 가리키면 대사가 밀릴 때 환불 발송이 스레드를 얻지 못한다. 이름만 비교하는
+		// 검사는 상수 값을 같게 바꿔도 통과하므로 실제 인스턴스가 다른지를 여기서 본다.
+		assertThat(pools.get(PaymentSchedulerConfig.RECONCILE_SCHEDULER_BEAN))
+			.isNotSameAs(pools.get(PaymentSchedulerConfig.SCHEDULER_BEAN));
 	}
 }

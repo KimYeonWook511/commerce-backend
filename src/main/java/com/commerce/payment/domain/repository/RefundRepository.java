@@ -52,20 +52,18 @@ public interface RefundRepository {
 	List<Refund> findDispatchTargets(Pageable pageable);
 
 	/** 결제사를 부르고 응답을 기다리는 환불 중 대사 대상. 회차별로 나눠 고른다 */
-	List<Refund> findInProgressReconcileTargets(
+	List<ReconcileTarget> findInProgressReconcileTargets(
 		LocalDateTime requestedBefore,
 		int minReconcileCount,
 		int maxReconcileCount,
-		LocalDateTime reconciledBefore,
-		Pageable pageable
+		LocalDateTime reconciledBefore
 	);
 
 	/** 결과를 모르는 환불 중 대사 대상 */
-	List<Refund> findUnknownReconcileTargets(
+	List<ReconcileTarget> findUnknownReconcileTargets(
 		int minReconcileCount,
 		int maxReconcileCount,
-		LocalDateTime reconciledBefore,
-		Pageable pageable
+		LocalDateTime reconciledBefore
 	);
 
 	/**

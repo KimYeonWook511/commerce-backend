@@ -2,16 +2,19 @@ package com.commerce.payment.application.usecase;
 
 import static org.assertj.core.api.Assertions.assertThat;
 import static org.mockito.ArgumentMatchers.any;
+import static org.mockito.ArgumentMatchers.anyInt;
 import static org.mockito.ArgumentMatchers.argThat;
 import static org.mockito.ArgumentMatchers.eq;
 import static org.mockito.BDDMockito.given;
 import static org.mockito.BDDMockito.then;
+import static org.mockito.BDDMockito.willAnswer;
 import static org.mockito.BDDMockito.willThrow;
 import static org.mockito.Mockito.never;
 import static org.mockito.Mockito.times;
 
 import java.time.LocalDateTime;
 import java.util.List;
+import java.util.concurrent.atomic.AtomicBoolean;
 
 import org.junit.jupiter.api.AfterEach;
 import org.junit.jupiter.api.DisplayName;
@@ -33,14 +36,15 @@ import com.commerce.order.domain.OrderStatus;
 import com.commerce.order.infrastructure.persistence.support.OrderPersistenceTestSupport;
 import com.commerce.payment.application.port.NotificationPort;
 import com.commerce.payment.application.port.PaymentGatewayPort;
-import com.commerce.payment.application.port.dto.PgCallSource;
 import com.commerce.payment.application.port.dto.PgApproveResult;
 import com.commerce.payment.application.port.dto.PgCallRecord;
+import com.commerce.payment.application.port.dto.PgCallSource;
 import com.commerce.payment.application.port.dto.PgHistoryEntry;
 import com.commerce.payment.application.port.dto.PgHistoryEntryType;
 import com.commerce.payment.application.port.dto.PgHistoryResult;
 import com.commerce.payment.application.port.dto.PgHistoryScope;
 import com.commerce.payment.application.port.dto.PgOutcome;
+import com.commerce.payment.application.service.PaymentService;
 import com.commerce.payment.domain.Payment;
 import com.commerce.payment.domain.PaymentCloseCode;
 import com.commerce.payment.domain.PaymentPg;
@@ -93,6 +97,9 @@ class ReconcilePaymentUseCaseIntegrationTest {
 
 	@MockitoSpyBean
 	private PaymentRepository paymentRepository;
+
+	@Autowired
+	private PaymentService paymentService;
 
 	@Autowired
 	private PersistenceCleanupTestSupport persistenceCleanup;
@@ -418,7 +425,7 @@ class ReconcilePaymentUseCaseIntegrationTest {
 		Fixture fixture = unknownPayment();
 		Payment stale = fixture.payment();
 		for (int round = 0; round < 12; round++) {
-			stale.recordReconciled(LocalDateTime.now().minusHours(6));
+			stale.recordReconciled(round, LocalDateTime.now().minusHours(6));
 		}
 		stale.recordNotified(LocalDateTime.now().minusHours(3));
 		paymentPersistence.save(stale);
@@ -428,6 +435,52 @@ class ReconcilePaymentUseCaseIntegrationTest {
 
 		// 멈추면 그 결제가 활성 슬롯을 쥔 채 남아 그 주문을 영영 결제할 수 없다.
 		assertThat(reload(fixture).getStatus()).isEqualTo(PaymentStatus.SUCCEEDED);
+	}
+
+	@DisplayName("집기가 다른 주기와 겹쳐 낙관 락에 걸리면 그 건만 건너뛰고 남은 건은 계속 처리한다")
+	@Test
+	void reconcile_whenClaimLosesOptimisticLock_skipsOnlyThatOne() {
+		Fixture contended = unknownPayment();
+		Fixture remaining = unknownPayment();
+		givenHistory(PgHistoryResult.succeeded(List.of(approvalEntry(remaining, remaining.amount())), "성공"));
+		// 두 집기가 실제로 겹쳐 진 쪽이 받는 것. 값 재확인이 아니라 이 갈래를 세운다.
+		willThrow(new PaymentException(PaymentErrorCode.PAYMENT_CONCURRENTLY_MODIFIED))
+			.given(paymentRepository)
+			.saveChecked(argThat(payment -> contended.payment().getId().equals(payment.getId())));
+
+		reconcilePaymentUseCase.reconcile();
+
+		Payment skipped = reload(contended);
+		assertThat(skipped.getReconcileCount()).isZero();
+		assertThat(skipped.getStatus()).isEqualTo(PaymentStatus.UNKNOWN);
+		// 진 쪽에서 회차가 통째로 깨지면 뒤의 건이 그 주기에 영영 안 돌아간다.
+		assertThat(reload(remaining).getStatus()).isEqualTo(PaymentStatus.SUCCEEDED);
+	}
+
+	@DisplayName("다른 주기가 먼저 집어 커밋한 건은 결제사를 부르지 않고 그 회차의 남은 건은 계속 처리한다")
+	@Test
+	void reconcile_whenAnotherRoundAlreadyCommittedItsClaim_skipsItAndKeepsGoing() {
+		Fixture taken = unknownPayment();
+		Fixture remaining = unknownPayment();
+		givenHistory(PgHistoryResult.succeeded(List.of(approvalEntry(remaining, remaining.amount())), "성공"));
+
+		// 목록을 받은 직후 다른 주기가 첫 건을 집어 커밋한 상황. 갱신이 이미 끝났으므로 낙관 락은 이 창을
+		// 가리지 못하고, 집을 때 본 회차와 달라졌다는 것만이 그 사실을 알려 준다.
+		AtomicBoolean claimedByOther = new AtomicBoolean();
+		willAnswer(invocation -> {
+			Object targets = invocation.callRealMethod();
+			if (claimedByOther.compareAndSet(false, true)) {
+				paymentService.recordReconciled(taken.payment().getId(), 0, LocalDateTime.now());
+			}
+			return targets;
+		}).given(paymentRepository).findUnknownReconcileTargets(anyInt(), anyInt(), any());
+
+		reconcilePaymentUseCase.reconcile();
+
+		Payment skipped = reload(taken);
+		assertThat(skipped.getReconcileCount()).isEqualTo(1);
+		assertThat(skipped.getStatus()).isEqualTo(PaymentStatus.UNKNOWN);
+		assertThat(reload(remaining).getStatus()).isEqualTo(PaymentStatus.SUCCEEDED);
 	}
 
 	// ── 픽스처 ───────────────────────────────────────────────────

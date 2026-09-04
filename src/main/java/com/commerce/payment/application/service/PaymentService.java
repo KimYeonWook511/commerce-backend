@@ -231,14 +231,19 @@ public class PaymentService {
 	 * 호출이나 응답 처리가 깨졌을 때 집은 사실까지 롤백되어 회차가 오르지 않고, 다시 집는 간격이 첫 값에
 	 * 머물러 장애가 길어질수록 결제사를 더 세게 두드린다.
 	 *
-	 * <p>이 저장에서 낙관 락이 걸린다. 두 주기가 같은 건을 동시에 집으면 진 쪽이 결제사를 부르기 전에
-	 * 물러난다.
+	 * <p>두 방어가 서로 다른 창을 막는다. 앞선 주기의 갱신이 아직 커밋 전이면 이 저장에서 낙관 락이
+	 * 걸리고, 이미 커밋됐으면 집을 때 본 회차와 달라져 도메인이 거른다 — 다시 읽는 이 자리는 그 커밋된
+	 * 값을 그대로 보므로 버전이 어긋나지 않는다.
+	 *
+	 * @return 집은 결제. 다른 주기가 이미 집었으면 비어 있다
 	 */
 	@Transactional
-	public Payment recordReconciled(Long id, LocalDateTime pickedAt) {
+	public Optional<Payment> recordReconciled(Long id, int expectedReconcileCount, LocalDateTime pickedAt) {
 		Payment payment = load(id);
-		payment.recordReconciled(pickedAt);
-		return paymentRepository.saveChecked(payment);
+		if (!payment.recordReconciled(expectedReconcileCount, pickedAt)) {
+			return Optional.empty();
+		}
+		return Optional.of(paymentRepository.saveChecked(payment));
 	}
 
 	/** 통지를 보낸 뒤에 남긴다. 먼저 남기면 전송이 실패했을 때 알린 것으로 남아 다시 알리지 않는다 */
