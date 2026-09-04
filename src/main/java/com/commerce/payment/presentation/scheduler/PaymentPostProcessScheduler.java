@@ -18,8 +18,11 @@ import lombok.RequiredArgsConstructor;
  * 붙인다 — 주기를 따로 정해야 하면 메서드마다 붙이면 되고, 한 클래스에 모여 있어야 무엇이 언제 도는지
  * 한눈에 보인다.
  *
- * <p>여기 있는 모든 주기 실행은 결제 후처리 전용 풀에서 돈다. 이 도메인만 결제사를 부르므로, 공용 풀에
+ * <p>여기 있는 주기 실행은 모두 결제 후처리 전용 풀에서 돈다. 이 도메인만 결제사를 부르므로, 공용 풀에
  * 두면 결제사가 느려질 때 주문 만료와 재고 복구까지 함께 멈춘다.
+ *
+ * <p>그 안에서 대사 둘만 따로 떼어 대사 전용 풀에서 돈다. 대사는 한 주기에 대상을 다 처리해 밀린 만큼
+ * 스레드를 오래 잡고, 같은 풀에 두면 그동안 환불 발송이 스레드를 얻지 못해 접수된 환불이 안 나간다.
  */
 @Component
 @Profile("!test")
@@ -43,7 +46,7 @@ public class PaymentPostProcessScheduler {
 		dispatchRefundUseCase.dispatch();
 	}
 
-	@Scheduled(scheduler = PaymentSchedulerConfig.SCHEDULER_BEAN,
+	@Scheduled(scheduler = PaymentSchedulerConfig.RECONCILE_SCHEDULER_BEAN,
 		cron = "${payment.postprocess.reconcile.cron}")
 	public void reconcile() {
 		reconcilePaymentUseCase.reconcile();
@@ -65,7 +68,7 @@ public class PaymentPostProcessScheduler {
 	 * 결과를 모르는 환불을 이력으로 확정하고, 이력에 그 시도가 없으면 그 자리에서 다시 보낸다.
 	 * 결제 대사와 조회 조건이 달라 주기를 따로 붙인다.
 	 */
-	@Scheduled(scheduler = PaymentSchedulerConfig.SCHEDULER_BEAN,
+	@Scheduled(scheduler = PaymentSchedulerConfig.RECONCILE_SCHEDULER_BEAN,
 		cron = "${payment.postprocess.refund.reconcile.cron}")
 	public void reconcileRefunds() {
 		reconcileRefundUseCase.reconcile();
