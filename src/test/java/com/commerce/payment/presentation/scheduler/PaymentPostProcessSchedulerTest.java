@@ -25,8 +25,8 @@ class PaymentPostProcessSchedulerTest {
 				: PaymentSchedulerConfig.SCHEDULER_BEAN;
 			assertThat(method.getAnnotation(Scheduled.class).scheduler())
 				// 대사가 나머지와 같은 풀에 있으면 밀린 대사가 스레드를 오래 잡아 환불 발송이 굶고,
-				// 어느 쪽도 아니면 공용 풀에서 돌아 결제사 지연이 주문 만료·재고 복구로 번진다.
-				// 실행 중에는 아무 증상이 없어 이 검사가 아니면 드러나지 않는다.
+				// 풀 지정을 빠뜨리면 공용 풀에서 돌아 결제사 지연이 주문 만료·재고 복구로 번진다.
+				// 둘 다 실행 중에는 아무 증상이 없어 이 검사가 아니면 드러나지 않는다.
 				.as("%s 가 가리키는 풀이 다르다", method.getName())
 				.isEqualTo(expected);
 		});

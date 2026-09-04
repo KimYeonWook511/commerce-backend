@@ -27,7 +27,11 @@ import org.springframework.scheduling.TaskScheduler;
 @Configuration
 public class PaymentSchedulerConfig {
 
-	/** 진입점이 이 이름으로 풀을 가리킨다. 양쪽에 문자열을 따로 적으면 오타가 조용히 공용 풀로 되돌린다 */
+	/**
+	 * 진입점이 이 이름으로 풀을 가리킨다. 양쪽에 문자열을 따로 적지 않는 것은, 이름이 어긋나면 그 빈을
+	 * 찾지 못해 애플리케이션이 기동에서 멈추기 때문이다. 조용히 공용 풀로 되돌아가는 것은 이름이 틀렸을
+	 * 때가 아니라 풀 지정을 아예 빠뜨렸을 때다.
+	 */
 	public static final String SCHEDULER_BEAN = "paymentPostProcessTaskScheduler";
 
 	/** 대사 진입점이 가리키는 풀. 오래 잡는 쪽을 여기 몰아 나머지 후처리가 굶지 않게 한다 */
