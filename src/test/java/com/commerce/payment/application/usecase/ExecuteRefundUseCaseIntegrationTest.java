@@ -397,10 +397,11 @@ class ExecuteRefundUseCaseIntegrationTest {
 		assertThat(reload(refund).getStatus()).isEqualTo(RefundStatus.SUCCEEDED);
 	}
 
-	@DisplayName("초과 거절을 결과를 모르던 다른 환불이 설명하면 그 건을 확정하고 이번 건은 상태를 그대로 둔다")
+	@DisplayName("같은 결제의 다른 환불이 이력에 완료로 있어도 그 행을 건드리지 않고 사람에게 넘긴다")
 	@Test
-	void send_whenExceededExplainedByAnotherRefund_settlesThatOneAndKeepsThisOne() {
+	void send_whenOnlyAnotherRefundIsInHistory_leavesThatRowAndFlagsForReview() {
 		PartiallyRefunded fixture = twoRefundsOnOnePayment();
+		RefundStatus otherStatusBefore = reload(fixture.earlier()).getStatus();
 		givenRefundResult(exceededRejection());
 		given(paymentGatewayPort.readHistory(any(), eq(PgHistoryScope.REFUND_ONLY), any()))
 			.willReturn(PgHistoryResult.succeeded(
@@ -409,29 +410,17 @@ class ExecuteRefundUseCaseIntegrationTest {
 		RefundStatus status = executeRefundUseCase.send(
 			fixture.payment(), fixture.current(), PgCallSource.MEMBER_REQUEST);
 
-		assertThat(reload(fixture.earlier()).getStatus()).isEqualTo(RefundStatus.SUCCEEDED);
-		// 사람에게 넘기지 않는다. 상태가 그대로라 다음 주기의 대사가 같은 키로 다시 보낸다.
-		assertThat(status).isEqualTo(RefundStatus.IN_PROGRESS);
-		assertThat(reload(fixture.current()).getStatus()).isEqualTo(RefundStatus.IN_PROGRESS);
-		assertThat(reload(fixture.current()).getReviewCode()).isNull();
-	}
+		// 자기가 든 환불만 바꾼다. 다른 환불은 자기 대사 주기가 이력을 읽어 확정한다.
+		Refund other = reload(fixture.earlier());
+		assertThat(other.getStatus()).isEqualTo(otherStatusBefore);
+		assertThat(other.getPgTransactionId()).isNull();
+		assertThat(reloadPayment(fixture.payment()).getRefundSucceededAmount()).isZero();
 
-	@DisplayName("한도를 다시 검사하지 않아 어긋남이 풀린 환불이 그대로 나갈 수 있다")
-	@Test
-	void send_whenExceededExplainedByAnotherRefund_doesNotRecheckTheLimit() {
-		PartiallyRefunded fixture = twoRefundsOnOnePayment();
-		givenRefundResult(exceededRejection());
-		given(paymentGatewayPort.readHistory(any(), eq(PgHistoryScope.REFUND_ONLY), any()))
-			.willReturn(PgHistoryResult.succeeded(
-				List.of(refundEntry(fixture.earlier().getRefundKey() + "-1")), "성공"));
-
-		executeRefundUseCase.send(fixture.payment(), fixture.current(), PgCallSource.MEMBER_REQUEST);
-
-		// 한도가 읽는 것은 돌려주기로 한 금액이고 그 값은 환불을 만들 때만 오르므로, 만들 때 통과한 이
-		// 환불은 지금도 한도 안이다. 방금 확정한 형제가 올린 것은 실제로 돌아간 금액이라 한도와 무관하다.
-		Payment stored = reloadPayment(fixture.payment());
-		assertThat(stored.getRefundOpenedAmount()).isEqualTo(AMOUNT);
-		assertThat(stored.getRefundSucceededAmount()).isEqualTo(fixture.earlier().getAmount());
+		// 우리 시도 키가 실리지 않았으므로 우리가 접수하지 않은 취소가 잔액을 가져간 것이다.
+		assertThat(status).isEqualTo(RefundStatus.MANUAL_REVIEW);
+		Refund flagged = reload(fixture.current());
+		assertThat(flagged.getStatus()).isEqualTo(RefundStatus.MANUAL_REVIEW);
+		assertThat(flagged.getReviewCode()).isEqualTo(RefundReviewCode.REFUNDABLE_AMOUNT_EXCEEDED);
 	}
 
 	@DisplayName("초과 거절이 어느 쪽으로도 설명되지 않으면 검토 코드를 채워 사람에게 넘긴다")
@@ -503,32 +492,6 @@ class ExecuteRefundUseCaseIntegrationTest {
 			assertThat(event.getLevel()).isEqualTo(Level.ERROR);
 			assertThat(event.getThrowableProxy()).isNotNull();
 		});
-	}
-
-	@DisplayName("형제 환불을 연달아 확정하다 가운데가 거부돼도 앞뒤로 커밋된 건은 남는다")
-	@Test
-	void send_whenSiblingSettlementIsRejectedInTheMiddle_keepsCommittedOnes() {
-		SiblingSettlement fixture = siblingsWithOneBroken();
-		givenRefundResult(exceededRejection());
-		given(paymentGatewayPort.readHistory(any(), eq(PgHistoryScope.REFUND_ONLY), any()))
-			.willReturn(PgHistoryResult.succeeded(List.of(
-				refundEntry(fixture.first().attemptKey()),
-				refundEntry(fixture.broken().attemptKey()),
-				refundEntry(fixture.third().attemptKey())), "성공"));
-
-		RefundStatus status = executeRefundUseCase.send(
-			fixture.payment(), fixture.driving(), PgCallSource.MEMBER_REQUEST);
-
-		// 확정 하나하나가 자기 트랜잭션이라 앞서 커밋된 것이 되돌려지지 않고, 남은 건은 대사가 회수한다.
-		assertThat(reload(fixture.first()).getStatus()).isEqualTo(RefundStatus.SUCCEEDED);
-		assertThat(reload(fixture.third()).getStatus()).isEqualTo(RefundStatus.SUCCEEDED);
-		assertThat(reload(fixture.broken()).getStatus()).isEqualTo(RefundStatus.UNKNOWN);
-		assertThat(reloadPayment(fixture.payment()).getRefundSucceededAmount())
-			.isEqualTo(fixture.first().getAmount() + fixture.third().getAmount());
-		// 우리 기록에 못 옮겼을 뿐 그 환불이 결제사에서 완료라는 사실은 달라지지 않으므로 초과 거절의
-		// 원인은 밝혀진 것이다. 여기서 안 세면 멀쩡한 건이 나가는 전이가 없는 검토 대기로 간다.
-		assertThat(status).isEqualTo(RefundStatus.IN_PROGRESS);
-		assertThat(reload(fixture.driving()).getReviewCode()).isNull();
 	}
 
 	// ── 대사가 이력을 읽은 뒤 그 자리에서 다시 보낸다 ────────────
@@ -655,40 +618,6 @@ class ExecuteRefundUseCaseIntegrationTest {
 		Refund revived = reload(refund);
 		ReflectionTestUtils.setField(revived, "status", RefundStatus.READY);
 		return refundPersistence.save(revived);
-	}
-
-	/**
-	 * 한 결제에 구동 환불 하나와 형제 셋. 이력이 형제 셋을 완료로 설명하는데 가운데 하나만 결제를 거치지
-	 * 않고 만들어져, 그 금액이 돌려주기로 한 금액에 안 들어 있어 확정이 거부된다.
-	 *
-	 * <p>확정 차례가 식별자 오름차순이라 깨진 건을 가운데에 끼워 넣는다.
-	 */
-	private SiblingSettlement siblingsWithOneBroken() {
-		Payment payment = savePayment();
-		int share = AMOUNT / 10;
-		Refund driving = payment.openRefund(
-			Optional.empty(), share, RefundReason.ORDER_CANCELED, "IDEM-driving-" + uniqueSuffix);
-		Refund first = unsettled(payment.openRefund(
-			Optional.empty(), share, RefundReason.ORDER_CANCELED, "IDEM-first-" + uniqueSuffix));
-		Refund third = unsettled(payment.openRefund(
-			Optional.empty(), share, RefundReason.ORDER_CANCELED, "IDEM-third-" + uniqueSuffix));
-
-		Refund savedDriving = refundPersistence.save(driving);
-		Refund savedFirst = refundPersistence.save(first);
-		Refund savedBroken = refundPersistence.save(unsettled(uncountedRefund(payment, AMOUNT / 2, "middle")));
-		Refund savedThird = refundPersistence.save(third);
-		paymentPersistence.save(payment);
-		return new SiblingSettlement(payment, savedDriving, savedFirst, savedBroken, savedThird);
-	}
-
-	private record SiblingSettlement(Payment payment, Refund driving, Refund first, Refund broken, Refund third) {
-	}
-
-	/** 결제사를 불렀는데 결과를 몰라 아직 결과가 정해지지 않은 환불. 형제 확정의 후보가 되는 상태다 */
-	private Refund unsettled(Refund refund) {
-		refund.markInProgress(LocalDateTime.now());
-		refund.markUnknown();
-		return refund;
 	}
 
 	/**

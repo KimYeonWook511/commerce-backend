@@ -21,7 +21,6 @@ import com.commerce.payment.domain.RefundReviewCode;
 import com.commerce.payment.domain.RefundStatus;
 import com.commerce.payment.domain.exception.PaymentErrorCode;
 import com.commerce.payment.domain.exception.PaymentException;
-import com.commerce.payment.domain.repository.RefundRepository;
 
 import lombok.RequiredArgsConstructor;
 import lombok.extern.slf4j.Slf4j;
@@ -49,7 +48,6 @@ public class ExecuteRefundUseCase {
 	private final PaymentGatewayPort paymentGatewayPort;
 	private final RefundService refundService;
 	private final PgCallLogService pgCallLogService;
-	private final RefundRepository refundRepository;
 
 	/**
 	 * 아직 안 나간 환불을 처음 보낸다. 부를 준비 상태일 때만 보내는 것이 겹친 호출을 막는 장치다 —
@@ -217,18 +215,16 @@ public class ExecuteRefundUseCase {
 	}
 
 	/**
-	 * 초과 거절을 이력으로 세 갈래로 가른다. 가르는 근거는 이력의 취소 항목이 우리 환불 기록으로
-	 * 설명되는지다 — 우리 시도 키가 실린 항목은 우리 사건이고, 실리지 않은 항목은 우리가 모르는 환불이다.
+	 * 초과 거절을 이력으로 두 갈래로 가른다. 가르는 근거는 이력의 취소 항목에 우리 시도 키가 실렸는지다.
 	 *
 	 * <ol>
 	 *   <li>이 사건이 이미 완료로 있다 — 성공으로 확정한다.
-	 *   <li>결과를 모르던 다른 건이 완료된 것으로 설명된다 — 그 건을 확정하고 이번 건은 상태를 그대로 둔다.
-	 *       다음 주기의 대사가 같은 키로 다시 보내며, 한도는 다시 검사하지 않는다 — 한도가 읽는 것은 돌려주기로
-	 *       한 금액이고 그 값은 환불을 만들 때만 오르므로 만들 때 통과한 이 환불은 지금도 한도 안이다. 방금
-	 *       확정한 건이 올린 것은 실제로 돌아간 금액이라 한도와 무관하고, 재검사를 두면 없앤 합계 조회가
-	 *       그 자리로 되살아난다.
-	 *   <li>어느 쪽으로도 설명되지 않는다 — 우리가 모르는 환불이 있다. 사람에게 넘긴다.
+	 *   <li>없다 — 우리가 접수하지 않은 취소가 잔액을 가져갔다는 뜻이라 사람에게 넘긴다.
 	 * </ol>
+	 *
+	 * <p>같은 결제의 다른 환불은 보지 않는다. 한도를 돌려주기로 한 금액으로 재므로 그 몫은 접수 시점에
+	 * 이미 빠져 있고, 그래서 다른 환불이 이 거절을 일으킬 수 없다. 그 건들은 각자 자기 대사 주기에
+	 * 확정된다.
 	 *
 	 * <p>다시 보내도 중복이 되지 않는다. 거절된 요청은 결제사가 실행하지 않아 이력에 흔적이 없다.
 	 */
@@ -247,42 +243,10 @@ public class ExecuteRefundUseCase {
 			return transition(refund,
 				() -> refundService.complete(refund.getId(), ours.get().pgTransactionId()), RefundStatus.SUCCEEDED);
 		}
-		if (settleOthersExplainedBy(payment, refund, history)) {
-			log.info("결과를 모르던 다른 환불이 초과 거절을 설명해 이번 건은 다음 주기로 넘긴다 refundId={}",
-				refund.getId());
-			return refund.getStatus();
-		}
 		return transition(refund,
 			() -> refundService.flagForReview(
 				refund.getId(), RefundReviewCode.REFUNDABLE_AMOUNT_EXCEEDED, result.message()),
 			RefundStatus.MANUAL_REVIEW);
-	}
-
-	/**
-	 * 같은 결제에서 결과를 모르던 다른 환불이 이력에 완료로 있으면 그것을 확정한다.
-	 *
-	 * @return 그렇게 확정된 건이 하나라도 있으면 true. 그것이 곧 어긋남의 원인이 밝혀졌다는 뜻이다
-	 */
-	private boolean settleOthersExplainedBy(Payment payment, Refund refund, PgHistoryResult history) {
-		boolean explained = false;
-		for (Refund sibling : refundRepository.findUnsettledByPaymentId(payment.getId())) {
-			if (sibling.getId().equals(refund.getId())) {
-				continue;
-			}
-			Optional<PgHistoryEntry> settled = history.settledRefundOf(sibling);
-			if (settled.isEmpty()) {
-				continue;
-			}
-			try {
-				refundService.complete(sibling.getId(), settled.get().pgTransactionId());
-			} catch (PaymentException ex) {
-				// 우리 기록에 못 옮겼을 뿐 그 건이 결제사에서 완료라는 사실은 달라지지 않으므로 설명된
-				// 것으로 센다. 여기서 안 세면 원인이 이미 밝혀진 건이 나가는 전이가 없는 검토 대기로 간다.
-				logAbsorbedFailure(sibling.getId(), ex);
-			}
-			explained = true;
-		}
-		return explained;
 	}
 
 	/**
