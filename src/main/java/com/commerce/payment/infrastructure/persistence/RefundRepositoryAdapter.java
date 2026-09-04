@@ -89,11 +89,6 @@ public class RefundRepositoryAdapter implements RefundRepository {
 	}
 
 	@Override
-	public List<Refund> findUnsettledByPaymentId(Long paymentId) {
-		return jpaRefundRepository.findUnsettledByPaymentId(paymentId);
-	}
-
-	@Override
 	public List<Refund> findDispatchTargets(Pageable pageable) {
 		return jpaRefundRepository.findDispatchTargets(pageable);
 	}
