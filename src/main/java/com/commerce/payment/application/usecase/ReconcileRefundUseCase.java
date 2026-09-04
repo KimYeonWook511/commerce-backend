@@ -92,7 +92,9 @@ public class ReconcileRefundUseCase {
 			try {
 				reconcileOne(target);
 			} catch (Exception ex) {
-				log.error("환불 대사 처리 실패 refundId={}", target.id(), ex);
+				// 집기 자체가 깨진 자리다. 그 행을 읽어 온 적이 없어 남길 것이 식별자뿐이며, 집은 뒤의
+				// 실패는 행을 손에 들고 더 자세히 남긴다.
+				log.error("환불 대사가 집지 못했다 refundId={}", target.id(), ex);
 			}
 		}
 	}
@@ -149,7 +151,17 @@ public class ReconcileRefundUseCase {
 		if (picked == null) {
 			return;
 		}
+		try {
+			settle(picked);
+		} catch (Exception ex) {
+			// 집은 뒤라 행을 손에 들고 있다. 대사가 무더기로 깨질 때 무엇이 어느 상태에서 깨지는지는
+			// 이 값들로만 갈리며, 없으면 건마다 다시 조회해야 한다.
+			log.error("환불 대사 처리 실패 refundId={} paymentId={} status={}",
+				picked.getId(), picked.getPaymentId(), picked.getStatus(), ex);
+		}
+	}
 
+	private void settle(Refund picked) {
 		Payment payment = paymentRepository.findById(picked.getPaymentId())
 			.orElseThrow(() -> new PaymentException(PaymentErrorCode.PAYMENT_NOT_FOUND));
 
