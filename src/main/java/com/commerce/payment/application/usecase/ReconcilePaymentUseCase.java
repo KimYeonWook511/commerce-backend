@@ -61,8 +61,8 @@ public class ReconcilePaymentUseCase {
 
 	/**
 	 * 집은 대상을 개수로 자르지 않고 다 처리한다. 자르면 남은 건이 다음 주기로 밀릴 뿐 총 처리 시간은
-	 * 줄지 않고, 주기가 끝난 뒤부터 간격을 재므로 잘게 쪼갤수록 쉬는 시간만 더 붙는다. 대신 대상이
-	 * 임계를 넘으면 알린다 — 밀렸다는 사실이 조용히 잘려 사라지지 않게 한다.
+	 * 줄지 않고, 그 주기는 다음 정각에야 오므로 잘게 쪼갤수록 마지막 건이 끝나는 시각이 뒤로 밀린다.
+	 * 대신 대상이 임계를 넘으면 알린다 — 밀렸다는 사실이 조용히 잘려 사라지지 않게 한다.
 	 */
 	public void reconcile() {
 		List<ReconcileTarget> targets = findTargets(LocalDateTime.now());
