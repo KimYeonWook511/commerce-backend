@@ -404,17 +404,20 @@ class ReconcileRefundUseCaseIntegrationTest {
 		assertThat(stored.getVersion()).isGreaterThan(versionBefore);
 	}
 
-	@DisplayName("금액 불변식이 깨져 확정이 거부되면 경합과 다른 수준으로 남는다")
+	@DisplayName("금액 기록이 어긋나 확정이 거부되면 사람이 이어받도록 검토 대기로 옮긴다")
 	@Test
-	void reconcile_whenAmountInvariantBroken_logsItApartFromRacing() {
+	void reconcile_whenAmountInvariantBroken_handsOverForReview() {
 		Payment payment = savePayment();
 		Refund refund = uncountedRefund(payment);
 		givenHistory(PgHistoryResult.succeeded(List.of(refundEntry(refund.attemptKey(), true)), "성공"));
 
 		reconcileRefundUseCase.reconcile();
 
-		// 금액 갱신이 환불 전이와 한 트랜잭션이라 거부되면 그 환불도 미결로 남는다.
-		assertThat(reload(refund).getStatus()).isEqualTo(RefundStatus.UNKNOWN);
+		// 그대로 두면 상태가 대사 대상 그대로라 주기마다 다시 집혀 이력 조회만 되풀이된다.
+		Refund handedOver = reload(refund);
+		assertThat(handedOver.getStatus()).isEqualTo(RefundStatus.MANUAL_REVIEW);
+		assertThat(handedOver.getReviewCode()).isEqualTo(RefundReviewCode.PAYMENT_AMOUNT_RECORD_BROKEN);
+		// 금액 갱신이 환불 전이와 한 트랜잭션이라 거부되면 결제 행은 그대로다.
 		assertThat(reloadPayment(payment).getRefundSucceededAmount()).isZero();
 		// 다시 집어도 풀리지 않는 것이라 경합과 같은 수준으로 남기면 정상 흐름 로그에 묻힌다.
 		assertThat(capturedLogs.list)

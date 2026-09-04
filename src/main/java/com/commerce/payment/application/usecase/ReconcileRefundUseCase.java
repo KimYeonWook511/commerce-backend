@@ -17,6 +17,7 @@ import com.commerce.payment.application.port.dto.PgOutcome;
 import com.commerce.payment.application.service.RefundService;
 import com.commerce.payment.domain.Payment;
 import com.commerce.payment.domain.Refund;
+import com.commerce.payment.domain.RefundReviewCode;
 import com.commerce.payment.domain.exception.PaymentErrorCode;
 import com.commerce.payment.domain.exception.PaymentException;
 import com.commerce.payment.domain.policy.ReconcileWindow;
@@ -218,11 +219,29 @@ public class ReconcileRefundUseCase {
 				// 남기면 그 신호가 정상 흐름 로그에 묻히고, 여기서 삼켜져 끝단에 닿지 않으므로 원인 위치는
 				// 실어 주는 stack 에만 남는다.
 				log.error("결제의 환불 금액 불변식이 깨져 이번 확정을 반영하지 못한다 refundId={}", refund.getId(), ex);
+				handOver(refund, ex);
 				return;
 			}
 			// 그 사이 다른 주체가 같은 결과로 옮겼거나, 결제가 동시에 바뀌어 이번 확정이 밀렸다. 어느
 			// 쪽이든 돈이 어떻게 됐는지는 달라지지 않고 다음 주기가 다시 집는다.
 			log.info("먼저 옮겨졌거나 결제가 함께 바뀌어 이번 확정을 반영하지 않는다 refundId={} 사유={}",
+				refund.getId(), ex.getErrorCode());
+		}
+	}
+
+	/**
+	 * 자동으로 풀 수 없는 건을 사람이 이어받는 자리로 옮긴다. 그대로 두면 상태가 대사 대상 그대로라
+	 * 주기마다 다시 집혀 결제사 이력 조회만 되풀이되고, 이미 나간 돈이 미결로 남는다.
+	 *
+	 * <p>이 전이는 환불만 저장하므로 방금 거부한 결제 행을 다시 건드리지 않는다. 밀리면 상태가 그대로라
+	 * 다음 주기가 다시 집어 이 자리로 온다.
+	 */
+	private void handOver(Refund refund, PaymentException cause) {
+		try {
+			refundService.flagForReview(
+				refund.getId(), RefundReviewCode.PAYMENT_AMOUNT_RECORD_BROKEN, cause.getErrorCode().getMessage());
+		} catch (PaymentException ex) {
+			log.info("검토 대기로 옮기지 못해 다음 주기로 넘긴다 refundId={} 사유={}",
 				refund.getId(), ex.getErrorCode());
 		}
 	}

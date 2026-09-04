@@ -16,5 +16,7 @@ public enum RefundReviewCode {
 	/** 결제사 잔액이 우리 기록보다 적다. 돈이 나갔는지 모른다 */
 	REFUNDABLE_AMOUNT_EXCEEDED,
 	/** 우리가 보낸 값이 결제사 기준에 맞지 않는다. 돈은 안 나갔다 */
-	REQUEST_REJECTED
+	REQUEST_REJECTED,
+	/** 나갔다. 그런데 결제 행의 금액 기록이 어긋나 그 성공을 반영하지 못한다 */
+	PAYMENT_AMOUNT_RECORD_BROKEN
 }
