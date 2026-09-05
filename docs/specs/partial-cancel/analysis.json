@@ -1,0 +1,431 @@
+{
+  "generated_at": "2026-09-05T13:41:00+09:00",
+  "closed_at": "2026-09-05T13:41:04.925593+09:00",
+  "round": 4,
+  "inspectors": [
+    "domain-model",
+    "domain-expert",
+    "repo-rules"
+  ],
+  "note": "4라운드 — 3라운드 통과 후 남은 MEDIUM 다섯을 고치고 그 수정만 겨냥해 셋(domain·domain-expert·repo-rules)을 돌린 좁은 재검사다. CRITICAL·HIGH 0건이며 3라운드에 이어 두 라운드 연속이다. 이번에 드러난 여덟(그중 DE7은 대조 규칙에서 수량 일치가 빠져 돈이 새는 자리, D9는 근거가 코드와 어긋난 자리)을 즉시 고쳤다. 남은 MEDIUM 11·LOW 15는 기록만 남긴다. 여기서 라운드를 멈춘 근거: CRITICAL·HIGH가 두 라운드 연속 0이고, 새로 나오는 것이 모두 문서 표현·전달 수준이며, 남은 것 중 구현을 어긋나게 할 수 있는 R11은 ArchUnit이 실행 중에 잡는다. 설계 결정이 남은 것은 D12 하나(빈 목록 면제를 '내역 0줄일 때'로 좁힐지)이고, 그것은 데이터를 깨지 않는다.",
+  "findings": [
+    {
+      "id": "DE7",
+      "reported_by": [
+        "domain-expert"
+      ],
+      "severity": "MEDIUM",
+      "category": "대조 관문 판정 규칙의 불완전",
+      "location": "data-model.md · phases/1-main/step4.md",
+      "summary": "새로 쓴 판정 규칙이 맞추는 키(품목 식별자)만 말하고 같아야 하는 값(수량)을 빠뜨려, 같은 품목 다른 수량이 재생으로 통과할 수 있었다. 사과 1개 취소 뒤 같은 키로 사과 2개가 오면 회원이 덜 돌려받는다.",
+      "disposition": {
+        "kind": "fixed",
+        "reason": "판정 규칙을 '품목 식별자로 짝짓고 짝이 없거나 줄 수가 다르거나 수량이 다르면 다르다고 답한다'로 닫고 두 문서를 같은 문장으로 맞췄다."
+      }
+    },
+    {
+      "id": "D9",
+      "reported_by": [
+        "domain-model"
+      ],
+      "severity": "MEDIUM",
+      "category": "요구 근거의 사실 오류",
+      "location": "spec.md#FR-016",
+      "summary": "FR-016의 새 근거 '값어치 0이 나가면 결제가 금액 0으로 환불을 연다'가 코드와 어긋났다. Refund.open이 이미 0 이하를 거부한다.",
+      "disposition": {
+        "kind": "fixed",
+        "reason": "근거를 실제 위험으로 바꿨다 — 결제 관문이 막긴 하지만 그때 회원에게 가는 것은 결제 도메인의 금액 오류라, 주문의 입력 잘못에 뜻이 다른 코드가 나가고 주문이 자기 검증을 다른 aggregate에 맡기게 된다."
+      }
+    },
+    {
+      "id": "D10",
+      "reported_by": [
+        "domain-model"
+      ],
+      "severity": "MEDIUM",
+      "category": "수정이 한 문서에만 닿음",
+      "location": "api-spec.md#실패",
+      "summary": "D1이 spec.md와 SCN-040에서 걷어낸 '모든 품목이 이미 취소된 주문에 목록 생략 요청이 온 경우'가 실패 표에 남아, HTTP로 도달할 수 없는 상황을 계약상 실패로 선언했다.",
+      "disposition": {
+        "kind": "fixed",
+        "reason": "그 행의 비고를 '검증·계산 관문이 확정된 줄을 하나도 못 만든 경우, 이미 취소된 주문은 그 앞의 상태 확인에서 걸린다'로 고쳤다."
+      }
+    },
+    {
+      "id": "D11",
+      "reported_by": [
+        "domain-model"
+      ],
+      "severity": "MEDIUM",
+      "category": "새 전제가 step 지시로 내려가지 않음",
+      "location": "phases/1-main/step2.md · data-model.md",
+      "summary": "'검증·계산 관문은 주문 상태를 보지 않는다'가 FR-016 근거 문장에만 있어, 구현자가 상태 가드를 넣으면 SCN-040이 확정 줄 0이 아니라 상태로 거절되어 가드 없이도 통과한다.",
+      "disposition": {
+        "kind": "fixed",
+        "reason": "step2 주의사항에 그 금지와 이유를 적고, data-model 호출 순서 ①에도 '주문 상태를 보지도 않는다'를 넣었다."
+      }
+    },
+    {
+      "id": "DE8",
+      "reported_by": [
+        "domain-expert"
+      ],
+      "severity": "LOW",
+      "category": "도메인 규칙의 중복 기재",
+      "location": "phases/1-main/step4.md",
+      "summary": "빈 요청 줄 면제가 지시 6과 지시 10에 두 벌로 적혀 한쪽만 고쳐질 자리가 있었다.",
+      "disposition": {
+        "kind": "fixed",
+        "reason": "지시 10을 지우고 관문 계약을 지시 6 한 곳에 모았다."
+      }
+    },
+    {
+      "id": "DE9",
+      "reported_by": [
+        "domain-expert"
+      ],
+      "severity": "LOW",
+      "category": "새 도메인 판정의 검증 부재",
+      "location": "scenarios.md#SCN-042 · phases/1-main/step4.md",
+      "summary": "'내역 0줄 + 요청 줄 있음 = 다르다'를 재는 시나리오가 없어, '저장된 줄이 모두 요청에 있는가'로 구현하면 0줄이 공허하게 참이 되어 검증할 수 없는 요청을 성공으로 재생한다.",
+      "disposition": {
+        "kind": "fixed",
+        "reason": "SCN-042를 신설해 step4 검증 대상에 넣었다."
+      }
+    },
+    {
+      "id": "DE11",
+      "reported_by": [
+        "domain-expert"
+      ],
+      "severity": "LOW",
+      "category": "정본과 다른 강도 표현",
+      "location": "db-schema.md#두 축의 대조",
+      "summary": "정본이 '이 작업 이후 취소를 지난 결제'로 좁힌 것을 여기만 '회원이 취소할 수 있는 결제에서는 구조적으로 일치한다'로 적었다.",
+      "disposition": {
+        "kind": "fixed",
+        "reason": "정본과 같은 범위 표현으로 맞췄다."
+      }
+    },
+    {
+      "id": "R12",
+      "reported_by": [
+        "repo-rules"
+      ],
+      "severity": "MEDIUM",
+      "category": "설정 확인 검증의 자리 미명세",
+      "location": "phases/1-main/step1.md",
+      "summary": "검증의 태그를 안 적어, 격리 태그가 붙은 클래스에 얹히면 CI에서 영영 안 돌아 CF7이 세우려던 상설 그물이 수동 실행에서만 존재하게 된다.",
+      "disposition": {
+        "kind": "fixed",
+        "reason": "'태그를 붙이지 않는다'와 그 이유를 지시 2에 적었다."
+      }
+    },
+    {
+      "id": "D12",
+      "reported_by": [
+        "domain-model"
+      ],
+      "severity": "MEDIUM",
+      "category": "규칙 범위와 근거 범위의 불일치",
+      "location": "spec.md#FR-009",
+      "summary": "빈 요청 줄 면제의 근거는 내역 없는 옛 환불만 덮는데 규칙은 모든 환불에 적용된다. 부분취소 뒤 같은 키로 목록 없이 오는 요청(잔여 전부 취소 의도)이 내용이 다른데도 재생된다. 데이터는 깨지지 않는다 — 재생은 아무것도 바꾸지 않고 응답의 두 금액이 무엇이 취소됐는지 드러낸다. 면제를 '내역 0줄일 때'로 좁힐지가 남은 선택이다.",
+      "disposition": null
+    },
+    {
+      "id": "R9",
+      "reported_by": [
+        "repo-rules"
+      ],
+      "severity": "MEDIUM",
+      "category": "규칙 문서 갱신의 실행 고리 약함",
+      "location": "plan.md · adr.md",
+      "summary": "갱신 계획 자체는 CLAUDE.md와 맞고 내용도 구체적이나, harness Stage 10이 규칙 문서를 위한 자리를 정의하지 않고 plan.md를 읽지 않아 실제로 걸리는 고리는 adr.md Consequences 한 줄뿐이다.",
+      "disposition": null
+    },
+    {
+      "id": "R10",
+      "reported_by": [
+        "repo-rules"
+      ],
+      "severity": "MEDIUM",
+      "category": "규약 이탈 정당화의 겨냥 어긋남",
+      "location": "phases/1-main/step5.md · docs/test-code-conventions.md",
+      "summary": "정당화의 알맹이는 규약과 양립하나, step이 이탈했다고 지목한 조항(용도 제한)과 반박이 겨눈 조항(결과 단언의 한계)이 다르다. 규약 자체도 절 제목과 첫 항목의 범위가 갈려 있어 SCN-036·041이 그 틈에 놓인다.",
+      "disposition": null
+    },
+    {
+      "id": "R11",
+      "reported_by": [
+        "repo-rules"
+      ],
+      "severity": "MEDIUM",
+      "category": "관문 입출력 타입의 레이어 귀속 미명세",
+      "location": "phases/1-main/step2.md · step4.md · data-model.md",
+      "summary": "'요청 줄 목록'과 '확정된 줄 목록'이 어느 레이어의 타입인지 없다. 응용 계층 dto로 잡히면 domain이 application을 참조해 ArchitectureRulesTest에 걸린다. ArchUnit이 잡으므로 잘못된 채 나가지는 않으나 step 시도 한도를 태울 수 있다.",
+      "disposition": null
+    },
+    {
+      "id": "T1",
+      "reported_by": [
+        "traceability"
+      ],
+      "severity": "MEDIUM",
+      "category": "시나리오와 요구의 대응 부정확",
+      "location": "scenarios.md#SCN-041 · spec.md#FR-013",
+      "summary": "SCN-041의 방아쇠는 내부 결제 행 경합인데 FR-013은 '외부 결제사 최종 실패'가 전제다.",
+      "disposition": null
+    },
+    {
+      "id": "T2",
+      "reported_by": [
+        "traceability"
+      ],
+      "severity": "MEDIUM",
+      "category": "시나리오와 요구의 대응 부정확",
+      "location": "scenarios.md#SCN-036 · spec.md#FR-006",
+      "summary": "SCN-036의 거절 이유는 결제 행 낙관 락 충돌인데 FR-006은 수량 한도다. 결제 행 경합에 대응하는 FR이 spec에 없어 두 시나리오의 정본 근거가 adr.md뿐이다.",
+      "disposition": null
+    },
+    {
+      "id": "D2+DE3",
+      "reported_by": [
+        "domain-model",
+        "domain-expert"
+      ],
+      "severity": "MEDIUM",
+      "category": "대조 관문 계약 (부분 해소)",
+      "location": "data-model.md · phases/1-main/step4.md",
+      "summary": "관문의 입출력·판정 규칙·면제·step 배치가 채워졌고 DE7로 수량 일치까지 닫혔다. 남은 것은 흐름 지시(step4 지시 3)에 대조 관문 호출 지점이 없다는 것뿐이다.",
+      "disposition": {
+        "kind": "fixed",
+        "reason": "호출 순서 ⓪·architecture ③·step4 지시 6·step2 주의사항에 관문 계약과 배치를 적었다. 남은 삽입 지점 표기는 D15로 기록한다."
+      }
+    },
+    {
+      "id": "D4",
+      "reported_by": [
+        "domain-model"
+      ],
+      "severity": "MEDIUM",
+      "category": "상태 셋 불일치",
+      "location": "aggregate.yaml#states",
+      "summary": "선언 밖 상태 RECEIVED·COMPLETED의 검토 사실이 없다. 운영 코드에 대입 자리가 없어 이 작업의 관문과 만날 수 없음을 코드로 확인했다.",
+      "disposition": null
+    },
+    {
+      "id": "AC1",
+      "reported_by": [
+        "access-control"
+      ],
+      "severity": "MEDIUM",
+      "category": "소유자 확인 요구 부재",
+      "location": "spec.md#요구사항",
+      "summary": "소유 규칙이 FR에 없어 SCN-018·SCN-014가 FR-001을 대신 가리킨다. 설계와 코드 양쪽에 소유 조건이 실재한다.",
+      "disposition": null
+    },
+    {
+      "id": "AC2",
+      "reported_by": [
+        "access-control"
+      ],
+      "severity": "MEDIUM",
+      "category": "존재 비노출 검증 부재",
+      "location": "phases/1-main/step4.md",
+      "summary": "step2가 SCN-014의 HTTP 경계 확인을 step4로 미뤘는데 step4 검증 대상에 없다. Order 도메인이 '남의 품목'과 '없는 식별자'를 구분할 수단이 없어 실제 노출은 아니다.",
+      "disposition": null
+    },
+    {
+      "id": "C1",
+      "reported_by": [
+        "clarity"
+      ],
+      "severity": "MEDIUM",
+      "category": "번호 기호 충돌",
+      "location": "architecture.md · data-model.md",
+      "summary": "①~⑩과 ⓪~③이 같은 원문자를 다른 단계에 붙인다.",
+      "disposition": null
+    },
+    {
+      "id": "D13",
+      "reported_by": [
+        "domain-model"
+      ],
+      "severity": "LOW",
+      "category": "판정 근거 체인의 반쪽 미기재",
+      "location": "data-model.md",
+      "summary": "'내역 0줄이면 옛 환불'의 역추론에 필요한 '이 작업 이후 환불에는 내역이 최소 한 줄 있다'가 문서에 없다. FR-016·FR-004·반영 관문이 함께 보장한다.",
+      "disposition": null
+    },
+    {
+      "id": "D14",
+      "reported_by": [
+        "domain-model"
+      ],
+      "severity": "LOW",
+      "category": "새 관문이 방법론 산출물에 없음",
+      "location": "ubiquitous-language-glossary.yaml · aggregate.yaml",
+      "summary": "관문이 셋이 됐는데 용어집과 aggregate.yaml에 대조 관문 항목이 없다.",
+      "disposition": null
+    },
+    {
+      "id": "D15",
+      "reported_by": [
+        "domain-model"
+      ],
+      "severity": "LOW",
+      "category": "관문 삽입 지점 미명시",
+      "location": "phases/1-main/step4.md#지시 3",
+      "summary": "대조 관문을 접수 흐름 어디에 끼우는지가 architecture ③에만 있고 흐름을 잇는 지시 3에는 없다.",
+      "disposition": null
+    },
+    {
+      "id": "DE10",
+      "reported_by": [
+        "domain-expert"
+      ],
+      "severity": "LOW",
+      "category": "새 관문 입력의 용어 미정의",
+      "location": "ubiquitous-language-glossary.yaml",
+      "summary": "관문 계약을 지는 '요청 줄'이 용어집에 없다. R11과 같은 자리를 다른 각도에서 가리킨다.",
+      "disposition": null
+    },
+    {
+      "id": "D5r",
+      "reported_by": [
+        "domain-model"
+      ],
+      "severity": "LOW",
+      "category": "논증의 반쪽 미증명",
+      "location": "spec.md#잔액을 재는 두 축의 관계",
+      "summary": "조건 3이 양방향을 주장하나 금액만 오르는 방향만 논증한다. 반대 방향은 반영 관문이 환불 식별자를 함께 받는 것으로 막힌다.",
+      "disposition": null
+    },
+    {
+      "id": "D8",
+      "reported_by": [
+        "domain-model"
+      ],
+      "severity": "LOW",
+      "category": "경계 그림이 정정의 요점을 가린다",
+      "location": "data-model.md#aggregate 경계",
+      "summary": "refundId 화살표 시작점이 취소 품목 내역 줄에 맞지 않는다.",
+      "disposition": null
+    },
+    {
+      "id": "CF6",
+      "reported_by": [
+        "concurrency-failure"
+      ],
+      "severity": "LOW",
+      "category": "재시도 가능성의 전제 미기록",
+      "location": "architecture.md",
+      "summary": "실패 경로의 선점 해제가 흐름 그림에 없다. 코드의 finally가 보장한다.",
+      "disposition": null
+    },
+    {
+      "id": "CF8",
+      "reported_by": [
+        "concurrency-failure"
+      ],
+      "severity": "LOW",
+      "category": "경합 순서 강제 조건의 미명세",
+      "location": "scenarios.md#SCN-036 · step5.md",
+      "summary": "SCN-036이 취소 쪽의 결제 행 읽기 시점을 못 박지 않았고, 두 참여자의 충돌 확정 지점이 다르다는 것도 지시 7에 없다.",
+      "disposition": null
+    },
+    {
+      "id": "AC3",
+      "reported_by": [
+        "access-control"
+      ],
+      "severity": "LOW",
+      "category": "선점과 소유자 확인 순서",
+      "location": "spec.md#제약사항",
+      "summary": "자리 키에 회원이 없으나 남의 자리를 잡거나 지울 수 없음을 코드로 확인했다.",
+      "disposition": null
+    },
+    {
+      "id": "AC4",
+      "reported_by": [
+        "access-control"
+      ],
+      "severity": "LOW",
+      "category": "소유자 조건 표기 누락",
+      "location": "architecture.md",
+      "summary": "경로 고르기 조회에 소유자 조건 표기가 없다. 코드에는 있다.",
+      "disposition": null
+    },
+    {
+      "id": "R7",
+      "reported_by": [
+        "repo-rules"
+      ],
+      "severity": "LOW",
+      "category": "규칙 문서 내부의 상충 표기",
+      "location": "docs/optimistic-lock-design.md",
+      "summary": "4장 표의 전파 행과 5.1이 어긋난다. R9의 문서 갱신에 교정 대상으로 포함했다.",
+      "disposition": null
+    },
+    {
+      "id": "R8",
+      "reported_by": [
+        "repo-rules"
+      ],
+      "severity": "LOW",
+      "category": "설정 변경 뒤 남는 오해 소지 표기",
+      "location": "application-local.yml · application-prod.yml",
+      "summary": "공통 파일에서 끄는데 프로필 주석이 'default true'로 남는다. 주석 유지는 사용자가 명시적으로 정한 것이다.",
+      "disposition": null
+    },
+    {
+      "id": "DE4",
+      "reported_by": [
+        "domain-expert"
+      ],
+      "severity": "LOW",
+      "category": "불변식 목록에 연산 계약 혼입",
+      "location": "aggregate.yaml",
+      "summary": "전부-또는-전무 계약이 상시 불변식 목록에 섞여 있다.",
+      "disposition": null
+    },
+    {
+      "id": "DE5",
+      "reported_by": [
+        "domain-expert"
+      ],
+      "severity": "LOW",
+      "category": "중심 타입 이름 미고정",
+      "location": "ubiquitous-language-glossary.yaml",
+      "summary": "'취소 값어치'·'확정된 줄'의 이름 유예에 이유가 없다.",
+      "disposition": null
+    },
+    {
+      "id": "DE6",
+      "reported_by": [
+        "domain-expert"
+      ],
+      "severity": "LOW",
+      "category": "확정된 줄의 조립 주체 미명시",
+      "location": "architecture.md · step4.md",
+      "summary": "확정된 줄이 상품 식별자를 담는지 정해지지 않았다.",
+      "disposition": null
+    }
+  ],
+  "carried_open": [],
+  "fingerprint": {
+    "spec.md": "588c6090ae01",
+    "plan.md": "f4db34a7d641",
+    "scenarios.md": "08bb6b466596",
+    "architecture.md": "93c7806cb257",
+    "data-model.md": "53ceca21f7c1",
+    "db-schema.md": "e606adf084df",
+    "api-spec.md": "feefbbb7fa7f",
+    "adr.md": "c01f04cf6fba",
+    "phases/1-main/step1.md": "048ed0080fbc",
+    "phases/1-main/step2.md": "5440aad95456",
+    "phases/1-main/step3.md": "0d07a244a6c1",
+    "phases/1-main/step4.md": "39794c809de5",
+    "phases/1-main/step5.md": "329f9cb0f590"
+  }
+}
