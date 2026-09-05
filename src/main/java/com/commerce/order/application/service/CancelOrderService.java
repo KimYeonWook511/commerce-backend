@@ -30,7 +30,7 @@ public class CancelOrderService {
 		Order order = orderRepository.findByIdAndMemberIdWithItems(orderId, memberId)
 			.orElseThrow(() -> new OrderException(OrderErrorCode.ORDER_NOT_FOUND));
 
-		order.cancel();
+		order.cancelBeforePayment();
 
 		List<OrderItem> sortedItems = order.getOrderItems().stream()
 			.sorted(Comparator.comparing(OrderItem::getProductId))

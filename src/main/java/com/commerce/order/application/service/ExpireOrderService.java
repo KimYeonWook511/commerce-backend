@@ -33,7 +33,7 @@ public class ExpireOrderService {
 		Order order = orderRepository.findByIdWithItems(orderId)
 			.orElseThrow(() -> new OrderException(OrderErrorCode.ORDER_NOT_FOUND));
 
-		order.cancel();
+		order.cancelBeforePayment();
 
 		stockRestoreOutboxCreateService.createOutboxEvent(toStockRestoreOutboxCreateCommand(order, requestedAt));
 
