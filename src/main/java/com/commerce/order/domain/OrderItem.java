@@ -89,6 +89,14 @@ public class OrderItem extends BaseTimeEntity {
 		return unitPrice * requestedQuantity;
 	}
 
+	/** 그 환불로 이 품목을 몇 개 취소했나. 그 환불의 내역이 없으면 0이다 */
+	int cancelledQuantityFor(Long refundId) {
+		return this.cancellations.stream()
+			.filter(cancellation -> cancellation.getRefundId().equals(refundId))
+			.mapToInt(OrderItemCancellation::getQuantity)
+			.sum();
+	}
+
 	/**
 	 * 취소수량을 올리고 그 내역을 남긴다. 둘을 한 자리에서만 움직여야 내역 수량의 합과 취소수량이
 	 * 갈라지지 않는다.

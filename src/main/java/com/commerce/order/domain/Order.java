@@ -1,7 +1,9 @@
 package com.commerce.order.domain;
 
 import java.util.ArrayList;
+import java.util.HashMap;
 import java.util.List;
+import java.util.Map;
 import java.util.Objects;
 
 import com.commerce.common.exception.CommonErrorCode;
@@ -82,8 +84,12 @@ public class Order extends BaseTimeEntity {
 		this.totalPrice += unitPrice * quantity;
 	}
 
-	public void cancel() {
-		if (this.status != OrderStatus.INIT && this.status != OrderStatus.PAID) {
+	/**
+	 * 결제 전 주문을 취소한다. 결제된 주문은 이 자리로 오지 않는다 — 상태만으로는 취소할 수 있는지가
+	 * 정해지지 않고 잔여수량이 남았는지에 따라 전이가 갈려, 검증·계산과 반영으로 나뉜 관문이 받는다.
+	 */
+	public void cancelBeforePayment() {
+		if (this.status != OrderStatus.INIT) {
 			throw new OrderException(OrderErrorCode.ORDER_CANCEL_NOT_ALLOWED);
 		}
 
@@ -159,6 +165,33 @@ public class Order extends BaseTimeEntity {
 		if (isFullyCancelled()) {
 			this.status = OrderStatus.CANCELED;
 		}
+	}
+
+	/**
+	 * 그 환불로 취소한 내역이 이번 요청 줄과 같은지 답한다. 같은 요청 키로 다시 온 요청에 앞 결과를
+	 * 돌려줄지 거절할지를 이 판정이 가르며, 줄의 순서는 따지지 않는다.
+	 *
+	 * <p>요청 줄이 비어 있으면 대조하지 않고 같다고 답한다 — 보낸 목록이 없으니 비교할 내용이 없다.
+	 * 반대로 저장된 내역이 하나도 없는데 요청 줄이 있으면 다르다고 답한다. 취소 품목 내역을 남기기
+	 * 전에 열린 환불이 그런 모습인데, 그 환불이 무엇을 취소했는지 알 수 없으므로 같다고 판정하지 않는다.
+	 */
+	public boolean matchesCancellation(Long refundId, List<OrderCancelLine> requestedLines) {
+		if (requestedLines == null || requestedLines.isEmpty()) {
+			return true;
+		}
+
+		Map<Long, Integer> recordedQuantities = new HashMap<>();
+		for (OrderItem orderItem : this.orderItems) {
+			int quantity = orderItem.cancelledQuantityFor(refundId);
+			if (quantity > 0) {
+				recordedQuantities.put(orderItem.getId(), quantity);
+			}
+		}
+		if (recordedQuantities.size() != requestedLines.size()) {
+			return false;
+		}
+		return requestedLines.stream()
+			.allMatch(line -> Integer.valueOf(line.quantity()).equals(recordedQuantities.get(line.orderItemId())));
 	}
 
 	private List<OrderCancelLine> remainingLines() {

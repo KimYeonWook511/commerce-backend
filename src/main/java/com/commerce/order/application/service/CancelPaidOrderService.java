@@ -2,12 +2,16 @@ package com.commerce.order.application.service;
 
 import java.util.Comparator;
 import java.util.List;
+import java.util.Map;
 import java.util.Optional;
+import java.util.stream.Collectors;
 
 import org.springframework.stereotype.Service;
 import org.springframework.transaction.annotation.Transactional;
 
 import com.commerce.order.domain.Order;
+import com.commerce.order.domain.OrderCancelLine;
+import com.commerce.order.domain.OrderCancelPlan;
 import com.commerce.order.domain.OrderItem;
 import com.commerce.order.domain.OrderStatus;
 import com.commerce.order.domain.exception.OrderErrorCode;
@@ -17,6 +21,8 @@ import com.commerce.payment.domain.Payment;
 import com.commerce.payment.domain.Refund;
 import com.commerce.payment.domain.RefundReason;
 import com.commerce.payment.domain.RefundRequester;
+import com.commerce.payment.domain.exception.PaymentErrorCode;
+import com.commerce.payment.domain.exception.PaymentException;
 import com.commerce.payment.domain.repository.PaymentRepository;
 import com.commerce.payment.domain.repository.RefundRepository;
 import com.commerce.stock.application.service.IncreaseStockService;
@@ -55,7 +61,8 @@ public class CancelPaidOrderService {
 	 * 저장소 장애 시 물러나는 경로가 있어 두 요청이 함께 들어오는 창이 그것만으로는 닫히지 않는다.
 	 */
 	@Transactional
-	public CancelPaidOrderResult cancelPaidOrder(Long memberId, Long orderId, String idempotencyKey) {
+	public CancelPaidOrderResult cancelPaidOrder(
+		Long memberId, Long orderId, String idempotencyKey, List<OrderCancelLine> requestedLines) {
 		// 주문 행만 잠근다. 남의 주문 번호를 실으면 그 주문이 있는지조차 드러나지 않는다.
 		Order order = orderRepository.findByIdAndMemberIdForUpdate(orderId, memberId)
 			.orElseThrow(() -> new OrderException(OrderErrorCode.ORDER_NOT_FOUND));
@@ -66,10 +73,16 @@ public class CancelPaidOrderService {
 			// 주문 상태를 보지 않고 판정한다. 일부만 취소돼 주문이 결제완료로 남아 있어도 같은 키의
 			// 재요청이면 앞 결과를 받아야 하고, 그러지 않으면 취소가 한 번 더 반영된다.
 			Payment refunded = refundTarget.orElseThrow();
+			Refund previous = existing.get();
+			// 금액이 같아도 품목 조합이 다를 수 있어 주문이 자기 내역으로 대조한다. 결제 쪽 금액·사유
+			// 대조는 그대로 두어, 주문을 거치지 않는 경로가 생겼을 때의 안전망으로 남긴다.
+			if (!order.matchesCancellation(previous.getId(), requestedLines)) {
+				throw new PaymentException(PaymentErrorCode.REFUND_IDEMPOTENCY_KEY_CONFLICT);
+			}
 			log.info("같은 요청 키의 환불이 이미 있어 앞선 취소 결과를 돌려준다 orderId={} refundId={}",
-				orderId, existing.get().getId());
+				orderId, previous.getId());
 			return CancelPaidOrderResult.replayed(
-				order, refunded, existing.get(), refunded.remainingRefundableAmount());
+				order, refunded, previous, refunded.remainingRefundableAmount());
 		}
 
 		if (order.getStatus() != OrderStatus.PAID) {
@@ -86,23 +99,28 @@ public class CancelPaidOrderService {
 			throw new OrderException(OrderErrorCode.ORDER_REFUND_NOT_AVAILABLE);
 		}
 
-		order.cancel();
-		// 찾아 둔 기존 사건을 그대로 넘긴다. 위에서 걸러 여기 닿는 것은 비어 있으나, 결제 쪽 내용 대조는
-		// 주문을 거치지 않는 경로가 생겼을 때의 안전망으로 남긴다.
+		// 무엇을 얼마나 취소할지는 주문이 정한다. 잔여수량이 저장되지 않는 파생값이라, 계산이 이 흐름으로
+		// 나오면 도메인이 자기 불변식을 잃는다.
+		OrderCancelPlan plan = order.planCancellation(requestedLines);
+		// 승인 금액이 아니라 주문이 계산한 값어치로 환불을 연다. 찾아 둔 기존 사건을 그대로 넘기는 것은
+		// 결제 쪽 내용 대조를 안전망으로 남기기 위해서다.
 		Refund refund = payment.openRefund(
-			existing, payment.getApprovedAmount(), RefundReason.ORDER_CANCELED, idempotencyKey);
+			existing, plan.cancelAmount(), RefundReason.ORDER_CANCELED, idempotencyKey);
+		// 취소 품목 내역이 환불 식별자를 적으므로 환불을 먼저 저장해 그 값을 얻는다.
+		Refund savedRefund = refundRepository.save(refund);
+
+		order.applyCancellation(plan, savedRefund.getId());
 
 		// 재고 복구가 이 묶음의 맨 뒤다. 앞에 두면 재고 행 락을 쥔 채 뒤 작업을 기다린다.
-		restoreStock(order);
+		restoreStock(order, plan);
 
 		orderRepository.save(order);
-		Refund savedRefund = refundRepository.save(refund);
 		// 돌려주기로 한 금액이 올라 결제 버전이 바뀐다. 동시에 온 두 요청 중 진 쪽은 그 버전에서 충돌해
 		// 자기 환불까지 함께 롤백된다.
 		paymentRepository.save(payment);
 
-		log.info("결제된 주문 취소 접수 orderId={} memberId={} paymentId={} refundId={} refundAmount={}",
-			orderId, memberId, payment.getId(), savedRefund.getId(), savedRefund.getAmount());
+		log.info("결제된 주문 취소 접수 orderId={} memberId={} paymentId={} refundId={} refundAmount={} lineCount={}",
+			orderId, memberId, payment.getId(), savedRefund.getId(), savedRefund.getAmount(), plan.lines().size());
 
 		return CancelPaidOrderResult.accepted(order, payment, savedRefund, payment.remainingRefundableAmount());
 	}
@@ -121,11 +139,19 @@ public class CancelPaidOrderService {
 				payment.getId(), RefundRequester.MEMBER, idempotencyKey));
 	}
 
-	private void restoreStock(Order order) {
-		List<OrderItem> sortedItems = order.getOrderItems().stream()
+	/**
+	 * 이번에 취소한 품목만 골라 그 요청 수량만큼 재고를 돌려놓는다. 상품 식별자 오름차순으로 도는 것은
+	 * 재고 행 교착을 피하는 계약이라 취소 대상이 줄어도 그대로 지킨다.
+	 */
+	private void restoreStock(Order order, OrderCancelPlan plan) {
+		Map<Long, Integer> quantityByOrderItemId = plan.lines().stream()
+			.collect(Collectors.toMap(OrderCancelLine::orderItemId, OrderCancelLine::quantity));
+
+		order.getOrderItems().stream()
+			.filter(item -> quantityByOrderItemId.containsKey(item.getId()))
 			.sorted(Comparator.comparing(OrderItem::getProductId))
-			.toList();
-		sortedItems.forEach(item -> increaseStockService.increase(item.getProductId(), item.getQuantity()));
+			.forEach(item -> increaseStockService.increase(
+				item.getProductId(), quantityByOrderItemId.get(item.getId())));
 	}
 
 	/**
