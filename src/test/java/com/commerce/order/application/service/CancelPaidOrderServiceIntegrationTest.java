@@ -4,6 +4,7 @@ import static org.assertj.core.api.Assertions.assertThat;
 import static org.assertj.core.api.Assertions.assertThatThrownBy;
 
 import java.time.LocalDateTime;
+import java.util.List;
 import java.util.UUID;
 
 import org.junit.jupiter.api.AfterEach;
@@ -21,6 +22,7 @@ import com.commerce.member.domain.Member;
 import com.commerce.member.infrastructure.persistence.support.MemberPersistenceTestSupport;
 import com.commerce.order.application.service.CancelPaidOrderService.CancelPaidOrderResult;
 import com.commerce.order.domain.Order;
+import com.commerce.order.domain.OrderCancelLine;
 import com.commerce.order.domain.OrderStatus;
 import com.commerce.order.domain.exception.OrderErrorCode;
 import com.commerce.order.domain.exception.OrderException;
@@ -102,18 +104,20 @@ class CancelPaidOrderServiceIntegrationTest {
 		);
 	}
 
-	@DisplayName("주문 취소가 롤백되면 환불 의도도 남지 않는다")
+	@DisplayName("주문 취소가 롤백되면 환불 의도도 취소수량도 남지 않는다")
 	@Test
-	void cancelPaidOrder_whenStockRestoreFails_rollsBackRefund() {
+	void cancelPaidOrder_whenStockRestoreFails_rollsBackRefundAndCancelledQuantity() {
 		// given: 재고 행을 만들지 않아, 환불 의도를 연 다음 단계인 재고 복구에서 실패하게 한다
 		Member member = memberPersistence.save(createMember("rollback"));
 		Product product = productPersistence.save(createProduct("cancel-tx-rollback"));
 		Order order = orderPersistence.saveAndFlush(createPaidOrder(member, product));
+		Long orderItemId = order.getOrderItems().get(0).getId();
 		saveSucceededPayment(order, member, "PK-CANCEL-TX-ROLLBACK", "pg-cancel-tx-rollback");
 
 		// when & then: 재고 복구 단계까지 도달했음을 에러 코드로 확인한다
 		assertThatThrownBy(() ->
-			cancelPaidOrderService.cancelPaidOrder(member.getId(), order.getId(), IDEMPOTENCY_KEY))
+			cancelPaidOrderService.cancelPaidOrder(member.getId(), order.getId(), IDEMPOTENCY_KEY,
+				List.of(new OrderCancelLine(orderItemId, ORDER_QUANTITY))))
 			.isInstanceOf(StockException.class)
 			.satisfies(ex -> assertThat(((StockException) ex).getErrorCode())
 				.isEqualTo(StockErrorCode.STOCK_NOT_FOUND));
@@ -121,6 +125,8 @@ class CancelPaidOrderServiceIntegrationTest {
 		// then: 대사가 집어갈 고아 환불이 남지 않고 주문도 결제완료 그대로다
 		assertThat(refundPersistence.findAll()).isEmpty();
 		assertThat(orderPersistence.getOrderStatusById(order.getId())).isEqualTo(OrderStatus.PAID);
+		assertThat(orderPersistence.getCancelledQuantity(orderItemId)).isZero();
+		assertThat(orderPersistence.countCancellations()).isZero();
 	}
 
 	@DisplayName("주문 취소가 성공하면 환불 의도·주문 취소·재고 복구가 함께 커밋된다")
@@ -133,7 +139,7 @@ class CancelPaidOrderServiceIntegrationTest {
 		stockPersistence.save(Stock.create(product.getId(), 0));
 
 		CancelPaidOrderResult result =
-			cancelPaidOrderService.cancelPaidOrder(member.getId(), order.getId(), IDEMPOTENCY_KEY);
+			cancelPaidOrderService.cancelPaidOrder(member.getId(), order.getId(), IDEMPOTENCY_KEY, List.of());
 
 		assertThat(refundPersistence.findAll()).hasSize(1);
 		assertThat(result.refund().getStatus()).isEqualTo(RefundStatus.READY);
@@ -158,10 +164,10 @@ class CancelPaidOrderServiceIntegrationTest {
 		Payment payment = saveSucceededPayment(order, member, "PK-CANCEL-TX-IDEM", "pg-cancel-tx-idem");
 		stockPersistence.save(Stock.create(product.getId(), 0));
 
-		cancelPaidOrderService.cancelPaidOrder(member.getId(), order.getId(), IDEMPOTENCY_KEY);
+		cancelPaidOrderService.cancelPaidOrder(member.getId(), order.getId(), IDEMPOTENCY_KEY, List.of());
 		// 두 번째 요청은 같은 키의 환불이 이미 있어 앞 결과를 그대로 받는다.
 		CancelPaidOrderResult replayed =
-			cancelPaidOrderService.cancelPaidOrder(member.getId(), order.getId(), IDEMPOTENCY_KEY);
+			cancelPaidOrderService.cancelPaidOrder(member.getId(), order.getId(), IDEMPOTENCY_KEY, List.of());
 
 		assertThat(replayed.replayed()).isTrue();
 		assertThat(refundPersistence.findAll()).hasSize(1);
@@ -180,10 +186,10 @@ class CancelPaidOrderServiceIntegrationTest {
 		saveSucceededPayment(order, member, "PK-CANCEL-TX-NEWKEY", "pg-cancel-tx-newkey");
 		stockPersistence.save(Stock.create(product.getId(), 0));
 
-		cancelPaidOrderService.cancelPaidOrder(member.getId(), order.getId(), IDEMPOTENCY_KEY);
+		cancelPaidOrderService.cancelPaidOrder(member.getId(), order.getId(), IDEMPOTENCY_KEY, List.of());
 
 		assertThatThrownBy(() ->
-			cancelPaidOrderService.cancelPaidOrder(member.getId(), order.getId(), "another-key"))
+			cancelPaidOrderService.cancelPaidOrder(member.getId(), order.getId(), "another-key", List.of()))
 			.isInstanceOf(OrderException.class)
 			.satisfies(ex -> assertThat(((OrderException) ex).getErrorCode())
 				.isEqualTo(OrderErrorCode.ORDER_CANCEL_NOT_ALLOWED));

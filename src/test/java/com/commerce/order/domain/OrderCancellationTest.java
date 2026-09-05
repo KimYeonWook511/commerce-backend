@@ -243,6 +243,87 @@ class OrderCancellationTest {
 		assertThat(order.getTotalPrice()).isEqualTo(50_000);
 	}
 
+	@DisplayName("같은 환불의 내역과 요청 줄이 순서만 다르면 같은 요청으로 본다")
+	@Test
+	void matchesCancellation_whenOnlyOrderDiffers_returnTrue() {
+		// Given
+		Order order = paidOrder();
+		cancel(order, List.of(
+			new OrderCancelLine(APPLE_ITEM_ID, 2),
+			new OrderCancelLine(PEAR_ITEM_ID, 1)
+		), REFUND_ID);
+
+		// When
+		boolean matches = order.matchesCancellation(REFUND_ID, List.of(
+			new OrderCancelLine(PEAR_ITEM_ID, 1),
+			new OrderCancelLine(APPLE_ITEM_ID, 2)
+		));
+
+		// Then
+		assertThat(matches).isTrue();
+	}
+
+	@DisplayName("금액이 같아도 품목 조합이 다르면 다른 요청으로 본다")
+	@Test
+	void matchesCancellation_whenItemsDifferAtSameValue_returnFalse() {
+		// Given
+		Order order = paidOrder();
+		cancel(order, List.of(new OrderCancelLine(APPLE_ITEM_ID, 2)), REFUND_ID);
+
+		// When & Then
+		assertThat(order.matchesCancellation(REFUND_ID, List.of(new OrderCancelLine(PEAR_ITEM_ID, 1)))).isFalse();
+	}
+
+	@DisplayName("품목은 같아도 수량이 다르거나 줄 수가 다르면 다른 요청으로 본다")
+	@Test
+	void matchesCancellation_whenQuantityOrLineCountDiffers_returnFalse() {
+		// Given
+		Order order = paidOrder();
+		cancel(order, List.of(new OrderCancelLine(APPLE_ITEM_ID, 2)), REFUND_ID);
+
+		// When & Then
+		assertThat(order.matchesCancellation(REFUND_ID, List.of(new OrderCancelLine(APPLE_ITEM_ID, 1)))).isFalse();
+		assertThat(order.matchesCancellation(REFUND_ID, List.of(
+			new OrderCancelLine(APPLE_ITEM_ID, 2),
+			new OrderCancelLine(PEAR_ITEM_ID, 1)
+		))).isFalse();
+	}
+
+	@DisplayName("요청 줄이 비어 있으면 대조하지 않고 같은 요청으로 본다")
+	@Test
+	void matchesCancellation_whenRequestedLinesEmpty_returnTrue() {
+		// Given
+		Order order = paidOrder();
+		cancel(order, List.of(new OrderCancelLine(APPLE_ITEM_ID, 2)), REFUND_ID);
+
+		// When & Then
+		assertThat(order.matchesCancellation(REFUND_ID, List.of())).isTrue();
+		assertThat(order.matchesCancellation(REFUND_ID, null)).isTrue();
+	}
+
+	@DisplayName("취소 품목 내역이 없는 환불에 품목 목록을 대조하면 다른 요청으로 본다")
+	@Test
+	void matchesCancellation_whenRefundHasNoRecord_returnFalse() {
+		// Given: 취소 품목 내역을 남기기 전에 열린 환불이라 무엇을 취소했는지 알 수 없다
+		Order order = paidOrder();
+
+		// When & Then
+		assertThat(order.matchesCancellation(REFUND_ID, List.of(new OrderCancelLine(APPLE_ITEM_ID, 1)))).isFalse();
+	}
+
+	@DisplayName("다른 환불의 내역은 이 환불의 대조 대상이 아니다")
+	@Test
+	void matchesCancellation_whenRecordBelongsToAnotherRefund_returnFalse() {
+		// Given
+		Order order = paidOrder();
+		cancel(order, List.of(new OrderCancelLine(APPLE_ITEM_ID, 1)), REFUND_ID);
+		cancel(order, List.of(new OrderCancelLine(PEAR_ITEM_ID, 1)), REFUND_ID + 1);
+
+		// When & Then
+		assertThat(order.matchesCancellation(REFUND_ID, List.of(new OrderCancelLine(APPLE_ITEM_ID, 1)))).isTrue();
+		assertThat(order.matchesCancellation(REFUND_ID, List.of(new OrderCancelLine(PEAR_ITEM_ID, 1)))).isFalse();
+	}
+
 	private void cancel(Order order, List<OrderCancelLine> lines, long refundId) {
 		order.applyCancellation(order.planCancellation(lines), refundId);
 	}

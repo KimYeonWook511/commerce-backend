@@ -12,6 +12,7 @@ import static org.mockito.BDDMockito.willThrow;
 import static org.mockito.Mockito.never;
 
 import java.time.LocalDateTime;
+import java.util.List;
 import java.util.Optional;
 
 import org.junit.jupiter.api.BeforeEach;
@@ -88,7 +89,7 @@ class OrderCancelUseCaseTest {
 		given(orderRepository.findByIdAndMemberId(ORDER_ID, MEMBER_ID)).willReturn(Optional.of(order));
 		given(cancelOrderService.cancelOrder(MEMBER_ID, ORDER_ID)).willReturn(expected);
 
-		OrderCancelResult result = cancelOrderUseCase.cancel(MEMBER_ID, ORDER_ID, IDEMPOTENCY_KEY);
+		OrderCancelResult result = cancelOrderUseCase.cancel(MEMBER_ID, ORDER_ID, IDEMPOTENCY_KEY, List.of());
 
 		assertThat(result).isSameAs(expected);
 		then(cancelPaidOrderService).shouldHaveNoInteractions();
@@ -99,7 +100,7 @@ class OrderCancelUseCaseTest {
 	void cancel_whenPaid_sendsRefundAfterCommit() {
 		givenPaidOrderCanceled(RefundStatus.SUCCEEDED);
 
-		OrderCancelResult result = cancelOrderUseCase.cancel(MEMBER_ID, ORDER_ID, IDEMPOTENCY_KEY);
+		OrderCancelResult result = cancelOrderUseCase.cancel(MEMBER_ID, ORDER_ID, IDEMPOTENCY_KEY, List.of());
 
 		assertThat(result.getRefundStatus()).isEqualTo(OrderCancelRefundStatus.COMPLETED);
 		assertThat(result.getRefundedAmount()).isEqualTo(APPROVED_AMOUNT);
@@ -112,7 +113,7 @@ class OrderCancelUseCaseTest {
 	void cancel_whenRefundNeedsManualReview_answersInProgress() {
 		givenPaidOrderCanceled(RefundStatus.MANUAL_REVIEW);
 
-		OrderCancelResult result = cancelOrderUseCase.cancel(MEMBER_ID, ORDER_ID, IDEMPOTENCY_KEY);
+		OrderCancelResult result = cancelOrderUseCase.cancel(MEMBER_ID, ORDER_ID, IDEMPOTENCY_KEY, List.of());
 
 		assertThat(result.getRefundStatus()).isEqualTo(OrderCancelRefundStatus.IN_PROGRESS);
 	}
@@ -123,12 +124,12 @@ class OrderCancelUseCaseTest {
 		givenReserved();
 		Order order = order(OrderStatus.PAID);
 		given(orderRepository.findByIdAndMemberId(ORDER_ID, MEMBER_ID)).willReturn(Optional.of(order));
-		given(cancelPaidOrderService.cancelPaidOrder(MEMBER_ID, ORDER_ID, IDEMPOTENCY_KEY))
+		given(cancelPaidOrderService.cancelPaidOrder(MEMBER_ID, ORDER_ID, IDEMPOTENCY_KEY, List.of()))
 			.willReturn(canceledResult());
 		willThrow(new IllegalStateException("결제사 호출이 깨졌다"))
 			.given(executeRefundUseCase).send(any(), any(), any());
 
-		OrderCancelResult result = cancelOrderUseCase.cancel(MEMBER_ID, ORDER_ID, IDEMPOTENCY_KEY);
+		OrderCancelResult result = cancelOrderUseCase.cancel(MEMBER_ID, ORDER_ID, IDEMPOTENCY_KEY, List.of());
 
 		assertThat(result.getStatus()).isEqualTo(OrderStatus.CANCELED);
 		assertThat(result.getRefundStatus()).isEqualTo(OrderCancelRefundStatus.IN_PROGRESS);
@@ -144,12 +145,12 @@ class OrderCancelUseCaseTest {
 		// 되돌려진 확정이 남긴 자국. 한 요청이 영속성 컨텍스트를 공유하면 확정이 이 인스턴스를 성공으로
 		// 바꾸는데, 그 트랜잭션이 되돌려져도 인스턴스의 값은 그대로 남는다.
 		ReflectionTestUtils.setField(canceled.refund(), "status", RefundStatus.SUCCEEDED);
-		given(cancelPaidOrderService.cancelPaidOrder(MEMBER_ID, ORDER_ID, IDEMPOTENCY_KEY))
+		given(cancelPaidOrderService.cancelPaidOrder(MEMBER_ID, ORDER_ID, IDEMPOTENCY_KEY, List.of()))
 			.willReturn(canceled);
 		willThrow(new CannotAcquireLockException("결제 행 락을 얻지 못했다"))
 			.given(executeRefundUseCase).send(any(), any(), any());
 
-		OrderCancelResult result = cancelOrderUseCase.cancel(MEMBER_ID, ORDER_ID, IDEMPOTENCY_KEY);
+		OrderCancelResult result = cancelOrderUseCase.cancel(MEMBER_ID, ORDER_ID, IDEMPOTENCY_KEY, List.of());
 
 		assertThat(result.getStatus()).isEqualTo(OrderStatus.CANCELED);
 		assertThat(result.getRefundStatus()).isEqualTo(OrderCancelRefundStatus.IN_PROGRESS);
@@ -161,10 +162,10 @@ class OrderCancelUseCaseTest {
 		givenReserved();
 		Order order = order(OrderStatus.CANCELED);
 		given(orderRepository.findByIdAndMemberId(ORDER_ID, MEMBER_ID)).willReturn(Optional.of(order));
-		given(cancelPaidOrderService.cancelPaidOrder(MEMBER_ID, ORDER_ID, IDEMPOTENCY_KEY))
+		given(cancelPaidOrderService.cancelPaidOrder(MEMBER_ID, ORDER_ID, IDEMPOTENCY_KEY, List.of()))
 			.willReturn(replayedResult(OrderStatus.CANCELED));
 
-		OrderCancelResult result = cancelOrderUseCase.cancel(MEMBER_ID, ORDER_ID, IDEMPOTENCY_KEY);
+		OrderCancelResult result = cancelOrderUseCase.cancel(MEMBER_ID, ORDER_ID, IDEMPOTENCY_KEY, List.of());
 
 		assertThat(result.getStatus()).isEqualTo(OrderStatus.CANCELED);
 		assertThat(result.getRefundStatus()).isEqualTo(OrderCancelRefundStatus.IN_PROGRESS);
@@ -178,10 +179,10 @@ class OrderCancelUseCaseTest {
 		givenReserved();
 		Order order = order(OrderStatus.PAID);
 		given(orderRepository.findByIdAndMemberId(ORDER_ID, MEMBER_ID)).willReturn(Optional.of(order));
-		given(cancelPaidOrderService.cancelPaidOrder(MEMBER_ID, ORDER_ID, IDEMPOTENCY_KEY))
+		given(cancelPaidOrderService.cancelPaidOrder(MEMBER_ID, ORDER_ID, IDEMPOTENCY_KEY, List.of()))
 			.willReturn(replayedResult(OrderStatus.PAID));
 
-		OrderCancelResult result = cancelOrderUseCase.cancel(MEMBER_ID, ORDER_ID, IDEMPOTENCY_KEY);
+		OrderCancelResult result = cancelOrderUseCase.cancel(MEMBER_ID, ORDER_ID, IDEMPOTENCY_KEY, List.of());
 
 		assertThat(result.getStatus()).isEqualTo(OrderStatus.PAID);
 		then(executeRefundUseCase).shouldHaveNoInteractions();
@@ -193,10 +194,10 @@ class OrderCancelUseCaseTest {
 		givenReserved();
 		Order order = order(OrderStatus.CANCELED);
 		given(orderRepository.findByIdAndMemberId(ORDER_ID, MEMBER_ID)).willReturn(Optional.of(order));
-		given(cancelPaidOrderService.cancelPaidOrder(MEMBER_ID, ORDER_ID, IDEMPOTENCY_KEY))
+		given(cancelPaidOrderService.cancelPaidOrder(MEMBER_ID, ORDER_ID, IDEMPOTENCY_KEY, List.of()))
 			.willThrow(new OrderException(OrderErrorCode.ORDER_CANCEL_NOT_ALLOWED));
 
-		assertThatThrownBy(() -> cancelOrderUseCase.cancel(MEMBER_ID, ORDER_ID, IDEMPOTENCY_KEY))
+		assertThatThrownBy(() -> cancelOrderUseCase.cancel(MEMBER_ID, ORDER_ID, IDEMPOTENCY_KEY, List.of()))
 			.isInstanceOf(OrderException.class)
 			.satisfies(ex -> assertThat(((OrderException) ex).getErrorCode())
 				.isEqualTo(OrderErrorCode.ORDER_CANCEL_NOT_ALLOWED));
@@ -206,7 +207,7 @@ class OrderCancelUseCaseTest {
 	@DisplayName("멱등키가 없으면 요청 형식 검증으로 거절한다")
 	@Test
 	void cancel_whenIdempotencyKeyMissing_throws() {
-		assertThatThrownBy(() -> cancelOrderUseCase.cancel(MEMBER_ID, ORDER_ID, " "))
+		assertThatThrownBy(() -> cancelOrderUseCase.cancel(MEMBER_ID, ORDER_ID, " ", List.of()))
 			.isInstanceOf(CommonException.class);
 		then(orderIdempotencyStore).shouldHaveNoInteractions();
 	}
@@ -216,7 +217,7 @@ class OrderCancelUseCaseTest {
 	void cancel_whenPreemptionLost_throwsInProgress() {
 		given(orderIdempotencyStore.reserveCancel(eq(ORDER_ID), eq(IDEMPOTENCY_KEY), any())).willReturn(false);
 
-		assertThatThrownBy(() -> cancelOrderUseCase.cancel(MEMBER_ID, ORDER_ID, IDEMPOTENCY_KEY))
+		assertThatThrownBy(() -> cancelOrderUseCase.cancel(MEMBER_ID, ORDER_ID, IDEMPOTENCY_KEY, List.of()))
 			.isInstanceOf(OrderException.class)
 			.satisfies(ex -> assertThat(((OrderException) ex).getErrorCode())
 				.isEqualTo(OrderErrorCode.ORDER_CANCEL_IN_PROGRESS));
@@ -229,10 +230,10 @@ class OrderCancelUseCaseTest {
 		givenReserved();
 		Order order = order(OrderStatus.PAID);
 		given(orderRepository.findByIdAndMemberId(ORDER_ID, MEMBER_ID)).willReturn(Optional.of(order));
-		given(cancelPaidOrderService.cancelPaidOrder(MEMBER_ID, ORDER_ID, IDEMPOTENCY_KEY))
+		given(cancelPaidOrderService.cancelPaidOrder(MEMBER_ID, ORDER_ID, IDEMPOTENCY_KEY, List.of()))
 			.willThrow(new DuplicateRefundRequestException());
 
-		assertThatThrownBy(() -> cancelOrderUseCase.cancel(MEMBER_ID, ORDER_ID, IDEMPOTENCY_KEY))
+		assertThatThrownBy(() -> cancelOrderUseCase.cancel(MEMBER_ID, ORDER_ID, IDEMPOTENCY_KEY, List.of()))
 			.isInstanceOf(OrderException.class)
 			.satisfies(ex -> assertThat(((OrderException) ex).getErrorCode())
 				.isEqualTo(OrderErrorCode.ORDER_CANCEL_IN_PROGRESS));
@@ -246,10 +247,10 @@ class OrderCancelUseCaseTest {
 		given(orderRepository.findByIdAndMemberId(ORDER_ID, MEMBER_ID)).willReturn(Optional.of(order));
 		// 유일 제약이 아닌 위반은 adapter가 번역하지 않고 그대로 올려 보낸다. 여기서 "처리 중"으로
 		// 바꾸면 실제 정합성 장애가 안전망에 닿지 못한다.
-		given(cancelPaidOrderService.cancelPaidOrder(MEMBER_ID, ORDER_ID, IDEMPOTENCY_KEY))
+		given(cancelPaidOrderService.cancelPaidOrder(MEMBER_ID, ORDER_ID, IDEMPOTENCY_KEY, List.of()))
 			.willThrow(new DataIntegrityViolationException("Column 'refund_key' cannot be null"));
 
-		assertThatThrownBy(() -> cancelOrderUseCase.cancel(MEMBER_ID, ORDER_ID, IDEMPOTENCY_KEY))
+		assertThatThrownBy(() -> cancelOrderUseCase.cancel(MEMBER_ID, ORDER_ID, IDEMPOTENCY_KEY, List.of()))
 			.isInstanceOf(DataIntegrityViolationException.class);
 	}
 
@@ -262,7 +263,7 @@ class OrderCancelUseCaseTest {
 		given(orderRepository.findByIdAndMemberId(ORDER_ID, MEMBER_ID)).willReturn(Optional.of(order));
 		given(cancelOrderService.cancelOrder(MEMBER_ID, ORDER_ID)).willReturn(OrderCancelResult.from(order));
 
-		OrderCancelResult result = cancelOrderUseCase.cancel(MEMBER_ID, ORDER_ID, IDEMPOTENCY_KEY);
+		OrderCancelResult result = cancelOrderUseCase.cancel(MEMBER_ID, ORDER_ID, IDEMPOTENCY_KEY, List.of());
 
 		assertThat(result.getRefundStatus()).isEqualTo(OrderCancelRefundStatus.NONE);
 		then(orderIdempotencyStore).should(never()).clearCancel(anyLong(), anyString());
@@ -274,7 +275,7 @@ class OrderCancelUseCaseTest {
 		givenReserved();
 		given(orderRepository.findByIdAndMemberId(ORDER_ID, MEMBER_ID)).willReturn(Optional.empty());
 
-		assertThatThrownBy(() -> cancelOrderUseCase.cancel(MEMBER_ID, ORDER_ID, IDEMPOTENCY_KEY))
+		assertThatThrownBy(() -> cancelOrderUseCase.cancel(MEMBER_ID, ORDER_ID, IDEMPOTENCY_KEY, List.of()))
 			.isInstanceOf(OrderException.class)
 			.satisfies(ex -> assertThat(((OrderException) ex).getErrorCode())
 				.isEqualTo(OrderErrorCode.ORDER_NOT_FOUND));
@@ -291,7 +292,7 @@ class OrderCancelUseCaseTest {
 		givenReserved();
 		Order order = order(OrderStatus.PAID);
 		given(orderRepository.findByIdAndMemberId(ORDER_ID, MEMBER_ID)).willReturn(Optional.of(order));
-		given(cancelPaidOrderService.cancelPaidOrder(MEMBER_ID, ORDER_ID, IDEMPOTENCY_KEY))
+		given(cancelPaidOrderService.cancelPaidOrder(MEMBER_ID, ORDER_ID, IDEMPOTENCY_KEY, List.of()))
 			.willReturn(canceledResult());
 		given(executeRefundUseCase.send(any(), any(), any())).willReturn(refundStatus);
 	}
