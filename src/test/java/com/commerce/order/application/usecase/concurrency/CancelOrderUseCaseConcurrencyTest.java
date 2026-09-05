@@ -142,7 +142,7 @@ class CancelOrderUseCaseConcurrencyTest {
 		Fixture fixture = paidOrder();
 
 		Outcome outcome = runConcurrently(index ->
-			cancelOrderUseCase.cancel(fixture.memberId(), fixture.orderId(), "same-cancel-key"));
+			cancelOrderUseCase.cancel(fixture.memberId(), fixture.orderId(), "same-cancel-key", List.of()));
 
 		assertThat(outcome.successes).isNotEmpty();
 		assertThat(outcome.unexpected).isEmpty();
@@ -157,7 +157,7 @@ class CancelOrderUseCaseConcurrencyTest {
 		Fixture fixture = paidOrder();
 
 		Outcome outcome = runConcurrently(index ->
-			cancelOrderUseCase.cancel(fixture.memberId(), fixture.orderId(), "cancel-key-" + index));
+			cancelOrderUseCase.cancel(fixture.memberId(), fixture.orderId(), "cancel-key-" + index, List.of()));
 
 		assertThat(outcome.successes).isNotEmpty();
 		assertThat(outcome.unexpected).isEmpty();

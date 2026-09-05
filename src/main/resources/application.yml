@@ -2,6 +2,10 @@ server:
   port: 8080
 
 spring:
+  jpa:
+    # 트랜잭션마다 영속성 컨텍스트를 새로 연다. 요청 단위로 열어 두면 잠금 전에 읽은 값이 캐시로 남아
+    # 잠금 뒤 읽기에 섞인다. 프로필별 파일에 적으면 검증이 도는 test 프로필만 옛 값으로 남는다.
+    open-in-view: false
   task:
     scheduling:
       pool:

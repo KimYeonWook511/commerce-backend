@@ -16,6 +16,9 @@ public enum OrderErrorCode implements ErrorCode {
 	ORDER_CANCELED_FOR_PAYMENT(ErrorCategory.CONFLICT, "ORDER-409-7", "취소된 주문은 결제를 완료할 수 없습니다"),
 	ORDER_INVALID_STATE_FOR_PAYMENT(ErrorCategory.CONFLICT, "ORDER-409-8", "현재 주문 상태에서는 결제를 완료할 수 없습니다"),
 	ORDER_PAYMENT_NOT_ALLOWED(ErrorCategory.CONFLICT, "ORDER-409-4", "주문 결제를 진행할 수 없습니다"),
+	// 요청 자체는 올바르고 그 사이 다른 요청이 먼저 취소했을 수 있다. 회원이 할 일이 "요청을 고쳐
+	// 다시 보낸다"가 아니라 "현재 잔여를 다시 확인한다"라 잘못된 요청과 코드를 가른다.
+	ORDER_CANCEL_QUANTITY_EXCEEDED(ErrorCategory.CONFLICT, "ORDER-409-9", "취소 수량이 잔여수량을 초과했습니다"),
 	ORDER_REFUND_NOT_AVAILABLE(ErrorCategory.CONFLICT, "ORDER-409-5", "결제 확인 중인 주문은 지금 취소할 수 없습니다. 잠시 후 다시 시도해 주세요."),
 	ORDER_REFUND_TARGET_NOT_FOUND(ErrorCategory.INTERNAL, "ORDER-500-1", "환불 대상 결제를 찾을 수 없습니다");
 

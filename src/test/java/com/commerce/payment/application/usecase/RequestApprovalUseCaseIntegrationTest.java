@@ -232,6 +232,7 @@ class RequestApprovalUseCaseIntegrationTest {
 	@Test
 	void approve_whenOrderAlreadyPaid_rejectsAsDuplicate() {
 		Fixture fixture = readyPayment();
+		Long orderItemId = fixture.order().getOrderItems().get(0).getId();
 		Order order = orderPersistence.findById(fixture.order().getId()).orElseThrow();
 		order.completePayment();
 		orderPersistence.saveAndFlush(order);
@@ -253,6 +254,11 @@ class RequestApprovalUseCaseIntegrationTest {
 		assertThat(refunds.get(0).getRequester()).isEqualTo(RefundRequester.SYSTEM);
 		assertThat(refunds.get(0).getReason()).isEqualTo(RefundReason.ORDER_NOT_PAYABLE);
 		assertThat(refunds.get(0).getAmount()).isEqualTo(fixture.amount());
+
+		// 잘못된 승인을 되돌리는 것은 돈을 되돌리는 일이라 주문 품목을 건드리지 않는다. 회원이 그 품목을
+		// 취소한 적이 없으므로 취소수량이 오르면 남은 잔여가 사라져 실제 취소가 막힌다.
+		assertThat(orderPersistence.getCancelledQuantity(orderItemId)).isZero();
+		assertThat(orderPersistence.countCancellations()).isZero();
 	}
 
 	// ── 결제사 응답 갈래 ─────────────────────────────────────────

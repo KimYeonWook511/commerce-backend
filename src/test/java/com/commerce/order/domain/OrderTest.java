@@ -75,40 +75,43 @@ class OrderTest {
 
 	@DisplayName("주문이 초기 상태면 취소된다")
 	@Test
-	void cancel_whenInitStatus_changeToCanceled() {
+	void cancelBeforePayment_whenInitStatus_changeToCanceled() {
 		// given
 		Order order = Order.create(1L);
 
 		// when
-		order.cancel();
+		order.cancelBeforePayment();
 
 		// then
 		assertThat(order.getStatus()).isEqualTo(OrderStatus.CANCELED);
 	}
 
-	@DisplayName("주문이 결제 완료 상태면 취소된다")
+	@DisplayName("결제 완료 주문은 이 관문으로 취소되지 않는다 — 잔여수량을 보는 관문이 따로 받는다")
 	@Test
-	void cancel_whenPaidStatus_changeToCanceled() {
+	void cancelBeforePayment_whenPaidStatus_throwException() {
 		// given
 		Order order = Order.create(1L);
 		setStatus(order, OrderStatus.PAID);
 
-		// when
-		order.cancel();
-
-		// then
-		assertThat(order.getStatus()).isEqualTo(OrderStatus.CANCELED);
+		// when & then
+		assertThatThrownBy(order::cancelBeforePayment)
+			.isInstanceOf(OrderException.class)
+			.satisfies(exception -> {
+				OrderException orderException = (OrderException) exception;
+				assertThat(orderException.getErrorCode()).isEqualTo(OrderErrorCode.ORDER_CANCEL_NOT_ALLOWED);
+			});
+		assertThat(order.getStatus()).isEqualTo(OrderStatus.PAID);
 	}
 
 	@DisplayName("주문이 이미 취소된 상태면 취소에 실패한다")
 	@Test
-	void cancel_whenAlreadyCanceled_throwException() {
+	void cancelBeforePayment_whenAlreadyCanceled_throwException() {
 		// given
 		Order order = Order.create(1L);
 		setStatus(order, OrderStatus.CANCELED);
 
 		// when & then
-		assertThatThrownBy(order::cancel)
+		assertThatThrownBy(order::cancelBeforePayment)
 			.isInstanceOf(OrderException.class)
 			.satisfies(exception -> {
 				OrderException orderException = (OrderException) exception;
@@ -116,16 +119,16 @@ class OrderTest {
 			});
 	}
 
-	@DisplayName("취소 허용 상태(INIT·PAID) 외에는 취소에 실패한다")
+	@DisplayName("초기 상태가 아니면 취소에 실패한다")
 	@Test
-	void cancel_whenStatusNotInitOrPaid_throwException() {
+	void cancelBeforePayment_whenStatusNotInit_throwException() {
 		// given
 		Order order = Order.create(1L);
 		order.addOrderItem(1L, 1, 1000);
 		setStatus(order, OrderStatus.RECEIVED);
 
 		// when & then
-		assertThatThrownBy(order::cancel)
+		assertThatThrownBy(order::cancelBeforePayment)
 			.isInstanceOf(OrderException.class)
 			.satisfies(exception -> {
 				OrderException orderException = (OrderException) exception;

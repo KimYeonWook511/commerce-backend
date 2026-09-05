@@ -1,6 +1,7 @@
 package com.commerce.order.application.usecase;
 
 import static org.assertj.core.api.Assertions.assertThat;
+import static org.assertj.core.api.Assertions.entry;
 import static org.assertj.core.api.Assertions.assertThatThrownBy;
 import static org.mockito.ArgumentMatchers.any;
 import static org.mockito.BDDMockito.given;
@@ -8,6 +9,8 @@ import static org.mockito.BDDMockito.then;
 import static org.mockito.Mockito.never;
 
 import java.time.LocalDateTime;
+import java.util.List;
+import java.util.Map;
 import java.util.UUID;
 
 import org.junit.jupiter.api.AfterEach;
@@ -27,6 +30,7 @@ import com.commerce.member.infrastructure.persistence.support.MemberPersistenceT
 import com.commerce.order.application.dto.OrderCancelRefundStatus;
 import com.commerce.order.application.dto.OrderCancelResult;
 import com.commerce.order.domain.Order;
+import com.commerce.order.domain.OrderCancelLine;
 import com.commerce.order.domain.OrderStatus;
 import com.commerce.order.domain.exception.OrderErrorCode;
 import com.commerce.order.domain.exception.OrderException;
@@ -41,6 +45,8 @@ import com.commerce.payment.domain.RefundReason;
 import com.commerce.payment.domain.RefundRequester;
 import com.commerce.payment.domain.RefundReviewCode;
 import com.commerce.payment.domain.RefundStatus;
+import com.commerce.payment.domain.exception.PaymentErrorCode;
+import com.commerce.payment.domain.exception.PaymentException;
 import com.commerce.payment.infrastructure.persistence.support.PaymentPersistenceTestSupport;
 import com.commerce.payment.infrastructure.persistence.support.PgCallLogPersistenceTestSupport;
 import com.commerce.payment.infrastructure.persistence.support.RefundPersistenceTestSupport;
@@ -73,6 +79,9 @@ import com.commerce.support.TestcontainersSupport;
 class CancelOrderUseCaseIntegrationTest {
 
 	private static final int UNIT_PRICE = 10_000;
+	private static final int APPLE_UNIT_PRICE = 10_000;
+	private static final int PEAR_UNIT_PRICE = 20_000;
+	private static final int APPLE_QUANTITY = 3;
 
 	@Autowired
 	private CancelOrderUseCase cancelOrderUseCase;
@@ -127,7 +136,7 @@ class CancelOrderUseCaseIntegrationTest {
 		givenGatewaySucceeds();
 
 		OrderCancelResult result = cancelOrderUseCase.cancel(
-			fixture.memberId(), fixture.orderId(), "cancel-key-1");
+			fixture.memberId(), fixture.orderId(), "cancel-key-1", List.of());
 
 		assertThat(result.getStatus()).isEqualTo(OrderStatus.CANCELED);
 		assertThat(result.getRefundStatus()).isEqualTo(OrderCancelRefundStatus.COMPLETED);
@@ -142,16 +151,16 @@ class CancelOrderUseCaseIntegrationTest {
 		assertThat(refund.getIdempotencyKey()).isEqualTo("cancel-key-1");
 	}
 
-	@DisplayName("주문 취소를 두 번 불러도 환불이 하나이고 결제사에 다시 나가지 않는다")
+	@DisplayName("주문 취소를 두 번 불러도 환불이 하나이고 재고도 결제사 호출도 늘지 않는다")
 	@Test
 	void cancel_whenCalledTwice_keepsSingleRefundAndDoesNotResend() {
 		Fixture fixture = paidOrder();
 		givenGatewaySucceeds();
 
 		OrderCancelResult first = cancelOrderUseCase.cancel(
-			fixture.memberId(), fixture.orderId(), "cancel-key-2");
+			fixture.memberId(), fixture.orderId(), "cancel-key-2", List.of());
 		OrderCancelResult second = cancelOrderUseCase.cancel(
-			fixture.memberId(), fixture.orderId(), "cancel-key-2");
+			fixture.memberId(), fixture.orderId(), "cancel-key-2", List.of());
 
 		// 같은 요청 키의 재요청은 앞선 결과를 그대로 돌려준다. 응답이 유실되어 회원이 다시 보낸 경우다.
 		assertThat(second.getStatus()).isEqualTo(OrderStatus.CANCELED);
@@ -160,7 +169,48 @@ class CancelOrderUseCaseIntegrationTest {
 		assertThat(second.getRemainingAmount()).isEqualTo(first.getRemainingAmount());
 
 		assertThat(refundPersistence.findAll()).hasSize(1);
+		// 재고 복구가 한 번 더 타면 없는 재고가 생긴다. 재생 판정이 지키는 것이 바로 이 값이다.
+		assertThat(stockPersistence.findByProductId(fixture.productId()).orElseThrow().getQuantity())
+			.isEqualTo(1);
 		then(paymentGatewayPort).should().refund(any(), any(), any());
+	}
+
+	@DisplayName("취소로 종착한 주문에 새 요청 키로 다시 오면 거절되고 아무 상태도 바뀌지 않는다")
+	@Test
+	void cancel_whenTerminalOrderGetsNewKey_rejects() {
+		Fixture fixture = paidOrder();
+		givenGatewaySucceeds();
+		cancelOrderUseCase.cancel(fixture.memberId(), fixture.orderId(), "cancel-key-8", List.of());
+
+		assertThatThrownBy(() ->
+			cancelOrderUseCase.cancel(fixture.memberId(), fixture.orderId(), "another-cancel-key", List.of()))
+			.isInstanceOf(OrderException.class)
+			.satisfies(ex -> assertThat(((OrderException) ex).getErrorCode())
+				.isEqualTo(OrderErrorCode.ORDER_CANCEL_NOT_ALLOWED));
+
+		assertThat(refundPersistence.findAll()).hasSize(1);
+		assertThat(stockPersistence.findByProductId(fixture.productId()).orElseThrow().getQuantity())
+			.isEqualTo(1);
+		then(paymentGatewayPort).should().refund(any(), any(), any());
+	}
+
+	@DisplayName("한 회원의 두 주문에 같은 요청 키를 써도 각자 취소되고 결과가 섞이지 않는다")
+	@Test
+	void cancel_whenSameKeyUsedOnTwoOrders_keepsThemIndependent() {
+		Fixture first = paidOrder();
+		Fixture second = paidOrderFor(first.memberId());
+		givenGatewaySucceeds();
+
+		OrderCancelResult firstResult = cancelOrderUseCase.cancel(
+			first.memberId(), first.orderId(), "shared-cancel-key", List.of());
+		OrderCancelResult secondResult = cancelOrderUseCase.cancel(
+			second.memberId(), second.orderId(), "shared-cancel-key", List.of());
+
+		assertThat(firstResult.getOrderId()).isEqualTo(first.orderId());
+		assertThat(secondResult.getOrderId()).isEqualTo(second.orderId());
+		assertThat(refundPersistence.findAll()).hasSize(2);
+		assertThat(orderPersistence.getOrderStatusById(first.orderId())).isEqualTo(OrderStatus.CANCELED);
+		assertThat(orderPersistence.getOrderStatusById(second.orderId())).isEqualTo(OrderStatus.CANCELED);
 	}
 
 	@DisplayName("남의 주문 번호로는 취소할 수 없고 환불도 생기지 않는다")
@@ -170,7 +220,7 @@ class CancelOrderUseCaseIntegrationTest {
 		Member other = memberPersistence.save(member("other"));
 
 		assertThatThrownBy(() ->
-			cancelOrderUseCase.cancel(other.getId(), fixture.orderId(), "cancel-key-3"))
+			cancelOrderUseCase.cancel(other.getId(), fixture.orderId(), "cancel-key-3", List.of()))
 			.isInstanceOf(OrderException.class)
 			.satisfies(ex -> assertThat(((OrderException) ex).getErrorCode())
 				.isEqualTo(OrderErrorCode.ORDER_NOT_FOUND));
@@ -199,7 +249,7 @@ class CancelOrderUseCaseIntegrationTest {
 		paymentPersistence.save(unknown);
 
 		assertThatThrownBy(() ->
-			cancelOrderUseCase.cancel(member.getId(), savedOrder.getId(), "cancel-key-4"))
+			cancelOrderUseCase.cancel(member.getId(), savedOrder.getId(), "cancel-key-4", List.of()))
 			.isInstanceOf(OrderException.class)
 			.satisfies(ex -> assertThat(((OrderException) ex).getErrorCode())
 				.isEqualTo(OrderErrorCode.ORDER_REFUND_NOT_AVAILABLE));
@@ -217,7 +267,7 @@ class CancelOrderUseCaseIntegrationTest {
 				new PgCallRecord(PgErrorType.TIMEOUT, null, null, null)));
 
 		OrderCancelResult result = cancelOrderUseCase.cancel(
-			fixture.memberId(), fixture.orderId(), "cancel-key-5");
+			fixture.memberId(), fixture.orderId(), "cancel-key-5", List.of());
 
 		assertThat(result.getStatus()).isEqualTo(OrderStatus.CANCELED);
 		assertThat(result.getRefundStatus()).isEqualTo(OrderCancelRefundStatus.IN_PROGRESS);
@@ -233,7 +283,7 @@ class CancelOrderUseCaseIntegrationTest {
 				"취소 기한 만료", new PgCallRecord(PgErrorType.NONE, "CancelDeadlineExpired", 200, "{}")));
 
 		OrderCancelResult result = cancelOrderUseCase.cancel(
-			fixture.memberId(), fixture.orderId(), "cancel-key-6");
+			fixture.memberId(), fixture.orderId(), "cancel-key-6", List.of());
 
 		assertThat(result.getRefundStatus()).isEqualTo(OrderCancelRefundStatus.IN_PROGRESS);
 		assertThat(refundPersistence.findAll().get(0).getStatus()).isEqualTo(RefundStatus.MANUAL_REVIEW);
@@ -247,7 +297,7 @@ class CancelOrderUseCaseIntegrationTest {
 
 		// 시스템 환불이 요청 키 자리에 담는 값과 같은 문자열을 회원이 보내도 공간이 갈려 있다.
 		cancelOrderUseCase.cancel(fixture.memberId(), fixture.orderId(),
-			RefundReason.ORDER_NOT_PAYABLE.name());
+			RefundReason.ORDER_NOT_PAYABLE.name(), List.of());
 
 		Payment payment = paymentPersistence.findById(fixture.paymentId()).orElseThrow();
 		Refund systemRefund = Refund.open(payment.getId(), "RF-system-" + uniqueSuffix,
@@ -267,12 +317,226 @@ class CancelOrderUseCaseIntegrationTest {
 		Order saved = orderPersistence.saveAndFlush(order);
 		stockPersistence.save(Stock.create(product.getId(), 0));
 
-		OrderCancelResult result = cancelOrderUseCase.cancel(member.getId(), saved.getId(), "cancel-key-7");
+		OrderCancelResult result = cancelOrderUseCase.cancel(member.getId(), saved.getId(), "cancel-key-7", List.of());
 
 		assertThat(result.getRefundStatus()).isEqualTo(OrderCancelRefundStatus.NONE);
 		assertThat(result.getRefundedAmount()).isZero();
 		assertThat(result.getRemainingAmount()).isZero();
 		assertThat(refundPersistence.findAll()).isEmpty();
+	}
+
+	// ── 부분취소 ─────────────────────────────────────────────
+
+	@DisplayName("품목과 수량을 지정해 일부만 취소하면 그 값어치만 환불되고 주문은 결제완료로 남는다")
+	@Test
+	void cancel_whenPartialQuantityRequested_refundsThatValueAndKeepsOrderPaid() {
+		BaseOrder base = baseOrder(1);
+		givenGatewaySucceeds();
+
+		OrderCancelResult result = cancel(base, "partial-key-1", List.of(new OrderCancelLine(base.appleItemId(), 1)));
+
+		assertThat(result.getStatus()).isEqualTo(OrderStatus.PAID);
+		assertThat(result.getRefundedAmount()).isEqualTo(APPLE_UNIT_PRICE);
+		assertThat(result.getRemainingAmount()).isEqualTo(40_000);
+		assertThat(orderPersistence.getCancelledQuantity(base.appleItemId())).isEqualTo(1);
+		assertThat(orderPersistence.getCancelledQuantity(base.pearItemId())).isZero();
+		assertThat(stockPersistence.findByProductId(base.appleProductId()).orElseThrow().getQuantity()).isEqualTo(1);
+		assertThat(stockPersistence.findByProductId(base.pearProductId()).orElseThrow().getQuantity()).isZero();
+		assertThat(refundPersistence.findAll()).hasSize(1);
+	}
+
+	@DisplayName("이어서 다른 품목을 새 키로 취소하면 그 결제에 환불이 둘이 된다")
+	@Test
+	void cancel_whenAnotherItemCancelledNext_opensSecondRefund() {
+		BaseOrder base = baseOrder(1);
+		givenGatewaySucceeds();
+		cancel(base, "partial-key-2a", List.of(new OrderCancelLine(base.appleItemId(), 1)));
+
+		OrderCancelResult result = cancel(base, "partial-key-2b", List.of(new OrderCancelLine(base.pearItemId(), 1)));
+
+		assertThat(result.getRefundedAmount()).isEqualTo(PEAR_UNIT_PRICE);
+		assertThat(refundPersistence.findAll()).hasSize(2);
+		assertThat(refundPersistence.findAll()).extracting(Refund::getAmount)
+			.containsExactlyInAnyOrder(APPLE_UNIT_PRICE, PEAR_UNIT_PRICE);
+	}
+
+	@DisplayName("품목 목록을 싣지 않으면 남은 수량 전부가 취소되고 주문이 취소로 전이한다")
+	@Test
+	void cancel_whenItemsOmitted_cancelsEveryRemainingQuantity() {
+		BaseOrder base = baseOrder(1);
+		givenGatewaySucceeds();
+		cancel(base, "partial-key-3a", List.of(new OrderCancelLine(base.appleItemId(), 1)));
+
+		OrderCancelResult result = cancel(base, "partial-key-3b", List.of());
+
+		assertThat(result.getRefundedAmount()).isEqualTo(40_000);
+		assertThat(result.getStatus()).isEqualTo(OrderStatus.CANCELED);
+		assertThat(stockPersistence.findByProductId(base.appleProductId()).orElseThrow().getQuantity())
+			.isEqualTo(APPLE_QUANTITY);
+		assertThat(stockPersistence.findByProductId(base.pearProductId()).orElseThrow().getQuantity()).isEqualTo(1);
+	}
+
+	@DisplayName("잔여수량을 그대로 지정해도 품목 목록을 생략했을 때와 같은 결과가 된다")
+	@Test
+	void cancel_whenRemainingQuantitySpecified_matchesOmittingItems() {
+		BaseOrder base = baseOrder(1);
+		givenGatewaySucceeds();
+		cancel(base, "partial-key-4a", List.of(new OrderCancelLine(base.appleItemId(), 1)));
+
+		OrderCancelResult result = cancel(base, "partial-key-4b", List.of(
+			new OrderCancelLine(base.appleItemId(), 2),
+			new OrderCancelLine(base.pearItemId(), 1)));
+
+		assertThat(result.getRefundedAmount()).isEqualTo(40_000);
+		assertThat(result.getStatus()).isEqualTo(OrderStatus.CANCELED);
+	}
+
+	@DisplayName("취소에 어느 품목을 몇 개 취소했는지가 남고 그 값어치가 환불 금액과 맞는다")
+	@Test
+	void cancel_whenApplied_recordsCancelledItemsWorthTheRefundAmount() {
+		BaseOrder base = baseOrder(1);
+		givenGatewaySucceeds();
+
+		cancel(base, "partial-key-5", List.of(
+			new OrderCancelLine(base.appleItemId(), 2),
+			new OrderCancelLine(base.pearItemId(), 1)));
+
+		Refund refund = refundPersistence.findAll().get(0);
+		Map<Long, Integer> cancelled = orderPersistence.findCancelledQuantitiesByRefundId(refund.getId());
+		assertThat(cancelled).containsOnly(
+			entry(base.appleItemId(), 2),
+			entry(base.pearItemId(), 1));
+		int worth = cancelled.get(base.appleItemId()) * APPLE_UNIT_PRICE
+			+ cancelled.get(base.pearItemId()) * PEAR_UNIT_PRICE;
+		assertThat(worth).isEqualTo(refund.getAmount());
+	}
+
+	@DisplayName("주문이 결제완료로 남아 있어도 같은 키 재요청은 앞 결과를 그대로 돌려준다")
+	@Test
+	void cancel_whenSameKeyRetriedWhileOrderStillPaid_replaysPreviousResult() {
+		BaseOrder base = baseOrder(1);
+		givenGatewaySucceeds();
+		List<OrderCancelLine> lines = List.of(new OrderCancelLine(base.appleItemId(), 1));
+
+		OrderCancelResult first = cancel(base, "partial-key-6", lines);
+		OrderCancelResult second = cancel(base, "partial-key-6", lines);
+
+		assertThat(second.getStatus()).isEqualTo(OrderStatus.PAID);
+		assertThat(second.getRefundedAmount()).isEqualTo(first.getRefundedAmount());
+		assertThat(second.getRemainingAmount()).isEqualTo(first.getRemainingAmount());
+		assertThat(refundPersistence.findAll()).hasSize(1);
+		assertThat(orderPersistence.getCancelledQuantity(base.appleItemId())).isEqualTo(1);
+		assertThat(stockPersistence.findByProductId(base.appleProductId()).orElseThrow().getQuantity()).isEqualTo(1);
+		then(paymentGatewayPort).should().refund(any(), any(), any());
+	}
+
+	@DisplayName("품목 순서만 다른 재시도는 같은 요청으로 보아 앞 결과를 돌려준다")
+	@Test
+	void cancel_whenSameKeyRetriedWithItemsInAnotherOrder_replaysPreviousResult() {
+		BaseOrder base = baseOrder(1);
+		givenGatewaySucceeds();
+		cancel(base, "partial-key-7", List.of(
+			new OrderCancelLine(base.appleItemId(), 2),
+			new OrderCancelLine(base.pearItemId(), 1)));
+
+		OrderCancelResult replayed = cancel(base, "partial-key-7", List.of(
+			new OrderCancelLine(base.pearItemId(), 1),
+			new OrderCancelLine(base.appleItemId(), 2)));
+
+		assertThat(replayed.getRefundedAmount()).isEqualTo(40_000);
+		assertThat(refundPersistence.findAll()).hasSize(1);
+		assertThat(orderPersistence.getCancelledQuantity(base.appleItemId())).isEqualTo(2);
+		assertThat(stockPersistence.findByProductId(base.appleProductId()).orElseThrow().getQuantity()).isEqualTo(2);
+	}
+
+	@DisplayName("같은 키로 다른 품목을 보내면 거절되고 아무 상태도 바뀌지 않는다")
+	@Test
+	void cancel_whenSameKeyCarriesDifferentItems_rejects() {
+		BaseOrder base = baseOrder(1);
+		givenGatewaySucceeds();
+		cancel(base, "partial-key-8", List.of(new OrderCancelLine(base.appleItemId(), 1)));
+
+		assertThatThrownBy(() ->
+			cancel(base, "partial-key-8", List.of(new OrderCancelLine(base.pearItemId(), 1))))
+			.isInstanceOf(PaymentException.class)
+			.satisfies(ex -> assertThat(((PaymentException) ex).getErrorCode())
+				.isEqualTo(PaymentErrorCode.REFUND_IDEMPOTENCY_KEY_CONFLICT));
+
+		assertThat(refundPersistence.findAll()).hasSize(1);
+		assertThat(orderPersistence.getCancelledQuantity(base.pearItemId())).isZero();
+		assertThat(stockPersistence.findByProductId(base.pearProductId()).orElseThrow().getQuantity()).isZero();
+	}
+
+	@DisplayName("금액이 같아도 품목 조합이 다르면 같은 키로 온 요청이 거절된다")
+	@Test
+	void cancel_whenSameKeyCarriesAnotherCombinationOfSameValue_rejects() {
+		BaseOrder base = baseOrder(1);
+		givenGatewaySucceeds();
+		// 1만원 사과 2개와 2만원 배 1개는 값어치가 같다.
+		cancel(base, "partial-key-9", List.of(new OrderCancelLine(base.appleItemId(), 2)));
+
+		assertThatThrownBy(() ->
+			cancel(base, "partial-key-9", List.of(new OrderCancelLine(base.pearItemId(), 1))))
+			.isInstanceOf(PaymentException.class)
+			.satisfies(ex -> assertThat(((PaymentException) ex).getErrorCode())
+				.isEqualTo(PaymentErrorCode.REFUND_IDEMPOTENCY_KEY_CONFLICT));
+
+		assertThat(refundPersistence.findAll()).hasSize(1);
+		assertThat(orderPersistence.getCancelledQuantity(base.pearItemId())).isZero();
+	}
+
+	@DisplayName("취소 품목 내역이 없는 옛 환불의 키에 품목 목록을 실으면 거절되고, 목록 없는 재시도는 재생된다")
+	@Test
+	void cancel_whenPreviousRefundHasNoItemRecord_rejectsRequestCarryingItems() {
+		BaseOrder base = baseOrder(1);
+		// 취소 품목 내역을 남기기 전에 열린 환불이라 무엇을 취소했는지 알 수 없다.
+		Payment payment = paymentPersistence.findById(base.paymentId()).orElseThrow();
+		refundPersistence.save(Refund.open(payment.getId(), "RF-legacy-" + (++uniqueSuffix),
+			RefundRequester.MEMBER, "legacy-key", APPLE_UNIT_PRICE, RefundReason.ORDER_CANCELED));
+
+		assertThatThrownBy(() ->
+			cancel(base, "legacy-key", List.of(new OrderCancelLine(base.appleItemId(), 1))))
+			.isInstanceOf(PaymentException.class)
+			.satisfies(ex -> assertThat(((PaymentException) ex).getErrorCode())
+				.isEqualTo(PaymentErrorCode.REFUND_IDEMPOTENCY_KEY_CONFLICT));
+
+		OrderCancelResult replayed = cancel(base, "legacy-key", List.of());
+
+		assertThat(replayed.getRefundedAmount()).isEqualTo(APPLE_UNIT_PRICE);
+		assertThat(orderPersistence.getCancelledQuantity(base.appleItemId())).isZero();
+		assertThat(orderPersistence.countCancellations()).isZero();
+		then(paymentGatewayPort).should(never()).refund(any(), any(), any());
+	}
+
+	@DisplayName("잔여 전부를 취소하면 그 값어치가 결제의 남은 한도와 같아 한도에 걸리지 않는다")
+	@Test
+	void cancel_whenRemainingCancelledAfterPartial_matchesRefundLimit() {
+		// 1만원 사과 3개와 2만원 배 2개로 7만원을 결제한 주문에서 배 1개가 먼저 취소된다.
+		BaseOrder base = baseOrder(2);
+		givenGatewaySucceeds();
+		cancel(base, "partial-key-10a", List.of(new OrderCancelLine(base.pearItemId(), 1)));
+
+		OrderCancelResult result = cancel(base, "partial-key-10b", List.of());
+
+		assertThat(result.getRefundedAmount()).isEqualTo(50_000);
+		assertThat(result.getRemainingAmount()).isZero();
+		assertThat(result.getStatus()).isEqualTo(OrderStatus.CANCELED);
+	}
+
+	@DisplayName("환불이 사람 손으로 넘어가도 취소수량과 늘어난 재고는 되돌아가지 않는다")
+	@Test
+	void cancel_whenRefundEndsInManualReview_keepsCancelledQuantityAndStock() {
+		BaseOrder base = baseOrder(1);
+		given(paymentGatewayPort.refund(any(), any(), any()))
+			.willReturn(PgRefundResult.terminalFailure(RefundReviewCode.CANCEL_DEADLINE_EXPIRED,
+				"취소 기한 만료", new PgCallRecord(PgErrorType.NONE, "CancelDeadlineExpired", 200, "{}")));
+
+		OrderCancelResult result = cancel(base, "partial-key-11", List.of(new OrderCancelLine(base.appleItemId(), 1)));
+
+		assertThat(result.getRefundStatus()).isEqualTo(OrderCancelRefundStatus.IN_PROGRESS);
+		assertThat(refundPersistence.findAll().get(0).getStatus()).isEqualTo(RefundStatus.MANUAL_REVIEW);
+		assertThat(orderPersistence.getCancelledQuantity(base.appleItemId())).isEqualTo(1);
+		assertThat(stockPersistence.findByProductId(base.appleProductId()).orElseThrow().getQuantity()).isEqualTo(1);
 	}
 
 	// ── 헬퍼 ──
@@ -286,20 +550,25 @@ class CancelOrderUseCaseIntegrationTest {
 	private Fixture paidOrder() {
 		int suffix = ++uniqueSuffix;
 		Member member = memberPersistence.save(member("paid" + suffix));
+		return paidOrderFor(member.getId());
+	}
+
+	private Fixture paidOrderFor(Long memberId) {
+		int suffix = ++uniqueSuffix;
 		Product product = productPersistence.save(product());
-		Order order = Order.create(member.getId());
+		Order order = Order.create(memberId);
 		order.addOrderItem(product.getId(), 1, UNIT_PRICE);
 		order.completePayment();
 		Order savedOrder = orderPersistence.saveAndFlush(order);
 		stockPersistence.save(Stock.create(product.getId(), 0));
 
-		Payment payment = Payment.start(savedOrder.getId(), member.getId(), PaymentPg.NAVERPAY,
+		Payment payment = Payment.start(savedOrder.getId(), memberId, PaymentPg.NAVERPAY,
 			"PK-" + suffix, "idem-" + suffix, UNIT_PRICE);
 		payment.markInProgress("pg-payment-" + suffix, LocalDateTime.now());
 		payment.succeed(UNIT_PRICE, "pg-tx-" + suffix);
 		Payment savedPayment = paymentPersistence.save(payment);
 
-		return new Fixture(member.getId(), savedOrder.getId(), savedPayment.getId());
+		return new Fixture(memberId, savedOrder.getId(), savedPayment.getId(), product.getId());
 	}
 
 	private Member member(String tag) {
@@ -309,10 +578,50 @@ class CancelOrderUseCaseIntegrationTest {
 	}
 
 	private Product product() {
-		return Product.create("상품-" + UUID.randomUUID().toString().substring(0, 6),
-			UNIT_PRICE, null, null, ProductStatus.ON_SALE);
+		return product(UNIT_PRICE);
 	}
 
-	private record Fixture(Long memberId, Long orderId, Long paymentId) {
+	private Product product(int price) {
+		return Product.create("상품-" + UUID.randomUUID().toString().substring(0, 6),
+			price, null, null, ProductStatus.ON_SALE);
+	}
+
+	private record Fixture(Long memberId, Long orderId, Long paymentId, Long productId) {
+	}
+
+	private OrderCancelResult cancel(BaseOrder base, String idempotencyKey, List<OrderCancelLine> lines) {
+		return cancelOrderUseCase.cancel(base.memberId(), base.orderId(), idempotencyKey, lines);
+	}
+
+	/** 1만원 사과 3개와 2만원 배로 이루어진 기준 주문. 전액 승인이 끝났고 두 상품의 재고는 0이다 */
+	private BaseOrder baseOrder(int pearQuantity) {
+		int suffix = ++uniqueSuffix;
+		Member member = memberPersistence.save(member("base" + suffix));
+		Product apple = productPersistence.save(product(APPLE_UNIT_PRICE));
+		Product pear = productPersistence.save(product(PEAR_UNIT_PRICE));
+
+		Order order = Order.create(member.getId());
+		order.addOrderItem(apple.getId(), APPLE_QUANTITY, APPLE_UNIT_PRICE);
+		order.addOrderItem(pear.getId(), pearQuantity, PEAR_UNIT_PRICE);
+		order.completePayment();
+		Order savedOrder = orderPersistence.saveAndFlush(order);
+		stockPersistence.save(Stock.create(apple.getId(), 0));
+		stockPersistence.save(Stock.create(pear.getId(), 0));
+
+		int totalPrice = savedOrder.getTotalPrice();
+		Payment payment = Payment.start(savedOrder.getId(), member.getId(), PaymentPg.NAVERPAY,
+			"PK-base-" + suffix, "idem-base-" + suffix, totalPrice);
+		payment.markInProgress("pg-payment-base-" + suffix, LocalDateTime.now());
+		payment.succeed(totalPrice, "pg-tx-base-" + suffix);
+		Payment savedPayment = paymentPersistence.save(payment);
+
+		return new BaseOrder(member.getId(), savedOrder.getId(), savedPayment.getId(),
+			apple.getId(), pear.getId(),
+			savedOrder.getOrderItems().get(0).getId(), savedOrder.getOrderItems().get(1).getId());
+	}
+
+	private record BaseOrder(
+		Long memberId, Long orderId, Long paymentId,
+		Long appleProductId, Long pearProductId, Long appleItemId, Long pearItemId) {
 	}
 }

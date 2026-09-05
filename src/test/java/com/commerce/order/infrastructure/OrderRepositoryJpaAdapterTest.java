@@ -75,7 +75,7 @@ class OrderRepositoryJpaAdapterTest {
 		Order first = createInitOrder(member, product);
 		Order second = createInitOrder(member, product);
 		Order canceled = createInitOrder(member, product);
-		canceled.cancel();
+		canceled.cancelBeforePayment();
 
 		Order savedFirst = orderRepository.save(first);
 		Order savedSecond = orderRepository.save(second);

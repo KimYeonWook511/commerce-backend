@@ -16,6 +16,7 @@
   - `V12__create_payment_and_refund.sql` — `tbl_payment`(재구성) · `tbl_refund` · `tbl_pg_call_log` CREATE.
   - `V13__drop_legacy_payment_tables.sql` — legacy 두 테이블 DROP. **파괴적 마이그레이션**이며 옛 결제·예약 데이터는 이관하지 않고 폐기한다 (운영 데이터 없음 전제).
 - **결제 환불 금액 분할**: `V15__split_payment_refund_amounts.sql` 으로 `tbl_payment.total_refunded_amount` 를 `refund_opened_amount` 로 옮기고 `refund_succeeded_amount INT NOT NULL DEFAULT 0` 을 신설한 뒤, 결제마다 그 결제에서 성공한 환불 금액의 합으로 채웠다 (2026-09-03). 옛 이름 하나에 "돌려주기로 했는데 아직 안 나간 돈"과 "실제로 돌아간 돈"이 섞여 있어 결제사에 남은 잔액을 물을 수단이 없었다.
+- **부분취소 도입**: `V16__add_order_item_cancellation.sql` 으로 `tbl_order_item.cancelled_quantity INT NOT NULL DEFAULT 0` 컬럼과 `tbl_order_item_cancellation` 테이블을 신설했다 (2026-09-05, → PR#340). 되메움은 하지 않는다 — 이 작업 이전에 전액취소된 주문의 행도 취소수량 0으로 남는다. 그 주문은 이미 취소 상태라 새 취소 경로가 닿지 않는다.
 - **환불 첫 상태 이름 교정**: `V14__rename_refund_requested_status.sql` 으로 `tbl_refund.status` 의 `REQUESTED` 를 `READY` 로 옮겼다 (2026-08-31). 옛 이름은 결제사에 이미 요청했다는 뜻으로 읽혀 아직 안 나간 환불을 나간 것으로 오해하게 했다.
 
 ## 네이밍 규칙
@@ -135,14 +136,38 @@ COLUMNS:
 - `product_id`
 - `quantity`
 - `unit_price INT NOT NULL`
+- `cancelled_quantity INT NOT NULL DEFAULT 0` (V16 신설)
 
 INDEX:
 - 없음
 
 비고:
+- `cancelled_quantity` 는 지금까지 취소된 수량의 누계다. 잔여수량(`quantity - cancelled_quantity`)은 저장하지 않고 계산해 답한다 — 저장하면 원본과 갈라질 자리가 생긴다.
+- 상한(`cancelled_quantity <= quantity`)을 DB 제약으로 두지 않는다. 도메인이 지키며, 제약으로 옮기면 그 위반이 정상 흐름에서 안전망으로 터진다.
 - `product_id` 는 FK 제약을 두지 않는다. `fk_order_item_product_id` 가 V4 migration 으로 제거됐다 (→ PR#166 후속 트랙). 동명 KEY index (`KEY fk_order_item_product_id (product_id)`) 는 조회 보조용으로 유지된다.
 - `order_id (FK -> tbl_order.id)` 는 same-aggregate FK 로 유지된다. cross-aggregate ID 참조 결정(→ PR#166)의 적용 범위 밖 (Order ↔ OrderItem 은 같은 aggregate).
 - `unit_price` 는 V5 migration 으로 신설된 결제 시점 가격 snapshot 컬럼이다. Product.price 변동 후에도 결제 시점 단가가 보존된다. 세부 결정은 `docs/tasks/order-item-price-snapshot/adr.md` 참조.
+
+### `tbl_order_item_cancellation` (신설 — V16)
+
+취소 한 번이 어느 품목 몇 개였는지를 남긴다. 주문 품목의 취소수량은 누계로만 쌓여 어느 요청이 얼마를 취소했는지 알 수 없고, 금액에서 역산하면 단가가 같은 조합을 구분하지 못한다. 환불이 자동으로 끝나지 않을 때 사람이 이어받는 근거가 이 표다.
+
+COLUMNS:
+- `id (PK)`
+- `order_item_id (FK -> tbl_order_item.id)`
+- `refund_id`
+- `quantity`
+- `created_at`
+- `updated_at`
+
+INDEX:
+- `uk_order_item_cancellation_refund_item (refund_id, order_item_id) UNIQUE`
+- `idx_order_item_cancellation_refund (refund_id)`
+
+비고:
+- **소속은 order aggregate다.** 주문 품목의 자식이며 환불을 루트 식별자로만 가리킨다. 환불 쪽에 두면 그 행이 주문 품목 식별자를 갖는데, 그것은 루트가 아니라 order aggregate 내부 엔티티의 식별자라 cross-aggregate 참조 결정(→ PR#166)과 어긋난다.
+- `refund_id` 에 FK 제약을 두지 않는다 (cross-aggregate). `order_item_id` 는 same-aggregate 라 FK 를 건다.
+- 유일 제약은 환불 하나 안에서 품목당 한 줄을 강제한다. 한 요청에 같은 품목이 여러 줄로 오는 것은 요청 경계가 거부하므로, 이 제약은 그 거부가 빠졌을 때의 안전망이다.
 
 ### `tbl_cart_item`
 
@@ -318,6 +343,8 @@ INDEX:
 
 - `tbl_member` 1:N `tbl_order`
 - `tbl_order` 1:N `tbl_order_item`
+- `tbl_order_item` 1:N `tbl_order_item_cancellation`
+- `tbl_refund` 1:N `tbl_order_item_cancellation` (refundId 값 참조, FK 제약 없음)
 - `tbl_product` 1:1 `tbl_stock`
 - `tbl_stock` 1:N `tbl_stock_history`
 - `tbl_product` 1:N `tbl_order_item`
