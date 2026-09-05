@@ -102,6 +102,24 @@ class OrderControllerTest {
 			.andExpect(jsonPath("$.code").value("COMMON-400"));
 	}
 
+	@DisplayName("주문 상품 목록에 null 원소가 있으면 400으로 거절한다")
+	@Test
+	void createOrder_whenItemIsNull_returnBadRequest() throws Exception {
+		stubForToken();
+
+		mockMvc.perform(post("/orders")
+				.header("Authorization", "Bearer access-token")
+				.header("Idempotency-Key", "create-key-null")
+				.contentType(MediaType.APPLICATION_JSON)
+				.content("""
+					{"items": [null]}
+					"""))
+			.andExpect(status().isBadRequest())
+			.andExpect(jsonPath("$.code").value("COMMON-400"));
+
+		then(createOrderUseCase).should(never()).createOrder(any());
+	}
+
 	@DisplayName("items가 비어있으면 400을 반환한다")
 	@Test
 	void createOrder_whenEmptyItems_returnBadRequest() throws Exception {
@@ -247,6 +265,24 @@ class OrderControllerTest {
 				.contentType(MediaType.APPLICATION_JSON)
 				.content("""
 					{"items": [{"orderItemId": 11, "quantity": 0}]}
+					"""))
+			.andExpect(status().isBadRequest())
+			.andExpect(jsonPath("$.code").value("COMMON-400"));
+
+		then(cancelOrderUseCase).should(never()).cancel(anyLong(), anyLong(), anyString(), any());
+	}
+
+	@DisplayName("취소 품목 목록에 null 원소가 있으면 400으로 거절한다")
+	@Test
+	void cancelOrder_whenItemIsNull_returnBadRequest() throws Exception {
+		stubForToken();
+
+		mockMvc.perform(post("/orders/1/cancel")
+				.header("Authorization", "Bearer access-token")
+				.header("Idempotency-Key", "cancel-key-null")
+				.contentType(MediaType.APPLICATION_JSON)
+				.content("""
+					{"items": [null]}
 					"""))
 			.andExpect(status().isBadRequest())
 			.andExpect(jsonPath("$.code").value("COMMON-400"));
