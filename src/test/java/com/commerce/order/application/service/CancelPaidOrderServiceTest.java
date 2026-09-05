@@ -4,6 +4,8 @@ import static org.assertj.core.api.Assertions.assertThat;
 import static org.assertj.core.api.Assertions.assertThatThrownBy;
 import static org.mockito.ArgumentMatchers.any;
 import static org.mockito.BDDMockito.given;
+import static org.mockito.BDDMockito.then;
+import static org.mockito.Mockito.never;
 
 import java.time.LocalDateTime;
 import java.util.Optional;
@@ -67,6 +69,7 @@ class CancelPaidOrderServiceTest {
 		CancelPaidOrderResult result =
 			cancelPaidOrderService.cancelPaidOrder(MEMBER_ID, ORDER_ID, IDEMPOTENCY_KEY);
 
+		assertThat(result.replayed()).isFalse();
 		assertThat(result.order().getStatus()).isEqualTo(OrderStatus.CANCELED);
 		assertThat(result.refund().getStatus()).isEqualTo(RefundStatus.READY);
 		assertThat(result.refund().getRequester()).isEqualTo(RefundRequester.MEMBER);
@@ -90,28 +93,58 @@ class CancelPaidOrderServiceTest {
 		assertThat(result.payment().getRefundOpenedAmount()).isEqualTo(APPROVED_AMOUNT);
 	}
 
-	@DisplayName("같은 요청 키로 다시 취소해도 앞서 만든 환불이 그대로 돌아오고 돌려주기로 한 금액이 다시 오르지 않는다")
+	@DisplayName("같은 요청 키의 환불이 이미 있으면 앞 결과를 돌려주고 주문·재고·결제 어느 것도 건드리지 않는다")
 	@Test
-	void cancelPaidOrder_whenSameIdempotencyKey_returnsExistingRefund() {
+	void cancelPaidOrder_whenRefundForSameKeyExists_returnsPreviousResultWithoutTouchingAnything() {
 		Order order = paidOrder();
 		Payment payment = succeededPayment();
-		Refund existing = Refund.open(payment.getId(), "RF-existing", RefundRequester.MEMBER,
-			IDEMPOTENCY_KEY, APPROVED_AMOUNT, RefundReason.ORDER_CANCELED);
-		ReflectionTestUtils.setField(payment, "refundOpenedAmount", APPROVED_AMOUNT);
-
-		given(orderRepository.findByIdAndMemberIdForUpdate(ORDER_ID, MEMBER_ID)).willReturn(Optional.of(order));
-		given(paymentRepository.existsUnknownByOrderId(ORDER_ID)).willReturn(false);
-		given(paymentRepository.findSucceededByMemberIdAndOrderId(MEMBER_ID, ORDER_ID))
-			.willReturn(Optional.of(payment));
-		given(refundRepository.findByPaymentIdAndRequesterAndIdempotencyKey(
-			payment.getId(), RefundRequester.MEMBER, IDEMPOTENCY_KEY)).willReturn(Optional.of(existing));
-		given(refundRepository.save(any())).willAnswer(invocation -> invocation.getArgument(0));
+		givenExistingRefund(order, payment);
 
 		CancelPaidOrderResult result =
 			cancelPaidOrderService.cancelPaidOrder(MEMBER_ID, ORDER_ID, IDEMPOTENCY_KEY);
 
-		assertThat(result.refund()).isSameAs(existing);
+		assertThat(result.replayed()).isTrue();
+		assertThat(result.refund().getIdempotencyKey()).isEqualTo(IDEMPOTENCY_KEY);
 		assertThat(result.payment().getRefundOpenedAmount()).isEqualTo(APPROVED_AMOUNT);
+		assertThat(order.getStatus()).isEqualTo(OrderStatus.PAID);
+		then(increaseStockService).shouldHaveNoInteractions();
+		then(orderRepository).should(never()).save(any());
+		then(refundRepository).should(never()).save(any());
+		then(paymentRepository).should(never()).save(any());
+	}
+
+	@DisplayName("주문이 취소로 종착했어도 같은 요청 키의 환불이 있으면 앞 결과를 돌려준다")
+	@Test
+	void cancelPaidOrder_whenOrderAlreadyTerminalAndRefundForSameKeyExists_returnsPreviousResult() {
+		Order order = paidOrder();
+		ReflectionTestUtils.setField(order, "status", OrderStatus.CANCELED);
+		Payment payment = succeededPayment();
+		givenExistingRefund(order, payment);
+
+		CancelPaidOrderResult result =
+			cancelPaidOrderService.cancelPaidOrder(MEMBER_ID, ORDER_ID, IDEMPOTENCY_KEY);
+
+		assertThat(result.replayed()).isTrue();
+		assertThat(result.order().getStatus()).isEqualTo(OrderStatus.CANCELED);
+	}
+
+	@DisplayName("주문이 취소로 종착한 뒤 다른 요청 키로 오면 취소 불가로 거부한다")
+	@Test
+	void cancelPaidOrder_whenOrderAlreadyTerminalAndNoRefundForKey_throws() {
+		Order order = paidOrder();
+		ReflectionTestUtils.setField(order, "status", OrderStatus.CANCELED);
+		Payment payment = succeededPayment();
+		given(orderRepository.findByIdAndMemberIdForUpdate(ORDER_ID, MEMBER_ID)).willReturn(Optional.of(order));
+		given(paymentRepository.findSucceededByMemberIdAndOrderId(MEMBER_ID, ORDER_ID))
+			.willReturn(Optional.of(payment));
+		given(refundRepository.findByPaymentIdAndRequesterAndIdempotencyKey(
+			payment.getId(), RefundRequester.MEMBER, "another-key")).willReturn(Optional.empty());
+
+		assertThatThrownBy(() -> cancelPaidOrderService.cancelPaidOrder(MEMBER_ID, ORDER_ID, "another-key"))
+			.isInstanceOf(OrderException.class)
+			.satisfies(ex -> assertThat(((OrderException) ex).getErrorCode())
+				.isEqualTo(OrderErrorCode.ORDER_CANCEL_NOT_ALLOWED));
+		then(refundRepository).should(never()).save(any());
 	}
 
 	@DisplayName("재고 복구는 상품 ID 정렬 순서로, 환불 의도를 연 뒤에 호출된다")
@@ -205,6 +238,18 @@ class CancelPaidOrderServiceTest {
 	}
 
 	// ── 헬퍼 ──
+
+	private void givenExistingRefund(Order order, Payment payment) {
+		Refund existing = Refund.open(payment.getId(), "RF-existing", RefundRequester.MEMBER,
+			IDEMPOTENCY_KEY, APPROVED_AMOUNT, RefundReason.ORDER_CANCELED);
+		ReflectionTestUtils.setField(payment, "refundOpenedAmount", APPROVED_AMOUNT);
+
+		given(orderRepository.findByIdAndMemberIdForUpdate(ORDER_ID, MEMBER_ID)).willReturn(Optional.of(order));
+		given(paymentRepository.findSucceededByMemberIdAndOrderId(MEMBER_ID, ORDER_ID))
+			.willReturn(Optional.of(payment));
+		given(refundRepository.findByPaymentIdAndRequesterAndIdempotencyKey(
+			payment.getId(), RefundRequester.MEMBER, IDEMPOTENCY_KEY)).willReturn(Optional.of(existing));
+	}
 
 	private void givenCancelable(Order order, Payment payment) {
 		given(orderRepository.findByIdAndMemberIdForUpdate(ORDER_ID, MEMBER_ID)).willReturn(Optional.of(order));

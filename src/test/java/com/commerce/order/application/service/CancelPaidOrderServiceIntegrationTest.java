@@ -22,6 +22,8 @@ import com.commerce.member.infrastructure.persistence.support.MemberPersistenceT
 import com.commerce.order.application.service.CancelPaidOrderService.CancelPaidOrderResult;
 import com.commerce.order.domain.Order;
 import com.commerce.order.domain.OrderStatus;
+import com.commerce.order.domain.exception.OrderErrorCode;
+import com.commerce.order.domain.exception.OrderException;
 import com.commerce.order.infrastructure.persistence.support.OrderPersistenceTestSupport;
 import com.commerce.payment.domain.Payment;
 import com.commerce.payment.domain.PaymentPg;
@@ -147,7 +149,7 @@ class CancelPaidOrderServiceIntegrationTest {
 			.isEqualTo(PRODUCT_PRICE * ORDER_QUANTITY);
 	}
 
-	@DisplayName("같은 요청 키로 취소를 두 번 불러도 환불 사건이 하나다")
+	@DisplayName("같은 요청 키로 취소를 두 번 불러도 환불 사건이 하나이고 재고도 다시 오르지 않는다")
 	@Test
 	void cancelPaidOrder_whenCalledTwiceWithSameKey_keepsSingleRefund() {
 		Member member = memberPersistence.save(createMember("idem"));
@@ -157,14 +159,38 @@ class CancelPaidOrderServiceIntegrationTest {
 		stockPersistence.save(Stock.create(product.getId(), 0));
 
 		cancelPaidOrderService.cancelPaidOrder(member.getId(), order.getId(), IDEMPOTENCY_KEY);
-		// 두 번째 요청은 이미 취소된 주문이라 취소 자체가 거부된다 — 환불이 늘지 않는 것이 요점이다.
-		assertThatThrownBy(() ->
-			cancelPaidOrderService.cancelPaidOrder(member.getId(), order.getId(), IDEMPOTENCY_KEY))
-			.isInstanceOf(RuntimeException.class);
+		// 두 번째 요청은 같은 키의 환불이 이미 있어 앞 결과를 그대로 받는다.
+		CancelPaidOrderResult replayed =
+			cancelPaidOrderService.cancelPaidOrder(member.getId(), order.getId(), IDEMPOTENCY_KEY);
 
+		assertThat(replayed.replayed()).isTrue();
 		assertThat(refundPersistence.findAll()).hasSize(1);
 		assertThat(paymentPersistence.findById(payment.getId()).orElseThrow().getRefundOpenedAmount())
 			.isEqualTo(PRODUCT_PRICE * ORDER_QUANTITY);
+		assertThat(stockPersistence.findByProductId(product.getId()).orElseThrow().getQuantity())
+			.isEqualTo(ORDER_QUANTITY);
+	}
+
+	@DisplayName("취소로 종착한 주문에 새 요청 키로 오면 거절되고 환불도 재고도 늘지 않는다")
+	@Test
+	void cancelPaidOrder_whenTerminalOrderGetsNewKey_rejects() {
+		Member member = memberPersistence.save(createMember("newkey"));
+		Product product = productPersistence.save(createProduct("cancel-tx-newkey"));
+		Order order = orderPersistence.saveAndFlush(createPaidOrder(member, product));
+		saveSucceededPayment(order, member, "PK-CANCEL-TX-NEWKEY", "pg-cancel-tx-newkey");
+		stockPersistence.save(Stock.create(product.getId(), 0));
+
+		cancelPaidOrderService.cancelPaidOrder(member.getId(), order.getId(), IDEMPOTENCY_KEY);
+
+		assertThatThrownBy(() ->
+			cancelPaidOrderService.cancelPaidOrder(member.getId(), order.getId(), "another-key"))
+			.isInstanceOf(OrderException.class)
+			.satisfies(ex -> assertThat(((OrderException) ex).getErrorCode())
+				.isEqualTo(OrderErrorCode.ORDER_CANCEL_NOT_ALLOWED));
+
+		assertThat(refundPersistence.findAll()).hasSize(1);
+		assertThat(stockPersistence.findByProductId(product.getId()).orElseThrow().getQuantity())
+			.isEqualTo(ORDER_QUANTITY);
 	}
 
 	// ── 헬퍼 ──

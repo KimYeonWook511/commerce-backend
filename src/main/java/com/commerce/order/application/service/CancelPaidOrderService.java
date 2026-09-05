@@ -50,14 +50,27 @@ public class CancelPaidOrderService {
 	/**
 	 * 결제된 주문을 취소하고 되돌릴 환불을 연다.
 	 *
-	 * <p>같은 요청 키로 다시 들어오면 앞서 만든 환불이 그대로 돌아오고 돌려주기로 한 금액도 다시 오르지 않는다.
-	 * 그 판정은 결제의 도메인 메서드가 하며, 이 자리는 기존 사건을 찾아 넘기기만 한다.
+	 * <p>같은 요청 키의 환불이 이미 있으면 앞선 결과를 그대로 돌려주고 주문·재고·결제 어느 것도 건드리지
+	 * 않는다. 그 판정을 이 트랜잭션 안에서, 주문 행을 잠근 뒤에 한다 — 앞단의 선점 표시에는 유효 시간과
+	 * 저장소 장애 시 물러나는 경로가 있어 두 요청이 함께 들어오는 창이 그것만으로는 닫히지 않는다.
 	 */
 	@Transactional
 	public CancelPaidOrderResult cancelPaidOrder(Long memberId, Long orderId, String idempotencyKey) {
 		// 주문 행만 잠근다. 남의 주문 번호를 실으면 그 주문이 있는지조차 드러나지 않는다.
 		Order order = orderRepository.findByIdAndMemberIdForUpdate(orderId, memberId)
 			.orElseThrow(() -> new OrderException(OrderErrorCode.ORDER_NOT_FOUND));
+
+		Optional<Payment> refundTarget = paymentRepository.findSucceededByMemberIdAndOrderId(memberId, orderId);
+		Optional<Refund> existing = findExistingRefund(refundTarget, idempotencyKey);
+		if (existing.isPresent()) {
+			// 주문 상태를 보지 않고 판정한다. 일부만 취소돼 주문이 결제완료로 남아 있어도 같은 키의
+			// 재요청이면 앞 결과를 받아야 하고, 그러지 않으면 취소가 한 번 더 반영된다.
+			Payment refunded = refundTarget.orElseThrow();
+			log.info("같은 요청 키의 환불이 이미 있어 앞선 취소 결과를 돌려준다 orderId={} refundId={}",
+				orderId, existing.get().getId());
+			return CancelPaidOrderResult.replayed(
+				order, refunded, existing.get(), refunded.remainingRefundableAmount());
+		}
 
 		if (order.getStatus() != OrderStatus.PAID) {
 			throw new OrderException(OrderErrorCode.ORDER_CANCEL_NOT_ALLOWED);
@@ -67,18 +80,15 @@ public class CancelPaidOrderService {
 			throw new OrderException(OrderErrorCode.ORDER_REFUND_NOT_AVAILABLE);
 		}
 
-		Payment payment = paymentRepository.findSucceededByMemberIdAndOrderId(memberId, orderId)
+		Payment payment = refundTarget
 			.orElseThrow(() -> new OrderException(OrderErrorCode.ORDER_REFUND_TARGET_NOT_FOUND));
 		if (payment.getApprovedAmount() == null) {
 			throw new OrderException(OrderErrorCode.ORDER_REFUND_NOT_AVAILABLE);
 		}
 
-		// 유일 제약이 결제·요청자·요청 키 셋이라 조회도 같은 범위로 좁힌다. 범위가 어긋나면 조회가
-		// 못 찾은 것을 제약이 잡아, 안전망으로만 쓰기로 한 위반이 정상 흐름에서 터진다.
-		Optional<Refund> existing = refundRepository.findByPaymentIdAndRequesterAndIdempotencyKey(
-			payment.getId(), RefundRequester.MEMBER, idempotencyKey);
-
 		order.cancel();
+		// 찾아 둔 기존 사건을 그대로 넘긴다. 위에서 걸러 여기 닿는 것은 비어 있으나, 결제 쪽 내용 대조는
+		// 주문을 거치지 않는 경로가 생겼을 때의 안전망으로 남긴다.
 		Refund refund = payment.openRefund(
 			existing, payment.getApprovedAmount(), RefundReason.ORDER_CANCELED, idempotencyKey);
 
@@ -94,25 +104,21 @@ public class CancelPaidOrderService {
 		log.info("결제된 주문 취소 접수 orderId={} memberId={} paymentId={} refundId={} refundAmount={}",
 			orderId, memberId, payment.getId(), savedRefund.getId(), savedRefund.getAmount());
 
-		return new CancelPaidOrderResult(order, payment, savedRefund, payment.remainingRefundableAmount());
+		return CancelPaidOrderResult.accepted(order, payment, savedRefund, payment.remainingRefundableAmount());
 	}
 
 	/**
-	 * 이미 취소된 주문에 같은 요청 키가 다시 왔을 때 앞선 결과를 찾는다. 응답이 유실되어 회원이 다시
-	 * 보낸 경우이며, 그 키로 만들어진 환불이 곧 이 요청의 결과다.
+	 * 같은 요청 키로 이미 만들어진 환불을 찾는다. 응답이 유실되어 회원이 다시 보낸 경우이며, 그 키로
+	 * 만들어진 환불이 곧 이 요청의 결과다.
 	 *
-	 * <p>요청 키로 좁히므로 다른 요청이 만든 환불이 돌아오지 않는다. 조회 범위는 환불을 만들 때 쓰는
-	 * 것과 같은 결제·요청자·요청 키 셋이다.
+	 * <p>유일 제약이 결제·요청자·요청 키 셋이라 조회도 같은 범위로 좁힌다. 범위가 어긋나면 조회가
+	 * 못 찾은 것을 제약이 잡아, 안전망으로만 쓰기로 한 위반이 정상 흐름에서 터진다.
 	 */
-	@Transactional(readOnly = true)
-	public Optional<CancelPaidOrderResult> findPreviousCancel(Order order, Long memberId, String idempotencyKey) {
-		return paymentRepository.findSucceededByMemberIdAndOrderId(memberId, order.getId())
+	private Optional<Refund> findExistingRefund(Optional<Payment> refundTarget, String idempotencyKey) {
+		return refundTarget
 			.filter(payment -> payment.getApprovedAmount() != null)
-			.flatMap(payment -> refundRepository
-				.findByPaymentIdAndRequesterAndIdempotencyKey(
-					payment.getId(), RefundRequester.MEMBER, idempotencyKey)
-				.map(refund -> new CancelPaidOrderResult(
-					order, payment, refund, payment.remainingRefundableAmount())));
+			.flatMap(payment -> refundRepository.findByPaymentIdAndRequesterAndIdempotencyKey(
+				payment.getId(), RefundRequester.MEMBER, idempotencyKey));
 	}
 
 	private void restoreStock(Order order) {
@@ -127,7 +133,20 @@ public class CancelPaidOrderService {
 	 *
 	 * @param remainingAmount 앞으로 더 취소할 수 있는 금액. 승인 금액에서 돌려주기로 한 금액을 뺀 값이며,
 	 *                        한도를 재는 것과 같은 계산이라 응답이 그것을 그대로 쓴다
+	 * @param replayed        같은 요청 키의 환불이 이미 있어 앞선 결과를 그대로 돌려준 것인지. 참이면
+	 *                        결제사를 부르지 않는다 — 그 환불은 이미 자기 경로로 나가 있다
 	 */
-	public record CancelPaidOrderResult(Order order, Payment payment, Refund refund, int remainingAmount) {
+	public record CancelPaidOrderResult(
+		Order order, Payment payment, Refund refund, int remainingAmount, boolean replayed) {
+
+		public static CancelPaidOrderResult accepted(
+			Order order, Payment payment, Refund refund, int remainingAmount) {
+			return new CancelPaidOrderResult(order, payment, refund, remainingAmount, false);
+		}
+
+		public static CancelPaidOrderResult replayed(
+			Order order, Payment payment, Refund refund, int remainingAmount) {
+			return new CancelPaidOrderResult(order, payment, refund, remainingAmount, true);
+		}
 	}
 }
