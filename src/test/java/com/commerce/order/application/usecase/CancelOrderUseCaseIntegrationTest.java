@@ -142,7 +142,7 @@ class CancelOrderUseCaseIntegrationTest {
 		assertThat(refund.getIdempotencyKey()).isEqualTo("cancel-key-1");
 	}
 
-	@DisplayName("주문 취소를 두 번 불러도 환불이 하나이고 결제사에 다시 나가지 않는다")
+	@DisplayName("주문 취소를 두 번 불러도 환불이 하나이고 재고도 결제사 호출도 늘지 않는다")
 	@Test
 	void cancel_whenCalledTwice_keepsSingleRefundAndDoesNotResend() {
 		Fixture fixture = paidOrder();
@@ -160,7 +160,48 @@ class CancelOrderUseCaseIntegrationTest {
 		assertThat(second.getRemainingAmount()).isEqualTo(first.getRemainingAmount());
 
 		assertThat(refundPersistence.findAll()).hasSize(1);
+		// 재고 복구가 한 번 더 타면 없는 재고가 생긴다. 재생 판정이 지키는 것이 바로 이 값이다.
+		assertThat(stockPersistence.findByProductId(fixture.productId()).orElseThrow().getQuantity())
+			.isEqualTo(1);
 		then(paymentGatewayPort).should().refund(any(), any(), any());
+	}
+
+	@DisplayName("취소로 종착한 주문에 새 요청 키로 다시 오면 거절되고 아무 상태도 바뀌지 않는다")
+	@Test
+	void cancel_whenTerminalOrderGetsNewKey_rejects() {
+		Fixture fixture = paidOrder();
+		givenGatewaySucceeds();
+		cancelOrderUseCase.cancel(fixture.memberId(), fixture.orderId(), "cancel-key-8");
+
+		assertThatThrownBy(() ->
+			cancelOrderUseCase.cancel(fixture.memberId(), fixture.orderId(), "another-cancel-key"))
+			.isInstanceOf(OrderException.class)
+			.satisfies(ex -> assertThat(((OrderException) ex).getErrorCode())
+				.isEqualTo(OrderErrorCode.ORDER_CANCEL_NOT_ALLOWED));
+
+		assertThat(refundPersistence.findAll()).hasSize(1);
+		assertThat(stockPersistence.findByProductId(fixture.productId()).orElseThrow().getQuantity())
+			.isEqualTo(1);
+		then(paymentGatewayPort).should().refund(any(), any(), any());
+	}
+
+	@DisplayName("한 회원의 두 주문에 같은 요청 키를 써도 각자 취소되고 결과가 섞이지 않는다")
+	@Test
+	void cancel_whenSameKeyUsedOnTwoOrders_keepsThemIndependent() {
+		Fixture first = paidOrder();
+		Fixture second = paidOrderFor(first.memberId());
+		givenGatewaySucceeds();
+
+		OrderCancelResult firstResult = cancelOrderUseCase.cancel(
+			first.memberId(), first.orderId(), "shared-cancel-key");
+		OrderCancelResult secondResult = cancelOrderUseCase.cancel(
+			second.memberId(), second.orderId(), "shared-cancel-key");
+
+		assertThat(firstResult.getOrderId()).isEqualTo(first.orderId());
+		assertThat(secondResult.getOrderId()).isEqualTo(second.orderId());
+		assertThat(refundPersistence.findAll()).hasSize(2);
+		assertThat(orderPersistence.getOrderStatusById(first.orderId())).isEqualTo(OrderStatus.CANCELED);
+		assertThat(orderPersistence.getOrderStatusById(second.orderId())).isEqualTo(OrderStatus.CANCELED);
 	}
 
 	@DisplayName("남의 주문 번호로는 취소할 수 없고 환불도 생기지 않는다")
@@ -286,20 +327,25 @@ class CancelOrderUseCaseIntegrationTest {
 	private Fixture paidOrder() {
 		int suffix = ++uniqueSuffix;
 		Member member = memberPersistence.save(member("paid" + suffix));
+		return paidOrderFor(member.getId());
+	}
+
+	private Fixture paidOrderFor(Long memberId) {
+		int suffix = ++uniqueSuffix;
 		Product product = productPersistence.save(product());
-		Order order = Order.create(member.getId());
+		Order order = Order.create(memberId);
 		order.addOrderItem(product.getId(), 1, UNIT_PRICE);
 		order.completePayment();
 		Order savedOrder = orderPersistence.saveAndFlush(order);
 		stockPersistence.save(Stock.create(product.getId(), 0));
 
-		Payment payment = Payment.start(savedOrder.getId(), member.getId(), PaymentPg.NAVERPAY,
+		Payment payment = Payment.start(savedOrder.getId(), memberId, PaymentPg.NAVERPAY,
 			"PK-" + suffix, "idem-" + suffix, UNIT_PRICE);
 		payment.markInProgress("pg-payment-" + suffix, LocalDateTime.now());
 		payment.succeed(UNIT_PRICE, "pg-tx-" + suffix);
 		Payment savedPayment = paymentPersistence.save(payment);
 
-		return new Fixture(member.getId(), savedOrder.getId(), savedPayment.getId());
+		return new Fixture(memberId, savedOrder.getId(), savedPayment.getId(), product.getId());
 	}
 
 	private Member member(String tag) {
@@ -313,6 +359,6 @@ class CancelOrderUseCaseIntegrationTest {
 			UNIT_PRICE, null, null, ProductStatus.ON_SALE);
 	}
 
-	private record Fixture(Long memberId, Long orderId, Long paymentId) {
+	private record Fixture(Long memberId, Long orderId, Long paymentId, Long productId) {
 	}
 }

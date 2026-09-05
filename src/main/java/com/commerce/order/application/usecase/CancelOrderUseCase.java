@@ -1,7 +1,6 @@
 package com.commerce.order.application.usecase;
 
 import java.time.Duration;
-import java.util.Optional;
 
 import org.springframework.beans.factory.annotation.Value;
 import org.springframework.stereotype.Component;
@@ -90,38 +89,30 @@ public class CancelOrderUseCase {
 		Order order = orderRepository.findByIdAndMemberId(orderId, memberId)
 			.orElseThrow(() -> new OrderException(OrderErrorCode.ORDER_NOT_FOUND));
 
-		if (order.getStatus() == OrderStatus.CANCELED) {
-			// 같은 요청 키로 만들어진 환불이 있으면 앞선 취소의 결과를 그대로 돌려준다. 응답이 유실되어
-			// 회원이 다시 보낸 경우이며, 새로 만들지 않고 앞 결과를 돌려주는 것이 이 키의 계약이다.
-			// 결제사는 다시 부르지 않는다 — 그 환불은 이미 자기 경로로 나가 있다.
-			Optional<CancelPaidOrderResult> previous =
-				cancelPaidOrderService.findPreviousCancel(order, memberId, idempotencyKey);
-			if (previous.isPresent()) {
-				return replay(previous.get());
-			}
-		}
-
-		if (order.getStatus() != OrderStatus.PAID) {
+		if (order.getStatus() == OrderStatus.INIT) {
 			return cancelOrderService.cancelOrder(memberId, orderId);
 		}
+		// 취소로 종착한 주문도 이 경로로 보낸다. 같은 요청 키의 환불이 있는지는 그 트랜잭션이 주문 행을
+		// 잠근 뒤에 판정하며, 여기서 상태로 미리 가르면 그 판정을 지나지 못하는 요청이 생긴다.
 		return cancelPaidOrder(memberId, orderId, idempotencyKey);
-	}
-
-	private OrderCancelResult replay(CancelPaidOrderResult previous) {
-		OrderCancelRefundStatus refundStatus = OrderCancelRefundStatus.from(previous.refund().getStatus());
-		log.info("이미 취소된 주문에 같은 요청 키가 다시 와 앞선 결과를 돌려준다 orderId={} refundId={}",
-			previous.order().getId(), previous.refund().getId());
-
-		return OrderCancelResult.withRefund(
-			previous.order(), refundStatus, previous.refund().getAmount(), previous.remainingAmount());
 	}
 
 	private OrderCancelResult cancelPaidOrder(Long memberId, Long orderId, String idempotencyKey) {
 		CancelPaidOrderResult canceled = commitCancel(memberId, orderId, idempotencyKey);
 
+		if (canceled.replayed()) {
+			// 결제사를 부르지 않는다 — 그 환불은 이미 자기 경로로 나가 있고, 중복으로 부르면 한 사건에
+			// 두 주체가 겹쳐 상태 전이가 충돌한다.
+			return answer(canceled, OrderCancelRefundStatus.from(canceled.refund().getStatus()));
+		}
+
 		OrderCancelRefundStatus refundStatus = OrderCancelRefundStatus.from(sendRefund(canceled));
 		log.info("주문 취소 완료 orderId={} memberId={} refundStatus={}", orderId, memberId, refundStatus);
 
+		return answer(canceled, refundStatus);
+	}
+
+	private OrderCancelResult answer(CancelPaidOrderResult canceled, OrderCancelRefundStatus refundStatus) {
 		return OrderCancelResult.withRefund(
 			canceled.order(), refundStatus, canceled.refund().getAmount(), canceled.remainingAmount());
 	}

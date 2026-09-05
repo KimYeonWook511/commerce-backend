@@ -155,6 +155,54 @@ class OrderCancelUseCaseTest {
 		assertThat(result.getRefundStatus()).isEqualTo(OrderCancelRefundStatus.IN_PROGRESS);
 	}
 
+	@DisplayName("같은 요청 키의 환불이 이미 있으면 앞 결과를 돌려주고 결제사를 다시 부르지 않는다")
+	@Test
+	void cancel_whenTransactionReplaysPreviousRefund_doesNotCallGateway() {
+		givenReserved();
+		Order order = order(OrderStatus.CANCELED);
+		given(orderRepository.findByIdAndMemberId(ORDER_ID, MEMBER_ID)).willReturn(Optional.of(order));
+		given(cancelPaidOrderService.cancelPaidOrder(MEMBER_ID, ORDER_ID, IDEMPOTENCY_KEY))
+			.willReturn(replayedResult(OrderStatus.CANCELED));
+
+		OrderCancelResult result = cancelOrderUseCase.cancel(MEMBER_ID, ORDER_ID, IDEMPOTENCY_KEY);
+
+		assertThat(result.getStatus()).isEqualTo(OrderStatus.CANCELED);
+		assertThat(result.getRefundStatus()).isEqualTo(OrderCancelRefundStatus.IN_PROGRESS);
+		assertThat(result.getRefundedAmount()).isEqualTo(APPROVED_AMOUNT);
+		then(executeRefundUseCase).shouldHaveNoInteractions();
+	}
+
+	@DisplayName("주문이 결제완료로 남아 있어도 취소 접수 트랜잭션이 재생을 판정한다")
+	@Test
+	void cancel_whenOrderStillPaid_stillGoesThroughAcceptanceTransaction() {
+		givenReserved();
+		Order order = order(OrderStatus.PAID);
+		given(orderRepository.findByIdAndMemberId(ORDER_ID, MEMBER_ID)).willReturn(Optional.of(order));
+		given(cancelPaidOrderService.cancelPaidOrder(MEMBER_ID, ORDER_ID, IDEMPOTENCY_KEY))
+			.willReturn(replayedResult(OrderStatus.PAID));
+
+		OrderCancelResult result = cancelOrderUseCase.cancel(MEMBER_ID, ORDER_ID, IDEMPOTENCY_KEY);
+
+		assertThat(result.getStatus()).isEqualTo(OrderStatus.PAID);
+		then(executeRefundUseCase).shouldHaveNoInteractions();
+	}
+
+	@DisplayName("이미 취소된 주문도 결제 전 취소 경로로 새지 않고 취소 접수 트랜잭션으로 간다")
+	@Test
+	void cancel_whenOrderAlreadyCanceled_doesNotFallBackToPlainCancel() {
+		givenReserved();
+		Order order = order(OrderStatus.CANCELED);
+		given(orderRepository.findByIdAndMemberId(ORDER_ID, MEMBER_ID)).willReturn(Optional.of(order));
+		given(cancelPaidOrderService.cancelPaidOrder(MEMBER_ID, ORDER_ID, IDEMPOTENCY_KEY))
+			.willThrow(new OrderException(OrderErrorCode.ORDER_CANCEL_NOT_ALLOWED));
+
+		assertThatThrownBy(() -> cancelOrderUseCase.cancel(MEMBER_ID, ORDER_ID, IDEMPOTENCY_KEY))
+			.isInstanceOf(OrderException.class)
+			.satisfies(ex -> assertThat(((OrderException) ex).getErrorCode())
+				.isEqualTo(OrderErrorCode.ORDER_CANCEL_NOT_ALLOWED));
+		then(cancelOrderService).shouldHaveNoInteractions();
+	}
+
 	@DisplayName("멱등키가 없으면 요청 형식 검증으로 거절한다")
 	@Test
 	void cancel_whenIdempotencyKeyMissing_throws() {
@@ -260,7 +308,14 @@ class OrderCancelUseCaseTest {
 			APPROVED_AMOUNT, RefundReason.ORDER_CANCELED);
 		ReflectionTestUtils.setField(refund, "id", 9L);
 
-		return new CancelPaidOrderResult(order(OrderStatus.CANCELED), payment, refund, 0);
+		return CancelPaidOrderResult.accepted(order(OrderStatus.CANCELED), payment, refund, 0);
+	}
+
+	/** 같은 요청 키의 환불이 이미 있어 트랜잭션이 앞 결과를 그대로 돌려준 경우 */
+	private CancelPaidOrderResult replayedResult(OrderStatus orderStatus) {
+		CancelPaidOrderResult accepted = canceledResult();
+		return CancelPaidOrderResult.replayed(
+			order(orderStatus), accepted.payment(), accepted.refund(), accepted.remainingAmount());
 	}
 
 	private Order order(OrderStatus status) {
