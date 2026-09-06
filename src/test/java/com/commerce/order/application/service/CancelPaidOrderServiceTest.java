@@ -201,6 +201,21 @@ class CancelPaidOrderServiceTest {
 				.isEqualTo(OrderErrorCode.ORDER_CANCEL_NOT_ALLOWED));
 	}
 
+	@DisplayName("결제완료가 아닌 주문은 승인 결과를 모르는 결제가 걸려 있어도 취소 가능 판정에서 먼저 거부된다")
+	@Test
+	void cancelPaidOrder_whenNotPaidAndUnknownPaymentExists_rejectsBeforeCheckingUnknownPayment() {
+		Order order = Order.create(MEMBER_ID);
+		ReflectionTestUtils.setField(order, "id", ORDER_ID);
+		given(orderRepository.findByIdAndMemberIdForUpdate(ORDER_ID, MEMBER_ID)).willReturn(Optional.of(order));
+
+		assertThatThrownBy(() -> cancelPaidOrderService.cancelPaidOrder(MEMBER_ID, ORDER_ID, IDEMPOTENCY_KEY, List.of()))
+			.isInstanceOf(OrderException.class)
+			.satisfies(ex -> assertThat(((OrderException) ex).getErrorCode())
+				.isEqualTo(OrderErrorCode.ORDER_CANCEL_NOT_ALLOWED));
+		// 결제 전 주문에는 "결제 확인 중" 안내가 실현될 길이 없다 — 그 검사에 닿기도 전에 거부된다.
+		then(paymentRepository).should(never()).existsUnknownByOrderId(any());
+	}
+
 	@DisplayName("승인 결과를 모르는 결제가 걸린 주문은 취소할 수 없다")
 	@Test
 	void cancelPaidOrder_whenUnknownPaymentExists_throws() {

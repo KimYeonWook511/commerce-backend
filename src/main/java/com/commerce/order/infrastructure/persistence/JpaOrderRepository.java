@@ -40,14 +40,6 @@ public interface JpaOrderRepository extends JpaRepository<Order, Long> {
 	);
 
 	@Query("""
-		select o
-		from Order o
-		where o.id = :orderId
-		and o.memberId = :memberId
-		""")
-	Optional<Order> findByIdAndMemberId(@Param("orderId") Long orderId, @Param("memberId") Long memberId);
-
-	@Query("""
 		select distinct o from Order o
 		join fetch o.orderItems oi
 		where o.id = :orderId

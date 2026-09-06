@@ -41,11 +41,6 @@ public class OrderRepositoryAdapter implements OrderRepository {
 	}
 
 	@Override
-	public Optional<Order> findByIdAndMemberId(Long orderId, Long memberId) {
-		return jpaOrderRepository.findByIdAndMemberId(orderId, memberId);
-	}
-
-	@Override
 	public Optional<Order> findByIdAndMemberIdWithItems(Long orderId, Long memberId) {
 		return jpaOrderRepository.findByIdAndMemberIdWithItems(orderId, memberId);
 	}

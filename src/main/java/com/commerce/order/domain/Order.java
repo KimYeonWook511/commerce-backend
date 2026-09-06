@@ -117,15 +117,30 @@ public class Order extends BaseTimeEntity {
 	}
 
 	/**
+	 * 결제완료 주문만 취소를 받을 수 있다는 것을 검증한다. 통과하면 아무것도 돌려주지 않고, 막히면 던진다.
+	 *
+	 * <p>이 판정은 취소를 접수하는 트랜잭션이 주문 행을 잠그고 멱등 재생을 판정한 뒤에 불려야 한다.
+	 * 같은 요청 키의 환불이 이미 있는 재요청은 이 판정보다 먼저 앞선 결과를 받으므로 이 판정에 닿지
+	 * 않는다 — 취소로 종착한 주문이라도 **다른** 요청 키로 오면 그 재생 판정을 지나 여기서 거부된다.
+	 * 승인 결과를 모르는 결제를 보는 검사보다도 먼저 불려야 한다 — 결제 전 주문에는 그 검사가 답하는
+	 * "결제 확인 중" 안내가 실현될 길이 없기 때문이다.
+	 */
+	public void checkCancellable() {
+		if (this.status != OrderStatus.PAID) {
+			throw new OrderException(OrderErrorCode.ORDER_CANCEL_NOT_ALLOWED);
+		}
+	}
+
+	/**
 	 * 취소 요청을 검증하고 이번 취소의 값어치를 계산한다. 상태를 바꾸지 않는다.
 	 *
 	 * <p>줄 목록이 비어 있으면 잔여가 남은 품목만 골라 그 잔여수량으로 채운다. 이미 전부 취소된 품목을
 	 * 넣으면 수량 0인 줄이 되어 요청 전체가 거부되고, 품목 식별자를 모르는 호출자가 남은 품목을 영영
 	 * 취소하지 못한다.
 	 *
-	 * <p>주문 상태를 보지 않는다 — 상태 확인은 취소를 접수하는 흐름의 몫이다. 여기에 상태 가드를 두면
-	 * 잔여가 하나도 없는 주문이 상태로 먼저 걸려, 확정된 줄이 없는 것을 막는 가드가 있는지 확인할 수
-	 * 없게 된다.
+	 * <p>주문 상태를 보지 않는다 — 취소 가능 여부는 {@link #checkCancellable()}이 따로 검증한다. 여기에
+	 * 상태 가드를 두면 잔여가 하나도 없는 주문이 상태로 먼저 걸려, 확정된 줄이 없는 것을 막는 가드가
+	 * 있는지 확인할 수 없게 된다.
 	 */
 	public OrderCancelPlan planCancellation(List<OrderCancelLine> requestedLines) {
 		List<OrderCancelLine> targetLines = (requestedLines == null || requestedLines.isEmpty())

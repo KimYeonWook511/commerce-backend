@@ -12,15 +12,11 @@ import com.commerce.common.exception.CommonException;
 import com.commerce.order.application.dto.OrderCancelRefundStatus;
 import com.commerce.order.application.dto.OrderCancelResult;
 import com.commerce.order.application.port.OrderIdempotencyStore;
-import com.commerce.order.application.service.CancelOrderService;
 import com.commerce.order.application.service.CancelPaidOrderService;
 import com.commerce.order.application.service.CancelPaidOrderService.CancelPaidOrderResult;
-import com.commerce.order.domain.Order;
 import com.commerce.order.domain.OrderCancelLine;
-import com.commerce.order.domain.OrderStatus;
 import com.commerce.order.domain.exception.OrderErrorCode;
 import com.commerce.order.domain.exception.OrderException;
-import com.commerce.order.domain.repository.OrderRepository;
 import com.commerce.order.infrastructure.OrderIdempotencyStoreUnavailableException;
 import com.commerce.payment.application.port.dto.PgCallSource;
 import com.commerce.payment.application.usecase.ExecuteRefundUseCase;
@@ -42,9 +38,7 @@ import lombok.extern.slf4j.Slf4j;
 @RequiredArgsConstructor
 public class CancelOrderUseCase {
 
-	private final OrderRepository orderRepository;
 	private final OrderIdempotencyStore orderIdempotencyStore;
-	private final CancelOrderService cancelOrderService;
 	private final CancelPaidOrderService cancelPaidOrderService;
 	private final ExecuteRefundUseCase executeRefundUseCase;
 
@@ -52,7 +46,8 @@ public class CancelOrderUseCase {
 	private long idempotencyTtlSeconds;
 
 	/**
-	 * 주문을 취소한다. 결제 전 주문은 재고만 돌려주고, 결제된 주문은 환불까지 잇는다.
+	 * 주문을 취소한다. 결제완료 주문만 받는다 — 결제 전 주문은 결제완료 취소 관문의 취소 가능 판정에
+	 * 걸려 거부되고, 취소로 종착한 주문은 같은 요청 키의 환불이 있으면 그 결과를 그대로 돌려준다.
 	 *
 	 * <p>취소할 품목 줄이 비어 있으면 잔여가 남은 품목 전부를 취소한다. 그 판정은 주문이 하고 여기서는
 	 * 받은 그대로 넘긴다.
@@ -74,7 +69,7 @@ public class CancelOrderUseCase {
 		} catch (OrderIdempotencyStoreUnavailableException ex) {
 			// 선점 저장소가 죽으면 DB 유일 제약 경로로 물러난다. 표시를 만들지 못했으므로 해제하지 않는다.
 			log.warn("주문 취소 선점 저장소 장애, DB 유일 제약으로 물러난다: orderId={}, key={}", orderId, idempotencyKey);
-			return execute(memberId, orderId, idempotencyKey, requestedLines);
+			return cancelPaidOrder(memberId, orderId, idempotencyKey, requestedLines);
 		}
 
 		if (!reserved) {
@@ -82,27 +77,11 @@ public class CancelOrderUseCase {
 		}
 
 		try {
-			return execute(memberId, orderId, idempotencyKey, requestedLines);
+			return cancelPaidOrder(memberId, orderId, idempotencyKey, requestedLines);
 		} finally {
 			// 트랜잭션을 열지 않는 계층이라 이 finally 는 취소 트랜잭션이 끝난 뒤에 돈다.
 			orderIdempotencyStore.clearCancel(orderId, idempotencyKey);
 		}
-	}
-
-	private OrderCancelResult execute(
-		Long memberId, Long orderId, String idempotencyKey, List<OrderCancelLine> requestedLines) {
-		// 잠그지 않고 상태만 읽어 경로를 고른다. 결제된 주문 취소의 검증과 잠금은 그 트랜잭션 안에서
-		// 다시 한다.
-		Order order = orderRepository.findByIdAndMemberId(orderId, memberId)
-			.orElseThrow(() -> new OrderException(OrderErrorCode.ORDER_NOT_FOUND));
-
-		if (order.getStatus() == OrderStatus.INIT) {
-			// 결제 전 취소는 되돌릴 돈이 없어 품목 목록을 쓰지 않는다. 기존 경로 그대로 위임한다.
-			return cancelOrderService.cancelOrder(memberId, orderId);
-		}
-		// 취소로 종착한 주문도 이 경로로 보낸다. 같은 요청 키의 환불이 있는지는 그 트랜잭션이 주문 행을
-		// 잠근 뒤에 판정하며, 여기서 상태로 미리 가르면 그 판정을 지나지 못하는 요청이 생긴다.
-		return cancelPaidOrder(memberId, orderId, idempotencyKey, requestedLines);
 	}
 
 	private OrderCancelResult cancelPaidOrder(
