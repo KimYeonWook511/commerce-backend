@@ -1,0 +1,254 @@
+{
+  "generated_at": "2026-09-07T01:20:00+09:00",
+  "closed_at": "2026-09-07T00:47:50.928097+09:00",
+  "round": 6,
+  "inspectors": [
+    "rules"
+  ],
+  "findings": [
+    {
+      "id": "K1",
+      "category": "전략 문서의 차단 정책과 이 spec의 응답이 한 사례에서 갈리는데 관계가 기록되지 않았다",
+      "severity": "MEDIUM",
+      "location": "docs/exception-strategy.md 결제 결과 UNKNOWN 차단 정책 / scenarios.md#SCN-016, api-spec.md, adr.md",
+      "summary": "전략 문서는 그 주문에 결과를 모르는 결제가 있으면 취소를 '결제 확인 중' 오류로 막는다고 정하는데, 이 spec은 결제 전 주문이 그 검사에 닿기 전에 취소 불가로 거부되도록 판정을 앞에 두고 그것을 불변 계약으로 못박으면서 그 문장과의 관계를 어느 문서에도 적지 않았다. 결제완료 주문의 답은 바뀌지 않고 결제 전 주문은 지금 막히지도 않는다.",
+      "recommendation": "adr에 그 결정을 남기고 전략 문서 범위 조정을 Root Sync 항목으로 적는다.",
+      "reported_by": [
+        {
+          "inspector": "rules",
+          "severity": "MEDIUM"
+        }
+      ],
+      "carried_disposition": null,
+      "disposition": {
+        "kind": "fixed",
+        "note": "adr.md Consequences에 '결제 전 주문에는 승인 결과 불명 검사가 닿지 않는다'는 항목을 넣고, 결제완료 주문의 답이 바뀌지 않는다는 것과 그 문서 범위 조정을 Root Sync에서 다룬다는 것을 함께 적었다."
+      }
+    },
+    {
+      "id": "K2",
+      "category": "구현 지시의 머리 문장이 표 한 행과 맞지 않는다",
+      "severity": "LOW",
+      "location": "phases/1-main/step1.md#구현 지시 9 표 셋째 행",
+      "summary": "머리 문장이 '지우지 말고 다시 쓴다'인데 셋째 행의 주석은 그것이 설명하는 조회가 함께 사라져 다시 쓸 대상이 없다. 문자대로 따르면 없는 코드를 설명하는 주석이 남는다.",
+      "recommendation": "코드가 남는 경우와 사라지는 경우를 가른다.",
+      "reported_by": [
+        {
+          "inspector": "rules",
+          "severity": "LOW"
+        }
+      ],
+      "carried_disposition": null,
+      "disposition": {
+        "kind": "fixed",
+        "note": "머리 문장을 '코드가 남는 자리의 주석은 다시 쓰고, 코드가 사라지는 자리의 주석은 그 코드와 함께 지운다'로 가르고 셋째 행에 '주석도 함께 지운다'를 명시했다."
+      }
+    },
+    {
+      "id": "K3",
+      "category": "같은 근거가 세 문서에 반복되고 정본이 정해지지 않았다",
+      "severity": "LOW",
+      "location": "spec.md#확인 방법, plan.md#시나리오 충족 점검, phases/1-main/step1.md#구현 지시 7",
+      "summary": "취소 가능 판정의 배치에 시나리오를 두지 않는 이유가 세 문서에 거의 같은 문장으로 적혀 판단이 바뀌면 세 곳이 갈린다.",
+      "recommendation": "정본을 한 곳으로 두고 나머지는 가리킨다.",
+      "reported_by": [
+        {
+          "inspector": "rules",
+          "severity": "LOW"
+        }
+      ],
+      "carried_disposition": "5차 J2(HIGH, fixed)의 처리가 만든 것이며 J11(LOW, fixed)이 잡은 실패 형태와 같다.",
+      "disposition": {
+        "kind": "fixed",
+        "note": "정본을 plan.md 시나리오 충족 점검 한 곳으로 두고 spec.md와 step1을 그것을 가리키는 한 줄로 줄였다."
+      }
+    }
+  ],
+  "not_applicable": {
+    "rules": [
+      "5차 J1(CRITICAL) 닫힘 — 학습용 테스트 규약 원문과 세 문서의 새 문장이 일치하고, 대상 파일이 관문을 임포트만 하고 쓰지 않는 것과 태그·build.gradle의 learning 제외를 코드로 확인했다.",
+      "**남은 CRITICAL 없음.** 규칙 문서 여덟을 절 단위로 훑고 step의 모든 삭제 지시를 보존·유지 조항과 하나씩 대조했다.",
+      "5차 14건 전부 문서에 반영됐고 반쯤 반영된 것이 없다 — 여섯 회차 만에 처음이다.",
+      "핵심 산출물 누락 없음. 계층 배치·의존 방향·트랜잭션 위치·도메인 예외 배치·영속성·로깅·테스트 태그/컨테이너/미러링 위반 없음. step이 없는 파일을 참조하는 곳 없음. 외부 저장소를 근거로 드는 문장 없음."
+    ]
+  },
+  "coverage": [
+    {
+      "key": "FR-001",
+      "scenarios": [
+        "SCN-001",
+        "SCN-005",
+        "SCN-006",
+        "SCN-008",
+        "SCN-009",
+        "SCN-012",
+        "SCN-016"
+      ],
+      "steps": [
+        "step1"
+      ],
+      "note": ""
+    },
+    {
+      "key": "FR-002",
+      "scenarios": [
+        "SCN-001",
+        "SCN-005",
+        "SCN-009",
+        "SCN-012"
+      ],
+      "steps": [
+        "step1"
+      ],
+      "note": ""
+    },
+    {
+      "key": "FR-003",
+      "scenarios": [
+        "SCN-002",
+        "SCN-003",
+        "SCN-009",
+        "SCN-010",
+        "SCN-013"
+      ],
+      "steps": [
+        "step1",
+        "step2",
+        "step3"
+      ],
+      "note": ""
+    },
+    {
+      "key": "FR-004",
+      "scenarios": [
+        "SCN-004",
+        "SCN-007",
+        "SCN-015"
+      ],
+      "steps": [
+        "step3"
+      ],
+      "note": ""
+    },
+    {
+      "key": "FR-005",
+      "scenarios": [
+        "SCN-014"
+      ],
+      "steps": [
+        "step3"
+      ],
+      "note": "유일한 시나리오가 유동이나 AC가 파일 부재를 직접 잰다"
+    },
+    {
+      "key": "FR-006",
+      "scenarios": [
+        "SCN-011",
+        "SCN-017"
+      ],
+      "steps": [
+        "step1",
+        "step3"
+      ],
+      "note": "재생되는 갈래와 거부되는 갈래를 각각 잰다"
+    },
+    {
+      "key": "FR-007",
+      "scenarios": [
+        "SCN-008"
+      ],
+      "steps": [
+        "step1"
+      ],
+      "note": ""
+    },
+    {
+      "key": "SC-001",
+      "scenarios": [
+        "SCN-001",
+        "SCN-005",
+        "SCN-006",
+        "SCN-008",
+        "SCN-009",
+        "SCN-012",
+        "SCN-016"
+      ],
+      "steps": [
+        "step1"
+      ],
+      "note": "취소 가능 판정 시점 기준으로 한정했다"
+    },
+    {
+      "key": "SC-002",
+      "scenarios": [
+        "SCN-002",
+        "SCN-003",
+        "SCN-009",
+        "SCN-011",
+        "SCN-013",
+        "SCN-017"
+      ],
+      "steps": [
+        "step1",
+        "step3"
+      ],
+      "note": ""
+    },
+    {
+      "key": "SC-003",
+      "scenarios": [
+        "SCN-004",
+        "SCN-007",
+        "SCN-015"
+      ],
+      "steps": [
+        "step3"
+      ],
+      "note": ""
+    },
+    {
+      "key": "SC-004",
+      "scenarios": [
+        "SCN-010"
+      ],
+      "steps": [
+        "step2",
+        "step3"
+      ],
+      "note": ""
+    },
+    {
+      "key": "SC-005",
+      "scenarios": [
+        "SCN-014"
+      ],
+      "steps": [
+        "step3"
+      ],
+      "note": ""
+    },
+    {
+      "key": "SC-006",
+      "scenarios": [],
+      "steps": [],
+      "note": "문서 산출물. PR 리뷰에서 api-spec.md를 연다"
+    },
+    {
+      "key": "SC-007",
+      "scenarios": [],
+      "steps": [],
+      "note": "문서 산출물. PR 리뷰에서 adr.md를 연다"
+    }
+  ],
+  "fingerprint": {
+    "spec.md": "3de71ba26d5f",
+    "plan.md": "d304942eff22",
+    "scenarios.md": "7bb4729d5fe6",
+    "architecture.md": "4d6a36d3bf12",
+    "api-spec.md": "b655f44169ed",
+    "adr.md": "4fc6142f1bc1",
+    "phases/1-main/step1.md": "93ca9b1e26b7",
+    "phases/1-main/step2.md": "f437902fab31",
+    "phases/1-main/step3.md": "40628b025e16"
+  }
+}
