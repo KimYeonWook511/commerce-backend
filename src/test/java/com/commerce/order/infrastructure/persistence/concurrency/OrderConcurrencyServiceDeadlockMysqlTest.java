@@ -26,12 +26,10 @@ import org.springframework.test.context.DynamicPropertySource;
 
 import com.commerce.member.domain.Member;
 import com.commerce.member.infrastructure.persistence.support.MemberPersistenceTestSupport;
-import com.commerce.order.application.service.CancelOrderService;
 import com.commerce.order.application.service.OrderCreateConcurrencyService;
 import com.commerce.order.application.service.CreateOrderService;
 import com.commerce.order.application.dto.OrderCreateCommand;
 import com.commerce.order.application.dto.OrderCreateItem;
-import com.commerce.order.application.dto.OrderCreateResult;
 import com.commerce.order.infrastructure.persistence.support.OrderPersistenceTestSupport;
 import com.commerce.product.domain.Product;
 import com.commerce.product.domain.ProductStatus;
@@ -50,9 +48,6 @@ class OrderConcurrencyServiceDeadlockMysqlTest {
 
 	@Autowired
 	private OrderCreateConcurrencyService orderCreateConcurrencyService;
-
-	@Autowired
-	private CancelOrderService cancelOrderService;
 
 	@Autowired
 	private PersistenceCleanupTestSupport persistenceCleanup;
@@ -219,46 +214,6 @@ class OrderConcurrencyServiceDeadlockMysqlTest {
 			Stock updated = stockPersistence.findByProductId(product.getId()).orElseThrow();
 			assertThat(updated.getQuantity()).isZero();
 		}
-	}
-
-	@DisplayName("MySQL에서 주문 생성과 주문 취소가 동시에 일어나도 데드락이 발생하지 않는다")
-	@Test
-	void createOrderAndCancelOrder_whenConcurrent_noDeadlock() throws Exception {
-		// given
-		Member member = memberPersistence.save(createMember());
-		Product product1 = productPersistence.save(createProduct("mysql-order-product-1", 1000));
-		Product product2 = productPersistence.save(createProduct("mysql-order-product-2", 1200));
-		stockPersistence.save(createStock(product1, 10));
-		stockPersistence.save(createStock(product2, 10));
-
-		OrderCreateCommand cancelRequest = createRequest(
-			member.getId(), List.of(product2.getId(), product1.getId())
-		);
-		OrderCreateResult created = orderCreateConcurrencyService.createOrderWithPessimisticLockOrdered(cancelRequest);
-
-		OrderCreateCommand createRequest = createRequest(
-			member.getId(), List.of(product1.getId(), product2.getId())
-		);
-
-		// when
-		ConcurrentLinkedQueue<Throwable> errors = new ConcurrentLinkedQueue<>();
-		AtomicInteger sequence = new AtomicInteger();
-		runConcurrent(2, () -> {
-			int index = sequence.getAndIncrement();
-			if (index == 0) {
-				cancelOrderService.cancelOrder(member.getId(), created.getOrderId());
-			} else {
-				orderCreateConcurrencyService.createOrderWithPessimisticLockOrdered(createRequest);
-			}
-		}, errors);
-
-		// then
-		assertThat(errors).isEmpty();
-		assertThat(orderPersistence.count()).isEqualTo(2L);
-		assertThat(stockPersistence.findByProductId(product1.getId()).orElseThrow().getQuantity())
-			.isEqualTo(9);
-		assertThat(stockPersistence.findByProductId(product2.getId()).orElseThrow().getQuantity())
-			.isEqualTo(9);
 	}
 
 	private void runConcurrent(int threadCount, Runnable task, ConcurrentLinkedQueue<Throwable> errors)

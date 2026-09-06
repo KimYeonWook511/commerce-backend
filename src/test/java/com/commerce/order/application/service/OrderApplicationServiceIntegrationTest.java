@@ -26,6 +26,7 @@ import com.commerce.order.infrastructure.persistence.support.OrderPersistenceTes
 import com.commerce.product.domain.Product;
 import com.commerce.product.domain.ProductStatus;
 import com.commerce.product.infrastructure.persistence.support.ProductPersistenceTestSupport;
+import com.commerce.stock.application.service.IncreaseStockService;
 import com.commerce.stock.domain.Stock;
 import com.commerce.stock.domain.exception.StockErrorCode;
 import com.commerce.stock.domain.exception.StockException;
@@ -49,7 +50,7 @@ class OrderApplicationServiceIntegrationTest {
 	private CreateOrderUseCase createOrderUseCase;
 
 	@Autowired
-	private CancelOrderService cancelOrderService;
+	private IncreaseStockService increaseStockService;
 
 	@Autowired
 	private PersistenceCleanupTestSupport persistenceCleanup;
@@ -79,9 +80,9 @@ class OrderApplicationServiceIntegrationTest {
 		);
 	}
 
-	@DisplayName("재고가 부족하면 주문이 실패하고 취소 후 다시 주문할 수 있다")
+	@DisplayName("재고가 부족하면 주문이 실패하고 재고가 돌아오면 다시 주문할 수 있다")
 	@Test
-	void createOrder_whenOutOfStock_thenCancel_thenCreateSuccess() {
+	void createOrder_whenOutOfStock_thenStockRestored_thenCreateSuccess() {
 		// given
 		Member member = memberPersistence.save(createMember("order-recovery"));
 		Product product = productPersistence.save(createProduct("recovery-product", 1000));
@@ -99,7 +100,7 @@ class OrderApplicationServiceIntegrationTest {
 			.build();
 
 		// when
-		OrderCreateResult created = createOrderUseCase.createOrder(firstRequest);
+		createOrderUseCase.createOrder(firstRequest);
 
 		// then
 		assertThatThrownBy(() -> createOrderUseCase.createOrder(secondRequest))
@@ -109,7 +110,7 @@ class OrderApplicationServiceIntegrationTest {
 				assertThat(stockException.getErrorCode()).isEqualTo(StockErrorCode.OUT_OF_STOCK);
 			});
 
-		cancelOrderService.cancelOrder(member.getId(), created.getOrderId());
+		increaseStockService.increase(product.getId(), 1);
 
 		OrderCreateResult recreated = createOrderUseCase.createOrder(secondRequest);
 		assertThat(recreated.getOrderId()).isNotNull();

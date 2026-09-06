@@ -28,7 +28,6 @@ import org.springframework.test.context.ActiveProfiles;
 import org.springframework.test.context.TestPropertySource;
 import org.springframework.test.context.bean.override.mockito.MockitoBean;
 
-import com.commerce.order.application.service.CancelOrderService;
 import com.commerce.order.application.service.OrderCreateConcurrencyService;
 import com.commerce.order.application.usecase.CreateOrderUseCase;
 import com.commerce.member.domain.Member;
@@ -41,8 +40,6 @@ import com.commerce.product.domain.ProductStatus;
 import com.commerce.stock.domain.Stock;
 import com.commerce.stock.domain.exception.StockErrorCode;
 import com.commerce.stock.domain.exception.StockException;
-import com.commerce.order.domain.OrderStatus;
-import org.springframework.dao.OptimisticLockingFailureException;
 
 import com.commerce.order.domain.exception.OrderErrorCode;
 import com.commerce.order.domain.exception.OrderException;
@@ -68,9 +65,6 @@ class OrderConcurrencyServiceTest {
 
 	@Autowired
 	private CreateOrderUseCase createOrderUseCase;
-
-	@Autowired
-	private CancelOrderService cancelOrderService;
 
 	@Autowired
 	private PersistenceCleanupTestSupport persistenceCleanup;
@@ -245,34 +239,6 @@ class OrderConcurrencyServiceTest {
 				StockException stockException = (StockException) error;
 				assertThat(stockException.getErrorCode()).isEqualTo(StockErrorCode.OUT_OF_STOCK);
 			});
-	}
-
-	@DisplayName("같은 주문에 취소 요청이 동시에 와도 한 번만 취소된다")
-	@Test
-	void cancelOrder_whenConcurrentRequests_onlyOneCancel() throws Exception {
-		// given
-		int threadCount = 3;
-		Member member = memberPersistence.save(createMember());
-		Product product = productPersistence.save(createProduct("cancel-product", 1000));
-		stockPersistence.save(createStock(product, 5));
-
-		OrderCreateResult created = createOrderUseCase.createOrder(
-			createRequest(member.getId(), product.getId(), 2, "cancel-key")
-		);
-
-		// when
-		ConcurrentLinkedQueue<Throwable> errors = new ConcurrentLinkedQueue<>();
-		runConcurrent(threadCount, () -> cancelOrderService.cancelOrder(member.getId(), created.getOrderId()), errors);
-
-		// then
-		Stock updated = stockPersistence.findByProductId(product.getId()).orElseThrow();
-		assertThat(updated.getQuantity()).isEqualTo(5);
-		assertThat(orderPersistence.findById(created.getOrderId()).orElseThrow().getStatus())
-			.isEqualTo(OrderStatus.CANCELED);
-		assertThat(errors).hasSize(threadCount - 1)
-			.allSatisfy(error ->
-				assertThat(error).isInstanceOf(OptimisticLockingFailureException.class)
-			);
 	}
 
 	private void runConcurrent(int threadCount, Runnable task, ConcurrentLinkedQueue<Throwable> errors)

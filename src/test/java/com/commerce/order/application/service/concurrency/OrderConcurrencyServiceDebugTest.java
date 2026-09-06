@@ -24,7 +24,6 @@ import org.springframework.context.annotation.Import;
 import org.springframework.test.context.ActiveProfiles;
 import org.springframework.test.context.TestPropertySource;
 
-import com.commerce.order.application.service.CancelOrderService;
 import com.commerce.order.application.service.OrderCreateConcurrencyService;
 import com.commerce.order.application.service.CreateOrderService;
 import com.commerce.member.domain.Member;
