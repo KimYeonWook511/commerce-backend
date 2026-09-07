@@ -13,7 +13,6 @@ import com.commerce.order.domain.Order;
 import com.commerce.order.domain.OrderCancelLine;
 import com.commerce.order.domain.OrderCancelPlan;
 import com.commerce.order.domain.OrderItem;
-import com.commerce.order.domain.OrderStatus;
 import com.commerce.order.domain.exception.OrderErrorCode;
 import com.commerce.order.domain.exception.OrderException;
 import com.commerce.order.domain.repository.OrderRepository;
@@ -85,10 +84,10 @@ public class CancelPaidOrderService {
 				order, refunded, previous, refunded.remainingRefundableAmount());
 		}
 
-		if (order.getStatus() != OrderStatus.PAID) {
-			throw new OrderException(OrderErrorCode.ORDER_CANCEL_NOT_ALLOWED);
-		}
+		order.checkCancellable();
 		// 승인 결과를 모르는 결제가 걸려 있으면 얼마를 돌려줘야 하는지가 아직 정해지지 않았다.
+		// 성공한 결제가 주문 자리를 놓지 않아 지금은 이 조합이 서지 않지만, 그 성질이 상태 플래그와
+		// 자리의 유일 제약에 흩어져 있어 한쪽이 바뀌면 되살아난다. 돈이 걸린 자리라 안전망으로 남긴다.
 		if (paymentRepository.existsUnknownByOrderId(orderId)) {
 			throw new OrderException(OrderErrorCode.ORDER_REFUND_NOT_AVAILABLE);
 		}

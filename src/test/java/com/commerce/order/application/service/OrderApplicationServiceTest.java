@@ -14,7 +14,6 @@ import org.junit.jupiter.api.DisplayName;
 import org.junit.jupiter.api.Test;
 import org.junit.jupiter.api.extension.ExtendWith;
 import org.mockito.ArgumentCaptor;
-import org.mockito.InOrder;
 import org.mockito.InjectMocks;
 import org.mockito.Mock;
 import org.mockito.junit.jupiter.MockitoExtension;
@@ -23,14 +22,12 @@ import org.springframework.test.util.ReflectionTestUtils;
 import com.commerce.member.domain.Member;
 import com.commerce.member.domain.repository.MemberRepository;
 import com.commerce.order.domain.Order;
-import com.commerce.order.domain.OrderStatus;
 import com.commerce.order.domain.repository.OrderRepository;
 import com.commerce.order.domain.exception.OrderErrorCode;
 import com.commerce.order.domain.exception.OrderException;
 import com.commerce.order.application.port.OrderIdempotencyStore;
 import com.commerce.order.application.dto.OrderCreateItem;
 import com.commerce.order.application.dto.OrderCreateCommand;
-import com.commerce.order.application.dto.OrderCancelResult;
 import com.commerce.order.application.dto.OrderCreateResult;
 import com.commerce.order.application.usecase.CreateOrderUseCase;
 import com.commerce.product.domain.Product;
@@ -40,7 +37,6 @@ import com.commerce.stock.domain.exception.StockErrorCode;
 import com.commerce.stock.domain.exception.StockException;
 import com.commerce.stock.application.service.DecreaseStockService;
 import com.commerce.stock.application.service.DecreaseStockBatchService;
-import com.commerce.stock.application.service.IncreaseStockService;
 import com.commerce.stock.application.service.StockDecreaseConcurrencyService;
 import com.commerce.stock.application.dto.StockDecreaseBatchCommand;
 
@@ -60,9 +56,6 @@ class OrderApplicationServiceTest {
 	private DecreaseStockBatchService decreaseStockBatchService;
 
 	@Mock
-	private IncreaseStockService increaseStockService;
-
-	@Mock
 	private StockDecreaseConcurrencyService stockDecreaseConcurrencyService;
 
 	@Mock
@@ -76,9 +69,6 @@ class OrderApplicationServiceTest {
 
 	@InjectMocks
 	private CreateOrderUseCase createOrderUseCase;
-
-	@InjectMocks
-	private CancelOrderService cancelOrderService;
 
 	@InjectMocks
 	private OrderCreateConcurrencyService orderCreateConcurrencyService;
@@ -142,84 +132,6 @@ class OrderApplicationServiceTest {
 		// then
 		then(stockDecreaseConcurrencyService).should().decrease(10L, 2);
 		then(stockDecreaseConcurrencyService).should().decrease(11L, 1);
-	}
-
-	@DisplayName("주문 취소를 요청하면 재고가 복구된다")
-	@Test
-	void cancelOrder_whenInitStatus_restoreStock() {
-		// given
-		Order order = Order.create(1L);
-		order.addOrderItem(10L, 2, 1000);
-		ReflectionTestUtils.setField(order, "id", 100L);
-
-		given(orderRepository.findByIdAndMemberIdWithItems(100L, 1L)).willReturn(Optional.of(order));
-
-		// when
-		OrderCancelResult result = cancelOrderService.cancelOrder(1L, 100L);
-
-		// then
-		then(increaseStockService).should().increase(10L, 2);
-		assertThat(result.getOrderId()).isEqualTo(100L);
-		assertThat(result.getStatus()).isEqualTo(OrderStatus.CANCELED);
-	}
-
-	@DisplayName("주문 취소 시 재고 복구는 상품 ID 순서로 호출된다")
-	@Test
-	void cancelOrder_whenMultipleItems_sortByProductId() {
-		// given
-		Order order = Order.create(1L);
-		order.addOrderItem(5L, 1, 1000);
-		order.addOrderItem(2L, 1, 1000);
-		ReflectionTestUtils.setField(order, "id", 100L);
-
-		given(orderRepository.findByIdAndMemberIdWithItems(100L, 1L)).willReturn(Optional.of(order));
-
-		// when
-		cancelOrderService.cancelOrder(1L, 100L);
-
-		// then
-		InOrder inOrder = org.mockito.Mockito.inOrder(increaseStockService);
-		inOrder.verify(increaseStockService).increase(2L, 1);
-		inOrder.verify(increaseStockService).increase(5L, 1);
-	}
-
-	@DisplayName("주문 상태가 초기 상태가 아니면 취소에 실패한다")
-	@Test
-	void cancelOrder_whenStatusNotInit_throwException() {
-		// given
-		Order order = Order.create(1L);
-		order.addOrderItem(10L, 1, 1000);
-		ReflectionTestUtils.setField(order, "id", 100L);
-		ReflectionTestUtils.setField(order, "status", OrderStatus.RECEIVED);
-
-		given(orderRepository.findByIdAndMemberIdWithItems(100L, 1L)).willReturn(Optional.of(order));
-
-		// when & then
-		assertThatThrownBy(() -> cancelOrderService.cancelOrder(1L, 100L))
-			.isInstanceOf(OrderException.class)
-			.satisfies(exception -> {
-				OrderException orderException = (OrderException) exception;
-				assertThat(orderException.getErrorCode()).isEqualTo(OrderErrorCode.ORDER_CANCEL_NOT_ALLOWED);
-			});
-	}
-
-	@DisplayName("다른 회원의 주문은 취소할 수 없다")
-	@Test
-	void cancelOrder_whenMemberMismatch_throwException() {
-		// given
-		Order order = Order.create(2L);
-		order.addOrderItem(10L, 1, 1000);
-		ReflectionTestUtils.setField(order, "id", 100L);
-
-		given(orderRepository.findByIdAndMemberIdWithItems(100L, 1L)).willReturn(Optional.empty());
-
-		// when & then
-		assertThatThrownBy(() -> cancelOrderService.cancelOrder(1L, 100L))
-			.isInstanceOf(OrderException.class)
-			.satisfies(exception -> {
-				OrderException orderException = (OrderException) exception;
-				assertThat(orderException.getErrorCode()).isEqualTo(OrderErrorCode.ORDER_NOT_FOUND);
-			});
 	}
 
 	@DisplayName("동기화 차감 방식을 사용해서 주문을 생성한다")

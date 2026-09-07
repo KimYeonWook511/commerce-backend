@@ -17,8 +17,6 @@ public interface OrderRepository {
 
 	Optional<Order> findByIdAndMemberIdForUpdate(Long orderId, Long memberId);
 
-	Optional<Order> findByIdAndMemberId(Long orderId, Long memberId);
-
 	Optional<Order> findByIdAndMemberIdWithItems(Long orderId, Long memberId);
 
 	Optional<Order> findByIdWithItems(Long orderId);

@@ -8,6 +8,7 @@ import static org.mockito.BDDMockito.given;
 import static org.mockito.BDDMockito.then;
 import static org.mockito.Mockito.never;
 
+import java.time.Duration;
 import java.time.LocalDateTime;
 import java.util.List;
 import java.util.Map;
@@ -29,6 +30,7 @@ import com.commerce.member.domain.Member;
 import com.commerce.member.infrastructure.persistence.support.MemberPersistenceTestSupport;
 import com.commerce.order.application.dto.OrderCancelRefundStatus;
 import com.commerce.order.application.dto.OrderCancelResult;
+import com.commerce.order.application.port.OrderIdempotencyStore;
 import com.commerce.order.domain.Order;
 import com.commerce.order.domain.OrderCancelLine;
 import com.commerce.order.domain.OrderStatus;
@@ -39,7 +41,9 @@ import com.commerce.payment.application.port.PaymentGatewayPort;
 import com.commerce.payment.application.port.dto.PgCallRecord;
 import com.commerce.payment.application.port.dto.PgRefundResult;
 import com.commerce.payment.domain.Payment;
+import com.commerce.payment.domain.PaymentCloseCode;
 import com.commerce.payment.domain.PaymentPg;
+import com.commerce.payment.domain.PaymentStatus;
 import com.commerce.payment.domain.Refund;
 import com.commerce.payment.domain.RefundReason;
 import com.commerce.payment.domain.RefundRequester;
@@ -85,6 +89,9 @@ class CancelOrderUseCaseIntegrationTest {
 
 	@Autowired
 	private CancelOrderUseCase cancelOrderUseCase;
+
+	@Autowired
+	private OrderIdempotencyStore orderIdempotencyStore;
 
 	@MockitoBean
 	private PaymentGatewayPort paymentGatewayPort;
@@ -229,6 +236,32 @@ class CancelOrderUseCaseIntegrationTest {
 		then(paymentGatewayPort).should(never()).refund(any(), any(), any());
 	}
 
+	@DisplayName("남의 결제 전 주문 번호로는 취소할 수 없고 그 주문이 있는지도, 취소 선점 자원도 드러나지 않는다")
+	@Test
+	void cancel_whenInitOrderBelongsToAnotherMember_rejectsWithoutLeakingReservation() {
+		Member owner = memberPersistence.save(member("init-owner"));
+		Product product = productPersistence.save(product());
+		Order order = Order.create(owner.getId());
+		order.addOrderItem(product.getId(), 1, UNIT_PRICE);
+		Order saved = orderPersistence.saveAndFlush(order);
+		stockPersistence.save(Stock.create(product.getId(), 0));
+		Member stranger = memberPersistence.save(member("init-stranger"));
+		String idempotencyKey = "cancel-key-init-stranger";
+
+		assertThatThrownBy(() ->
+			cancelOrderUseCase.cancel(stranger.getId(), saved.getId(), idempotencyKey, List.of()))
+			.isInstanceOf(OrderException.class)
+			.satisfies(ex -> assertThat(((OrderException) ex).getErrorCode())
+				.isEqualTo(OrderErrorCode.ORDER_NOT_FOUND));
+
+		assertThat(refundPersistence.findAll()).isEmpty();
+		assertThat(orderPersistence.getOrderStatusById(saved.getId())).isEqualTo(OrderStatus.INIT);
+		// 실패한 요청도 끝에서 선점을 풀어, 요청 전후로 같은 키를 다시 선점할 수 있다.
+		boolean reservedAgain = orderIdempotencyStore.reserveCancel(saved.getId(), idempotencyKey, Duration.ofSeconds(60));
+		assertThat(reservedAgain).isTrue();
+		orderIdempotencyStore.clearCancel(saved.getId(), idempotencyKey);
+	}
+
 	@DisplayName("결제 결과를 모르는 결제가 걸린 주문은 취소할 수 없고 환불도 생기지 않는다")
 	@Test
 	void cancel_whenUnknownPaymentExists_rejects() {
@@ -307,9 +340,9 @@ class CancelOrderUseCaseIntegrationTest {
 		assertThat(refundPersistence.findAll()).hasSize(2);
 	}
 
-	@DisplayName("결제 전 주문 취소는 환불이 없고 금액 둘이 모두 0이다")
+	@DisplayName("결제를 시작하지 않은 결제 전 주문의 취소가 거부되고 주문 상태·재고가 그대로 남는다")
 	@Test
-	void cancel_whenOrderNotPaid_answersWithoutRefund() {
+	void cancel_whenOrderNotPaidAndNoPaymentAttached_rejectsWithoutChangingAnything() {
 		Member member = memberPersistence.save(member("init"));
 		Product product = productPersistence.save(product());
 		Order order = Order.create(member.getId());
@@ -317,11 +350,126 @@ class CancelOrderUseCaseIntegrationTest {
 		Order saved = orderPersistence.saveAndFlush(order);
 		stockPersistence.save(Stock.create(product.getId(), 0));
 
-		OrderCancelResult result = cancelOrderUseCase.cancel(member.getId(), saved.getId(), "cancel-key-7", List.of());
+		assertThatThrownBy(() ->
+			cancelOrderUseCase.cancel(member.getId(), saved.getId(), "cancel-key-7", List.of()))
+			.isInstanceOf(OrderException.class)
+			.satisfies(ex -> assertThat(((OrderException) ex).getErrorCode())
+				.isEqualTo(OrderErrorCode.ORDER_CANCEL_NOT_ALLOWED));
 
-		assertThat(result.getRefundStatus()).isEqualTo(OrderCancelRefundStatus.NONE);
-		assertThat(result.getRefundedAmount()).isZero();
-		assertThat(result.getRemainingAmount()).isZero();
+		assertThat(orderPersistence.getOrderStatusById(saved.getId())).isEqualTo(OrderStatus.INIT);
+		assertThat(stockPersistence.findByProductId(product.getId()).orElseThrow().getQuantity()).isZero();
+		assertThat(refundPersistence.findAll()).isEmpty();
+	}
+
+	@DisplayName("결제창이 열려 활성 슬롯을 쥔 결제가 걸린 결제 전 주문의 취소도 거부되고 그 결제 상태도 그대로다")
+	@Test
+	void cancel_whenOrderNotPaidAndPaymentInProgress_rejectsWithoutChangingPayment() {
+		int suffix = ++uniqueSuffix;
+		Member member = memberPersistence.save(member("inprogress" + suffix));
+		Product product = productPersistence.save(product());
+		Order order = Order.create(member.getId());
+		order.addOrderItem(product.getId(), 1, UNIT_PRICE);
+		Order saved = orderPersistence.saveAndFlush(order);
+		stockPersistence.save(Stock.create(product.getId(), 0));
+
+		Payment inProgress = Payment.start(saved.getId(), member.getId(), PaymentPg.NAVERPAY,
+			"PK-inprogress-" + suffix, "idem-inprogress-" + suffix, UNIT_PRICE);
+		inProgress.markInProgress("pg-inprogress-" + suffix, LocalDateTime.now());
+		Payment savedPayment = paymentPersistence.save(inProgress);
+
+		assertThatThrownBy(() ->
+			cancelOrderUseCase.cancel(member.getId(), saved.getId(), "cancel-key-inprogress", List.of()))
+			.isInstanceOf(OrderException.class)
+			.satisfies(ex -> assertThat(((OrderException) ex).getErrorCode())
+				.isEqualTo(OrderErrorCode.ORDER_CANCEL_NOT_ALLOWED));
+
+		assertThat(orderPersistence.getOrderStatusById(saved.getId())).isEqualTo(OrderStatus.INIT);
+		assertThat(paymentPersistence.findById(savedPayment.getId()).orElseThrow().getStatus())
+			.isEqualTo(PaymentStatus.IN_PROGRESS);
+		assertThat(refundPersistence.findAll()).isEmpty();
+	}
+
+	@DisplayName("결제가 실패·거절로 종결되어 걸린 결제가 없는 결제 전 주문의 취소도 같은 오류로 거부된다")
+	@Test
+	void cancel_whenOrderNotPaidAndPaymentClosed_rejectsWithSameError() {
+		int suffix = ++uniqueSuffix;
+		Member member = memberPersistence.save(member("closed" + suffix));
+		Product product = productPersistence.save(product());
+		Order order = Order.create(member.getId());
+		order.addOrderItem(product.getId(), 1, UNIT_PRICE);
+		Order saved = orderPersistence.saveAndFlush(order);
+		stockPersistence.save(Stock.create(product.getId(), 0));
+
+		Payment closed = Payment.start(saved.getId(), member.getId(), PaymentPg.NAVERPAY,
+			"PK-closed-" + suffix, "idem-closed-" + suffix, UNIT_PRICE);
+		closed.markInProgress("pg-closed-" + suffix, LocalDateTime.now());
+		closed.fail(PaymentCloseCode.PG_DECLINED, "거절");
+		paymentPersistence.save(closed);
+
+		assertThatThrownBy(() ->
+			cancelOrderUseCase.cancel(member.getId(), saved.getId(), "cancel-key-closed", List.of()))
+			.isInstanceOf(OrderException.class)
+			.satisfies(ex -> assertThat(((OrderException) ex).getErrorCode())
+				.isEqualTo(OrderErrorCode.ORDER_CANCEL_NOT_ALLOWED));
+
+		assertThat(orderPersistence.getOrderStatusById(saved.getId())).isEqualTo(OrderStatus.INIT);
+		assertThat(refundPersistence.findAll()).isEmpty();
+	}
+
+	@DisplayName("승인 결과를 모르는 결제가 걸린 결제 전 주문의 취소도 같은 취소 불가 오류로 거부된다")
+	@Test
+	void cancel_whenOrderNotPaidAndUnknownPaymentExists_rejectsWithSameError() {
+		int suffix = ++uniqueSuffix;
+		Member member = memberPersistence.save(member("unknowninit" + suffix));
+		Product product = productPersistence.save(product());
+		Order order = Order.create(member.getId());
+		order.addOrderItem(product.getId(), 1, UNIT_PRICE);
+		Order saved = orderPersistence.saveAndFlush(order);
+		stockPersistence.save(Stock.create(product.getId(), 0));
+
+		Payment unknown = Payment.start(saved.getId(), member.getId(), PaymentPg.NAVERPAY,
+			"PK-unknown-init-" + suffix, "idem-unknown-init-" + suffix, UNIT_PRICE);
+		unknown.markInProgress("pg-unknown-init-" + suffix, LocalDateTime.now());
+		unknown.markUnknown();
+		paymentPersistence.save(unknown);
+
+		// 승인 결과를 모르는 결제를 보는 검사보다 취소 가능 판정이 앞이라, "결제 확인 중"이 아니라 다른
+		// 결제 전 주문과 같은 취소 불가 오류가 나간다.
+		assertThatThrownBy(() ->
+			cancelOrderUseCase.cancel(member.getId(), saved.getId(), "cancel-key-unknown-init", List.of()))
+			.isInstanceOf(OrderException.class)
+			.satisfies(ex -> assertThat(((OrderException) ex).getErrorCode())
+				.isEqualTo(OrderErrorCode.ORDER_CANCEL_NOT_ALLOWED));
+
+		assertThat(orderPersistence.getOrderStatusById(saved.getId())).isEqualTo(OrderStatus.INIT);
+		assertThat(refundPersistence.findAll()).isEmpty();
+	}
+
+	@DisplayName("결제 전 주문에 같은 취소 요청을 두 번 보내도 두 번 다 거부되고 아무것도 바뀌지 않는다")
+	@Test
+	void cancel_whenSameKeySentTwiceToInitOrder_rejectsBothTimes() {
+		Member member = memberPersistence.save(member("twice"));
+		Product product = productPersistence.save(product());
+		Order order = Order.create(member.getId());
+		order.addOrderItem(product.getId(), 1, UNIT_PRICE);
+		Order saved = orderPersistence.saveAndFlush(order);
+		stockPersistence.save(Stock.create(product.getId(), 0));
+		String idempotencyKey = "cancel-key-twice";
+
+		assertThatThrownBy(() ->
+			cancelOrderUseCase.cancel(member.getId(), saved.getId(), idempotencyKey, List.of()))
+			.isInstanceOf(OrderException.class)
+			.satisfies(ex -> assertThat(((OrderException) ex).getErrorCode())
+				.isEqualTo(OrderErrorCode.ORDER_CANCEL_NOT_ALLOWED));
+		// 첫 요청이 끝에서 선점을 풀어 두므로 두 번째 요청도 "처리 중"이 아니라 같은 거부를 받는다.
+		assertThatThrownBy(() ->
+			cancelOrderUseCase.cancel(member.getId(), saved.getId(), idempotencyKey, List.of()))
+			.isInstanceOf(OrderException.class)
+			.satisfies(ex -> assertThat(((OrderException) ex).getErrorCode())
+				.isEqualTo(OrderErrorCode.ORDER_CANCEL_NOT_ALLOWED));
+
+		assertThat(orderPersistence.getOrderStatusById(saved.getId())).isEqualTo(OrderStatus.INIT);
+		assertThat(stockPersistence.findByProductId(product.getId()).orElseThrow().getQuantity()).isZero();
 		assertThat(refundPersistence.findAll()).isEmpty();
 	}
 

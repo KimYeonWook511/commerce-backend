@@ -226,6 +226,51 @@ class OrderTest {
 			});
 	}
 
+	@DisplayName("결제완료 주문은 취소 가능 판정을 통과한다")
+	@Test
+	void checkCancellable_whenPaidStatus_doNothing() {
+		// given
+		Order order = Order.create(1L);
+		setStatus(order, OrderStatus.PAID);
+
+		// when
+		order.checkCancellable();
+
+		// then
+		assertThat(order.getStatus()).isEqualTo(OrderStatus.PAID);
+	}
+
+	@DisplayName("결제 전 주문은 취소 가능 판정에서 거부된다")
+	@Test
+	void checkCancellable_whenInitStatus_throwException() {
+		// given
+		Order order = Order.create(1L);
+
+		// when & then
+		assertThatThrownBy(order::checkCancellable)
+			.isInstanceOf(OrderException.class)
+			.satisfies(exception -> {
+				OrderException orderException = (OrderException) exception;
+				assertThat(orderException.getErrorCode()).isEqualTo(OrderErrorCode.ORDER_CANCEL_NOT_ALLOWED);
+			});
+	}
+
+	@DisplayName("취소로 종착한 주문은 취소 가능 판정에서 거부된다")
+	@Test
+	void checkCancellable_whenCanceledStatus_throwException() {
+		// given
+		Order order = Order.create(1L);
+		setStatus(order, OrderStatus.CANCELED);
+
+		// when & then
+		assertThatThrownBy(order::checkCancellable)
+			.isInstanceOf(OrderException.class)
+			.satisfies(exception -> {
+				OrderException orderException = (OrderException) exception;
+				assertThat(orderException.getErrorCode()).isEqualTo(OrderErrorCode.ORDER_CANCEL_NOT_ALLOWED);
+			});
+	}
+
 	private void setStatus(Order order, OrderStatus status) {
 		ReflectionTestUtils.setField(order, "status", status);
 	}

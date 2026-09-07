@@ -11,7 +11,7 @@ public class OrderCancelResult {
 
 	private Long orderId;
 	private OrderStatus status;
-	/** 환불 진행 상태. 결제 전 취소는 NONE, 결제된 주문 취소는 COMPLETED 또는 IN_PROGRESS. */
+	/** 환불 진행 상태. COMPLETED 또는 IN_PROGRESS다. */
 	private OrderCancelRefundStatus refundStatus;
 	/** 이번 요청으로 환불되는 금액. 그 결제의 모든 환불 합이 아니라 이번 건 하나다 */
 	private int refundedAmount;
@@ -31,20 +31,6 @@ public class OrderCancelResult {
 		this.refundStatus = refundStatus;
 		this.refundedAmount = refundedAmount;
 		this.remainingAmount = remainingAmount;
-	}
-
-	/**
-	 * 결제 전 취소. 되돌릴 돈이 없어 환불액이 0이고, 승인 금액이 없어 한도 자체가 없으므로 남은 금액도
-	 * 0이다.
-	 */
-	public static OrderCancelResult from(Order order) {
-		return OrderCancelResult.builder()
-			.orderId(order.getId())
-			.status(order.getStatus())
-			.refundStatus(OrderCancelRefundStatus.NONE)
-			.refundedAmount(0)
-			.remainingAmount(0)
-			.build();
 	}
 
 	public static OrderCancelResult withRefund(
