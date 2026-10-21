@@ -4,6 +4,7 @@ import static org.assertj.core.api.Assertions.assertThat;
 import static org.assertj.core.api.Assertions.assertThatThrownBy;
 
 import java.time.LocalDateTime;
+import java.util.List;
 import java.util.Optional;
 
 import org.junit.jupiter.api.DisplayName;
@@ -192,6 +193,71 @@ class PaymentTest {
 		assertThatThrownBy(() -> payment.expire(PaymentCloseCode.SESSION_TIMEOUT))
 			.isInstanceOf(PaymentException.class)
 			.hasMessage(PaymentErrorCode.PAYMENT_STATUS_TRANSITION_NOT_ALLOWED.getMessage());
+	}
+
+	@DisplayName("승인을 부르지 않은 결제를 주문 만료로 닫으면 종결 코드만으로 대체·세션 경과 종결과 가려진다")
+	@Test
+	void tryExpire_fromReady_closesWithDistinctOrderExpiredCode() {
+		Payment payment = readyPayment();
+
+		boolean closed = payment.tryExpire(PaymentCloseCode.ORDER_EXPIRED);
+
+		assertThat(closed).isTrue();
+		assertThat(payment.getStatus()).isEqualTo(PaymentStatus.EXPIRED);
+		assertThat(payment.getCloseCode())
+			.isEqualTo(PaymentCloseCode.ORDER_EXPIRED)
+			.isNotIn(PaymentCloseCode.SUPERSEDED, PaymentCloseCode.SESSION_TIMEOUT);
+		assertThat(payment.getActiveOrderKey()).isNull();
+	}
+
+	@DisplayName("승인을 부른 뒤의 결제는 던지지 않고 종결하지 않았다고 답하며 그대로 남는다")
+	@Test
+	void tryExpire_whenApprovalAlreadyCalled_reportsNotClosedAndKeepsPayment() {
+		Payment inProgress = inProgressPayment();
+		Payment unknown = inProgressPayment();
+		unknown.markUnknown();
+		Payment succeeded = inProgressPayment();
+		succeeded.succeed(10_000, "pg-tx-1");
+
+		for (Payment payment : List.of(inProgress, unknown, succeeded)) {
+			PaymentStatus before = payment.getStatus();
+
+			boolean closed = payment.tryExpire(PaymentCloseCode.ORDER_EXPIRED);
+
+			assertThat(closed).as("%s", before).isFalse();
+			assertThat(payment.getStatus()).isEqualTo(before);
+			assertThat(payment.getCloseCode()).isNull();
+			assertThat(payment.getActiveOrderKey()).isEqualTo(ORDER_ID);
+		}
+	}
+
+	@DisplayName("이미 종결된 결제는 종결하지 않았다는 답에 섞지 않고 전이 불가로 막는다")
+	@Test
+	void tryExpire_whenAlreadyClosed_throws() {
+		Payment expired = readyPayment();
+		expired.expire(PaymentCloseCode.SUPERSEDED);
+		Payment failed = inProgressPayment();
+		failed.fail(PaymentCloseCode.PG_DECLINED, "거절");
+		Payment rejected = inProgressPayment();
+		rejected.reject(PaymentCloseCode.ORDER_NOT_PAYABLE, "결제 불가");
+
+		for (Payment payment : List.of(expired, failed, rejected)) {
+			assertThatThrownBy(() -> payment.tryExpire(PaymentCloseCode.ORDER_EXPIRED))
+				.as("%s", payment.getStatus())
+				.isInstanceOf(PaymentException.class)
+				.hasMessage(PaymentErrorCode.PAYMENT_STATUS_TRANSITION_NOT_ALLOWED.getMessage());
+		}
+	}
+
+	@DisplayName("만료 종결이 아닌 종결 코드로는 만료 전이를 시도할 수 없다")
+	@Test
+	void tryExpire_withCloseCodeOfAnotherTerminalStatus_throws() {
+		Payment payment = readyPayment();
+
+		assertThatThrownBy(() -> payment.tryExpire(PaymentCloseCode.ORDER_NOT_PAYABLE))
+			.isInstanceOf(PaymentException.class)
+			.hasMessage(PaymentErrorCode.PAYMENT_CLOSE_CODE_NOT_ALLOWED.getMessage());
+		assertThat(payment.getStatus()).isEqualTo(PaymentStatus.READY);
 	}
 
 	@DisplayName("그 종결 상태의 것이 아닌 종결 코드는 받지 않는다")
