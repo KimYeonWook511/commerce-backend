@@ -55,8 +55,11 @@ public interface PaymentRepository {
 	/** 그 회원의 주문에서 성공한 결제 */
 	Optional<Payment> findSucceededByMemberIdAndOrderId(Long memberId, Long orderId);
 
-	/** 주어진 주문들 중 활성 슬롯을 쥔 결제가 있는 것. 배치가 부르는 자리라 회원으로 좁히지 않는다 */
-	Set<Long> findOrderIdsHoldingActiveSlot(Collection<Long> orderIds);
+	/**
+	 * 주어진 주문들 중 승인을 부른 뒤의 결제(활성 슬롯을 쥔 결제 중 승인 전이 아닌 것)가 걸린 것.
+	 * 배치가 부르는 자리라 회원으로 좁히지 않는다
+	 */
+	Set<Long> findOrderIdsWithPaymentPastApprovalCall(Collection<Long> orderIds);
 
 	/**
 	 * 승인을 호출하고 응답을 기다리는 결제 중 대사 대상.
