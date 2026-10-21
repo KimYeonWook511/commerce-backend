@@ -26,8 +26,8 @@ import com.commerce.payment.domain.repository.PaymentRepository;
 import com.commerce.support.TestcontainersSupport;
 
 /**
- * 주문 만료 배치가 무엇을 건너뛰는지는 활성 슬롯으로 판정한다. 결제창을 띄운 것부터 결과를 모르는
- * 것까지 전부 막힌 것으로 보는지가 이 판정의 핵심이다.
+ * 주문 만료 배치가 무엇을 건너뛰는지는 승인을 부른 뒤의 결제로 판정한다. 슬롯을 쥐었어도 승인을 아직
+ * 부르지 않은 결제는 막지 않고, 승인을 부른 뒤라면 결과가 무엇이든 막는지가 이 판정의 핵심이다.
  */
 @Tag("docker")
 @DataJpaTest
@@ -57,15 +57,15 @@ class BlockingPaymentCheckerAdapterIntegrationTest {
 		return Payment.start(orderId, MEMBER_ID, PaymentPg.NAVERPAY, "PK-" + suffix, "IDEM-" + suffix, 10_000);
 	}
 
-	@DisplayName("결제창만 띄운 주문도 만료 차단 대상이다 — 인증하는 사이 주문이 사라지면 돌아온 승인을 받을 자리가 없다")
+	@DisplayName("승인을 아직 부르지 않은 결제만 걸린 주문은 슬롯을 쥐고 있어도 만료 차단 대상이 아니다")
 	@Test
-	void findOrderIdsWithBlockingPayment_includesOrderWaitingForApprovalCall() {
+	void findOrderIdsWithBlockingPayment_excludesOrderWaitingForApprovalCall() {
 		long orderId = ++nextOrderId;
 		paymentRepository.save(startedPayment(orderId, "ready"));
 
 		Set<Long> blocked = blockingPaymentChecker.findOrderIdsWithBlockingPayment(List.of(orderId));
 
-		assertThat(blocked).containsExactly(orderId);
+		assertThat(blocked).isEmpty();
 	}
 
 	@DisplayName("승인을 호출했거나 결과를 모르는 결제가 걸린 주문도 만료 차단 대상이다")
