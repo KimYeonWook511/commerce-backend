@@ -27,11 +27,13 @@ import org.springframework.test.context.bean.override.mockito.MockitoSpyBean;
 
 import com.commerce.member.domain.Member;
 import com.commerce.member.infrastructure.persistence.support.MemberPersistenceTestSupport;
+import com.commerce.order.application.service.ExpireOrderService;
 import com.commerce.order.domain.Order;
 import com.commerce.order.domain.OrderStatus;
 import com.commerce.order.domain.exception.OrderErrorCode;
 import com.commerce.order.domain.exception.OrderException;
 import com.commerce.order.infrastructure.persistence.support.OrderPersistenceTestSupport;
+import com.commerce.outbox.infrastructure.persistence.support.OutboxPersistenceTestSupport;
 import com.commerce.payment.application.dto.ApprovalResult;
 import com.commerce.payment.application.dto.ApprovalStatus;
 import com.commerce.payment.application.dto.StartPaymentCommand;
@@ -78,6 +80,7 @@ import com.commerce.support.TestcontainersSupport;
 	MemberPersistenceTestSupport.class,
 	ProductPersistenceTestSupport.class,
 	OrderPersistenceTestSupport.class,
+	OutboxPersistenceTestSupport.class,
 	PaymentPersistenceTestSupport.class,
 	PgCallLogPersistenceTestSupport.class,
 	RefundPersistenceTestSupport.class
@@ -92,6 +95,9 @@ class RequestApprovalUseCaseIntegrationTest {
 
 	@Autowired
 	private StartPaymentUseCase startPaymentUseCase;
+
+	@Autowired
+	private ExpireOrderService expireOrderService;
 
 	@MockitoBean
 	private PaymentGatewayPort paymentGatewayPort;
@@ -115,6 +121,9 @@ class RequestApprovalUseCaseIntegrationTest {
 	private OrderPersistenceTestSupport orderPersistence;
 
 	@Autowired
+	private OutboxPersistenceTestSupport outboxPersistence;
+
+	@Autowired
 	private PaymentPersistenceTestSupport paymentPersistence;
 
 	@Autowired
@@ -135,7 +144,7 @@ class RequestApprovalUseCaseIntegrationTest {
 	void tearDown() {
 		persistenceCleanup.deleteAllInBatch(
 			pgCallLogPersistence, refundPersistence, paymentPersistence,
-			memberPersistence, productPersistence, orderPersistence
+			memberPersistence, productPersistence, orderPersistence, outboxPersistence
 		);
 	}
 
@@ -232,6 +241,23 @@ class RequestApprovalUseCaseIntegrationTest {
 			.hasMessage(PaymentErrorCode.PAYMENT_ATTEMPT_CLOSED.getMessage());
 
 		then(paymentGatewayPort).should(never()).approve(any(Payment.class));
+	}
+
+	@DisplayName("주문 만료로 종결된 결제로 승인 요청이 오면 재주문 안내로 거절하고 결제사를 부르지 않는다")
+	@Test
+	void approve_whenPaymentClosedByOrderExpiry_rejectsAsOrderExpiredWithoutCallingGateway() {
+		Fixture fixture = readyPayment();
+		expireOrderService.expireOrder(fixture.order().getId(), LocalDateTime.now());
+
+		assertThatThrownBy(() -> approve(fixture))
+			.isInstanceOf(PaymentException.class)
+			.hasMessage(PaymentErrorCode.PAYMENT_ORDER_EXPIRED.getMessage());
+
+		then(paymentGatewayPort).should(never()).approve(any(Payment.class));
+		assertThat(pgCallLogPersistence.findAll()).isEmpty();
+		Payment payment = reload(fixture);
+		assertThat(payment.getStatus()).isEqualTo(PaymentStatus.EXPIRED);
+		assertThat(payment.getCloseCode()).isEqualTo(PaymentCloseCode.ORDER_EXPIRED);
 	}
 
 	@DisplayName("이미 결제된 주문에 승인이 들어오면 중복 결제로 거절하고 결제를 반려로 종결한다")
