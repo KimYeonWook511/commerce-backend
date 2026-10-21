@@ -55,7 +55,7 @@ public class RequestApprovalUseCase {
 			// 이미 부른 뒤라 결과를 기다리는 중이다. 여기서 다시 부르면 같은 결제에 승인이 두 번 나간다.
 			case IN_PROGRESS, UNKNOWN -> throw new PaymentException(PaymentErrorCode.PAYMENT_RESULT_PENDING);
 			// 우리가 종결해도 결제사 쪽 예약은 살아 있어 옛 결제창의 인증이 여기로 돌아온다.
-			case FAILED, REJECTED, EXPIRED -> throw new PaymentException(PaymentErrorCode.PAYMENT_ATTEMPT_CLOSED);
+			case FAILED, REJECTED, EXPIRED -> throw new PaymentException(closedAttemptError(payment));
 			case READY -> {
 				// 아래로 이어간다.
 			}
@@ -70,6 +70,18 @@ public class RequestApprovalUseCase {
 		} finally {
 			recordCallResult(callLog, result);
 		}
+	}
+
+	/**
+	 * 주문 만료로 종결된 시도만 가른다. 그 주문은 이미 취소돼 결제를 다시 시작해도 막히므로 회원이 할 일이
+	 * 재주문이다. 읽은 뒤에 만료가 커밋된 경우는 부르기 직전 전이에 밀려 결과 확인 중으로 답하며, 다시
+	 * 시도하면 여기서 갈린다.
+	 */
+	private PaymentErrorCode closedAttemptError(Payment payment) {
+		if (payment.getCloseCode() == PaymentCloseCode.ORDER_EXPIRED) {
+			return PaymentErrorCode.PAYMENT_ORDER_EXPIRED;
+		}
+		return PaymentErrorCode.PAYMENT_ATTEMPT_CLOSED;
 	}
 
 	/**
