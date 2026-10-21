@@ -6,6 +6,7 @@ import java.util.Map;
 import java.util.Optional;
 
 import org.springframework.boot.test.context.TestComponent;
+import org.springframework.transaction.annotation.Transactional;
 
 import com.commerce.order.domain.Order;
 import com.commerce.order.domain.OrderStatus;
@@ -65,6 +66,14 @@ public class OrderPersistenceTestSupport implements PersistenceTestSupport {
 
 	public long countItems() {
 		return orderItemRepository.count();
+	}
+
+	/** 상태는 그대로 두고 주문 행의 버전만 올려 커밋한다. 다른 트랜잭션이 그 행을 먼저 바꾼 상황을 만든다 */
+	@Transactional
+	public void incrementVersion(Long orderId) {
+		entityManager.createQuery("update Order o set o.version = o.version + 1 where o.id = :orderId")
+			.setParameter("orderId", orderId)
+			.executeUpdate();
 	}
 
 	public OrderStatus getOrderStatusById(Long orderId) {

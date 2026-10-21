@@ -27,11 +27,16 @@ import org.springframework.test.context.bean.override.mockito.MockitoSpyBean;
 
 import com.commerce.member.domain.Member;
 import com.commerce.member.infrastructure.persistence.support.MemberPersistenceTestSupport;
+import com.commerce.order.application.service.ExpireOrderService;
 import com.commerce.order.domain.Order;
 import com.commerce.order.domain.OrderStatus;
+import com.commerce.order.domain.exception.OrderErrorCode;
+import com.commerce.order.domain.exception.OrderException;
 import com.commerce.order.infrastructure.persistence.support.OrderPersistenceTestSupport;
+import com.commerce.outbox.infrastructure.persistence.support.OutboxPersistenceTestSupport;
 import com.commerce.payment.application.dto.ApprovalResult;
 import com.commerce.payment.application.dto.ApprovalStatus;
+import com.commerce.payment.application.dto.StartPaymentCommand;
 import com.commerce.payment.application.port.NotificationPort;
 import com.commerce.payment.application.port.PaymentGatewayPort;
 import com.commerce.payment.application.port.dto.PgApproveResult;
@@ -75,6 +80,7 @@ import com.commerce.support.TestcontainersSupport;
 	MemberPersistenceTestSupport.class,
 	ProductPersistenceTestSupport.class,
 	OrderPersistenceTestSupport.class,
+	OutboxPersistenceTestSupport.class,
 	PaymentPersistenceTestSupport.class,
 	PgCallLogPersistenceTestSupport.class,
 	RefundPersistenceTestSupport.class
@@ -86,6 +92,12 @@ class RequestApprovalUseCaseIntegrationTest {
 
 	@Autowired
 	private RequestApprovalUseCase requestApprovalUseCase;
+
+	@Autowired
+	private StartPaymentUseCase startPaymentUseCase;
+
+	@Autowired
+	private ExpireOrderService expireOrderService;
 
 	@MockitoBean
 	private PaymentGatewayPort paymentGatewayPort;
@@ -109,6 +121,9 @@ class RequestApprovalUseCaseIntegrationTest {
 	private OrderPersistenceTestSupport orderPersistence;
 
 	@Autowired
+	private OutboxPersistenceTestSupport outboxPersistence;
+
+	@Autowired
 	private PaymentPersistenceTestSupport paymentPersistence;
 
 	@Autowired
@@ -129,7 +144,7 @@ class RequestApprovalUseCaseIntegrationTest {
 	void tearDown() {
 		persistenceCleanup.deleteAllInBatch(
 			pgCallLogPersistence, refundPersistence, paymentPersistence,
-			memberPersistence, productPersistence, orderPersistence
+			memberPersistence, productPersistence, orderPersistence, outboxPersistence
 		);
 	}
 
@@ -228,6 +243,23 @@ class RequestApprovalUseCaseIntegrationTest {
 		then(paymentGatewayPort).should(never()).approve(any(Payment.class));
 	}
 
+	@DisplayName("주문 만료로 종결된 결제로 승인 요청이 오면 재주문 안내로 거절하고 결제사를 부르지 않는다")
+	@Test
+	void approve_whenPaymentClosedByOrderExpiry_rejectsAsOrderExpiredWithoutCallingGateway() {
+		Fixture fixture = readyPayment();
+		expireOrderService.expireOrder(fixture.order().getId(), LocalDateTime.now());
+
+		assertThatThrownBy(() -> approve(fixture))
+			.isInstanceOf(PaymentException.class)
+			.hasMessage(PaymentErrorCode.PAYMENT_ORDER_EXPIRED.getMessage());
+
+		then(paymentGatewayPort).should(never()).approve(any(Payment.class));
+		assertThat(pgCallLogPersistence.findAll()).isEmpty();
+		Payment payment = reload(fixture);
+		assertThat(payment.getStatus()).isEqualTo(PaymentStatus.EXPIRED);
+		assertThat(payment.getCloseCode()).isEqualTo(PaymentCloseCode.ORDER_EXPIRED);
+	}
+
 	@DisplayName("이미 결제된 주문에 승인이 들어오면 중복 결제로 거절하고 결제를 반려로 종결한다")
 	@Test
 	void approve_whenOrderAlreadyPaid_rejectsAsDuplicate() {
@@ -259,6 +291,44 @@ class RequestApprovalUseCaseIntegrationTest {
 		// 취소한 적이 없으므로 취소수량이 오르면 남은 잔여가 사라져 실제 취소가 막힌다.
 		assertThat(orderPersistence.getCancelledQuantity(orderItemId)).isZero();
 		assertThat(orderPersistence.countCancellations()).isZero();
+	}
+
+	@DisplayName("취소된 주문에 승인 전 결제가 서 있으면 결제사를 부른 뒤 확정이 막혀 반려되고 되돌릴 환불이 열린다")
+	@Test
+	void approve_whenOrderCanceledUnderReadyPayment_rejectsAndOpensRefund() {
+		Fixture fixture = readyPaymentOnCanceledOrder();
+		givenApproveSucceeded(fixture, fixture.amount());
+
+		assertThatThrownBy(() -> approve(fixture))
+			.isInstanceOf(PaymentException.class)
+			.hasMessage(PaymentErrorCode.PAYMENT_APPROVAL_FAILED.getMessage());
+
+		then(paymentGatewayPort).should().approve(any(Payment.class));
+		Payment payment = reload(fixture);
+		assertThat(payment.getStatus()).isEqualTo(PaymentStatus.REJECTED);
+		assertThat(payment.getCloseCode()).isEqualTo(PaymentCloseCode.ORDER_NOT_PAYABLE);
+		assertThat(payment.getActiveOrderKey()).isNull();
+		List<Refund> refunds = refundPersistence.findAll();
+		assertThat(refunds).hasSize(1);
+		assertThat(refunds.get(0).getReason()).isEqualTo(RefundReason.ORDER_NOT_PAYABLE);
+		assertThat(refunds.get(0).getAmount()).isEqualTo(fixture.amount());
+		assertThat(orderPersistence.getOrderStatusById(fixture.order().getId())).isEqualTo(OrderStatus.CANCELED);
+	}
+
+	@DisplayName("취소된 주문에 선 결제가 반려된 뒤에는 그 주문에 결제를 다시 시작할 수 없어 반려가 주문당 한 번에 그친다")
+	@Test
+	void approve_whenOrderCanceledUnderReadyPayment_blocksNextPaymentStart() {
+		Fixture fixture = readyPaymentOnCanceledOrder();
+		givenApproveSucceeded(fixture, fixture.amount());
+		assertThatThrownBy(() -> approve(fixture)).isInstanceOf(PaymentException.class);
+
+		StartPaymentCommand restart = new StartPaymentCommand(
+			fixture.member().getId(), fixture.order().getId(), PaymentPg.NAVERPAY, "idem-restart-" + (++uniqueSuffix));
+		assertThatThrownBy(() -> startPaymentUseCase.start(restart))
+			.isInstanceOf(OrderException.class)
+			.hasMessage(OrderErrorCode.ORDER_PAYMENT_NOT_ALLOWED.getMessage());
+
+		assertThat(paymentPersistence.count()).isEqualTo(1);
 	}
 
 	// ── 결제사 응답 갈래 ─────────────────────────────────────────
@@ -678,6 +748,15 @@ class RequestApprovalUseCaseIntegrationTest {
 		Payment payment = Payment.start(order.getId(), member.getId(), PaymentPg.NAVERPAY,
 			"PAY-" + (++uniqueSuffix), "idem-" + uniqueSuffix, order.getTotalPrice());
 		return new Fixture(member, order, paymentPersistence.save(payment));
+	}
+
+	/** 만료가 보지 못한 결제가 취소된 주문에 선 상태. 그 결제는 승인을 아직 부르지 않았다 */
+	private Fixture readyPaymentOnCanceledOrder() {
+		Fixture fixture = readyPayment();
+		Order order = orderPersistence.findById(fixture.order().getId()).orElseThrow();
+		order.cancelBeforePayment();
+		orderPersistence.saveAndFlush(order);
+		return fixture;
 	}
 
 	private Member saveMember() {

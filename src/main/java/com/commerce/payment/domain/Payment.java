@@ -348,6 +348,24 @@ public class Payment extends BaseTimeEntity {
 	}
 
 	/**
+	 * 승인을 아직 부르지 않았으면 종결하고, 부른 뒤면 종결하지 않고 그 사실을 돌려준다. 종결하지 못하는
+	 * 것은 오류가 아니라 부르는 쪽이 자기 흐름을 정할 갈림이라 던지지 않는다.
+	 *
+	 * <p>{@code SUCCEEDED}는 종착이지만 활성 슬롯을 쥐므로 종착 여부가 아니라 승인을 불렀는지로 가른다.
+	 * 이미 종결된 결제는 이 답에 섞지 않고 {@link #expire}처럼 전이 불가로 던진다.
+	 *
+	 * @return 종결했으면 true, 승인을 부른 뒤라 종결하지 않았으면 false
+	 */
+	public boolean tryExpire(PaymentCloseCode closeCode) {
+		requireCloseCodeFor(closeCode, PaymentStatus.EXPIRED);
+		if (this.status != PaymentStatus.READY && this.status.holdsActiveSlot()) {
+			return false;
+		}
+		expire(closeCode);
+		return true;
+	}
+
+	/**
 	 * 다시 시도할 수 있는 실패를 받았다. 상태는 그대로 두고 시도 번호만 올려 다음 호출이 새 키로
 	 * 나가게 한다. 그 사실이 상태에 남지 않으므로 사유를 알게 된 이 자리에서 올린다.
 	 */

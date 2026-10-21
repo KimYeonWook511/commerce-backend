@@ -31,8 +31,11 @@ import org.springframework.context.annotation.Import;
 import org.springframework.test.context.ActiveProfiles;
 import org.springframework.test.context.bean.override.mockito.MockitoBean;
 
+import com.commerce.payment.application.service.PaymentService;
 import com.commerce.payment.domain.Payment;
+import com.commerce.payment.domain.PaymentCloseCode;
 import com.commerce.payment.domain.PaymentPg;
+import com.commerce.payment.domain.PaymentStatus;
 import com.commerce.payment.infrastructure.persistence.support.PaymentPersistenceTestSupport;
 
 import com.commerce.order.domain.exception.OrderErrorCode;
@@ -78,6 +81,9 @@ class OrderExpirationBatchTest {
 	@Autowired
 	private PaymentPersistenceTestSupport paymentPersistence;
 
+	@Autowired
+	private PaymentService paymentService;
+
 	@MockitoBean
 	private StockRestoreOutboxCreateService stockRestoreOutboxCreateService;
 
@@ -93,7 +99,7 @@ class OrderExpirationBatchTest {
 		);
 	}
 
-	@DisplayName("만료된 주문은 배치에서 취소되고 outbox 이벤트가 생성된다")
+	@DisplayName("결제를 한 번도 시작하지 않은 만료 주문은 배치에서 취소되고 outbox 이벤트가 생성된다")
 	@Test
 	void orderExpirationJob_whenOrderExpired_cancelOrder() throws Exception {
 		// given
@@ -112,6 +118,76 @@ class OrderExpirationBatchTest {
 		assertThat(result.getStatus()).isEqualTo(OrderStatus.CANCELED);
 		then(stockRestoreOutboxCreateService).should()
 			.createOutboxEvent(argThat(command -> command.getOrderId().equals(result.getId())));
+		assertThat(paymentPersistence.count()).isZero();
+	}
+
+	@DisplayName("결제를 여러 번 다시 시작한 주문도 만료 기준이 지나면 취소되고 품목 수량만큼 재고 복구가 요청된다")
+	@Test
+	void orderExpirationJob_whenPaymentRestartedRepeatedly_cancelOrderAndRequestRestore() throws Exception {
+		// given
+		LocalDateTime now = LocalDateTime.now();
+		Member member = memberPersistence.save(createMember());
+		Product product = productPersistence.save(createProduct());
+		Order order = orderPersistence.save(createOrder(member, product, 3));
+		startPaymentRepeatedly(order, member, "restart-restore");
+		JobParameters parameters = jobParameters(now.plusMinutes(10));
+
+		// when
+		JobExecution execution = jobLauncherTestUtils.launchJob(parameters);
+
+		// then
+		assertThat(execution.getStatus()).isEqualTo(BatchStatus.COMPLETED);
+		assertThat(orderPersistence.getOrderStatusById(order.getId())).isEqualTo(OrderStatus.CANCELED);
+		then(stockRestoreOutboxCreateService).should().createOutboxEvent(argThat(command ->
+			command.getOrderId().equals(order.getId())
+				&& command.getItems().size() == 1
+				&& command.getItems().getFirst().getProductId().equals(product.getId())
+				&& command.getItems().getFirst().getQuantity() == 3));
+	}
+
+	@DisplayName("만료된 주문의 마지막 결제가 종결되어 그 주문의 활성 슬롯이 빈다")
+	@Test
+	void orderExpirationJob_whenPaymentRestartedRepeatedly_closeLastPaymentAndReleaseSlot() throws Exception {
+		// given
+		LocalDateTime now = LocalDateTime.now();
+		Member member = memberPersistence.save(createMember());
+		Product product = productPersistence.save(createProduct());
+		Order order = orderPersistence.save(createOrder(member, product));
+		Payment last = startPaymentRepeatedly(order, member, "restart-slot");
+		JobParameters parameters = jobParameters(now.plusMinutes(10));
+
+		// when
+		jobLauncherTestUtils.launchJob(parameters);
+
+		// then
+		Payment closed = paymentPersistence.findById(last.getId()).orElseThrow();
+		assertThat(closed.getStatus()).isEqualTo(PaymentStatus.EXPIRED);
+		assertThat(closed.getActiveOrderKey()).isNull();
+		assertThat(paymentPersistence.findActiveByOrderId(order.getId())).isEmpty();
+	}
+
+	@DisplayName("주문 만료로 닫힌 결제는 대체 종결·결제 세션이 지난 종결과 다른 종결 코드로 남는다")
+	@Test
+	void orderExpirationJob_whenReadyPaymentClosed_recordOrderExpiredCloseCode() throws Exception {
+		// given
+		LocalDateTime now = LocalDateTime.now();
+		Member member = memberPersistence.save(createMember());
+		Product product = productPersistence.save(createProduct());
+		Order order = orderPersistence.save(createOrder(member, product));
+		Payment last = startPaymentRepeatedly(order, member, "restart-code");
+		JobParameters parameters = jobParameters(now.plusMinutes(10));
+
+		// when
+		jobLauncherTestUtils.launchJob(parameters);
+
+		// then
+		PaymentCloseCode closeCode = paymentPersistence.findById(last.getId()).orElseThrow().getCloseCode();
+		assertThat(closeCode).isEqualTo(PaymentCloseCode.ORDER_EXPIRED);
+		assertThat(closeCode).isNotIn(PaymentCloseCode.SUPERSEDED, PaymentCloseCode.SESSION_TIMEOUT);
+		assertThat(paymentPersistence.findAll())
+			.filteredOn(payment -> !payment.getId().equals(last.getId()))
+			.extracting(Payment::getCloseCode)
+			.containsOnly(PaymentCloseCode.SUPERSEDED);
 	}
 
 	@DisplayName("만료 대상이 없으면 아무 것도 처리하지 않는다")
@@ -155,6 +231,28 @@ class OrderExpirationBatchTest {
 		assertThat(result.getStatus()).isEqualTo(OrderStatus.INIT);
 		then(stockRestoreOutboxCreateService).should(never())
 			.createOutboxEvent(any(StockRestoreOutboxCreateCommand.class));
+	}
+
+	@DisplayName("만료 기준을 지나지 않은 주문은 승인 전 결제가 걸려 있어도 결제와 함께 그대로 남는다")
+	@Test
+	void orderExpirationJob_whenOrderWithReadyPaymentNotExpired_keepOrderAndPayment() throws Exception {
+		// given
+		LocalDateTime now = LocalDateTime.now();
+		Member member = memberPersistence.save(createMember());
+		Product product = productPersistence.save(createProduct());
+		Order order = orderPersistence.save(createOrder(member, product));
+		Payment ready = paymentPersistence.save(readyPayment(order, member, "not-expired"));
+		JobParameters parameters = jobParameters(now.minusMinutes(60));
+
+		// when
+		JobExecution execution = jobLauncherTestUtils.launchJob(parameters);
+
+		// then
+		assertThat(execution.getStatus()).isEqualTo(BatchStatus.COMPLETED);
+		assertThat(orderPersistence.getOrderStatusById(order.getId())).isEqualTo(OrderStatus.INIT);
+		Payment result = paymentPersistence.findById(ready.getId()).orElseThrow();
+		assertThat(result.getStatus()).isEqualTo(PaymentStatus.READY);
+		assertThat(result.getActiveOrderKey()).isEqualTo(order.getId());
 	}
 
 	@DisplayName("만료 주문이 청크 사이즈를 넘어도 모두 취소 처리된다")
@@ -218,6 +316,32 @@ class OrderExpirationBatchTest {
 			.createOutboxEvent(any(StockRestoreOutboxCreateCommand.class));
 	}
 
+	@DisplayName("결제를 함께 종결하며 만료된 주문은 다음 회차의 만료 대상이 아니다")
+	@Test
+	void orderExpirationJob_whenOrderExpiredWithPayment_doNothingOnNextRun() throws Exception {
+		// given
+		LocalDateTime now = LocalDateTime.now();
+		Member member = memberPersistence.save(createMember());
+		Product product = productPersistence.save(createProduct());
+		Order order = orderPersistence.save(createOrder(member, product));
+		Payment ready = paymentPersistence.save(readyPayment(order, member, "next-run"));
+		jobLauncherTestUtils.launchJob(jobParameters(now.plusMinutes(10)));
+
+		// when
+		JobExecution nextExecution = jobLauncherTestUtils.launchJob(jobParameters(now.plusMinutes(10)));
+
+		// then
+		assertThat(nextExecution.getStatus()).isEqualTo(BatchStatus.COMPLETED);
+		StepExecution nextStep = nextExecution.getStepExecutions().iterator().next();
+		assertThat(nextStep.getReadCount()).isEqualTo(0);
+		assertThat(nextStep.getWriteCount()).isEqualTo(0);
+		assertThat(orderPersistence.getOrderStatusById(order.getId())).isEqualTo(OrderStatus.CANCELED);
+		assertThat(paymentPersistence.findById(ready.getId()).orElseThrow().getCloseCode())
+			.isEqualTo(PaymentCloseCode.ORDER_EXPIRED);
+		then(stockRestoreOutboxCreateService).should(times(1))
+			.createOutboxEvent(any(StockRestoreOutboxCreateCommand.class));
+	}
+
 	@DisplayName("주문 만료 처리 중 CustomException이 발생하면 해당 주문을 skip한다")
 	@Test
 	void orderExpirationJob_whenCustomExceptionOccurs_skipItem() throws Exception {
@@ -243,6 +367,30 @@ class OrderExpirationBatchTest {
 		assertThat(result.getStatus()).isEqualTo(OrderStatus.INIT);
 	}
 
+	@DisplayName("승인 호출 중인 결제가 걸린 주문은 만료 배치에서 제외되고 결제도 그대로 남는다")
+	@Test
+	void orderExpirationJob_whenOrderHasInProgressPayment_skipExpiration() throws Exception {
+		// given
+		LocalDateTime now = LocalDateTime.now();
+		Member member = memberPersistence.save(createMember());
+		Product product = productPersistence.save(createProduct());
+		Order order = orderPersistence.save(createOrder(member, product));
+		Payment inProgress = readyPayment(order, member, "in-progress");
+		inProgress.markInProgress("pg-in-progress", now);
+		Payment saved = paymentPersistence.save(inProgress);
+		JobParameters parameters = jobParameters(now.plusMinutes(10));
+
+		// when
+		JobExecution execution = jobLauncherTestUtils.launchJob(parameters);
+
+		// then
+		assertThat(execution.getStatus()).isEqualTo(BatchStatus.COMPLETED);
+		assertThat(orderPersistence.getOrderStatusById(order.getId())).isEqualTo(OrderStatus.INIT);
+		assertThat(paymentPersistence.findById(saved.getId()).orElseThrow().getStatus())
+			.isEqualTo(PaymentStatus.IN_PROGRESS);
+		then(stockRestoreOutboxCreateService).should(never()).createOutboxEvent(any());
+	}
+
 	@DisplayName("UNKNOWN 결제가 걸린 INIT 주문은 만료 배치에서 제외된다")
 	@Test
 	void orderExpirationJob_whenOrderHasUnknownPayment_skipExpiration() throws Exception {
@@ -252,7 +400,7 @@ class OrderExpirationBatchTest {
 		Product product = productPersistence.save(createProduct());
 		Order order = orderPersistence.save(createOrder(member, product));
 
-		paymentPersistence.save(unknownPayment(order.getId(), member.getId(), "1", now));
+		Payment unknown = paymentPersistence.save(unknownPayment(order.getId(), member.getId(), "1", now));
 
 		JobParameters parameters = jobParameters(now.plusMinutes(10));
 
@@ -267,6 +415,31 @@ class OrderExpirationBatchTest {
 		Order result = orderPersistence.findById(order.getId()).orElseThrow();
 		assertThat(result.getStatus()).isEqualTo(OrderStatus.INIT);
 		then(stockRestoreOutboxCreateService).should(never()).createOutboxEvent(any());
+		assertThat(paymentPersistence.findById(unknown.getId()).orElseThrow().getStatus())
+			.isEqualTo(PaymentStatus.UNKNOWN);
+	}
+
+	@DisplayName("결과 불명이던 결제가 실패로 확정되어 슬롯을 반납하면 다음 회차가 그 주문을 만료시킨다")
+	@Test
+	void orderExpirationJob_whenUnknownPaymentFailedLater_expireOrderOnNextRun() throws Exception {
+		// given
+		LocalDateTime now = LocalDateTime.now();
+		Member member = memberPersistence.save(createMember());
+		Product product = productPersistence.save(createProduct());
+		Order order = orderPersistence.save(createOrder(member, product));
+		Payment unknown = paymentPersistence.save(unknownPayment(order.getId(), member.getId(), "resolved", now));
+		jobLauncherTestUtils.launchJob(jobParameters(now.plusMinutes(10)));
+		assertThat(orderPersistence.getOrderStatusById(order.getId())).isEqualTo(OrderStatus.INIT);
+		paymentService.fail(unknown.getId(), PaymentCloseCode.PG_DECLINED, "거절");
+
+		// when
+		JobExecution nextExecution = jobLauncherTestUtils.launchJob(jobParameters(now.plusMinutes(10)));
+
+		// then
+		assertThat(nextExecution.getStatus()).isEqualTo(BatchStatus.COMPLETED);
+		assertThat(orderPersistence.getOrderStatusById(order.getId())).isEqualTo(OrderStatus.CANCELED);
+		then(stockRestoreOutboxCreateService).should()
+			.createOutboxEvent(argThat(command -> command.getOrderId().equals(order.getId())));
 	}
 
 	@DisplayName("UNKNOWN 결제 주문은 제외되고 일반 만료 주문은 정상 처리된다")
@@ -340,7 +513,22 @@ class OrderExpirationBatchTest {
 		return order;
 	}
 
-	// 만료 배치가 건너뛰는 기준은 결제가 활성 슬롯을 쥐고 있는지다. 결과를 모르는 결제가 그 대표 경우다.
+	private Payment readyPayment(Order order, Member member, String suffix) {
+		return Payment.start(order.getId(), member.getId(), PaymentPg.NAVERPAY,
+			"PK-batch-" + suffix, "IDEM-batch-" + suffix, order.getTotalPrice());
+	}
+
+	/** 결제를 세 번 시작해 앞의 둘은 대체 종결되고 마지막 결제가 슬롯을 쥔 상태를 만든다 */
+	private Payment startPaymentRepeatedly(Order order, Member member, String suffix) {
+		for (int attempt = 1; attempt <= 2; attempt++) {
+			Payment superseded = readyPayment(order, member, suffix + "-" + attempt);
+			superseded.expire(PaymentCloseCode.SUPERSEDED);
+			paymentPersistence.save(superseded);
+		}
+		return paymentPersistence.save(readyPayment(order, member, suffix + "-3"));
+	}
+
+	// 만료 배치가 건너뛰는 기준은 승인을 부른 뒤의 결제가 걸렸는지다. 결과를 모르는 결제가 그 대표 경우다.
 	private Payment unknownPayment(Long orderId, Long memberId, String suffix, LocalDateTime now) {
 		Payment payment = Payment.start(orderId, memberId, PaymentPg.NAVERPAY,
 			"PK-batch-" + suffix, "IDEM-batch-" + suffix, 1000);

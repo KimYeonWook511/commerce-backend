@@ -120,11 +120,11 @@ public class PaymentRepositoryAdapter implements PaymentRepository {
 	}
 
 	@Override
-	public Set<Long> findOrderIdsHoldingActiveSlot(Collection<Long> orderIds) {
+	public Set<Long> findOrderIdsWithPaymentPastApprovalCall(Collection<Long> orderIds) {
 		if (orderIds.isEmpty()) {
 			return Set.of();
 		}
-		return new HashSet<>(jpaPaymentRepository.findActiveOrderKeysIn(orderIds));
+		return new HashSet<>(jpaPaymentRepository.findActiveOrderKeysPastApprovalCallIn(orderIds));
 	}
 
 	@Override

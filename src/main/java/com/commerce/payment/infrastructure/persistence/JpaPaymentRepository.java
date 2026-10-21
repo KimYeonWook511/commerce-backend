@@ -43,11 +43,13 @@ public interface JpaPaymentRepository extends JpaRepository<Payment, Long> {
 
 	// 활성 슬롯에는 살아 있는 결제만 주문 식별자를 담고 그 값이 유일하므로, 슬롯 값을 그대로 읽으면
 	// 막힌 주문 목록이 된다. 중복 제거도 필요 없다.
+	// 승인 전 결제는 상태 조건으로만 뺀다. 고르는 조건이 슬롯 열에서 시작해야 그 유일 인덱스를 그대로 탄다.
 	@Query("""
 		SELECT p.activeOrderKey FROM Payment p
 		WHERE p.activeOrderKey IN :orderIds
+		  AND p.status <> 'READY'
 		""")
-	List<Long> findActiveOrderKeysIn(@Param("orderIds") Collection<Long> orderIds);
+	List<Long> findActiveOrderKeysPastApprovalCallIn(@Param("orderIds") Collection<Long> orderIds);
 
 	// 임계 시각과 회차 범위는 코드가 간격표에서 계산해 넘긴다. 그래야 조회에 등호와 부등호만 남아
 	// (status, reconcile_count, last_reconcile_at) 인덱스가 그대로 먹는다.

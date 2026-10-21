@@ -18,10 +18,13 @@ import org.springframework.test.context.DynamicPropertySource;
 
 import com.commerce.member.domain.Member;
 import com.commerce.member.infrastructure.persistence.support.MemberPersistenceTestSupport;
+import com.commerce.order.application.service.ExpireOrderService;
 import com.commerce.order.domain.Order;
+import com.commerce.order.domain.OrderStatus;
 import com.commerce.order.domain.exception.OrderErrorCode;
 import com.commerce.order.domain.exception.OrderException;
 import com.commerce.order.infrastructure.persistence.support.OrderPersistenceTestSupport;
+import com.commerce.outbox.infrastructure.persistence.support.OutboxPersistenceTestSupport;
 import com.commerce.payment.application.dto.StartPaymentCommand;
 import com.commerce.payment.application.dto.StartPaymentResult;
 import com.commerce.payment.domain.Payment;
@@ -49,7 +52,8 @@ import com.commerce.support.TestcontainersSupport;
 	MemberPersistenceTestSupport.class,
 	ProductPersistenceTestSupport.class,
 	OrderPersistenceTestSupport.class,
-	PaymentPersistenceTestSupport.class
+	PaymentPersistenceTestSupport.class,
+	OutboxPersistenceTestSupport.class
 })
 class StartPaymentUseCaseIntegrationTest {
 
@@ -57,6 +61,9 @@ class StartPaymentUseCaseIntegrationTest {
 
 	@Autowired
 	private StartPaymentUseCase startPaymentUseCase;
+
+	@Autowired
+	private ExpireOrderService expireOrderService;
 
 	@Autowired
 	private PersistenceCleanupTestSupport persistenceCleanup;
@@ -73,6 +80,9 @@ class StartPaymentUseCaseIntegrationTest {
 	@Autowired
 	private PaymentPersistenceTestSupport paymentPersistence;
 
+	@Autowired
+	private OutboxPersistenceTestSupport outboxPersistence;
+
 	private static int uniqueSuffix = 0;
 
 	@DynamicPropertySource
@@ -84,7 +94,7 @@ class StartPaymentUseCaseIntegrationTest {
 	@AfterEach
 	void tearDown() {
 		persistenceCleanup.deleteAllInBatch(
-			paymentPersistence, memberPersistence, productPersistence, orderPersistence
+			paymentPersistence, outboxPersistence, memberPersistence, productPersistence, orderPersistence
 		);
 	}
 
@@ -195,6 +205,23 @@ class StartPaymentUseCaseIntegrationTest {
 		assertThat(paymentPersistence.count()).isEqualTo(1);
 		assertThat(paymentPersistence.findActiveByOrderId(order.getId()).orElseThrow().getStatus())
 			.isEqualTo(PaymentStatus.UNKNOWN);
+	}
+
+	@DisplayName("만료된 주문에는 결제를 다시 시작할 수 없고 새 결제 행도 생기지 않는다")
+	@Test
+	void start_whenOrderExpired_rejectsWithoutCreatingPayment() {
+		Member member = saveMember();
+		Order order = saveOrder(member, 1);
+		startPaymentUseCase.start(command(member, order, "idem-before-expiry"));
+		expireOrderService.expireOrder(order.getId(), LocalDateTime.now());
+		assertThat(orderPersistence.getOrderStatusById(order.getId())).isEqualTo(OrderStatus.CANCELED);
+
+		assertThatThrownBy(() -> startPaymentUseCase.start(command(member, order, "idem-after-expiry")))
+			.isInstanceOf(OrderException.class)
+			.hasMessage(OrderErrorCode.ORDER_PAYMENT_NOT_ALLOWED.getMessage());
+
+		assertThat(paymentPersistence.count()).isEqualTo(1);
+		assertThat(paymentPersistence.findActiveByOrderId(order.getId())).isEmpty();
 	}
 
 	@DisplayName("같은 멱등키로 다시 요청하면 앞서 만든 결제가 그대로 돌아오고 시도가 하나다")

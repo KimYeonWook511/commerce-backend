@@ -22,6 +22,10 @@ public enum PaymentErrorCode implements ErrorCode {
 	// 진행할 것이 없으므로 결제사를 부르지 않고 회원에게 다시 시작하라고 알린다.
 	PAYMENT_ATTEMPT_CLOSED(ErrorCategory.CONFLICT, "PAYMENT-409-15",
 		"종결된 결제 시도입니다. 결제를 다시 시작해 주세요."),
+	// 주문이 만료되며 그 결제 시도도 종결됐다. 주문이 이미 취소돼 결제를 다시 시작해도 막히므로 위 응답과
+	// 갈라 다시 주문하라고 알린다.
+	PAYMENT_ORDER_EXPIRED(ErrorCategory.CONFLICT, "PAYMENT-409-18",
+		"주문이 만료되어 결제할 수 없습니다. 다시 주문해 주세요."),
 	PAYMENT_APPROVAL_FAILED(ErrorCategory.CONFLICT, "PAYMENT-409-16", "결제 승인에 실패했습니다"),
 	PAYMENT_AMOUNT_MISMATCH(ErrorCategory.CONFLICT, "PAYMENT-409-17", "승인 금액이 주문 금액과 다릅니다"),
 	// 승인 응답에 실려 온 결제 키가 이 결제의 것이 아니다. 어느 결제가 승인됐는지를 회원에게 알리지
