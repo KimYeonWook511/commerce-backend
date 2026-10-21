@@ -29,7 +29,9 @@ public enum PaymentCloseCode {
 	/** 새 결제 요청이 자리를 뺏었다 */
 	SUPERSEDED(PaymentStatus.EXPIRED),
 	/** 세션이 지나 만료 배치가 정리했다 */
-	SESSION_TIMEOUT(PaymentStatus.EXPIRED);
+	SESSION_TIMEOUT(PaymentStatus.EXPIRED),
+	/** 승인을 부르기 전에 주문이 만료되어 함께 닫혔다. 승인 결과를 받은 뒤 걸러진 {@link #ORDER_NOT_PAYABLE}과 다르다 */
+	ORDER_EXPIRED(PaymentStatus.EXPIRED);
 
 	private final PaymentStatus closedStatus;
 
