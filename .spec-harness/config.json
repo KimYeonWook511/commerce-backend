@@ -14,7 +14,7 @@
     "docs/db-schema.md",
     "docs/architecture.md"
   ],
-  "spec_root": "docs/specs",
+  "run_root": "docs/specs",
   "methodologies": ["ddd", "bdd"],
   "merge": { "agent": "root_sync" },
   "workspace": {
