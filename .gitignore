@@ -54,6 +54,7 @@ __pycache__/
 
 ### harness 실행 산출물 (진행 마커·로그 상태) ###
 /.spec-harness/run/
+/.spec-harness/local.json
 docs/tasks/**/phases/**/handoff/
 docs/tasks/**/phases/**/step*-output.json
 docs/tasks/**/phases/**/step*-ac-output.json
